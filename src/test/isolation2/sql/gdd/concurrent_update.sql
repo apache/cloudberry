@@ -1,4 +1,6 @@
 -- Test concurrent update a table with a varying length type
+-1U:@db_name postgres: CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
+
 CREATE TABLE t_concurrent_update(a int, b int, c char(84));
 INSERT INTO t_concurrent_update VALUES(1,1,'test');
 
@@ -30,16 +32,20 @@ DROP TABLE t_concurrent_update;
 -- transaction 2 suspend before commit, but it will wake up transaction 3 on segment
 2: select gp_inject_fault('before_xact_end_procarray', 'suspend', '', 'isolation2test', '', 1, 1, 0, dbid) FROM gp_segment_configuration WHERE role='p' AND content=-1;
 2&: END;
-1: select gp_wait_until_triggered_fault('before_xact_end_procarray', 1, dbid) FROM gp_segment_configuration WHERE role='p' AND content=-1;
+-- Use utility mode for fault coordination. A regular QD snapshot would wait
+-- for the suspended DTX that this query is responsible for releasing.
+-1U:@db_name postgres: select gp_wait_until_triggered_fault('before_xact_end_procarray', 1, dbid) FROM gp_segment_configuration WHERE role='p' AND content=-1;
+-- Release the suspended commit before waiting for its QD cleanup.
+-1U:@db_name postgres: select gp_inject_fault('before_xact_end_procarray', 'reset', dbid) FROM gp_segment_configuration WHERE role='p' AND content=-1;
 -- transaction 3 should wait transaction 2 commit on master
 3<:
 3&: END;
+-- A QD distributed snapshot waits for the commit cleanup to finish.
+3<:
 -- the query should not get the incorrect distributed snapshot: transaction 1 in-progress
 -- and transaction 2 finished
 1: SELECT * FROM t_concurrent_update;
-1: select gp_inject_fault('before_xact_end_procarray', 'reset', dbid) FROM gp_segment_configuration WHERE role='p' AND content=-1;
 2<:
-3<:
 2q:
 3q:
 
@@ -59,9 +65,9 @@ DROP TABLE t_concurrent_update;
 5: SELECT gp_inject_fault('before_get_distributed_xid', 'suspend', dbid) FROM gp_segment_configuration WHERE role='p' AND content=1;
 5&: UPDATE t_concurrent_update SET b=b+10 WHERE a=1;
 
-6: SELECT gp_wait_until_triggered_fault('before_get_distributed_xid', 1, dbid) FROM gp_segment_configuration WHERE role='p' AND content=1;
+-1U:@db_name postgres: SELECT gp_wait_until_triggered_fault('before_get_distributed_xid', 1, dbid) FROM gp_segment_configuration WHERE role='p' AND content=1;
 4: END;
-4: SELECT gp_inject_fault('before_get_distributed_xid', 'reset', dbid) FROM gp_segment_configuration WHERE role='p' AND content=1;
+-1U:@db_name postgres: SELECT gp_inject_fault('before_get_distributed_xid', 'reset', dbid) FROM gp_segment_configuration WHERE role='p' AND content=1;
 
 5<:
 5: END;

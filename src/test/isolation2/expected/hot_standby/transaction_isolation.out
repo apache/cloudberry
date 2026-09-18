@@ -96,6 +96,9 @@ CREATE
 (0 rows)
 
 -- reset
+-- This control session must release a commit already suspended on a QE.
+3: SET debug_disable_distributed_snapshot = on;
+SET
 3: select gp_inject_fault('qe_start_prepared', 'reset',dbid) from gp_segment_configuration where content=0 and role='p';
  gp_inject_fault 
 -----------------
@@ -315,6 +318,9 @@ CREATE
 1&: insert into hs_t5 select i, 'in-progress' from generate_series(1,10) i;  <waiting ...>
 
 -- now run some dtx and completed, and primary conducts a checkpoint
+-- This independent DTX must not wait for the suspended commit above.
+2: SET debug_disable_distributed_snapshot = on;
+SET
 2: insert into hs_t5 values(1, 'commited');
 INSERT 1
 2: insert into hs_t6 select i, 'committed' from generate_series(1,10) i;
@@ -369,6 +375,8 @@ server closed the connection unexpectedly
 (1 row)
 1<:  <... completed>
 INSERT 10
+2: RESET debug_disable_distributed_snapshot;
+RESET
 
 -- standby should see all rows now
 -1S: select * from hs_t5;
@@ -463,6 +471,8 @@ INSERT 10
 DELETE 11
 2<:  <... completed>
 DELETE 10
+3: RESET debug_disable_distributed_snapshot;
+RESET
 
 -- standby now see those deletes
 -1S: select * from hs_t5;
