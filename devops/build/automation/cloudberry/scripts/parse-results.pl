@@ -145,8 +145,10 @@ while (<$fh>) {
     } elsif (/^Result: FAIL/) {
         $status = 'failed';
 
-    # TAP individual test failure: "  t/xxx.pl (Wstat: ...)"
-    } elsif (/^\s+(t\/\S+\.pl)\s+\(Wstat:/) {
+    # TAP individual test failure, as listed by prove's "Test Summary
+    # Report".  Those lines start at column 0, not indented, e.g.
+    # "t/019_replslot_limit.pl  (Wstat: 7424 Tests: 9 Failed: 2)".
+    } elsif (/^\s*(\S+\.pl)\s+\(Wstat:/) {
         push @failed_test_list, $1;
     }
 

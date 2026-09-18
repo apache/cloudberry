@@ -141,7 +141,11 @@ SELECT fetch_sample();
 SELECT pg_sleep(1.7);
 -- end_ignore
 
-SELECT verify_cpu_usage('rg1_cpu_test', 90, 10);
+-- rg1_cpu_test is uncapped (cpu_max_percent=-1) and it is the only busy
+-- group, so it takes essentially every core: gp_resgroup_status reports
+-- ~100, not 90.  Expecting 90 put the real value on the upper edge of the
+-- +/- err_rate window, so any upward sampling jitter failed the test.
+SELECT verify_cpu_usage('rg1_cpu_test', 100, 10);
 
 -- start_ignore
 SELECT * FROM cancel_all;
@@ -212,9 +216,11 @@ SELECT fetch_sample();
 SELECT pg_sleep(1.7);
 -- end_ignore
 
-SELECT verify_cpu_usage('rg1_cpu_test', 30, 10);
+-- Both groups are uncapped, so they share the whole machine in proportion
+-- to cpu_weight (100 and 200): ~33 and ~67, not ~30 and ~60.
+SELECT verify_cpu_usage('rg1_cpu_test', 33, 10);
 -- start_ignore
-SELECT verify_cpu_usage('rg2_cpu_test', 60, 10);
+SELECT verify_cpu_usage('rg2_cpu_test', 67, 10);
 
 SELECT * FROM cancel_all;
 

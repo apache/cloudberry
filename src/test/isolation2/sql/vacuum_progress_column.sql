@@ -131,7 +131,14 @@ select gp_segment_id, relid::regclass as relname, phase, heap_blks_total, heap_b
 select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, heap_blks_vacuumed, index_vacuum_count, max_dead_tuples, num_dead_tuples from gp_stat_progress_vacuum_summary;
 
 -- Resume execution of compact phase and block at syncrep on one segment.
+-- The suspend only takes effect the next time the walsender goes round its
+-- loop, so wait until it is really parked before letting the vacuum go on.
+-- Otherwise the compact phase can commit while the walsender is still
+-- streaming, syncrep is satisfied by the live mirror, the vacuum runs to
+-- completion on the same gang, no new vacuum worker ever takes over and the
+-- gp_wait_until_triggered_fault() below times out after ten minutes.
 2: SELECT gp_inject_fault_infinite('wal_sender_loop', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
+2: SELECT gp_wait_until_triggered_fault('wal_sender_loop', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
 2: SELECT gp_inject_fault('vacuum_ao_after_compact', 'reset', dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
 -- stop the mirror should turn off syncrep
 2: SELECT pg_ctl(datadir, 'stop', 'immediate') FROM gp_segment_configuration WHERE content = 1 AND role = 'm';
