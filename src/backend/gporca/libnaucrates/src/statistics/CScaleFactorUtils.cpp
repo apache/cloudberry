@@ -502,10 +502,23 @@ CScaleFactorUtils::CalcScaleFactorCumulativeConj(
 
 	const ULONG num_cols = scale_factors->Size();
 	CDouble scale_factor(1.0);
+	if (0 == num_cols)
+	{
+		return scale_factor;
+	}
+
 	if (1 < num_cols)
 	{
 		// sort (in desc order) the scaling factor based on the selectivity of each column
 		scale_factors->Sort(CScaleFactorUtils::DescendingOrderCmpFunc);
+	}
+
+	if (CDouble(0.0) == stats_config->DDampingFactorFilter())
+	{
+		// Maximum overlap: retain only the smallest selectivity, represented
+		// by the largest scale factor. Handle zero explicitly rather than
+		// relying on CDouble's minimum magnitude when computing powers.
+		return std::max(CStatistics::MinRows.Get(), (*scale_factors)[0]->Get());
 	}
 
 	for (ULONG ul = 0; ul < num_cols; ul++)
