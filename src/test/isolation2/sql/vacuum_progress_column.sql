@@ -27,6 +27,13 @@ CREATE INDEX on vacuum_progress_ao_column(j);
 -- Abort so that segno 1 has logical EOF = 0.
 1: ABORT;
 
+-- Look up the collected stats before the DELETE below.  The stats collector
+-- is asynchronous: wait until it has received the dead tuples of both
+-- aborted inserts, and read the view before the DELETE, whose own counts
+-- may reach the collector at any moment after it.
+1U: SELECT wait_until_dead_tup_change_to('vacuum_progress_ao_column'::regclass::oid, 200000);
+SELECT n_live_tup, n_dead_tup, last_vacuum, vacuum_count FROM pg_stat_all_tables WHERE relname = 'vacuum_progress_ao_column';
+
 -- Also delete half of the tuples evenly before the EOF of segno 2.
 DELETE FROM vacuum_progress_ao_column where j % 2 = 0;
 
