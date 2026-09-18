@@ -97,6 +97,7 @@ typedef struct TuplesortInstrumentation
 	long		spaceUsed;		/* space consumption, in kB */
 
 	Size		workmemused;
+	Size		workmemwanted;	/* GPDB: work_mem for an in-memory sort */
 } TuplesortInstrumentation;
 
 
