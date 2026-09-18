@@ -1,0 +1,33 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg viewBox="0 0 620 200" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,monospace" font-size="13">
+  <text x="20" y="22" font-size="11" fill="#8a6d1a">given: a.x = b.x  AND  b.x = 5</text>
+  <ellipse cx="90" cy="90" rx="42" ry="26" fill="#f5edff" stroke="#cdb4db"/>
+  <text x="72" y="95">a.x</text>
+  <ellipse cx="250" cy="90" rx="42" ry="26" fill="#f5edff" stroke="#cdb4db"/>
+  <text x="232" y="95">b.x</text>
+  <ellipse cx="410" cy="90" rx="42" ry="26" fill="#fff4d6" stroke="#8a6d1a"/>
+  <text x="398" y="95">5</text>
+  <line x1="132" y1="90" x2="208" y2="90" stroke="#8a6d1a" stroke-width="1.5"/>
+  <text x="150" y="82" font-size="10.5">given</text>
+  <line x1="292" y1="90" x2="368" y2="90" stroke="#8a6d1a" stroke-width="1.5"/>
+  <text x="312" y="82" font-size="10.5">given</text>
+  <path d="M 90 116 Q 250 185 410 116" fill="none" stroke="#4a7" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="205" y="178" font-size="11" fill="#4a7">implied: a.x = 5 (pushed to a's scan)</text>
+</svg>

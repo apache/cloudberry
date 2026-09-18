@@ -1,0 +1,62 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 330" width="100%" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13">
+  <defs>
+    <marker id="s142arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#6b4fa0"/></marker>
+  </defs>
+
+  <rect x="8" y="8" width="360" height="314" rx="10" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.5"/>
+  <text x="188" y="34" text-anchor="middle" font-weight="bold" fill="#8a6d1a">independence assumption</text>
+
+  <rect x="40" y="56" width="290" height="40" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <text x="52" y="81" fill="#3a3350">region_id = 5</text>
+  <text x="316" y="81" text-anchor="end" fill="#6b4fa0" font-weight="bold">0.02</text>
+
+  <text x="188" y="120" text-anchor="middle" fill="#8a6d1a" font-weight="bold">×</text>
+
+  <rect x="40" y="132" width="290" height="40" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <text x="52" y="157" fill="#3a3350">region_name = 'region_5'</text>
+  <text x="316" y="157" text-anchor="end" fill="#6b4fa0" font-weight="bold">0.02</text>
+
+  <line x1="188" y1="180" x2="188" y2="214" stroke="#6b4fa0" stroke-width="1.5" marker-end="url(#s142arr)"/>
+  <rect x="70" y="222" width="236" height="76" rx="8" fill="#fdecec" stroke="#c0392b" stroke-width="1.5"/>
+  <text x="188" y="250" text-anchor="middle" fill="#c0392b">0.02 × 0.02 = ⟦0.0004⟧</text>
+  <text x="188" y="274" text-anchor="middle" fill="#c0392b" font-weight="bold">≈ 40 rows  (WRONG)</text>
+  <text x="188" y="292" text-anchor="middle" fill="#8a6d1a">actual = 2000</text>
+
+  <rect x="392" y="8" width="360" height="314" rx="10" fill="#eafaf0" stroke="#2e8b57" stroke-width="1.5"/>
+  <text x="572" y="34" text-anchor="middle" font-weight="bold" fill="#2e8b57">functional dependency  f = 1</text>
+
+  <rect x="424" y="56" width="290" height="40" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <text x="436" y="81" fill="#3a3350">region_id = 5</text>
+  <text x="700" y="81" text-anchor="end" fill="#6b4fa0" font-weight="bold">0.02</text>
+
+  <line x1="572" y1="100" x2="572" y2="128" stroke="#2e8b57" stroke-width="1.5" marker-end="url(#s142arr)"/>
+  <text x="572" y="122" text-anchor="middle" fill="#2e8b57" font-size="12">region_id ⇒ region_name</text>
+
+  <rect x="424" y="132" width="290" height="40" rx="6" fill="#e8e8ee" stroke="#9aa" stroke-width="1.5"/>
+  <text x="436" y="157" fill="#777">region_name = 'region_5'</text>
+  <text x="700" y="157" text-anchor="end" fill="#777">implied</text>
+
+  <line x1="572" y1="180" x2="572" y2="214" stroke="#2e8b57" stroke-width="1.5" marker-end="url(#s142arr)"/>
+  <rect x="454" y="222" width="236" height="76" rx="8" fill="#eafaf0" stroke="#2e8b57" stroke-width="1.5"/>
+  <text x="572" y="250" text-anchor="middle" fill="#2e8b57">sel ≈ sel(region_id) = ⟦0.02⟧</text>
+  <text x="572" y="274" text-anchor="middle" fill="#2e8b57" font-weight="bold">≈ 2000 rows  (RIGHT)</text>
+  <text x="572" y="292" text-anchor="middle" fill="#2e8b57">actual = 2000</text>
+</svg>

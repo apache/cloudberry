@@ -1,0 +1,71 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 500" width="100%" style="max-width:880px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">
+  <defs>
+    <marker id="m172arrow" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#7a5ea8"/></marker>
+    <marker id="m172arrowA" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#8a6d1a"/></marker>
+  </defs>
+
+  <rect x="220" y="14" width="430" height="182" rx="9" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <text x="234" y="37" font-size="13" font-weight="700" fill="#4a3a6a">ROOT &#183; Group 5 (#GExprs: 6)</text>
+  <rect x="226" y="138" width="418" height="24" rx="4" fill="#ede4ff" stroke="#cdb4db" stroke-width="1"/>
+  <text x="234" y="62" font-size="12.5" fill="#5b4a8a">0: CLogicalNAryJoin [ 0 1 4 ]</text>
+  <text x="234" y="84" font-size="12.5" fill="#5b4a8a">1: CLogicalInnerJoin [ 0 1 4 ]</text>
+  <text x="234" y="106" font-size="12.5" fill="#5b4a8a">2: CLogicalInnerJoin [ 1 0 4 ]</text>
+  <text x="234" y="128" font-size="12.5" fill="#2f6b46">3: CPhysicalInnerHashJoin (High) [ 1 0 4 ]</text>
+  <text x="234" y="155" font-size="12.5" font-weight="700" fill="#2f6b46">4: CPhysicalInnerHashJoin (High) [ 0 1 4 ]</text>
+  <text x="234" y="183" font-size="12.5" fill="#8a6d1a">5: CPhysicalMotionGather(master) [ 5 ]</text>
+
+  <path d="M240,162 C170,205 140,252 149,294" fill="none" stroke="#7a5ea8" stroke-width="1.6" marker-end="url(#m172arrow)"/>
+  <text x="96" y="252" font-size="11.5" fill="#7a5ea8">outer</text>
+  <path d="M400,164 C400,220 428,255 435,294" fill="none" stroke="#7a5ea8" stroke-width="1.6" marker-end="url(#m172arrow)"/>
+  <text x="443" y="252" font-size="11.5" fill="#7a5ea8">inner</text>
+  <path d="M598,164 C660,205 700,255 710,294" fill="none" stroke="#7a5ea8" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#m172arrow)"/>
+  <text x="718" y="252" font-size="11.5" fill="#7a5ea8">scalar</text>
+
+  <path d="M646,183 C700,183 722,183 722,120 C722,66 700,44 662,46" fill="none" stroke="#8a6d1a" stroke-width="1.6" marker-end="url(#m172arrowA)"/>
+  <text x="736" y="150" font-size="11" fill="#8a6d1a">the Gather enforcer</text>
+  <text x="736" y="167" font-size="11" fill="#8a6d1a">points back at</text>
+  <text x="736" y="184" font-size="11" fill="#8a6d1a">Group 5 itself</text>
+
+  <rect x="14" y="300" width="270" height="126" rx="9" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <text x="26" y="322" font-size="12.5" font-weight="700" fill="#4a3a6a">Group 0 (#GExprs: 4)</text>
+  <text x="26" y="346" font-size="11.5" fill="#5b4a8a">0: CLogicalGet "t1"</text>
+  <text x="26" y="368" font-size="11.5" fill="#2f6b46">1: CPhysicalTableScan "t1"</text>
+  <text x="26" y="390" font-size="11.5" fill="#8a6d1a">2: CPhysicalMotionGather(master)</text>
+  <text x="26" y="412" font-size="11.5" fill="#8a6d1a">3: CPhysicalMotionBroadcast</text>
+
+  <rect x="300" y="300" width="270" height="126" rx="9" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <text x="312" y="322" font-size="12.5" font-weight="700" fill="#4a3a6a">Group 1 (#GExprs: 4)</text>
+  <text x="312" y="346" font-size="11.5" fill="#5b4a8a">0: CLogicalGet "t2"</text>
+  <text x="312" y="368" font-size="11.5" fill="#2f6b46">1: CPhysicalTableScan "t2"</text>
+  <text x="312" y="390" font-size="11.5" fill="#8a6d1a">2: CPhysicalMotionGather(master)</text>
+  <text x="312" y="412" font-size="11.5" fill="#8a6d1a">3: CPhysicalMotionBroadcast</text>
+
+  <rect x="590" y="300" width="276" height="126" rx="9" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <text x="602" y="322" font-size="12.5" font-weight="700" fill="#2f6b46">scalar groups</text>
+  <text x="602" y="346" font-size="11.5" fill="#2f6b46">Group 4: CScalarCmp (=) [ 2 3 ]</text>
+  <text x="602" y="368" font-size="11.5" fill="#2f6b46">Group 3: CScalarIdent "a" (9)</text>
+  <text x="602" y="390" font-size="11.5" fill="#2f6b46">Group 2: CScalarIdent "a" (0)</text>
+  <text x="602" y="412" font-size="11" fill="#6f8f7c">one expression each, never costed</text>
+
+  <text x="14" y="466" font-size="11.5" fill="#5b4a8a">&#9632; logical operator</text>
+  <text x="180" y="466" font-size="11.5" fill="#2f6b46">&#9632; physical operator</text>
+  <text x="360" y="466" font-size="11.5" fill="#8a6d1a">&#9632; Motion enforcer, added during optimization only</text>
+</svg>

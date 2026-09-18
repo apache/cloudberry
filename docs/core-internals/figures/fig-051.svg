@@ -1,0 +1,61 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 300" width="100%" style="max-width:780px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px">
+ <defs>
+  <marker id="t181a" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#6b4f8a"/></marker>
+  <marker id="t181b" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#8a6d1a"/></marker>
+ </defs>
+ <text x="20" y="16" fill="#6b4f8a" font-weight="bold">1 · after ExecInitNode</text>
+ <rect x="20" y="28" width="170" height="78" rx="4" fill="#f5edff" stroke="#cdb4db"/>
+ <text x="28" y="46" fill="#2b2b3a">PlanState</text>
+ <line x1="20" y1="54" x2="190" y2="54" stroke="#cdb4db"/>
+ <rect x="26" y="58" width="158" height="20" rx="3" fill="#fff4d6" stroke="#8a6d1a"/>
+ <text x="32" y="72" fill="#2b2b3a" font-size="11.5">ExecProcNode</text>
+ <text x="32" y="98" fill="#2b2b3a" font-size="11.5">ExecProcNodeReal</text>
+ <rect x="240" y="56" width="175" height="24" rx="3" fill="#fff4d6" stroke="#8a6d1a"/>
+ <text x="248" y="73" fill="#2b2b3a" font-size="11.5">ExecProcNodeFirst</text>
+ <rect x="240" y="88" width="175" height="24" rx="3" fill="#eafaf0" stroke="#cfead9"/>
+ <text x="248" y="105" fill="#2b2b3a" font-size="11.5">ExecSeqScan</text>
+ <line x1="190" y1="68" x2="236" y2="68" stroke="#6b4f8a" stroke-width="1.5" marker-end="url(#t181a)"/>
+ <line x1="190" y1="96" x2="236" y2="100" stroke="#6b4f8a" stroke-width="1.5" marker-end="url(#t181a)"/>
+ <text x="440" y="48" fill="#5b5b70" font-size="11">Upstream PostgreSQL would install the real method</text>
+ <text x="440" y="64" fill="#5b5b70" font-size="11">here, or ExecProcNodeInstr when instrumenting —</text>
+ <text x="440" y="80" fill="#5b5b70" font-size="11">in Cloudberry that branch sits inside #if 0 at</text>
+ <text x="440" y="96" fill="#5b5b70" font-size="11">execProcnode.c:627, so the wrapper always stays.</text>
+
+ <rect x="20" y="126" width="740" height="44" rx="4" fill="none" stroke="#8a6d1a" stroke-dasharray="5 4"/>
+ <text x="32" y="145" fill="#8a6d1a" font-size="11.5">first call only: check_stack_depth();</text>
+ <text x="32" y="161" fill="#8a6d1a" font-size="11.5">then node-&gt;ExecProcNode = ExecProcNodeGPDB;   and   return node-&gt;ExecProcNode(node);</text>
+
+ <text x="20" y="192" fill="#6b4f8a" font-weight="bold">2 · steady state, for every tuple after the first</text>
+ <rect x="20" y="204" width="170" height="78" rx="4" fill="#f5edff" stroke="#cdb4db"/>
+ <text x="28" y="222" fill="#2b2b3a">PlanState</text>
+ <line x1="20" y1="230" x2="190" y2="230" stroke="#cdb4db"/>
+ <rect x="26" y="234" width="158" height="20" rx="3" fill="#fff4d6" stroke="#8a6d1a"/>
+ <text x="32" y="248" fill="#2b2b3a" font-size="11.5">ExecProcNode</text>
+ <text x="32" y="274" fill="#2b2b3a" font-size="11.5">ExecProcNodeReal</text>
+ <rect x="240" y="232" width="175" height="24" rx="3" fill="#fff4d6" stroke="#8a6d1a"/>
+ <text x="248" y="249" fill="#2b2b3a" font-size="11.5">ExecProcNodeGPDB</text>
+ <rect x="470" y="262" width="175" height="24" rx="3" fill="#eafaf0" stroke="#cfead9"/>
+ <text x="478" y="279" fill="#2b2b3a" font-size="11.5">ExecSeqScan</text>
+ <line x1="190" y1="244" x2="236" y2="244" stroke="#6b4f8a" stroke-width="1.5" marker-end="url(#t181a)"/>
+ <line x1="190" y1="274" x2="466" y2="274" stroke="#6b4f8a" stroke-width="1.5" marker-end="url(#t181a)"/>
+ <line x1="410" y1="256" x2="466" y2="266" stroke="#8a6d1a" stroke-dasharray="4 3" marker-end="url(#t181b)"/>
+ <text x="416" y="228" fill="#8a6d1a" font-size="10.5">calls ⟦ExecProcNodeReal⟧</text>
+</svg>
