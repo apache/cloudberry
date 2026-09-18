@@ -340,6 +340,7 @@ struct Tuplesortstate
 	struct Instrumentation *instrument;
 	struct StringInfoData  *explainbuf;
 	uint64 spilledBytes;
+	int64		workmemwanted;	/* work_mem for an in-memory sort */
 
 	/*
 	 * Resource snapshot for time of sort start.
@@ -815,6 +816,7 @@ tuplesort_begin_batch(Tuplesortstate *state)
 	state->growmemtuples = true;
 	state->totalNumTuples = 0; /*CDB*/
 	state->spilledBytes = 0; /*CDB*/
+	state->workmemwanted = 0; /*CDB*/
 	state->slabAllocatorUsed = false;
 	if (state->memtuples != NULL && state->memtupsize != INITIAL_MEMTUPSIZE)
 	{
@@ -1476,22 +1478,25 @@ tuplesort_performsort(Tuplesortstate *state)
 			 */
 			dumptuples(state, true);
 
-			/* CDB: How much work_mem would be enough for in-memory sort? */
-			if (state->instrument && state->instrument->need_cdb)
-			{
-				/*
-				 * The workmemwanted is summed up of the following:
-				 * (1) metadata: Tuplesortstate, tuple array
-				 * (2) the total bytes for all tuples.
-				 */
-				int64   workmemwanted =
-					sizeof(Tuplesortstate) +
-					((uint64) 1 << my_log2(state->totalNumTuples)) * sizeof(SortTuple) +
-					state->spilledBytes;
+			/*
+			 * CDB: How much work_mem would be enough for in-memory sort?
+			 *
+			 * The workmemwanted is summed up of the following:
+			 * (1) metadata: Tuplesortstate, tuple array
+			 * (2) the total bytes for all tuples.
+			 *
+			 * It is kept in the state as well, so that tuplesort_get_stats()
+			 * can hand it over from a parallel worker, which has no
+			 * Instrumentation of its own.
+			 */
+			state->workmemwanted =
+				sizeof(Tuplesortstate) +
+				((uint64) 1 << my_log2(state->totalNumTuples)) * sizeof(SortTuple) +
+				state->spilledBytes;
 
+			if (state->instrument && state->instrument->need_cdb)
 				state->instrument->workmemwanted =
-					Max(state->instrument->workmemwanted, workmemwanted);
-			}
+					Max(state->instrument->workmemwanted, state->workmemwanted);
 
 			mergeruns(state);
 			state->eof_reached = false;
@@ -2665,6 +2670,7 @@ tuplesort_get_stats(Tuplesortstate *state,
 		stats->workmemused = state->instrument->workmemused;
 	else
 		stats->workmemused = MemoryContextGetPeakSpace(state->base.sortcontext);
+	stats->workmemwanted = state->workmemwanted;
 
 	switch (state->maxSpaceStatus)
 	{
