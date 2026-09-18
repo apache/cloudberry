@@ -135,13 +135,23 @@ anser_define_gucs(void)
 							 GUC_EXPLAIN,
 							 NULL, NULL, NULL);
 
+	/*
+	 * GUC_GPDB_NEED_SYNC on everything a QE reads.  A custom GUC gets
+	 * GUC_GPDB_NO_SYNC by default -- gpdb_assign_sync_flag() says so in as many
+	 * words for "the third-part libraries gucs introduced by customer"
+	 * (guc_gp.c) -- and a QE created after the SET then never receives the
+	 * value.  The QEs alive at the time do get it, because the SET itself is
+	 * dispatched to them as a command, so the setting appears to work right up
+	 * until a query needs a wider gang and the new processes fall back to the
+	 * compiled-in default.  That is not a setting anyone can reason about.
+	 */
 	DefineCustomBoolVariable("anser.debug",
 							 "Logs each step of the Anser filter exchange.",
 							 "Traces publish, merge, delivery and receive in the log of the process each happens in.",
 							 &gp_anser_debug,
 							 false,
 							 PGC_USERSET,
-							 0,
+							 GUC_GPDB_NEED_SYNC,
 							 NULL, NULL, NULL);
 
 	DefineCustomIntVariable("anser.max_info_size",
@@ -159,7 +169,7 @@ anser_define_gucs(void)
 							&gp_anser_timeout_ms,
 							100000, 0, INT_MAX,
 							PGC_USERSET,
-							GUC_UNIT_MS,
+							GUC_UNIT_MS | GUC_GPDB_NEED_SYNC,
 							NULL, NULL, NULL);
 
 	MarkGUCPrefixReserved("anser");
