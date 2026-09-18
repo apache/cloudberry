@@ -105,12 +105,14 @@
 				Assert(IsParallelWorker()); \
 				Assert(ParallelWorkerNumber <= (node)->shared_info->num_workers); \
 				instrumentSortedGroup(&(node)->shared_info->sinfo[ParallelWorkerNumber].groupName##GroupInfo, \
-									  (node)->groupName##_state); \
+									  (node)->groupName##_state, \
+									  (node)->ss.ps.instrument); \
 			} \
 			else \
 			{ \
 				instrumentSortedGroup(&(node)->incsort_info.groupName##GroupInfo, \
-									  (node)->groupName##_state); \
+									  (node)->groupName##_state, \
+									  (node)->ss.ps.instrument); \
 			} \
 		} \
 	} while (0)
@@ -126,7 +128,8 @@
  */
 static void
 instrumentSortedGroup(IncrementalSortGroupInfo *groupInfo,
-					  Tuplesortstate *sortState)
+					  Tuplesortstate *sortState,
+					  Instrumentation *instr)
 {
 	TuplesortInstrumentation sort_instr;
 
@@ -149,6 +152,26 @@ instrumentSortedGroup(IncrementalSortGroupInfo *groupInfo,
 				groupInfo->maxMemorySpaceUsed = sort_instr.spaceUsed;
 
 			break;
+	}
+
+	/*
+	 * GPDB: remember how much memory the batches of this node used, and the
+	 * largest work_mem any single batch would have needed to stay in memory,
+	 * so that EXPLAIN ANALYZE can report "Memory used" and "Memory wanted".
+	 */
+	if ((int64) sort_instr.workmemused > groupInfo->maxWorkmemUsed)
+		groupInfo->maxWorkmemUsed = sort_instr.workmemused;
+	if ((int64) sort_instr.workmemwanted > groupInfo->maxWorkmemWanted)
+		groupInfo->maxWorkmemWanted = sort_instr.workmemwanted;
+
+	if (instr != NULL)
+	{
+		if (instr->workmemused < groupInfo->maxWorkmemUsed)
+			instr->workmemused = groupInfo->maxWorkmemUsed;
+		if (instr->workmemwanted < groupInfo->maxWorkmemWanted)
+			instr->workmemwanted = groupInfo->maxWorkmemWanted;
+		if (sort_instr.spaceType == SORT_SPACE_TYPE_DISK)
+			instr->workfileCreated = true;
 	}
 
 	/* Track each sort method we've used. */
@@ -1253,4 +1276,24 @@ ExecIncrementalSortRetrieveInstrumentation(IncrementalSortState *node)
 	si = palloc(size);
 	memcpy(si, node->shared_info, size);
 	node->shared_info = si;
+
+	/*
+	 * GPDB: the workers' memory figures are not aggregated by the generic
+	 * instrumentation code, so fold them into this node's instrumentation.
+	 */
+	if (node->ss.ps.instrument != NULL)
+	{
+		for (int n = 0; n < si->num_workers; n++)
+		{
+			int64		used = Max(si->sinfo[n].fullsortGroupInfo.maxWorkmemUsed,
+								   si->sinfo[n].prefixsortGroupInfo.maxWorkmemUsed);
+			int64		wanted = Max(si->sinfo[n].fullsortGroupInfo.maxWorkmemWanted,
+									 si->sinfo[n].prefixsortGroupInfo.maxWorkmemWanted);
+
+			if (node->ss.ps.instrument->workmemused < used)
+				node->ss.ps.instrument->workmemused = used;
+			if (node->ss.ps.instrument->workmemwanted < wanted)
+				node->ss.ps.instrument->workmemwanted = wanted;
+		}
+	}
 }
