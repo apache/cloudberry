@@ -67,6 +67,8 @@ typedef enum AnserRfPrivateIndex
 	ANSER_RF_PRIV_MAX_PAYLOAD,			/* Integer: bloom sizing (producer) */
 	ANSER_RF_PRIV_PLANNED_BYTES,		/* Integer: planned bitset bytes (EXPLAIN) */
 	ANSER_RF_PRIV_N_PRODUCERS,			/* Integer: processes publishing a part */
+	ANSER_RF_PRIV_DEFER_FIRST,			/* Integer: consumer must let the join's
+										 * empty-outer prefetch through */
 	ANSER_RF_PRIV_CONDITION_KEY,		/* String:  channel condition_key */
 	ANSER_RF_PRIV__COUNT
 } AnserRfPrivateIndex;
@@ -100,6 +102,9 @@ typedef struct AnserBloomConsumeScanState
 	AttrNumber	key_attno;
 	int64		planned_bytes;
 	bool		received;		/* have we run the receive/union yet? */
+	bool		defer_first;	/* this join prefetches one outer tuple before
+								 * building its hash; see anser_consume_receive() */
+	bool		probed;			/* has the join pulled a tuple from us before? */
 	bool		pushed_down;	/* filter handed to the child scan as an
 								 * SK_BLOOM_FILTER scan key (the scan filters,
 								 * we pass through) */
@@ -201,7 +206,7 @@ anser_build_rf_scan(const CustomScanMethods *methods, Plan *child,
 					AttrNumber key_attno, uint32 condition_id,
 					const char *condition_key, int64 total_elems,
 					Size max_payload_bytes, int64 planned_bytes,
-					int n_producers)
+					int n_producers, bool defer_first)
 {
 	CustomScan *cs = makeNode(CustomScan);
 	List	   *priv = NIL;
@@ -213,6 +218,7 @@ anser_build_rf_scan(const CustomScanMethods *methods, Plan *child,
 	priv = lappend(priv, makeInteger((int) max_payload_bytes));
 	priv = lappend(priv, makeInteger((int) planned_bytes));
 	priv = lappend(priv, makeInteger(n_producers));
+	priv = lappend(priv, makeInteger(defer_first ? 1 : 0));
 	priv = lappend(priv, makeString(pstrdup(condition_key)));
 
 	cs->scan.plan.targetlist = anser_rf_identity_tlist(child->targetlist);
@@ -277,18 +283,21 @@ AnserBuildBloomProducerScan(Plan *child, AttrNumber key_attno,
 {
 	return anser_build_rf_scan(&anser_produce_scan_methods, child, key_attno,
 							   condition_id, condition_key, total_elems,
-							   max_payload_bytes, planned_bytes, n_producers);
+							   max_payload_bytes, planned_bytes, n_producers,
+							   false);
 }
 
 CustomScan *
 AnserBuildBloomConsumerScan(Plan *child, AttrNumber key_attno,
 							uint32 condition_id, const char *condition_key,
 							int64 total_elems, Size max_payload_bytes,
-							int64 planned_bytes, int n_producers)
+							int64 planned_bytes, int n_producers,
+							bool defer_first)
 {
 	return anser_build_rf_scan(&anser_consume_scan_methods, child, key_attno,
 							   condition_id, condition_key, total_elems,
-							   max_payload_bytes, planned_bytes, n_producers);
+							   max_payload_bytes, planned_bytes, n_producers,
+							   defer_first);
 }
 
 /* ---- shared helpers ---- */
@@ -552,6 +561,8 @@ anser_consume_begin(CustomScanState *node, EState *estate, int eflags)
 	st->planned_bytes = intVal(list_nth(priv, ANSER_RF_PRIV_PLANNED_BYTES));
 	st->filter = NULL;
 	st->received = false;
+	st->defer_first = (intVal(list_nth(priv, ANSER_RF_PRIV_DEFER_FIRST)) != 0);
+	st->probed = false;
 	st->pushed_down = false;
 
 	anser_rf_build_key(cscan, &key);
@@ -573,6 +584,38 @@ anser_consume_receive(AnserBloomConsumeScanState *st)
 {
 	if (st->received)
 		return;
+
+	/*
+	 * Not on the first tuple, when the join is one that prefetches.
+	 *
+	 * ExecHashJoin pulls one tuple from its outer side -- us -- before it
+	 * builds the hash table, so that it can skip the build when the outer side
+	 * turns out to be empty (nodeHashjoin.c, the hj_FirstOuterTupleSlot fetch
+	 * in HJ_BUILD_HASHTABLE).  Waiting there waits for the inner side the same
+	 * join has not started; when the join is co-located -- no Motion between
+	 * the two, producer and consumer in one slice -- that is this very
+	 * process, and nothing but the deadline ends it.
+	 *
+	 * Letting that one tuple through unfiltered costs a wasted probe and can
+	 * never cost a row: the join still applies the real condition, and passing
+	 * rows a filter would have rejected is the safe direction.  By the next
+	 * call the hash table is built, so the producer's scan has been drained
+	 * and its part published.
+	 *
+	 * It is not free, which is why it is conditional: the scan has started by
+	 * then, and anser_consume_pushdown() has to run before that to get its key
+	 * into the scan descriptor.  So a deferred consumer keeps the filter and
+	 * probes it itself.  The planner sets the flag whenever it cannot rule the
+	 * prefetch out, which is the conservative direction -- guessing "no
+	 * prefetch" wrongly deadlocks, guessing "prefetch" wrongly only gives up
+	 * pushdown.
+	 */
+	if (st->defer_first && !st->probed)
+	{
+		st->probed = true;
+		return;
+	}
+
 	st->received = true;
 
 	if (st->consume == NULL)

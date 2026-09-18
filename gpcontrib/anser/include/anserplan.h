@@ -70,13 +70,22 @@ extern CustomScan *AnserBuildBloomProducerScan(Plan *child, AttrNumber key_attno
 											   Size max_payload_bytes,
 											   int64 planned_bytes,
 											   int n_producers);
+/*
+ * `defer_first` tells the consumer to pass its first tuple through unfiltered.
+ * ExecHashJoin pulls one outer tuple before building its hash table, and a
+ * consumer that blocks there waits for an inner side the join has not started
+ * -- in a co-located join, for its own process.  Set it whenever the prefetch
+ * cannot be ruled out; the cost is that such a consumer cannot push its filter
+ * into the scan and probes it itself instead.
+ */
 extern CustomScan *AnserBuildBloomConsumerScan(Plan *child, AttrNumber key_attno,
 											   uint32 condition_id,
 											   const char *condition_key,
 											   int64 total_elems,
 											   Size max_payload_bytes,
 											   int64 planned_bytes,
-											   int n_producers);
+											   int n_producers,
+											   bool defer_first);
 
 /*
  * Bloom sizing for one join, from its estimated build cardinality.  False means

@@ -539,10 +539,22 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 	producer->scan.plan.plan_node_id = ctx->next_plan_node_id++;
 	anser_relink_child(build_parent, (Plan *) producer);
 
-	/* Consumer wraps the probe base scan; keyed by the mapped probe attno. */
+	/*
+	 * Consumer wraps the probe base scan; keyed by the mapped probe attno.
+	 *
+	 * Whether it must let the join's first outer tuple through unfiltered
+	 * comes down to whether ExecHashJoin prefetches one before building its
+	 * hash table.  It skips the prefetch when it null-fills the inner side --
+	 * HJ_FILL_INNER, which for the join types injected into means a right join
+	 * -- and otherwise decides on a cost comparison we are not going to
+	 * reproduce here.  So: rule it out only where the join type rules it out,
+	 * and defer everywhere else.  Wrongly deferring gives up pushdown for that
+	 * consumer; wrongly not deferring deadlocks it against its own producer.
+	 */
 	consumer = AnserBuildBloomConsumerScan(probe_scan, probe_attno, condition_id,
 										   condition_key, total_elems, max_payload,
-										   planned_bytes, n_producers);
+										   planned_bytes, n_producers,
+										   hj->join.jointype != JOIN_RIGHT);
 	consumer->scan.plan.plan_node_id = ctx->next_plan_node_id++;
 	anser_relink_child(probe_parent, (Plan *) consumer);
 
