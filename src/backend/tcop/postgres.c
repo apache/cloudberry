@@ -4438,6 +4438,8 @@ ProcessInterrupts(const char* filename, int lineno)
 	if (ParallelMessagePending)
 		HandleParallelMessages();
 
+	CheckAndHandleCustomSignals();
+
 	if (LogMemoryContextPending)
 		ProcessLogMemoryContextInterrupt();
 

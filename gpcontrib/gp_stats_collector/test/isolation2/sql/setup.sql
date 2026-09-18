@@ -1,0 +1,4 @@
+-- Shared setup for the pg_query_state isolation2 suite.
+-- pg_isolation2_regress always runs a "setup" test before the schedule.
+CREATE EXTENSION IF NOT EXISTS gp_stats_collector;
+CREATE EXTENSION IF NOT EXISTS gp_inject_fault;

@@ -259,7 +259,8 @@ jobs:
                                "gpcontrib/gp_toolkit:installcheck"]
               },
               {"test":"gpcontrib-gp-stats-collector",
-               "make_configs":["gpcontrib/gp_stats_collector:installcheck"],
+               "make_configs":["gpcontrib/gp_stats_collector:installcheck",
+                               "gpcontrib/gp_stats_collector/test:installcheck"],
                "extension":"gp_stats_collector"
               },
               {"test":"ic-cbdb-parallel",
