@@ -152,3 +152,34 @@ DROP TABLE jsonexplaintest;
 DROP TABLE test_src_tbl;
 DROP TABLE test_hashagg_spill;
 DROP TABLE test_hashagg_groupingsets;
+
+-- A sort that spills to disk must be reflected in "Memory wanted".
+CREATE TABLE memwanted_sort (id int, pad text) DISTRIBUTED BY (id);
+INSERT INTO memwanted_sort SELECT g, repeat('x', 200) FROM generate_series(1, 100000) g;
+ANALYZE memwanted_sort;
+CREATE FUNCTION sort_spill_vs_wanted(query text, OUT spilled_kb bigint, OUT wanted_kb bigint)
+LANGUAGE plpgsql AS $$
+DECLARE
+    ln text;
+    m  text[];
+BEGIN
+    spilled_kb := 0;
+    wanted_kb  := 0;
+    FOR ln IN EXECUTE 'EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF) ' || query LOOP
+        m := regexp_match(ln, 'Sort Method:\s+external merge\s+Disk:\s+(\d+)kB');
+        IF m IS NOT NULL THEN
+            spilled_kb := greatest(spilled_kb, m[1]::bigint);
+        END IF;
+        m := regexp_match(ln, 'Memory wanted:\s+(\d+)kB');
+        IF m IS NOT NULL THEN
+            wanted_kb := m[1]::bigint;
+        END IF;
+    END LOOP;
+END $$;
+-- 2MB is not enough for the sort, so it spills and must ask for more.
+SET statement_mem = '2MB';
+SELECT spilled_kb > 0 AS sort_spilled, wanted_kb > 2048 AS wants_more_than_given
+  FROM sort_spill_vs_wanted('SELECT * FROM memwanted_sort ORDER BY pad, id');
+RESET statement_mem;
+DROP FUNCTION sort_spill_vs_wanted(text);
+DROP TABLE memwanted_sort;

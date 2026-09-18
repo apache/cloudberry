@@ -147,13 +147,10 @@ ExecSort(PlanState *pstate)
 		/* CDB */
 
 		/* If EXPLAIN ANALYZE, share our Instrumentation object with sort. */
-		/* GPDB_12_MERGE_FIXME: broken */
-#if 0
 		if (node->ss.ps.instrument && node->ss.ps.instrument->need_cdb)
 			tuplesort_set_instrument(tuplesortstate,
 									 node->ss.ps.instrument,
 									 node->ss.ps.cdbexplainbuf);
-#endif
 		/*
 		 * Scan the subplan and feed all the tuples to tuplesort using the
 		 * appropriate method based on the type of sort we're doing.
@@ -509,8 +506,8 @@ ExecSortExplainEnd(PlanState *planstate, struct StringInfoData *buf)
 
 	if (sortstate->tuplesortstate)
 	{
-		tuplesort_get_stats(sortstate->tuplesortstate,
-							&sortstate->sortstats);
+		tuplesort_finalize_stats(sortstate->tuplesortstate,
+								 &sortstate->sortstats);
 
 		if (planstate->instrument)
 		{
@@ -535,8 +532,8 @@ ExecEagerFreeSort(SortState *node)
 		 * Save stats like in ExecSortExplainEnd, so that we can display
 		 * them later in EXPLAIN ANALYZE.
 		 */
-		tuplesort_get_stats(node->tuplesortstate,
-							&node->sortstats);
+		tuplesort_finalize_stats(node->tuplesortstate,
+								 &node->sortstats);
 		if (node->ss.ps.instrument)
 		{
 			node->ss.ps.instrument->workfileCreated = (node->sortstats.spaceType == SORT_SPACE_TYPE_DISK);
