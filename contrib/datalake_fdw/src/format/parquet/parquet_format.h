@@ -17,22 +17,29 @@
  * specific language governing permissions and limitations
  * under the License.
  *
- * pg_iceberg_guc.h
- *	  Configuration variables for Iceberg table creation.
+ * parquet_format.h
+ *	  The Parquet reader and writer.
  *
  * IDENTIFICATION
- *	  contrib/datalake_fdw/src/am_iceberg/pg_iceberg_guc.h
+ *	  contrib/datalake_fdw/src/format/parquet/parquet_format.h
  *
  *-------------------------------------------------------------------------
  */
 
-#ifndef PG_ICEBERG_GUC_H
-#define PG_ICEBERG_GUC_H
+#ifndef DL_PARQUET_FORMAT_H
+#define DL_PARQUET_FORMAT_H
 
-extern char *iceberg_default_catalog;
-extern char *iceberg_default_volume;
-extern int	iceberg_batch_rows;
+#include "format/format.h"
 
-extern void pg_iceberg_define_gucs(void);
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 
-#endif							/* PG_ICEBERG_GUC_H */
+extern const FormatRoutine *GetParquetFormatRoutine(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif							/* DL_PARQUET_FORMAT_H */

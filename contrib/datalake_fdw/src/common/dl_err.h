@@ -55,6 +55,9 @@ typedef enum DlErrCode {
 	DL_ERR_ALREADY_EXISTS,
 	DL_ERR_IO,
 	DL_ERR_INTERNAL,
+	DL_ERR_OUT_OF_MEMORY,		/* the memory limit, not the machine: Arrow's
+								 * allocations are reserved with the vmem
+								 * tracker, and this is what it refused */
 } DlErrCode;
 
 #define DL_ERR_FIELD_LEN	128
@@ -109,9 +112,22 @@ extern const char *dl_err_message(DlErrCode code);
  * when the session asked for log-level detail -- a stack is for whoever is
  * debugging the implementation, not for whoever ran the statement.
  *
- * Detail recorded against a different code is ignored rather than misattributed.
+ * Detail recorded against a different code is ignored rather than misattributed,
+ * and reporting consumes what it used.  Matching on the code alone cannot tell
+ * this failure's detail from an earlier failure's with the same code, so the
+ * record is not left behind for the next one to inherit.
  */
 extern void dl_error_report(int elevel, DlErrCode code, const char *prefix);
+
+/*
+ * An argument that was not what it had to be.  A caller reporting the code
+ * alone would say "invalid parameter" about a call the user never wrote, so
+ * this names the entry point instead -- there is no user error to describe,
+ * only which one of ours was called wrongly.
+ */
+#define DL_ARG_ERROR(operation) \
+	(dl_error_set(DL_ERR_INVALID_OPTION, (operation), NULL, \
+				  "a required argument was missing"), DL_ERR_INVALID_OPTION)
 
 #ifdef __cplusplus
 }

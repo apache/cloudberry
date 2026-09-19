@@ -71,7 +71,7 @@ datalake_fs_open(const DatalakeLocation *location,
 			}
 		}
 	}
-	DL_ABI_GUARD_END(rc);
+	DL_ABI_GUARD_END(rc, "fs_open");
 
 	return rc;
 }
@@ -116,7 +116,7 @@ datalake_fs_list(DatalakeFileSystem fs, const char *prefix,
 			rc = fs->ops->fs_list(fs, prefix, names_out, nnames_out);
 		}
 	}
-	DL_ABI_GUARD_END(rc);
+	DL_ABI_GUARD_END(rc, "fs_list");
 
 	return rc;
 }
@@ -144,7 +144,7 @@ datalake_file_open(DatalakeFileSystem fs, const char *path,
 				(*file_out)->ops = fs->ops;
 		}
 	}
-	DL_ABI_GUARD_END(rc);
+	DL_ABI_GUARD_END(rc, "file_open");
 
 	return rc;
 }
@@ -165,7 +165,7 @@ datalake_file_read(DatalakeFile file, void *buffer, int64_t length,
 			rc = file->ops->file_read(file, buffer, length, nread);
 		}
 	}
-	DL_ABI_GUARD_END(rc);
+	DL_ABI_GUARD_END(rc, "file_read");
 
 	return rc;
 }
@@ -182,7 +182,7 @@ datalake_file_write(DatalakeFile file, const void *buffer, int64_t length)
 		else
 			rc = file->ops->file_write(file, buffer, length);
 	}
-	DL_ABI_GUARD_END(rc);
+	DL_ABI_GUARD_END(rc, "file_write");
 
 	return rc;
 }
@@ -209,7 +209,7 @@ datalake_file_close(DatalakeFile *file)
 			rc = doomed->ops->file_close(doomed);
 		}
 	}
-	DL_ABI_GUARD_END(rc);
+	DL_ABI_GUARD_END(rc, "file_close");
 
 	return rc;
 }

@@ -13,7 +13,8 @@ DROP TABLE IF EXISTS
   dlskel_bad_tablespace, dlskel_bad_missing_server,
   dlskel_bad_wrong_catalog, dlskel_bad_no_catalog,
   dlskel_bad_reloption, dlskel_bad_engine, dlskel_r_new, dlskel_heap,
-  dlskel_bad_repl, dlskel_bad_purge
+  dlskel_bad_repl, dlskel_bad_purge, dlskel_bad_numeric, dlskel_bad_varchar,
+  dlskel_bad_char, dlskel_bad_like, dlskel_types
   CASCADE;
 DROP SERVER IF EXISTS dlskel_cat CASCADE;
 DROP SERVER IF EXISTS dlskel_cat2 CASCADE;
@@ -77,13 +78,13 @@ CREATE TABLE dlskel_r (a int, b text)
   WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol');
 NOTICE:  stub engine: created iceberg table "public.dlskel_r" in catalog "dlskel_cat"
 SELECT * FROM dlskel_r;
-ERROR:  iceberg: SELECT is not supported yet  (seg0 slice1 172.17.0.2:40000 pid=92001)
+ERROR:  iceberg: SELECT is not supported yet  (seg0 slice1 172.17.0.3:40000 pid=96554)
 INSERT INTO dlskel_r VALUES (1, 'x');
-ERROR:  iceberg: INSERT is not supported yet  (seg1 172.17.0.2:40001 pid=92002)
+ERROR:  iceberg: INSERT is not supported yet  (seg0 172.17.0.3:40000 pid=96554)
 UPDATE dlskel_r SET a = 1;
-ERROR:  iceberg: SELECT is not supported yet  (seg0 172.17.0.2:40000 pid=92001)
+ERROR:  iceberg: SELECT is not supported yet  (seg0 172.17.0.3:40000 pid=96554)
 DELETE FROM dlskel_r;
-ERROR:  iceberg: SELECT is not supported yet  (seg0 172.17.0.2:40000 pid=92001)
+ERROR:  iceberg: SELECT is not supported yet  (seg0 172.17.0.3:40000 pid=96554)
 COPY dlskel_r FROM stdin;
 ERROR:  iceberg: INSERT is not supported yet
 CONTEXT:  COPY dlskel_r, line 1
@@ -92,7 +93,7 @@ ERROR:  iceberg: SELECT is not supported yet
 CREATE INDEX ON dlskel_r (a);
 ERROR:  iceberg: CREATE INDEX is not supported yet
 SELECT * FROM dlskel_r TABLESAMPLE BERNOULLI (10);
-ERROR:  iceberg: SELECT is not supported yet  (seg0 slice1 172.17.0.2:40000 pid=92001)
+ERROR:  iceberg: SELECT is not supported yet  (seg0 slice1 172.17.0.3:40000 pid=96554)
 -- A table from an earlier transaction takes the new-filelocator path rather
 -- than the access method's truncate callback, so this is the case that would
 -- silently report success if only the callback rejected it.
@@ -122,7 +123,7 @@ SELECT count(*) AS heap_rows_kept FROM dlskel_heap;
 VACUUM FULL dlskel_r;
 ERROR:  iceberg: VACUUM FULL on iceberg tables is not supported yet
 SELECT * FROM dlskel_r FOR UPDATE;
-ERROR:  iceberg: SELECT is not supported yet  (seg0 slice1 172.17.0.2:40000 pid=92001)
+ERROR:  iceberg: SELECT is not supported yet  (seg0 slice1 172.17.0.3:40000 pid=96554)
 CREATE TABLE dlskel_bad_dist (a int)
   USING iceberg
   WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol')
@@ -166,6 +167,41 @@ CREATE TABLE dlskel_bad USING iceberg AS SELECT 1;
 ERROR:  iceberg: CREATE TABLE AS / CREATE MATERIALIZED VIEW is not supported yet
 CREATE MATERIALIZED VIEW dlskel_mv USING iceberg AS SELECT 1;
 ERROR:  iceberg: CREATE TABLE AS / CREATE MATERIALIZED VIEW is not supported yet
+-- A column type a data file cannot hold is refused when the table is created,
+-- not at its first write: nothing can ALTER a lake table's columns, so a table
+-- accepted with one would be a table nothing can ever be put in.  The rule is
+-- the format layer's, asked through the same function the writer asks.
+CREATE TABLE dlskel_bad_numeric (a int, n numeric)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol');
+ERROR:  iceberg: column "n" has type numeric, which cannot be stored in a lake table
+-- A length limit has nowhere to live in a lake table, whose only string type is
+-- unbounded, and a file written by anything else could break it.
+CREATE TABLE dlskel_bad_varchar (a int, v varchar(16))
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol');
+ERROR:  iceberg: column "v" has type character varying(16), which has a length limit, and a lake table has no way to store one; use text or varchar without a length
+CREATE TABLE dlskel_bad_char (a int, c char(5))
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol');
+ERROR:  iceberg: column "c" has type character(5), which is padded to a declared length, and a lake table has no way to store that; use text
+-- LIKE copies its columns after this check has run, so it is refused rather
+-- than let through unchecked.
+CREATE TABLE dlskel_bad_like (LIKE dlskel_heap)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol');
+ERROR:  iceberg: LIKE is not supported yet
+-- Every type a data file can hold, in one table; unbounded varchar included.
+CREATE TABLE dlskel_types (
+  c_bool boolean, c_int2 smallint, c_int4 integer, c_int8 bigint,
+  c_float4 real, c_float8 double precision, c_text text, c_varchar varchar,
+  c_bytea bytea, c_date date, c_time time, c_ts timestamp,
+  c_tstz timestamptz, c_uuid uuid, c_serial serial)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol');
+NOTICE:  stub engine: created iceberg table "public.dlskel_types" in catalog "dlskel_cat"
+DROP TABLE dlskel_types;
+NOTICE:  stub engine: dropped iceberg table "public.dlskel_types" from catalog "dlskel_cat", keeping data
 -- Converting a heap into a lake table has to be refused too: the relation is
 -- still a heap when the statement arrives, so the guard above does not see it.
 ALTER TABLE dlskel_heap SET ACCESS METHOD iceberg;
@@ -417,7 +453,8 @@ DROP TABLE IF EXISTS
   dlskel_bad_tablespace, dlskel_bad_missing_server,
   dlskel_bad_wrong_catalog, dlskel_bad_no_catalog,
   dlskel_bad_reloption, dlskel_bad_engine, dlskel_r_new, dlskel_heap,
-  dlskel_bad_repl, dlskel_bad_purge
+  dlskel_bad_repl, dlskel_bad_purge, dlskel_bad_numeric, dlskel_bad_varchar,
+  dlskel_bad_char, dlskel_bad_like, dlskel_types
   CASCADE;
 DROP SERVER IF EXISTS dlskel_cat CASCADE;
 DROP SERVER IF EXISTS dlskel_cat2 CASCADE;
