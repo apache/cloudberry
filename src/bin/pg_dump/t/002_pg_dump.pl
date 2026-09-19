@@ -1596,6 +1596,16 @@ my %tests = (
 		regexp => qr/\n--[^\n]*\nattack/s,
 		like => {},
 	},
+	'CREATE DATABASE regression_invalid...' => {
+		create_order => 1,
+		create_sql => q(
+		    CREATE DATABASE regression_invalid;
+			UPDATE pg_database SET datconnlimit = -2 WHERE datname = 'regression_invalid'),
+		regexp => qr/^CREATE DATABASE regression_invalid/m,
+
+		# invalid databases should never be dumped
+		like => {},
+	},
 
 	'CREATE ACCESS METHOD gist2' => {
 		create_order => 52,
