@@ -3,7 +3,7 @@
 -- are flowing from different segments in different order. Mask those
 -- differences by setting 'extra_float_digits'. This isn't enough for all of
 -- the queries, so a few also use TO_CHAR() to truncate the results further.
-set extra_float_digits=0;
+set extra_float_digits=-1;
 drop table if exists dqa_t1;
 NOTICE:  table "dqa_t1" does not exist, skipping
 drop table if exists dqa_t2;
@@ -800,9 +800,9 @@ explain (costs off) select sum(distinct d), count(distinct i), count(distinct c)
 
 -- multi args singledqa
 select corr(distinct d, i) from dqa_t1;
-        corr        
---------------------
- 0.0824013341460019
+       corr        
+-------------------
+ 0.082401334146002
 (1 row)
 
 explain (costs off) select corr(distinct d, i) from dqa_t1;
@@ -895,9 +895,9 @@ explain (costs off) select to_char(corr(distinct d, i), '9.99999999999999') from
 
 -- multi args multidqa
 select count(distinct c), corr(distinct d, i) from dqa_t1;
- count |        corr        
--------+--------------------
-    10 | 0.0824013341460019
+ count |       corr        
+-------+-------------------
+    10 | 0.082401334146002
 (1 row)
 
 explain (costs off) select count(distinct c), corr(distinct d, i) from dqa_t1;
@@ -917,9 +917,9 @@ explain (costs off) select count(distinct c), corr(distinct d, i) from dqa_t1;
 (11 rows)
 
 select count(distinct d), corr(distinct d, i) from dqa_t1;
- count |        corr        
--------+--------------------
-    23 | 0.0824013341460019
+ count |       corr        
+-------+-------------------
+    23 | 0.082401334146002
 (1 row)
 
 explain (costs off) select count(distinct d), corr(distinct d, i) from dqa_t1;
@@ -939,9 +939,9 @@ explain (costs off) select count(distinct d), corr(distinct d, i) from dqa_t1;
 (11 rows)
 
 select count(distinct d), count(distinct i), corr(distinct d, i) from dqa_t1;
- count | count |        corr        
--------+-------+--------------------
-    23 |    12 | 0.0824013341460019
+ count | count |       corr        
+-------+-------+-------------------
+    23 |    12 | 0.082401334146002
 (1 row)
 
 explain (costs off) select count(distinct d), count(distinct i), corr(distinct d, i) from dqa_t1;
@@ -961,9 +961,9 @@ explain (costs off) select count(distinct d), count(distinct i), corr(distinct d
 (11 rows)
 
 select count(distinct c), count(distinct d), count(distinct i), corr(distinct d, i) from dqa_t1;
- count | count | count |        corr        
--------+-------+-------+--------------------
-    10 |    23 |    12 | 0.0824013341460019
+ count | count | count |       corr        
+-------+-------+-------+-------------------
+    10 |    23 |    12 | 0.082401334146002
 (1 row)
 
 explain (costs off) select count(distinct c), count(distinct d), count(distinct i), corr(distinct d, i) from dqa_t1;
@@ -1159,42 +1159,42 @@ explain (costs off) select count(distinct c), corr(distinct d, i), d, i from dqa
 (16 rows)
 
 select count(distinct c), corr(distinct d, i), dt from dqa_t1 group by dt;
- count |        corr        |     dt     
--------+--------------------+------------
-     3 |   0.59603956067927 | 06-25-2009
-     3 | 0.0750939261482638 | 06-20-2009
-     3 | 0.0750939261482638 | 07-11-2009
-     3 | 0.0750939261482638 | 06-18-2009
-     3 | 0.0750939261482638 | 06-14-2009
-     3 |  0.755928946018455 | 06-10-2009
-     3 | 0.0750939261482638 | 06-28-2009
-     3 | 0.0750939261482638 | 06-17-2009
-     3 | 0.0750939261482638 | 06-16-2009
-     3 |   0.59603956067927 | 06-24-2009
-     3 | 0.0750939261482638 | 06-29-2009
-     3 | 0.0750939261482638 | 07-09-2009
-     3 | 0.0750939261482638 | 06-21-2009
-     3 | 0.0750939261482638 | 06-26-2009
-     3 | -0.709570905570559 | 06-13-2009
-     3 | -0.709570905570559 | 06-23-2009
-     3 |   0.59603956067927 | 06-11-2009
-     3 | 0.0750939261482638 | 07-10-2009
-     3 | 0.0750939261482638 | 07-01-2009
-     3 | -0.709570905570559 | 06-12-2009
-     3 |   0.59603956067927 | 07-04-2009
-     3 | 0.0750939261482638 | 06-15-2009
-     3 | 0.0750939261482638 | 06-30-2009
-     3 |   0.59603956067927 | 07-05-2009
-     2 |                 -1 | 07-12-2009
-     3 | 0.0750939261482638 | 07-02-2009
-     3 | 0.0750939261482638 | 06-27-2009
-     3 |                 -1 | 07-03-2009
-     3 | -0.709570905570559 | 07-06-2009
-     2 |                 -1 | 07-13-2009
-     3 | -0.709570905570559 | 07-07-2009
-     3 | 0.0750939261482638 | 07-08-2009
-     3 | 0.0750939261482638 | 06-19-2009
-     3 | -0.709570905570559 | 06-22-2009
+ count |       corr        |     dt     
+-------+-------------------+------------
+     3 |  0.75592894601845 | 06-10-2009
+     3 | 0.075093926148264 | 07-11-2009
+     3 | 0.075093926148264 | 06-28-2009
+     3 | 0.075093926148264 | 06-19-2009
+     3 | 0.075093926148264 | 06-17-2009
+     3 | 0.075093926148264 | 07-08-2009
+     3 | 0.075093926148264 | 06-16-2009
+     2 |                -1 | 07-13-2009
+     3 | 0.075093926148264 | 06-29-2009
+     3 |  0.59603956067927 | 07-04-2009
+     3 | -0.70957090557056 | 06-23-2009
+     2 |                -1 | 07-12-2009
+     3 | 0.075093926148264 | 07-02-2009
+     3 |  0.59603956067927 | 06-11-2009
+     3 | 0.075093926148264 | 07-10-2009
+     3 | 0.075093926148264 | 06-18-2009
+     3 |  0.59603956067927 | 07-05-2009
+     3 | 0.075093926148264 | 06-20-2009
+     3 | 0.075093926148264 | 07-09-2009
+     3 | -0.70957090557056 | 06-12-2009
+     3 |  0.59603956067927 | 06-24-2009
+     3 | 0.075093926148264 | 06-14-2009
+     3 | 0.075093926148264 | 06-26-2009
+     3 | -0.70957090557056 | 06-22-2009
+     3 | -0.70957090557056 | 06-13-2009
+     3 | 0.075093926148264 | 06-21-2009
+     3 | -0.70957090557056 | 07-07-2009
+     3 | 0.075093926148264 | 06-27-2009
+     3 | -0.70957090557056 | 07-06-2009
+     3 | 0.075093926148264 | 07-01-2009
+     3 |                -1 | 07-03-2009
+     3 | 0.075093926148264 | 06-15-2009
+     3 |  0.59603956067927 | 06-25-2009
+     3 | 0.075093926148264 | 06-30-2009
 (34 rows)
 
 explain (costs off) select count(distinct c), corr(distinct d, i), dt from dqa_t1 group by dt;
