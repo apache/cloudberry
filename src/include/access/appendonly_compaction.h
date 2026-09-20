@@ -29,11 +29,19 @@
  */
 typedef struct AOVacuumRelStats
 {
-	int		nbytes_truncated;	/* current # of bytes truncated from segment file */
-	int		num_dead_tuples;	/* current # of dead tuples */
+	int64	nbytes_truncated;	/* current # of bytes truncated from segment file */
+	int64	num_dead_tuples;	/* current # of dead tuples */
 	int		num_index_vacuumed; /* current # of indexes been vacuumed */
-	/* when the first phase started, for the cumulative vacuum time */
+	/* Legacy timing-report baseline, retained until elapsed-time reporting. */
 	TimestampTz starttime;
+	/* Active phase durations and delays in milliseconds, excluding phase gaps. */
+	double		vacuum_time;
+	double		delay_time;
+	int64		live_tuples;
+	int64		dead_tuples;
+
+	/* the relation these stats were started for */
+	Oid			relid;
 } AOVacuumRelStats;
 
 extern Bitmapset *AppendOptimizedCollectDeadSegments(Relation aorel);
