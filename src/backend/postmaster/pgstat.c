@@ -5872,6 +5872,9 @@ pgstat_recv_vacstats(PgStat_MsgVacstats *msg, int len)
 	vacstats->tuples_deleted += msg->m_stats.tuples_deleted;
 	vacstats->dead_tuples += msg->m_stats.dead_tuples;
 	vacstats->pages_deleted += msg->m_stats.pages_deleted;
+	vacstats->bytes_removed += msg->m_stats.bytes_removed;
+	/* Relation state is replaced, never added to database totals. */
+	vacstats->total_file_segs = msg->m_stats.total_file_segs;
 	vacstats->dead_pages += msg->m_stats.dead_pages;
 	vacstats->pages_frozen += msg->m_stats.pages_frozen;
 	vacstats->pages_all_visible += msg->m_stats.pages_all_visible;
@@ -5890,6 +5893,7 @@ pgstat_recv_vacstats(PgStat_MsgVacstats *msg, int len)
 	dbentry->n_vacuum_stats.tuples_deleted += msg->m_stats.tuples_deleted;
 	dbentry->n_vacuum_stats.dead_tuples += msg->m_stats.dead_tuples;
 	dbentry->n_vacuum_stats.pages_deleted += msg->m_stats.pages_deleted;
+	dbentry->n_vacuum_stats.bytes_removed += msg->m_stats.bytes_removed;
 	dbentry->n_vacuum_stats.dead_pages += msg->m_stats.dead_pages;
 	dbentry->n_vacuum_stats.pages_frozen += msg->m_stats.pages_frozen;
 	dbentry->n_vacuum_stats.pages_all_visible += msg->m_stats.pages_all_visible;
