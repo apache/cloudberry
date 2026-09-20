@@ -36,6 +36,7 @@ typedef struct AOVacuumRelStats
 	int64	vacuum_time;		/* time spent in the phases, in microseconds */
 	int64	delay_time;			/* of which the cost-based vacuum delay */
 	int64	dead_tuples_left;	/* tuples the post-cleanup found still hidden */
+	int64	total_file_segs;	/* segment metadata entries after post-cleanup */
 } AOVacuumRelStats;
 
 extern Bitmapset *AppendOptimizedCollectDeadSegments(Relation aorel);
