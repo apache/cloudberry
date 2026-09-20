@@ -437,7 +437,9 @@ typedef struct PgStat_VacuumStats
 	PgStat_Counter tuples_deleted;	/* tuples removed by vacuum */
 	PgStat_Counter dead_tuples; /* dead tuples left unremoved */
 	PgStat_Counter pages_deleted;	/* pages removed/deleted by vacuum */
+	PgStat_Counter bytes_removed; /* bytes physically truncated from table files */
 	PgStat_Counter dead_pages;	/* pages with unremoved dead tuples */
+	PgStat_Counter total_file_segs; /* latest AO segment count, not cumulative */
 	PgStat_Counter pages_frozen;	/* pages where vacuum froze tuples */
 	PgStat_Counter pages_all_visible;	/* pages marked all-visible by vacuum */
 
@@ -778,7 +780,7 @@ typedef union PgStat_Msg
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCAA
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCAD
 
 /* ----------
  * PgStat_StatDBEntry			The collector's data per database

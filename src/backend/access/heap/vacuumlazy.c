@@ -786,6 +786,7 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 		vacstats.tuples_deleted = (PgStat_Counter) vacrel->tuples_deleted;
 		vacstats.dead_tuples = (PgStat_Counter) vacrel->new_dead_tuples;
 		vacstats.pages_deleted = (PgStat_Counter) vacrel->pages_removed;
+		vacstats.bytes_removed = (PgStat_Counter) vacrel->pages_removed * BLCKSZ;
 		vacstats.dead_pages = (PgStat_Counter) vacrel->dead_pages;
 		vacstats.pages_frozen = (PgStat_Counter) vacrel->pages_frozen;
 		vacstats.pages_all_visible = (PgStat_Counter) vacrel->pages_all_visible;
