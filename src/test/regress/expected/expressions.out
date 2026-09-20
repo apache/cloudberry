@@ -509,14 +509,12 @@ select * from inttest where a in (1::myint,2::myint,3::myint,4::myint,5::myint,6
 select * from inttest where a not in (1::myint,2::myint,3::myint,4::myint,5::myint,6::myint,7::myint,8::myint,9::myint, null);
  a 
 ---
- 
-(1 row)
+(0 rows)
 
 select * from inttest where a not in (0::myint,2::myint,3::myint,4::myint,5::myint,6::myint,7::myint,8::myint,9::myint, null);
  a 
 ---
- 
-(1 row)
+(0 rows)
 
 -- ensure the result matched with the non-hashed version.  We simply remove
 -- some array elements so that we don't reach the hashing threshold.

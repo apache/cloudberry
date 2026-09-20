@@ -40,8 +40,11 @@
 #    SQL_DIR sql
 #    EXPECTED_DIR expected_${GP_MAJOR_VERSION})
 
-# CMAKE_CURRENT_FUNCTION_LIST_DIR - 3.17
-cmake_minimum_required(VERSION 3.17)
+cmake_minimum_required(VERSION 3.16)
+
+# Directory holding this module, captured at include() time. Used instead of
+# CMAKE_CURRENT_FUNCTION_LIST_DIR, which requires CMake 3.17.
+set(REGRESS_CMAKE_LIST_DIR ${CMAKE_CURRENT_LIST_DIR})
 
 # pg_isolation2_regress was not shipped with GPDB release. It needs to be created from source.
 function(_PGIsolation2Target_Add working_DIR)
@@ -203,7 +206,7 @@ function(RegressTarget_Add name)
         ${regress_BIN}  ${regress_opts_arg}  ${regress_arg})
     if (arg_RUN_TIMES)
         set(test_command
-            ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/regress_loop.sh
+            ${REGRESS_CMAKE_LIST_DIR}/regress_loop.sh
             ${arg_RUN_TIMES}
             ${regress_command})
     else()
@@ -222,7 +225,7 @@ function(RegressTarget_Add name)
         COMMAND
         ${test_command}
         ||
-        ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/regress_show_diff.sh ${working_DIR}
+        ${REGRESS_CMAKE_LIST_DIR}/regress_show_diff.sh ${working_DIR}
     )
 
     if(arg_REGRESS_TYPE STREQUAL isolation2)

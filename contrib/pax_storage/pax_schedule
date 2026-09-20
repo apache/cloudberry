@@ -6,6 +6,7 @@ test: alter_distributed
 test: toast toast_failed detoast ddl numeric types filter
 test: update
 test: statistics_bloom_filter
+test: delete_bloom_stats
 
 test: filter_tree filter_tree_arithmetic
 test: filter_tree_root_quals

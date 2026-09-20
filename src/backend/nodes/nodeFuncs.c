@@ -3036,7 +3036,6 @@ expression_tree_mutator_impl(Node *node,
 		case T_NextValueExpr:
 		case T_RangeTblRef:
 		case T_String:
-		case T_Null:
 		case T_CTESearchClause:
 			return (Node *) copyObject(node);
 		case T_WithCheckOption:

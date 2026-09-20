@@ -768,6 +768,8 @@ typedef struct RangeTableSample
  */
 typedef struct ColumnDef
 {
+	pg_node_attr(custom_copy_equal, custom_read_write)
+
 	NodeTag		type;
 	char	   *colname;		/* name of column */
 	TypeName   *typeName;		/* type of column */
@@ -966,8 +968,8 @@ typedef struct PartitionSpec
 	PartitionStrategy strategy;
 	List	   *partParams;		/* List of PartitionElems */
 
-	struct GpPartitionDefinition *gpPartDef;
-	struct PartitionSpec         *subPartSpec;     /* subpartition specification */
+	struct GpPartitionDefinition *gpPartDef pg_node_attr(read_as(NULL), read_write_ignore);
+	struct PartitionSpec         *subPartSpec pg_node_attr(read_as(NULL), read_write_ignore);     /* subpartition specification */
 	int                          location;		/* token location, or -1 if unknown */
 } PartitionSpec;
 
@@ -1208,7 +1210,7 @@ typedef struct RangeTblEntry
 	/* These are for pre-planned sub-queries only.  They are internal to
 	 * window planning.
 	 */
-	struct PlannerInfo *subquery_root;	/* merge16_delete_temp   */
+	struct PlannerInfo *subquery_root pg_node_attr(equal_ignore, copy_ignore);	/* merge16_delete_temp   */
 	List		*subquery_rtable;
 	List		*subquery_pathkeys;
 
@@ -1420,7 +1422,7 @@ typedef struct RangeTblFunction
 	List	   *funccoltypmods pg_node_attr(query_jumble_ignore);
 	/* OID list of column collation OIDs */
 	List	   *funccolcollations pg_node_attr(query_jumble_ignore);
-	bytea	   *funcuserdata;	/* merge16_delete_temp  */	/* describe function user data. assume bytea */
+	bytea	   *funcuserdata pg_node_attr(array_size(funccolcount));	/* merge16_delete_temp  */	/* describe function user data. assume bytea */
 
 	/* This is set during planning for use by the executor: */
 	/* PARAM_EXEC Param IDs affecting this func */
@@ -2321,8 +2323,8 @@ typedef struct CreateSchemaStmt
 	NodeTag		type;
 	char	   *schemaname;		/* the name of the schema to create */
 	RoleSpec   *authrole;		/* the owner of the created schema */
-	List	   *schemaElts;		/* schema components (list of parsenodes) */
-	bool		if_not_exists;	/* just do nothing if schema already exists? */
+	List	   *schemaElts pg_node_attr(read_as(NIL), read_write_ignore);		/* schema components (list of parsenodes) */
+	bool		if_not_exists pg_node_attr(read_as(false), read_write_ignore);	/* just do nothing if schema already exists? */
 
 	/*
 	 * In GPDB, when a CreateSchemaStmt is dispatched to executor nodes, the
@@ -2885,7 +2887,7 @@ typedef enum ExtTableType
 	EXTTBL_TYPE_EXECUTE			/* table defined with EXECUTE clause */
 } ExtTableType;
 
-typedef struct
+typedef struct ExtTableTypeDesc
 {
 	NodeTag			type;
 	ExtTableType	exttabletype;
@@ -3938,7 +3940,8 @@ typedef struct FetchStmt
  * properties are empty.
  * ----------------------
  */
-typedef enum IndexConcurrentlyPhase {
+typedef enum IndexConcurrentlyPhase 
+{
 	CONCURRENTLY_INIT,
 	CONCURRENTLY_BUILD_INDEX,
 	CONCURRENTLY_VALIDATE_INDEX,
@@ -4347,7 +4350,7 @@ typedef struct ViewStmt
 	Node	   *query;			/* the SELECT query (as a raw parse tree) */
 	bool		replace;		/* replace an existing view? */
 	List	   *options;		/* options from WITH clause */
-	ViewCheckOption withCheckOption;	/* WITH CHECK OPTION */
+	ViewCheckOption withCheckOption pg_node_attr(read_as(NO_CHECK_OPTION), read_write_ignore);	/* WITH CHECK OPTION */
 	List	   *tags;			/* List of tags DefElem nodes */
 } ViewStmt;
 

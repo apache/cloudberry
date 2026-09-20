@@ -553,13 +553,7 @@ code or new licensing patterns.
             <exclude>gpAux/extensions/pljava/src/java/Makefile.global</exclude>
             <exclude>gpAux/releng/set_bld_arch.sh</exclude>
             <exclude>gpAux/releng/gppkg.mk</exclude>
-            <exclude>gpAux/client/install/src/windows/Makefile</exclude>
-            <exclude>gpAux/client/install/src/windows/greenplum-clients.wxs</exclude>
-            <exclude>gpAux/client/install/src/windows/CreatePackage.bat</exclude>
-            <exclude>gpAux/client/install/src/windows/CopyDependencies.bat</exclude>
-            <exclude>gpAux/client/install/src/windows/license.rtf</exclude>
             <exclude>gpAux/client/scripts/cloudberry_clients_path.sh</exclude>
-            <exclude>gpAux/client/scripts/cloudberry_clients_path.bat</exclude>
 
             <exclude>doc/**</exclude>
 
@@ -1254,7 +1248,6 @@ code or new licensing patterns.
             <exclude>**/*.json</exclude>
             <exclude>**/*.sql</exclude>
             <exclude>**/*.out</exclude>
-            <exclude>**/Thumbs.db</exclude>
             <exclude>.github/full_color_black.svg</exclude>
             <exclude>.github/full_color_white.svg</exclude>
             <exclude>sonar-project.properties</exclude>
@@ -1281,6 +1274,9 @@ code or new licensing patterns.
             <exclude>gpcontrib/gp_relsizes_stats/gp_relsizes_stats.control</exclude>
             <exclude>gpcontrib/gp_relsizes_stats/test/postgresql.conf.add</exclude>
 
+            <exclude>gpcontrib/gp_relaccess_stats/Makefile</exclude>
+            <exclude>gpcontrib/gp_relaccess_stats/gp_relaccess_stats.control</exclude>
+
             <exclude>gpcontrib/reject_partition_fullscan/Makefile</exclude>
             <exclude>gpcontrib/reject_partition_fullscan/reject_partition_fullscan.control</exclude>
 
@@ -1297,255 +1293,6 @@ code or new licensing patterns.
             <exclude>contrib/pax_storage/src/api/python3/MANIFEST.in</exclude>
             <exclude>contrib/pax_storage/src/api/python3/setup.cfg</exclude>
 
-            <exclude>dependency/yyjson/.gitattributes</exclude>
-            <exclude>dependency/yyjson/.github/codecov.yml</exclude>
-            <exclude>dependency/yyjson/.github/workflows/cmake.yml</exclude>
-            <exclude>dependency/yyjson/CMakeLists.txt</exclude>
-            <exclude>dependency/yyjson/Package.swift</exclude>
-            <exclude>dependency/yyjson/cmake/FindGMP.cmake</exclude>
-            <exclude>dependency/yyjson/cmake/FindMPFR.cmake</exclude>
-            <exclude>dependency/yyjson/cmake/XcodeProperty.cmake</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/DoxyLayout.xml</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/Doxyfile.in</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/annotated.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/annotated_dup.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/api.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/building-and-testing.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/classes.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/cookie.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/data-structures.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/deprecated.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/dir_68267d1309a1af8e8297ef4c3efbcdba.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/dir_68267d1309a1af8e8297ef4c3efbcdba.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/dir_e68e8157741866f444e17edd764ebbae.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/doc.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/docd.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/doxygen.css</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/doxygen.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/doxygen_crawl.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/files.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/files_dup.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/folderclosed.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/folderclosedd.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/folderopen.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/folderopend.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/functions.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/functions_vars.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/globals.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/globals_defs.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/globals_dup.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/globals_func.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/globals_func.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/globals_type.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/globals_vars.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/globals_y.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/index.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/index.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/jquery.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/md__c_h_a_n_g_e_l_o_g.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/md_doc__a_p_i.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/md_doc__build_and_test.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/md_doc__data_structure.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/minus.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/minusd.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/navtree.css</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/navtreeindex0.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/navtreeindex1.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/navtreeindex2.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/pages.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/perf_reader_a14.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/perf_reader_ec2.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/plus.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/plusd.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_0.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_0.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_10.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_10.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_11.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_12.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_13.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_14.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_15.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_16.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_17.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_18.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_19.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1a.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1b.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1c.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1d.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1e.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1f.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_2.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_2.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_20.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_3.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_3.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_4.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_4.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_5.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_5.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_6.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_6.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_7.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_7.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_8.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_8.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_9.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_9.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_a.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_a.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_b.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_b.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_c.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_c.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_d.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_d.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_e.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_e.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_f.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_f.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/classes_0.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/classes_0.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/close.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/defines_0.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/defines_0.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/defines_1.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/defines_1.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/files_0.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/files_0.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/functions_0.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/functions_0.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/mag.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/mag_d.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/mag_sel.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/mag_seld.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/nomatches.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_0.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_0.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_1.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_1.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_2.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_2.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_3.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_3.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_4.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_4.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_5.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_6.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_7.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/search.css</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/searchdata.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/typedefs_0.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/typedefs_0.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_0.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_0.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_1.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_1.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_2.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_2.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_3.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_3.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_4.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_4.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_5.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_5.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_6.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_6.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_7.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_7.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_8.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_8.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_9.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_9.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_a.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_a.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_b.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_b.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_c.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_c.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_d.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_d.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_e.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_e.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/struct_idoc1.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/struct_idoc2.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/struct_ival.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/struct_mdoc.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/struct_mval.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/structyyjson__alc.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/structyyjson__alc.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/tabs.css</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson-style.css</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__alc.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__arr__iter.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__doc.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__mut__arr__iter.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__mut__doc.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__mut__obj__iter.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__mut__val.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__obj__iter.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__patch__err.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__ptr__ctx.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__ptr__err.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__read__err.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__val.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__write__err.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/theme/yyjson-footer.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/theme/yyjson-header.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/theme/yyjson-style.css</exclude>
-            <exclude>dependency/yyjson/doc/images/perf_reader_a14.svg</exclude>
-            <exclude>dependency/yyjson/doc/images/perf_reader_ec2.svg</exclude>
-            <exclude>dependency/yyjson/doc/images/struct_idoc1.svg</exclude>
-            <exclude>dependency/yyjson/doc/images/struct_idoc2.svg</exclude>
-            <exclude>dependency/yyjson/doc/images/struct_ival.svg</exclude>
-            <exclude>dependency/yyjson/doc/images/struct_mdoc.svg</exclude>
-            <exclude>dependency/yyjson/doc/images/struct_mval.svg</exclude>
-            <exclude>dependency/yyjson/fuzz/fuzzer.c</exclude>
-            <exclude>dependency/yyjson/fuzz/fuzzer.dict</exclude>
-            <exclude>dependency/yyjson/misc/jsoninfo.c</exclude>
-            <exclude>dependency/yyjson/misc/make_tables.c</exclude>
-            <exclude>dependency/yyjson/test/compile_ansi.c</exclude>
-            <exclude>dependency/yyjson/test/compile_ansi.cpp</exclude>
-            <exclude>dependency/yyjson/test/data/num/literal_fail.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/literal_pass.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/num_fail.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/num_overflow.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/real_pass_1.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/real_pass_2.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/real_pass_3.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/real_pass_4.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/real_pass_5.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/real_pass_6.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/real_pass_7.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/sint_bignum.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/sint_pass.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/uint_bignum.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/uint_pass.txt</exclude>
-            <exclude>dependency/yyjson/test/test_allocator.c</exclude>
-            <exclude>dependency/yyjson/test/test_err_code.c</exclude>
-            <exclude>dependency/yyjson/test/test_json_merge_patch.c</exclude>
-            <exclude>dependency/yyjson/test/test_json_mut_val.c</exclude>
-            <exclude>dependency/yyjson/test/test_json_patch.c</exclude>
-            <exclude>dependency/yyjson/test/test_json_pointer.c</exclude>
-            <exclude>dependency/yyjson/test/test_json_reader.c</exclude>
-            <exclude>dependency/yyjson/test/test_json_val.c</exclude>
-            <exclude>dependency/yyjson/test/test_json_writer.c</exclude>
-            <exclude>dependency/yyjson/test/test_number.c</exclude>
-            <exclude>dependency/yyjson/test/test_roundtrip.c</exclude>
-            <exclude>dependency/yyjson/test/test_string.c</exclude>
-            <exclude>dependency/yyjson/test/util/goo_double_conv.h</exclude>
-            <exclude>dependency/yyjson/test/util/yy_test_utils.c</exclude>
-            <exclude>dependency/yyjson/test/util/yy_test_utils.h</exclude>
-            <exclude>dependency/yyjson/test/xctest/Info.plist</exclude>
-            <exclude>dependency/yyjson/test/xctest/yy_xctest.h</exclude>
-            <exclude>dependency/yyjson/test/xctest/yy_xctest.m.in</exclude>
-            <exclude>dependency/yyjson/test/xctest/yy_xctest.m</exclude>
-            <exclude>dependency/yyjson/yyjson.pc.in</exclude>
 
             <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/tools/requirements.txt</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/tools/strip_asm.py</exclude>
@@ -1716,6 +1463,15 @@ code or new licensing patterns.
             <exclude>contrib/pax_storage/src/cpp/cpp-stub/src_win/addr_any.h</exclude>
             <exclude>contrib/pax_storage/src/cpp/cpp-stub/src/addr_pri.h</exclude>
             <exclude>contrib/pax_storage/src/cpp/cpp-stub/src/stub.h</exclude>
+
+            <!--
+                Verbatim third-party license texts referenced from the root
+                LICENSE file.  These are license grants, not source files, so
+                they carry no license header of their own.
+            -->
+            <exclude>licenses/LICENSE-amalgamate.txt</exclude>
+            <exclude>licenses/LICENSE-boost.txt</exclude>
+            <exclude>licenses/LICENSE-termcolor.txt</exclude>
 
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/tabulateConfig.cmake.in</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/tabulate.pri</exclude>

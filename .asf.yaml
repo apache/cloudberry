@@ -72,6 +72,19 @@ github:
     # Enable rebase merging for linear history
     rebase: true
 
+  # Repository collaborators (triage access)
+  #
+  # Non-committer contributors listed here get triage permission, which
+  # lets GitHub Actions run automatically on their pull requests without
+  # waiting for a committer's manual approval.  This speeds up the
+  # feedback loop for people who contribute regularly.
+  collaborators:
+    - Alena0704
+    - andr-sokolov
+    - Vlasdislav
+    - fairyfar
+    - MutableFire
+
   # Branch protection rules for the main branch
   protected_branches:
     main:

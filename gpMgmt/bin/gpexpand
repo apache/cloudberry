@@ -846,6 +846,24 @@ class SegmentTemplate:
         # and mirror information
         update_pg_hba_on_segments(self.gparray, self.isHbaHostnames, self.batch_size, expanded_host_content)
 
+        new_segments = self.gparray.getExpansionSegDbList()
+        chmod_commands_by_host = defaultdict(list)
+
+        for seg in new_segments:
+            if seg.isSegmentMirror():
+                continue
+            datadir = seg.getSegmentDataDirectory()
+            hostname = seg.getSegmentHostName()
+            chmod_commands_by_host[hostname].append("chmod 0750 '%s'" % datadir)
+
+        for host, commands in chmod_commands_by_host.items():
+            if commands:
+                self.pool.addCommand(Command(name='gpexpand fix permissions on %s' % host,
+                                 cmdStr=" && ".join(commands), ctxt=REMOTE, remoteHost=host))
+
+        self.pool.join()
+        self.pool.check_results()
+
         self._start_new_primary_segments()
         self._stop_new_primary_segments()
 

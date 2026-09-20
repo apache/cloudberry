@@ -406,11 +406,9 @@ format_sockaddr(struct sockaddr_storage *sa, char *buf, size_t len)
 		snprintf(buf, len, "?host?:?port?");
 	else
 	{
-#ifdef HAVE_IPV6
 		if (sa->ss_family == AF_INET6)
 			snprintf(buf, len, "[%s]:%s", remote_host, remote_port);
 		else
-#endif
 			snprintf(buf, len, "%s:%s", remote_host, remote_port);
 	}
 

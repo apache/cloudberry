@@ -20,11 +20,6 @@ ifeq ($(have_yaml),yes)
   endif
 endif
 
-ifeq ($(PORTNAME),win32)
-  override CPPFLAGS := -I$(top_builddir)/src/port $(CPPFLAGS)
-  OBJS += $(top_builddir)/src/port/glob.o
-endif
-
 LDLIBS += $(LIBS) $(GPFDIST_LIBS) $(apr_link_ld_libs)
 
 all: gpfdist$(X)

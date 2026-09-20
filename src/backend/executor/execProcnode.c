@@ -893,7 +893,6 @@ ExecEndNode(PlanState *node)
 			break;
 
 		case T_DynamicIndexScanState:
-		case T_DynamicIndexOnlyScanState:
 			ExecEndDynamicIndexScan((DynamicIndexScanState *) node);
 			break;
 

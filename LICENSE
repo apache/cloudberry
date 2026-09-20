@@ -214,13 +214,6 @@ The PostgreSQL software includes:
       copyright (c) Oliver Elphick <olly@lfix.co.uk>, 2001
 
 ----------------------------
-   BSD-4-Clause (University of California-Specific)
-      
-      src/include/port/win32_msvc/glob.h
-      src/port/glob.c
-      see licenses/LICENSE-glob.txt
-
-----------------------------
    BSD 3 Clause License
       
       src/port/inet_aton.c
@@ -235,7 +228,8 @@ The PostgreSQL software includes:
       src/backend/utils/mb/wstrncmp.c
       see licenses/LICENSE-bsd3-wstrncmp.txt
       
-      src/backend/libpq/sha2.h
+      src/common/sha2.c
+      src/common/sha2_int.h
       see licenses/LICENSE-bsd3-sha2.txt
 
 ----------------------------
@@ -251,7 +245,7 @@ The PostgreSQL software includes:
 ----------------------------
    Perl Artistic License 2.0 (exception)
       
-      src/pl/plperl/ppport.h: 
+      src/pl/plperl/ppport.h
 
       Pursuant to https://issues.apache.org/jira/browse/LEGAL-79 and
       PL/Perl's use of a generated header file, we declare this file to
@@ -281,8 +275,25 @@ The PostgreSQL software includes:
 ----------------------------
    PostgreSQL-style License
 
-      src/port/gettimeofday.c 
+      src/port/win32gettimeofday.c
       see licenses/LICENSE-gettimeofday.txt
+
+----------------------------
+   Boost Software License - Version 1.0
+
+      Ryu float-to-string conversion (https://github.com/ulfjack/ryu),
+      copyright 2018 Ulf Adams.  Upstream Ryu is dual-licensed under the
+      Apache License 2.0 or the Boost Software License 1.0; PostgreSQL
+      took it under the terms of the Boost license, and so does this
+      distribution.
+
+      src/common/d2s.c
+      src/common/d2s_full_table.h
+      src/common/d2s_intrinsics.h
+      src/common/f2s.c
+      src/common/ryu_common.h
+      src/include/common/shortest_dec.h
+      see licenses/LICENSE-boost.txt
 
 ================================================================================
 This product contains significant parts that were originally based on software
@@ -317,6 +328,27 @@ The Greenplum Database software includes:
       gpcontrib/gpcloud/test/googletest
       see licenses/LICENSE-googletest.txt
 
+      gpcontrib/pg_hint_plan/*
+      see licenses/LICENSE-pg-hint-plan.txt
+
+----------------------------
+   Internet Systems Consortium/Internet Software Consortium (ISC) LICENSE
+
+      gpMgmt/bin/lib/pexpect/__init__.py
+      gpMgmt/bin/lib/pexpect/pxssh.py
+      see licenses/LICENSE-pexpect.txt
+
+----------------------------
+   MIT LICENSE
+
+      gpcontrib/gpcloud/lib/http_parser.cpp
+      gpcontrib/gpcloud/lib/http_parser.h
+      see licenses/LICENSE-http-parser.txt
+
+      gpcontrib/gpcloud/lib/ini.cpp
+      gpcontrib/gpcloud/lib/ini.h
+      see licenses/LICENSE-ini.txt
+
 ----------------------------
    PostgreSQL License
 
@@ -347,17 +379,78 @@ Apache Cloudberry includes codes from
 ----------------------------
    MIT LICENSE
 
-      dependencies/yyjson
-      see licenses/LICENSE-yyjson.txt
-
       contrib/pax_storage/src/cpp/cpp-stub
       see licenses/LICENSE-cpp-stub.txt
 
       contrib/pax_storage/src/cpp/contrib/tabulate
+      (tabulate's own code only; the third-party code bundled and embedded
+       within it is listed below under its own licenses)
       see licenses/LICENSE-tabulate.txt
 
- ----------------------------
-   BSD 3 Clause License 
+      Note that tabulate's amalgamated single header,
+      contrib/pax_storage/src/cpp/contrib/tabulate/single_include/tabulate/tabulate.hpp,
+      is a composite file: the portions carrying tabulate's own
+      "SPDX-License-Identifier: MIT" notices are under this MIT license,
+      while the third-party portions embedded in the same file are under
+      the licenses identified below.
+
+----------------------------
+   Boost Software License - Version 1.0
+
+      The bundled tabulate library includes the following third-party
+      header-only libraries by Martin Moene, which are distributed under
+      the Boost Software License, Version 1.0, rather than under
+      tabulate's own MIT license:
+
+      optional-lite (https://github.com/martinmoene/optional-lite)
+         contrib/pax_storage/src/cpp/contrib/tabulate/include/tabulate/optional_lite.hpp
+
+      variant-lite (https://github.com/martinmoene/variant-lite)
+         contrib/pax_storage/src/cpp/contrib/tabulate/include/tabulate/variant_lite.hpp
+
+      string-view-lite (https://github.com/martinmoene/string-view-lite)
+         contrib/pax_storage/src/cpp/contrib/tabulate/include/tabulate/string_view_lite.hpp
+
+      Verbatim copies of all three are also embedded in tabulate's
+      amalgamated single header.  This license covers those embedded
+      portions -- the ones bearing the Martin Moene copyright notices and
+      the accompanying "Distributed under the Boost Software License,
+      Version 1.0" grants -- and not the file as a whole:
+         contrib/pax_storage/src/cpp/contrib/tabulate/single_include/tabulate/tabulate.hpp
+
+      see licenses/LICENSE-boost.txt
+      (also shipped in-tree as
+       contrib/pax_storage/src/cpp/contrib/tabulate/LICENSE.optional-lite and
+       contrib/pax_storage/src/cpp/contrib/tabulate/LICENSE.variant-lite)
+
+----------------------------
+   BSD 3 Clause License
 
       contrib/pax_storage/src/cpp/contrib/googletest
       see licenses/LICENSE-googletest.txt
+
+      termcolor (https://github.com/ikalnytskyi/termcolor), bundled by
+      tabulate rather than under tabulate's own MIT license:
+
+         contrib/pax_storage/src/cpp/contrib/tabulate/include/tabulate/termcolor.hpp
+
+      A verbatim copy of termcolor is also embedded in tabulate's
+      amalgamated single header.  This license covers that embedded
+      portion -- the one bearing the "copyright: (c) 2013 by Ihor
+      Kalnytskyi" notice, comprising the termcolor namespace -- and not
+      the file as a whole:
+         contrib/pax_storage/src/cpp/contrib/tabulate/single_include/tabulate/tabulate.hpp
+
+      see licenses/LICENSE-termcolor.txt
+      (also shipped in-tree as
+       contrib/pax_storage/src/cpp/contrib/tabulate/LICENSE.termcolor)
+
+      amalgamate.py (https://github.com/edlund/amalgamate), copyright
+      2012 Erik Edlund, the source amalgamation tool bundled by tabulate
+      and used to generate its single header:
+
+         contrib/pax_storage/src/cpp/contrib/tabulate/utils/amalgamate
+
+      see licenses/LICENSE-amalgamate.txt
+      (also shipped in-tree as
+       contrib/pax_storage/src/cpp/contrib/tabulate/utils/amalgamate/LICENSE.md)

@@ -77,7 +77,7 @@ typedef enum DMLAction
  */
 typedef struct PlannedStmt
 {
-	pg_node_attr(no_equal, no_query_jumble)
+	pg_node_attr(no_equal, no_query_jumble, custom_copy_equal, custom_read_write)
 
 	NodeTag		type;
 
@@ -122,7 +122,7 @@ typedef struct PlannedStmt
 
 	List	   *subplans;		/* Plan trees for SubPlan expressions; note
 								 * that some could be NULL */
-	int		   *subplan_sliceIds;	/* merge16_delete_temp  */	/* slice IDs containing SubPlans; size equals 'subplans' */
+	int		   *subplan_sliceIds pg_node_attr(array_size(subplans));	/* merge16_delete_temp  */	/* slice IDs containing SubPlans; size equals 'subplans' */
 
 	Bitmapset  *rewindPlanIDs;	/* indices of subplans that require REWIND */
 
@@ -272,7 +272,7 @@ typedef struct PlanSlice
  */
 typedef struct Plan
 {
-	pg_node_attr(abstract, no_equal, no_query_jumble)
+	pg_node_attr(no_equal, no_query_jumble)
 
 	NodeTag		type;
 
@@ -328,7 +328,7 @@ typedef struct Plan
 	 * MPP needs to keep track of the characteristics of flow of output
 	 * tuple of Plan nodes.
 	 */
-	Flow		*flow;			/* Flow description.  Initially NULL.
+	Flow		*flow pg_node_attr(read_as(NULL), read_write_ignore);			/* Flow description.  Initially NULL.
 	 * Set during parallelization.
 	 */
 
@@ -339,8 +339,8 @@ typedef struct Plan
 	 * Field flow has the locus info only in the top Plan nodes,
 	 * other nodes couldn't be set that.
 	 */
-	uint8	locustype;
-	int 			parallel; /* parallel workers of this plan if there was */
+	uint8	locustype pg_node_attr(read_as(0), read_write_ignore);
+	int 			parallel pg_node_attr(read_as(0), read_write_ignore); /* parallel workers of this plan if there was */
 
 	/**
 	 * How much memory (in KB) should be used to execute this plan node?
@@ -381,7 +381,7 @@ typedef struct Result
 	Node	   *resconstantqual;
 
 	int			numHashFilterCols;
-	int16	   *hashFilterColIdx pg_node_attr(array_size(numHashFilterCols));
+	AttrNumber *hashFilterColIdx pg_node_attr(array_size(numHashFilterCols));
 	Oid		   *hashFilterFuncs pg_node_attr(array_size(numHashFilterCols));
 } Result;
 
@@ -595,8 +595,6 @@ typedef struct BitmapOr
  */
 typedef struct Scan
 {
-	pg_node_attr(abstract)
-
 	Plan		plan;
 	Index		scanrelid;		/* relid is index into the range table */
 } Scan;
@@ -1188,8 +1186,6 @@ typedef struct CustomScan
  */
 typedef struct Join
 {
-	pg_node_attr(abstract)
-
 	Plan		plan;
 	JoinType	jointype;
 	bool		inner_unique;
@@ -1648,22 +1644,22 @@ typedef struct WindowHashAgg
 	Plan		plan;
 	Index		winref;			/* ID referenced by window functions */
 	int			partNumCols;	/* number of columns in partition clause */
-	AttrNumber *partColIdx;		/* their indexes in the target list */
-	Oid		   *partOperators;	/* equality operators for partition columns */
-	Oid		   *partCollations; /* collations for partition columns */
+	AttrNumber *partColIdx pg_node_attr(array_size(partNumCols));		/* their indexes in the target list */
+	Oid		   *partOperators pg_node_attr(array_size(partNumCols));	/* equality operators for partition columns */
+	Oid		   *partCollations pg_node_attr(array_size(partNumCols));	/* collations for partition columns */
 	/*
 	 * Different with `WindowAgg`, WindowHashAgg may use the 
 	 * `order by` information.
 	 */
 	int			ordNumCols;		/* number of sort-key columns */
-	AttrNumber *ordColIdx;		/* their indexes in the target list */
-	Oid		   *ordOperators;	/* OIDs of operators to sort them by */
-	Oid		   *ordCollations;	/* OIDs of collations */
-	bool	   *ordNullsFirst;	/* NULLS FIRST/LAST directions */
+	AttrNumber *ordColIdx pg_node_attr(array_size(ordNumCols));		/* their indexes in the target list */
+	Oid		   *ordOperators pg_node_attr(array_size(ordNumCols));	/* OIDs of operators to sort them by */
+	Oid		   *ordCollations pg_node_attr(array_size(ordNumCols));	/* OIDs of collations */
+	bool	   *ordNullsFirst pg_node_attr(array_size(ordNumCols));	/* NULLS FIRST/LAST directions */
 
 	int			frameOptions;	/* frame_clause options, see WindowDef */
-	Node	   *startOffset;	/* expression for starting bound, if any */
-	Node	   *endOffset;		/* expression for ending bound, if any */
+	Node	   *startOffset pg_node_attr(array_size(frameOptions));	/* expression for starting bound, if any */
+	Node	   *endOffset pg_node_attr(array_size(frameOptions));	/* expression for ending bound, if any */
 	/* these fields are used with RANGE offset PRECEDING/FOLLOWING: */
 	Oid			startInRangeFunc;	/* in_range function for startOffset */
 	Oid			endInRangeFunc; /* in_range function for endOffset */
@@ -1892,6 +1888,7 @@ typedef enum MotionType
  */
 typedef struct Motion
 {
+	pg_node_attr(no_equal, custom_read_write, custom_copy_equal)
 	Plan		plan;
 
 	MotionType  motionType;
@@ -1900,7 +1897,7 @@ typedef struct Motion
 
 	/* For Hash */
 	List		*hashExprs;			/* list of hash expressions */
-	Oid			*hashFuncs;			/* merge16_delete_temp 	*/		/* corresponding hash functions */
+	Oid			*hashFuncs pg_node_attr(array_size(hashExprs));			/* merge16_delete_temp 	*/		/* corresponding hash functions */
 	int         numHashSegments;	/* the module number of the hash function */
 
 	/* For Explicit */

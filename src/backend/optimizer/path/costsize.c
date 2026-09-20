@@ -5814,7 +5814,15 @@ calc_joinrel_size_estimate(PlannerInfo *root,
 										jointype,
 										sjinfo,
 										gp_selectivity_damping_for_joins);
-										
+
+		/*
+		 * Selectivities must be probabilities.  Round-off in the OR
+		 * combination (s1 + s2 - s1*s2) can leave them a hair outside [0,1],
+		 * and adjust_selectivity_for_nulltest() asserts on that.
+		 */
+		CLAMP_PROBABILITY(jselec);
+		CLAMP_PROBABILITY(pselec);
+
 		/* 
 		 * special case where a pushed qual probes the inner
 		 * side of an outer join to be NULL
