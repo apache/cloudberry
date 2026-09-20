@@ -151,13 +151,14 @@ static void vacuum_appendonly_index(Relation indexRelation,
 									Bitmapset *dead_segs,
 									int elevel,
 									BufferAccessStrategy bstrategy,
-									AOVacuumRelStats *vacrelstats);
+									AOVacuumRelStats *vacrelstats,
+									IndexBulkDeleteResult *result);
 
 static bool appendonly_tid_reaped(ItemPointer itemptr, void *state);
 
 static void vacuum_appendonly_fill_stats(Relation aorel, Snapshot snapshot, int elevel,
 										 BlockNumber *rel_pages, double *rel_tuples,
-										 double *dead_tuples, bool *relhasindex, BlockNumber *total_file_segs);
+										 int64 *dead_tuples, bool *relhasindex, BlockNumber *total_file_segs);
 static int vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs,
 									 BufferAccessStrategy bstrategy, AOVacuumRelStats *vacrelstats);
 static void ao_vacuum_rel_recycle_dead_segments(Relation onerel, VacuumParams *params,
@@ -243,7 +244,7 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 {
 	BlockNumber	relpages;
 	double		reltuples;
-	double		deadtuples;
+	int64		deadtuples;
 	bool		relhasindex;
 	/* AO/AOCO total file segment number, use type BlockNumber to
 	 * represent same type with num_all_visible_pages in libpq.
@@ -307,6 +308,11 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 						NULL,
 						false,
 						true /* isvacuum */);
+
+	vacrelstats->total_file_segs = total_file_segs;
+
+	/* Keep the final dead-tuple sample for native work reporting. */
+	vacrelstats->dead_tuples = deadtuples;
 
 	/* report results to the stats collector, too */
 	pgstat_report_vacuum(RelationGetRelid(onerel),
@@ -524,6 +530,18 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 
 	if (ao_vacuum_phase == VACOPT_AO_POST_CLEANUP_PHASE)
 	{
+		PgStat_VacuumStats stats = {0};
+
+		stats.tuples_deleted = vacrelstats->num_dead_tuples;
+		stats.dead_tuples = vacrelstats->dead_tuples;
+		stats.recently_dead_tuples = vacrelstats->dead_tuples;
+		stats.pages_scanned = vacrelstats->pages_scanned;
+		stats.total_file_segs = vacrelstats->total_file_segs;
+		stats.compacted_segments = vacrelstats->compacted_segments;
+		stats.tuples_moved = vacrelstats->tuples_moved;
+		stats.pages_removed = vacrelstats->nbytes_truncated / BLCKSZ +
+			(vacrelstats->nbytes_truncated % BLCKSZ != 0);
+
 		pgstat_progress_end_command();
 		cleanup_vacrelstats(&vacrelstats);
 	}
@@ -715,6 +733,8 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 	int			i;
 	Relation   *Irel;
 	int			nindexes;
+	bool		final_cleanup =
+		(options & VACUUM_AO_PHASE_MASK) == VACOPT_AO_POST_CLEANUP_PHASE;
 
 	Assert(RelationStorageIsAO(aoRelation));
 
@@ -745,23 +765,27 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 		{
 			for (i = 0; i < nindexes; i++)
 			{
+				IndexBulkDeleteResult result = {0};
 				LVExtStatCounters *extcounters;
 
 				extcounters = extvac_stats_start(Irel[i], elevel == INFO);
 				scan_index(Irel[i],
 						   aoRelation,
 						   elevel,
-						   bstrategy);
+						   bstrategy,
+						   &result);
 				if (extcounters != NULL)
 					ao_measure_index_resources(Irel[i], extcounters,
 											 vacrelstats,
 											 elevel == INFO && Gp_role != GP_ROLE_DISPATCH);
+				vacuum_measure_index_stats(Irel[i], &result, 0, 0, final_cleanup);
 			}
 		}
 		else
 		{
 			for (i = 0; i < nindexes; i++)
 			{
+				IndexBulkDeleteResult result = {0};
 				LVExtStatCounters *extcounters;
 
 				extcounters = extvac_stats_start(Irel[i], elevel == INFO);
@@ -770,18 +794,20 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 										dead_segs,
 										elevel,
 										bstrategy,
-										vacrelstats);
+										vacrelstats,
+										&result);
 				if (extcounters != NULL)
 					ao_measure_index_resources(Irel[i], extcounters,
 											 vacrelstats,
 											 elevel == INFO && Gp_role != GP_ROLE_DISPATCH);
+				vacuum_measure_index_stats(Irel[i], &result, 0, 0, final_cleanup);
 			}
 		}
 	}
 
 	vac_close_indexes(nindexes, Irel, NoLock);
 	pgstat_progress_update_param(PROGRESS_VACUUM_PHASE,
-								 ((options & VACUUM_AO_PHASE_MASK) == VACOPT_AO_POST_CLEANUP_PHASE) ?
+								 final_cleanup ?
 								 PROGRESS_VACUUM_PHASE_AO_POST_CLEANUP : PROGRESS_VACUUM_PHASE_AO_PRE_CLEANUP);
 	return nindexes;
 }
@@ -798,7 +824,8 @@ vacuum_appendonly_index(Relation indexRelation,
 						Bitmapset *dead_segs,
 						int elevel,
 						BufferAccessStrategy bstrategy,
-						AOVacuumRelStats *vacrelstats)
+						AOVacuumRelStats *vacrelstats,
+						IndexBulkDeleteResult *result)
 {
 	IndexBulkDeleteResult *stats;
 	IndexVacuumInfo ivinfo = {0};
@@ -835,6 +862,10 @@ vacuum_appendonly_index(Relation indexRelation,
 
 	if (!stats)
 		return;
+
+	/* Hand the counts of the pass to the caller, for the statistics */
+	if (result)
+		*result = *stats;
 
 	/*
 	 * Now update statistics in pg_class, but only if the index says the count
@@ -899,7 +930,7 @@ appendonly_tid_reaped(ItemPointer itemptr, void *state)
 static void
 vacuum_appendonly_fill_stats(Relation aorel, Snapshot snapshot, int elevel,
 							 BlockNumber *rel_pages, double *rel_tuples,
-							 double *dead_tuples, bool *relhasindex, BlockNumber *total_file_segs)
+							 int64 *dead_tuples, bool *relhasindex, BlockNumber *total_file_segs)
 {
 	FileSegTotals *fstotal;
 	BlockNumber nblocks;
@@ -977,7 +1008,8 @@ cleanup_vacrelstats(AOVacuumRelStats **vacrelstats)
  * We use this when we have no deletions to do.
  */
 void
-scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac_strategy)
+scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac_strategy,
+		   IndexBulkDeleteResult *result)
 {
 	IndexBulkDeleteResult *stats;
 	IndexVacuumInfo ivinfo = {0};
@@ -1004,6 +1036,10 @@ scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac
 
 	if (!stats)
 		return;
+
+	/* Hand the counts of the pass to the caller, for the statistics */
+	if (result)
+		*result = *stats;
 
 	/*
 	 * Now update statistics in pg_class, but only if the index says the count
