@@ -107,6 +107,9 @@ typedef struct PgStat_VacuumStats
 	PgStat_Counter	pages_scanned;
 	PgStat_Counter	pages_removed;
 	PgStat_Counter	missed_dead_pages;
+	PgStat_Counter	total_file_segs;
+	PgStat_Counter	compacted_segments;
+	PgStat_Counter	tuples_moved;
 } PgStat_VacuumStats;
 
 
