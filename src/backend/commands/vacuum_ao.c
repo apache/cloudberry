@@ -153,7 +153,8 @@ static void vacuum_appendonly_index(Relation indexRelation,
 									Bitmapset *dead_segs,
 									int elevel,
 									BufferAccessStrategy bstrategy,
-									AOVacuumRelStats *vacrelstats);
+									AOVacuumRelStats *vacrelstats,
+									IndexBulkDeleteResult *result);
 
 static bool appendonly_tid_reaped(ItemPointer itemptr, void *state);
 
@@ -315,6 +316,7 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 	/* Report once all phase timers have been stopped. */
 	vacrelstats->live_tuples = reltuples;
 	vacrelstats->dead_tuples = deadtuples;
+	vacrelstats->total_file_segs = total_file_segs;
 
 	SIMPLE_FAULT_INJECTOR("vacuum_ao_post_cleanup_end");
 }
@@ -537,6 +539,18 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 
 	if (ao_vacuum_phase == VACOPT_AO_POST_CLEANUP_PHASE)
 	{
+		PgStat_VacuumStats stats = {0};
+
+		stats.tuples_deleted = vacrelstats->num_dead_tuples;
+		stats.dead_tuples = vacrelstats->dead_tuples;
+		stats.recently_dead_tuples = vacrelstats->dead_tuples;
+		stats.pages_scanned = vacrelstats->pages_scanned;
+		stats.total_file_segs = vacrelstats->total_file_segs;
+		stats.compacted_segments = vacrelstats->compacted_segments;
+		stats.tuples_moved = vacrelstats->tuples_moved;
+		stats.pages_removed = vacrelstats->nbytes_truncated / BLCKSZ +
+			(vacrelstats->nbytes_truncated % BLCKSZ != 0);
+
 		/* The last phase: report only the phases executed by this worker. */
 		pgstat_report_vacuum_elapsed(RelationGetRelid(rel),
 									 rel->rd_rel->relisshared,
@@ -785,6 +799,7 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 		{
 			for (i = 0; i < nindexes; i++)
 			{
+				IndexBulkDeleteResult result = {0};
 				LVExtStatCounters *extcounters;
 
 				extcounters = extvac_stats_start(Irel[i], elevel == INFO);
@@ -794,7 +809,9 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 				scan_index(Irel[i],
 						   aoRelation,
 						   elevel,
-						   bstrategy);
+						   bstrategy,
+						   &result);
+				vacuum_measure_index_stats(Irel[i], &result, 0, 0, final_cleanup);
 				if (extcounters != NULL)
 					ao_measure_index_resources(Irel[i], extcounters,
 											 vacrelstats,
@@ -806,6 +823,7 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 		{
 			for (i = 0; i < nindexes; i++)
 			{
+				IndexBulkDeleteResult result = {0};
 				LVExtStatCounters *extcounters;
 
 				extcounters = extvac_stats_start(Irel[i], elevel == INFO);
@@ -817,7 +835,9 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 										dead_segs,
 										elevel,
 										bstrategy,
-										vacrelstats);
+										vacrelstats,
+										&result);
+				vacuum_measure_index_stats(Irel[i], &result, 0, 0, final_cleanup);
 				if (extcounters != NULL)
 					ao_measure_index_resources(Irel[i], extcounters,
 											 vacrelstats,
@@ -846,7 +866,8 @@ vacuum_appendonly_index(Relation indexRelation,
 						Bitmapset *dead_segs,
 						int elevel,
 						BufferAccessStrategy bstrategy,
-						AOVacuumRelStats *vacrelstats)
+						AOVacuumRelStats *vacrelstats,
+						IndexBulkDeleteResult *result)
 {
 	IndexBulkDeleteResult *stats;
 	IndexVacuumInfo ivinfo = {0};
@@ -883,6 +904,10 @@ vacuum_appendonly_index(Relation indexRelation,
 
 	if (!stats)
 		return;
+
+	/* Hand the counts of the pass to the caller, for the statistics */
+	if (result)
+		*result = *stats;
 
 	/*
 	 * Now update statistics in pg_class, but only if the index says the count
@@ -1025,7 +1050,8 @@ cleanup_vacrelstats(AOVacuumRelStats **vacrelstats)
  * We use this when we have no deletions to do.
  */
 void
-scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac_strategy)
+scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac_strategy,
+		   IndexBulkDeleteResult *result)
 {
 	IndexBulkDeleteResult *stats;
 	IndexVacuumInfo ivinfo = {0};
@@ -1052,6 +1078,10 @@ scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac
 
 	if (!stats)
 		return;
+
+	/* Hand the counts of the pass to the caller, for the statistics */
+	if (result)
+		*result = *stats;
 
 	/*
 	 * Now update statistics in pg_class, but only if the index says the count
