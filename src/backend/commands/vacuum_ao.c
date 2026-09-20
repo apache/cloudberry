@@ -332,6 +332,7 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 	 * ao_vacuum_rel() reports once this last phase is over.
 	 */
 	vacrelstats->dead_tuples_left = (int64) deadtuples;
+	vacrelstats->total_file_segs = total_file_segs;
 
 	SIMPLE_FAULT_INJECTOR("vacuum_ao_post_cleanup_end");
 }
@@ -447,6 +448,69 @@ init_vacrelstats()
 }
 
 /*
+ * Report what the vacuuming of an append-optimized relation did to the
+ * statistics collector, the way lazy vacuum does for a heap relation.
+ *
+ * The counters that describe heap pages have no counterpart here: an AO
+ * relation has no heap visibility map and nothing to freeze, so
+ * pages_frozen and pages_all_visible stay zero.  Nor is there a relfrozenxid
+ * of its own to reach the freeze table age -- it is always invalid, the
+ * auxiliary heap relations being vacuumed and frozen on their own -- so the
+ * freeze_age_vacuum_count stays zero as well.  What the heap reports as
+ * truncated pages is the space compaction freed, measured in blocks of the
+ * segment files it dropped or truncated.
+ *
+ * The indexes report themselves, from vacuum_appendonly_index() and scan_index().
+ */
+static void
+ao_report_vacuum_stats(Relation aorel, AOVacuumRelStats *vacrelstats)
+{
+	PgStat_VacuumStats vacstats;
+
+	Assert(pgstat_track_vacuum_statistics);
+
+	MemSet(&vacstats, 0, sizeof(vacstats));
+	vacstats.tuples_deleted = (PgStat_Counter) vacrelstats->num_dead_tuples;
+	vacstats.dead_tuples = (PgStat_Counter) vacrelstats->dead_tuples_left;
+	/* Keep the conversion 64-bit: aggregate AO files can exceed BlockNumber. */
+	vacstats.bytes_removed = vacrelstats->nbytes_truncated;
+	vacstats.pages_deleted = vacrelstats->nbytes_truncated / BLCKSZ +
+		(vacrelstats->nbytes_truncated % BLCKSZ != 0);
+	vacstats.total_file_segs = vacrelstats->total_file_segs;
+
+	pgstat_report_vacstats(RelationGetRelid(aorel),
+						   aorel->rd_rel->relisshared,
+						   false,
+						   &vacstats);
+}
+
+/* Report index work, including cleanup runs with no obsolete AO segments. */
+static void
+ao_report_index_vacuum_stats(Relation indexRelation,
+							 IndexBulkDeleteResult *stats)
+{
+	PgStat_VacuumStats vacstats;
+
+	Assert(pgstat_track_vacuum_statistics);
+
+	MemSet(&vacstats, 0, sizeof(vacstats));
+	if (stats)
+	{
+		vacstats.tuples_deleted = (PgStat_Counter) stats->tuples_removed;
+		vacstats.pages_deleted = (PgStat_Counter) stats->pages_newly_deleted;
+		/* deleted pages that are not yet reusable still hold dead entries */
+		if (stats->pages_deleted > stats->pages_free)
+			vacstats.dead_pages =
+				(PgStat_Counter) (stats->pages_deleted - stats->pages_free);
+	}
+
+	pgstat_report_vacstats(RelationGetRelid(indexRelation),
+						   indexRelation->rd_rel->relisshared,
+						   true,
+						   &vacstats);
+}
+
+/*
  * ao_vacuum_rel()
  *
  * Common interface for vacuuming Append-Optimized table.
@@ -522,11 +586,16 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 				(errmsg("append-optimized table \"%s\": vacuum statistics",
 						RelationGetRelationName(rel)),
 				 errdetail("%lld dead tuples remain.\n"
+						   "%lld bytes truncated; %lld file segments remain.\n"
 						   "elapsed: %.3f ms, cost-based delay: %.3f ms",
 						   (long long) vacrelstats->dead_tuples_left,
+						   (long long) vacrelstats->nbytes_truncated,
+						   (long long) vacrelstats->total_file_segs,
 						   vacrelstats->vacuum_time / 1000.0,
 						   vacrelstats->delay_time / 1000.0)));
 
+		if (pgstat_track_vacuum_statistics)
+			ao_report_vacuum_stats(rel, vacrelstats);
 		pgstat_progress_end_command();
 		cleanup_vacrelstats(&vacrelstats);
 	}
@@ -716,6 +785,13 @@ vacuum_appendonly_index(Relation indexRelation,
 	INSTR_TIME_SET_CURRENT(endtime);
 	INSTR_TIME_SUBTRACT(endtime, starttime);
 
+	/* Ordinary timing follows track_counts, independently of work counters. */
+	pgstat_report_index_vacuum_time(indexRelation,
+								   (PgStat_Counter) INSTR_TIME_GET_MICROSEC(endtime),
+								   VacuumDelayTime - startdelaytime,
+								   IsAutoVacuumWorkerProcess());
+	if (pgstat_track_vacuum_statistics)
+		ao_report_index_vacuum_stats(indexRelation, stats);
 
 	if (!stats)
 		return;
@@ -889,6 +965,14 @@ scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac
 
 	INSTR_TIME_SET_CURRENT(endtime);
 	INSTR_TIME_SUBTRACT(endtime, starttime);
+
+	/* Ordinary timing follows track_counts, independently of work counters. */
+	pgstat_report_index_vacuum_time(indrel,
+								   (PgStat_Counter) INSTR_TIME_GET_MICROSEC(endtime),
+								   VacuumDelayTime - startdelaytime,
+								   IsAutoVacuumWorkerProcess());
+	if (pgstat_track_vacuum_statistics)
+		ao_report_index_vacuum_stats(indrel, stats);
 
 	if (!stats)
 		return;
