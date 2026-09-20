@@ -114,6 +114,8 @@
  */
 #include "postgres.h"
 
+#include <math.h>
+
 #include "access/table.h"
 #include "access/aocs_compaction.h"
 #include "access/aomd.h"
@@ -157,7 +159,7 @@ static bool appendonly_tid_reaped(ItemPointer itemptr, void *state);
 
 static void vacuum_appendonly_fill_stats(Relation aorel, Snapshot snapshot, int elevel,
 										 BlockNumber *rel_pages, double *rel_tuples,
-										 double *dead_tuples, bool *relhasindex, BlockNumber *total_file_segs);
+										 int64 *dead_tuples, bool *relhasindex, BlockNumber *total_file_segs);
 static int vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs,
 									 BufferAccessStrategy bstrategy, AOVacuumRelStats *vacrelstats);
 static void ao_vacuum_rel_recycle_dead_segments(Relation onerel, VacuumParams *params,
@@ -169,6 +171,8 @@ static void ao_accum_resources(PgStat_CommonCounts *dst,
 static void ao_measure_index_resources(Relation indrel,
 									 LVExtStatCounters *counters,
 									 AOVacuumRelStats *vacrelstats, bool verbose);
+static void ao_measure_index_vacuum_time(Relation indrel, TimestampTz starttime,
+										double startdelaytime);
 
 static void
 ao_vacuum_rel_pre_cleanup(Relation onerel, VacuumParams *params, BufferAccessStrategy bstrategy, AOVacuumRelStats *vacrelstats)
@@ -243,7 +247,7 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 {
 	BlockNumber	relpages;
 	double		reltuples;
-	double		deadtuples;
+	int64		deadtuples;
 	bool		relhasindex;
 	/* AO/AOCO total file segment number, use type BlockNumber to
 	 * represent same type with num_all_visible_pages in libpq.
@@ -308,12 +312,17 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 						false,
 						true /* isvacuum */);
 
+	/* Report once all phase timers have been stopped. */
+	vacrelstats->live_tuples = reltuples;
+	vacrelstats->dead_tuples = deadtuples;
+
 	/* report results to the stats collector, too */
 	pgstat_report_vacuum(RelationGetRelid(onerel),
 						 onerel->rd_rel->relisshared,
 						 reltuples,
 						 deadtuples,
 						 vacrelstats->starttime);
+
 
 	SIMPLE_FAULT_INJECTOR("vacuum_ao_post_cleanup_end");
 }
@@ -425,11 +434,8 @@ init_vacrelstats(bool instrument)
 		vacrelstats->extstats = palloc0(sizeof(AOVacuumExtStats));
 	MemoryContextSwitchTo(old_context);
 
-	/*
-	 * The phases of an AO vacuum run as separate steps, all of them sharing
-	 * these stats; time the vacuum from the first one.
-	 */
 	vacrelstats->starttime = GetCurrentTimestamp();
+	MemoryContextSwitchTo(old_context);
 
 	return vacrelstats;
 }
@@ -446,6 +452,9 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 	LVExtStatCounters *extcounters;
 	bool		verbose = (params->options & VACOPT_VERBOSE) != 0;
 	PgStat_CommonCounts index_start = {0};
+	instr_time	phase_start;
+	instr_time	phase_end;
+	double		phase_start_delay;
 	Assert(RelationStorageIsAO(rel));
 	Assert(params != NULL);
 
@@ -488,6 +497,8 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 	extcounters = extvac_stats_start(rel, verbose);
 	if (verbose)
 		index_start = vacrelstats->extstats->indexes;
+	INSTR_TIME_SET_CURRENT(phase_start);
+	phase_start_delay = VacuumDelayTime;
 
 	/*
 	 * Do the actual work --- either FULL or "lazy" vacuum
@@ -501,6 +512,14 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 	else
 		/* Do nothing here, we will launch the stages later */
 		Assert(ao_vacuum_phase == 0);
+
+	if (ao_vacuum_phase != 0)
+	{
+		INSTR_TIME_SET_CURRENT(phase_end);
+		INSTR_TIME_SUBTRACT(phase_end, phase_start);
+		vacrelstats->vacuum_time += INSTR_TIME_GET_MILLISEC(phase_end);
+		vacrelstats->delay_time += VacuumDelayTime - phase_start_delay;
+	}
 
 	if (verbose && ao_vacuum_phase != 0)
 	{
@@ -647,6 +666,24 @@ ao_measure_index_resources(Relation indrel, LVExtStatCounters *counters,
 }
 
 /*
+ * Accumulate one vacuum pass over an index of an append-optimized table
+ * into the index's cumulative vacuum and delay times, as the heap does in
+ * lazy_vacuum_one_index() and lazy_cleanup_one_index().
+ */
+static void
+ao_measure_index_vacuum_time(Relation indrel, TimestampTz starttime,
+							double startdelaytime)
+{
+	PgStat_Counter elapsedtime =
+		TimestampDifferenceMilliseconds(starttime, GetCurrentTimestamp());
+	PgStat_Counter delaytime = (PgStat_Counter) rint(VacuumDelayTime - startdelaytime);
+
+	/* Backend-local measurements; cumulative reporting follows separately. */
+	(void) elapsedtime;
+	(void) delaytime;
+}
+
+/*
  * Recycling AWAITING_DROP segments.
  */
 static void
@@ -720,6 +757,8 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 	int			i;
 	Relation   *Irel;
 	int			nindexes;
+	bool		final_cleanup =
+		(options & VACUUM_AO_PHASE_MASK) == VACOPT_AO_POST_CLEANUP_PHASE;
 
 	Assert(RelationStorageIsAO(aoRelation));
 
@@ -753,6 +792,9 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 				LVExtStatCounters *extcounters;
 
 				extcounters = extvac_stats_start(Irel[i], elevel == INFO);
+				TimestampTz istarttime = GetCurrentTimestamp();
+				double		startdelaytime = VacuumDelayTime;
+
 				scan_index(Irel[i],
 						   aoRelation,
 						   elevel,
@@ -761,6 +803,7 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 					ao_measure_index_resources(Irel[i], extcounters,
 											 vacrelstats,
 											 elevel == INFO && Gp_role != GP_ROLE_DISPATCH);
+				ao_measure_index_vacuum_time(Irel[i], istarttime, startdelaytime);
 			}
 		}
 		else
@@ -770,6 +813,9 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 				LVExtStatCounters *extcounters;
 
 				extcounters = extvac_stats_start(Irel[i], elevel == INFO);
+				TimestampTz istarttime = GetCurrentTimestamp();
+				double		startdelaytime = VacuumDelayTime;
+
 				vacuum_appendonly_index(Irel[i],
 										aoRelation,
 										dead_segs,
@@ -780,13 +826,14 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 					ao_measure_index_resources(Irel[i], extcounters,
 											 vacrelstats,
 											 elevel == INFO && Gp_role != GP_ROLE_DISPATCH);
+				ao_measure_index_vacuum_time(Irel[i], istarttime, startdelaytime);
 			}
 		}
 	}
 
 	vac_close_indexes(nindexes, Irel, NoLock);
 	pgstat_progress_update_param(PROGRESS_VACUUM_PHASE,
-								 ((options & VACUUM_AO_PHASE_MASK) == VACOPT_AO_POST_CLEANUP_PHASE) ?
+								 final_cleanup ?
 								 PROGRESS_VACUUM_PHASE_AO_POST_CLEANUP : PROGRESS_VACUUM_PHASE_AO_PRE_CLEANUP);
 	return nindexes;
 }
@@ -904,7 +951,7 @@ appendonly_tid_reaped(ItemPointer itemptr, void *state)
 static void
 vacuum_appendonly_fill_stats(Relation aorel, Snapshot snapshot, int elevel,
 							 BlockNumber *rel_pages, double *rel_tuples,
-							 double *dead_tuples, bool *relhasindex, BlockNumber *total_file_segs)
+							 int64 *dead_tuples, bool *relhasindex, BlockNumber *total_file_segs)
 {
 	FileSegTotals *fstotal;
 	BlockNumber nblocks;
