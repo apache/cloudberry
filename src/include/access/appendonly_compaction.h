@@ -28,9 +28,17 @@
  */
 typedef struct AOVacuumRelStats
 {
-	int		nbytes_truncated;	/* current # of bytes truncated from segment file */
-	int		num_dead_tuples;	/* current # of dead tuples */
+	int64	nbytes_truncated;	/* current # of bytes truncated from segment file */
+	int64	num_dead_tuples;	/* current # of dead tuples */
 	int		num_index_vacuumed; /* current # of indexes been vacuumed */
+	int64		dead_tuples;
+	int64		pages_scanned;
+	int64		total_file_segs;
+	int64		compacted_segments;
+	int64		tuples_moved;
+
+	/* the relation these stats were started for */
+	Oid			relid;
 } AOVacuumRelStats;
 
 extern Bitmapset *AppendOptimizedCollectDeadSegments(Relation aorel);
