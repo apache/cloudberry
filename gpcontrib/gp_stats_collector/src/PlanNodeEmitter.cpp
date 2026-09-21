@@ -81,6 +81,26 @@ map_node_status(QsNodeStatus status)
 	}
 }
 
+/*
+ * map_node_type -- convert a QsPlanNodeType enum to yagpcc::PlanNodeType.
+ *
+ * The two enums are defined to share numbering (qs_types.h documents the
+ * contract), so this is a checked cast rather than a switch: values outside
+ * the known range collapse to PLAN_NODE_TYPE_UNSPECIFIED, which the receiver
+ * treats the same as an unrecognised code.
+ *
+ * Note both are protocol values, NOT PostgreSQL NodeTags -- NodeTag numbering
+ * changes between major versions and must never reach the wire.
+ */
+static yagpcc::PlanNodeType
+map_node_type(QsPlanNodeType type)
+{
+	if (!yagpcc::PlanNodeType_IsValid(static_cast<int>(type)))
+		return yagpcc::PLAN_NODE_TYPE_UNSPECIFIED;
+
+	return static_cast<yagpcc::PlanNodeType>(type);
+}
+
 extern "C" void
 gpsc_emit_node_batch(GpscNodeSample **nodes, int count, const char *trace_id)
 {
@@ -105,7 +125,7 @@ gpsc_emit_node_batch(GpscNodeSample **nodes, int count, const char *trace_id)
 		bn->set_pid(node->pid);
 		bn->set_plan_node_id(node->plan_node_id);
 		bn->set_parent_plan_node_id(node->parent_plan_node_id);
-		bn->set_node_type(node->node_tag);
+		bn->set_node_type(map_node_type(node->node_type));
 		bn->set_slice_id(node->slice_id);
 		bn->set_plan_rows(node->plan_rows);
 		bn->set_relation_oid(node->relation_oid);
