@@ -118,13 +118,30 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/")
 include(FindDependencies)
 add_subdirectory(src/cpp)
 
+# yyjson is only needed by the manifest API implementation, which is off by
+# default.  It is fetched from its upstream release at configure time rather
+# than vendored as a submodule, so that it stays out of the source release
+# for builds that do not use it.
+set(YYJSON_VERSION "0.12.0" CACHE STRING "yyjson release to fetch for the manifest API")
+
 if(USE_MANIFEST_API AND NOT USE_PAX_CATALOG)
+    include(FetchContent)
+
+    message(STATUS "Fetching yyjson ${YYJSON_VERSION} for the manifest API")
+    FetchContent_Declare(
+        yyjson
+        GIT_REPOSITORY https://github.com/ibireme/yyjson.git
+        GIT_TAG ${YYJSON_VERSION}
+        GIT_SHALLOW TRUE
+    )
+
     set(SAVED_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
     set(SAVED_CMAKE_INSTALL_SO_NO_EXE ${CMAKE_INSTALL_SO_NO_EXE})
 
     set(BUILD_SHARED_LIBS ON)
     set(CMAKE_INSTALL_SO_NO_EXE OFF)
-    add_subdirectory(${CMAKE_SOURCE_DIR}/../../dependency/yyjson ${CMAKE_BINARY_DIR}/yyjson_build)
+
+    FetchContent_MakeAvailable(yyjson)
 
     set(BUILD_SHARED_LIBS ${SAVED_BUILD_SHARED_LIBS})
     set(CMAKE_INSTALL_SO_NO_EXE ${SAVED_CMAKE_INSTALL_SO_NO_EXE})
