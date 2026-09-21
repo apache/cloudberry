@@ -74,7 +74,7 @@ static WalReceiverConn *test_connection = NULL;
 void
 _PG_init(void)
 {
-	libpqwalreceiver_PG_init();
+	load_file("libpqwalreceiver", false);
 }
 
 Datum
