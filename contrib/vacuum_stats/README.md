@@ -17,6 +17,11 @@ including vacuum times, VM clearings, failsafe and interruption counts.
 The `visible_page_marks_cleared` and `frozen_page_marks_cleared` counters describe
 visibility-map changes caused by data modifications. They follow `track_counts`
 and are collected and retained independently of `track_vacuum_statistics`.
+The dedicated vacuum-statistics reset functions also reset these counters,
+vacuum times and failsafe counts. Database-wide vacuum reset also
+clears `pg_stat_vacuum_database.vacuum_interrupt_count`; relation reset preserves
+this database total. The reset functions preserve ordinary access counters,
+maintenance counts and timestamps, and ANALYZE times.
 
 Install with `CREATE EXTENSION vacuum_stats`. All new SQL functions and
 views belong to the extension's schema. Existing system views and built-in

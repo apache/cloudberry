@@ -518,6 +518,9 @@ CHECKPOINT;
 		vacuum_table($table);
 		is(counters($table, 'bytes_removed, pages_deleted, total_file_segs'),
 			"$tail_size|$pages|$segs", "$am repeated vacuum does not recount the tail or segments");
+		run_and_wait("SELECT vacuum_stats_reset('$table'::regclass::oid)");
+		is(counters($table, 'bytes_removed, total_file_segs'), '0|0',
+			"$am relation reset clears both cumulative bytes and segment state");
 	}
 };
 
@@ -596,6 +599,87 @@ DELETE FROM vstat_idx WHERE id <= 90000;
 		't', 'deleted-page totals accumulate without recounting the first run');
 };
 
+subtest 'reset preserves ordinary statistics and other relations' => sub {
+	$node->safe_psql('postgres', q{
+CREATE TABLE vstat_reset (id int PRIMARY KEY) WITH (autovacuum_enabled = off);
+CREATE TABLE vstat_keep (id int) WITH (autovacuum_enabled = off);
+INSERT INTO vstat_reset SELECT generate_series(1, 1000);
+INSERT INTO vstat_keep SELECT generate_series(1, 1000);
+DELETE FROM vstat_keep;
+});
+	vacuum_table('vstat_keep');
+	vacuum_table('vstat_reset', 'FREEZE');
+	$node->safe_psql('postgres', 'UPDATE vstat_reset SET id = id + 1000');
+	wait_for_updates('vstat_reset', 1000);
+	vacuum_table('vstat_reset', 'FREEZE');
+	is(counters('vstat_reset',
+		'tuples_deleted, frozen_page_marks_cleared > 0, visible_page_marks_cleared > 0'),
+		'1000|t|t', 'populate removal and VM revision counters before reset');
+	my $keep_before = counters('vstat_keep');
+	my $index_before = index_counters('vstat_reset_pkey');
+	my $db_before = database_counters();
+	my $ordinary_query = "SELECT vacuum_count, n_tup_upd FROM pg_stat_all_tables_internal WHERE relname = 'vstat_reset'";
+	my $ordinary_before = $node->safe_psql('postgres', $ordinary_query);
+	my $reset_before = counters('vstat_reset');
+
+	my ($result, $stdout, $stderr) = $node->psql('postgres',
+		'SELECT vacuum_stats_reset(0::oid)');
+	is($result, 3, 'an invalid relation OID is rejected');
+	like($stderr, qr/invalid relation OID: 0/, 'invalid OID has a specific error');
+	run_and_wait('SELECT vacuum_stats_reset(NULL::oid)');
+	is(counters('vstat_reset'), $reset_before,
+		'invalid and NULL OIDs do not reset a relation');
+	is(database_counters(), $db_before,
+		'invalid and NULL OIDs do not reset database totals');
+
+	run_and_wait("SELECT vacuum_stats_reset('vstat_reset'::regclass::oid)");
+	is(counters('vstat_reset', $all_zero), 't', 'relation reset clears every vacuum counter including VM clearing counters');
+	is(counters('vstat_keep'), $keep_before, 'relation reset preserves another table');
+	is(index_counters('vstat_reset_pkey'), $index_before, 'relation reset preserves the index counters');
+	is(database_counters(), $db_before, 'relation reset preserves database totals');
+	is($node->safe_psql('postgres', $ordinary_query), $ordinary_before,
+		'relation reset preserves ordinary statistics');
+
+	# Refill the reset relation, including both VM revision counters,
+	# before checking the database-wide reset.
+	$node->safe_psql('postgres', 'UPDATE vstat_reset SET id = id + 1000');
+	wait_for_updates('vstat_reset', 2000);
+	vacuum_table('vstat_reset', 'FREEZE');
+	is(counters('vstat_reset',
+		'tuples_deleted, frozen_page_marks_cleared > 0, visible_page_marks_cleared > 0'),
+		'1000|t|t', 'the counters are nonzero again before database reset');
+	$ordinary_before = $node->safe_psql('postgres', $ordinary_query);
+	run_and_wait('SELECT vacuum_stats_reset()');
+	is($node->safe_psql('postgres', "SELECT bool_and($all_zero) FROM pg_stat_vacuum_tables"),
+		't', 'database reset clears all table counters');
+	is($node->safe_psql('postgres', 'SELECT bool_and(total_file_segs = 0) FROM pg_stat_vacuum_tables'),
+		't', 'database reset clears AO segment snapshots');
+	is($node->safe_psql('postgres', "SELECT bool_and($all_zero) FROM pg_stat_vacuum_indexes"),
+		't', 'database reset clears all index counters');
+	is(database_counters($all_zero), 't', 'database reset clears database totals');
+	is($node->safe_psql('postgres', $ordinary_query), $ordinary_before,
+		'database reset preserves ordinary statistics');
+
+
+};
+
+subtest 'database totals do not count index work twice' => sub {
+	$node->safe_psql('postgres', q{
+CREATE TABLE vstat_db (id int PRIMARY KEY, val int) WITH (autovacuum_enabled = off);
+CREATE INDEX ON vstat_db (val);
+INSERT INTO vstat_db SELECT i, i FROM generate_series(1, 10000) g(i);
+DELETE FROM vstat_db WHERE id % 2 = 0;
+});
+	run_and_wait('SELECT vacuum_stats_reset()');
+	vacuum_table('vstat_db');
+	is($node->safe_psql('postgres',
+		"SELECT sum(tuples_deleted) FROM pg_stat_vacuum_indexes WHERE relname = 'vstat_db'"),
+		'10000', 'both indexes report 5000 removed entries');
+	is(database_counters('tuples_deleted'), '5000', 'database totals count only heap tuples');
+	is(database_counters(), counters('vstat_db'),
+		'all database vacuum counters match the only table vacuumed since reset');
+};
+
 subtest 'statistics snapshots release their vacuum counters' => sub {
 	# Keep the last snapshot alive until the context count is read.
 	# Outside this transaction its context would already have been freed.
@@ -613,6 +697,41 @@ SELECT count(*) FROM pg_backend_memory_contexts
 WHERE name = 'Databases hash';
 COMMIT;
 }), '1', 'only the current snapshot owns statistics entries with vacuum counters');
+};
+
+subtest 'reset targets shared catalogs independently' => sub {
+	# Shared catalogs have a separate collector entry, not the current DB's.
+	# Create actual dead index entries instead of timing an empty cleanup.
+	$node->safe_psql('postgres', 'CREATE DATABASE vstat_shared_reset');
+	$node->safe_psql('postgres', 'DROP DATABASE vstat_shared_reset');
+	vacuum_table('pg_database', '(FREEZE, INDEX_CLEANUP ON)');
+	is(counters('pg_database', 'total_vacuum_time > 0'), 't',
+		'populate vacuum counters for a shared catalog');
+	my $shared_before = counters('pg_database');
+	run_and_wait('SELECT vacuum_stats_reset()');
+	is(counters('pg_database'), $shared_before,
+		'database reset leaves shared catalog counters alone');
+
+	vacuum_table('vstat_reset');
+	my $reset_before = counters('vstat_reset');
+	my $db_before = database_counters();
+	run_and_wait("SELECT vacuum_stats_reset('pg_database'::regclass::oid)");
+	is(counters('pg_database', $all_zero), 't',
+		'relation reset reaches the shared catalog entry');
+	is(counters('vstat_reset'), $reset_before,
+		'shared relation reset leaves current-database relations alone');
+	is(database_counters(), $db_before,
+		'shared relation reset leaves current-database totals alone');
+
+	# Indexes are separate reset targets, including shared catalog indexes.
+	is(index_counters('pg_database_oid_index', 'tuples_deleted > 0'), 't',
+		'resetting the shared table preserves its index counters');
+	run_and_wait(q{
+SELECT vacuum_stats_reset(indexrelid) FROM pg_index
+WHERE indrelid = 'pg_database'::regclass
+});
+	is(index_counters('pg_database_oid_index', $all_zero), 't',
+		'relation reset also reaches shared index counters');
 };
 
 subtest 'disabling tracking omits vacuum counters and preserves ordinary statistics' => sub {
@@ -653,6 +772,16 @@ INSERT INTO vstat_startup SELECT generate_series(1, 1000);
 		'reading statistics with tracking disabled preserves ordinary counters');
 	cmp_ok(snapshot_bytes(), '<', $on_bytes,
 		'disabled snapshots omit vacuum storage but retain ordinary VM counters');
+	run_and_wait("SELECT vacuum_stats_reset('vstat_startup'::regclass::oid)");
+	is(counters('vstat_startup', $vm_columns), '0|0',
+		'relation reset clears VM counters with vacuum tracking off');
+	is(database_counters($vm_columns), $db_vm_before,
+		'relation reset preserves database VM totals with vacuum tracking off');
+	run_and_wait('SELECT vacuum_stats_reset()');
+	is(database_counters($vm_columns), '0|0',
+		'database reset clears VM totals with vacuum tracking off');
+	is($node->safe_psql('postgres', $ordinary_query), $ordinary_before,
+		'vacuum reset while disabled leaves ordinary counters intact');
 	$node->safe_psql('postgres', 'ALTER SYSTEM SET track_vacuum_statistics = on');
 	$node->restart;
 	is(counters('vstat_startup', $vacuum_zero), 't',
