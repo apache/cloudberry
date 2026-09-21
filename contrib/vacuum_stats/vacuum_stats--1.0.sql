@@ -553,6 +553,36 @@ CREATE VIEW gp_stat_vacuum_database AS
          total_autovacuum_delay_time double precision,
          vacuum_interrupt_count int8);
 
+--
+-- Resetting, for when only these counters are in the way: pg_stat_reset()
+-- and pg_stat_reset_single_table_counters() throw away the rest of the
+-- statistics of the database or the relation as well.
+--
+-- As with the rest of the statistics, resetting acts on the node it runs on,
+-- so on a cluster both the coordinator function and the segment one have to
+-- be called.
+--
+CREATE FUNCTION vacuum_stats_reset() RETURNS void
+AS 'MODULE_PATHNAME', 'vacuum_stats_reset'
+LANGUAGE C;
+
+CREATE FUNCTION vacuum_stats_reset(relid oid) RETURNS void
+AS 'MODULE_PATHNAME', 'vacuum_stats_reset_relation'
+LANGUAGE C STRICT;
+
+CREATE FUNCTION gp_vacuum_stats_reset() RETURNS SETOF void AS
+$$ SELECT @extschema@.vacuum_stats_reset() $$
+LANGUAGE SQL EXECUTE ON ALL SEGMENTS;
+
+CREATE FUNCTION gp_vacuum_stats_reset(relid oid) RETURNS SETOF void AS
+$$ SELECT @extschema@.vacuum_stats_reset($1) $$
+LANGUAGE SQL EXECUTE ON ALL SEGMENTS;
+
+REVOKE ALL ON FUNCTION vacuum_stats_reset() FROM PUBLIC;
+REVOKE ALL ON FUNCTION vacuum_stats_reset(oid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION gp_vacuum_stats_reset() FROM PUBLIC;
+REVOKE ALL ON FUNCTION gp_vacuum_stats_reset(oid) FROM PUBLIC;
+
 GRANT SELECT ON pg_stat_vacuum_tables, pg_stat_vacuum_indexes,
     pg_stat_vacuum_database, gp_stat_vacuum_tables,
     gp_stat_vacuum_indexes, gp_stat_vacuum_database TO PUBLIC;
