@@ -39,6 +39,7 @@
 #include "access/twophase_rmgr.h"
 #include "access/xact.h"
 #include "access/xlog.h"
+#include "catalog/catalog.h"
 #include "catalog/pg_database.h"
 #include "catalog/pg_proc.h"
 #include "executor/instrument.h"
@@ -378,6 +379,7 @@ static void pgstat_recv_resetreplslotcounter(PgStat_MsgResetreplslotcounter *msg
 static void pgstat_recv_autovac(PgStat_MsgAutovacStart *msg, int len);
 static void pgstat_recv_vacuum(PgStat_MsgVacuum *msg, int len);
 static void pgstat_recv_vacstats(PgStat_MsgVacstats *msg, int len);
+static void pgstat_recv_resetvacstats(PgStat_MsgResetVacstats *msg, int len);
 static void pgstat_recv_analyze(PgStat_MsgAnalyze *msg, int len);
 static void pgstat_recv_archiver(PgStat_MsgArchiver *msg, int len);
 static void pgstat_recv_queuestat(PgStat_MsgQueuestat *msg, int len); /* GPDB */
@@ -1687,6 +1689,36 @@ pgstat_report_vacstats(Oid tableoid, bool shared, bool isindex,
 	msg.m_tableoid = tableoid;
 	msg.m_isindex = isindex;
 	msg.m_stats = *stats;
+	pgstat_send(&msg, sizeof(msg));
+}
+
+/* ----------
+ * pgstat_reset_vacuum_stats() -
+ *
+ *	Tell the collector to throw away the vacuum counters of one relation of
+ *	this database, or of all of them when resetall is true.
+ * ----------
+ */
+void
+pgstat_reset_vacuum_stats(Oid relid, bool resetall)
+{
+	PgStat_MsgResetVacstats msg;
+
+	/* An invalid relation OID must never turn into a database-wide reset. */
+	if (!resetall && !OidIsValid(relid))
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("invalid relation OID: %u", relid)));
+	Assert(!resetall || !OidIsValid(relid));
+
+	if (pgStatSock == PGINVALID_SOCKET)
+		return;
+
+	pgstat_setheader(&msg.m_hdr, PGSTAT_MTYPE_RESETVACSTATS);
+	msg.m_databaseid = !resetall && IsSharedRelation(relid) ?
+		InvalidOid : MyDatabaseId;
+	msg.m_objectid = relid;
+	msg.m_resetall = resetall;
 	pgstat_send(&msg, sizeof(msg));
 }
 
@@ -3783,6 +3815,10 @@ PgstatCollectorMain(int argc, char *argv[])
 
 				case PGSTAT_MTYPE_VACSTATS:
 					pgstat_recv_vacstats(&msg.msg_vacstats, len);
+					break;
+
+				case PGSTAT_MTYPE_RESETVACSTATS:
+					pgstat_recv_resetvacstats(&msg.msg_resetvacstats, len);
 					break;
 
 				case PGSTAT_MTYPE_ANALYZE:
@@ -5900,6 +5936,69 @@ pgstat_recv_vacstats(PgStat_MsgVacstats *msg, int len)
 	dbentry->n_vacuum_stats.freeze_age_vacuum_count +=
 		msg->m_stats.freeze_age_vacuum_count;
 }
+
+/* ----------
+ * pgstat_recv_resetvacstats() -
+ *
+ *	Throw away the vacuum counters of one relation, or of the whole database
+ *	when no relation is given. This includes the VM revision counters;
+ *	ordinary statistics are left alone.
+ * ----------
+ */
+static void
+pgstat_recv_resetvacstats(PgStat_MsgResetVacstats *msg, int len)
+{
+	PgStat_StatDBEntry *dbentry;
+	PgStat_StatTabEntry *tabentry;
+	HASH_SEQ_STATUS hstat;
+
+	dbentry = pgstat_get_db_entry(msg->m_databaseid, false);
+	if (!dbentry)
+		return;
+
+	if (!msg->m_resetall)
+	{
+		tabentry = pgstat_get_tab_entry(dbentry, msg->m_objectid, false);
+		if (tabentry != NULL)
+		{
+			tabentry->frozen_page_marks_cleared = 0;
+			tabentry->visible_page_marks_cleared = 0;
+			tabentry->total_vacuum_time = 0;
+			tabentry->total_autovacuum_time = 0;
+			tabentry->total_vacuum_delay_time = 0;
+			tabentry->total_autovacuum_delay_time = 0;
+			tabentry->vacuum_failsafe_count = 0;
+			if (pgstat_track_vacuum_statistics)
+				MemSet(&tabentry->vacuum_stats, 0, sizeof(tabentry->vacuum_stats));
+		}
+		return;
+	}
+
+	hash_seq_init(&hstat, dbentry->tables);
+	while ((tabentry = (PgStat_StatTabEntry *) hash_seq_search(&hstat)) != NULL)
+	{
+		tabentry->frozen_page_marks_cleared = 0;
+		tabentry->visible_page_marks_cleared = 0;
+		tabentry->total_vacuum_time = 0;
+		tabentry->total_autovacuum_time = 0;
+		tabentry->total_vacuum_delay_time = 0;
+		tabentry->total_autovacuum_delay_time = 0;
+		tabentry->vacuum_failsafe_count = 0;
+		if (pgstat_track_vacuum_statistics)
+			MemSet(&tabentry->vacuum_stats, 0, sizeof(tabentry->vacuum_stats));
+	}
+	dbentry->n_frozen_page_marks_cleared = 0;
+	dbentry->n_visible_page_marks_cleared = 0;
+	dbentry->total_vacuum_time = 0;
+	dbentry->total_autovacuum_time = 0;
+	dbentry->total_vacuum_delay_time = 0;
+	dbentry->total_autovacuum_delay_time = 0;
+	dbentry->vacuum_failsafe_count = 0;
+	dbentry->vacuum_interrupt_count = 0;
+	if (pgstat_track_vacuum_statistics)
+		MemSet(&dbentry->n_vacuum_stats, 0, sizeof(dbentry->n_vacuum_stats));
+}
+
 
 /* ----------
  * pgstat_recv_analyze() -

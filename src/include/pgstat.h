@@ -86,6 +86,7 @@ typedef enum StatMsgType
 	PGSTAT_MTYPE_CONNECT,
 	PGSTAT_MTYPE_DISCONNECT,
 	PGSTAT_MTYPE_VACSTATS,
+	PGSTAT_MTYPE_RESETVACSTATS,
 } StatMsgType;
 
 /* ----------
@@ -735,6 +736,20 @@ typedef struct PgStat_MsgDisconnect
 } PgStat_MsgDisconnect;
 
 /* ----------
+ * PgStat_MsgResetVacstats		Sent by the backend to throw away the vacuum
+ *								counters of one relation, or of the whole
+ *								database when m_resetall is true.
+ * ----------
+ */
+typedef struct PgStat_MsgResetVacstats
+{
+	PgStat_MsgHdr m_hdr;
+	Oid			m_databaseid;
+	Oid			m_objectid;
+	bool		m_resetall;
+} PgStat_MsgResetVacstats;
+
+/* ----------
  * PgStat_Msg					Union over all possible messages.
  * ----------
  */
@@ -754,6 +769,7 @@ typedef union PgStat_Msg
 	PgStat_MsgAutovacStart msg_autovacuum_start;
 	PgStat_MsgVacuum msg_vacuum;
 	PgStat_MsgVacstats msg_vacstats;
+	PgStat_MsgResetVacstats msg_resetvacstats;
 	PgStat_MsgAnalyze msg_analyze;
 	PgStat_MsgArchiver msg_archiver;
 	PgStat_MsgQueuestat msg_queuestat;  /* GPDB */
@@ -1160,6 +1176,7 @@ extern void pgstat_report_index_vacuum_time(Relation rel,
 											PgStat_Counter delaytime, bool is_autovacuum);
 extern void pgstat_report_vacstats(Oid tableoid, bool shared, bool isindex,
 								   const PgStat_VacuumStats *stats);
+extern void pgstat_reset_vacuum_stats(Oid relid, bool resetall);
 
 /* count a page whose all-visible bit is being cleared */
 #define pgstat_count_visible_page_marks_cleared(rel)						\
