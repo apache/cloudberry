@@ -158,3 +158,32 @@ DEFINE_DB_VACSTAT_FUNC(pg_stat_get_db_vacuum_dead_pages, dead_pages)
 DEFINE_DB_VACSTAT_FUNC(pg_stat_get_db_vacuum_pages_frozen, pages_frozen)
 DEFINE_DB_VACSTAT_FUNC(pg_stat_get_db_vacuum_pages_all_visible, pages_all_visible)
 DEFINE_DB_VACSTAT_FUNC(pg_stat_get_db_vacuum_freeze_age_count, freeze_age_vacuum_count)
+
+/*
+ * Throw away the vacuum counters of one relation, or of the whole database,
+ * without touching the rest of the statistics -- which is what
+ * pg_stat_reset() and pg_stat_reset_single_table_counters() would do.
+ *
+ * Like the other resetting functions this acts on the node it runs on, so on
+ * a cluster it has to be dispatched to the segments as well; see
+ * gp_vacuum_stats_reset() in the extension script.
+ */
+PG_FUNCTION_INFO_V1(vacuum_stats_reset);
+Datum
+vacuum_stats_reset(PG_FUNCTION_ARGS)
+{
+	pgstat_reset_vacuum_stats(InvalidOid, true);
+
+	PG_RETURN_VOID();
+}
+
+PG_FUNCTION_INFO_V1(vacuum_stats_reset_relation);
+Datum
+vacuum_stats_reset_relation(PG_FUNCTION_ARGS)
+{
+	Oid			relid = PG_GETARG_OID(0);
+
+	pgstat_reset_vacuum_stats(relid, false);
+
+	PG_RETURN_VOID();
+}
