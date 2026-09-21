@@ -749,6 +749,13 @@ emit_node_batch(List *per_node_stats, const char *trace_id)
  * than left to the caller: a QE only instantiates the PlanStates of its own
  * slice, so the document it produced would be a partial tree that the collection
  * has no use for -- the QD's copy is the whole plan.
+ *
+ * Must be called with interrupts already held, which SendQueryState() does for
+ * the whole collection.  Taking a nested hold here would be worse than
+ * redundant: ExplainPrintPlan() can raise an error, and the non-local jump out
+ * would skip the matching RESUME_INTERRUPTS(), leaving the count permanently
+ * elevated once the caller dismisses the error -- and a backend whose holdoff
+ * count never returns to zero can no longer be cancelled or terminated.
  */
 static char *
 build_plan_doc(QueryDesc *queryDesc, ExplainFormat format)
@@ -758,20 +765,18 @@ build_plan_doc(QueryDesc *queryDesc, ExplainFormat format)
 	if (queryDesc == NULL || Gp_role != GP_ROLE_DISPATCH)
 		return NULL;
 
-	HOLD_INTERRUPTS();
-	{
-		es = NewExplainState();
-		es->format  = format;
-		es->verbose = true;
-		es->costs   = true;
-		es->runtime = true;
-		ExplainBeginOutput(es);
-		ExplainOpenGroup("Query", NULL, true, es);
-		ExplainPrintPlan(es, queryDesc);
-		ExplainCloseGroup("Query", NULL, true, es);
-		ExplainEndOutput(es);
-	}
-	RESUME_INTERRUPTS();
+	Assert(InterruptHoldoffCount > 0);
+
+	es = NewExplainState();
+	es->format  = format;
+	es->verbose = true;
+	es->costs   = true;
+	es->runtime = true;
+	ExplainBeginOutput(es);
+	ExplainOpenGroup("Query", NULL, true, es);
+	ExplainPrintPlan(es, queryDesc);
+	ExplainCloseGroup("Query", NULL, true, es);
+	ExplainEndOutput(es);
 
 	return es->str->data;
 }

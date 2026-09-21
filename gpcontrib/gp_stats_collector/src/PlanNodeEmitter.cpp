@@ -43,8 +43,52 @@
 #include "Config.h"
 #include "ProtoUtils.h"
 
+#include <exception>
+#include <utility>
+
+extern "C" {
+#include "postgres.h"
+}
+
 /* Module-private Config instance shared across all emit calls in a session. */
 static Config pne_config;
+
+/*
+ * qs_emit_guard -- run `body` behind a C++ exception boundary.
+ *
+ * The three entry points below are extern "C" and are reached from the
+ * pg_query_state signal path, so the frame above them is plain C.  Letting an
+ * exception escape an extern "C" function is undefined behaviour and in
+ * practice calls std::terminate(), taking the backend down -- and Config::sync(),
+ * protobuf construction/serialization and the UDS write can all throw.  Nothing
+ * may propagate past this point.
+ *
+ * Unlike cpp_call() in hook_wrappers.cpp this reports at WARNING rather than
+ * raising a PostgreSQL error.  These calls are best-effort telemetry taken
+ * while somebody else's query is mid-flight; an ereport(ERROR) longjmp would
+ * abandon the rest of the snapshot (and skip the RAII destructors in the frames
+ * it jumps over) to no benefit.  The caller treats a missing batch as a missed
+ * sample, which is the correct outcome here.
+ */
+template <typename F>
+static void
+qs_emit_guard(const char *what, F &&body)
+{
+	try
+	{
+		std::forward<F>(body)();
+	}
+	catch (const std::exception &e)
+	{
+		ereport(WARNING,
+				(errmsg("pg_query_state: %s failed: %s", what, e.what())));
+	}
+	catch (...)
+	{
+		ereport(WARNING,
+				(errmsg("pg_query_state: %s failed: unknown exception", what)));
+	}
+}
 
 /*
  * gpsc_qs_sync_config -- reload the Config singleton.
@@ -56,7 +100,7 @@ static Config pne_config;
 extern "C" void
 gpsc_qs_sync_config()
 {
-	pne_config.sync();
+	qs_emit_guard("config sync", [&]() { pne_config.sync(); });
 }
 
 /*
@@ -101,8 +145,8 @@ map_node_type(QsPlanNodeType type)
 	return static_cast<yagpcc::PlanNodeType>(type);
 }
 
-extern "C" void
-gpsc_emit_node_batch(GpscNodeSample **nodes, int count, const char *trace_id)
+static void
+emit_node_batch_impl(GpscNodeSample **nodes, int count, const char *trace_id)
 {
 	if (count <= 0)
 		return;
@@ -168,7 +212,14 @@ gpsc_emit_node_batch(GpscNodeSample **nodes, int count, const char *trace_id)
 }
 
 extern "C" void
-gpsc_emit_query_plan(int32_t tmid, int32_t ssid, int32_t ccnt,
+gpsc_emit_node_batch(GpscNodeSample **nodes, int count, const char *trace_id)
+{
+	qs_emit_guard("per-node batch emit",
+				  [&]() { emit_node_batch_impl(nodes, count, trace_id); });
+}
+
+static void
+emit_query_plan_impl(int32_t tmid, int32_t ssid, int32_t ccnt,
 					 const char *plan_doc, int32_t format)
 {
 	if (plan_doc == nullptr || plan_doc[0] == '\0')
@@ -187,4 +238,13 @@ gpsc_emit_query_plan(int32_t tmid, int32_t ssid, int32_t ccnt,
 	request.set_format(format);
 
 	UDSConnector::report_query_plan(request, pne_config);
+}
+
+extern "C" void
+gpsc_emit_query_plan(int32_t tmid, int32_t ssid, int32_t ccnt,
+					 const char *plan_doc, int32_t format)
+{
+	qs_emit_guard("query plan emit", [&]() {
+		emit_query_plan_impl(tmid, ssid, ccnt, plan_doc, format);
+	});
 }

@@ -104,7 +104,18 @@ typedef struct
 #define IsCustomProcSignalReason(reason) \
 	((reason) >= PROCSIG_CUSTOM_1 && (reason) <= PROCSIG_CUSTOM_N)
 
-static bool CustomSignalPendings[NUM_CUSTOM_PROCSIGNALS];
+/*
+ * CustomSignalPendings is set by procsignal_sigusr1_handler() and cleared by
+ * CheckAndHandleCustomSignals() in normal code, so it carries the same
+ * signal-handler contract as pss_signalFlags above and needs the same type:
+ * as a plain bool the compiler is free to keep a stale copy across the read in
+ * CheckAndHandleCustomSignals(), silently dropping notifications.
+ *
+ * CustomSignalProcessing (a recursion guard) and CustomInterruptHandlers (set
+ * once at _PG_init time) are never touched from the handler, so they stay
+ * ordinary variables.
+ */
+static volatile sig_atomic_t CustomSignalPendings[NUM_CUSTOM_PROCSIGNALS];
 static bool CustomSignalProcessing[NUM_CUSTOM_PROCSIGNALS];
 static ProcSignalHandler_type CustomInterruptHandlers[NUM_CUSTOM_PROCSIGNALS];
 
