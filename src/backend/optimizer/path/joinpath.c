@@ -367,6 +367,21 @@ add_paths_to_join_relation(PlannerInfo *root,
 		hash_inner_and_outer(root, joinrel, outerrel, innerrel,
 							 jointype, &extra);
 
+#ifdef NOT_USED
+	/*
+	 * createplan.c does not currently support handling of pseudoconstant
+	 * clauses assigned to joins pushed down by extensions; check if the
+	 * restrictlist has such clauses, and if not, allow them to consider
+	 * pushing down joins.
+	 */
+	if ((joinrel->fdwroutine &&
+		 joinrel->fdwroutine->GetForeignJoinPaths) ||
+		set_join_pathlist_hook)
+		consider_join_pushdown = !has_pseudoconstant_clauses(root,
+															 restrictlist);
+
+#endif
+
 	/*
 	 * 5. If inner and outer relations are foreign tables (or joins) belonging
 	 * to the same server and assigned to the same user to check access
@@ -424,7 +439,10 @@ add_paths_to_join_relation(PlannerInfo *root,
 	}
 
 	/*
-	 * 6. Finally, give extensions a chance to manipulate the path list.
+	 * 6. Finally, give extensions a chance to manipulate the path list.  They
+	 * could add new paths (such as CustomPaths) by calling add_path(), or
+	 * add_partial_path() if parallel aware.  They could also delete or modify
+	 * paths added by the core code.
 	 */
 	if (set_join_pathlist_hook)
 		set_join_pathlist_hook(root, joinrel, outerrel, innerrel,
