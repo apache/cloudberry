@@ -2975,8 +2975,8 @@ ExplainNode(PlanState *planstate, List *ancestors,
 	 * it is what keeps this safe -- planstate->worker_instrument alone is not
 	 * enough.
 	 */
-	if (es->workers_state && (es->buffers || es->wal) && es->verbose
-		&& !es->runtime)
+	if (es->workers_state && planstate->worker_instrument &&
+		(es->buffers || es->wal) && es->verbose && !es->runtime)
 	{
 		WorkerInstrumentation *w = planstate->worker_instrument;
 
