@@ -243,6 +243,7 @@ IsMemoryIntensiveOperator(Node *node, PlannedStmt *stmt)
 	{
 		case T_Material:
 		case T_Sort:
+		case T_IncrementalSort:
 		case T_ShareInputScan:
 		case T_Hash:
 		case T_BitmapIndexScan:
