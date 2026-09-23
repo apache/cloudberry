@@ -3,6 +3,7 @@ import datetime
 import json
 
 from gppylib import gplog
+from gppylib.commands.base import Command, REMOTE
 
 
 class RecoveryInfo(object):
@@ -169,8 +170,31 @@ class RecoveryResult(object):
                     self._logger.error(setup_recovery_error_pattern.format(hostname, error.port, error.error_msg))
         self._print_invalid_errors()
 
+    def get_error_from_logfile(self, progress_file, hostname):
+        """
+        Traverse the error file to fetch last registered occurrence of 'error, panic or fatal'.
+        pg_rewind logs a line of its own after every failed attempt, which is
+        never the reason for the failure -- the reason is whatever the backend
+        wrote just above it -- so that line is excluded. Upstream excludes
+        PostgreSQL 12's wording of it, "fatal: postgres single-user mode of
+        target instance failed for command"; since 13 pg_rewind writes
+        "error: postgres single-user mode in target cluster failed" followed by
+        a separate "detail: Command was: ...", and only the first of those two
+        carries a word this grep looks for.
+        To ensure grep doesn't return a non-zero exit code, it is ORed with true.
+        """
+        cmdStr = 'set -o pipefail; cat {} | (grep -i "ERROR\|PANIC\|FATAL" | grep -v "error: postgres single-user mode in target cluster failed" || true) | tail -1'.format(progress_file)
+        cmd = Command(name="Parse logfile for errors on a remote host", cmdStr=cmdStr, ctxt=REMOTE, remoteHost=hostname)
+        cmd.run()
+
+        if cmd.get_results().rc != 0:
+            self._logger.debug("Failed while parsing the logfile %s" % progress_file)
+            return None
+
+        return cmd.get_results().stdout.strip()
+
     def print_bb_rewind_and_start_errors(self):
-        bb_rewind_error_pattern = " hostname: {}; port: {}; logfile: {}; recoverytype: {}"
+        bb_rewind_error_pattern = " hostname: {}; port: {}; logfile: {}; recoverytype: {}; error: {}"
         if len(self._bb_errors) > 0 or len(self._rewind_errors) > 0:
             self._logger.info("----------------------------------------------------------")
             if len(self._rewind_errors) > 0:
@@ -181,11 +205,15 @@ class RecoveryResult(object):
             for hostname, errors in self._rewind_errors.items():
                 for error in errors:
                     self._logger.info(bb_rewind_error_pattern.format(hostname, error.port, error.progress_file,
-                                                                     error.error_type))
+                                                                     error.error_type,
+                                                                     self.get_error_from_logfile(error.progress_file,
+                                                                                                 hostname)))
             for hostname, errors in self._bb_errors.items():
                 for error in errors:
                     self._logger.info(bb_rewind_error_pattern.format(hostname, error.port, error.progress_file,
-                                                                 error.error_type))
+                                                                 error.error_type,
+                                                                 self.get_error_from_logfile(error.progress_file,
+                                                                                             hostname)))
 
         start_error_pattern = " hostname: {}; port: {}; datadir: {}"
         if len(self._start_errors) > 0:

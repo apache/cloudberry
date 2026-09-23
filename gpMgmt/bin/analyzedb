@@ -982,7 +982,11 @@ def get_oid_str(table_list):
 def regclass_schema_tbl(schema, tbl):
     schema_tbl = "%s.%s" % (escape_identifier(schema), escape_identifier(tbl))
 
-    return "to_regclass('%s')" % (pg.escape_string(schema_tbl))
+    # Not pg.escape_string(): PyGreSQL's C implementation encodes its argument
+    # as ASCII and raises UnicodeEncodeError on a table or schema name that
+    # contains non-ASCII characters. With standard_conforming_strings on -- the
+    # default -- doubling single quotes is the whole of the escaping needed.
+    return "to_regclass('%s')" % schema_tbl.replace("'", "''")
 
 
 # Escape double-quotes in a string, so that the resulting string is suitable for

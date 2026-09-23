@@ -314,8 +314,10 @@ cat >> $CLUSTER_CONFIG <<-EOF
 	
 	COORDINATOR_PORT=${COORDINATOR_DEMO_PORT}
 	
-	# Shell to use to execute commands on all hosts
-	TRUSTED_SHELL="$(dirname "$0")/lalshell"
+	# Shell to use to execute commands on all hosts. Use an absolute path here
+	# because this file is later sourced by gpinitsystem, where \$0 is no longer
+	# demo_cluster.sh.
+	TRUSTED_SHELL=$(pwd)/lalshell
 	
 	ENCODING=UNICODE
 EOF
