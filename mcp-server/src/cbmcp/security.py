@@ -84,6 +84,26 @@ class SQLValidator:
         return True, "Query is valid"
     
     @classmethod
+    def quote_identifier(cls, name: str) -> str:
+        """Quote a SQL identifier so it can be embedded in a statement.
+
+        This is the last step of identifier handling, not the only one. Callers
+        resolve a name against the catalog first; quoting then guarantees that
+        whatever came back is read as a single identifier and nothing else.
+        """
+        if not isinstance(name, str) or not name:
+            raise ValueError(f"Identifier must be a non-empty string, got {name!r}")
+        if "\x00" in name:
+            raise ValueError("Identifier must not contain a NUL character")
+        escaped = name.replace('"', '""')
+        return f'"{escaped}"'
+
+    @classmethod
+    def quote_qualified_name(cls, schema: str, table: str) -> str:
+        """Quote a schema-qualified relation name."""
+        return f"{cls.quote_identifier(schema)}.{cls.quote_identifier(table)}"
+
+    @classmethod
     def sanitize_parameter_name(cls, param_name: str) -> str:
         """Sanitize parameter names to prevent injection"""
         # Remove any non-alphanumeric characters except underscores
