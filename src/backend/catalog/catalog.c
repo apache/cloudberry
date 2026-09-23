@@ -692,6 +692,10 @@ RelationNeedsSynchronizedOIDs(Relation relation)
 bool
 IsPinnedObject(Oid classId, Oid objectId)
 {
+	/* Objects with oids in this range are managed while dev process in upstream
+	 * or by extensions (e.g. yezzey) */
+	if (objectId < 9000 && objectId >= 8000)
+		return false;
 	/*
 	 * Objects with OIDs above FirstUnpinnedObjectId are never pinned.  Since
 	 * the OID generator skips this range when wrapping around, this check
