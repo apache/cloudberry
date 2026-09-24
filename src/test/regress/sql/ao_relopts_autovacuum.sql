@@ -1,0 +1,37 @@
+-- AO storage reloptions must not produce zeroed autovacuum options
+-- that get inherited by the TOAST relation.
+
+CREATE SCHEMA ao_relopts_av_test;
+SET search_path = ao_relopts_av_test;
+
+CREATE TABLE ao_row_with_storage_opts
+(
+    id integer,
+    payload text
+)
+WITH
+(
+    appendonly=true,
+    orientation=row,
+    compresstype=zlib,
+    compresslevel=1,
+    checksum=true
+)
+DISTRIBUTED RANDOMLY;
+
+INSERT INTO ao_row_with_storage_opts VALUES (1, repeat('x', 10000));
+
+-- Parent has only storage reloptions.
+SELECT option_name, option_value
+FROM pg_options_to_table(
+    (SELECT reloptions FROM pg_class
+     WHERE oid = 'ao_row_with_storage_opts'::regclass))
+ORDER BY option_name;
+
+-- TOAST has no reloptions of its own.
+SELECT t.reloptions IS NULL AS toast_no_reloptions
+FROM pg_class c
+JOIN pg_class t ON t.oid = c.reltoastrelid
+WHERE c.oid = 'ao_row_with_storage_opts'::regclass;
+
+DROP SCHEMA ao_relopts_av_test CASCADE;
