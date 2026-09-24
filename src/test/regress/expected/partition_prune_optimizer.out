@@ -1610,7 +1610,7 @@ create table coercepart_cd partition of coercepart for values in ('cd');
 explain (costs off) select * from coercepart where a in ('ab', to_char(125, '999'));
                            QUERY PLAN                            
 -----------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    ->  Dynamic Seq Scan on coercepart
          Number of partitions to scan: 1 (out of 3)
          Filter: ((a)::text = ANY ('{ab," 125"}'::text[]))
@@ -1660,7 +1660,7 @@ explain (costs off) select * from coercepart where a !~ all ('{ab,bc}');
 explain (costs off) select * from coercepart where a = any ('{ab,bc}');
                       QUERY PLAN                       
 -------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    ->  Dynamic Seq Scan on coercepart
          Number of partitions to scan: 2 (out of 3)
          Filter: ((a)::text = ANY ('{ab,bc}'::text[]))
@@ -1700,7 +1700,7 @@ explain (costs off) select * from coercepart where a = all ('{ab}');
 explain (costs off) select * from coercepart where a = all ('{ab,bc}');
                       QUERY PLAN                       
 -------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    ->  Dynamic Seq Scan on coercepart
          Number of partitions to scan: 2 (out of 3)
          Filter: ((a)::text = ALL ('{ab,bc}'::text[]))
@@ -3904,7 +3904,7 @@ explain (costs off) select * from pp_arrpart where a = '{1, 2}';
 explain (costs off) select * from pp_arrpart where a in ('{4, 5}', '{1}');
                               QUERY PLAN                              
 ----------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    ->  Dynamic Seq Scan on pp_arrpart
          Number of partitions to scan: 2 (out of 2)
          Filter: ((a = '{4,5}'::integer[]) OR (a = '{1}'::integer[]))
