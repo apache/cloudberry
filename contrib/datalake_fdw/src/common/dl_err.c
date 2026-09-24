@@ -29,6 +29,7 @@
 
 #include "postgres.h"
 
+#include "miscadmin.h"
 #include "utils/memutils.h"
 
 #include "common/dl_err.h"
@@ -326,6 +327,14 @@ dl_error_report(int elevel, DlErrCode code, const char *prefix)
 	bool		has_detail;
 
 	dl_error_reset();
+
+	/*
+	 * Code below C cannot service an interrupt, so it stops and fails instead
+	 * (an S3 listing does).  Taking a pending one here first reports the
+	 * cancel the user asked for rather than the failure it caused.
+	 */
+	if (elevel >= ERROR)
+		CHECK_FOR_INTERRUPTS();
 
 	/*
 	 * Detail recorded against a different code belongs to some other failure --

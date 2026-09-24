@@ -67,6 +67,7 @@ typedef struct DatalakeStorageRegistry
 } DatalakeStorageRegistry;
 
 extern DlErrCode datalake_register_local_backend(void);
+extern DlErrCode datalake_register_s3_backend(void);
 
 static DatalakeStorageRegistry *
 storage_registry(bool create)
@@ -325,4 +326,13 @@ datalake_register_storage_backends(void)
 
 	if (rc != DL_OK && rc != DL_ERR_ALREADY_EXISTS)
 		dl_error_report(ERROR, rc, "register file storage backend");
+
+	DL_TRY
+	{
+		rc = datalake_register_s3_backend();
+	}
+	DL_CATCH_END();
+
+	if (rc != DL_OK && rc != DL_ERR_ALREADY_EXISTS)
+		dl_error_report(ERROR, rc, "register s3 storage backend");
 }
