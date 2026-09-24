@@ -426,12 +426,12 @@ DETAIL:  location URI "s3://" has an empty authority
 CREATE SERVER dlskel_bad_query
   FOREIGN DATA WRAPPER iceberg_volume_fdw
   OPTIONS (base_path 's3://b/p?versionId=3');
-ERROR:  invalid iceberg volume base_path "s3://b/p?versionId=3"
+ERROR:  invalid iceberg volume base_path "s3://b/p?***"
 DETAIL:  location URI must not contain a query
 CREATE SERVER dlskel_bad_userinfo
   FOREIGN DATA WRAPPER iceberg_volume_fdw
   OPTIONS (base_path 's3://user@b/p');
-ERROR:  invalid iceberg volume base_path "s3://user@b/p"
+ERROR:  invalid iceberg volume base_path "s3://***@b/p"
 DETAIL:  location URI must not contain userinfo
 CREATE SERVER dlskel_bad_bucket
   FOREIGN DATA WRAPPER iceberg_volume_fdw

@@ -39,6 +39,7 @@
 #include <parquet/arrow/reader.h>
 #include <parquet/properties.h>
 
+#include "common/storage_arrow.h"
 #include "format/arrow_support.h"
 
 #include "am_iceberg/pg_iceberg_guc.h"
@@ -297,7 +298,7 @@ parquet_open_reader(const Fragment *fragment, const ProjectionSet *projection,
 		return DL_ARG_ERROR("open_reader");
 	*out = NULL;
 
-	if (fragment == NULL || fragment->path == NULL)
+	if (fragment == NULL || fragment->path == NULL || fragment->fs == NULL)
 		return DL_ARG_ERROR("open_reader");
 
 	/*
@@ -325,8 +326,8 @@ parquet_open_reader(const Fragment *fragment, const ProjectionSet *projection,
 		parquet::arrow::FileReaderBuilder builder;
 		parquet::ArrowReaderProperties properties;
 
-		arrow::Result<std::shared_ptr<arrow::io::ReadableFile>> file =
-			arrow::io::ReadableFile::Open(fragment->path, pool);
+		arrow::Result<std::shared_ptr<arrow::io::RandomAccessFile>> file =
+			dl_storage_open_input(fragment->fs, fragment->path);
 
 		if (!file.ok())
 			return DlArrowStatus(file.status(), "open a Parquet file");

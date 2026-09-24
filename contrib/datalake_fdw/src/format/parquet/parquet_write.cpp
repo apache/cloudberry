@@ -45,6 +45,7 @@
 #include <parquet/properties.h>
 #include <parquet/types.h>
 
+#include "common/storage_arrow.h"
 #include "format/arrow_support.h"
 
 extern "C"
@@ -60,9 +61,9 @@ extern "C"
 struct ParquetWriter
 {
 	FormatWriter base;
-	std::string path;
+	std::string path;				/* relative to the mount, for messages */
 	std::shared_ptr<arrow::Schema> schema;
-	std::shared_ptr<arrow::io::FileOutputStream> sink;
+	std::shared_ptr<arrow::io::OutputStream> sink;
 	std::unique_ptr<parquet::arrow::FileWriter> writer;
 
 	/*
@@ -98,23 +99,22 @@ private:
 };
 
 /*
- * Gives up on the file being written.  The sink is closed first and the writer
- * left to its destructor: a Parquet writer writes the footer when it closes,
- * and against a sink that is already closed it cannot -- which is what stops a
- * complete, valid, truncated file appearing at the path if the unlink does not
- * take.  What it leaves then has no footer, so nothing can read it, and that is
- * why the unlink's result is not worth reporting.
+ * Gives up on the file being written.  Aborting the sink is what removes it:
+ * a stream cleans up whatever it created and nothing else, which on a local
+ * file means unlinking the one it created and on object storage means
+ * abandoning the upload, leaving no object at all.  Deleting by path from here
+ * would instead reach whatever is at that name by now, which after a failed
+ * write may belong to another writer entirely.
  *
- * The file is ours to delete: parquet_open_writer() created it with O_EXCL, so
- * nothing was at the path before, and nothing this removes was anyone else's.
+ * The writer itself is left to its destructor.  A Parquet writer writes the
+ * footer when it closes, and against an aborted sink it cannot, so what a
+ * half-written file leaves behind is unreadable rather than plausible.
  */
 static void
 parquet_discard(ParquetWriter *impl)
 {
 	if (impl->sink != nullptr)
-		(void) impl->sink->Close();
-
-	(void) unlink(impl->path.c_str());
+		(void) impl->sink->Abort();
 }
 
 /*
@@ -387,7 +387,7 @@ parquet_compression(const char *name, arrow::Compression::type *out)
 }
 
 DlErrCode
-parquet_open_writer(const char *path, void *tupdesc_arg,
+parquet_open_writer(DatalakeFileSystem fs, const char *path, void *tupdesc_arg,
 					const WriterOptions *options, FormatWriter **out)
 {
 	DlErrCode	result = DL_OK;
@@ -396,7 +396,7 @@ parquet_open_writer(const char *path, void *tupdesc_arg,
 		return DL_ARG_ERROR("open_writer");
 	*out = NULL;
 
-	if (path == NULL || tupdesc_arg == NULL)
+	if (fs == NULL || path == NULL || tupdesc_arg == NULL)
 		return DL_ARG_ERROR("open_writer");
 
 	DL_ABI_GUARD_BEGIN
@@ -406,7 +406,6 @@ parquet_open_writer(const char *path, void *tupdesc_arg,
 		parquet::WriterProperties::Builder properties;
 		arrow::Compression::type compression = arrow::Compression::SNAPPY;
 		DlErrCode	rc;
-		int			fd;
 
 		impl->path = path;
 		impl->schema = DlArrowSchemaFromTupleDesc((TupleDesc) tupdesc_arg,
@@ -435,44 +434,17 @@ parquet_open_writer(const char *path, void *tupdesc_arg,
 		impl->pending_rows = 0;
 
 		/*
-		 * Created here rather than by Arrow.  Arrow's path form opens with
-		 * O_TRUNC, which would empty a file that was already there -- and this
-		 * writer deletes the file it holds whenever it cannot finish it, so a
-		 * truncated file would then be a deleted one.  With O_EXCL the kernel
-		 * answers "did I create this", and the writer only ever deletes what
-		 * it created.  A lake's data file names are unique by construction, so
-		 * a path that exists is a mistake, and refusing it is right anyway.
+		 * The storage layer creates it, and refuses if something is already
+		 * there: a lake's data file names are unique by construction, so a
+		 * path that exists is a mistake rather than something to overwrite.
+		 * The stream that comes back owns what it created, which is what lets
+		 * parquet_discard() give the file up without deleting by path.
 		 */
-		fd = open(path, O_WRONLY | O_CREAT | O_EXCL, pg_file_create_mode);
-		if (fd < 0)
-		{
-			int			saved_errno = errno;
-			std::string message;
-
-			if (saved_errno == EEXIST)
-			{
-				message = std::string("\"") + path + "\" already exists";
-				dl_error_set(DL_ERR_ALREADY_EXISTS, "create a Parquet file", NULL,
-							 message.c_str());
-				return DL_ERR_ALREADY_EXISTS;
-			}
-
-			message = std::string("could not create \"") + path + "\": " +
-				strerror(saved_errno);
-			dl_error_set(DL_ERR_IO, "create a Parquet file", NULL, message.c_str());
-			return DL_ERR_IO;
-		}
-
-		/* From here the file exists and is ours, so every failure discards it. */
-		arrow::Result<std::shared_ptr<arrow::io::FileOutputStream>> sink =
-			arrow::io::FileOutputStream::Open(fd);
+		arrow::Result<std::shared_ptr<arrow::io::OutputStream>> sink =
+			dl_storage_open_output(fs, path);
 
 		if (!sink.ok())
-		{
-			(void) close(fd);	/* Arrow took nothing */
-			parquet_discard(impl.get());
 			return DlArrowStatus(sink.status(), "create a Parquet file");
-		}
 		impl->sink = *sink;
 
 		/*

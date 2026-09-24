@@ -49,6 +49,7 @@
 
 #include "am_iceberg/pg_iceberg_guc.h"
 #include "am_iceberg/pg_iceberg_options.h"
+#include "iceberg_volume_fdw/iceberg_volume_option.h"
 #include "common/dl_err.h"
 #include "common/file_system_wrapper.h"
 #include "format/arrow_builder.h"
@@ -108,30 +109,16 @@ storage_parse_uri(const char *uri, bool leaf, DatalakeLocation *location,
 	char	   *detail = NULL;
 	DlErrCode	rc;
 
-	if (strncmp(uri, "dltest://", 9) == 0)
+	/*
+	 * The production parser, dltest included: it accepts any scheme a backend
+	 * has registered, so the test backend is addressed exactly the way a
+	 * third party's would be.
+	 */
+	rc = pg_iceberg_parse_location(uri, NULL, NULL, location, &detail);
+	if (rc != DL_OK)
 	{
-		const char *path = uri + 9;
-
-		if (path[0] != '/' || strchr(path, '?') != NULL || strchr(path, '#') != NULL)
-		{
-			dl_error_set(DL_ERR_INVALID_OPTION, "parse storage location", NULL,
-						 "dltest location must have an absolute path and no query or fragment");
-			dl_error_report(ERROR, DL_ERR_INVALID_OPTION, "parse storage location");
-		}
-		memset(location, 0, sizeof(*location));
-		location->abi_version = DATALAKE_LOCATION_ABI_VERSION;
-		location->scheme = pstrdup("dltest");
-		location->authority = pstrdup("");
-		location->path_prefix = pstrdup(path);
-	}
-	else
-	{
-		rc = pg_iceberg_parse_location(uri, NULL, NULL, location, &detail);
-		if (rc != DL_OK)
-		{
-			dl_error_set(rc, "parse storage location", NULL, detail);
-			dl_error_report(ERROR, rc, "parse storage location");
-		}
+		dl_error_set(rc, "parse storage location", NULL, detail);
+		dl_error_report(ERROR, rc, "parse storage location");
 	}
 
 	*relative = pstrdup("");
@@ -150,6 +137,63 @@ storage_parse_uri(const char *uri, bool leaf, DatalakeLocation *location,
 		else
 			*slash = '\0';
 	}
+}
+
+/*
+ * Mount whatever the caller named.  A bare path is a local absolute path --
+ * which is what the Parquet cases have always passed -- and a URI names a
+ * volume's scheme; when a volume is given, its server options and the calling
+ * user's credentials are what the backend gets.
+ */
+static DatalakeFileSystem
+storage_open_volume(const char *path_or_uri, const char *volume, bool leaf,
+					char **relative)
+{
+	DatalakeLocation location;
+	DatalakeFileSystem fs = NULL;
+	DlKeyValue *kv = NULL;
+	char	   *uri;
+	int			nkv = 0;
+	DlErrCode	rc;
+
+	uri = strstr(path_or_uri, "://") != NULL ? pstrdup(path_or_uri) :
+		psprintf("file://%s", path_or_uri);
+
+	storage_parse_uri(uri, leaf, &location, relative);
+
+	if (volume != NULL)
+	{
+		DatalakeLocation volume_location;
+		Size		prefix_len;
+
+		iceberg_volume_resolve(volume, GetUserId(), &volume_location, &kv, &nkv);
+
+		/*
+		 * A volume's credentials belong to the volume's storage.  Without
+		 * this, naming any volume would lend its keys to any bucket the
+		 * caller cared to type.
+		 */
+		prefix_len = strlen(volume_location.path_prefix);
+		if (strcmp(location.scheme, volume_location.scheme) != 0 ||
+			strcmp(location.authority, volume_location.authority) != 0 ||
+			strncmp(location.path_prefix, volume_location.path_prefix,
+					prefix_len) != 0 ||
+			(location.path_prefix[prefix_len] != '\0' &&
+			 location.path_prefix[prefix_len] != '/'))
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("\"%s\" is not inside volume \"%s\"",
+							path_or_uri, volume)));
+
+		/* The volume says how to reach it; the URI says which object. */
+		location.endpoint = volume_location.endpoint;
+		location.region = volume_location.region;
+	}
+
+	rc = datalake_fs_open(&location, kv, nkv, &fs);
+	if (rc != DL_OK)
+		dl_error_report(ERROR, rc, "open storage");
+	return fs;
 }
 
 static DatalakeFileSystem
@@ -247,16 +291,25 @@ datalake_parquet_write(PG_FUNCTION_ARGS)
 	WriterOptions options = {0};
 	FormatWriter *volatile open_writer = NULL;
 	DlArrowBuilder volatile open_builder = NULL;
+	DatalakeFileSystem volatile open_fs = NULL;
+	char	   *relative;
 	long		batch_rows = iceberg_batch_rows;
 	int64		written = 0;
 	MemoryContext row_context;
 
-	check_nargs(fcinfo, 4);
+	check_nargs(fcinfo, 5);
+	/* Not STRICT, because volume is optional; the rest are not. */
+	if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2) || PG_ARGISNULL(3))
+		PG_RETURN_NULL();
 	path = text_to_cstring(PG_GETARG_TEXT_PP(0));
 	query = text_to_cstring(PG_GETARG_TEXT_PP(1));
 	row_group_size = PG_GETARG_INT32(2);
 	compression = text_to_cstring(PG_GETARG_TEXT_PP(3));
 	routine = parquet_routine();
+	open_fs = storage_open_volume(path,
+								  PG_ARGISNULL(4) ? NULL :
+								  text_to_cstring(PG_GETARG_TEXT_PP(4)),
+								  true, &relative);
 
 	/*
 	 * Bounded above as well as below, and by the same number as
@@ -326,7 +379,8 @@ datalake_parquet_write(PG_FUNCTION_ARGS)
 			{
 				tupdesc = CreateTupleDescCopy(SPI_tuptable->tupdesc);
 
-				rc = routine->open_writer(path, tupdesc, &options, &writer);
+				rc = routine->open_writer((DatalakeFileSystem) open_fs, relative,
+										  tupdesc, &options, &writer);
 				if (rc != DL_OK)
 					dl_error_report(ERROR, rc, "open_writer");
 				open_writer = writer;
@@ -406,17 +460,25 @@ datalake_parquet_write(PG_FUNCTION_ARGS)
 	{
 		DlArrowBuilder builder = open_builder;
 		FormatWriter *writer = open_writer;
+		DatalakeFileSystem fs = (DatalakeFileSystem) open_fs;
 
 		if (builder != NULL)
 			dl_arrow_builder_close(&builder);
 		if (writer != NULL)
 			writer->ops->abort(&writer);
+		datalake_fs_close(&fs);
 
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
 
 	SPI_finish();
+
+	{
+		DatalakeFileSystem fs = (DatalakeFileSystem) open_fs;
+
+		datalake_fs_close(&fs);
+	}
 
 	PG_RETURN_INT64(written);
 }
@@ -461,15 +523,27 @@ datalake_parquet_read(PG_FUNCTION_ARGS)
 	Datum	   *values;
 	bool	   *nulls;
 	FormatReader *reader = NULL;
+	DatalakeFileSystem volatile open_fs = NULL;
+	char	   *relative;
 	MemoryContext row_context;
 	DlErrCode	rc;
 
-	check_nargs(fcinfo, 4);
+	check_nargs(fcinfo, 5);
+	/* Not STRICT, because volume is optional; the rest are not. */
+	if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2) || PG_ARGISNULL(3))
+		ereport(ERROR,
+				(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+				 errmsg("path, first_row_group, n_row_groups and field_ids are required")));
 	path = text_to_cstring(PG_GETARG_TEXT_PP(0));
 	field_id_array = PG_GETARG_ARRAYTYPE_P(3);
 	routine = parquet_routine();
+	open_fs = storage_open_volume(path,
+								  PG_ARGISNULL(4) ? NULL :
+								  text_to_cstring(PG_GETARG_TEXT_PP(4)),
+								  true, &relative);
 
-	fragment.path = path;
+	fragment.fs = (DatalakeFileSystem) open_fs;
+	fragment.path = relative;
 	fragment.first_row_group = PG_GETARG_INT32(1);
 	fragment.n_row_groups = PG_GETARG_INT32(2);
 
@@ -591,6 +665,7 @@ datalake_parquet_read(PG_FUNCTION_ARGS)
 	PG_CATCH();
 	{
 		FormatReader *failed = open_reader;
+		DatalakeFileSystem fs = (DatalakeFileSystem) open_fs;
 
 		if (batch->release != NULL)
 			batch->release(batch);
@@ -598,10 +673,17 @@ datalake_parquet_read(PG_FUNCTION_ARGS)
 			schema->release(schema);
 		if (failed != NULL)
 			failed->ops->close(&failed);
+		datalake_fs_close(&fs);
 
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+
+	{
+		DatalakeFileSystem fs = (DatalakeFileSystem) open_fs;
+
+		datalake_fs_close(&fs);
+	}
 
 	return (Datum) 0;
 }
