@@ -52,6 +52,7 @@ OBJS = \
 	src/common/parser_option.o \
 	src/common/file_system_wrapper.o \
 	src/common/local_file_system.o \
+	src/common/s3_file_system.o \
 	src/common/backend_registry.o \
 	src/test/storage_test_backend.o \
 	src/test/datalake_fdw_test.o
@@ -89,13 +90,57 @@ Debian and Ubuntu)
 endif
 endif
 
+# The AWS SDK for C++, which the s3 backend is built on.  No distribution
+# packages it, so it is found by prefix rather than by pkg-config: either the
+# one named on the command line, or the usual places a hand-built one lands.
+# Without it the module still builds, and opening an s3:// location is what
+# reports that it was left out.
+AWS_SDK_SEARCH = /usr/local /opt/datalake
+ifeq ($(origin AWS_SDK_PREFIX),undefined)
+AWS_SDK_PREFIX := $(firstword $(foreach d,$(AWS_SDK_SEARCH),\
+	$(if $(wildcard $(d)/include/aws/s3/S3Client.h),$(d))))
+else
+# Named explicitly and wrong is a mistake to report, not to work around.
+ifeq ($(wildcard $(AWS_SDK_PREFIX)/include/aws/s3/S3Client.h),)
+ifeq ($(filter clean distclean maintainer-clean,$(MAKECMDGOALS)),)
+$(error AWS_SDK_PREFIX=$(AWS_SDK_PREFIX) has no include/aws/s3/S3Client.h)
+endif
+endif
+endif
+
+ifneq ($(AWS_SDK_PREFIX),)
+AWS_SDK_CPPFLAGS = -DDL_HAVE_AWS_SDK -I$(AWS_SDK_PREFIX)/include
+# One group, because these static archives refer to each other both ways.
+# -Bstatic, because a prefix that also holds shared SDK libraries would
+# otherwise bind those, and this module promises to add no runtime dependency
+# beyond the system libraries the SDK itself needs.
+AWS_SDK_LIBS = -L$(AWS_SDK_PREFIX)/lib64 -L$(AWS_SDK_PREFIX)/lib \
+	-Wl,-Bstatic \
+	-Wl,--start-group \
+	-laws-cpp-sdk-s3 -laws-cpp-sdk-core \
+	-laws-crt-cpp -laws-c-s3 -laws-c-auth -laws-c-http -laws-c-io \
+	-laws-c-cal -laws-c-compression -laws-c-mqtt -laws-c-event-stream \
+	-laws-c-sdkutils -laws-c-common -laws-checksums -ls2n \
+	-Wl,--end-group \
+	-Wl,-Bdynamic \
+	-lssl -lcrypto -lz -lcurl
+else
+AWS_SDK_CPPFLAGS =
+AWS_SDK_LIBS =
+ifeq ($(filter clean distclean maintainer-clean,$(MAKECMDGOALS)),)
+$(info NOTICE: the AWS SDK for C++ was not found in $(AWS_SDK_SEARCH), so \
+datalake_fdw is being built without the s3 storage backend.  Point \
+AWS_SDK_PREFIX at an installed SDK to build with it.)
+endif
+endif
+
 # Use the documented PGXS knobs: pgxs.mk appends these AFTER the flags configure
 # chose, so optimization/warning settings survive.  A pre-include
 # "override CFLAGS +=" would give CFLAGS override origin and silently discard
 # Makefile.global's own "CFLAGS = @CFLAGS@" assignment.
 PG_CFLAGS = -fvisibility=hidden
 PG_CXXFLAGS = -fvisibility=hidden -fvisibility-inlines-hidden -std=c++17
-PG_CPPFLAGS = -I$(srcdir)/src $(ARROW_CPPFLAGS)
+PG_CPPFLAGS = -I$(srcdir)/src $(ARROW_CPPFLAGS) $(AWS_SDK_CPPFLAGS)
 
 # The regression cases live with the rest of the test material rather than in a
 # second place of their own; pg_regress is pointed at them.  REGRESS_OPTS is
@@ -116,6 +161,9 @@ FORMAT_PARQUET_REGRESS = parquet_roundtrip
 FORMAT_PARQUET_INPUTDIR = $(srcdir)/test/automation/sqlrepo/smoke/format_parquet
 STORAGE_LOCAL_REGRESS = storage_local
 STORAGE_LOCAL_INPUTDIR = $(srcdir)/test/automation/sqlrepo/smoke/storage_local
+# The s3 category needs a service to talk to, so it runs where one is named.
+STORAGE_S3_REGRESS = storage_s3
+STORAGE_S3_INPUTDIR = $(srcdir)/test/automation/sqlrepo/smoke/storage_s3
 
 EXTRA_CLEAN = exports_darwin.list exports.map
 
@@ -139,7 +187,7 @@ endif
 
 # Shared libraries are linked with $(CC) (see src/Makefile.shlib COMPILER), so a
 # module containing C++ translation units must pull in the C++ runtime itself.
-SHLIB_LINK += -lstdc++ $(ARROW_LIBS)
+SHLIB_LINK += -lstdc++ $(ARROW_LIBS) $(AWS_SDK_LIBS)
 
 # The export list is the single place that decides what stays visible -- which
 # now also means none of Arrow's symbols become symbols this module offers.
@@ -172,7 +220,7 @@ $(shlib): $(EXPORT_LIST)
 # two runs creating the same extension in the same database race.  The
 # categories are chained through their prerequisites rather than listed side
 # by side, which is what keeps the order under a parallel make.
-installcheck: installcheck-storage-local
+installcheck: installcheck-storage-s3
 
 installcheck-format-parquet: submake $(REGRESS_PREP)
 	$(pg_regress_installcheck) $(REGRESS_OPTS) \
@@ -185,6 +233,16 @@ installcheck-storage-local: submake $(REGRESS_PREP) installcheck-format-parquet
 		--inputdir=$(STORAGE_LOCAL_INPUTDIR) $(STORAGE_LOCAL_REGRESS)
 
 .PHONY: installcheck-storage-local
+
+installcheck-storage-s3: submake $(REGRESS_PREP) installcheck-storage-local
+ifeq ($(DATALAKE_TEST_S3_ENDPOINT),)
+	@echo "NOTICE: DATALAKE_TEST_S3_ENDPOINT is not set, skipping the s3 storage tests"
+else
+	$(pg_regress_installcheck) $(REGRESS_OPTS) \
+		--inputdir=$(STORAGE_S3_INPUTDIR) $(STORAGE_S3_REGRESS)
+endif
+
+.PHONY: installcheck-storage-s3
 
 # "make check" is in-tree only -- under PGXS pgxs.mk refuses the target -- and
 # it is the only run that supplies the temp-config that preloads this module.

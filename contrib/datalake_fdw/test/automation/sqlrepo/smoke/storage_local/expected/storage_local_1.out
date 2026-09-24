@@ -95,9 +95,9 @@ SELECT * FROM datalake_storage_list(
 (1 row)
 
 SELECT datalake_storage_probe('s3');
- datalake_storage_probe 
-------------------------
- supported
+                                                                          datalake_storage_probe                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ datalake_fdw was built without the AWS SDK for C++, so s3:// locations cannot be opened; rebuild the extension with AWS_SDK_PREFIX=<prefix> pointing at an installed SDK
 (1 row)
 
 -- Each malformed registration must be rejected by the check it breaks, not by

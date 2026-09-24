@@ -60,6 +60,7 @@ PG_FUNCTION_INFO_V1(datalake_parquet_read);
 PG_FUNCTION_INFO_V1(datalake_storage_write_text);
 PG_FUNCTION_INFO_V1(datalake_storage_read_text);
 PG_FUNCTION_INFO_V1(datalake_storage_list);
+PG_FUNCTION_INFO_V1(datalake_storage_delete);
 PG_FUNCTION_INFO_V1(datalake_storage_probe);
 PG_FUNCTION_INFO_V1(datalake_storage_register_bad);
 
@@ -782,6 +783,42 @@ datalake_storage_list(PG_FUNCTION_ARGS)
 		datalake_fs_close(&fs);
 	}
 	return (Datum) 0;
+}
+
+Datum
+datalake_storage_delete(PG_FUNCTION_ARGS)
+{
+	char	   *relative;
+	DatalakeFileSystem volatile open_fs = NULL;
+
+	check_nargs(fcinfo, 2);
+	if (PG_ARGISNULL(0))
+		PG_RETURN_NULL();
+	open_fs = storage_open_uri(fcinfo, 0, 1, true, &relative);
+
+	PG_TRY();
+	{
+		DatalakeFileSystem fs = (DatalakeFileSystem) open_fs;
+		DlErrCode	rc = datalake_file_delete(fs, relative);
+
+		if (rc != DL_OK)
+			dl_error_report(ERROR, rc, "delete storage file");
+	}
+	PG_CATCH();
+	{
+		DatalakeFileSystem fs = (DatalakeFileSystem) open_fs;
+
+		datalake_fs_close(&fs);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	{
+		DatalakeFileSystem fs = (DatalakeFileSystem) open_fs;
+
+		datalake_fs_close(&fs);
+	}
+	PG_RETURN_BOOL(true);
 }
 
 Datum
