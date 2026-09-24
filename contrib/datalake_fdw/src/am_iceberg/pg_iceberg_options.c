@@ -31,6 +31,7 @@
 #include "access/relation.h"
 #include "access/reloptions.h"
 #include "am_iceberg/pg_iceberg_options.h"
+#include "common/backend_registry.h"
 #include "catalog/dependency.h"
 #include "catalog/objectaddress.h"
 #include "catalog/pg_class.h"
@@ -516,6 +517,64 @@ s3_bucket_char(char ch)
 	return s3_bucket_alnum(ch) || ch == '.' || ch == '-';
 }
 
+/*
+ * A form of the URI that is safe to put in an error message.
+ *
+ * A rejected URI is quoted back so the user can see what was wrong with it,
+ * but the parts this parser rejects are exactly the parts that carry secrets:
+ * a query string holds a presigned signature, userinfo holds a password.  So
+ * those are reported as present rather than reproduced.
+ */
+char *
+pg_iceberg_redacted_location_uri(const char *uri)
+{
+	const char *authority;
+	const char *cut;
+	StringInfoData safe;
+
+	if (uri == NULL)
+		return pstrdup("(null)");
+
+	initStringInfo(&safe);
+
+	authority = strstr(uri, "://");
+	authority = authority == NULL ? uri : authority + 3;
+
+	/* Everything up to the authority, then the authority without userinfo. */
+	appendBinaryStringInfo(&safe, uri, (int) (authority - uri));
+	cut = strpbrk(authority, "/?#");
+	{
+		Size		authority_len = cut == NULL ?
+			strlen(authority) : (Size) (cut - authority);
+		const char *at = memchr(authority, '@', authority_len);
+
+		if (at != NULL)
+		{
+			appendStringInfoString(&safe, "***@");
+			appendBinaryStringInfo(&safe, at + 1,
+								   (int) (authority_len - (at + 1 - authority)));
+		}
+		else
+			appendBinaryStringInfo(&safe, authority, (int) authority_len);
+	}
+
+	/* Then the path, with any query or fragment named but not repeated. */
+	if (cut != NULL)
+	{
+		const char *tail = strpbrk(cut, "?#");
+
+		if (tail == NULL)
+			appendStringInfoString(&safe, cut);
+		else
+		{
+			appendBinaryStringInfo(&safe, cut, (int) (tail - cut));
+			appendStringInfoString(&safe, *tail == '?' ? "?***" : "#***");
+		}
+	}
+
+	return safe.data;
+}
+
 DlErrCode
 pg_iceberg_parse_location(const char *uri, const char *endpoint,
 						  const char *region, DatalakeLocation *out,
@@ -528,7 +587,9 @@ pg_iceberg_parse_location(const char *uri, const char *endpoint,
 	Size		authority_len;
 	Size		path_len;
 	bool		is_s3;
+	bool		is_file;
 	Size		i;
+	char	   *safe_uri;
 
 	Assert(out != NULL);
 	memset(out, 0, sizeof(*out));
@@ -539,72 +600,98 @@ pg_iceberg_parse_location(const char *uri, const char *endpoint,
 		return invalid_location(errdetail,
 								pstrdup("location URI is null"));
 
+	safe_uri = pg_iceberg_redacted_location_uri(uri);
+
 	scheme_end = strstr(uri, "://");
 	if (scheme_end == NULL)
 		return invalid_location(errdetail,
 								psprintf("location URI \"%s\" is missing \"://\"",
-										 uri));
+										 safe_uri));
 
 	scheme_len = scheme_end - uri;
 	is_s3 = scheme_len == strlen(DATALAKE_ICEBERG_VOLUME_SERVER_TYPE_S3) &&
 		strncmp(uri, DATALAKE_ICEBERG_VOLUME_SERVER_TYPE_S3, scheme_len) == 0;
-	if (!is_s3 &&
-		!(scheme_len == strlen(DATALAKE_ICEBERG_VOLUME_SERVER_TYPE_HDFS) &&
-		  strncmp(uri, DATALAKE_ICEBERG_VOLUME_SERVER_TYPE_HDFS, scheme_len) == 0))
-		return invalid_location(errdetail,
-								psprintf("location URI \"%s\" has unsupported scheme; expected %s or %s",
-										 uri,
-										 DATALAKE_ICEBERG_VOLUME_SERVER_TYPE_S3,
-										 DATALAKE_ICEBERG_VOLUME_SERVER_TYPE_HDFS));
+	is_file = scheme_len == strlen("file") &&
+		strncmp(uri, "file", scheme_len) == 0;
 
+	/*
+	 * Two schemes have rules of their own below; any other is acceptable
+	 * exactly when something can read it.  A fixed list here would mean a
+	 * third party could register a backend and still have no way to name a
+	 * volume that uses it, which would make the extension contract a promise
+	 * the parser breaks.
+	 */
+	if (!is_s3 && !is_file)
+	{
+		char	   *scheme = pnstrdup(uri, scheme_len);
+
+		if (!datalake_storage_scheme_registered(scheme))
+			return invalid_location(errdetail,
+									psprintf("location URI \"%s\" names storage \"%s\", which no backend is registered for",
+											 safe_uri, scheme));
+	}
+
+	/*
+	 * These three say what is wrong without repeating the URI.  A query string
+	 * carries a presigned signature and userinfo carries a password, and an
+	 * error message is read in a log by people the credential was not issued
+	 * to.  The caller still reports the value it was given, which is the DDL
+	 * the user just typed, so nothing is lost in diagnosing a typo.
+	 */
 	if (strchr(uri, '?') != NULL)
 		return invalid_location(errdetail,
-								psprintf("location URI \"%s\" must not contain a query",
-										 uri));
+								pstrdup("location URI must not contain a query"));
 	if (strchr(uri, '#') != NULL)
 		return invalid_location(errdetail,
-								psprintf("location URI \"%s\" must not contain a fragment",
-										 uri));
+								pstrdup("location URI must not contain a fragment"));
 
 	authority_start = scheme_end + 3;
 	path_start = strchr(authority_start, '/');
 	authority_len = path_start == NULL ?
 		strlen(authority_start) : (Size) (path_start - authority_start);
 
-	if (authority_len == 0)
+	if (is_s3 && authority_len == 0)
 		return invalid_location(errdetail,
 								psprintf("location URI \"%s\" has an empty authority",
-										 uri));
+										 safe_uri));
+	/* A scheme a backend brought is addressed like file: a path, no host. */
+	if (!is_s3 && authority_len != 0)
+		return invalid_location(errdetail,
+								psprintf("location URI \"%s\" must have an empty authority",
+										 safe_uri));
+	if (!is_s3 && (path_start == NULL || path_start[0] != '/'))
+		return invalid_location(errdetail,
+								psprintf("location URI \"%s\" must have an absolute path",
+										 safe_uri));
 	if (memchr(authority_start, '@', authority_len) != NULL)
 		return invalid_location(errdetail,
-								psprintf("location URI \"%s\" must not contain userinfo",
-										 uri));
+								pstrdup("location URI must not contain userinfo"));
 
 	if (is_s3)
 	{
 		if (authority_len < 3 || authority_len > 63)
 			return invalid_location(errdetail,
 									psprintf("s3 bucket in location URI \"%s\" must be 3 to 63 characters",
-											 uri));
+											 safe_uri));
 		if (!s3_bucket_alnum(authority_start[0]) ||
 			!s3_bucket_alnum(authority_start[authority_len - 1]))
 			return invalid_location(errdetail,
 									psprintf("s3 bucket in location URI \"%s\" must start and end with a lowercase letter or digit",
-											 uri));
+											 safe_uri));
 		for (i = 0; i < authority_len; i++)
 		{
 			if (!s3_bucket_char(authority_start[i]))
 				return invalid_location(errdetail,
 										psprintf("s3 bucket in location URI \"%s\" contains an invalid character",
-												 uri));
+												 safe_uri));
 		}
 	}
 
 	path_len = path_start == NULL ? 0 : strlen(path_start);
-	while (path_len > 0 && path_start[path_len - 1] == '/')
+	while (path_len > (is_file ? 1 : 0) && path_start[path_len - 1] == '/')
 		path_len--;
 
-	out->schema_version = DATALAKE_LOCATION_SCHEMA_VERSION;
+	out->abi_version = DATALAKE_LOCATION_ABI_VERSION;
 	out->scheme = pnstrdup(uri, scheme_len);
 	out->authority = pnstrdup(authority_start, authority_len);
 	out->path_prefix = path_len == 0 ?

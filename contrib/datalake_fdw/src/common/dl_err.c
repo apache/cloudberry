@@ -29,6 +29,8 @@
 
 #include "postgres.h"
 
+#include "utils/memutils.h"
+
 #include "common/dl_err.h"
 #include "utils/guc.h"
 
@@ -90,6 +92,67 @@ dl_error_copy_field(char *dest, Size dest_size, const char *src)
 	strlcpy(dest, src, dest_size);
 }
 
+/*
+ * Values that must never appear in what a user or a log is shown.
+ *
+ * Credentials arrive as options and end up inside a backend's client, from
+ * where any number of things can quote them back: an SDK message, an
+ * exception's what(), a third-party backend's own wording.  Scrubbing at each
+ * of those places means every one of them has to remember to; scrubbing here,
+ * where every error is recorded, means none of them has to.
+ *
+ * The list only grows.  A session that has mounted a volume keeps hiding that
+ * volume's secrets afterwards, which is the safe direction to be wrong in,
+ * and it stays small because it holds credentials rather than data.
+ */
+#define DL_MAX_SECRETS 32
+#define DL_MIN_SECRET_LEN 6		/* shorter than this and masking would eat
+								 * ordinary words out of every message */
+
+static char *dl_secrets[DL_MAX_SECRETS];
+static int	dl_nsecrets;
+
+void
+dl_error_add_secret(const char *value)
+{
+	int			i;
+
+	if (value == NULL || strlen(value) < DL_MIN_SECRET_LEN)
+		return;
+
+	for (i = 0; i < dl_nsecrets; i++)
+	{
+		if (strcmp(dl_secrets[i], value) == 0)
+			return;
+	}
+
+	if (dl_nsecrets == DL_MAX_SECRETS)
+		return;					/* a session with 32 distinct secrets is not
+								 * a session whose 33rd needs hiding */
+	dl_secrets[dl_nsecrets] = MemoryContextStrdup(TopMemoryContext, value);
+	dl_nsecrets++;
+}
+
+/* Replaces each secret in place; "***" is shorter than any of them. */
+static void
+dl_error_scrub(char *text)
+{
+	int			i;
+
+	for (i = 0; i < dl_nsecrets; i++)
+	{
+		const char *secret = dl_secrets[i];
+		Size		len = strlen(secret);
+		char	   *at;
+
+		while ((at = strstr(text, secret)) != NULL)
+		{
+			memcpy(at, "***", 3);
+			memmove(at + 3, at + len, strlen(at + len) + 1);
+		}
+	}
+}
+
 void
 dl_error_reset(void)
 {
@@ -114,6 +177,10 @@ dl_error_set(DlErrCode code, const char *operation, const char *type,
 	dl_error_copy_field(dl_error_detail.message,
 						sizeof(dl_error_detail.message), message);
 	dl_error_detail.stack[0] = '\0';
+
+	/* Whatever produced these, they are about to be shown to somebody. */
+	dl_error_scrub(dl_error_detail.type);
+	dl_error_scrub(dl_error_detail.message);
 }
 
 void

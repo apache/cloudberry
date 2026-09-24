@@ -18,7 +18,7 @@
  * under the License.
  *
  * backend_registry.h
- *	  Registry of the storage backends, one per protocol.
+ *	  Internal access to the storage backend registry.
  *
  * IDENTIFICATION
  *	  contrib/datalake_fdw/src/common/backend_registry.h
@@ -29,69 +29,27 @@
 #ifndef BACKEND_REGISTRY_H
 #define BACKEND_REGISTRY_H
 
-#include <stdint.h>
-
-#include "common/file_system_wrapper.h"
-
 #ifdef __cplusplus
-
-/*
- * One storage protocol's implementation of the facade in
- * common/file_system_wrapper.h.  The operations mirror it one for one, so a
- * backend is written against the same contract its callers see.
- */
-struct DatalakeStorageOps
-{
-	DlErrCode	(*fs_open) (const DatalakeLocation *location,
-							const DlKeyValue *credentials, int ncredentials,
-							DatalakeFileSystem *fs_out);
-	void		(*fs_close) (DatalakeFileSystem fs);	/* releases fs */
-	DlErrCode	(*fs_list) (DatalakeFileSystem fs, const char *prefix,
-							char ***names_out, int *nnames_out);
-	DlErrCode	(*file_open) (DatalakeFileSystem fs, const char *path,
-							  DatalakeFileMode mode, DatalakeFile *file_out);
-	DlErrCode	(*file_read) (DatalakeFile file, void *buffer, int64_t length,
-							  int64_t *nread);
-	DlErrCode	(*file_write) (DatalakeFile file, const void *buffer,
-							   int64_t length);
-	DlErrCode	(*file_close) (DatalakeFile file);	/* releases file */
-	void		(*file_abort) (DatalakeFile file);	/* releases file */
-};
-
-/*
- * Every handle a backend hands out starts with this field, which is how the
- * facade finds its way back to the right operations.  A handle lives until a
- * cleanup entry point consumes it; there is no closed-but-alive state, because
- * keeping one would mean either leaking every handle or letting a backend free
- * memory the facade still reads.
- */
-struct DatalakeFileSystemData
-{
-	const struct DatalakeStorageOps *ops;
-};
-
-struct DatalakeFileData
-{
-	const struct DatalakeStorageOps *ops;
-};
-
-extern DlErrCode datalake_register_storage_backend(const char *scheme,
-												   const struct DatalakeStorageOps *ops);
-extern const struct DatalakeStorageOps *datalake_lookup_storage_backend(const char *scheme);
-
-#endif							/* __cplusplus */
+#include "common/storage_backend.h"
+extern const DatalakeStorageBackend *datalake_lookup_storage_backend(
+	const char *scheme);
+extern arrow::Status datalake_initialize_storage_backend(
+	const DatalakeStorageBackend *backend);
+#endif
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 
-/*
- * Registration is an explicit call rather than a static initializer: the order
- * static initializers run in a shared module is not something to depend on,
- * and _PG_init is where this is meant to happen.
- */
 extern void datalake_register_storage_backends(void);
+
+/*
+ * Whether anything can reach this scheme.  The location parser asks, so that
+ * a volume may name any storage a backend has registered rather than only the
+ * two this module ships.
+ */
+extern bool datalake_storage_scheme_registered(const char *scheme);
 
 #ifdef __cplusplus
 }

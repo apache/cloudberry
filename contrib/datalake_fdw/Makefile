@@ -51,9 +51,17 @@ OBJS = \
 	src/common/dl_option_util.o \
 	src/common/parser_option.o \
 	src/common/file_system_wrapper.o \
-	src/common/s3_file_system.o \
+	src/common/local_file_system.o \
 	src/common/backend_registry.o \
+	src/test/storage_test_backend.o \
 	src/test/datalake_fdw_test.o
+
+HEADERS = \
+	src/common/storage_backend.h \
+	src/common/storage_backend_register.h \
+	src/common/datalake_location.h \
+	src/common/dl_kv.h \
+	src/common/dl_err.h
 
 # libparquet is written in terms of Arrow's types, so linking one links both.
 PKG_CONFIG ?= pkg-config
@@ -106,6 +114,8 @@ REGRESS_OPTS = --temp-config=$(srcdir)/datalake_fdw.conf \
 # A second category, and pg_regress takes one --inputdir, so it is a second run.
 FORMAT_PARQUET_REGRESS = parquet_roundtrip
 FORMAT_PARQUET_INPUTDIR = $(srcdir)/test/automation/sqlrepo/smoke/format_parquet
+STORAGE_LOCAL_REGRESS = storage_local
+STORAGE_LOCAL_INPUTDIR = $(srcdir)/test/automation/sqlrepo/smoke/storage_local
 
 EXTRA_CLEAN = exports_darwin.list exports.map
 
@@ -157,7 +167,12 @@ $(shlib): $(EXPORT_LIST)
 # wins over the one in REGRESS_OPTS.  submake and REGRESS_PREP are the same
 # prerequisites pgxs.mk gives its own targets, so that a parallel make cannot
 # start pg_regress before it has been built.
-installcheck: installcheck-format-parquet
+# Each category is a separate pg_regress run against the same database, so
+# they have to go one at a time: "make -j" would otherwise start both, and
+# two runs creating the same extension in the same database race.  The
+# categories are chained through their prerequisites rather than listed side
+# by side, which is what keeps the order under a parallel make.
+installcheck: installcheck-storage-local
 
 installcheck-format-parquet: submake $(REGRESS_PREP)
 	$(pg_regress_installcheck) $(REGRESS_OPTS) \
@@ -165,14 +180,28 @@ installcheck-format-parquet: submake $(REGRESS_PREP)
 
 .PHONY: installcheck-format-parquet
 
+installcheck-storage-local: submake $(REGRESS_PREP) installcheck-format-parquet
+	$(pg_regress_installcheck) $(REGRESS_OPTS) \
+		--inputdir=$(STORAGE_LOCAL_INPUTDIR) $(STORAGE_LOCAL_REGRESS)
+
+.PHONY: installcheck-storage-local
+
 # "make check" is in-tree only -- under PGXS pgxs.mk refuses the target -- and
 # it is the only run that supplies the temp-config that preloads this module.
 ifndef USE_PGXS
-check: check-format-parquet
+# Chained for the same reason as installcheck above, and here it matters more:
+# every category would otherwise start its own temp instance in ./tmp_check.
+check: check-storage-local
 
 check-format-parquet: submake $(REGRESS_PREP)
 	$(pg_regress_check) $(REGRESS_OPTS) \
 		--inputdir=$(FORMAT_PARQUET_INPUTDIR) $(FORMAT_PARQUET_REGRESS)
 
 .PHONY: check-format-parquet
+
+check-storage-local: submake $(REGRESS_PREP) check-format-parquet
+	$(pg_regress_check) $(REGRESS_OPTS) \
+		--inputdir=$(STORAGE_LOCAL_INPUTDIR) $(STORAGE_LOCAL_REGRESS)
+
+.PHONY: check-storage-local
 endif

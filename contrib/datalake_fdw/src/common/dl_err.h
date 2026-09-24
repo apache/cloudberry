@@ -97,6 +97,14 @@ extern void dl_error_set(DlErrCode code, const char *operation,
 /* Record the implementation's own numeric code, when it reports one. */
 extern void dl_error_set_remote_code(int remote_code);
 
+/*
+ * Remember a value that must never be shown.  Every error recorded afterwards
+ * has it replaced with "***", whichever layer produced the text -- a backend,
+ * an SDK, or an exception nobody expected.  Values shorter than six characters
+ * are ignored, because masking those would eat words out of ordinary messages.
+ */
+extern void dl_error_add_secret(const char *value);
+
 /* Record a stack from the failing implementation. */
 extern void dl_error_set_stack(const char *stack);
 

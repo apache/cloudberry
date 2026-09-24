@@ -37,6 +37,8 @@
 
 #include "postgres.h"
 
+#include <stdlib.h>
+
 #include "catalog/pg_type.h"
 #include "executor/spi.h"
 #include "funcapi.h"
@@ -46,13 +48,127 @@
 #include "utils/tuplestore.h"
 
 #include "am_iceberg/pg_iceberg_guc.h"
+#include "am_iceberg/pg_iceberg_options.h"
 #include "common/dl_err.h"
+#include "common/file_system_wrapper.h"
 #include "format/arrow_builder.h"
 #include "format/arrow_decode.h"
 #include "format/format.h"
 
 PG_FUNCTION_INFO_V1(datalake_parquet_write);
 PG_FUNCTION_INFO_V1(datalake_parquet_read);
+PG_FUNCTION_INFO_V1(datalake_storage_write_text);
+PG_FUNCTION_INFO_V1(datalake_storage_read_text);
+PG_FUNCTION_INFO_V1(datalake_storage_list);
+PG_FUNCTION_INFO_V1(datalake_storage_probe);
+PG_FUNCTION_INFO_V1(datalake_storage_register_bad);
+
+extern DlErrCode datalake_test_register_bad_storage_backend(const char *kind);
+
+static DlKeyValue *
+storage_kv(FunctionCallInfo fcinfo, int argno, int *nkv)
+{
+	Datum	  *values;
+	bool	  *nulls;
+	DlKeyValue *kv;
+	int			i;
+
+	*nkv = 0;
+	if (PG_ARGISNULL(argno))
+		return NULL;
+
+	deconstruct_array(PG_GETARG_ARRAYTYPE_P(argno), TEXTOID, -1, false,
+					  TYPALIGN_INT, &values, &nulls, nkv);
+	kv = palloc0(*nkv * sizeof(*kv));
+	for (i = 0; i < *nkv; i++)
+	{
+		char	   *equal;
+
+		if (nulls[i])
+			ereport(ERROR,
+					(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+					 errmsg("a storage option cannot be null")));
+		kv[i].key = TextDatumGetCString(values[i]);
+		equal = strchr(kv[i].key, '=');
+		if (equal == NULL || equal == kv[i].key)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("storage option must have the form key=value")));
+		*equal = '\0';
+		kv[i].value = equal + 1;
+	}
+	return kv;
+}
+
+static void
+storage_parse_uri(const char *uri, bool leaf, DatalakeLocation *location,
+				  char **relative)
+{
+	char	   *detail = NULL;
+	DlErrCode	rc;
+
+	if (strncmp(uri, "dltest://", 9) == 0)
+	{
+		const char *path = uri + 9;
+
+		if (path[0] != '/' || strchr(path, '?') != NULL || strchr(path, '#') != NULL)
+		{
+			dl_error_set(DL_ERR_INVALID_OPTION, "parse storage location", NULL,
+						 "dltest location must have an absolute path and no query or fragment");
+			dl_error_report(ERROR, DL_ERR_INVALID_OPTION, "parse storage location");
+		}
+		memset(location, 0, sizeof(*location));
+		location->abi_version = DATALAKE_LOCATION_ABI_VERSION;
+		location->scheme = pstrdup("dltest");
+		location->authority = pstrdup("");
+		location->path_prefix = pstrdup(path);
+	}
+	else
+	{
+		rc = pg_iceberg_parse_location(uri, NULL, NULL, location, &detail);
+		if (rc != DL_OK)
+		{
+			dl_error_set(rc, "parse storage location", NULL, detail);
+			dl_error_report(ERROR, rc, "parse storage location");
+		}
+	}
+
+	*relative = pstrdup("");
+	if (leaf)
+	{
+		char	   *slash = strrchr(location->path_prefix, '/');
+
+		if (slash == NULL || slash[1] == '\0')
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("storage URI must name a file")));
+		*relative = pstrdup(slash + 1);
+		if (slash == location->path_prefix)
+			location->path_prefix = pstrdup(
+				strcmp(location->scheme, "s3") == 0 ? "" : "/");
+		else
+			*slash = '\0';
+	}
+}
+
+static DatalakeFileSystem
+storage_open_uri(FunctionCallInfo fcinfo, int uri_arg, int kv_arg, bool leaf,
+				 char **relative)
+{
+	DatalakeLocation location;
+	DatalakeFileSystem fs = NULL;
+	DlKeyValue *kv;
+	char	   *uri = text_to_cstring(PG_GETARG_TEXT_PP(uri_arg));
+	int			nkv;
+	DlErrCode	rc;
+
+	storage_parse_uri(uri, leaf, &location, relative);
+	kv = storage_kv(fcinfo, kv_arg, &nkv);
+	rc = datalake_fs_open(&location, kv, nkv, &fs);
+	if (rc != DL_OK)
+		dl_error_report(ERROR, rc, "open storage");
+	return fs;
+}
 
 /*
  * The SQL declaration and the C function have to agree on the argument list,
@@ -487,4 +603,224 @@ datalake_parquet_read(PG_FUNCTION_ARGS)
 	PG_END_TRY();
 
 	return (Datum) 0;
+}
+
+/*
+ * The handles an error has to release live in volatile locals, which is what
+ * lets PG_CATCH still read them after a longjmp; same shape as the Parquet
+ * writer above.  Each is cleared as soon as something else owns it.
+ */
+Datum
+datalake_storage_write_text(PG_FUNCTION_ARGS)
+{
+	text	   *content;
+	char	   *relative;
+	DatalakeFileSystem volatile open_fs = NULL;
+	DatalakeFile volatile open_file = NULL;
+	int64		length;
+
+	check_nargs(fcinfo, 3);
+	if (PG_ARGISNULL(0) || PG_ARGISNULL(1))
+		PG_RETURN_NULL();
+	content = PG_GETARG_TEXT_PP(1);
+	length = VARSIZE_ANY_EXHDR(content);
+	open_fs = storage_open_uri(fcinfo, 0, 2, true, &relative);
+
+	PG_TRY();
+	{
+		DatalakeFileSystem fs = (DatalakeFileSystem) open_fs;
+		DatalakeFile file = NULL;
+		DlErrCode	rc;
+
+		rc = datalake_file_open(fs, relative, DATALAKE_FILE_WRITE, &file);
+		open_file = file;
+		if (rc == DL_OK)
+			rc = datalake_file_write(file, VARDATA_ANY(content), length);
+		if (rc == DL_OK)
+		{
+			rc = datalake_file_close(&file);
+			open_file = file;	/* close consumes the handle */
+		}
+		if (rc != DL_OK)
+			dl_error_report(ERROR, rc, "write storage file");
+	}
+	PG_CATCH();
+	{
+		DatalakeFile file = (DatalakeFile) open_file;
+		DatalakeFileSystem fs = (DatalakeFileSystem) open_fs;
+
+		datalake_file_abort(&file);
+		datalake_fs_close(&fs);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	{
+		DatalakeFileSystem fs = (DatalakeFileSystem) open_fs;
+
+		datalake_fs_close(&fs);
+	}
+	PG_RETURN_INT64(length);
+}
+
+Datum
+datalake_storage_read_text(PG_FUNCTION_ARGS)
+{
+	char	   *relative;
+	DatalakeFileSystem volatile open_fs = NULL;
+	DatalakeFile volatile open_file = NULL;
+	StringInfoData data;
+
+	check_nargs(fcinfo, 2);
+	if (PG_ARGISNULL(0))
+		PG_RETURN_NULL();
+	open_fs = storage_open_uri(fcinfo, 0, 1, true, &relative);
+	initStringInfo(&data);
+	PG_TRY();
+	{
+		DatalakeFileSystem fs = (DatalakeFileSystem) open_fs;
+		DatalakeFile file = NULL;
+		char		buffer[8192];
+		DlErrCode	rc;
+
+		rc = datalake_file_open(fs, relative, DATALAKE_FILE_READ, &file);
+		open_file = file;
+		while (rc == DL_OK)
+		{
+			int64		nread;
+
+			rc = datalake_file_read(file, buffer, sizeof(buffer), &nread);
+			if (rc != DL_OK || nread == 0)
+				break;
+			appendBinaryStringInfo(&data, buffer, nread);
+		}
+		if (rc == DL_OK)
+		{
+			rc = datalake_file_close(&file);
+			open_file = file;	/* close consumes the handle */
+		}
+		if (rc != DL_OK)
+			dl_error_report(ERROR, rc, "read storage file");
+	}
+	PG_CATCH();
+	{
+		DatalakeFile file = (DatalakeFile) open_file;
+		DatalakeFileSystem fs = (DatalakeFileSystem) open_fs;
+
+		datalake_file_abort(&file);
+		datalake_fs_close(&fs);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	{
+		DatalakeFileSystem fs = (DatalakeFileSystem) open_fs;
+
+		datalake_fs_close(&fs);
+	}
+	PG_RETURN_TEXT_P(cstring_to_text_with_len(data.data, data.len));
+}
+
+Datum
+datalake_storage_list(PG_FUNCTION_ARGS)
+{
+	char	   *relative;
+	DatalakeFileSystem volatile open_fs = NULL;
+	char	 **volatile open_names = NULL;
+	int volatile open_nnames = 0;
+	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
+
+	check_nargs(fcinfo, 2);
+	if (PG_ARGISNULL(0))
+		PG_RETURN_NULL();
+	open_fs = storage_open_uri(fcinfo, 0, 1, false, &relative);
+	PG_TRY();
+	{
+		DatalakeFileSystem fs = (DatalakeFileSystem) open_fs;
+		char	  **names = NULL;
+		int			nnames = 0;
+		int			i;
+		DlErrCode	rc;
+
+		rc = datalake_fs_list(fs, relative, &names, &nnames);
+		open_names = names;
+		open_nnames = nnames;
+		if (rc != DL_OK)
+			dl_error_report(ERROR, rc, "list storage");
+		InitMaterializedSRF(fcinfo, MAT_SRF_USE_EXPECTED_DESC);
+		for (i = 0; i < nnames; i++)
+		{
+			Datum		value = CStringGetTextDatum(names[i]);
+			bool		isnull = false;
+
+			tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc,
+							 &value, &isnull);
+			free(names[i]);
+			names[i] = NULL;	/* so the cleanup path cannot free it twice */
+		}
+		free(names);
+		open_names = NULL;
+		open_nnames = 0;
+	}
+	PG_CATCH();
+	{
+		char	  **names = (char **) open_names;
+		DatalakeFileSystem fs = (DatalakeFileSystem) open_fs;
+		int			i;
+
+		for (i = 0; names != NULL && i < open_nnames; i++)
+			free(names[i]);
+		free(names);
+		datalake_fs_close(&fs);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	{
+		DatalakeFileSystem fs = (DatalakeFileSystem) open_fs;
+
+		datalake_fs_close(&fs);
+	}
+	return (Datum) 0;
+}
+
+Datum
+datalake_storage_probe(PG_FUNCTION_ARGS)
+{
+	DatalakeLocation location = {0};
+	DatalakeFileSystem fs = NULL;
+	char	   *scheme;
+	DlErrCode	rc;
+
+	check_nargs(fcinfo, 1);
+	if (PG_ARGISNULL(0))
+		PG_RETURN_NULL();
+	scheme = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	location.abi_version = DATALAKE_LOCATION_ABI_VERSION;
+	location.scheme = scheme;
+	location.authority = pstrdup(strcmp(scheme, "s3") == 0 ? "probe-bucket" : "");
+	location.path_prefix = pstrdup("/tmp");
+	rc = datalake_fs_open(&location, NULL, 0, &fs);
+	if (rc == DL_OK)
+	{
+		datalake_fs_close(&fs);
+		PG_RETURN_TEXT_P(cstring_to_text("supported"));
+	}
+	PG_RETURN_TEXT_P(cstring_to_text(dl_error_get()->message));
+}
+
+Datum
+datalake_storage_register_bad(PG_FUNCTION_ARGS)
+{
+	char	   *kind;
+	DlErrCode	rc;
+
+	check_nargs(fcinfo, 1);
+	if (PG_ARGISNULL(0))
+		PG_RETURN_NULL();
+	kind = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	rc = datalake_test_register_bad_storage_backend(kind);
+	if (rc == DL_OK)
+		PG_RETURN_TEXT_P(cstring_to_text("accepted"));
+	PG_RETURN_TEXT_P(cstring_to_text(dl_error_get()->message));
 }

@@ -53,3 +53,23 @@ CREATE FUNCTION datalake_parquet_read(path text,
 RETURNS SETOF record AS 'MODULE_PATHNAME' LANGUAGE C STRICT EXECUTE ON COORDINATOR;
 
 REVOKE EXECUTE ON FUNCTION datalake_parquet_read(text, int, int, int[]) FROM PUBLIC;
+
+-- Test-only storage contract functions.
+CREATE FUNCTION datalake_storage_write_text(uri text, content text,
+											 kv text[] DEFAULT NULL)
+RETURNS bigint AS 'MODULE_PATHNAME' LANGUAGE C VOLATILE;
+CREATE FUNCTION datalake_storage_read_text(uri text, kv text[] DEFAULT NULL)
+RETURNS text AS 'MODULE_PATHNAME' LANGUAGE C VOLATILE;
+CREATE FUNCTION datalake_storage_list(uri text, kv text[] DEFAULT NULL)
+RETURNS SETOF text AS 'MODULE_PATHNAME'
+LANGUAGE C VOLATILE EXECUTE ON COORDINATOR;
+CREATE FUNCTION datalake_storage_probe(scheme text)
+RETURNS text AS 'MODULE_PATHNAME' LANGUAGE C VOLATILE;
+CREATE FUNCTION datalake_storage_register_bad(kind text)
+RETURNS text AS 'MODULE_PATHNAME' LANGUAGE C VOLATILE;
+
+REVOKE EXECUTE ON FUNCTION datalake_storage_write_text(text, text, text[]) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION datalake_storage_read_text(text, text[]) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION datalake_storage_list(text, text[]) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION datalake_storage_probe(text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION datalake_storage_register_bad(text) FROM PUBLIC;
