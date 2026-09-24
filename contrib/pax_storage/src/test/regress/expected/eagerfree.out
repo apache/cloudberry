@@ -1379,21 +1379,19 @@ where i < (select count(*) from smallt where smallt.i = smallt2.i) order by 1,2,
 
 explain select smallt2.* from smallt2
 where i < (select count(*) from smallt where smallt.i = smallt2.i);
-                                      QUERY PLAN                                       
----------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=5.10..8.08 rows=17 width=15)
-   ->  Hash Join  (cost=5.10..8.08 rows=6 width=15)
-         Hash Cond: smallt2.i = "Expr_SUBQUERY".csq_c0
-         Join Filter: smallt2.i < "Expr_SUBQUERY".csq_c1
-         ->  Seq Scan on smallt2  (cost=0.00..2.50 rows=17 width=15)
-         ->  Hash  (cost=4.97..4.97 rows=4 width=12)
-               ->  Subquery Scan on "Expr_SUBQUERY"  (cost=4.75..4.97 rows=4 width=12)
-                     ->  HashAggregate  (cost=4.75..4.88 rows=4 width=12)
-                           Filter: smallt.i < count(*)
-                           Group Key: smallt.i
-                           ->  Seq Scan on smallt  (cost=0.00..4.00 rows=34 width=4)
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=1.61..3.99 rows=17 width=15)
+   ->  Hash Left Join  (cost=1.61..2.88 rows=6 width=15)
+         Hash Cond: (smallt2.i = smallt.i)
+         Filter: (smallt2.i < CASE WHEN (true) THEN (count(*)) ELSE '0'::bigint END)
+         ->  Seq Scan on smallt2  (cost=0.00..1.17 rows=17 width=15)
+         ->  Hash  (cost=1.57..1.57 rows=3 width=13)
+               ->  HashAggregate  (cost=1.50..1.53 rows=3 width=13)
+                     Group Key: smallt.i
+                     ->  Seq Scan on smallt  (cost=0.00..1.33 rows=33 width=4)
  Optimizer: Postgres query optimizer
-(12 rows)
+(10 rows)
 
 -- Sort in MergeJoin
 -- start_ignore
