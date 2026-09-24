@@ -39,6 +39,7 @@
 
 #include <arrow/api.h>
 
+#include "common/storage_arrow.h"
 #include "format/arrow_support.h"
 
 extern "C"
@@ -56,6 +57,23 @@ DlArrowStatus(const arrow::Status &status, const char *operation)
 	if (status.ok())
 		return DL_OK;
 
+	/*
+	 * A status that came from the storage layer already carries the answer:
+	 * only the backend knows that a 404 from one service and a missing file
+	 * on another are both "not found".  Reclassifying it here by status code
+	 * would throw that away.
+	 */
+	if (status.detail() != nullptr &&
+		strcmp(status.detail()->type_id(), "datalake::DlStatusDetail") == 0)
+	{
+		const DlStatusDetail *detail =
+			static_cast<const DlStatusDetail *>(status.detail().get());
+
+		dl_error_set(detail->code(), operation, detail->type().c_str(),
+					 status.message().c_str());
+		return detail->code();
+	}
+
 	switch (status.code())
 	{
 		case arrow::StatusCode::IOError:
@@ -72,13 +90,25 @@ DlArrowStatus(const arrow::Status &status, const char *operation)
 		case arrow::StatusCode::OutOfMemory:
 			code = DL_ERR_OUT_OF_MEMORY;
 			break;
+		case arrow::StatusCode::AlreadyExists:
+			code = DL_ERR_ALREADY_EXISTS;
+			break;
 		default:
 			code = DL_ERR_INTERNAL;
 			break;
 	}
 
-	dl_error_set(code, operation, arrow::Status::CodeAsString(status.code()).c_str(),
-				 status.message().c_str());
+	/*
+	 * Arrow's own name for a code it does not print is "Unknown", which says
+	 * less than nothing next to a message that already explains itself.
+	 */
+	{
+		std::string type = arrow::Status::CodeAsString(status.code());
+
+		dl_error_set(code, operation,
+					 type == "Unknown" ? NULL : type.c_str(),
+					 status.message().c_str());
+	}
 	return code;
 }
 
