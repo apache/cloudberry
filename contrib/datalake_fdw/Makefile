@@ -163,7 +163,16 @@ STORAGE_LOCAL_REGRESS = storage_local
 STORAGE_LOCAL_INPUTDIR = $(srcdir)/test/automation/sqlrepo/smoke/storage_local
 # The s3 category needs a service to talk to, so it runs where one is named.
 STORAGE_S3_REGRESS = storage_s3
+# Thousands of requests, so it runs where someone asked for it rather than on
+# every build; CI does, a local gate does not.
+ifneq ($(DATALAKE_TEST_S3_PAGINATION),)
+STORAGE_S3_REGRESS += storage_s3_pagination
+endif
 STORAGE_S3_INPUTDIR = $(srcdir)/test/automation/sqlrepo/smoke/storage_s3
+# One body of storage behaviour, run against each backend that can be reached.
+STORAGE_CONFORMANCE_REGRESS = conformance_file conformance_dltest volume_resolve
+STORAGE_CONFORMANCE_S3_REGRESS = conformance_s3
+STORAGE_CONFORMANCE_INPUTDIR = $(srcdir)/test/automation/sqlrepo/smoke/storage_conformance
 
 EXTRA_CLEAN = exports_darwin.list exports.map
 
@@ -220,7 +229,7 @@ $(shlib): $(EXPORT_LIST)
 # two runs creating the same extension in the same database race.  The
 # categories are chained through their prerequisites rather than listed side
 # by side, which is what keeps the order under a parallel make.
-installcheck: installcheck-storage-s3
+installcheck: installcheck-storage-conformance
 
 installcheck-format-parquet: submake $(REGRESS_PREP)
 	$(pg_regress_installcheck) $(REGRESS_OPTS) \
@@ -244,12 +253,22 @@ endif
 
 .PHONY: installcheck-storage-s3
 
+installcheck-storage-conformance: submake $(REGRESS_PREP) installcheck-storage-s3
+	$(pg_regress_installcheck) $(REGRESS_OPTS) \
+		--inputdir=$(STORAGE_CONFORMANCE_INPUTDIR) $(STORAGE_CONFORMANCE_REGRESS)
+ifneq ($(DATALAKE_TEST_S3_ENDPOINT),)
+	$(pg_regress_installcheck) $(REGRESS_OPTS) \
+		--inputdir=$(STORAGE_CONFORMANCE_INPUTDIR) $(STORAGE_CONFORMANCE_S3_REGRESS)
+endif
+
+.PHONY: installcheck-storage-conformance
+
 # "make check" is in-tree only -- under PGXS pgxs.mk refuses the target -- and
 # it is the only run that supplies the temp-config that preloads this module.
 ifndef USE_PGXS
 # Chained for the same reason as installcheck above, and here it matters more:
 # every category would otherwise start its own temp instance in ./tmp_check.
-check: check-storage-local
+check: check-storage-conformance
 
 check-format-parquet: submake $(REGRESS_PREP)
 	$(pg_regress_check) $(REGRESS_OPTS) \
@@ -262,4 +281,24 @@ check-storage-local: submake $(REGRESS_PREP) check-format-parquet
 		--inputdir=$(STORAGE_LOCAL_INPUTDIR) $(STORAGE_LOCAL_REGRESS)
 
 .PHONY: check-storage-local
+
+check-storage-s3: submake $(REGRESS_PREP) check-storage-local
+ifeq ($(DATALAKE_TEST_S3_ENDPOINT),)
+	@echo "NOTICE: DATALAKE_TEST_S3_ENDPOINT is not set, skipping the s3 storage tests"
+else
+	$(pg_regress_check) $(REGRESS_OPTS) \
+		--inputdir=$(STORAGE_S3_INPUTDIR) $(STORAGE_S3_REGRESS)
+endif
+
+.PHONY: check-storage-s3
+
+check-storage-conformance: submake $(REGRESS_PREP) check-storage-s3
+	$(pg_regress_check) $(REGRESS_OPTS) \
+		--inputdir=$(STORAGE_CONFORMANCE_INPUTDIR) $(STORAGE_CONFORMANCE_REGRESS)
+ifneq ($(DATALAKE_TEST_S3_ENDPOINT),)
+	$(pg_regress_check) $(REGRESS_OPTS) \
+		--inputdir=$(STORAGE_CONFORMANCE_INPUTDIR) $(STORAGE_CONFORMANCE_S3_REGRESS)
+endif
+
+.PHONY: check-storage-conformance
 endif
