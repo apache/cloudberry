@@ -72,7 +72,6 @@
    reference if 'false' (always true in GPDB) */
 #undef FLOAT8PASSBYVAL
 
-
 /* Define to 1 to build ORCA in debug (GPOS_DEBUG=1) */
 #undef GPOS_DEBUG
 
@@ -210,10 +209,6 @@
 
 /* Define to 1 if fseeko (and presumably ftello) exists and is declared. */
 #undef HAVE_FSEEKO
-
-/* Define to 1 if you have __sync_lock_test_and_set(int *) and friends. */
-#undef HAVE_GCC_INT_ATOMICS
-
 
 /* Define to 1 if you have __atomic_compare_exchange_n(int *, int *, int). */
 #undef HAVE_GCC__ATOMIC_INT32_CAS
@@ -364,6 +359,9 @@
 /* Define to 1 if you have the `ssl' library (-lssl). */
 #undef HAVE_LIBSSL
 
+/* Define to 1 if you have the `uring' library (-luring). */
+#undef HAVE_LIBURING
+
 /* Define to 1 if you have the `uv' library (-luv). */
 #undef HAVE_LIBUV
 
@@ -430,17 +428,8 @@
 /* Define to 1 if you have the `ppoll' function. */
 #undef HAVE_PPOLL
 
-/* Define to 1 if you have the `pread' function. */
-#undef HAVE_PREAD
-
 /* Define if protobuf is available */
 #undef HAVE_PROTOBUF
-
-/* Define to 1 if you have the `pstat' function. */
-#undef HAVE_PSTAT
-
-/* Define to 1 if the PS_STRINGS thing exists. */
-#undef HAVE_PS_STRINGS
 
 /* Define if you have POSIX threads libraries and header files. */
 #undef HAVE_PTHREAD
@@ -631,17 +620,11 @@
 /* Define to 1 if you have the `wcstombs_l' function. */
 #undef HAVE_WCSTOMBS_L
 
-/* Define to 1 if you have the <wctype.h> header file. */
-#undef HAVE_WCTYPE_H
-
-/* Define to 1 if you have the <winldap.h> header file. */
-#undef HAVE_WINLDAP_H
-
 /* Define to 1 if you have the <winsock2.h> header file. */
 #undef HAVE_WINSOCK2_H
 
-/* Define to 1 if you have the `writev' function. */
-#undef HAVE_WRITEV
+/* Define to 1 if you have the `X509_get_signature_info' function. */
+#undef HAVE_X509_GET_SIGNATURE_INFO
 
 /* Define to 1 if you have the `X509_get_signature_nid' function. */
 #undef HAVE_X509_GET_SIGNATURE_NID
@@ -654,9 +637,6 @@
 
 /* Define if zstd is available */
 #undef HAVE_ZSTD
-
-/* Define to 1 if the system has the type `_Bool'. */
-#undef HAVE__BOOL
 
 /* Define to 1 if your compiler understands __builtin_bswap16. */
 #undef HAVE__BUILTIN_BSWAP16
@@ -702,15 +682,6 @@
 
 /* Define to 1 if your compiler understands _Static_assert. */
 #undef HAVE__STATIC_ASSERT
-
-/* Define to 1 if you have the `etcdlib' library (-letcdlib). */
-#undef HAVE_LIBETCDLIB
-
-/* Define to 1 if you have the `__strtoll' function. */
-#undef HAVE___STRTOLL
-
-/* Define to 1 if you have the `__strtoull' function. */
-#undef HAVE___STRTOULL
 
 /* Define to the appropriate printf length modifier for 64-bit ints. */
 #undef INT64_MODIFIER
@@ -886,11 +857,14 @@
 /* Define to 1 to build with LZ4 support. (--with-lz4) */
 #undef USE_LZ4
 
-/* Define to 1 to build with MDB locales. (--with-mdblocales) */
-#undef USE_MDBLOCALES
+/* Define to 1 to build with LZO support. (--with-lzo) */
+#undef USE_LZO
 
 /* Define to 1 to build with Mapreduce capabilities (--enable-mapreduce) */
 #undef USE_MAPREDUCE
+
+/* Define to 1 to build with MDB locales. (--with-mdblocales) */
+#undef USE_MDBLOCALES
 
 /* Define to select named POSIX semaphores. */
 #undef USE_NAMED_POSIX_SEMAPHORES
@@ -938,7 +912,7 @@
 /* Define to select Win32-style shared memory. */
 #undef USE_WIN32_SHARED_MEMORY
 
-/* Define to 1 to build with ZSTD support. (--with-zstd) */
+/* Define to build with zstd support. (--with-zstd) */
 #undef USE_ZSTD
 
 /* Define to 1 if `wcstombs_l' requires <xlocale.h>. */
