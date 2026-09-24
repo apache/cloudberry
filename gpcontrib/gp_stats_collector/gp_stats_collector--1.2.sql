@@ -127,7 +127,7 @@ CREATE TYPE gpsc.gp_segment_pid AS (
 CREATE FUNCTION gpsc.pg_query_state(pid int, trace_id bytea)
 RETURNS SETOF void
 AS 'MODULE_PATHNAME', 'pg_query_state'
-LANGUAGE C VOLATILE EXECUTE ON COORDINATOR;
+LANGUAGE C STRICT VOLATILE EXECUTE ON COORDINATOR;
 
 -- cbdb_mpp_query_state(gp_segment_pid[], trace_id): dispatched verbatim to
 -- every segment by pg_query_state() via CdbDispatchCommand; runs locally on
@@ -137,7 +137,7 @@ LANGUAGE C VOLATILE EXECUTE ON COORDINATOR;
 CREATE FUNCTION gpsc.cbdb_mpp_query_state(gpsc.gp_segment_pid[], trace_id bytea)
 RETURNS SETOF void
 AS 'MODULE_PATHNAME', 'cbdb_mpp_query_state'
-LANGUAGE C VOLATILE;
+LANGUAGE C STRICT VOLATILE;
 
 -- pg_query_state_backends(pid): list the QE backends participating in the
 -- query running on backend `pid`, as (segid, pid) rows.  yagpcc uses the row
@@ -146,7 +146,7 @@ LANGUAGE C VOLATILE;
 CREATE FUNCTION gpsc.pg_query_state_backends(pid int)
 RETURNS TABLE(segid int, pid int)
 AS 'MODULE_PATHNAME', 'pg_query_state_backends'
-LANGUAGE C VOLATILE EXECUTE ON COORDINATOR;
+LANGUAGE C STRICT VOLATILE EXECUTE ON COORDINATOR;
 
 -- The runtime query-state API is callable by any role; the per-backend
 -- permission gate in C (superuser or the query's owner) enforces access, so
