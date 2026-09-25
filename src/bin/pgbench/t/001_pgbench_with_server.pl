@@ -841,9 +841,37 @@ select 1 \gset f
 }
 	});
 
+# Try \startpipeline without \endpipeline in a single transaction
+$node->pgbench(
+	'-t 1 -n -M extended',
+	2,
+	[],
+	[qr{end of script reached with pipeline open}],
+	'error: call \startpipeline without \endpipeline in a single transaction',
+	{
+		'001_pgbench_pipeline_5' => q{
+-- startpipeline only with single transaction
+\startpipeline
+}
+	});
+
+# Try \startpipeline without \endpipeline
+$node->pgbench(
+	'-t 2 -n -M extended',
+	2,
+	[],
+	[qr{end of script reached with pipeline open}],
+	'error: call \startpipeline without \endpipeline',
+	{
+		'001_pgbench_pipeline_6' => q{
+-- startpipeline only
+\startpipeline
+}
+	});
+
 # Working \startpipeline in prepared query mode with serializable
 $node->pgbench(
-	'-c4 -j2 -t 10 -n -M prepared',
+	'-c4 -t 10 -n -M prepared',
 	0,
 	[
 		qr{type: .*/001_pgbench_pipeline_serializable},

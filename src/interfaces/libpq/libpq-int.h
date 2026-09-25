@@ -608,8 +608,8 @@ struct pg_conn
 	int			gss_SendLength; /* End of data available in gss_SendBuffer */
 	int			gss_SendNext;	/* Next index to send a byte from
 								 * gss_SendBuffer */
-	int			gss_SendConsumed;	/* Number of *unencrypted* bytes consumed
-									 * for current contents of gss_SendBuffer */
+	int			gss_SendConsumed;	/* Number of source bytes encrypted but
+									 * not yet reported as sent */
 	char	   *gss_RecvBuffer; /* Received, encrypted data */
 	int			gss_RecvLength; /* End of data available in gss_RecvBuffer */
 	char	   *gss_ResultBuffer;	/* Decryption of data in gss_RecvBuffer */
@@ -741,7 +741,8 @@ extern PGresult *pqFunctionCall2(PGconn *conn, Oid fnid,
 								 int result_is_int,
 								 const PQArgBlock *args, int nargs);
 
-extern void pqCommandQueueAdvance(PGconn *conn);
+extern void pqCommandQueueAdvance(PGconn *conn, bool isReadyForQuery,
+								  bool gotSync);
 extern int	PQsendQueryContinue(PGconn *conn, const char *query);
 extern PGresult *PQnfn(PGconn *conn, int fnid, int *result_buf, int buf_size,
 					   int *result_len, int result_is_int,

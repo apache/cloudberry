@@ -501,7 +501,7 @@ MarkAsPreparingGuts(GlobalTransaction gxact, TransactionId xid, const char *gid,
 	proc->tempNamespaceId = InvalidOid;
 	proc->isBackgroundWorker = false;
 	proc->mppSessionId = gp_session_id;
-	proc->lwWaiting = false;
+	proc->lwWaiting = LW_WS_NOT_WAITING;
 	proc->lwWaitMode = 0;
 	proc->waitLock = NULL;
 	proc->waitProcLock = NULL;
