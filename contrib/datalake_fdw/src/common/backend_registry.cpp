@@ -18,7 +18,7 @@
  * under the License.
  *
  * backend_registry.cpp
- *	  Registry of the storage backends, one per protocol.
+ *	  Process-local registry shared with storage backend plugins.
  *
  * IDENTIFICATION
  *	  contrib/datalake_fdw/src/common/backend_registry.cpp
@@ -26,97 +26,313 @@
  *-------------------------------------------------------------------------
  */
 
+#include <stddef.h>
+#include <stdio.h>
+#include <string.h>
+
+#include <arrow/memory_pool.h>
+#include <arrow/util/config.h>
+
+#include "common/storage_backend.h"
 #include "common/dl_pg_api.h"
 
-#include <string.h>
+extern "C"
+{
+#include "fmgr.h"
+#include "miscadmin.h"
+#include "storage/ipc.h"
+#include "utils/memutils.h"
+}
 
 #include "common/backend_registry.h"
 #include "common/dl_wrappers.h"
 
-typedef struct DatalakeStorageBackend
+#define DL_STORAGE_RENDEZVOUS_NAME "datalake_storage_registry_v1"
+#define DL_STORAGE_V1_MIN_SIZE \
+	(offsetof(DatalakeStorageBackend, finalize) + \
+	 sizeof(((DatalakeStorageBackend *) 0)->finalize))
+
+typedef struct DatalakeStorageBackendEntry
 {
-	const char *scheme;
-	const struct DatalakeStorageOps *ops;
-} DatalakeStorageBackend;
+	const DatalakeStorageBackend *backend;
+	bool		initialized;
+	struct DatalakeStorageBackendEntry *next;
+} DatalakeStorageBackendEntry;
 
-/* Room for s3 and hdfs, plus space to grow without revisiting this. */
-static DatalakeStorageBackend storage_backends[4];
-static int	nstorage_backends;
+typedef struct DatalakeStorageRegistry
+{
+	DatalakeStorageBackendEntry *backends;
+	void	   *wrappers;			/* reserved for a future wrapper chain */
+	bool		finalizer_registered;
+} DatalakeStorageRegistry;
 
+extern DlErrCode datalake_register_local_backend(void);
 extern DlErrCode datalake_register_s3_backend(void);
 
-static bool
-storage_ops_are_complete(const struct DatalakeStorageOps *ops)
+static DatalakeStorageRegistry *
+storage_registry(bool create)
 {
-	/*
-	 * A partially filled table would turn into a null call at the first
-	 * operation the backend forgot, so refuse it at registration instead.
-	 */
-	return ops != NULL &&
-		ops->fs_open != NULL &&
-		ops->fs_close != NULL &&
-		ops->fs_list != NULL &&
-		ops->file_open != NULL &&
-		ops->file_read != NULL &&
-		ops->file_write != NULL &&
-		ops->file_close != NULL &&
-		ops->file_abort != NULL;
+	void	  **slot = NULL;
+
+	/* Both calls can allocate and therefore must not longjmp through C++. */
+	DL_WRAP_START;
+	{
+		slot = find_rendezvous_variable(DL_STORAGE_RENDEZVOUS_NAME);
+		if (create && *slot == NULL)
+			*slot = MemoryContextAllocZero(TopMemoryContext,
+										   sizeof(DatalakeStorageRegistry));
+	}
+	DL_WRAP_END;
+
+	return slot == NULL ? NULL :
+		static_cast<DatalakeStorageRegistry *>(*slot);
 }
 
-DlErrCode
-datalake_register_storage_backend(const char *scheme,
-								  const struct DatalakeStorageOps *ops)
+static void
+storage_backends_finalize(int code, Datum arg)
 {
-	int			i;
+	DatalakeStorageRegistry *registry = NULL;
+	DatalakeStorageBackendEntry *entry;
 
-	if (scheme == NULL || scheme[0] == '\0' || !storage_ops_are_complete(ops))
-		return DL_ERR_INVALID_OPTION;
+	(void) code;
+	(void) arg;
 
-	for (i = 0; i < nstorage_backends; i++)
+	try
 	{
-		if (strcmp(storage_backends[i].scheme, scheme) == 0)
-			return DL_ERR_ALREADY_EXISTS;
+		registry = storage_registry(false);
+	}
+	catch (...)
+	{
+		/* Process exit is a cleanup boundary: never throw or ereport here. */
+		return;
 	}
 
-	if (nstorage_backends >= (int) lengthof(storage_backends))
-		return DL_ERR_INTERNAL;
+	if (registry == NULL)
+		return;
 
-	storage_backends[nstorage_backends].scheme = scheme;
-	storage_backends[nstorage_backends].ops = ops;
-	nstorage_backends++;
-
-	return DL_OK;
+	for (entry = registry->backends; entry != NULL; entry = entry->next)
+	{
+		if (entry->initialized && entry->backend->finalize != NULL)
+		{
+			try
+			{
+				DL_WRAP_START;
+				{
+					elog(DEBUG1, "datalake_fdw: finalizing storage backend \"%s\"",
+						 entry->backend->uri_scheme);
+				}
+				DL_WRAP_END;
+				entry->backend->finalize();
+			}
+			catch (...)
+			{
+				/* One plugin must not prevent the remaining finalizers. */
+			}
+		}
+		entry->initialized = false;
+	}
 }
 
-const struct DatalakeStorageOps *
+static void
+set_registration_error(const char *message)
+{
+	dl_error_set(DL_ERR_INVALID_OPTION, "register storage backend", NULL,
+				 message);
+}
+
+extern "C" __attribute__((visibility("default"))) DlErrCode
+datalake_register_storage_backend(const DatalakeStorageBackend *backend)
+{
+	DlErrCode	rc = DL_ERR_INTERNAL;
+
+	DL_ABI_GUARD_BEGIN
+	{
+		DatalakeStorageRegistry *registry;
+		DatalakeStorageBackendEntry *entry;
+		char		message[DL_ERR_MSG_LEN];
+
+		dl_error_reset();
+		if (backend == NULL)
+		{
+			set_registration_error("expected a non-null storage backend, got null");
+			rc = DL_ERR_INVALID_OPTION;
+		}
+		else if (backend->abi_version != DL_STORAGE_ABI_VERSION)
+		{
+			snprintf(message, sizeof(message),
+					 "storage backend ABI version mismatch: expected %u, got %u",
+					 DL_STORAGE_ABI_VERSION, backend->abi_version);
+			set_registration_error(message);
+			rc = DL_ERR_INVALID_OPTION;
+		}
+		else if (backend->struct_size < DL_STORAGE_V1_MIN_SIZE)
+		{
+			snprintf(message, sizeof(message),
+					 "storage backend struct size mismatch: expected at least %zu, got %u",
+					 (size_t) DL_STORAGE_V1_MIN_SIZE, backend->struct_size);
+			set_registration_error(message);
+			rc = DL_ERR_INVALID_OPTION;
+		}
+		else if (backend->arrow_version == NULL ||
+				 strcmp(backend->arrow_version, ARROW_VERSION_STRING) != 0)
+		{
+			snprintf(message, sizeof(message),
+					 "storage backend Arrow version mismatch: expected \"%s\", got \"%s\"",
+					 ARROW_VERSION_STRING,
+					 backend->arrow_version == NULL ? "(null)" : backend->arrow_version);
+			set_registration_error(message);
+			rc = DL_ERR_INVALID_OPTION;
+		}
+		else if (backend->abi_fingerprint == NULL ||
+				 strcmp(backend->abi_fingerprint,
+						DL_STORAGE_ABI_FINGERPRINT) != 0)
+		{
+			snprintf(message, sizeof(message),
+					 "storage backend ABI fingerprint mismatch: expected \"%s\", got \"%s\"",
+					 DL_STORAGE_ABI_FINGERPRINT,
+					 backend->abi_fingerprint == NULL ?
+					 "(null)" : backend->abi_fingerprint);
+			set_registration_error(message);
+			rc = DL_ERR_INVALID_OPTION;
+		}
+		else if (backend->uri_scheme == NULL || backend->uri_scheme[0] == '\0' ||
+				 backend->mount == NULL)
+		{
+			set_registration_error("expected a scheme and mount function, got an incomplete storage backend");
+			rc = DL_ERR_INVALID_OPTION;
+		}
+		else
+		{
+			registry = storage_registry(true);
+			for (entry = registry->backends; entry != NULL; entry = entry->next)
+			{
+				if (strcmp(entry->backend->uri_scheme, backend->uri_scheme) == 0)
+					break;
+			}
+
+			if (entry != NULL)
+			{
+				snprintf(message, sizeof(message),
+						 "storage backend scheme expected to be unique, got duplicate \"%s\"",
+						 backend->uri_scheme);
+				dl_error_set(DL_ERR_ALREADY_EXISTS,
+							 "register storage backend", NULL, message);
+				rc = DL_ERR_ALREADY_EXISTS;
+			}
+			else
+			{
+				DL_WRAP_START;
+				{
+					entry = static_cast<DatalakeStorageBackendEntry *>(
+						MemoryContextAllocZero(TopMemoryContext, sizeof(*entry)));
+				}
+				DL_WRAP_END;
+				entry->backend = backend;
+				entry->next = registry->backends;
+				registry->backends = entry;
+				rc = DL_OK;
+			}
+		}
+	}
+	DL_ABI_GUARD_END(rc, "register_storage_backend");
+
+	return rc;
+}
+
+const DatalakeStorageBackend *
 datalake_lookup_storage_backend(const char *scheme)
 {
-	int			i;
+	DatalakeStorageRegistry *registry = storage_registry(false);
+	DatalakeStorageBackendEntry *entry;
 
-	if (scheme == NULL)
+	if (registry == NULL || scheme == NULL)
 		return NULL;
 
-	for (i = 0; i < nstorage_backends; i++)
+	for (entry = registry->backends; entry != NULL; entry = entry->next)
 	{
-		if (strcmp(storage_backends[i].scheme, scheme) == 0)
-			return storage_backends[i].ops;
+		if (strcmp(entry->backend->uri_scheme, scheme) == 0)
+			return entry->backend;
+	}
+	return NULL;
+}
+
+arrow::Status
+datalake_initialize_storage_backend(const DatalakeStorageBackend *backend)
+{
+	DatalakeStorageRegistry *registry = storage_registry(false);
+	DatalakeStorageBackendEntry *entry;
+
+	if (registry == NULL || backend == NULL)
+		return arrow::Status::Invalid("storage backend is not registered");
+
+	for (entry = registry->backends; entry != NULL; entry = entry->next)
+	{
+		if (entry->backend != backend)
+			continue;
+		if (entry->initialized)
+			return arrow::Status::OK();
+
+		arrow::Status status = arrow::Status::OK();
+
+		Assert(MyProcPid != PostmasterPid);
+		if (!registry->finalizer_registered)
+		{
+			DL_WRAP_START;
+			{
+				on_proc_exit(storage_backends_finalize, (Datum) 0);
+			}
+			DL_WRAP_END;
+			registry->finalizer_registered = true;
+		}
+
+		if (backend->initialize != NULL)
+			status = backend->initialize();
+
+		if (status.ok())
+			entry->initialized = true;
+		return status;
 	}
 
-	return NULL;
+	return arrow::Status::Invalid("storage backend is not registered");
+}
+
+extern "C" bool
+datalake_storage_scheme_registered(const char *scheme)
+{
+	bool		found = false;
+
+	/* Asked from C, on a path that must not throw. */
+	try
+	{
+		found = datalake_lookup_storage_backend(scheme) != NULL;
+	}
+	catch (...)
+	{
+		found = false;
+	}
+	return found;
 }
 
 extern "C" void
 datalake_register_storage_backends(void)
 {
+	DlErrCode	rc = DL_ERR_INTERNAL;
+
 	DL_TRY
 	{
-		DlErrCode	rc = datalake_register_s3_backend();
-
-		/* Registering twice is harmless; anything else is a coding error. */
-		if (rc != DL_OK && rc != DL_ERR_ALREADY_EXISTS)
-			ereport(ERROR,
-					(errmsg("datalake_fdw: could not register the s3 storage backend: %s",
-							dl_err_message(rc))));
+		rc = datalake_register_local_backend();
 	}
 	DL_CATCH_END();
+
+	if (rc != DL_OK && rc != DL_ERR_ALREADY_EXISTS)
+		dl_error_report(ERROR, rc, "register file storage backend");
+
+	DL_TRY
+	{
+		rc = datalake_register_s3_backend();
+	}
+	DL_CATCH_END();
+
+	if (rc != DL_OK && rc != DL_ERR_ALREADY_EXISTS)
+		dl_error_report(ERROR, rc, "register s3 storage backend");
 }

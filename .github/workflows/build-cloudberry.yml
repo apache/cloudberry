@@ -1440,6 +1440,63 @@ jobs:
           echo "Exact KB:"
           df -k /
 
+      # contrib/datalake_fdw reads and writes s3 through the AWS SDK for C++,
+      # which no distribution packages, so it is built from source.  That costs
+      # a few minutes, and the result depends on nothing but the version, the
+      # distribution and the architecture -- so it is cached under exactly
+      # those three, and a hit restores it in seconds.
+      - name: Restore the AWS SDK for C++
+        id: aws-sdk-cache
+        if: success() && needs.check-skip.outputs.should_skip != 'true' && matrix.pgxs_extension == 'contrib/datalake_fdw'
+        uses: actions/cache@v4
+        with:
+          path: /opt/datalake
+          key: aws-sdk-cpp-1.11.844-rocky${{ matrix.rocky_version }}-${{ runner.arch }}
+
+      - name: Build the AWS SDK for C++
+        if: success() && needs.check-skip.outputs.should_skip != 'true' && matrix.pgxs_extension == 'contrib/datalake_fdw' && steps.aws-sdk-cache.outputs.cache-hit != 'true'
+        run: |
+          set -eo pipefail
+
+          # Only s3 and the sts it needs to assume a role: the whole SDK is
+          # some three hundred clients and none of the rest is reachable from
+          # here.  Static and position-independent, because what consumes it is
+          # a shared library that promises to add no runtime dependency of its
+          # own beyond the system libraries the SDK itself needs.
+          . /etc/os-release
+          crb=crb
+          if [[ "${VERSION_ID%%.*}" == "8" ]]; then crb=powertools; fi
+
+          # Only what is missing, asked for by capability so a package the
+          # distribution renamed still counts as present -- Rocky 10 ships
+          # zlib-devel as zlib-ng-compat-devel.  Naming a package the image
+          # already has makes dnf try to upgrade it to the newest build in the
+          # repository, and that is how this step first failed: Rocky 10's
+          # newest libcurl-devel wants a libcurl no enabled repository
+          # carries.  The intent is to add build dependencies, never to move
+          # the image's own packages.
+          missing=""
+          for pkg in cmake git ninja-build libcurl-devel openssl-devel zlib-devel; do
+            rpm -q --whatprovides "${pkg}" > /dev/null 2>&1 || missing="${missing} ${pkg}"
+          done
+          if [[ -n "${missing}" ]]; then
+            dnf install -y --enablerepo=epel --enablerepo=${crb} ${missing}
+          fi
+
+          git clone --depth 1 --branch 1.11.844 \
+            --recurse-submodules --shallow-submodules \
+            https://github.com/aws/aws-sdk-cpp.git /tmp/aws-sdk-cpp
+          cmake -S /tmp/aws-sdk-cpp -B /tmp/aws-sdk-cpp/build -GNinja \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/datalake \
+            -DBUILD_ONLY="s3;sts" -DBUILD_SHARED_LIBS=OFF \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DENABLE_TESTING=OFF -DUSE_OPENSSL=ON
+          ninja -C /tmp/aws-sdk-cpp/build install
+
+          # The cache stores what is under /opt/datalake; the tree it was built
+          # from is a gigabyte that nothing reads again.
+          rm -rf /tmp/aws-sdk-cpp
+
       # Modules that ship as extensions are not built into the RPM.  Build them
       # here the way a user would: against the server that was just installed,
       # through PGXS, with no configured source tree involved.  This has to run
@@ -1488,11 +1545,21 @@ jobs:
               dnf install -y --enablerepo=epel --enablerepo=powertools \
                 arrow-devel-17.0.0-1.el8 parquet-devel-17.0.0-1.el8
             else
-              # From EPEL, which the image has enrolled but left disabled,
-              # exactly as it does for its own EPEL packages; CRB carries what
-              # they depend on.
+              # Apache's own repository rather than EPEL, and pinned.  EPEL's
+              # Arrow moves when EPEL moves, so a version change there would
+              # arrive in this job with no commit of ours behind it -- and
+              # Arrow is the library this extension's ABI is shared with.  The
+              # two versions differ on purpose: between them and the Arrow 9
+              # the maintainers test locally, the three legs cover the range
+              # contrib/datalake_fdw claims to build against.
+              arrow_version=17.0.0-1.el9
+              if [[ "${VERSION_ID%%.*}" == "10" ]]; then
+                arrow_version=21.0.0-1.el10
+              fi
+              dnf install -y \
+                https://apache.jfrog.io/artifactory/arrow/almalinux/${VERSION_ID%%.*}/apache-arrow-release-latest.rpm
               dnf install -y --enablerepo=epel --enablerepo=crb \
-                libarrow-devel parquet-libs-devel
+                "arrow-devel-${arrow_version}" "parquet-devel-${arrow_version}"
             fi
           fi
 
@@ -1539,6 +1606,96 @@ jobs:
             fi
 
           } 2>&1 | tee -a build-logs/details/create-cloudberry-demo-cluster.log
+
+      # The s3 half of contrib/datalake_fdw's regression needs something that
+      # speaks S3.  SeaweedFS is one static binary, starts in a second, and
+      # answers the same requests as the object stores the maintainers test
+      # against by hand.  Its coordinates go into the job environment, which is
+      # what the test step reads to decide whether the s3 cases run at all --
+      # so every other test entry is unaffected, and a leg where this step did
+      # not run skips them rather than failing.
+      - name: Start an S3 service for datalake_fdw
+        if: success() && needs.check-skip.outputs.should_skip != 'true' && matrix.test == 'ic-datalake-fdw'
+        run: |
+          set -eo pipefail
+
+          case "$(uname -m)" in
+            x86_64)  weed_arch=linux_amd64 ;;
+            aarch64) weed_arch=linux_arm64 ;;
+            *)       echo "::error::no SeaweedFS build for $(uname -m)"; exit 1 ;;
+          esac
+
+          # Pinned, and to the version the maintainers ran the same suite
+          # against by hand: a service the tests assert against must not change
+          # underneath them.
+          curl -fsSL -o /tmp/seaweedfs.tar.gz \
+            "https://github.com/seaweedfs/seaweedfs/releases/download/4.47/${weed_arch}.tar.gz"
+          tar -C /usr/local/bin -xzf /tmp/seaweedfs.tar.gz weed
+          rm -f /tmp/seaweedfs.tar.gz
+
+          # One identity with a key pair, because the suite asserts that a
+          # wrong secret is refused.  Started without this file SeaweedFS
+          # accepts anything, and that case would pass by not being tested.
+          mkdir -p /tmp/seaweedfs
+          printf '%s\n' '{"identities":[{"name":"datalake","credentials":[{"accessKey":"datalake","secretKey":"datalake-secret"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' \
+            > /tmp/seaweedfs/s3.json
+
+          nohup weed server -dir=/tmp/seaweedfs -ip=127.0.0.1 \
+            -master.port=9333 -volume.port=8080 -filer -filer.port=8888 \
+            -s3 -s3.port=8333 -s3.config=/tmp/seaweedfs/s3.json \
+            > /tmp/seaweedfs/weed.log 2>&1 &
+          disown
+
+          # Up to a minute, checking rather than sleeping, and checking the S3
+          # port itself: the master elects itself and the volume server
+          # registers seconds before the S3 gateway starts listening, so a
+          # master that answers is not yet a service the tests can use.  An
+          # unsigned request is refused with 403 once the identity file is in
+          # effect -- which is the state the wrong-secret case needs -- so any
+          # HTTP status means listening, and only "000" means nothing answered.
+          for _ in $(seq 60); do
+            s3_status=$(curl -sS -o /dev/null -w '%{http_code}' \
+              http://127.0.0.1:8333/ 2>/dev/null || true)
+            if [[ -n "${s3_status}" && "${s3_status}" != "000" ]]; then
+              break
+            fi
+            sleep 1
+          done
+          if [[ -z "${s3_status:-}" || "${s3_status}" == "000" ]]; then
+            echo "::error::the SeaweedFS S3 gateway never started listening"
+            tail -50 /tmp/seaweedfs/weed.log
+            exit 1
+          fi
+          echo "S3 gateway answers an unsigned GET with ${s3_status}"
+
+          # "weed shell" exits 0 whatever happened, so what is checked is the
+          # bucket being listed afterwards, not an exit code.
+          echo 's3.bucket.create -name datalake-test' |
+            weed shell -master=127.0.0.1:9333 > /tmp/seaweedfs/shell.log 2>&1
+          if ! echo 's3.bucket.list' |
+                 weed shell -master=127.0.0.1:9333 2>/dev/null |
+                 grep -q 'datalake-test'; then
+            echo "::error::SeaweedFS has no datalake-test bucket"
+            cat /tmp/seaweedfs/shell.log
+            tail -50 /tmp/seaweedfs/weed.log
+            exit 1
+          fi
+
+          {
+            echo "DATALAKE_TEST_S3_ENDPOINT=http://127.0.0.1:8333"
+            echo "DATALAKE_TEST_S3_BUCKET=datalake-test"
+            echo "DATALAKE_TEST_S3_ACCESS_KEY=datalake"
+            echo "DATALAKE_TEST_S3_SECRET_KEY=datalake-secret"
+            echo "DATALAKE_TEST_S3_REGION=us-east-1"
+            echo "DATALAKE_TEST_S3_PATH_STYLE=true"
+            # A value that is a secret only to this run: the suite asserts it
+            # never appears in an error message, and the logs are searched for
+            # it afterwards.
+            echo "DATALAKE_TEST_S3_BAD_SECRET=dl-canary-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            # Eleven hundred objects through a paginated listing: minutes, so
+            # it runs here rather than in every local build.
+            echo "DATALAKE_TEST_S3_PAGINATION=1"
+          } >> "${GITHUB_ENV}"
 
       - name: "Run Tests: ${{ matrix.test }}"
         if: success() && needs.check-skip.outputs.should_skip != 'true'
@@ -1634,6 +1791,21 @@ jobs:
             PG_OPTS="$PG_OPTS -c default_table_access_method=${{ matrix.pg_settings.default_table_access_method }}"
           fi
 
+          # A test that needs a service of its own carries its coordinates in
+          # the job environment.  "su -" builds a login shell and drops all of
+          # it, so what the tests need has to be named on the command line
+          # below; every other entry leaves this empty and the command line is
+          # the one it always was.
+          EXTRA_TEST_ENV=""
+          if [[ -n "${DATALAKE_TEST_S3_ENDPOINT:-}" ]]; then
+            for v in DATALAKE_TEST_S3_ENDPOINT DATALAKE_TEST_S3_BUCKET \
+                     DATALAKE_TEST_S3_ACCESS_KEY DATALAKE_TEST_S3_SECRET_KEY \
+                     DATALAKE_TEST_S3_REGION DATALAKE_TEST_S3_PATH_STYLE \
+                     DATALAKE_TEST_S3_BAD_SECRET DATALAKE_TEST_S3_PAGINATION; do
+              EXTRA_TEST_ENV+="${v}='${!v}' "
+            done
+          fi
+
           # Read configs into array
           IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
 
@@ -1660,6 +1832,7 @@ jobs:
 
             # Execute test script with proper environment setup
             if ! time su - gpadmin -c "cd ${SRC_DIR} && \
+                 ${EXTRA_TEST_ENV}\
                  MAKE_NAME='${{ matrix.test }}-config$i' \
                  MAKE_TARGET='$target' \
                  MAKE_DIRECTORY='-C $dir' \

@@ -62,6 +62,8 @@
 
 PG_MODULE_MAGIC;
 
+extern DlErrCode datalake_register_test_storage_backend(void);
+
 static ProcessUtility_hook_type prev_ProcessUtility_hook;
 
 static bool iceberg_is_effective_am(const char *accessMethod);
@@ -1010,6 +1012,8 @@ pg_iceberg_ProcessUtility(PlannedStmt *pstmt,
 void
 _PG_init(void)
 {
+	DlErrCode	test_backend_rc;
+
 	if (!process_shared_preload_libraries_in_progress)
 		ereport(ERROR,
 				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -1021,6 +1025,10 @@ _PG_init(void)
 	pg_iceberg_register_reloptions();
 	DatalakeRegisterMetaEngines();
 	datalake_register_storage_backends();
+	test_backend_rc = datalake_register_test_storage_backend();
+	if (test_backend_rc != DL_OK && test_backend_rc != DL_ERR_ALREADY_EXISTS)
+		dl_error_report(ERROR, test_backend_rc,
+						"register dltest storage backend");
 
 	prev_ProcessUtility_hook = ProcessUtility_hook;
 	ProcessUtility_hook = pg_iceberg_ProcessUtility;
