@@ -15,16 +15,25 @@
 
 #ifndef FRONTEND
 #include "postgres.h"
+
+/*
+ * GPDB: everything these declare -- GpIdentity, terminal_fd, pg_ltoa -- is
+ * used only from #ifndef FRONTEND blocks below, and they are backend headers:
+ * utils/builtins.h pulls in the generated utils/fmgrprotos.h, which nothing
+ * builds before src/common in a frontend build. Including them unguarded made
+ * the frontend copy of this file depend on a backend header being generated
+ * first, which happened to hold under make's ordering and not under ninja's.
+ */
+#include "cdb/cdbvars.h"
+#include "postmaster/postmaster.h"
+#include "utils/builtins.h"
 #else
 #include "postgres_fe.h"
 #include "common/logging.h"
 #endif
 
-#include "cdb/cdbvars.h"
 #include "common/percentrepl.h"
 #include "lib/stringinfo.h"
-#include "postmaster/postmaster.h"
-#include "utils/builtins.h"
 
 /*
  * replace_percent_placeholders

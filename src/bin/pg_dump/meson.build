@@ -1,5 +1,9 @@
 # Copyright (c) 2022-2023, PostgreSQL Global Development Group
 
+# override CPPFLAGS := -Wno-deprecated-declarations ... in this directory's
+# Makefile, applied to everything built here.
+pg_dump_c_args = ['-Wno-deprecated-declarations']
+
 pg_dump_common_sources = files(
   'compress_gzip.c',
   'compress_io.c',
@@ -15,11 +19,13 @@ pg_dump_common_sources = files(
   'pg_backup_null.c',
   'pg_backup_tar.c',
   'pg_backup_utils.c',
+  'dumputils_gp.c',
 )
 
 pg_dump_common = static_library('libpgdump_common',
   pg_dump_common_sources,
   c_pch: pch_postgres_fe_h,
+  c_args: pg_dump_c_args,
   dependencies: [frontend_code, libpq, lz4, zlib, zstd],
   kwargs: internal_lib_args,
 )
@@ -40,6 +46,7 @@ endif
 pg_dump = executable('pg_dump',
   pg_dump_sources,
   link_with: [pg_dump_common],
+  c_args: pg_dump_c_args,
   dependencies: [frontend_code, libpq, zlib],
   kwargs: default_bin_args,
 )
@@ -59,6 +66,7 @@ endif
 pg_dumpall = executable('pg_dumpall',
   pg_dumpall_sources,
   link_with: [pg_dump_common],
+  c_args: pg_dump_c_args,
   dependencies: [frontend_code, libpq, zlib],
   kwargs: default_bin_args,
 )
@@ -78,6 +86,7 @@ endif
 pg_restore = executable('pg_restore',
   pg_restore_sources,
   link_with: [pg_dump_common],
+  c_args: pg_dump_c_args,
   dependencies: [frontend_code, libpq, zlib],
   kwargs: default_bin_args,
 )

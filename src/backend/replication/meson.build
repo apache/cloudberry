@@ -7,6 +7,10 @@ backend_sources += files(
   'walreceiver.c',
   'walreceiverfuncs.c',
   'walsender.c',
+  'gp_replication.c',
+  # In PostgreSQL this is a separate shared library; Cloudberry links it as a
+  # normal backend object (src/backend/replication/Makefile:34).
+  'libpqwalreceiver/libpqwalreceiver.c',
 )
 
 # see ../parser/meson.build

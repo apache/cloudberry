@@ -1,0 +1,541 @@
+# --------------------------------------------------------------------
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership.  The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License.  You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.  See the License for the specific language governing
+# permissions and limitations under the License.
+# --------------------------------------------------------------------
+#
+# Apache Cloudberry Meson Build
+#
+# PostgreSQL 16 introduced meson as a second build system alongside
+# autoconf/make. This workflow builds Cloudberry with meson, brings up a real
+# demo cluster on the result, and exercises the MPP paths against it.
+#
+# This does NOT replace the autoconf build. Until the two are proven
+# equivalent, build-cloudberry.yml remains the authoritative build; this
+# workflow exists to stop the meson files from rotting and to surface
+# divergence early.
+#
+# Shape, mirroring build-cloudberry.yml:
+#
+#   check-skip -> install-parity -> report
+#              -> build (matrix) -> cluster-test -> report
+#
+# install-parity is static and finishes in seconds, so the most common porting
+# mistake -- a file added to a Makefile and not to the meson.build beside it --
+# is reported long before the build that would not have caught it anyway.
+#
+# The build matrix is two configurations, and they are opposites:
+#
+#   full      every component this branch supports, and the reference line in
+#             coverity.yml. It is what cluster-test runs against.
+#   minimal   every optional component off, shared_postgres_backend included
+#
+# One build would only ever exercise the enabled side of each `if
+# get_option(...)` in the meson files, and the disabled side is where this
+# port's bugs were: C++ enabled only for ORCA, PAX requiring the shared
+# backend, extensions gated on flags nothing turned off. Between the two,
+# every option is compiled in both states.
+#
+# What that pair does not reach is a cross -- ORCA on with the shared backend
+# off, which is the one combination where C++ objects link into a static
+# postgres. Add a third configuration if that link ever needs guarding; until
+# then it is not worth a third full build of the tree.
+#
+# Regression suites are NOT run here yet. src/test/regress and friends are
+# make-driven and include src/Makefile.global from the source tree, which only
+# a configure run produces, so they cannot execute against a meson-only tree.
+# Porting them is separate work; this workflow is structured so those jobs can
+# be added alongside cluster-test once that lands.
+#
+# Option mapping, against the reference configure line in coverity.yml:
+#
+#   --disable-external-fts      -> -Dexternal_fts=false
+#   --enable-orca               -> -Dorca=enabled
+#   --enable-pxf                -> -Dpxf=enabled
+#   --enable-orafce             -> -Dorafce=enabled
+#   --enable-ic-proxy           -> -Dic_proxy=enabled
+#   --enable-gpcloud            -> -Dgpcloud=enabled
+#   --enable-mapreduce          -> -Dmapreduce=enabled
+#   --enable-pax                -> -Dpax=enabled
+#   --with-diskquota            -> -Ddiskquota=enabled
+#   --enable-tap-tests          -> -Dtap_tests=enabled
+#   --with-gssapi               -> -Dgssapi=enabled
+#   --with-ldap                 -> -Dldap=enabled
+#   --with-libxml               -> -Dlibxml=enabled
+#   --with-lz4                  -> -Dlz4=enabled
+#   --with-zstd                 -> -Dzstd=enabled
+#   --with-pam                  -> -Dpam=enabled
+#   --with-perl                 -> -Dplperl=enabled
+#   --with-python               -> -Dplpython=enabled
+#   --with-ssl=openssl          -> -Dssl=openssl
+#   --with-uuid=e2fs            -> -Duuid=e2fs
+#   --with-pgport=5432          -> -Dpgport=5432
+#   --with-includes=...         -> -Dextra_include_dirs=...
+#   --with-libraries=...        -> -Dextra_lib_dirs=...
+#
+# Not enabled here: --with-gp-stats-collector. It is wired up, but
+# src/hook_wrappers.h declares test_uds_receive() as returning int64_t while
+# the definition returns PG's int64. Those are the same type on 64-bit Linux
+# and differ on macOS, so it could not be verified locally; enable it once
+# someone has confirmed it builds.
+#
+# Deliberately dropped: --with-pythonsrc-ext downloads psutil / PyYAML /
+# PyGreSQL from PyPI during `make install`, which has no honest meson
+# equivalent -- a build should not reach the network. The meson build still
+# installs those modules, but only if they have already been staged in
+# gpMgmt/bin/ext; see gpMgmt/install_python_modules.py.
+#
+# The build job splits that in two, so the boundary is real rather than
+# rhetorical: the sources are fetched up front, alongside meson and ninja and
+# before anything is configured, and are unpacked and compiled after the
+# install (PyGreSQL needs pg_config). Nothing between meson setup and the end
+# of the build touches the network, an unreachable PyPI fails the job in
+# seconds, and the tarballs are cached between runs.
+# --------------------------------------------------------------------
+name: Apache Cloudberry Meson Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUILD_IMAGE: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+  INSTALL_PREFIX: /usr/local/cloudberry-db
+  # Matches meson.build's floor. Pinned rather than left to pip's latest so
+  # that CI fails the same way a supported-but-old meson would, instead of
+  # silently depending on features newer than the project claims to need.
+  MESON_VERSION: '>=0.54'
+
+jobs:
+  # ------------------------------------------------------------------
+  check-skip:
+    name: Check skip
+    runs-on: ubuntu-22.04
+    outputs:
+      should_skip: ${{ steps.skip-check.outputs.should_skip }}
+    steps:
+    - id: skip-check
+      shell: bash
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        PR_TITLE: ${{ github.event.pull_request.title || '' }}
+        PR_BODY: ${{ github.event.pull_request.body || '' }}
+      run: |
+        echo "should_skip=false" >> "$GITHUB_OUTPUT"
+        if [[ "$EVENT_NAME" == "pull_request" ]]; then
+          MESSAGE="${PR_TITLE} ${PR_BODY}"
+          if printf '%s' "$MESSAGE" | grep -qEi '\[skip[ -]ci\]|\[ci[ -]skip\]'; then
+            echo "Skip requested by PR title/body"
+            echo "should_skip=true" >> "$GITHUB_OUTPUT"
+          fi
+        fi
+
+  # ------------------------------------------------------------------
+  install-parity:
+    name: Install parity
+    runs-on: ubuntu-22.04
+    needs: [check-skip]
+    if: needs.check-skip.outputs.should_skip != 'true'
+    steps:
+    - name: Checkout Apache Cloudberry
+      uses: actions/checkout@v7
+      with:
+        # No submodules: this job reads Makefiles and meson.build files and
+        # compiles nothing. Cloning googletest and friends would cost more
+        # than the check itself, and the point of the job is fast feedback.
+        fetch-depth: 1
+        submodules: false
+
+    - name: Compare Makefile install lists against meson.build
+      run: |
+        set -euo pipefail
+        # Static, so it runs in seconds and reports before the build finishes.
+        # It catches the failure mode this port is most exposed to: a file
+        # added to a Makefile and not to the meson.build beside it, which no
+        # build failure reveals and only a running cluster notices.
+        python3 devops/build/automation/cloudberry/scripts/meson-install-parity.py
+
+  # ------------------------------------------------------------------
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ubuntu-22.04
+    needs: [check-skip]
+    if: needs.check-skip.outputs.should_skip != 'true'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - name: full
+          upload: true
+          options: >-
+            -Dexternal_fts=false
+            -Dorca=enabled
+            -Dpxf=enabled
+            -Dorafce=enabled
+            -Dic_proxy=enabled
+            -Dgpfdist=enabled
+            -Dgpcloud=enabled
+            -Dmapreduce=enabled
+            -Ddiskquota=enabled
+            -Dpax=enabled
+            -Dtap_tests=enabled
+            -Dgssapi=enabled
+            -Dldap=enabled
+            -Dlibxml=enabled
+            -Dlz4=enabled
+            -Dzstd=enabled
+            -Dpam=enabled
+            -Dplperl=enabled
+            -Dplpython=enabled
+            -Dssl=openssl
+            -Duuid=e2fs
+            -Dpgport=5432
+        - name: minimal
+          upload: false
+          options: >-
+            -Dorca=disabled
+            -Dpxf=disabled
+            -Dorafce=disabled
+            -Dic_proxy=disabled
+            -Dgpfdist=disabled
+            -Dgpcloud=disabled
+            -Dmapreduce=disabled
+            -Ddiskquota=disabled
+            -Dpax=disabled
+            -Dshared_postgres_backend=false
+            -Ddebug_extensions=false
+            -Dtap_tests=disabled
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+      options: >-
+        --user root
+        -h cdw
+
+    steps:
+    - name: Checkout Apache Cloudberry
+      uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+        submodules: true
+
+    - name: Environment initialization
+      run: |
+        if ! su - gpadmin -c "/tmp/init_system.sh"; then
+          echo "::error::Container initialization failed"
+          exit 1
+        fi
+
+    - name: Install Python build tools
+      run: |
+        set -euox pipefail
+        # The build image ships autoconf/make but not meson.
+        python3 -m pip install --disable-pip-version-check "meson${MESON_VERSION}" ninja
+        meson --version
+        ninja --version
+        # What builds psutil, PyGreSQL and PyYAML later: they are setup.py
+        # distributions, and PyYAML cythonises its C extension. gpMgmt/bin's
+        # Makefile pip-installs wheel and Cython itself when they are absent,
+        # which on this image they are -- as gpadmin, mid-build, over the
+        # network. Installed here as root they are importable by gpadmin, so
+        # that check passes and the staging step stays offline. setuptools
+        # comes along because Python 3.12 dropped distutils and setup.py needs
+        # its shim; the rocky9 image already has it, images newer than it may
+        # not.
+        python3 -m pip install --disable-pip-version-check setuptools wheel "cython<3.0.0"
+
+    - name: Restore cached gpMgmt Python sources
+      if: matrix.upload
+      uses: actions/cache@v4
+      with:
+        # Only the tarballs. The unpacked trees and their build output live in
+        # the same directory and are worthless to cache -- they are rebuilt
+        # against this job's Python either way.
+        path: gpMgmt/bin/pythonSrc/ext/*.tar.gz
+        key: gpmgmt-python-src-${{ hashFiles('gpMgmt/bin/Makefile') }}
+
+    - name: Fetch gpMgmt Python sources
+      if: matrix.upload
+      run: |
+        set -euox pipefail
+        # psutil, PyGreSQL and PyYAML come from PyPI. Fetching them here, next
+        # to the other dependency installs and before anything is configured,
+        # keeps the build itself off the network and turns an unreachable PyPI
+        # into a failure in seconds rather than after a 40-minute build. They
+        # cannot be vendored in the repo -- downloading them is what replaced
+        # that, under the Apache release policy.
+        #
+        # This is the target the autoconf build uses, so the versions and URLs
+        # have one home. It skips any tarball already there, which is what
+        # makes the cache above work and what an offline build relies on.
+        # wheel and Cython, which it would otherwise pip-install here, are
+        # already in from the step above.
+        make -C gpMgmt/bin download-python-deps
+        for f in gpMgmt/bin/pythonSrc/ext/*.tar.gz; do gzip -t "${f}"; done
+        ls -la gpMgmt/bin/pythonSrc/ext/*.tar.gz
+
+    - name: Prepare install prefix
+      run: |
+        set -euox pipefail
+        # Mirrors build-cloudberry.yml: xerces is staged into the install
+        # prefix so the built binaries can find it at runtime.
+        mkdir -p "${INSTALL_PREFIX}/lib"
+        cp /usr/local/xerces-c/lib/libxerces-c.so \
+           /usr/local/xerces-c/lib/libxerces-c-3.3.so \
+           "${INSTALL_PREFIX}/lib"
+        chown -R gpadmin:gpadmin "${INSTALL_PREFIX}"
+        chown -R gpadmin:gpadmin "${GITHUB_WORKSPACE}"
+
+    - name: meson setup
+      run: |
+        set -euox pipefail
+        # Run the build as gpadmin, like the autoconf workflows do. No single
+        # quotes inside, so the whole command can be double quoted and the
+        # environment variables expand in this shell.
+        su gpadmin -c "cd ${GITHUB_WORKSPACE} && meson setup build-meson . \
+          --prefix=${INSTALL_PREFIX} \
+          --buildtype=release \
+          ${{ matrix.options }} \
+          -Dextra_include_dirs=/usr/local/xerces-c/include \
+          -Dextra_lib_dirs=${INSTALL_PREFIX}/lib"
+
+    - name: Fail on meson warnings
+      run: |
+        set -euo pipefail
+        LOG=build-meson/meson-logs/meson-log.txt
+        # Three kinds of warning are about the declared meson floor, and all
+        # three are actionable and platform-independent:
+        #
+        #   uses feature introduced in   the floor is too low for the code
+        #   uses feature deprecated      the floor is high enough that meson
+        #                                now objects to upstream's own APIs
+        #   always evaluates to true     the floor made an upstream version
+        #                                guard dead
+        #
+        # A configure that reports none of them is the evidence that the floor
+        # in meson.build is the right one, so treat any as a failure. Other
+        # warnings can be environment-specific, so those are only reported.
+        if grep -qE "uses feature introduced in|uses feature deprecated|always evaluates to true" "${LOG}"; then
+          echo "::error::meson reported version-floor warnings"
+          grep -E "uses feature introduced in|uses feature deprecated|always evaluates to true" "${LOG}"
+          exit 1
+        fi
+        echo "No meson version-floor warnings"
+        OTHER=$(grep -c "WARNING" "${LOG}" || true)
+        echo "Other meson warnings: ${OTHER}"
+        if [ "${OTHER}" -gt 0 ]; then
+          grep "WARNING" "${LOG}" | head -20
+        fi
+
+    - name: Build the frontend common library first
+      run: |
+        set -euox pipefail
+        # src/common is compiled twice, once with -DFRONTEND. A backend header
+        # included there without an #ifndef FRONTEND guard drags in headers
+        # that only the backend build generates, and ninja is free to compile
+        # the frontend copy before anything has generated them -- so such a
+        # mistake fails the build or not depending on scheduling. It cost one
+        # red matrix entry and one green one on the same commit.
+        #
+        # Building this single target from cold, before the full build has
+        # produced anything, turns that coin flip into a deterministic check
+        # for the one directory that is compiled both ways.
+        su gpadmin -c "cd ${GITHUB_WORKSPACE} && ninja -C build-meson src/common/libpgcommon_shlib.a"
+
+    - name: ninja build
+      run: |
+        set -euox pipefail
+        su gpadmin -c "cd ${GITHUB_WORKSPACE} && ninja -C build-meson -j$(nproc)" \
+          2>&1 | tee build-meson-build.log
+
+    - name: Report compiler warnings
+      run: |
+        set -euo pipefail
+        # Not fatal, but surfaced: the autoconf build is warning-quiet for the
+        # flags Cloudberry selects, so a jump here usually means the meson
+        # flags have drifted from configure.ac.
+        COUNT=$(grep -c "warning:" build-meson-build.log || true)
+        echo "Compiler warnings: ${COUNT}"
+        if [ "${COUNT}" -gt 0 ]; then
+          grep -oE "\[-W[a-z0-9-]+\]" build-meson-build.log \
+            | sort | uniq -c | sort -rn | head -20
+        fi
+        {
+          echo "### Build \`${{ matrix.name }}\`"
+          echo
+          echo "Compiler warnings: **${COUNT}**"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: ninja install
+      run: |
+        set -euox pipefail
+        su gpadmin -c "cd ${GITHUB_WORKSPACE} && ninja -C build-meson install"
+
+    - name: Stage gpMgmt Python modules
+      if: matrix.upload
+      run: |
+        set -euox pipefail
+        # psutil, PyGreSQL and PyYAML are runtime dependencies of the
+        # management utilities, not build inputs. The meson build installs them
+        # if they have been staged in gpMgmt/bin/ext but never downloads them,
+        # so stage them with gpMgmt/bin's own targets -- the same ones
+        # --with-pythonsrc-ext drives.
+        #
+        # The sources were fetched before the build; this unpacks and compiles
+        # them. It cannot move earlier: PyGreSQL builds against pg_config, so
+        # it needs a finished install, and that is why the install runs twice.
+        su gpadmin -c "cd ${GITHUB_WORKSPACE} && PATH=${INSTALL_PREFIX}/bin:\$PATH \
+          make -C gpMgmt/bin TAR=tar psutil pygresql pyyaml"
+        su gpadmin -c "cd ${GITHUB_WORKSPACE} && ninja -C build-meson install"
+        test -d "${INSTALL_PREFIX}/lib/python/psutil"
+        test -f "${INSTALL_PREFIX}/lib/python/pg.py"
+        test -d "${INSTALL_PREFIX}/lib/python/yaml"
+
+    - name: Smoke test
+      run: |
+        set -euox pipefail
+        # The build directory is passed so the smoke test can read which
+        # optional components this configuration asked for; see its header.
+        su gpadmin -c "${GITHUB_WORKSPACE}/devops/build/automation/cloudberry/scripts/meson-smoke-test.sh ${INSTALL_PREFIX} ${GITHUB_WORKSPACE}/build-meson"
+
+    - name: Package install tree
+      if: matrix.upload
+      run: |
+        set -euox pipefail
+        tar -C "$(dirname ${INSTALL_PREFIX})" -czf \
+          "${GITHUB_WORKSPACE}/cloudberry-meson-install.tar.gz" \
+          "$(basename ${INSTALL_PREFIX})"
+        ls -la "${GITHUB_WORKSPACE}/cloudberry-meson-install.tar.gz"
+
+    - name: Upload install tree
+      if: matrix.upload
+      uses: actions/upload-artifact@v4
+      with:
+        name: meson-install
+        path: cloudberry-meson-install.tar.gz
+        retention-days: 3
+        if-no-files-found: error
+
+    - name: Upload meson logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: meson-logs-${{ matrix.name }}
+        path: |
+          build-meson/meson-logs/
+          build-meson-build.log
+        retention-days: 7
+        if-no-files-found: ignore
+
+  # ------------------------------------------------------------------
+  cluster-test:
+    name: Demo cluster test
+    runs-on: ubuntu-22.04
+    needs: [check-skip, build]
+    if: needs.check-skip.outputs.should_skip != 'true'
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+      options: >-
+        --user root
+        -h cdw
+
+    steps:
+    - name: Checkout Apache Cloudberry
+      uses: actions/checkout@v7
+      with:
+        # No submodules: this job runs against the install tree built by the
+        # build job, which does check them out -- PAX compiles against
+        # src/cpp/contrib/tabulate. Nothing is compiled here; the checkout is
+        # only for gpAux/gpdemo and the test scripts.
+        fetch-depth: 1
+        submodules: false
+
+    - name: Environment initialization
+      run: |
+        if ! su - gpadmin -c "/tmp/init_system.sh"; then
+          echo "::error::Container initialization failed"
+          exit 1
+        fi
+
+    - name: Download install tree
+      uses: actions/download-artifact@v4
+      with:
+        name: meson-install
+
+    - name: Unpack install tree
+      run: |
+        set -euox pipefail
+        tar -C "$(dirname ${INSTALL_PREFIX})" -xzf cloudberry-meson-install.tar.gz
+        chown -R gpadmin:gpadmin "${INSTALL_PREFIX}"
+        chown -R gpadmin:gpadmin "${GITHUB_WORKSPACE}"
+        test -x "${INSTALL_PREFIX}/bin/postgres"
+        test -f "${INSTALL_PREFIX}/cloudberry-env.sh"
+
+    - name: Create demo cluster and run MPP checks
+      run: |
+        set -euox pipefail
+        su gpadmin -c "${GITHUB_WORKSPACE}/devops/build/automation/cloudberry/scripts/meson-cluster-test.sh ${INSTALL_PREFIX} ${GITHUB_WORKSPACE}"
+
+    - name: Upload cluster logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: meson-cluster-logs
+        path: |
+          gpAux/gpdemo/datadirs/*/pg_log/
+          gpAux/gpdemo/*.log
+          /home/gpadmin/gpAdminLogs/
+        retention-days: 7
+        if-no-files-found: ignore
+
+  # ------------------------------------------------------------------
+  report:
+    name: Report
+    runs-on: ubuntu-22.04
+    needs: [check-skip, install-parity, build, cluster-test]
+    if: always() && needs.check-skip.outputs.should_skip != 'true'
+    steps:
+    - name: Summarise
+      run: |
+        PARITY="${{ needs.install-parity.result }}"
+        BUILD="${{ needs.build.result }}"
+        CLUSTER="${{ needs.cluster-test.result }}"
+        {
+          echo "## Meson build"
+          echo
+          echo "| Job | Result |"
+          echo "| --- | --- |"
+          echo "| install-parity | ${PARITY} |"
+          echo "| build (all configurations) | ${BUILD} |"
+          echo "| cluster-test | ${CLUSTER} |"
+        } >> "$GITHUB_STEP_SUMMARY"
+        if [ "${PARITY}" != "success" ] || [ "${BUILD}" != "success" ] \
+           || [ "${CLUSTER}" != "success" ]; then
+          echo "::error::meson workflow failed (install-parity=${PARITY} build=${BUILD} cluster-test=${CLUSTER})"
+          exit 1
+        fi
+        echo "All meson jobs passed"

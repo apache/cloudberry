@@ -54,6 +54,11 @@ subdir('pg_walinspect')
 subdir('postgres_fdw')
 subdir('seg')
 subdir('sepgsql')
+# --enable-pax; requires protobuf >= 3.5, zstd >= 1.4 and the shared backend
+if get_option('pax').enabled()
+  subdir('pax_storage')
+endif
+subdir('interconnect')
 subdir('spi')
 subdir('sslinfo')
 # start-scripts doesn't contain build products

@@ -13,6 +13,8 @@ backend_sources += files(
   'read.c',
   'tidbitmap.c',
   'value.c',
+  'outfast.c',
+  'readfast.c',
 )
 
 # these include .c files generated in ../../include/nodes, seems nicer to not
@@ -20,7 +22,6 @@ backend_sources += files(
 nodefunc_sources = files(
   'copyfuncs.c',
   'equalfuncs.c',
-  'queryjumblefuncs.c',
   'outfuncs.c',
   'readfuncs.c',
 )

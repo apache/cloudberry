@@ -260,3 +260,69 @@ endforeach
 foreach d, v : pgxs_deps
   pgxs_cdata.set('with_@0@'.format(d), v.found() ? 'yes' : 'no')
 endforeach
+
+###############################################################
+# Apache Cloudberry: PGXS variables
+###############################################################
+#
+# src/Makefile.global.in carries ~38 Cloudberry @variables@ that configure
+# fills in via AC_SUBST. They are consumed by recursive make (gpcontrib/Makefile
+# reads enable_gpcloud / enable_pxf / with_diskquota / enable_debug_extensions,
+# src/bin/gpfdist/Makefile reads have_yaml / EVENT_LIBS / apr_*, and so on).
+#
+# The meson build does not use them itself -- it uses meson options instead --
+# but Makefile.global is installed as part of PGXS, so out-of-tree extensions
+# built with `make USE_PGXS=1` still read them. Leaving them empty would
+# silently change behaviour for those extensions, so fill them in here.
+
+pgxs_cdata.set('GP_MAJORVERSION', gp_majorversion)
+pgxs_cdata.set('GP_VERSION_SHORT', gp_version_short)
+pgxs_cdata.set('PG_PACKAGE_VERSION', pg_version)
+pgxs_cdata.set('BLD_ARCH', '')
+
+foreach k, v : {
+  'enable_orca': xerces.found(),
+  'enable_gpfdist': get_option('gpfdist').enabled(),
+  'enable_pxf': get_option('pxf').enabled(),
+  'enable_gpcloud': get_option('gpcloud').enabled(),
+  'enable_mapreduce': get_option('mapreduce').enabled(),
+  'enable_orafce': get_option('orafce').enabled(),
+  'enable_ic_proxy': get_option('ic_proxy').enabled(),
+  'enable_pax': get_option('pax').enabled(),
+  'enable_ic_udp2': get_option('ic_udp2'),
+  'enable_catalog_ext': get_option('catalog_ext'),
+  'enable_serverless': get_option('serverless'),
+  'enable_debug_extensions': get_option('debug_extensions'),
+  'enable_shared_postgres_backend': get_option('shared_postgres_backend'),
+  'enable_link_postgres_with_shared': get_option('link_postgres_with_shared'),
+  'with_diskquota': get_option('diskquota').enabled(),
+  'with_gp_stats_collector': get_option('gp_stats_collector').enabled(),
+  'with_libbz2': libbz2.found(),
+  'have_yaml': libyaml.found(),
+  # legacy upstream toggles that are always on in a modern build
+  'enable_largefile': true,
+  'enable_shared': true,
+  'enable_strong_random': true,
+  # dropped in the meson build: the autoconf path downloads Python packages
+  # at build time, which has no honest meson equivalent
+  'with_pythonsrc_ext': false,
+}
+  pgxs_cdata.set(k, v ? 'yes' : 'no')
+endforeach
+
+pgxs_cdata.set('YAML_LIBS', libyaml.found() ? '-lyaml' : '')
+pgxs_cdata.set('EVENT_LIBS', libevent.found() ? '-levent' : '')
+pgxs_cdata.set('ZSTD_CFLAGS', '')
+pgxs_cdata.set('ZSTD_LIBS', zstd.found() ? '-lzstd' : '')
+
+# apr is discovered through pkg-config here, where configure shells out to
+# apr-1-config; expose the same variables so PGXS consumers keep working.
+pgxs_cdata.set('APR_1_CONFIG', '')
+pgxs_cdata.set('with_apr_config', '')
+pgxs_cdata.set('apr_includes', '')
+pgxs_cdata.set('apr_cppflags', '')
+pgxs_cdata.set('apr_cflags', '')
+pgxs_cdata.set('apr_link_ld_libs', apr_link_ld_libs)
+
+pgxs_cdata.set('libexecdir', dir_prefix / get_option('libexecdir'))
+pgxs_cdata.set('sbindir', dir_prefix / get_option('sbindir'))
