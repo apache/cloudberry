@@ -1,0 +1,72 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 420" width="100%" style="max-width:860px" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">
+  <defs>
+    <marker id="ar182" markerWidth="9" markerHeight="9" refX="8.5" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 z" fill="#6b5b95"/>
+    </marker>
+  </defs>
+
+  <rect x="8" y="146" width="184" height="118" rx="7" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <text x="18" y="166" font-size="12" font-weight="700" fill="#3d2b57">Seq Scan</text>
+  <text x="18" y="182" fill="#4a3a63">SeqScanState</text>
+  <line x1="18" y1="190" x2="182" y2="190" stroke="#cdb4db" stroke-width="1"/>
+  <text x="18" y="206" fill="#4a3a63">ss_currentRelation</text>
+  <text x="18" y="222" fill="#4a3a63">ss_currentScanDesc</text>
+  <text x="18" y="238" fill="#4a3a63">ps.qual</text>
+  <text x="18" y="254" fill="#4a3a63">ps.ps_ProjInfo</text>
+
+  <line x1="192" y1="205" x2="234" y2="205" stroke="#6b5b95" stroke-width="1.5" marker-end="url(#ar182)"/>
+
+  <rect x="238" y="140" width="246" height="130" rx="7" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.5"/>
+  <text x="248" y="160" font-size="12" font-weight="700" fill="#6b5310">SeqNext</text>
+  <text x="248" y="176" fill="#6b5310">nodeSeqscan.c:57</text>
+  <line x1="248" y1="184" x2="474" y2="184" stroke="#dcc48a" stroke-width="1"/>
+  <text x="248" y="202" fill="#5c4a12">table_beginscan_es</text>
+  <text x="248" y="218" fill="#5c4a12">table_scan_getnextslot</text>
+  <text x="248" y="242" fill="#8a6d1a">dispatch via</text>
+  <text x="248" y="258" font-weight="700" fill="#8a6d1a">rel-&gt;rd_tableam</text>
+
+  <rect x="556" y="16" width="296" height="62" rx="6" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <text x="568" y="38" font-size="12" font-weight="700" fill="#1f5c3d">heap</text>
+  <text x="568" y="56" fill="#2c6b4a">heapam_handler.c &#8212; 32 kB pages, MVCC</text>
+  <text x="568" y="70" fill="#2c6b4a">rows, buffer cache, ring strategy</text>
+
+  <rect x="556" y="106" width="296" height="62" rx="6" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <text x="568" y="128" font-size="12" font-weight="700" fill="#1f5c3d">ao_row</text>
+  <text x="568" y="146" fill="#2c6b4a">appendonlyam_handler.c:2307</text>
+  <text x="568" y="160" fill="#8a6d1a" font-weight="700">scan_begin_extractcolumns</text>
+
+  <rect x="556" y="196" width="296" height="62" rx="6" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <text x="568" y="218" font-size="12" font-weight="700" fill="#1f5c3d">ao_column</text>
+  <text x="568" y="236" fill="#2c6b4a">aocsam_handler.c:2608</text>
+  <text x="568" y="250" fill="#8a6d1a" font-weight="700">scan_begin_extractcolumns</text>
+
+  <rect x="556" y="286" width="296" height="62" rx="6" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <text x="568" y="308" font-size="12" font-weight="700" fill="#1f5c3d">pax</text>
+  <text x="568" y="326" fill="#2c6b4a">pax_access_handle.cc:732</text>
+  <text x="568" y="340" fill="#8a6d1a" font-weight="700">scan_begin_extractcolumns</text>
+
+  <line x1="484" y1="196" x2="552" y2="52"  stroke="#6b5b95" stroke-width="1.5" marker-end="url(#ar182)"/>
+  <line x1="484" y1="201" x2="552" y2="140" stroke="#6b5b95" stroke-width="1.5" marker-end="url(#ar182)"/>
+  <line x1="484" y1="210" x2="552" y2="228" stroke="#6b5b95" stroke-width="1.5" marker-end="url(#ar182)"/>
+  <line x1="484" y1="215" x2="552" y2="315" stroke="#6b5b95" stroke-width="1.5" marker-end="url(#ar182)"/>
+
+  <text x="8" y="398" fill="#6b5b95">&#8249; the plan node is the same object in all four cases &#8212; only rd_tableam differs &#8250;</text>
+</svg>

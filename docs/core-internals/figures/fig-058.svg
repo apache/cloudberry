@@ -1,0 +1,90 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 348" width="100%" style="max-width:800px;display:block;margin:0 auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px">
+  <defs>
+    <marker id="m192arw" markerWidth="10" markerHeight="10" refX="9" refY="3.5" orient="auto">
+      <path d="M0,0 L0,7 L9,3.5 z" fill="#8a6d1a"/>
+    </marker>
+  </defs>
+
+  <text x="315" y="16" text-anchor="middle" fill="#6b6b7b">seg0 :7102</text>
+  <text x="475" y="16" text-anchor="middle" fill="#6b6b7b">seg1 :7103</text>
+  <text x="635" y="16" text-anchor="middle" fill="#6b6b7b">seg2 :7104</text>
+
+  <text x="240" y="35" fill="#8a6d1a">gang 1 &#8212; PRIMARY WRITER (holds the transaction, publishes the shared local snapshot)</text>
+  <rect x="240" y="40" width="470" height="62" rx="7" fill="none" stroke="#b9b9c6" stroke-width="1" stroke-dasharray="4 3"/>
+  <rect x="250" y="49" width="130" height="44" rx="5" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.5"/>
+  <rect x="410" y="49" width="130" height="44" rx="5" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.5"/>
+  <rect x="570" y="49" width="130" height="44" rx="5" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.5"/>
+  <text x="315" y="66" text-anchor="middle" fill="#5c4a10">writer QE</text>
+  <text x="315" y="83" text-anchor="middle" fill="#8a6d1a">pid 22408</text>
+  <text x="475" y="66" text-anchor="middle" fill="#5c4a10">writer QE</text>
+  <text x="475" y="83" text-anchor="middle" fill="#8a6d1a">pid 22409</text>
+  <text x="635" y="66" text-anchor="middle" fill="#5c4a10">writer QE</text>
+  <text x="635" y="83" text-anchor="middle" fill="#8a6d1a">pid 22410</text>
+
+  <text x="240" y="119" fill="#6b4c8a">gang 2 &#8212; PRIMARY READER (slice2)</text>
+  <rect x="240" y="124" width="470" height="62" rx="7" fill="none" stroke="#b9b9c6" stroke-width="1" stroke-dasharray="4 3"/>
+  <rect x="250" y="133" width="130" height="44" rx="5" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <rect x="410" y="133" width="130" height="44" rx="5" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <rect x="570" y="133" width="130" height="44" rx="5" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <text x="315" y="150" text-anchor="middle" fill="#4a3c66">reader QE</text>
+  <text x="315" y="167" text-anchor="middle" fill="#6b4c8a">pid 22414</text>
+  <text x="475" y="150" text-anchor="middle" fill="#4a3c66">reader QE</text>
+  <text x="475" y="167" text-anchor="middle" fill="#6b4c8a">pid 22415</text>
+  <text x="635" y="150" text-anchor="middle" fill="#4a3c66">reader QE</text>
+  <text x="635" y="167" text-anchor="middle" fill="#6b4c8a">pid 22416</text>
+
+  <text x="240" y="203" fill="#3f7a5c">gang 3 &#8212; PRIMARY READER (slice3)</text>
+  <rect x="240" y="208" width="470" height="62" rx="7" fill="none" stroke="#b9b9c6" stroke-width="1" stroke-dasharray="4 3"/>
+  <rect x="250" y="217" width="130" height="44" rx="5" fill="#eafaf0" stroke="#7fae95" stroke-width="1.5"/>
+  <rect x="410" y="217" width="130" height="44" rx="5" fill="#eafaf0" stroke="#7fae95" stroke-width="1.5"/>
+  <rect x="570" y="217" width="130" height="44" rx="5" fill="#eafaf0" stroke="#7fae95" stroke-width="1.5"/>
+  <text x="315" y="234" text-anchor="middle" fill="#2f5c46">reader QE</text>
+  <text x="315" y="251" text-anchor="middle" fill="#3f7a5c">pid 22420</text>
+  <text x="475" y="234" text-anchor="middle" fill="#2f5c46">reader QE</text>
+  <text x="475" y="251" text-anchor="middle" fill="#3f7a5c">pid 22421</text>
+  <text x="635" y="234" text-anchor="middle" fill="#2f5c46">reader QE</text>
+  <text x="635" y="251" text-anchor="middle" fill="#3f7a5c">pid 22422</text>
+
+  <rect x="24" y="104" width="190" height="58" rx="5" fill="#f5edff" stroke="#6b4c8a" stroke-width="2"/>
+  <text x="119" y="124" text-anchor="middle" fill="#3a2b52">QD &#8212; coordinator :7100</text>
+  <text x="119" y="141" text-anchor="middle" fill="#6b4c8a">pid 22404</text>
+  <text x="119" y="156" text-anchor="middle" fill="#6b6b7b">gp_session_id = 69</text>
+
+  <text x="24" y="203" fill="#6b6b7b">entry-DB reader (1-gang)</text>
+  <rect x="24" y="208" width="190" height="44" rx="5" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="119" y="226" text-anchor="middle" fill="#4a3c66">reads coordinator tables</text>
+  <text x="119" y="243" text-anchor="middle" fill="#6b4c8a">pid 23012 &#183; :7100</text>
+
+  <path d="M214,118 C234,118 226,71 238,71" fill="none" stroke="#8a6d1a" stroke-width="1.5" marker-end="url(#m192arw)"/>
+  <path d="M214,133 L238,155" fill="none" stroke="#8a6d1a" stroke-width="1.5" marker-end="url(#m192arw)"/>
+  <path d="M214,148 C234,148 226,239 238,239" fill="none" stroke="#8a6d1a" stroke-width="1.5" marker-end="url(#m192arw)"/>
+  <path d="M119,162 L119,204" fill="none" stroke="#8a6d1a" stroke-width="1.5" marker-end="url(#m192arw)"/>
+
+  <path d="M710,71 L727,71" stroke="#8a8a99" stroke-width="1" stroke-dasharray="3 3" fill="none"/>
+  <path d="M710,155 L727,155" stroke="#8a8a99" stroke-width="1" stroke-dasharray="3 3" fill="none"/>
+  <path d="M710,239 L727,239" stroke="#8a8a99" stroke-width="1" stroke-dasharray="3 3" fill="none"/>
+  <path d="M727,71 L727,239" stroke="#8a8a99" stroke-width="1" stroke-dasharray="3 3" fill="none"/>
+
+  <path d="M250,300 L286,300" stroke="#8a6d1a" stroke-width="1.5" fill="none" marker-end="url(#m192arw)"/>
+  <text x="296" y="304" fill="#6b6b7b">libpq: connect, dispatch, completion, errors (this section)</text>
+  <path d="M250,322 L286,322" stroke="#8a8a99" stroke-width="1" stroke-dasharray="3 3" fill="none"/>
+  <text x="296" y="326" fill="#6b6b7b">interconnect: tuples flowing QE &#8646; QE (&#167;19.5)</text>
+</svg>

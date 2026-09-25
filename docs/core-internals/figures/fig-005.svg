@@ -1,0 +1,54 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 292" width="100%" style="height:auto;display:block;min-width:600px" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11">
+        <defs>
+          <marker id="bld" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8a7aa8"/></marker>
+          <marker id="blr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#c79a3a"/></marker>
+        </defs>
+        <rect x="14" y="24" width="150" height="40" rx="5" fill="#faf6ff" stroke="#b79ad6" stroke-width="1.5"/>
+        <text x="89" y="42" text-anchor="middle" font-weight="700" fill="#5e4b86">meta blk 0</text>
+        <text x="89" y="56" text-anchor="middle" font-size="9.5" fill="#444">root → 3 · level 1</text>
+        <path d="M164 44 H246" fill="none" stroke="#8a7aa8" stroke-width="1.6" marker-end="url(#bld)"/>
+        <rect x="248" y="20" width="304" height="50" rx="5" fill="#f5edff" stroke="#b79ad6" stroke-width="1.5"/>
+        <text x="400" y="38" text-anchor="middle" font-weight="700" fill="#5e4b86">root blk 3 · BTP_ROOT · level 1 · 91 downlinks</text>
+        <text x="400" y="56" text-anchor="middle" font-size="9.5" fill="#444">−∞ → blk1  |  sep 4442 → blk2  |  sep 8818 → blk4  …</text>
+        <path d="M300 70 L130 148" fill="none" stroke="#8a7aa8" stroke-width="1.4" marker-end="url(#bld)"/>
+        <text x="188" y="104" text-anchor="middle" font-size="8.5" fill="#8a7aa8">−∞ … &lt;4442</text>
+        <path d="M400 70 L380 148" fill="none" stroke="#8a7aa8" stroke-width="1.4" marker-end="url(#bld)"/>
+        <text x="410" y="110" text-anchor="middle" font-size="8.5" fill="#8a7aa8">4442 … &lt;8818</text>
+        <path d="M500 70 L610 148" fill="none" stroke="#8a7aa8" stroke-width="1.4" marker-end="url(#bld)"/>
+        <text x="576" y="104" text-anchor="middle" font-size="8.5" fill="#8a7aa8">8818 …</text>
+        <rect x="40" y="150" width="180" height="58" rx="5" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+        <text x="130" y="168" text-anchor="middle" font-weight="700">leaf blk1 · level 0</text>
+        <text x="130" y="183" text-anchor="middle" font-size="9.5" fill="#444">keys 1 … 4441</text>
+        <text x="130" y="199" text-anchor="middle" font-size="9.5" fill="#8a6d1a" font-weight="700">HK = 4442</text>
+        <rect x="290" y="150" width="180" height="58" rx="5" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+        <text x="380" y="168" text-anchor="middle" font-weight="700">leaf blk2 · level 0</text>
+        <text x="380" y="183" text-anchor="middle" font-size="9.5" fill="#444">keys 4442 …</text>
+        <text x="380" y="199" text-anchor="middle" font-size="9.5" fill="#8a6d1a" font-weight="700">HK = 8818</text>
+        <rect x="540" y="150" width="150" height="58" rx="5" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+        <text x="615" y="168" text-anchor="middle" font-weight="700">leaf blk4 · level 0</text>
+        <text x="615" y="183" text-anchor="middle" font-size="9.5" fill="#444">keys 8818 …</text>
+        <text x="615" y="199" text-anchor="middle" font-size="9" fill="#8a939c">rightmost: no HK</text>
+        <path d="M220 179 H288" fill="none" stroke="#c79a3a" stroke-width="2" marker-end="url(#blr)"/>
+        <path d="M470 179 H538" fill="none" stroke="#c79a3a" stroke-width="2" marker-end="url(#blr)"/>
+        <text x="254" y="173" text-anchor="middle" font-size="8.5" fill="#8a6d1a">btpo_next</text>
+        <text x="504" y="173" text-anchor="middle" font-size="8.5" fill="#8a6d1a">btpo_next</text>
+        <text x="360" y="230" text-anchor="middle" font-size="10" fill="#8a7aa8">right-links let a reader that lands on a just-split page follow btpo_next instead of re-descending (_bt_moveright)</text>
+      </svg>

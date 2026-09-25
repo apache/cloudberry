@@ -1,0 +1,41 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 224" width="100%" style="max-width:860px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace">
+<defs>
+<marker id="ar175c" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#8a6d1a"/></marker>
+<marker id="ar175d" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a4a7a"/></marker>
+</defs>
+<text x="30" y="24" font-size="11" fill="#8a6d1a">forward &#183; CTranslatorQueryToDXL, one hash lookup per Var</text>
+<rect x="30" y="40" width="200" height="76" rx="4" fill="#eafaf0" stroke="#cfead9"/>
+<text x="130" y="58" font-size="12" fill="#233" text-anchor="middle">Var (t1.b)</text>
+<text x="44" y="76" font-size="11" fill="#3d6b52">varno = 1</text>
+<text x="44" y="92" font-size="11" fill="#3d6b52">varattno = 2</text>
+<text x="44" y="108" font-size="11" fill="#3d6b52">varlevelsup = 0</text>
+<rect x="300" y="48" width="230" height="60" rx="4" fill="#f5edff" stroke="#cdb4db"/>
+<text x="415" y="70" font-size="11.5" fill="#233" text-anchor="middle">CGPDBAttInfo(0, 1, 2)</text>
+<text x="415" y="90" font-size="10.5" fill="#666" text-anchor="middle">key into m_gpdb_att_opt_col_mapping</text>
+<rect x="600" y="48" width="230" height="60" rx="4" fill="#fff4d6" stroke="#e0c98a"/>
+<text x="715" y="70" font-size="12" fill="#233" text-anchor="middle">&#10214; colid 2 &#10215;</text>
+<text x="715" y="90" font-size="10.5" fill="#666" text-anchor="middle">dxl:Ident ColId=2 ColName=b</text>
+<path d="M234,78 H296" fill="none" stroke="#8a6d1a" stroke-width="1.4" marker-end="url(#ar175c)"/>
+<path d="M534,78 H596" fill="none" stroke="#8a6d1a" stroke-width="1.4" marker-end="url(#ar175c)"/>
+<text x="30" y="152" font-size="11" fill="#5a4a7a">reverse &#183; CTranslatorDXLToPlStmt, one lookup per DXL Ident</text>
+<path d="M760,178 H100" fill="none" stroke="#5a4a7a" stroke-width="1.4" stroke-dasharray="5 3" marker-end="url(#ar175d)"/>
+<text x="430" y="200" font-size="10.5" fill="#5a4a7a" text-anchor="middle">VarFromDXLNodeScId(): colid &#8594; TargetEntry in a child context &#8594; Var(OUTER_VAR or INNER_VAR, resno)</text>
+</svg>

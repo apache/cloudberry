@@ -1,0 +1,54 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 250" width="100%" style="height:auto;display:block;min-width:600px" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11">
+        <defs>
+          <marker id="ap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8a7aa8"/></marker>
+          <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#6b8a76"/></marker>
+        </defs>
+        <text x="360" y="18" text-anchor="middle" fill="#6b5b95">BEGIN; INSERT; SAVEPOINT s1; INSERT; SAVEPOINT s2; INSERT;</text>
+
+        <rect x="60" y="40" width="180" height="64" rx="6" fill="#f5edff" stroke="#b79ad6" stroke-width="1.5"/>
+        <text x="150" y="58" text-anchor="middle" fill="#6b5b95">TopTransactionState</text>
+        <text x="150" y="76" text-anchor="middle">nestingLevel 1</text>
+        <text x="150" y="94" text-anchor="middle" fill="#8a6d1a" font-weight="700">xid 1146</text>
+
+        <rect x="270" y="40" width="180" height="64" rx="6" fill="#f5edff" stroke="#b79ad6" stroke-width="1.5"/>
+        <text x="360" y="58" text-anchor="middle" fill="#6b5b95">subxact s1</text>
+        <text x="360" y="76" text-anchor="middle">nestingLevel 2</text>
+        <text x="360" y="94" text-anchor="middle" fill="#8a6d1a" font-weight="700">xid 1147</text>
+
+        <rect x="480" y="40" width="180" height="64" rx="6" fill="#fff4d6" stroke="#e0b365" stroke-width="1.5"/>
+        <text x="570" y="58" text-anchor="middle" fill="#6b5b95">subxact s2</text>
+        <text x="570" y="76" text-anchor="middle">nestingLevel 3</text>
+        <text x="570" y="94" text-anchor="middle" fill="#8a6d1a" font-weight="700">xid 1148</text>
+
+        <text x="570" y="122" text-anchor="middle" fill="#8a7aa8">CurrentTransactionState</text>
+        <path d="M570 126 L570 104" stroke="#8a7aa8" stroke-width="1.5" marker-end="url(#ap)"/>
+
+        <text x="255" y="30" text-anchor="middle" fill="#8a7aa8">parent</text>
+        <path d="M270 72 L240 72" stroke="#8a7aa8" stroke-width="1.5" marker-end="url(#ap)"/>
+        <text x="465" y="30" text-anchor="middle" fill="#8a7aa8">parent</text>
+        <path d="M480 72 L450 72" stroke="#8a7aa8" stroke-width="1.5" marker-end="url(#ap)"/>
+
+        <rect x="60" y="160" width="600" height="70" rx="6" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+        <text x="80" y="182" fill="#6b8a76">pg_subtrans  (subxid to parent xid, per segment)</text>
+        <text x="90" y="204">1147</text><path d="M118 200 L168 200" stroke="#6b8a76" stroke-width="1.5" marker-end="url(#ag)"/><text x="200" y="204" fill="#8a6d1a" font-weight="700">parent 1146</text>
+        <text x="330" y="204">1148</text><path d="M360 200 L410 200" stroke="#6b8a76" stroke-width="1.5" marker-end="url(#ag)"/><text x="452" y="204" fill="#8a6d1a" font-weight="700">parent 1147</text>
+        <text x="80" y="222" fill="#8a7aa8">topmost of any subxid resolves to 1146, the writing transaction other backends test for visibility</text>
+      </svg>
