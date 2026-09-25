@@ -1,5 +1,4 @@
 import os
-import imp
 
 from .gp_unittest import *
 from mock import *
@@ -21,7 +20,7 @@ class GpExpand(GpTestCase):
         #   import gpexpand
         #   self.subject = gpexpand
         gpexpand_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpexpand")
-        self.subject = imp.load_source('gpexpand', gpexpand_file)
+        self.subject = load_source('gpexpand', gpexpand_file)
         self.old_sys_argv = sys.argv
         sys.argv = []  # We need to do this otherwise, the parser will read the command line as the default arguments.
         self.options, self.args, self.parser = self.subject.parseargs()
