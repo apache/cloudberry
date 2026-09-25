@@ -285,6 +285,8 @@ bool NeedWAL(Relation rel);
 void ExecDropSingleTupleTableSlot(TupleTableSlot *slot);
 TupleTableSlot *MakeSingleTupleTableSlot(TupleDesc tupdesc,
                                          const TupleTableSlotOps *tts_ops);
+HeapTuple ExecCopyHeapTuple(TupleTableSlot *slot);
+
 
 void SlotGetAllAttrs(TupleTableSlot *slot);
 
@@ -292,6 +294,7 @@ void ExecClearTuple(TupleTableSlot *slot);
 
 void ExecStoreVirtualTuple(TupleTableSlot *slot);
 
+void VacuumDelayPoint();
 }  // namespace cbdb
 
 // clang-format off
