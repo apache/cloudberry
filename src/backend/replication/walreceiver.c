@@ -294,7 +294,8 @@ WalReceiverMain(void)
 	pqsignal(SIGCHLD, SIG_DFL);
 
 	/* Load the libpq-specific functions */
-	libpqwalreceiver_PG_init();
+	load_file("libpqwalreceiver", false);
+
 	if (WalReceiverFunctions == NULL)
 		elog(ERROR, "libpqwalreceiver didn't initialize correctly");
 
