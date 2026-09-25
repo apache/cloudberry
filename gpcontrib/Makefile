@@ -52,7 +52,7 @@ ifeq "$(with_gp_stats_collector)" "yes"
 	recurse_targets += gp_stats_collector
 endif
 
-# Anser is opt-out at configure time: --without-anser.
+# Anser is opt-in at configure time: --with-anser (off by default).
 ifeq "$(with_anser)" "yes"
 	recurse_targets += anser
 endif
