@@ -1434,10 +1434,16 @@ _read${n}(void)
 ! unless $no_read;
 
 			# for out and read fast
+			#
+			# Binary, to match READ_STRING_VAR below: a 4-byte length then the
+			# bytes.  This used to be a copy of the text branch above, which
+			# wrote " :methods " and an outToken() into the binary stream; the
+			# reader then took the first four ASCII bytes of that (" :me") as
+			# the string length and asked for a 1.7 GB allocation.  Any plan
+			# containing a CustomScan failed to deserialize on the segments.
 			print $ofaf q{
 	/* CustomName is a key to lookup CustomScanMethods */
-	appendStringInfoString(str, " :methods ");
-	outToken(str, node->methods->CustomName);
+	WRITE_STRING_VAR(node->methods->CustomName);
 };
 			print $rfaf q!
 	{

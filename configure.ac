@@ -242,6 +242,13 @@ PGAC_ARG_BOOL(enable, debug-extensions, yes,
 AC_SUBST(enable_debug_extensions)
 
 #
+# Anser adaptive information sharing (runtime filters)
+#
+PGAC_ARG_BOOL(with, anser, yes,
+              [do not build the Anser runtime-filter extension])
+AC_SUBST(with_anser)
+
+#
 # Enable fault injector
 #
 PGAC_ARG_BOOL(enable, faultinjector, yes, [disable fault injector],
