@@ -819,6 +819,7 @@ enable_debug
 enable_orafce
 enable_faultinjector
 enable_debug_extensions
+with_anser
 enable_pxf
 enable_gpfdist
 enable_strong_random
@@ -890,6 +891,7 @@ enable_atomics
 enable_strong_random
 enable_gpfdist
 enable_pxf
+with_anser
 enable_debug_extensions
 enable_faultinjector
 enable_orafce
@@ -1654,6 +1656,7 @@ Optional Features:
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
+  --without-anser         do not build the Anser runtime-filter extension
   --with-extra-version=STRING
                           append STRING to version
   --with-template=NAME    override operating system template
@@ -3622,6 +3625,35 @@ if test "${enable_debug_extensions+set}" = set; then :
 
 else
   enable_debug_extensions=yes
+
+fi
+
+
+
+
+
+#
+# Anser adaptive information sharing (runtime filters)
+#
+
+
+# Check whether --with-anser was given.
+if test "${with_anser+set}" = set; then :
+  withval=$with_anser;
+  case $withval in
+    yes)
+      :
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --with-anser option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  with_anser=yes
 
 fi
 

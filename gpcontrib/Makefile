@@ -52,7 +52,10 @@ ifeq "$(with_gp_stats_collector)" "yes"
 	recurse_targets += gp_stats_collector
 endif
 
-recurse_targets += anser
+# Anser is opt-out at configure time: --without-anser.
+ifeq "$(with_anser)" "yes"
+	recurse_targets += anser
+endif
 
 $(call recurse,all install clean distclean, $(recurse_targets))
 
@@ -116,3 +119,4 @@ installcheck:
 	$(MAKE) -C gp_toolkit installcheck
 	$(MAKE) -C gp_exttable_fdw installcheck
 	if [ "$(with_diskquota)" = "yes" ]; then $(MAKE) -C diskquota installcheck; fi
+	if [ "$(with_anser)" = "yes" ]; then $(MAKE) -C anser installcheck; fi
