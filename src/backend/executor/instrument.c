@@ -117,6 +117,9 @@ InstrStopNodeSync(Instrumentation *instr, uint64 nTuples)
 	/* count the returned tuples */
 	instr->tuplecount += nTuples;
 
+	/* A zero-tuple stop means the node is exhausted for this cycle. */
+	instr->eof = (nTuples == 0);
+
 	/* let's update the time only if the timer was requested */
 	if (instr->need_timer)
 	{
@@ -207,6 +210,7 @@ InstrEndLoop(Instrumentation *instr)
 
 	/* Reset for next cycle (if any) */
 	instr->running = false;
+	instr->eof = false;
 	INSTR_TIME_SET_ZERO(instr->starttime);
 	INSTR_TIME_SET_ZERO(instr->counter);
 	instr->firsttuple = 0;
@@ -235,6 +239,14 @@ InstrAggNode(Instrumentation *dst, Instrumentation *add)
 	dst->nloops += add->nloops;
 	dst->nfiltered1 += add->nfiltered1;
 	dst->nfiltered2 += add->nfiltered2;
+
+	/*
+	 * dst->eof is deliberately not aggregated.  It describes the state of one
+	 * backend's current plan cycle, and every caller of this function has
+	 * already run InstrEndLoop() on *add (which clears eof), so there is
+	 * nothing meaningful to merge.  Readers of eof -- pg_query_state's
+	 * plan-tree walker -- sample it per backend while that backend runs.
+	 */
 
 	/* Add delta of buffer usage since entry to node's totals */
 	if (dst->need_bufusage)
