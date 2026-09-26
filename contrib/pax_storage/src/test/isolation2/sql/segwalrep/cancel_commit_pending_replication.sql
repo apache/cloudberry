@@ -1,6 +1,9 @@
 select gp_inject_fault('sync_rep_query_cancel', 'reset', 2);
 select gp_inject_fault('wal_sender_loop', 'reset', 2);
 
+-- This session coordinates a suspended commit rather than testing snapshots.
+SET debug_disable_distributed_snapshot = on;
+
 create or replace function wait_for_replication(iterations int)
 returns bool as $$
 begin /* in func */

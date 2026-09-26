@@ -229,6 +229,8 @@ typedef struct TMGXACT
 	DistributedTransactionId	xminDistributedSnapshot;
 
 	bool						includeInCkpt;
+	/* True after QE commit notification starts, until the DTX ends. */
+	bool						commitInProgress;
 	int							sessionId;
 }	TMGXACT;
 
