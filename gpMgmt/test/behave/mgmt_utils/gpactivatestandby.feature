@@ -34,6 +34,26 @@ Feature: gpactivatestandby
         And verify that gpstart on original coordinator fails due to lower Timeline ID
         And clean up and revert back to original coordinator
 
+    Scenario: gpactivatestandby -f waits for promotion after a clean cluster shutdown
+        Given the database is running
+        And the standby is not initialized
+        And the user runs gpinitstandby with options " "
+        Then gpinitstandby should return a return code of 0
+        And verify the standby coordinator entries in catalog
+        When there is a "heap" table "foobar" in "postgres" with data
+        And the standby recovery end command is set to "sleep 5"
+        And the user runs "gpstop -a"
+        Then gpstop should return a return code of 0
+        And the user runs gpactivatestandby with options "-f"
+        Then gpactivatestandby should return a return code of 0
+        And verify the standby coordinator is now acting as coordinator
+        And verify that table "foobar" in "postgres" has "2190" rows
+        When the user runs command "gpstate -Q" from standby coordinator
+        Then verify gpstate with options "-Q" output is correct
+        And the standby recovery end command is restored
+        And verify that gpstart on original coordinator fails due to lower Timeline ID
+        And clean up and revert back to original coordinator
+
     Scenario: gpactivatestandby should fail when given invalid data directory
         Given the database is running
         And the standby is not initialized
