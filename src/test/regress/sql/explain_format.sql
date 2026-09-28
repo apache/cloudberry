@@ -152,3 +152,65 @@ DROP TABLE jsonexplaintest;
 DROP TABLE test_src_tbl;
 DROP TABLE test_hashagg_spill;
 DROP TABLE test_hashagg_groupingsets;
+
+-- A sort that spills to disk must be reflected in "Memory wanted".
+CREATE TABLE memwanted_sort (id int, pad text) DISTRIBUTED BY (id);
+INSERT INTO memwanted_sort SELECT g, repeat('x', 200) FROM generate_series(1, 100000) g;
+ANALYZE memwanted_sort;
+CREATE FUNCTION sort_spill_vs_wanted(query text, OUT spilled_kb bigint, OUT wanted_kb bigint)
+LANGUAGE plpgsql AS $$
+DECLARE
+    ln text;
+    m  text[];
+BEGIN
+    spilled_kb := 0;
+    wanted_kb  := 0;
+    FOR ln IN EXECUTE 'EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF) ' || query LOOP
+        m := regexp_match(ln, 'Sort Method:\s+external merge\s+Disk:\s+(\d+)kB');
+        IF m IS NOT NULL THEN
+            spilled_kb := greatest(spilled_kb, m[1]::bigint);
+        END IF;
+        -- an Incremental Sort reports the disk space of its batches instead
+        m := regexp_match(ln, 'Sort Method:\s+external merge\s+Average Disk:\s+(\d+)kB');
+        IF m IS NOT NULL THEN
+            spilled_kb := greatest(spilled_kb, m[1]::bigint);
+        END IF;
+        m := regexp_match(ln, 'Memory wanted:\s+(\d+)kB');
+        IF m IS NOT NULL THEN
+            wanted_kb := m[1]::bigint;
+        END IF;
+    END LOOP;
+END $$;
+-- 2MB is not enough for the sort, so it spills and must ask for more.
+SET statement_mem = '2MB';
+SELECT spilled_kb > 0 AS sort_spilled, wanted_kb > 2048 AS wants_more_than_given
+  FROM sort_spill_vs_wanted('SELECT * FROM memwanted_sort ORDER BY pad, id');
+RESET statement_mem;
+
+-- An Incremental Sort sorts one group of rows at a time.  Its advice has to
+-- describe the largest group rather than the sum of all of them, and the node
+-- has to use the memory the statement was given.
+CREATE TABLE memwanted_incsort(id bigint, grp int, pad text) DISTRIBUTED BY (id);
+INSERT INTO memwanted_incsort
+    SELECT g, g % 5, repeat(chr(97 + g % 26), 100) FROM generate_series(1, 120000) g;
+CREATE INDEX ON memwanted_incsort (grp);
+ANALYZE memwanted_incsort;
+
+SET enable_incremental_sort = on;
+SET enable_sort = off;
+SET enable_seqscan = off;
+SET enable_bitmapscan = off;
+SET statement_mem = '1MB';
+SELECT spilled_kb > 0 AS incsort_spilled,
+       wanted_kb > 1024 AS wants_more_than_given,
+       wanted_kb < 5 * spilled_kb AS wants_one_group_not_all
+  FROM sort_spill_vs_wanted('SELECT * FROM memwanted_incsort ORDER BY grp, pad');
+RESET statement_mem;
+RESET enable_incremental_sort;
+RESET enable_sort;
+RESET enable_seqscan;
+RESET enable_bitmapscan;
+
+DROP FUNCTION sort_spill_vs_wanted(text);
+DROP TABLE memwanted_sort;
+DROP TABLE memwanted_incsort;
