@@ -96,6 +96,7 @@ static f_smgr smgrsw[SMGR_MAX_ID + 1] = {
 		.smgr_exists = mdexists,
 		.smgr_unlink = mdunlink_ao,
 		.smgr_extend = mdextend,
+		.smgr_zeroextend = mdzeroextend,
 		.smgr_prefetch = mdprefetch,
 		.smgr_read = mdread,
 		.smgr_write = mdwrite,
@@ -438,7 +439,7 @@ smgrrelease(SMgrRelation reln)
 {
 	for (ForkNumber forknum = 0; forknum <= MAX_FORKNUM; forknum++)
 	{
-		smgrsw[reln->smgr_which].smgr_close(reln, forknum);
+		(*reln->smgr).smgr_close(reln, forknum);
 		reln->smgr_cached_nblocks[forknum] = InvalidBlockNumber;
 	}
 	reln->smgr_targblock = InvalidBlockNumber;
@@ -696,8 +697,22 @@ void
 smgrzeroextend(SMgrRelation reln, ForkNumber forknum, BlockNumber blocknum,
 			   int nblocks, bool skipFsync)
 {
-	smgrsw[reln->smgr_which].smgr_zeroextend(reln, forknum, blocknum,
-											 nblocks, skipFsync);
+	if (reln->smgr->smgr_zeroextend != NULL)
+		(*reln->smgr).smgr_zeroextend(reln, forknum, blocknum,
+									  nblocks, skipFsync);
+	else
+	{
+		/*
+		 * A storage manager written before PG16 may not provide
+		 * smgr_zeroextend.  Emulate it with its own smgr_extend rather than
+		 * falling back to smgrsw[], which would bypass smgr_hook.
+		 */
+		static const PGIOAlignedBlock zero_buffer = {{0}};
+
+		for (int i = 0; i < nblocks; i++)
+			(*reln->smgr).smgr_extend(reln, forknum, blocknum + i,
+									  zero_buffer.data, skipFsync);
+	}
 
 	/*
 	 * Normally we expect this to increase the fork size by nblocks, but if

@@ -89,6 +89,7 @@ static const f_smgr pax_smgr = {
     .smgr_exists = mdexists,
     .smgr_unlink = mdunlink_pax,
     .smgr_extend = mdextend,
+    .smgr_zeroextend = mdzeroextend,
     .smgr_prefetch = mdprefetch,
     .smgr_read = mdread,
     .smgr_write = mdwrite,
