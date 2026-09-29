@@ -33,3 +33,7 @@ subdir('test_shm_mq')
 subdir('test_slru')
 subdir('unsafe_tests')
 subdir('worker_spi')
+
+# Cloudberry's own, as SUBDIRS in src/test/modules/Makefile
+subdir('test_planner')
+subdir('parallel_customscan')
