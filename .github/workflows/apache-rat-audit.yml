@@ -115,7 +115,7 @@ jobs:
       - name: Check for binary files
         run: |
           echo "Checking for binary files..."
-          echo "Checking extensions: class, jar, tar, tgz, zip, exe, dll, so, gz, bz2"
+          echo "Checking extensions: class, jar, tar, tgz, zip, exe, dll, so, gz, bz2, deb, rpm, gppkg, bin"
           echo "----------------------------------------------------------------------"
           
           # Binary file allowlist, see README.apache.md
@@ -127,10 +127,12 @@ jobs:
             "src/bin/gpfdist/regress/data/gpfdist2/gz_multi_chunk_2.tbl.gz"
             "src/bin/gpfdist/regress/data/gpfdist2/lineitem.tbl.bz2"
             "src/bin/gpfdist/regress/data/gpfdist2/lineitem.tbl.gz"
+            "gpMgmt/test/behave/mgmt_utils/steps/data/sample.gppkg"
+            "src/bin/pgevent/MSG00001.bin"
           )
           
           # Check for specific binary file extensions
-          binary_extensions="class jar tar tgz zip exe dll so gz bz2"
+          binary_extensions="class jar tar tgz zip exe dll so gz bz2 deb rpm gppkg bin"
           echo "BINARY_EXTENSIONS=${binary_extensions}" >> $GITHUB_ENV
           binary_results=""
           binaryfiles_found=false

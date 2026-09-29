@@ -259,7 +259,7 @@ class SegSetupRecoveryTestCase(GpTestCase):
         mock_connect.assert_called_once()
         mock_execsql.assert_called_once()
         #TODO use regex pattern
-        self.assertRegex(gplog.get_logfile(), '/gpsegsetuprecovery.py_\d+\.log')
+        self.assertRegex(gplog.get_logfile(), r'/gpsegsetuprecovery.py_\d+\.log')
 
     @patch('gpsegsetuprecovery.ValidationForFullRecovery.validate_failover_data_directory')
     @patch('gpsegsetuprecovery.dbconn.connect')
@@ -284,7 +284,7 @@ class SegSetupRecoveryTestCase(GpTestCase):
         mock_validate_datadir.assert_called_once()
         mock_dburl.assert_called_once()
         mock_connect.assert_called_once()
-        self.assertRegex(gplog.get_logfile(), '/gpsegsetuprecovery.py_\d+\.log')
+        self.assertRegex(gplog.get_logfile(), r'/gpsegsetuprecovery.py_\d+\.log')
 
 
     @patch('recovery_base.gplog.setup_tool_logging')

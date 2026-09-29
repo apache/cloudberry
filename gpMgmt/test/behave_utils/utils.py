@@ -679,7 +679,7 @@ def modify_sql_file(file, hostport):
     if os.path.isfile(file):
         for line in fileinput.FileInput(file, inplace=1):
             if line.find("gpfdist") >= 0:
-                line = re.sub('(\d+)\.(\d+)\.(\d+)\.(\d+)\:(\d+)', hostport, line)
+                line = re.sub(r'(\d+)\.(\d+)\.(\d+)\.(\d+)\:(\d+)', hostport, line)
             print(str(re.sub('\n', '', line)))
 
 

@@ -13,6 +13,10 @@ void write_log(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 // For GpIdentity
 #ifndef S3_STANDALONE
 extern "C" {
+// The OpenSSL headers included above (through s3common_headers.h) already
+// define OPENSSL_API_COMPAT, so drop it before pg_config.h defines its own
+// value to avoid a macro redefinition warning.
+#undef OPENSSL_API_COMPAT
 #include "c.h"
 #include "cdb/cdbvars.h"
 extern int getgpsegmentCount(void);

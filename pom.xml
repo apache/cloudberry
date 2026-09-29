@@ -108,6 +108,10 @@ code or new licensing patterns.
             <exclude>gpcontrib/gpcloud/regress/**</exclude>
             <exclude>gpcontrib/gpcloud/test/**</exclude>
             <exclude>gpcontrib/gpcloud/bin/**</exclude>
+            <!-- The gpcloud S3 implementation was inherited from Greenplum,
+                 which ships these sources without a licence header.  They are
+                 not project-authored, so an ASF header must not be added; the
+                 files stay excluded instead. -->
             <exclude>gpcontrib/gpcloud/src/**.cpp</exclude>
 
             <exclude>gpcontrib/gp_debug_numsegments/Makefile</exclude>
@@ -1243,11 +1247,192 @@ code or new licensing patterns.
                  find out the origins of these.
             -->
 
-            <exclude>**/*.gif</exclude>
-            <exclude>**/*.md</exclude>
-            <exclude>**/*.json</exclude>
-            <exclude>**/*.sql</exclude>
-            <exclude>**/*.out</exclude>
+            <!-- Markdown: every project-authored .md carries an ASF header.
+                 What remains is README files, which by convention do not, plus
+                 documentation inherited from orafce and from Greenplum's ORCA. -->
+            <exclude>**/README*.md</exclude>
+            <exclude>**/readme*.md</exclude>
+            <exclude>gpcontrib/orafce/doc/**/*.md</exclude>
+            <exclude>src/backend/gporca/**/*.md</exclude>
+            <exclude>src/backend/cdb/dispatcher/extend_protocol_libpq.md</exclude>
+
+            <!-- SQL scripts and regression expected-output inherited from
+                 PostgreSQL, Greenplum and other upstreams.  Upstream ships these
+                 without a licence header and they must not be given an ASF one.
+                 Scoped to .sql/.out so that C, Perl and other sources in the
+                 same directories stay in the scan.  The 5354 project-authored
+                 .sql and .out files elsewhere in the tree do carry a header and
+                 remain checked, so a new one without a header is now reported
+                 rather than silently skipped. -->
+            <exclude>contrib/adminpack/**/*.sql</exclude>
+            <exclude>contrib/adminpack/**/*.out</exclude>
+            <exclude>contrib/amcheck/**/*.sql</exclude>
+            <exclude>contrib/amcheck/**/*.out</exclude>
+            <exclude>contrib/auto_explain/**/*.sql</exclude>
+            <exclude>contrib/auto_explain/**/*.out</exclude>
+            <exclude>contrib/basic_archive/**/*.sql</exclude>
+            <exclude>contrib/basic_archive/**/*.out</exclude>
+            <exclude>contrib/bloom/**/*.sql</exclude>
+            <exclude>contrib/bloom/**/*.out</exclude>
+            <exclude>contrib/bool_plperl/**/*.sql</exclude>
+            <exclude>contrib/bool_plperl/**/*.out</exclude>
+            <exclude>contrib/btree_gin/**/*.sql</exclude>
+            <exclude>contrib/btree_gin/**/*.out</exclude>
+            <exclude>contrib/btree_gist/**/*.sql</exclude>
+            <exclude>contrib/btree_gist/**/*.out</exclude>
+            <exclude>contrib/citext/**/*.sql</exclude>
+            <exclude>contrib/citext/**/*.out</exclude>
+            <exclude>contrib/cube/**/*.sql</exclude>
+            <exclude>contrib/cube/**/*.out</exclude>
+            <exclude>contrib/datalake_fdw/test/**/*.sql</exclude>
+            <exclude>contrib/datalake_fdw/test/**/*.out</exclude>
+            <exclude>contrib/dblink/**/*.sql</exclude>
+            <exclude>contrib/dblink/**/*.out</exclude>
+            <exclude>contrib/dict_int/**/*.sql</exclude>
+            <exclude>contrib/dict_int/**/*.out</exclude>
+            <exclude>contrib/dict_xsyn/**/*.sql</exclude>
+            <exclude>contrib/dict_xsyn/**/*.out</exclude>
+            <exclude>contrib/earthdistance/**/*.sql</exclude>
+            <exclude>contrib/earthdistance/**/*.out</exclude>
+            <exclude>contrib/extprotocol/**/*.sql</exclude>
+            <exclude>contrib/extprotocol/**/*.out</exclude>
+            <exclude>contrib/file_fdw/**/*.sql</exclude>
+            <exclude>contrib/file_fdw/**/*.out</exclude>
+            <exclude>contrib/formatter_fixedwidth/**/*.sql</exclude>
+            <exclude>contrib/formatter_fixedwidth/**/*.out</exclude>
+            <exclude>contrib/fuzzystrmatch/**/*.sql</exclude>
+            <exclude>contrib/fuzzystrmatch/**/*.out</exclude>
+            <exclude>contrib/hstore/**/*.sql</exclude>
+            <exclude>contrib/hstore/**/*.out</exclude>
+            <exclude>contrib/hstore_plperl/**/*.sql</exclude>
+            <exclude>contrib/hstore_plperl/**/*.out</exclude>
+            <exclude>contrib/hstore_plpython/**/*.sql</exclude>
+            <exclude>contrib/hstore_plpython/**/*.out</exclude>
+            <exclude>contrib/indexscan/**/*.sql</exclude>
+            <exclude>contrib/indexscan/**/*.out</exclude>
+            <exclude>contrib/intagg/**/*.sql</exclude>
+            <exclude>contrib/intagg/**/*.out</exclude>
+            <exclude>contrib/intarray/**/*.sql</exclude>
+            <exclude>contrib/intarray/**/*.out</exclude>
+            <exclude>contrib/interconnect/**/*.sql</exclude>
+            <exclude>contrib/interconnect/**/*.out</exclude>
+            <exclude>contrib/isn/**/*.sql</exclude>
+            <exclude>contrib/isn/**/*.out</exclude>
+            <exclude>contrib/jsonb_plperl/**/*.sql</exclude>
+            <exclude>contrib/jsonb_plperl/**/*.out</exclude>
+            <exclude>contrib/jsonb_plpython/**/*.sql</exclude>
+            <exclude>contrib/jsonb_plpython/**/*.out</exclude>
+            <exclude>contrib/lo/**/*.sql</exclude>
+            <exclude>contrib/lo/**/*.out</exclude>
+            <exclude>contrib/ltree/**/*.sql</exclude>
+            <exclude>contrib/ltree/**/*.out</exclude>
+            <exclude>contrib/ltree_plpython/**/*.sql</exclude>
+            <exclude>contrib/ltree_plpython/**/*.out</exclude>
+            <exclude>contrib/old_snapshot/**/*.sql</exclude>
+            <exclude>contrib/old_snapshot/**/*.out</exclude>
+            <exclude>contrib/pageinspect/**/*.sql</exclude>
+            <exclude>contrib/pageinspect/**/*.out</exclude>
+            <exclude>contrib/passwordcheck/**/*.sql</exclude>
+            <exclude>contrib/passwordcheck/**/*.out</exclude>
+            <exclude>contrib/pax_storage/sql/**/*.sql</exclude>
+            <exclude>contrib/pax_storage/sql/**/*.out</exclude>
+            <exclude>contrib/pg_buffercache/**/*.sql</exclude>
+            <exclude>contrib/pg_buffercache/**/*.out</exclude>
+            <exclude>contrib/pg_freespacemap/**/*.sql</exclude>
+            <exclude>contrib/pg_freespacemap/**/*.out</exclude>
+            <exclude>contrib/pg_prewarm/**/*.sql</exclude>
+            <exclude>contrib/pg_prewarm/**/*.out</exclude>
+            <exclude>contrib/pg_stat_statements/**/*.sql</exclude>
+            <exclude>contrib/pg_stat_statements/**/*.out</exclude>
+            <exclude>contrib/pg_surgery/**/*.sql</exclude>
+            <exclude>contrib/pg_surgery/**/*.out</exclude>
+            <exclude>contrib/pg_trgm/**/*.sql</exclude>
+            <exclude>contrib/pg_trgm/**/*.out</exclude>
+            <exclude>contrib/pg_visibility/**/*.sql</exclude>
+            <exclude>contrib/pg_visibility/**/*.out</exclude>
+            <exclude>contrib/pg_walinspect/**/*.sql</exclude>
+            <exclude>contrib/pg_walinspect/**/*.out</exclude>
+            <exclude>contrib/pgcrypto/**/*.sql</exclude>
+            <exclude>contrib/pgcrypto/**/*.out</exclude>
+            <exclude>contrib/pgrowlocks/**/*.sql</exclude>
+            <exclude>contrib/pgrowlocks/**/*.out</exclude>
+            <exclude>contrib/pgstattuple/**/*.sql</exclude>
+            <exclude>contrib/pgstattuple/**/*.out</exclude>
+            <exclude>contrib/postgres_fdw/**/*.sql</exclude>
+            <exclude>contrib/postgres_fdw/**/*.out</exclude>
+            <exclude>contrib/sasdemo/sql/**/*.sql</exclude>
+            <exclude>contrib/sasdemo/sql/**/*.out</exclude>
+            <exclude>contrib/seg/**/*.sql</exclude>
+            <exclude>contrib/seg/**/*.out</exclude>
+            <exclude>contrib/sepgsql/**/*.sql</exclude>
+            <exclude>contrib/sepgsql/**/*.out</exclude>
+            <exclude>contrib/spi/**/*.sql</exclude>
+            <exclude>contrib/spi/**/*.out</exclude>
+            <exclude>contrib/sslinfo/**/*.sql</exclude>
+            <exclude>contrib/sslinfo/**/*.out</exclude>
+            <exclude>contrib/tablefunc/**/*.sql</exclude>
+            <exclude>contrib/tablefunc/**/*.out</exclude>
+            <exclude>contrib/tcn/**/*.sql</exclude>
+            <exclude>contrib/tcn/**/*.out</exclude>
+            <exclude>contrib/test_decoding/**/*.sql</exclude>
+            <exclude>contrib/test_decoding/**/*.out</exclude>
+            <exclude>contrib/tsm_system_rows/**/*.sql</exclude>
+            <exclude>contrib/tsm_system_rows/**/*.out</exclude>
+            <exclude>contrib/tsm_system_time/**/*.sql</exclude>
+            <exclude>contrib/tsm_system_time/**/*.out</exclude>
+            <exclude>contrib/unaccent/expected/**/*.sql</exclude>
+            <exclude>contrib/unaccent/expected/**/*.out</exclude>
+            <exclude>contrib/uuid-ossp/**/*.sql</exclude>
+            <exclude>contrib/uuid-ossp/**/*.out</exclude>
+            <exclude>contrib/xml2/**/*.sql</exclude>
+            <exclude>contrib/xml2/**/*.out</exclude>
+            <exclude>gpcontrib/gp_debug_numsegments/**/*.sql</exclude>
+            <exclude>gpcontrib/gp_debug_numsegments/**/*.out</exclude>
+            <exclude>gpcontrib/gp_distribution_policy/**/*.sql</exclude>
+            <exclude>gpcontrib/gp_distribution_policy/**/*.out</exclude>
+            <exclude>gpcontrib/gp_exttable_fdw/**/*.sql</exclude>
+            <exclude>gpcontrib/gp_exttable_fdw/**/*.out</exclude>
+            <exclude>gpcontrib/gp_inject_fault/**/*.sql</exclude>
+            <exclude>gpcontrib/gp_inject_fault/**/*.out</exclude>
+            <exclude>gpcontrib/gp_sparse_vector/**/*.sql</exclude>
+            <exclude>gpcontrib/gp_sparse_vector/**/*.out</exclude>
+            <exclude>gpcontrib/orafce/**/*.sql</exclude>
+            <exclude>gpcontrib/orafce/**/*.out</exclude>
+            <exclude>gpcontrib/pg_hint_plan/**/*.sql</exclude>
+            <exclude>gpcontrib/pg_hint_plan/**/*.out</exclude>
+            <exclude>gpcontrib/pg_hint_plan/sql/**/*.sql</exclude>
+            <exclude>gpcontrib/pg_hint_plan/sql/**/*.out</exclude>
+            <exclude>gpcontrib/pxf_fdw/**/*.sql</exclude>
+            <exclude>gpcontrib/pxf_fdw/**/*.out</exclude>
+            <exclude>gpcontrib/zstd/**/*.sql</exclude>
+            <exclude>gpcontrib/zstd/**/*.out</exclude>
+            <exclude>src/bin/**/*.sql</exclude>
+            <exclude>src/bin/**/*.out</exclude>
+            <exclude>src/interfaces/**/*.sql</exclude>
+            <exclude>src/interfaces/**/*.out</exclude>
+            <exclude>src/pl/**/*.sql</exclude>
+            <exclude>src/pl/**/*.out</exclude>
+            <exclude>contrib/unaccent/unaccent--1.0--1.1.sql</exclude>
+            <exclude>contrib/unaccent/unaccent--1.1.sql</exclude>
+            <exclude>src/backend/catalog/cdb_schema.sql</exclude>
+            <exclude>src/backend/catalog/gp_toolkit_test.sql</exclude>
+
+            <!-- Project-authored files that cannot carry a header.
+                 GitHub copies the pull request template into the body of
+                 every pull request, so a licence header on it would appear
+                 in each one. -->
+            <exclude>.github/pull_request_template.md</exclude>
+
+            <!-- Extensions brought into gpcontrib during Cloudberry's own
+                 development: gp_relsizes_stats, gp_relaccess_stats, and
+                 gp_stats_collector.  Their regression fixtures came with 
+                 them and carry no ASF header. -->
+            <exclude>gpcontrib/gp_relaccess_stats/**/*.sql</exclude>
+            <exclude>gpcontrib/gp_relaccess_stats/**/*.out</exclude>
+            <exclude>gpcontrib/gp_relsizes_stats/**/*.sql</exclude>
+            <exclude>gpcontrib/gp_relsizes_stats/**/*.out</exclude>
+            <exclude>gpcontrib/gp_stats_collector/**/*.sql</exclude>
+            <exclude>gpcontrib/gp_stats_collector/**/*.out</exclude>
             <exclude>.github/full_color_black.svg</exclude>
             <exclude>.github/full_color_white.svg</exclude>
             <exclude>sonar-project.properties</exclude>

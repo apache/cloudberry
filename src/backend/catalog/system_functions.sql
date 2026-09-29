@@ -747,10 +747,36 @@ REVOKE EXECUTE ON FUNCTION pg_ls_replslotdir(text) FROM PUBLIC;
 
 REVOKE EXECUTE ON FUNCTION pg_log_backend_memory_contexts(integer) FROM PUBLIC;
 
+-- pg_file_write/pg_file_rename/pg_file_unlink have proacl NULL (PUBLIC
+-- EXECUTE) because their _v1_1 bodies were copied in-core from adminpack
+-- without adminpack's matching REVOKE.  genfile.c now also checks for
+-- superuser/pg_write_server_files membership at call time, but this
+-- REVOKE is defense in depth for new initdbs.  The matching GRANT keeps
+-- pg_write_server_files members able to call them (the EXECUTE ACL check
+-- happens before genfile.c's own membership check ever runs).
+REVOKE EXECUTE ON FUNCTION pg_file_write(text,text,boolean) FROM public;
+
+REVOKE EXECUTE ON FUNCTION pg_file_rename(text,text,text) FROM public;
+
+REVOKE EXECUTE ON FUNCTION pg_file_unlink(text) FROM public;
+
+-- pg_logdir_ls has the same omission (proacl NULL, _v1_1 body with no
+-- privilege check): it's a read-side listing, so gate it like the other
+-- read-side functions above (pg_read_server_files) rather than write.
+REVOKE EXECUTE ON FUNCTION pg_logdir_ls() FROM public;
+
 
 --
 -- We also set up some things as accessible to standard roles.
 --
+
+GRANT EXECUTE ON FUNCTION pg_file_write(text,text,boolean) TO pg_write_server_files;
+
+GRANT EXECUTE ON FUNCTION pg_file_rename(text,text,text) TO pg_write_server_files;
+
+GRANT EXECUTE ON FUNCTION pg_file_unlink(text) TO pg_write_server_files;
+
+GRANT EXECUTE ON FUNCTION pg_logdir_ls() TO pg_read_server_files;
 
 GRANT EXECUTE ON FUNCTION pg_ls_logdir() TO pg_monitor;
 

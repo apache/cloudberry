@@ -294,14 +294,14 @@ class RecoveryTripletsFactoryTestCase(GpTestCase):
                 "gparray": self.three_failedover_segs_gparray_str,
                 "new_hosts": ['new_1', 'new_2'],
                 "unreachable_hosts": ['new_1', 'new_2'],
-                "expected": "Cannot recover. The following recovery target hosts are unreachable: \['new_1', 'new_2'\]"
+                "expected": r"Cannot recover. The following recovery target hosts are unreachable: \['new_1', 'new_2'\]"
             },
             {
                 "name": "some_hosts_unreachable",
                 "gparray": self.three_failedover_segs_gparray_str,
                 "new_hosts": ['new_1', 'new_2'],
                 "unreachable_hosts": ['new_2'],
-                "expected": "Cannot recover. The following recovery target hosts are unreachable: \['new_2'\]"
+                "expected": r"Cannot recover. The following recovery target hosts are unreachable: \['new_2'\]"
             },
             {
                 "name": "no_peer_for_failed_seg",
@@ -329,7 +329,7 @@ class RecoveryTripletsFactoryTestCase(GpTestCase):
                 "gparray": self.three_failedover_segs_gparray_str,
                 "new_hosts": ['new_1','new_2'],
                 "unreachable_existing_hosts": ['sdw2'],
-                "expected": "The recovery source segment sdw2 \(content 0\) is unreachable"
+                "expected": r"The recovery source segment sdw2 \(content 0\) is unreachable"
             },
             {
             "name": "failed_and_live_same_dbid",
