@@ -1249,11 +1249,13 @@ code or new licensing patterns.
 
             <!-- Markdown: every project-authored .md carries an ASF header.
                  What remains is README files, which by convention do not, plus
-                 documentation inherited from orafce and from Greenplum's ORCA. -->
+                 documentation inherited from orafce and from Greenplum's ORCA,
+                 and the docs of the third-party pax_storage submodules. -->
             <exclude>**/README*.md</exclude>
             <exclude>**/readme*.md</exclude>
             <exclude>gpcontrib/orafce/doc/**/*.md</exclude>
             <exclude>src/backend/gporca/**/*.md</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/*/**/*.md</exclude>
             <exclude>src/backend/cdb/dispatcher/extend_protocol_libpq.md</exclude>
 
             <!-- SQL scripts and regression expected-output inherited from
