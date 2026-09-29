@@ -52,9 +52,9 @@
 ## Introduction
 
 Apache Cloudberry (Incubating), created by the original developers of
-Greenplum Database, is one advanced and mature open-source Massively Parallel
-Processing (MPP) database, which evolves from the open-source version of the
-Pivotal Greenplum Database®️ but features a newer PostgreSQL kernel and more
+Greenplum® Database, is one advanced and mature open-source Massively Parallel
+Processing (MPP) database, which evolves from the open-source Greenplum®
+Database but features a newer PostgreSQL kernel and more
 advanced enterprise capabilities. It can serve as a data warehouse and can
 also be used for large-scale analytics and AI/ML workloads.
 
