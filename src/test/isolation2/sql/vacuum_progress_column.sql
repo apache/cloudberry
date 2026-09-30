@@ -26,11 +26,11 @@ CREATE INDEX on vacuum_progress_ao_column(j);
 2q:
 -- Abort so that segno 1 has logical EOF = 0.
 1: ABORT;
+-- Flush the aborted insert statistics before waiting in another session.
+1q:
 
--- Look up the collected stats before the DELETE below.  The stats collector
--- is asynchronous: wait until it has received the dead tuples of both
--- aborted inserts, and read the view before the DELETE, whose own counts
--- may reach the collector at any moment after it.
+-- pg_stat_all_tables aggregates tuple counters from the segments. Wait on
+-- segment 1, which holds all rows, before reading the view and before DELETE.
 1U: SELECT wait_until_dead_tup_change_to('vacuum_progress_ao_column'::regclass::oid, 200000);
 SELECT n_live_tup, n_dead_tup, last_vacuum, vacuum_count FROM pg_stat_all_tables WHERE relname = 'vacuum_progress_ao_column';
 
@@ -103,7 +103,7 @@ SELECT gp_inject_fault('appendonly_after_truncate_segment_file', 'reset', dbid) 
 1U: select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, heap_blks_vacuumed, index_vacuum_count, max_dead_tuples, num_dead_tuples from pg_stat_progress_vacuum;
 
 -- pg_class and collected stats view should be updated after the 2nd VACUUM
-1U: SELECT wait_until_dead_tup_change_to('vacuum_progress_ao_column'::regclass::oid, 0);
+1U: SELECT wait_until_vacuum_count_change_to('vacuum_progress_ao_column'::regclass::oid, 2);
 SELECT relpages, reltuples, relallvisible FROM pg_class where relname = 'vacuum_progress_ao_column';
 SELECT n_live_tup, n_dead_tup, last_vacuum is not null as has_last_vacuum, vacuum_count FROM pg_stat_all_tables WHERE relname = 'vacuum_progress_ao_column';
 
