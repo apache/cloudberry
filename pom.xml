@@ -1406,6 +1406,8 @@ code or new licensing patterns.
             <exclude>gpcontrib/pg_hint_plan/sql/**/*.out</exclude>
             <exclude>gpcontrib/pxf_fdw/**/*.sql</exclude>
             <exclude>gpcontrib/pxf_fdw/**/*.out</exclude>
+            <exclude>gpcontrib/yezzey/**/*.sql</exclude>
+            <exclude>gpcontrib/yezzey/**/*.out</exclude>
             <exclude>gpcontrib/zstd/**/*.sql</exclude>
             <exclude>gpcontrib/zstd/**/*.out</exclude>
             <exclude>src/bin/**/*.sql</exclude>
