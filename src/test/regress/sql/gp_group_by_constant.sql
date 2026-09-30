@@ -77,6 +77,12 @@ SELECT count(DISTINCT n) FROM group_by_constant_empty;
 SELECT count(DISTINCT n) FILTER (WHERE n < 0),
        count(DISTINCT c0) FILTER (WHERE n < 0)
     FROM group_by_constant_data GROUP BY 'x'::text;
+-- TupleSplit is still used when one DQA has no FILTER.
+EXPLAIN (COSTS OFF)
+SELECT count(DISTINCT n) FILTER (WHERE n < 0), count(DISTINCT c0)
+    FROM group_by_constant_data GROUP BY 'x'::text;
+SELECT count(DISTINCT n) FILTER (WHERE n < 0), count(DISTINCT c0)
+    FROM group_by_constant_data GROUP BY 'x'::text;
 
 -- Compare with single-phase aggregation and ORCA.
 SET LOCAL gp_enable_multiphase_agg = off;
@@ -97,6 +103,11 @@ SELECT count(*) FROM group_by_constant_data WHERE n % 10000 = -1
     GROUP BY 'x'::text;
 SELECT count(*) FROM group_by_constant_data WHERE n % 10000 = -1
     GROUP BY 'x'::text;
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM group_by_constant_empty
+    WHERE n % 2 = 0 GROUP BY n % 2;
+SELECT count(*) FROM group_by_constant_empty
+    WHERE n % 2 = 0 GROUP BY n % 2;
 SELECT count(*), sum(n) FROM group_by_constant_data GROUP BY 'x'::text;
 SELECT 'x'::text FROM group_by_constant_empty GROUP BY 'x'::text;
 SELECT 'x'::text FROM group_by_constant_data GROUP BY 'x'::text;

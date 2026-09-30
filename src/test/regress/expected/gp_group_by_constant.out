@@ -190,6 +190,32 @@ SELECT count(DISTINCT n) FILTER (WHERE n < 0),
      0 |     0
 (1 row)
 
+-- TupleSplit is still used when one DQA has no FILTER.
+EXPLAIN (COSTS OFF)
+SELECT count(DISTINCT n) FILTER (WHERE n < 0), count(DISTINCT c0)
+    FROM group_by_constant_data GROUP BY 'x'::text;
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Finalize GroupAggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial GroupAggregate
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: n, c0, (AggExprId)
+                     ->  Streaming HashAggregate
+                           Group Key: AggExprId, n, c0
+                           ->  TupleSplit
+                                 Split by Col: (n) FILTER (WHERE (n < 0)), (c0)
+                                 ->  Seq Scan on group_by_constant_data
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+SELECT count(DISTINCT n) FILTER (WHERE n < 0), count(DISTINCT c0)
+    FROM group_by_constant_data GROUP BY 'x'::text;
+ count | count 
+-------+-------
+     0 |     1
+(1 row)
+
 -- Compare with single-phase aggregation and ORCA.
 SET LOCAL gp_enable_multiphase_agg = off;
 SELECT count(*) FROM group_by_constant_empty GROUP BY 'x'::text;
@@ -226,6 +252,25 @@ SELECT count(*) FROM group_by_constant_data WHERE n % 10000 = -1
 
 SELECT count(*) FROM group_by_constant_data WHERE n % 10000 = -1
     GROUP BY 'x'::text;
+ count 
+-------
+(0 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM group_by_constant_empty
+    WHERE n % 2 = 0 GROUP BY n % 2;
+                           QUERY PLAN                           
+----------------------------------------------------------------
+ Finalize GroupAggregate
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         ->  Partial GroupAggregate
+               ->  Parallel Seq Scan on group_by_constant_empty
+                     Filter: ((n % 2) = 0)
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+SELECT count(*) FROM group_by_constant_empty
+    WHERE n % 2 = 0 GROUP BY n % 2;
  count 
 -------
 (0 rows)
