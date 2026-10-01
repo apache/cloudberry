@@ -324,7 +324,8 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 						 deadtuples,
 						 vacrelstats->starttime,
 						 vacrelstats->delay_time +
-						 (VacuumDelayTime - vacrelstats->phase_start_delay));
+						 (VacuumDelayTime - vacrelstats->phase_start_delay),
+						 false); /* AO itself has no failsafe mode. */
 
 	/*
 	 * Remember what is left behind for the vacuum statistics, which

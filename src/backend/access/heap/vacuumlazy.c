@@ -775,7 +775,7 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 						 rel->rd_rel->relisshared,
 						 Max(new_live_tuples, 0),
 						 vacrel->new_dead_tuples, starttime,
-						 VacuumDelayTime - startdelaytime);
+						 VacuumDelayTime - startdelaytime, vacrel->failsafe_active);
 
 	/* assemble the per-vacuum measurements for subsequent reporting */
 	{

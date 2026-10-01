@@ -1590,7 +1590,8 @@ pgstat_report_autovac(Oid dboid)
 void
 pgstat_report_vacuum(Oid tableoid, bool shared,
 					 PgStat_Counter livetuples, PgStat_Counter deadtuples,
-					 TimestampTz starttime, PgStat_Counter delaytime)
+					 TimestampTz starttime, PgStat_Counter delaytime,
+					 bool failsafe)
 {
 	PgStat_MsgVacuum msg;
 
@@ -1602,6 +1603,7 @@ pgstat_report_vacuum(Oid tableoid, bool shared,
 	msg.m_tableoid = tableoid;
 	msg.m_autovacuum = IsAutoVacuumWorkerProcess();
 	msg.m_isindex = false;
+	msg.m_failsafe = failsafe;
 	msg.m_delaytime = delaytime;
 	msg.m_vacuumtime = GetCurrentTimestamp();
 	msg.m_elapsedtime = Max(msg.m_vacuumtime - starttime, 0);
@@ -3850,6 +3852,7 @@ reset_dbentry_counters(PgStat_StatDBEntry *dbentry)
 	dbentry->total_autovacuum_time = 0;
 	dbentry->total_vacuum_delay_time = 0;
 	dbentry->total_autovacuum_delay_time = 0;
+	dbentry->vacuum_failsafe_count = 0;
 	dbentry->n_frozen_page_marks_cleared = 0;
 	dbentry->n_visible_page_marks_cleared = 0;
 
@@ -3953,6 +3956,7 @@ pgstat_get_tab_entry(PgStat_StatDBEntry *dbentry, Oid tableoid, bool create)
 		result->total_autoanalyze_time = 0;
 		result->total_vacuum_delay_time = 0;
 		result->total_autovacuum_delay_time = 0;
+		result->vacuum_failsafe_count = 0;
 		result->frozen_page_marks_cleared = 0;
 		result->visible_page_marks_cleared = 0;
 	}
@@ -5322,6 +5326,7 @@ pgstat_recv_tabstat(PgStat_MsgTabstat *msg, int len)
 			tabentry->total_autoanalyze_time = 0;
 			tabentry->total_vacuum_delay_time = 0;
 			tabentry->total_autovacuum_delay_time = 0;
+			tabentry->vacuum_failsafe_count = 0;
 			tabentry->frozen_page_marks_cleared = 0;
 			tabentry->visible_page_marks_cleared = 0;
 		}
@@ -5676,6 +5681,12 @@ pgstat_recv_vacuum(PgStat_MsgVacuum *msg, int len)
 	/* Index passes are already included in the owning table's elapsed time. */
 	if (msg->m_isindex)
 		return;
+
+	if (msg->m_failsafe)
+	{
+		tabentry->vacuum_failsafe_count++;
+		dbentry->vacuum_failsafe_count++;
+	}
 
 	if (msg->m_autovacuum)
 	{

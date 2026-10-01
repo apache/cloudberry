@@ -422,6 +422,7 @@ typedef struct PgStat_MsgVacuum
 	PgStat_Counter m_dead_tuples;
 	PgStat_Counter m_elapsedtime; /* microseconds */
 	PgStat_Counter m_delaytime; /* microseconds */
+	bool		m_failsafe; /* this completed table vacuum entered failsafe */
 } PgStat_MsgVacuum;
 
 
@@ -758,7 +759,7 @@ typedef union PgStat_Msg
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCA5
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCA6
 
 /* ----------
  * PgStat_StatDBEntry			The collector's data per database
@@ -802,6 +803,7 @@ typedef struct PgStat_StatDBEntry
 	PgStat_Counter total_autovacuum_time; /* microseconds */
 	PgStat_Counter total_vacuum_delay_time; /* microseconds */
 	PgStat_Counter total_autovacuum_delay_time; /* microseconds */
+	PgStat_Counter vacuum_failsafe_count;
 
 
 	/* VM revisions are fed by ordinary relation statistics. */
@@ -863,6 +865,7 @@ typedef struct PgStat_StatTabEntry
 	PgStat_Counter total_autoanalyze_time;
 	PgStat_Counter total_vacuum_delay_time;
 	PgStat_Counter total_autovacuum_delay_time;
+	PgStat_Counter vacuum_failsafe_count;
 
 	/* VM revisions are fed by ordinary relation statistics. */
 	PgStat_Counter frozen_page_marks_cleared;
@@ -1111,7 +1114,8 @@ extern void pgstat_report_connect(Oid dboid);
 extern void pgstat_report_autovac(Oid dboid);
 extern void pgstat_report_vacuum(Oid tableoid, bool shared,
 								 PgStat_Counter livetuples, PgStat_Counter deadtuples,
-								 TimestampTz starttime, PgStat_Counter delaytime);
+								 TimestampTz starttime, PgStat_Counter delaytime,
+								 bool failsafe);
 extern void pgstat_report_index_vacuum_time(Relation rel,
 											PgStat_Counter elapsedtime,
 											PgStat_Counter delaytime, bool is_autovacuum);
