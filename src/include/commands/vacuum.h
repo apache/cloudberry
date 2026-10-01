@@ -445,6 +445,7 @@ extern PGDLLIMPORT int VacuumCostBalanceLocal;
 /* Allocated only when a hook consumes the extended statistics. */
 typedef struct LVExtStatCounters
 {
+	WalUsage	walusage;
 	BufferUsage bufusage;
 	PgStat_Counter blocks_fetched;
 	PgStat_Counter blocks_hit;
