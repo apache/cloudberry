@@ -316,7 +316,8 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 						 reltuples,
 						 deadtuples,
 						 vacrelstats->starttime,
-						 0);			/* AO delay time tracking is added in a later commit. */
+						 0,			/* AO delay time tracking is added in a later commit. */
+						 false);	/* no failsafe mode for AO tables */
 
 
 	SIMPLE_FAULT_INJECTOR("vacuum_ao_post_cleanup_end");
