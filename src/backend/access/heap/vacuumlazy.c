@@ -344,6 +344,7 @@ extvac_stats_start(Relation rel)
 		return NULL;
 
 	counters = palloc0(sizeof(LVExtStatCounters));
+	counters->walusage = pgWalUsage;
 	counters->bufusage = pgBufferUsage;
 
 	if (rel->pgstat_info && pgstat_track_counts)
@@ -361,8 +362,11 @@ void
 extvac_stats_end(Relation rel, LVExtStatCounters * counters,
 				 PgStat_CommonCounts * report)
 {
+	WalUsage	walusage;
 	BufferUsage bufusage;
 
+	memset(&walusage, 0, sizeof(WalUsage));
+	WalUsageAccumDiff(&walusage, &pgWalUsage, &counters->walusage);
 	memset(&bufusage, 0, sizeof(BufferUsage));
 	BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &counters->bufusage);
 
@@ -373,6 +377,9 @@ extvac_stats_end(Relation rel, LVExtStatCounters * counters,
 	/* PostgreSQL 16 keeps a single timer for shared and local blocks */
 	report->blk_read_time = INSTR_TIME_GET_MILLISEC(bufusage.blk_read_time);
 	report->blk_write_time = INSTR_TIME_GET_MILLISEC(bufusage.blk_write_time);
+	report->wal_records = walusage.wal_records;
+	report->wal_fpi = walusage.wal_fpi;
+	report->wal_bytes = walusage.wal_bytes;
 
 	if (rel->pgstat_info && pgstat_track_counts)
 	{
@@ -402,6 +409,9 @@ accumulate_heap_vacuum_statistics(LVRelState *vacrel, PgStat_VacuumRelationCount
 	extVacStats->common.total_blks_written -= vacrel->extVacReportIdx->total_blks_written;
 	extVacStats->common.blk_read_time -= vacrel->extVacReportIdx->blk_read_time;
 	extVacStats->common.blk_write_time -= vacrel->extVacReportIdx->blk_write_time;
+	extVacStats->common.wal_records -= vacrel->extVacReportIdx->wal_records;
+	extVacStats->common.wal_fpi -= vacrel->extVacReportIdx->wal_fpi;
+	extVacStats->common.wal_bytes -= vacrel->extVacReportIdx->wal_bytes;
 }
 
 /*
@@ -418,6 +428,9 @@ accumulate_idxs_vacuum_statistics(LVRelState *vacrel,
 	vacrel->extVacReportIdx->total_blks_written += extVacIdxStats->common.total_blks_written;
 	vacrel->extVacReportIdx->blk_read_time += extVacIdxStats->common.blk_read_time;
 	vacrel->extVacReportIdx->blk_write_time += extVacIdxStats->common.blk_write_time;
+	vacrel->extVacReportIdx->wal_records += extVacIdxStats->common.wal_records;
+	vacrel->extVacReportIdx->wal_fpi += extVacIdxStats->common.wal_fpi;
+	vacrel->extVacReportIdx->wal_bytes += extVacIdxStats->common.wal_bytes;
 }
 
 /*
