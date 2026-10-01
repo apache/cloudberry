@@ -238,7 +238,7 @@ typedef struct PgStat_TableXactStatus
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCB0
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCB1
 
 typedef struct PgStat_ArchiverStats
 {
@@ -370,6 +370,9 @@ typedef struct PgStat_StatDBEntry
 	 * failsafe mode (see vacuum_failsafe_age).
 	 */
 	PgStat_Counter vacuum_failsafe_count;
+
+	/* # of vacuums in this database interrupted by errors */
+	PgStat_Counter vacuum_interrupt_count;
 
 	TimestampTz stat_reset_timestamp;
 } PgStat_StatDBEntry;
@@ -694,6 +697,7 @@ extern void pgstat_report_index_vacuum_time(Relation rel,
 											PgStat_Counter elapsedtime,
 											PgStat_Counter delaytime,
 											bool is_autovacuum);
+extern void pgstat_count_vacuum_error(bool shared);
 extern void pgstat_report_analyze(Relation rel,
 								  PgStat_Counter livetuples, PgStat_Counter deadtuples,
 								  bool resetcounter, TimestampTz starttime);
