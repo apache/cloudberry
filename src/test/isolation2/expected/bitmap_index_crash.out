@@ -74,11 +74,9 @@ SET
 1Uq: ... <quitting>
 1U:ALTER SYSTEM reset shared_buffers;
 ALTER
-2:SELECT pg_ctl(datadir, 'restart') from gp_segment_configuration where role = 'p' and content = 1;
- pg_ctl 
---------
- OK     
-(1 row)
+-- Reset the checkpoint fault before the restart: gp_inject_fault connects
+-- to every primary directly without retrying, while pg_ctl -w can return
+-- before the restarted segment accepts connections.
 3:SELECT gp_inject_fault_infinite('checkpoint', 'reset', dbid) FROM gp_segment_configuration WHERE role='p';
  gp_inject_fault_infinite 
 --------------------------
@@ -87,6 +85,11 @@ ALTER
  Success:                 
  Success:                 
 (4 rows)
+2:SELECT pg_ctl(datadir, 'restart') from gp_segment_configuration where role = 'p' and content = 1;
+ pg_ctl 
+--------
+ OK     
+(1 row)
 
 3:SELECT gp_inject_fault('fts_probe', 'reset', dbid) FROM gp_segment_configuration WHERE role='p' AND content=-1;
  gp_inject_fault 
