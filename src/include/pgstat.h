@@ -245,7 +245,7 @@ typedef struct PgStat_TableXactStatus
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCB4
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCB0
 
 typedef struct PgStat_ArchiverStats
 {
@@ -372,6 +372,12 @@ typedef struct PgStat_StatDBEntry
 	PgStat_Counter total_vacuum_delay_time;
 	PgStat_Counter total_autovacuum_delay_time;
 
+	/*
+	 * Number of vacuums in this database that entered the wraparound
+	 * failsafe mode (see vacuum_failsafe_age).
+	 */
+	PgStat_Counter vacuum_failsafe_count;
+
 	TimestampTz stat_reset_timestamp;
 } PgStat_StatDBEntry;
 
@@ -458,6 +464,12 @@ typedef struct PgStat_StatTabEntry
 	 */
 	PgStat_Counter total_vacuum_delay_time;
 	PgStat_Counter total_autovacuum_delay_time;
+
+	/*
+	 * Number of vacuums of this relation that entered the wraparound
+	 * failsafe mode (see vacuum_failsafe_age).
+	 */
+	PgStat_Counter vacuum_failsafe_count;
 } PgStat_StatTabEntry;
 
 typedef struct PgStat_WalStats
@@ -683,7 +695,8 @@ extern void pgstat_unlink_relation(Relation rel);
 
 extern void pgstat_report_vacuum(Oid tableoid, bool shared,
 								 PgStat_Counter livetuples, PgStat_Counter deadtuples,
-								 TimestampTz starttime, PgStat_Counter delaytime);
+								 TimestampTz starttime, PgStat_Counter delaytime,
+								 bool failsafe);
 extern void pgstat_report_index_vacuum_time(Relation rel,
 											PgStat_Counter elapsedtime,
 											PgStat_Counter delaytime,
