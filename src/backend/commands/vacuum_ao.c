@@ -322,7 +322,7 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 						 onerel->rd_rel->relisshared,
 						 reltuples,
 						 deadtuples,
-						 0, 0);
+						 0, 0, false); /* AO itself has no failsafe mode. */
 
 	/*
 	 * Remember what is left behind for the vacuum statistics, which

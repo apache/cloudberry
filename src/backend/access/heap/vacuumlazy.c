@@ -778,7 +778,7 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 						 Max(new_live_tuples, 0),
 						 vacrel->new_dead_tuples,
 						 (PgStat_Counter) INSTR_TIME_GET_MICROSEC(vacend),
-						 VacuumDelayTime - startdelaytime);
+						 VacuumDelayTime - startdelaytime, vacrel->failsafe_active);
 
 	/* Log the same elapsed duration sent to the collector. */
 	{
