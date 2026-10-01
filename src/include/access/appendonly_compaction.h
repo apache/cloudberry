@@ -44,6 +44,7 @@ typedef struct AOVacuumRelStats
 	AOVacuumExtStats *extstats; /* allocated only for VERBOSE */
 	/* Legacy timing-report baseline, retained until elapsed-time reporting. */
 	TimestampTz starttime;
+	double		startdelaytime;
 	/* Active phase durations and delays in milliseconds, excluding phase gaps. */
 	double		vacuum_time;
 	double		delay_time;
