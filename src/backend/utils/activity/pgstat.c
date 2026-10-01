@@ -369,6 +369,7 @@ static const PgStat_KindInfo pgstat_kind_builtin_infos[PGSTAT_KIND_BUILTIN_SIZE]
 		.name = "resqueue",
 
 		.fixed_amount = false,
+		.write_to_file = true,
 		/* resource queues are cluster-wide objects, visible across databases */
 		.accessed_across_databases = true,
 
