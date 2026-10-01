@@ -3453,6 +3453,10 @@ vacuum_error_callback(void *arg)
 {
 	LVRelState *errinfo = arg;
 
+	/* Ignore non-error reports that also invoke this callback. */
+	if (errinfo->rel != NULL && geterrlevel() == ERROR)
+		pgstat_count_vacuum_error(errinfo->rel->rd_rel->relisshared);
+
 	switch (errinfo->phase)
 	{
 		case VACUUM_ERRCB_PHASE_SCAN_HEAP:
