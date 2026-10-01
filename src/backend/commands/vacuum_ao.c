@@ -528,6 +528,9 @@ ao_accum_resources(PgStat_CommonCounts *dst, const PgStat_CommonCounts *src,
 		/* Per-relation block counts do not include the indexes. */
 		dst->blk_read_time -= src->blk_read_time;
 		dst->blk_write_time -= src->blk_write_time;
+		dst->wal_records -= src->wal_records;
+		dst->wal_fpi -= src->wal_fpi;
+		dst->wal_bytes -= src->wal_bytes;
 	}
 	else
 	{
@@ -539,6 +542,9 @@ ao_accum_resources(PgStat_CommonCounts *dst, const PgStat_CommonCounts *src,
 		dst->blks_hit += src->blks_hit;
 		dst->blk_read_time += src->blk_read_time;
 		dst->blk_write_time += src->blk_write_time;
+		dst->wal_records += src->wal_records;
+		dst->wal_fpi += src->wal_fpi;
+		dst->wal_bytes += src->wal_bytes;
 	}
 }
 
