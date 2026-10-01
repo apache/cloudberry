@@ -165,8 +165,9 @@ static void ao_vacuum_rel_recycle_dead_segments(Relation onerel, VacuumParams *p
 												BufferAccessStrategy bstrategy, AOVacuumRelStats *vacrelstats);
 static AOVacuumRelStats *init_vacrelstats(void);
 static void cleanup_vacrelstats(AOVacuumRelStats **vacrelstatsp);
-static void ao_measure_index_vacuum_time(Relation indrel, TimestampTz starttime,
+static void ao_report_index_vacuum_time(Relation indrel, TimestampTz starttime,
 										double startdelaytime);
+static void ao_vacuum_error_callback(void *arg);
 
 static void
 ao_vacuum_rel_pre_cleanup(Relation onerel, VacuumParams *params, BufferAccessStrategy bstrategy, AOVacuumRelStats *vacrelstats)
@@ -316,7 +317,8 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 						 reltuples,
 						 deadtuples,
 						 vacrelstats->starttime,
-						 0,			/* AO delay time tracking is added in a later commit. */
+						 (PgStat_Counter) rint(VacuumDelayTime -
+											   vacrelstats->startdelaytime),
 						 false);	/* no failsafe mode for AO tables */
 
 
@@ -427,6 +429,7 @@ init_vacrelstats()
 	old_context = MemoryContextSwitchTo(TopMemoryContext);
 	vacrelstats = (AOVacuumRelStats *) palloc0(sizeof(AOVacuumRelStats));
 	vacrelstats->starttime = GetCurrentTimestamp();
+	vacrelstats->startdelaytime = VacuumDelayTime;
 	MemoryContextSwitchTo(old_context);
 
 	return vacrelstats;
@@ -441,6 +444,7 @@ void
 ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy)
 {
 	static AOVacuumRelStats *vacrelstats = NULL;
+	ErrorContextCallback errcallback;
 	instr_time	phase_start;
 	instr_time	phase_end;
 	double		phase_start_delay;
@@ -482,6 +486,12 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 		vacrelstats->relid = RelationGetRelid(rel);
 	}
 
+	/* Count the vacuums of the relation that an error interrupts */
+	errcallback.callback = ao_vacuum_error_callback;
+	errcallback.arg = rel;
+	errcallback.previous = error_context_stack;
+	error_context_stack = &errcallback;
+
 	INSTR_TIME_SET_CURRENT(phase_start);
 	phase_start_delay = VacuumDelayTime;
 
@@ -511,6 +521,25 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 		pgstat_progress_end_command();
 		cleanup_vacrelstats(&vacrelstats);
 	}
+	error_context_stack = errcallback.previous;
+}
+
+/*
+ * Error context callback of an append-optimized vacuum phase.
+ *
+ * Like vacuum_error_callback() of the heap, count a vacuum interrupted by an
+ * actual ERROR, not by a lower-severity report that merely carries this
+ * context, in vacuum_interrupt_count of the database.  We are inside the
+ * error handler, so pgstat_count_vacuum_error() only bumps a counter.  The
+ * callback adds no context line: the phases report their own progress.
+ */
+static void
+ao_vacuum_error_callback(void *arg)
+{
+	Relation	rel = (Relation) arg;
+
+	if (geterrlevel() == ERROR)
+		pgstat_count_vacuum_error(rel->rd_rel->relisshared);
 }
 
 /*
@@ -519,16 +548,15 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
  * lazy_vacuum_one_index() and lazy_cleanup_one_index().
  */
 static void
-ao_measure_index_vacuum_time(Relation indrel, TimestampTz starttime,
+ao_report_index_vacuum_time(Relation indrel, TimestampTz starttime,
 							double startdelaytime)
 {
-	PgStat_Counter elapsedtime =
-		TimestampDifferenceMilliseconds(starttime, GetCurrentTimestamp());
-	PgStat_Counter delaytime = (PgStat_Counter) rint(VacuumDelayTime - startdelaytime);
-
-	/* Backend-local measurements; cumulative reporting follows separately. */
-	(void) elapsedtime;
-	(void) delaytime;
+	pgstat_report_index_vacuum_time(indrel,
+									TimestampDifferenceMilliseconds(starttime,
+																	GetCurrentTimestamp()),
+									(PgStat_Counter) rint(VacuumDelayTime -
+														  startdelaytime),
+									IsAutoVacuumWorkerProcess());
 }
 
 /*
@@ -644,7 +672,7 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 						   aoRelation,
 						   elevel,
 						   bstrategy);
-				ao_measure_index_vacuum_time(Irel[i], istarttime, startdelaytime);
+				ao_report_index_vacuum_time(Irel[i], istarttime, startdelaytime);
 			}
 		}
 		else
@@ -660,7 +688,7 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 										elevel,
 										bstrategy,
 										vacrelstats);
-				ao_measure_index_vacuum_time(Irel[i], istarttime, startdelaytime);
+				ao_report_index_vacuum_time(Irel[i], istarttime, startdelaytime);
 			}
 		}
 	}
