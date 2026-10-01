@@ -836,6 +836,7 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 	IndexBulkDeleteResult *istat = NULL;
 	IndexBulkDeleteResult *istat_res;
 	IndexVacuumInfo ivinfo;
+	LVExtStatCounters *extVacCounters;
 
 	/*
 	 * Update the pointer to the corresponding bulk-deletion result if someone
@@ -844,6 +845,7 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 	if (indstats->istat_updated)
 		istat = &(indstats->istat);
 
+	extVacCounters = extvac_stats_start(indrel);
 	ivinfo.index = indrel;
 	ivinfo.heaprel = pvs->heaprel;
 	ivinfo.analyze_only = false;
@@ -869,6 +871,15 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 			elog(ERROR, "unexpected parallel vacuum index status %d for index \"%s\"",
 				 indstats->status,
 				 RelationGetRelationName(indrel));
+	}
+
+	if (extVacCounters != NULL)
+	{
+		PgStat_VacuumRelationCounts *extVacReport = &extVacCounters->report;
+
+		extvac_stats_end(indrel, extVacCounters, &extVacReport->common);
+		extVacReport->type = PGSTAT_EXTVAC_INDEX;
+		pfree(extVacCounters);
 	}
 
 	/*
