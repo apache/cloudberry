@@ -37,6 +37,7 @@ static int	pgStatXactRollback = 0;
 static PgStat_Counter pgLastSessionReportTime = 0;
 
 
+
 /*
  * Remove entry for the database being dropped.
  */
@@ -417,6 +418,10 @@ pgstat_database_flush_cb(PgStat_EntryRef *entry_ref, bool nowait)
 
 	PGSTAT_ACCUM_DBCOUNT(blk_read_time);
 	PGSTAT_ACCUM_DBCOUNT(blk_write_time);
+	PGSTAT_ACCUM_DBCOUNT(total_vacuum_time);
+	PGSTAT_ACCUM_DBCOUNT(total_autovacuum_time);
+	PGSTAT_ACCUM_DBCOUNT(total_vacuum_delay_time);
+	PGSTAT_ACCUM_DBCOUNT(total_autovacuum_delay_time);
 
 	PGSTAT_ACCUM_DBCOUNT(sessions);
 	PGSTAT_ACCUM_DBCOUNT(session_time);
