@@ -1,7 +1,7 @@
 MODULE_big = gp_stats_collector
 EXTENSION  = gp_stats_collector
 DATA       = $(wildcard *--*.sql)
-REGRESS    = gpsc_cursors gpsc_dist gpsc_select gpsc_utf8_trim gpsc_utility gpsc_guc_cache gpsc_uds gpsc_locale
+REGRESS    = gpsc_cursors gpsc_dist gpsc_select gpsc_utf8_trim gpsc_utility gpsc_guc_cache gpsc_uds gpsc_locale gpsc_fdw_norm
 
 PROTO_BASES = gpsc_plan gpsc_metrics gpsc_set_service
 PROTO_OBJS  = $(patsubst %,src/protos/%.pb.o,$(PROTO_BASES))

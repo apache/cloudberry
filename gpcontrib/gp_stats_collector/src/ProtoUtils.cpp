@@ -150,6 +150,12 @@ set_query_plan(gpsc::SetQueryReq *req, QueryDesc *query_desc,
 										 norm_plan->len));
 				gpdb::pfree(norm_plan->data);
 			}
+			else
+			{
+				/* plan_id must be calculated even if normalization failed */
+				qi->set_plan_id(
+					hash_any((unsigned char *) es.str->data, es.str->len));
+			}
 			qi->set_query_id(query_desc->plannedstmt->queryId);
 			gpdb::pfree(es.str->data);
 		}
