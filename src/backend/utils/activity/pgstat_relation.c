@@ -216,7 +216,8 @@ pgstat_drop_relation(Relation rel)
 void
 pgstat_report_vacuum(Oid tableoid, bool shared,
 					 PgStat_Counter livetuples, PgStat_Counter deadtuples,
-					 TimestampTz starttime, PgStat_Counter delaytime)
+					 TimestampTz starttime, PgStat_Counter delaytime,
+					 bool failsafe)
 {
 	PgStat_EntryRef *entry_ref;
 	PgStatShared_Relation *shtabentry;
@@ -269,6 +270,9 @@ pgstat_report_vacuum(Oid tableoid, bool shared,
 		tabentry->total_vacuum_delay_time += delaytime;
 	}
 
+	if (failsafe)
+		tabentry->vacuum_failsafe_count++;
+
 	pgstat_unlock_entry(entry_ref);
 
 	/*
@@ -290,6 +294,9 @@ pgstat_report_vacuum(Oid tableoid, bool shared,
 			dbentry->total_vacuum_time += elapsedtime * 1000;
 			dbentry->total_vacuum_delay_time += delaytime * 1000;
 		}
+
+		if (failsafe)
+			dbentry->vacuum_failsafe_count++;
 	}
 
 	/*
