@@ -274,6 +274,12 @@ pgstat_report_vacuum(Oid tableoid, bool shared,
 }
 
 /*
+ * Hook for extensions to receive extended vacuum statistics.
+ * NULL when no extension has registered.
+ */
+set_report_vacuum_hook_type set_report_vacuum_hook = NULL;
+
+/*
  * Report that the table was just analyzed and flush IO statistics.
  *
  * Caller must provide new live- and dead-tuples estimates, as well as a

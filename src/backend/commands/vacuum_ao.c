@@ -163,6 +163,13 @@ static void ao_vacuum_rel_recycle_dead_segments(Relation onerel, VacuumParams *p
 												BufferAccessStrategy bstrategy, AOVacuumRelStats *vacrelstats);
 static AOVacuumRelStats *init_vacrelstats(void);
 static void cleanup_vacrelstats(AOVacuumRelStats **vacrelstatsp);
+static void ao_accum_resources(PgStat_CommonCounts *dst,
+							   const PgStat_CommonCounts *src, bool subtract);
+static void ao_measure_index_resources(Relation indrel,
+									 LVExtStatCounters *counters,
+									 AOVacuumRelStats *vacrelstats);
+static void ao_measure_table_resources(Relation rel,
+									 AOVacuumRelStats *vacrelstats);
 
 static void
 ao_vacuum_rel_pre_cleanup(Relation onerel, VacuumParams *params, BufferAccessStrategy bstrategy, AOVacuumRelStats *vacrelstats)
@@ -414,6 +421,8 @@ init_vacrelstats()
 
 	old_context = MemoryContextSwitchTo(TopMemoryContext);
 	vacrelstats = (AOVacuumRelStats *) palloc0(sizeof(AOVacuumRelStats));
+	if (set_report_vacuum_hook != NULL)
+		vacrelstats->extstats = palloc0(sizeof(AOVacuumExtStats));
 	MemoryContextSwitchTo(old_context);
 
 	return vacrelstats;
@@ -428,10 +437,25 @@ void
 ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy)
 {
 	static AOVacuumRelStats *vacrelstats = NULL;
+	LVExtStatCounters *extcounters;
+	bool		extstats = (set_report_vacuum_hook != NULL);
 	Assert(RelationStorageIsAO(rel));
 	Assert(params != NULL);
 
 	int ao_vacuum_phase = (params->options & VACUUM_AO_PHASE_MASK);
+
+	/*
+	 * The phases of one vacuum share these stats and free them at the end of
+	 * the last phase, so a vacuum that failed in between leaves them behind.
+	 * Drop such leftovers: otherwise the counters of the failed vacuum are
+	 * taken for the next one, whose progress is never reported because the
+	 * progress command is only
+	 * started along with the stats.
+	 */
+	if (vacrelstats != NULL &&
+		(ao_vacuum_phase == VACOPT_AO_PRE_CLEANUP_PHASE ||
+		 vacrelstats->relid != RelationGetRelid(rel)))
+		cleanup_vacrelstats(&vacrelstats);
 
 	if (!vacrelstats)
 	{
@@ -450,7 +474,11 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 
 		pgstat_progress_start_command(PROGRESS_COMMAND_VACUUM, RelationGetRelid(rel));
 		vacrelstats = init_vacrelstats();
+		vacrelstats->relid = RelationGetRelid(rel);
 	}
+
+	/* Sample the resource usage of the phase for the extended statistics */
+	extcounters = extvac_stats_start(rel);
 
 	/*
 	 * Do the actual work --- either FULL or "lazy" vacuum
@@ -460,14 +488,93 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 	else if (ao_vacuum_phase == VACOPT_AO_COMPACT_PHASE)
 		ao_vacuum_rel_compact(rel, params, bstrategy, vacrelstats);
 	else if (ao_vacuum_phase == VACOPT_AO_POST_CLEANUP_PHASE)
-	{
 		ao_vacuum_rel_post_cleanup(rel, params, bstrategy, vacrelstats);
-		pgstat_progress_end_command();
-		cleanup_vacrelstats(&vacrelstats);
-	}
 	else
 		/* Do nothing here, we will launch the stages later */
 		Assert(ao_vacuum_phase == 0);
+
+	if (extstats && ao_vacuum_phase != 0)
+	{
+		extvac_stats_end(rel, extcounters, &extcounters->report.common);
+		ao_accum_resources(&vacrelstats->extstats->phases,
+						   &extcounters->report.common, false);
+	}
+
+	if (ao_vacuum_phase == VACOPT_AO_POST_CLEANUP_PHASE)
+	{
+		if (extstats)
+			ao_measure_table_resources(rel, vacrelstats);
+		pgstat_progress_end_command();
+		cleanup_vacrelstats(&vacrelstats);
+	}
+
+	if (extcounters != NULL)
+		pfree(extcounters);
+}
+
+/*
+ * Add the resource usage counters of src to dst, or subtract them from it.
+ */
+static void
+ao_accum_resources(PgStat_CommonCounts *dst, const PgStat_CommonCounts *src,
+				   bool subtract)
+{
+	if (subtract)
+	{
+		dst->total_blks_read -= src->total_blks_read;
+		dst->total_blks_hit -= src->total_blks_hit;
+		dst->total_blks_dirtied -= src->total_blks_dirtied;
+		dst->total_blks_written -= src->total_blks_written;
+		/* Per-relation block counts do not include the indexes. */
+		dst->blk_read_time -= src->blk_read_time;
+		dst->blk_write_time -= src->blk_write_time;
+	}
+	else
+	{
+		dst->total_blks_read += src->total_blks_read;
+		dst->total_blks_hit += src->total_blks_hit;
+		dst->total_blks_dirtied += src->total_blks_dirtied;
+		dst->total_blks_written += src->total_blks_written;
+		dst->blks_fetched += src->blks_fetched;
+		dst->blks_hit += src->blks_hit;
+		dst->blk_read_time += src->blk_read_time;
+		dst->blk_write_time += src->blk_write_time;
+	}
+}
+
+/*
+ * Report one pass over an index of an append-optimized table to
+ * set_report_vacuum_hook, as lazy_vacuum_one_index() does for the heap, and
+ * remember its resource usage, which the table's report must not count
+ * again.
+ */
+static void
+ao_measure_index_resources(Relation indrel, LVExtStatCounters *counters,
+						 AOVacuumRelStats *vacrelstats)
+{
+	PgStat_VacuumRelationCounts *report = &counters->report;
+
+	extvac_stats_end(indrel, counters, &report->common);
+	report->type = PGSTAT_EXTVAC_INDEX;
+
+	ao_accum_resources(&vacrelstats->extstats->indexes, &report->common, false);
+	pfree(counters);
+}
+
+/*
+ * Report the vacuum of an append-optimized table, all of its phases, to
+ * set_report_vacuum_hook.
+ */
+static void
+ao_measure_table_resources(Relation rel, AOVacuumRelStats *vacrelstats)
+{
+	PgStat_VacuumRelationCounts report;
+
+	memset(&report, 0, sizeof(report));
+	report.type = PGSTAT_EXTVAC_TABLE;
+	report.common = vacrelstats->extstats->phases;
+	ao_accum_resources(&report.common, &vacrelstats->extstats->indexes, true);
+
 }
 
 /*
@@ -574,22 +681,34 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 		{
 			for (i = 0; i < nindexes; i++)
 			{
+				LVExtStatCounters *extcounters;
+
+				extcounters = extvac_stats_start(Irel[i]);
 				scan_index(Irel[i],
 						   aoRelation,
 						   elevel,
 						   bstrategy);
+				if (set_report_vacuum_hook)
+					ao_measure_index_resources(Irel[i], extcounters,
+											 vacrelstats);
 			}
 		}
 		else
 		{
 			for (i = 0; i < nindexes; i++)
 			{
+				LVExtStatCounters *extcounters;
+
+				extcounters = extvac_stats_start(Irel[i]);
 				vacuum_appendonly_index(Irel[i],
 										aoRelation,
 										dead_segs,
 										elevel,
 										bstrategy,
 										vacrelstats);
+				if (set_report_vacuum_hook)
+					ao_measure_index_resources(Irel[i], extcounters,
+											 vacrelstats);
 			}
 		}
 	}
@@ -780,6 +899,8 @@ vacuum_appendonly_fill_stats(Relation aorel, Snapshot snapshot, int elevel,
 static void
 cleanup_vacrelstats(AOVacuumRelStats **vacrelstats)
 {
+	if ((*vacrelstats)->extstats != NULL)
+		pfree((*vacrelstats)->extstats);
 	pfree(*vacrelstats);
 	*vacrelstats = NULL;
 }
