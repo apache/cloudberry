@@ -81,7 +81,6 @@ CFilterStatsProcessor::SelectivityOfPredicate(CMemoryPool *mp,
 	CColRefSet *used_col_refs = pred->DeriveUsedColumns();
 	CColRefSet *used_local_col_refs =
 		GPOS_NEW(mp) CColRefSet(mp, *used_col_refs);
-	ULONG num_outer_ref_preds = 0;
 
 	if (nullptr != outer_refs)
 	{
@@ -101,7 +100,7 @@ CFilterStatsProcessor::SelectivityOfPredicate(CMemoryPool *mp,
 
 	const COptCtxt *poctxt = COptCtxt::PoctxtFromTLS();
 	CMDAccessor *md_accessor = poctxt->Pmda();
-	// grab default stats config
+	// use the current optimizer statistics configuration
 	CStatisticsConfig *stats_config =
 		poctxt->GetOptimizerConfig()->GetStatsConf();
 	// we don't care about the width of the columns, just the row count
@@ -115,14 +114,15 @@ CFilterStatsProcessor::SelectivityOfPredicate(CMemoryPool *mp,
 	IStatistics *result_stats = CFilterStatsProcessor::MakeStatsFilter(
 		mp, dynamic_cast<CStatistics *>(base_table_stats), pred_stats, false);
 
-	CDouble result = result_stats->Rows() / base_table_stats->Rows();
-	BOOL have_local_preds = (result < 1.0);
+	const CDouble local_selectivity =
+		result_stats->Rows() / base_table_stats->Rows();
 	pred_stats->Release();
 	used_local_col_refs->Release();
 	base_table_stats->Release();
 	dummy_width_set->Release();
 
-	// handle outer_refs
+	// estimate outer predicates using statistics after local filtering
+	CDoubleArray *outer_scale_factors = GPOS_NEW(mp) CDoubleArray(mp);
 	if (nullptr != expr_with_outer_refs)
 	{
 		CExpressionArray *outer_ref_exprs =
@@ -132,7 +132,13 @@ CFilterStatsProcessor::SelectivityOfPredicate(CMemoryPool *mp,
 		for (ULONG ul = 0; ul < size; ul++)
 		{
 			CExpression *pexpr = (*outer_ref_exprs)[ul];
+			if (CUtils::FScalarConstTrue(pexpr))
+			{
+				continue;
+			}
+
 			CColRef *local_col_ref = nullptr;
+			CDouble scale_factor = 1 / CHistogram::DefaultSelectivity;
 
 			if (CPredicateUtils::FIdentCompareOuterRefExprIgnoreCast(
 					pexpr, outer_refs, &local_col_ref))
@@ -144,64 +150,30 @@ CFilterStatsProcessor::SelectivityOfPredicate(CMemoryPool *mp,
 					GPOS_ASSERT(nullptr != local_col_ref);
 					CDouble ndv = result_stats->GetNDVs(local_col_ref);
 
-					if (ndv < 1.0)
+					// an NDV below 1 means that we have no stats on this column
+					if (ndv >= 1.0)
 					{
-						// An NDV of less than 1 means that we have no stats on this column
-						result = result * CHistogram::DefaultSelectivity;
-					}
-					else
-					{
-						result = result * (1 / ndv);
+						scale_factor = ndv;
 					}
 				}
-				else
-				{
-					// a comparison col op <outer ref> other than an equals
-					result = result * CHistogram::DefaultSelectivity;
-				}
-				num_outer_ref_preds++;
 			}
-			else
-			{
-				// if it is a true filter, then we had no expressions with outer refs
-				if (!CUtils::FScalarConstTrue(pexpr))
-				{
-					// some other expression, not of the form col op <outer ref>,
-					// e.g. an OR expression
-					result = result * CHistogram::DefaultSelectivity;
-					num_outer_ref_preds++;
-				}
-			}
+			outer_scale_factors->Append(GPOS_NEW(mp) CDouble(scale_factor));
 		}
 
 		expr_with_outer_refs->Release();
 		outer_ref_exprs->Release();
 	}
 
-	// apply damping factor to the outer ref predicates whose selectivities we multiplied above
-	if (have_local_preds)
-	{
-		// add one for the combined non-outer refs which were dampened internally,
-		// but not in combination with the preds on outer refs
-		num_outer_ref_preds++;
-	}
-	if (1 < num_outer_ref_preds)
-	{
-		CStatisticsConfig *stats_config =
-			CStatisticsConfig::PstatsconfDefault(mp);
-
-		result =
-			std::min(result.Get() / CScaleFactorUtils::DampedFilterScaleFactor(
-										stats_config, num_outer_ref_preds)
-										.Get(),
-					 1.0);
-
-		stats_config->Release();
-	}
+	const CDouble outer_scale_factor =
+		CScaleFactorUtils::CalcScaleFactorCumulativeConj(stats_config,
+													  outer_scale_factors);
+	outer_scale_factors->Release();
 	result_stats->Release();
 	local_expr->Release();
 
-	return result;
+	// Outer selectivities are conditional on the local filter. Damping only
+	// their conjunction preserves the local estimate as an upper bound.
+	return local_selectivity / outer_scale_factor;
 }
 
 // create new structure from a list of statistics filters
