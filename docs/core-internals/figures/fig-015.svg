@@ -1,0 +1,42 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 360" width="100%" style="height:auto;display:block;min-width:600px" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11">
+      <defs>
+      <marker id="ax" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8a7aa8"/></marker>
+      <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#6b8a76"/></marker>
+      </defs>
+      <circle cx="360" cy="185" r="130" fill="none" stroke="#cdb4db" stroke-width="1.5"/>
+      <path d="M360 55 A130 130 0 0 0 360 315" fill="none" stroke="#6b8a76" stroke-width="9" opacity="0.55"/>
+      <path d="M360 315 A130 130 0 0 0 360 55" fill="none" stroke="#e0b365" stroke-width="9" opacity="0.55"/>
+      <line x1="360" y1="185" x2="360" y2="45" stroke="#8a7aa8" stroke-width="1.5" marker-end="url(#ax)"/>
+      <circle cx="360" cy="55" r="4" fill="#8a7aa8"/>
+      <text x="360" y="32" text-anchor="middle" fill="#6b5b95">nextXid  = now</text>
+      <text x="150" y="120" text-anchor="middle" fill="#6b8a76">visible past</text>
+      <text x="150" y="134" text-anchor="middle" fill="#6b8a76">(~2^31 xids)</text>
+      <text x="575" y="120" text-anchor="middle" fill="#8a6d1a">danger zone</text>
+      <text x="575" y="134" text-anchor="middle" fill="#8a6d1a">looks like FUTURE</text>
+      <circle cx="230" cy="300" r="4" fill="#6b8a76"/>
+      <text x="205" y="322" text-anchor="middle" fill="#6b8a76">aging tuple xmin</text>
+      <line x1="230" y1="300" x2="440" y2="300" stroke="#e0b365" stroke-width="1" stroke-dasharray="3 3"/>
+      <text x="335" y="345" text-anchor="middle" fill="#8a6d1a">as the wheel turns, xmin drifts toward the danger zone</text>
+      <rect x="560" y="250" width="140" height="46" rx="6" fill="#fff4d6" stroke="#e0b365" stroke-width="1.5"/>
+      <text x="630" y="270" text-anchor="middle" fill="#8a6d1a">FROZEN tuple</text>
+      <text x="630" y="285" text-anchor="middle" fill="#8a6d1a">off the wheel — visible forever</text>
+      <line x1="560" y1="273" x2="470" y2="255" stroke="#e0b365" stroke-width="1.5" marker-end="url(#ax)"/>
+      </svg>

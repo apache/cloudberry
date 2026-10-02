@@ -1,0 +1,74 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 420" width="100%" style="max-width:780px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px">
+ <defs>
+  <marker id="f181child" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#8a6d9a"/></marker>
+  <marker id="f181back" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#8a6d1a"/></marker>
+  <marker id="f181est" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#3f7a55"/></marker>
+ </defs>
+ <text x="20" y="18" fill="#6b4f8a" font-weight="bold">Plan tree — optimizer output, serialized, dispatched</text>
+ <text x="424" y="18" fill="#6b4f8a" font-weight="bold">PlanState tree — built by ExecInitNode, one per executor</text>
+
+ <rect x="30" y="40" width="190" height="44" rx="4" fill="#f5edff" stroke="#cdb4db"/>
+ <text x="40" y="58" fill="#2b2b3a">Agg</text><text x="40" y="74" fill="#5b5b70" font-size="11">Finalize, AGG_PLAIN</text>
+ <rect x="30" y="112" width="190" height="44" rx="4" fill="#f5edff" stroke="#cdb4db"/>
+ <text x="40" y="130" fill="#2b2b3a">Motion</text><text x="40" y="146" fill="#5b5b70" font-size="11">Gather 3:1, slice 1</text>
+ <rect x="30" y="184" width="190" height="44" rx="4" fill="#f5edff" stroke="#cdb4db"/>
+ <text x="40" y="202" fill="#2b2b3a">Agg</text><text x="40" y="218" fill="#5b5b70" font-size="11">Partial</text>
+ <rect x="30" y="256" width="190" height="44" rx="4" fill="#f5edff" stroke="#cdb4db"/>
+ <text x="40" y="274" fill="#2b2b3a">SeqScan</text><text x="40" y="290" fill="#5b5b70" font-size="11">scanrelid 1</text>
+
+ <line x1="125" y1="84" x2="125" y2="108" stroke="#8a6d9a" stroke-width="1.5" marker-end="url(#f181child)"/>
+ <line x1="125" y1="156" x2="125" y2="180" stroke="#8a6d9a" stroke-width="1.5" marker-end="url(#f181child)"/>
+ <line x1="125" y1="228" x2="125" y2="252" stroke="#8a6d9a" stroke-width="1.5" marker-end="url(#f181child)"/>
+ <text x="132" y="102" fill="#8a6d9a" font-size="10.5">lefttree</text>
+
+ <rect x="430" y="40" width="200" height="44" rx="4" fill="#f5edff" stroke="#cdb4db"/>
+ <text x="440" y="58" fill="#2b2b3a">AggState</text><text x="440" y="74" fill="#5b5b70" font-size="11">transValues, ExprContext</text>
+ <rect x="430" y="112" width="200" height="44" rx="4" fill="#f5edff" stroke="#cdb4db"/>
+ <text x="440" y="130" fill="#2b2b3a">MotionState</text><text x="440" y="146" fill="#5b5b70" font-size="11">tuple queue, EOS flags</text>
+ <rect x="430" y="184" width="200" height="44" rx="4" fill="#f5edff" stroke="#cdb4db"/>
+ <text x="440" y="202" fill="#2b2b3a">AggState</text><text x="440" y="218" fill="#5b5b70" font-size="11">hashtable or transValues</text>
+ <rect x="430" y="256" width="200" height="44" rx="4" fill="#fff4d6" stroke="#8a6d1a"/>
+ <text x="440" y="274" fill="#2b2b3a">SeqScanState</text><text x="440" y="290" fill="#5b5b70" font-size="11">TableScanDesc, slot, pin</text>
+
+ <line x1="530" y1="84" x2="530" y2="108" stroke="#8a6d9a" stroke-width="1.5" marker-end="url(#f181child)"/>
+ <line x1="530" y1="156" x2="530" y2="180" stroke="#8a6d9a" stroke-width="1.5" marker-end="url(#f181child)"/>
+ <line x1="530" y1="228" x2="530" y2="252" stroke="#8a6d9a" stroke-width="1.5" marker-end="url(#f181child)"/>
+
+ <line x1="425" y1="62" x2="226" y2="62" stroke="#8a6d1a" stroke-dasharray="5 4" marker-end="url(#f181back)"/>
+ <line x1="425" y1="134" x2="226" y2="134" stroke="#8a6d1a" stroke-dasharray="5 4" marker-end="url(#f181back)"/>
+ <line x1="425" y1="206" x2="226" y2="206" stroke="#8a6d1a" stroke-dasharray="5 4" marker-end="url(#f181back)"/>
+ <line x1="425" y1="278" x2="226" y2="278" stroke="#8a6d1a" stroke-dasharray="5 4" marker-end="url(#f181back)"/>
+ <text x="258" y="56" fill="#8a6d1a" font-size="10.5">ps-&gt;plan</text>
+
+ <line x1="630" y1="62" x2="700" y2="62" stroke="#3f7a55" stroke-width="1"/>
+ <line x1="630" y1="134" x2="700" y2="134" stroke="#3f7a55" stroke-width="1"/>
+ <line x1="630" y1="206" x2="700" y2="206" stroke="#3f7a55" stroke-width="1"/>
+ <line x1="630" y1="278" x2="700" y2="278" stroke="#3f7a55" stroke-width="1"/>
+ <line x1="700" y1="62" x2="700" y2="357" stroke="#3f7a55" stroke-width="1"/>
+ <line x1="700" y1="357" x2="636" y2="357" stroke="#3f7a55" stroke-width="1" marker-end="url(#f181est)"/>
+ <text x="708" y="200" fill="#3f7a55" font-size="10.5">ps-&gt;state</text>
+ <rect x="430" y="330" width="200" height="54" rx="4" fill="#eafaf0" stroke="#cfead9"/>
+ <text x="440" y="350" fill="#2b2b3a">EState</text>
+ <text x="440" y="366" fill="#5b5b70" font-size="11">snapshot, range table, slice</text>
+ <text x="440" y="379" fill="#5b5b70" font-size="11">table, per-tuple ExprContext</text>
+
+ <text x="20" y="410" fill="#5b5b70" font-size="11">solid ⟦lefttree / righttree⟧ child links exist in both trees · dashed = each state node knows its plan · green = all state nodes share one EState</text>
+</svg>
