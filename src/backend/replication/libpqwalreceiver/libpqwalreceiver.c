@@ -36,6 +36,11 @@
 #include "utils/pg_lsn.h"
 #include "utils/tuplestore.h"
 
+
+PG_MODULE_MAGIC;
+
+void		_PG_init(void);
+
 /*
  * In PostgreSQL, this is a dynamically loaded module, because PostgreSQL
  * doesn't want to link libpq statically into the backend.  In GPDB, we have
@@ -117,7 +122,7 @@ static char *stringlist_to_identifierstr(PGconn *conn, List *strings);
  * Module initialization function
  */
 void
-libpqwalreceiver_PG_init(void)
+_PG_init(void)
 {
 	if (WalReceiverFunctions != NULL)
 		elog(ERROR, "libpqwalreceiver already loaded");
