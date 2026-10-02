@@ -416,11 +416,11 @@ class DatabaseManager:
                 "n.nspname as schema_name, "
                 "c.relname as object_name, "
                 "c.relkind as object_type, "
-                "p.perm as permission "
+                "p.privilege_type as permission "
                 "FROM pg_class c "
                 "JOIN pg_namespace n ON n.oid = c.relnamespace "
                 "CROSS JOIN LATERAL aclexplode(c.relacl) p "
-                "WHERE p.grantee = (SELECT oid FROM pg_user WHERE usename = $1) "
+                "WHERE p.grantee = (SELECT usesysid FROM pg_user WHERE usename = $1) "
                 "AND n.nspname NOT LIKE 'pg_%' "
                 "ORDER BY n.nspname, c.relname",
                 username
@@ -644,14 +644,11 @@ class DatabaseManager:
             records = await conn.fetch(
                 "SELECT "
                 "schemaname, "
-                "relname as tablename, "
-                "pg_size_pretty(pg_total_relation_size(schemaname||'.'||relname)) as total_size, "
-                "round(100 * (relpages - (relpages * fillfactor / 100)) / relpages, 2) as bloat_ratio "
-                "FROM pg_class c "
-                "JOIN pg_namespace n ON n.oid = c.relnamespace "
-                "JOIN pg_stat_user_tables s ON s.relid = c.oid "
-                "WHERE c.relkind = 'r' AND n.nspname NOT LIKE 'pg_%' "
-                "ORDER BY bloat_ratio DESC "
+                "relname AS tablename, "
+                "pg_size_pretty(pg_total_relation_size(relid)) AS total_size, "
+                "round(100.0 * n_dead_tup / GREATEST(n_live_tup + n_dead_tup, 1), 2)::float8 AS bloat_ratio "
+                "FROM pg_stat_user_tables "
+                "ORDER BY bloat_ratio DESC, schemaname, relname "
                 "LIMIT 20"
             )
             return [
