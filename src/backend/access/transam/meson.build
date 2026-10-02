@@ -24,6 +24,10 @@ backend_sources += files(
   'xlogrecovery.c',
   'xlogstats.c',
   'xlogutils.c',
+  'distributedlog.c',
+  'gp_distributed_log.c',
+  'gp_transaction_log.c',
+  'xlogfuncs_gp.c',
 )
 
 # used by frontend programs to build a frontend xlogreader

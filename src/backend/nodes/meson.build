@@ -17,11 +17,15 @@ backend_sources += files(
 
 # these include .c files generated in ../../include/nodes, seems nicer to not
 # add that as an include path for the whole backend
+#
+# outfast.c and readfast.c belong here too: Cloudberry's plan serialisation for
+# dispatch includes outfast.funcs.c / readfast.funcs.c the same way.
 nodefunc_sources = files(
   'copyfuncs.c',
   'equalfuncs.c',
-  'queryjumblefuncs.c',
+  'outfast.c',
   'outfuncs.c',
+  'readfast.c',
   'readfuncs.c',
 )
 nodefuncs = static_library('nodefuncs',

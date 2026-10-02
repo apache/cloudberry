@@ -33,12 +33,49 @@ subdir('storage')
 subdir('tcop')
 subdir('tsearch')
 subdir('utils')
+subdir('task')
+subdir('crypto')
+subdir('fts')
+subdir('cdb')
+
+# ifeq ($(enable_orca),yes) / SUBDIRS += gporca gpopt
+if xerces.found()
+  subdir('gporca')
+  subdir('gpopt')
+endif
 
 subdir('po', if_found: libintl)
 
 
 backend_link_args = []
 backend_link_depends = []
+
+# Cloudberry compiles frontend symbols into the postgres binary (the backend
+# connects to other segments), while extensions dynamically link libpq.so.
+# Some symbols are unsafe to export from both -- e.g. functions that use
+# palloc/pfree in the backend and malloc/free in the frontend. The linker is
+# told to keep them private in postgres, matching SYMBOL_MAPPING_FLAGS in
+# src/backend/Makefile.
+gen_symbol_map = files('gen_symbol_map.py')
+libpq_exports_txt = meson.source_root() / 'src/interfaces/libpq/exports.txt'
+
+if host_system == 'darwin'
+  symbol_map = custom_target('hide_symbols.list',
+    output: 'hide_symbols.list',
+    command: [python, gen_symbol_map, 'darwin', libpq_exports_txt, '@OUTPUT@'],
+  )
+  backend_link_args += '-Wl,-unexported_symbols_list,@0@'.format(symbol_map.full_path())
+  backend_link_depends += symbol_map
+elif host_system == 'linux'
+  symbol_map = custom_target('postgres_symbols.map',
+    output: 'postgres_symbols.map',
+    command: [python, gen_symbol_map, 'linux', libpq_exports_txt, '@OUTPUT@'],
+  )
+  backend_link_args += '-Wl,--version-script=@0@'.format(symbol_map.full_path())
+  backend_link_depends += symbol_map
+else
+  symbol_map = []
+endif
 
 
 # On windows when compiling with msvc we need to make postgres export all its
@@ -140,12 +177,20 @@ if host_system == 'windows'
     '--FILEDESC', 'PostgreSQL Server',])
 endif
 
+# src/backend/Makefile links postgres with $(CXX) because ORCA is C++.
+# meson picks the linker from the target's own sources, which are all C, so
+# the C++ linker has to be requested explicitly when ORCA is linked in.
+postgres_link_language = xerces.found() ? 'cpp' : 'c'
+
 postgres = executable('postgres',
   backend_input,
-  sources: post_export_backend_sources,
+  # main.c is not part of backend_sources: src/backend/Makefile filters
+  # main/main.o out of libpostgres.so and links it into this binary instead.
+  sources: post_export_backend_sources + main_file,
   objects: backend_objs,
   link_args: backend_link_args,
   link_with: backend_link_with,
+  link_language: postgres_link_language,
   link_depends: backend_link_depends,
   export_dynamic: true,
   implib: true,
@@ -154,6 +199,39 @@ postgres = executable('postgres',
 )
 
 backend_targets += postgres
+
+# --enable-shared-postgres-backend (default yes): in addition to the fully
+# linked postgres binary, expose the backend as a shared library. PAX links
+# against it. main.c is excluded (see src/backend/main/meson.build).
+#
+# --enable-link-postgres-with-shared (default no) would make postgres link
+# against this library instead of the objects directly; that variant is not
+# implemented yet.
+if get_option('shared_postgres_backend')
+  # main.c provides progname and other globals but is excluded from this
+  # library (it is linked into the postgres executable), so the library has
+  # undefined symbols that are resolved at load time.
+  #
+  # The Makefile only needs an explicit flag on darwin, because it never asks
+  # the linker to reject undefined symbols in the first place. meson does:
+  # b_lundef defaults to true, which passes -Wl,--no-undefined on Linux and
+  # -Wl,-undefined,error on darwin. Turning it off for this target covers both
+  # platforms -- on darwin meson then emits -Wl,-undefined,dynamic_lookup,
+  # which is exactly what LIBPOSTGRES_SO_LDFLAGS sets by hand.
+  libpostgres_so = shared_library('postgres',
+    objects: backend_objs,
+    link_whole: backend_link_with,
+    link_args: backend_link_args,
+    link_language: postgres_link_language,
+    link_depends: backend_link_depends,
+    dependencies: backend_build_deps,
+    name_prefix: 'lib',
+    override_options: ['b_lundef=false'],
+    install: true,
+    install_dir: dir_lib,
+  )
+  backend_targets += libpostgres_so
+endif
 
 pg_mod_c_args = cflags_mod
 pg_mod_cpp_args = cxxflags_mod
@@ -207,7 +285,6 @@ pg_test_mod_args = pg_mod_args + {
 # enter these after we defined the server build.
 
 subdir('jit/llvm')
-subdir('replication/libpqwalreceiver')
 subdir('replication/pgoutput')
 subdir('snowball')
 subdir('utils/mb/conversion_procs')

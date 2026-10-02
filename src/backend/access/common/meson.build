@@ -17,4 +17,6 @@ backend_sources += files(
   'toast_internals.c',
   'tupconvert.c',
   'tupdesc.c',
+  'memtuple.c',
+  'reloptions_gp.c',
 )
