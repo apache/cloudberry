@@ -33,6 +33,9 @@ select gp_request_fts_probe_scan();
 2&: commit;
 
 -- this should not block due to direct dispatch to primary with active synced mirror
+-- Do not wait for the blocked commit: this test exercises direct dispatch on
+-- another primary while synchronous replication is waiting.
+SET debug_disable_distributed_snapshot = on;
 insert into fts_unblock_primary values (2);
 
 -- resume FTS probes

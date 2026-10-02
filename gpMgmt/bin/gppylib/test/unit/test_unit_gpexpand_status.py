@@ -6,6 +6,8 @@
 
 import os
 
+from mock import call, patch
+
 from gppylib.test.unit.gp_unittest import GpTestCase, run_tests
 from gppylib.commands import gp
 from gppylib.db import dbconn
@@ -18,6 +20,23 @@ class Context(object):
     day = 0
 
 ctx = Context()
+
+class GpExpandStatusConnectionMode(GpTestCase):
+
+    @patch('gppylib.commands.gp.dbconn.connect')
+    @patch('gppylib.commands.gp.dbconn.DbURL')
+    @patch('gppylib.commands.gp.dbconn.querySingleton', side_effect=[1, 'SETUP DONE'])
+    def test_phase2_catalog_check_uses_utility_connection(self, query_singleton, dburl_cls, connect):
+        status = gp._GpExpandStatus()
+        status.dbname = 'testdb'
+
+        self.assertTrue(status._get_phase2_status())
+        self.assertEqual(status.status, 'SETUP DONE')
+        dburl_cls.assert_called_once_with(dbname='testdb')
+        self.assertEqual(connect.call_args_list, [
+            call(dburl_cls.return_value, utility=True, encoding='UTF8'),
+            call(dburl_cls.return_value, encoding='UTF8'),
+        ])
 
 def get_gpexpand_status():
     st = gp.get_gpexpand_status()
