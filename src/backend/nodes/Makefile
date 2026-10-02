@@ -28,6 +28,7 @@ OBJS = \
 	outfast.o \
 	params.o \
 	print.o \
+	queryjumblefuncs.o \
 	read.o \
 	readfuncs.o \
 	readfast.o \
