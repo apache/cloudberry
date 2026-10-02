@@ -468,6 +468,16 @@ AS_IF([test "$with_llvm" = yes], [
   PGAC_LLVM_SUPPORT()
 ]) # fi
 
+#
+# --without-copy-program disables COPY TO/FROM PROGRAM
+#
+PGAC_ARG_BOOL(with, copy-program, yes,
+              [build with COPY TO/FROM PROGRAM support],
+              [AC_DEFINE([USE_COPY_PROGRAM], 1,
+                         [Define to 1 to build with COPY TO/FROM PROGRAM support. (--with-copy-program)])])
+AC_MSG_RESULT([checking whether to build with COPY PROGRAM... $with_copy_program])
+AC_SUBST(with_copy_program)
+
 
 unset CFLAGS
 unset CXXFLAGS
