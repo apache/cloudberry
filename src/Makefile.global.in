@@ -267,6 +267,7 @@ BITCODE_CXXFLAGS = @BITCODE_CXXFLAGS@
 have_yaml 		= @have_yaml@
 YAML_LIBS		= @YAML_LIBS@
 with_zstd 		= @with_zstd@
+with_anser		= @with_anser@
 ZSTD_CFLAGS		= @ZSTD_CFLAGS@
 ZSTD_LIBS		= @ZSTD_LIBS@
 EVENT_LIBS		= @EVENT_LIBS@
