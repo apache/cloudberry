@@ -1586,11 +1586,17 @@ _jumble${n}(JumbleState *jstate, Node *node)
 		my $t = $node_type_info{$n}->{field_types}{$f};
 		my @a = @{ $node_type_info{$n}->{field_attrs}{$f} };
 		my $query_jumble_ignore = $struct_no_query_jumble;
+		my $query_jumble_custom = 0;
 		my $query_jumble_location = 0;
+		my $query_jumble_squash = 0;
 
 		# extract per-field attributes
 		foreach my $a (@a)
 		{
+			if ($a eq 'custom_query_jumble')
+			{
+				$query_jumble_custom = 1;
+			}
 			if ($a eq 'query_jumble_ignore')
 			{
 				$query_jumble_ignore = 1;
@@ -1599,14 +1605,32 @@ _jumble${n}(JumbleState *jstate, Node *node)
 			{
 				$query_jumble_location = 1;
 			}
+			elsif ($a eq 'query_jumble_squash')
+			{
+				$query_jumble_squash = 1;
+			}
 		}
 
-		# node type
-		if (($t =~ /^(\w+)\*$/ or $t =~ /^struct\s+(\w+)\*$/)
+		if ($query_jumble_custom)
+		{
+			# Custom function that applies to one field of a node.
+			print $jff "\tJUMBLE_CUSTOM($n, $f);\n"
+			  unless $query_jumble_ignore;
+		}
+		elsif (($t =~ /^(\w+)\*$/ or $t =~ /^struct\s+(\w+)\*$/)
 			and elem $1, @node_types)
 		{
-			print $jff "\tJUMBLE_NODE($f);\n"
-			  unless $query_jumble_ignore;
+			# Node type.  Squash constants if requested.
+			if ($query_jumble_squash)
+			{
+				print $jff "\tJUMBLE_ELEMENTS($f);\n"
+				  unless $query_jumble_ignore;
+			}
+			else
+			{
+				print $jff "\tJUMBLE_NODE($f);\n"
+				  unless $query_jumble_ignore;
+			}
 		}
 		elsif ($t eq 'int' && $f =~ 'location$')
 		{
