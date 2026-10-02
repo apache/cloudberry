@@ -575,7 +575,7 @@ typedef struct GroupId
 typedef struct GroupingSetId
 {
 	Expr		xpr;
-	int			location;		/* token location */
+	int			location pg_node_attr(query_jumble_location);		/* token location */
 } GroupingSetId;
 
 /*
