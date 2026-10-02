@@ -1441,7 +1441,6 @@ code or new licensing patterns.
             <!-- The following files are from pg_cron under PostgreSQL 
                  license, introduced by Cloudberry.
             -->
-            <exclude>src/include/task/bitstring.h</exclude>
             <exclude>src/include/task/cron.h</exclude>
             <exclude>src/include/task/pg_cron.h</exclude>
             <exclude>src/include/task/task_states.h</exclude>
@@ -1657,6 +1656,8 @@ code or new licensing patterns.
             <exclude>licenses/LICENSE-amalgamate.txt</exclude>
             <exclude>licenses/LICENSE-boost.txt</exclude>
             <exclude>licenses/LICENSE-termcolor.txt</exclude>
+            <exclude>licenses/LICENSE-vixie-cron.txt</exclude>
+            <exclude>licenses/LICENSE-x0213.txt</exclude>
 
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/tabulateConfig.cmake.in</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/tabulate.pri</exclude>
