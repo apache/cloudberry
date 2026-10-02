@@ -26,6 +26,12 @@ CREATE INDEX on vacuum_progress_ao_row(j);
 -- Abort so that segno 1 has logical EOF = 0.
 1: ABORT;
 
+-- Wait on the coordinator for the statistics of both aborted inserts, since
+-- the following pg_stat_all_tables query also runs there. Read before DELETE
+-- so its statistics cannot race with this check.
+-1U: SELECT wait_until_dead_tup_change_to('vacuum_progress_ao_row'::regclass::oid, 200000);
+SELECT n_live_tup, n_dead_tup, last_vacuum, vacuum_count FROM pg_stat_all_tables WHERE relname = 'vacuum_progress_ao_row';
+
 -- Also delete half of the tuples evenly before the EOF of segno 2.
 DELETE FROM vacuum_progress_ao_row where j % 2 = 0;
 
@@ -36,7 +42,8 @@ SELECT gp_inject_fault('appendonly_after_truncate_segment_file', 'suspend', '', 
 
 1: set Debug_appendonly_print_compaction to on;
 1&: VACUUM vacuum_progress_ao_row;
-SELECT gp_wait_until_triggered_fault('appendonly_after_truncate_segment_file', 2, dbid) FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+-- Wait for all primaries, since the summary below includes every segment.
+SELECT gp_wait_until_triggered_fault('appendonly_after_truncate_segment_file', 2, dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
 -- We are in pre_cleanup phase and some blocks should've been vacuumed by now
 select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, heap_blks_vacuumed, index_vacuum_count, max_dead_tuples, num_dead_tuples from gp_stat_progress_vacuum where gp_segment_id = 1;
 select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, heap_blks_vacuumed, index_vacuum_count, max_dead_tuples, num_dead_tuples from gp_stat_progress_vacuum_summary;
@@ -44,7 +51,8 @@ select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, he
 -- Resume execution and suspend again in the middle of compact phase
 SELECT gp_inject_fault('appendonly_insert', 'suspend', '', '', '', 200, 200, 0, dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
 SELECT gp_inject_fault('appendonly_after_truncate_segment_file', 'reset', dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
-SELECT gp_wait_until_triggered_fault('appendonly_insert', 200, dbid) FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+-- Wait for all primaries, since the summary below includes every segment.
+SELECT gp_wait_until_triggered_fault('appendonly_insert', 200, dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
 -- We are in compact phase. num_dead_tuples should increase as we move and count tuples, one by one.
 select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, heap_blks_vacuumed, index_vacuum_count, max_dead_tuples, num_dead_tuples from gp_stat_progress_vacuum where gp_segment_id = 1;
 select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, heap_blks_vacuumed, index_vacuum_count, max_dead_tuples, num_dead_tuples from gp_stat_progress_vacuum_summary;
@@ -136,7 +144,14 @@ select gp_segment_id, relid::regclass as relname, phase, heap_blks_total, heap_b
 select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, heap_blks_vacuumed, index_vacuum_count, max_dead_tuples, num_dead_tuples from gp_stat_progress_vacuum_summary;
 
 -- Resume execution of compact phase and block at syncrep.
+-- The suspend only takes effect the next time the walsender goes round its
+-- loop, so wait until it is really parked before letting the vacuum go on.
+-- Otherwise the compact phase can commit while the walsender is still
+-- streaming, syncrep is satisfied by the live mirror, the vacuum runs to
+-- completion on the same gang, no new vacuum worker ever takes over and the
+-- gp_wait_until_triggered_fault() below times out after ten minutes.
 2: SELECT gp_inject_fault_infinite('wal_sender_loop', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
+2: SELECT gp_wait_until_triggered_fault('wal_sender_loop', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
 2: SELECT gp_inject_fault('vacuum_ao_after_compact', 'reset', dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
 -- stop the mirror should turn off syncrep
 2: SELECT pg_ctl(datadir, 'stop', 'immediate') FROM gp_segment_configuration WHERE content=1 AND role = 'm';
@@ -210,7 +225,14 @@ select gp_segment_id, relid::regclass as relname, phase, heap_blks_total, heap_b
 select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, heap_blks_vacuumed, index_vacuum_count, max_dead_tuples, num_dead_tuples from gp_stat_progress_vacuum_summary;
 
 -- Resume execution of compact phase and block at syncrep.
+-- The suspend only takes effect the next time the walsender goes round its
+-- loop, so wait until it is really parked before letting the vacuum go on.
+-- Otherwise the compact phase can commit while the walsender is still
+-- streaming, syncrep is satisfied by the live mirror, the vacuum runs to
+-- completion on the same gang, no new vacuum worker ever takes over and the
+-- gp_wait_until_triggered_fault() below times out after ten minutes.
 2: SELECT gp_inject_fault_infinite('wal_sender_loop', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
+2: SELECT gp_wait_until_triggered_fault('wal_sender_loop', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
 2: SELECT gp_inject_fault('vacuum_ao_after_compact', 'reset', dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
 -- stop the mirror should turn off syncrep
 2: SELECT pg_ctl(datadir, 'stop', 'immediate') FROM gp_segment_configuration WHERE content=1 AND role = 'm';

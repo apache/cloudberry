@@ -47,8 +47,17 @@ $node_standby->append_conf('postgresql.conf', "primary_slot_name = 'rep1'");
 
 $node_standby->start;
 
+# Cloudberry: take a CHECKPOINT before recording the position to wait for.
+# A physical slot's restart_lsn is set to whichever is smaller, the confirmed
+# received lsn or the last checkpoint's redo lsn (ca0c1809825), so it tracks
+# checkpoints rather than the standby and wait_for_catchup() alone says nothing
+# about where it ends up.  Waiting for a position taken after a checkpoint makes
+# the reply that satisfies it arrive after that checkpoint, which pins
+# restart_lsn to its redo point.
+$node_primary->safe_psql('postgres', "CHECKPOINT;");
 # Wait until standby has replayed enough data
-$node_primary->wait_for_catchup($node_standby);
+my $start_lsn = $node_primary->lsn('write');
+$node_primary->wait_for_catchup($node_standby, 'replay', $start_lsn);
 
 # Stop standby
 $node_standby->stop;
@@ -85,7 +94,10 @@ like($result, qr/^(reserved|extended)\|t$/, 'check that slot is working');
 # The standby can reconnect to primary
 $node_standby->start;
 
-$node_primary->wait_for_catchup($node_standby);
+# Cloudberry: CHECKPOINT first, see the comment on the first such wait above.
+$node_primary->safe_psql('postgres', "CHECKPOINT;");
+$start_lsn = $node_primary->lsn('write');
+$node_primary->wait_for_catchup($node_standby, 'replay', $start_lsn);
 
 $node_standby->stop;
 
@@ -115,7 +127,10 @@ is($result, "reserved",
 
 # The standby can reconnect to primary
 $node_standby->start;
-$node_primary->wait_for_catchup($node_standby);
+# Cloudberry: CHECKPOINT first, see the comment on the first such wait above.
+$node_primary->safe_psql('postgres', "CHECKPOINT;");
+$start_lsn = $node_primary->lsn('write');
+$node_primary->wait_for_catchup($node_standby, 'replay', $start_lsn);
 $node_standby->stop;
 
 # wal_keep_size overrides max_slot_wal_keep_size
@@ -134,7 +149,10 @@ $result = $node_primary->safe_psql('postgres',
 
 # The standby can reconnect to primary
 $node_standby->start;
-$node_primary->wait_for_catchup($node_standby);
+# Cloudberry: CHECKPOINT first, see the comment on the first such wait above.
+$node_primary->safe_psql('postgres', "CHECKPOINT;");
+$start_lsn = $node_primary->lsn('write');
+$node_primary->wait_for_catchup($node_standby, 'replay', $start_lsn);
 $node_standby->stop;
 
 # Advance WAL again without checkpoint, reducing remain by 6 MB.

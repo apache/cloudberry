@@ -41,6 +41,20 @@ ABORT
 1: ABORT;
 ABORT
 
+-- Wait on the coordinator for the statistics of both aborted inserts, since
+-- the following pg_stat_all_tables query also runs there. Read before DELETE
+-- so its statistics cannot race with this check.
+-1U: SELECT wait_until_dead_tup_change_to('vacuum_progress_ao_column'::regclass::oid, 200000);
+ wait_until_dead_tup_change_to 
+-------------------------------
+ OK                            
+(1 row)
+SELECT n_live_tup, n_dead_tup, last_vacuum, vacuum_count FROM pg_stat_all_tables WHERE relname = 'vacuum_progress_ao_column';
+ n_live_tup | n_dead_tup | last_vacuum | vacuum_count 
+------------+------------+-------------+--------------
+ 100000     | 200000     |             | 0            
+(1 row)
+
 -- Also delete half of the tuples evenly before the EOF of segno 2.
 DELETE FROM vacuum_progress_ao_column where j % 2 = 0;
 DELETE 50000
@@ -222,10 +236,10 @@ VACUUM
 (0 rows)
 
 -- pg_class and collected stats view should be updated after the 2nd VACUUM
-1U: SELECT wait_until_dead_tup_change_to('vacuum_progress_ao_column'::regclass::oid, 0);
- wait_until_dead_tup_change_to 
--------------------------------
- OK                            
+1U: SELECT wait_until_vacuum_count_change_to('vacuum_progress_ao_column'::regclass::oid, 2);
+ wait_until_vacuum_count_change_to 
+-----------------------------------
+ OK                                
 (1 row)
 SELECT relpages, reltuples, relallvisible FROM pg_class where relname = 'vacuum_progress_ao_column';
  relpages | reltuples | relallvisible 
@@ -305,10 +319,21 @@ select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, he
 (1 row)
 
 -- Resume execution of compact phase and block at syncrep on one segment.
+-- The suspend only takes effect the next time the walsender goes round its
+-- loop, so wait until it is really parked before letting the vacuum go on.
+-- Otherwise the compact phase can commit while the walsender is still
+-- streaming, syncrep is satisfied by the live mirror, the vacuum runs to
+-- completion on the same gang, no new vacuum worker ever takes over and the
+-- gp_wait_until_triggered_fault() below times out after ten minutes.
 2: SELECT gp_inject_fault_infinite('wal_sender_loop', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
  gp_inject_fault_infinite 
 --------------------------
  Success:                 
+(1 row)
+2: SELECT gp_wait_until_triggered_fault('wal_sender_loop', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
 (1 row)
 2: SELECT gp_inject_fault('vacuum_ao_after_compact', 'reset', dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
  gp_inject_fault 
