@@ -352,6 +352,8 @@ test: aqumv
 # Tests of materialized view data catalog maintenance
 test: matview_data
 
+test: aqumv_regress_rewrites
+
 # test access method with encoding options
 test: am_encoding
 
