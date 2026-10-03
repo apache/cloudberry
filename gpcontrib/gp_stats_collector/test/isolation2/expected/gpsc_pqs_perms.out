@@ -1,0 +1,92 @@
+-- Permission gate: a non-superuser that does not own the target query is
+-- denied; a superuser is allowed.
+--
+-- The gate is superuser() || GetUserId() == proc->roleId.  isolation2 runs all
+-- sessions under the same session role (the one that launched the harness), so
+-- the "non-super owner is allowed" branch cannot be expressed here and is not
+-- covered; the deny and superuser-allow branches are.
+--
+-- A non-superuser cannot see another backend's application_name in
+-- pg_stat_activity, so the target pid is captured (as superuser) into a table
+-- before SET ROLE.
+--
+-- Extensions come from setup.sql.
+
+CREATE TABLE qs_perm_t (id int) DISTRIBUTED BY (id);
+CREATE
+INSERT INTO qs_perm_t SELECT generate_series(1, 100);
+INSERT 100
+CREATE TABLE qs_perm_pid (pid int);
+CREATE
+CREATE ROLE qs_unpriv;
+CREATE
+GRANT SELECT ON qs_perm_pid TO qs_unpriv;
+GRANT
+-- No gpsc grants here on purpose: the extension grants USAGE/EXECUTE to PUBLIC
+-- in its migration, so an ordinary role reaches the roleId gate exactly as it
+-- would in production.  This test verifies the gate, not the schema grants.
+
+SELECT gp_inject_fault('executor_pre_tuple_processed', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+(3 rows)
+
+1: SET application_name TO 'qs_perm_target';
+SET
+1&: SELECT count(*) FROM qs_perm_t;  <waiting ...>
+
+SELECT gp_wait_until_triggered_fault('executor_pre_tuple_processed', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+ Success:                      
+ Success:                      
+(3 rows)
+
+-- Capture the target pid as superuser (sees application_name).
+2: INSERT INTO qs_perm_pid SELECT pid FROM pg_stat_activity WHERE application_name = 'qs_perm_target' AND pid <> pg_backend_pid() ORDER BY backend_start LIMIT 1;
+INSERT 1
+
+-- Non-superuser, non-owner: both entry points are denied.
+2: SET ROLE qs_unpriv;
+SET
+2: SELECT gpsc.pg_query_state((SELECT pid FROM qs_perm_pid), '\x00112233445566778899aabbccddeeff'::bytea);
+ERROR:  permission denied
+2: SELECT * FROM gpsc.pg_query_state_backends((SELECT pid FROM qs_perm_pid));
+ERROR:  permission denied
+2: RESET ROLE;
+RESET
+
+-- Superuser: allowed (non-empty backend list).
+2: SELECT count(*) > 0 AS has_backends FROM gpsc.pg_query_state_backends((SELECT pid FROM qs_perm_pid));
+ has_backends 
+--------------
+ t            
+(1 row)
+
+SELECT gp_inject_fault('executor_pre_tuple_processed', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+(3 rows)
+1<:  <... completed>
+ count 
+-------
+ 100   
+(1 row)
+1q: ... <quitting>
+2q: ... <quitting>
+
+DROP OWNED BY qs_unpriv;
+DROP
+DROP ROLE qs_unpriv;
+DROP
+DROP TABLE qs_perm_pid;
+DROP
+DROP TABLE qs_perm_t;
+DROP
