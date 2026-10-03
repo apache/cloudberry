@@ -1,0 +1,334 @@
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+# GitHub Actions Workflow: Apache Cloudberry macOS Build Pipeline
+# --------------------------------------------------------------------
+# Description:
+#
+#   Builds, installs, and smoke-tests Apache Cloudberry on macOS
+#   (Apple Silicon). Runs configure → build → install → demo cluster →
+#   regression tests → teardown. Targets macos-14 (Sonoma) and
+#   macos-15 (Sequoia).
+#
+# --------------------------------------------------------------------
+
+name: Apache Cloudberry macOS CI
+
+on:
+  push:
+    branches: [main, REL_2_STABLE]
+  pull_request:
+    branches: [main, REL_2_STABLE]
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  checks: read
+  pull-requests: read
+
+env:
+  LOG_RETENTION_DAYS: 7
+
+jobs:
+
+  build-and-test-macos:
+    name: Build & Test macOS (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15]
+
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-${{ matrix.os }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout Apache Cloudberry
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: true
+
+      - name: Set Build Timestamp
+        id: set_timestamp
+        run: |
+          timestamp=$(date +'%Y%m%d_%H%M%S')
+          echo "timestamp=$timestamp" | tee -a "$GITHUB_OUTPUT"
+          echo "BUILD_TIMESTAMP=$timestamp" | tee -a "$GITHUB_ENV"
+
+      - name: Setup Build Environment
+        id: setup_env
+        run: |
+          set -eo pipefail
+
+          BREW_PREFIX="$(brew --prefix)"
+          BUILD_DESTINATION="${GITHUB_WORKSPACE}/cbdb-install"
+
+          echo "BREW_PREFIX=${BREW_PREFIX}"              | tee -a "$GITHUB_ENV"
+          echo "BUILD_DESTINATION=${BUILD_DESTINATION}"   | tee -a "$GITHUB_ENV"
+          echo "SRC_DIR=${GITHUB_WORKSPACE}"              | tee -a "$GITHUB_ENV"
+
+          # PATH: make Homebrew keg-only bison/flex available first
+          echo "PATH=${BREW_PREFIX}/opt/bison/bin:${BREW_PREFIX}/opt/flex/bin:${PATH}" | tee -a "$GITHUB_ENV"
+
+          # Common linker / preprocessor flags for keg-only libraries
+          echo "LDFLAGS=-L${BREW_PREFIX}/opt/krb5/lib -L${BREW_PREFIX}/opt/openssl@3/lib -L${BREW_PREFIX}/opt/readline/lib -L${BREW_PREFIX}/lib" | tee -a "$GITHUB_ENV"
+
+          echo "CPPFLAGS=-I${BREW_PREFIX}/opt/krb5/include -I${BREW_PREFIX}/opt/openssl@3/include -I${BREW_PREFIX}/opt/readline/include -I${BREW_PREFIX}/include" | tee -a "$GITHUB_ENV"
+
+          echo "PKG_CONFIG_PATH=${BREW_PREFIX}/opt/krb5/lib/pkgconfig:${BREW_PREFIX}/opt/icu4c/lib/pkgconfig:${PKG_CONFIG_PATH:-}" | tee -a "$GITHUB_ENV"
+
+          echo "PERL5LIB=${HOME}/perl5/lib/perl5:${PERL5LIB:-}" | tee -a "$GITHUB_ENV"
+
+          # OpenSSL discovery helpers (some configure probes use these directly)
+          echo "OPENSSL_INCLUDE_DIR=${BREW_PREFIX}/opt/openssl@3/include" | tee -a "$GITHUB_ENV"
+          echo "OPENSSL_LIB_DIR=${BREW_PREFIX}/opt/openssl@3/lib"         | tee -a "$GITHUB_ENV"
+
+          # Locale for consistent regression test expectations
+          echo "LC_CTYPE=en_US.UTF-8" | tee -a "$GITHUB_ENV"
+
+      - name: Install Dependencies
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: |
+          set -eo pipefail
+
+          echo "=== Installing dependencies via Homebrew ==="
+          brew install \
+            bison \
+            flex \
+            xerces-c \
+            libyaml \
+            libuv \
+            pkg-config \
+            protobuf \
+            cmake \
+            krb5 \
+            cpanminus \
+            apr \
+            apr-util \
+            libevent \
+            openssl@3 \
+            readline \
+            icu4c
+
+          echo "=== Installing Perl IPC::Run ==="
+          cpanm --local-lib="$HOME/perl5" local::lib && eval "$(perl -I "$HOME/perl5/lib/perl5/" -Mlocal::lib)"
+          cpanm IPC::Run
+
+      - name: Configure macOS System
+        run: |
+          set -eo pipefail
+          echo "=== Configuring macOS kernel parameters for MPP database ==="
+
+          # ---- Shared memory (required for PostgreSQL segments) ----
+          sudo sysctl -w kern.sysv.shmmax=2147483648
+          sudo sysctl -w kern.sysv.shmmin=1
+          sudo sysctl -w kern.sysv.shmmni=64
+          sudo sysctl -w kern.sysv.shmseg=16
+          sudo sysctl -w kern.sysv.shmall=524288
+
+          # ---- File descriptors (MPP with multiple segments needs far more than the default 256) ----
+          sudo sysctl -w kern.maxfiles=131072
+          sudo sysctl -w kern.maxfilesperproc=131072
+
+          # ---- Network tuning for inter-segment interconnect ----
+          sudo sysctl -w net.inet.tcp.msl=60
+          sudo sysctl -w net.local.dgram.recvspace=262144
+          sudo sysctl -w net.local.dgram.maxdgram=16384
+          sudo sysctl -w net.inet.tcp.sendspace=262144
+          sudo sysctl -w net.inet.tcp.recvspace=262144
+          sudo sysctl -w kern.ipc.maxsockbuf=6291456
+
+          # ---- Hostname resolution for segment communication ----
+          echo "127.0.0.1 $(hostname)" | sudo tee -a /etc/hosts
+
+          # ---- Core dump setup for crash diagnosis ----
+          mkdir -p "${HOME}/cores"
+          sudo sysctl -w kern.corefile="${HOME}/cores/core.%P"
+
+          # ---- Apply file-descriptor limit to current session ----
+          ulimit -n 65536
+
+          echo "=== macOS system configuration complete ==="
+
+      - name: Setup Workspace Symlink
+        run: |
+          set -eo pipefail
+          # Cloudberry/GPDB scripts expect ${SRC_DIR}/../cloudberry to point
+          # to the source tree. Create (or refresh) that symlink.
+          ln -sfn "${GITHUB_WORKSPACE}" "${GITHUB_WORKSPACE}/../cloudberry"
+
+      - name: Run Configure
+        run: |
+          set -eo pipefail
+          mkdir -p build-logs
+
+          echo "=== Configuring Apache Cloudberry ==="
+          ./configure --prefix="${BUILD_DESTINATION}" \
+                      --disable-external-fts \
+                      --enable-gpcloud \
+                      --enable-ic-proxy \
+                      --enable-mapreduce \
+                      --enable-orafce \
+                      --enable-orca \
+                      --enable-pax \
+                      --disable-pxf \
+                      --enable-tap-tests \
+                      --with-diskquota \
+                      --with-gp-stats-collector \
+                      --with-gssapi \
+                      --with-icu \
+                      --with-ldap \
+                      --with-libxml \
+                      --with-lz4 \
+                      --with-openssl \
+                      --with-zstd \
+                      --with-pam \
+                      --with-perl \
+                      --with-pgport=5432 \
+                      --with-python \
+                      --with-pythonsrc-ext \
+                      --with-ssl=openssl \
+                      --with-uuid=e2fs \
+                      --with-includes="${BREW_PREFIX}/include" \
+                      --with-libraries="${BREW_PREFIX}/lib" \
+                      --with-apr-config="${BREW_PREFIX}/opt/apr/bin/apr-1-config" \
+                      2>&1 | tee build-logs/configure.log
+
+      - name: Build and Install
+        run: |
+          set -eo pipefail
+
+          ulimit -n 65536
+
+          # Reserve one core to avoid OOM on constrained runners
+          NCPU=$(($(sysctl -n hw.ncpu) - 1))
+
+          echo "=== Compiling Cloudberry (${NCPU} parallel jobs) ==="
+          make -j"${NCPU}" 2>&1 | tee build-logs/build.log
+
+          echo "=== Installing Cloudberry ==="
+          make install 2>&1 | tee build-logs/install.log
+
+      - name: Verify Build Artifacts
+        run: |
+          set -eo pipefail
+          echo "=== Verifying build artifacts ==="
+          if [ ! -d "${BUILD_DESTINATION}" ]; then
+            echo "::error::Build destination directory not found"
+            exit 1
+          fi
+          for binary in "bin/postgres" "bin/psql"; do
+            if [ ! -x "${BUILD_DESTINATION}/${binary}" ]; then
+              echo "::error::Critical binary missing or not executable: ${binary}"
+              exit 1
+            fi
+            ls -l "${BUILD_DESTINATION}/${binary}"
+          done
+          "${BUILD_DESTINATION}/bin/postgres" --version
+          "${BUILD_DESTINATION}/bin/psql" --version
+
+      - name: Setup Passwordless SSH
+        run: |
+          set -eo pipefail
+          echo "=== Configuring passwordless SSH on localhost ==="
+
+          if [ ! -f ~/.ssh/id_rsa ]; then
+            ssh-keygen -t rsa -N "" -f ~/.ssh/id_rsa
+          fi
+          cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+          chmod 600 ~/.ssh/authorized_keys
+          chmod 700 ~/.ssh
+
+          # Start SSH daemon on macOS
+          sudo launchctl load -w /System/Library/LaunchDaemons/ssh.plist 2>/dev/null || true
+
+          # Verify SSH daemon is running
+          if ! launchctl list | grep -q "com.openssh.sshd"; then
+            echo "::error::SSH daemon failed to start — cannot create demo cluster"
+            exit 1
+          fi
+
+          # Populate known_hosts
+          ssh-keyscan -t rsa localhost   >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -t rsa 127.0.0.1   >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -t rsa ::1         >> ~/.ssh/known_hosts 2>/dev/null || true
+
+          # Smoke-test SSH connectivity
+          ssh localhost "echo 'SSH configuration successful'"
+
+      - name: Create Demo Cluster
+        run: |
+          set -eo pipefail
+
+          ulimit -n 65536
+
+          export PATH="${BUILD_DESTINATION}/bin:${PATH}"
+          export LD_LIBRARY_PATH="${BUILD_DESTINATION}/lib:${LD_LIBRARY_PATH:-}"
+          export DYLD_LIBRARY_PATH="${BUILD_DESTINATION}/lib:${DYLD_LIBRARY_PATH:-}"
+
+          chmod +x "${SRC_DIR}/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"
+
+          echo "=== Creating demo cluster ==="
+          export NUM_PRIMARY_MIRROR_PAIRS=3
+          time "${SRC_DIR}/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh" 2>&1 | tee build-logs/create-cluster.log
+
+      - name: Run Regression Tests
+        run: |
+          set -eo pipefail
+
+          ulimit -n 65536
+
+          echo "=== Sourcing demo environment and running regression tests ==="
+          source "${BUILD_DESTINATION}/cloudberry-env.sh"
+          source "${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh"
+
+          # Enable extended tests for features we compiled in
+          export PG_TEST_EXTRA="kerberos ldap ssl"
+
+          make -C src/test/regress installcheck-good 2>&1 | tee build-logs/regression-tests.log
+
+      - name: Destroy Demo Cluster
+        if: always()
+        run: |
+          set -eo pipefail
+          echo "=== Destroying demo cluster ==="
+          if [ -d "${SRC_DIR}/gpAux/gpdemo" ]; then
+            source "${BUILD_DESTINATION}/cloudberry-env.sh" || true
+            source "${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh" || true
+            make -C "${SRC_DIR}/gpAux/gpdemo" destroy-demo-cluster || true
+          fi
+
+      - name: Upload Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build-logs-${{ matrix.os }}-${{ env.BUILD_TIMESTAMP }}
+          path: |
+            build-logs/
+            src/test/regress/regression.diffs
+            src/test/regress/regression.out
+            ~/cores/
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
