@@ -147,9 +147,18 @@ github:
       # Require conversation threads to be resolved
       required_conversation_resolution: true
 
-  # Branch cleanup settings
-  # Don't automatically delete branches after merging
-  del_branch_on_merge: true
+  # Pull request settings
+  pull_requests:
+    # Allow a PR to be merged automatically once all required reviews
+    # and status checks pass.  Committers should only enable it on a PR
+    # whose commit history is already in a mergeable shape; PRs that
+    # need squashing or history cleanup are still merged by hand.
+    allow_auto_merge: true
+    # Show the "Update branch" button, since main requires branches to
+    # be up to date before merging (strict status checks)
+    allow_update_branch: true
+    # Automatically delete head branches after merging
+    del_branch_on_merge: true
 
   # Dependabot security settings
   # Enable security vulnerability alerts
