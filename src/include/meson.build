@@ -44,9 +44,27 @@ config_paths_data.set_quoted('MANDIR', dir_prefix / dir_man)
 
 var_cc = ' '.join(cc.cmd_array())
 var_cpp = ' '.join(cc.cmd_array() + ['-E'])
-var_cflags = ' '.join(cflags + cflags_warn + get_option('c_args'))
-if llvm.found()
-  var_cxxflags = ' '.join(cxxflags + cxxflags_warn + get_option('cpp_args'))
+# meson adds the optimization, debug and -Wall flags itself, from buildtype
+# and warning_level, so they are in none of the lists above -- and an
+# extension built through PGXS would get none of them: -O0, where configure
+# gives it the server's own -O3 or -O2 -g. Spell them out for PGXS.
+var_build_flags = []
+if cc.get_argument_syntax() == 'gcc'
+  if get_option('optimization') != 'plain'
+    var_build_flags += '-O' + get_option('optimization')
+  endif
+  if get_option('debug')
+    var_build_flags += '-g'
+  endif
+  if get_option('warning_level') != '0'
+    var_build_flags += '-Wall'
+  endif
+endif
+var_cflags = ' '.join(var_build_flags + cflags + cflags_warn + get_option('c_args'))
+# Not only for LLVM, as upstream has it: see cxxflags in the top-level
+# meson.build.
+if have_cpp
+  var_cxxflags = ' '.join(var_build_flags + cxxflags + cxxflags_warn + get_option('cpp_args'))
 else
   var_cxxflags = ''
 endif
@@ -158,6 +176,12 @@ header_subdirs = [
   'utils',
   'port',
   'portability',
+  # Cloudberry's, as src/include/Makefile lists them. Without cdb/ no extension
+  # can be compiled against a meson install at all: nodes/primnodes.h includes
+  # cdb/cdbpathlocus.h and utils/snapshot.h includes
+  # cdb/cdbdistributedsnapshot.h.
+  'cdb',
+  'task',
 ]
 
 # XXX: installing headers this way has the danger of installing editor files

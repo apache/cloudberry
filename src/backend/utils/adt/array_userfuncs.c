@@ -23,7 +23,7 @@
 #include "utils/datum.h"
 #include "utils/lsyscache.h"
 #include "utils/typcache.h"
-#include "../../catalog/pg_type_d.h"
+#include "catalog/pg_type_d.h"
 
 /*
  * SerialIOData

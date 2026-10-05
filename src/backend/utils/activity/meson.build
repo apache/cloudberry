@@ -18,4 +18,5 @@ backend_sources += files(
   'pgstat_wal.c',
   'pgstat_xact.c',
   'wait_event.c',
+  'pgstat_resqueue.c',
 )

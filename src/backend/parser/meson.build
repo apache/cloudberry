@@ -19,6 +19,7 @@ backend_sources += files(
   'parse_type.c',
   'parse_utilcmd.c',
   'scansup.c',
+  'parse_partition_gp.c',
 )
 
 # Build a small utility static lib for the parser. The generation of the
