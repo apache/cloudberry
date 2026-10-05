@@ -29,6 +29,7 @@
 #ifndef ANSERPLAN_H
 #define ANSERPLAN_H
 
+#include "nodes/execnodes.h"	/* PlanState, for the pushdown helpers */
 #include "nodes/plannodes.h"
 
 /*
@@ -141,5 +142,26 @@ extern PGDLLEXPORT bool AnserResolveKeyScan(Plan *top,
  * widths for the same query -- see the implementation.
  */
 extern PGDLLEXPORT int AnserSliceProducers(PlannedStmt *stmt, int slice_index);
+
+/*
+ * Runtime-filter pushdown, split so the decision can be tested on its own.
+ *
+ * AnserPushdownAccepts answers "would this node take a scan key for the column
+ * it emits at output position `attno`?", and on yes reports the attribute
+ * number the key must carry -- which is the table's attno, not `attno`, because
+ * the scan evaluates the key against an unprojected tuple.
+ *
+ * AnserPushdownTarget walks down from `top` following that column and returns
+ * the deepest accepting node, so a stack of consumers over one relation all
+ * push into the same scan instead of probing tuple by tuple.
+ *
+ * Both return false/NULL rather than failing when the shape is not supported;
+ * the caller's fallback is to probe the filter itself, which is always correct.
+ */
+extern PGDLLEXPORT bool AnserPushdownAccepts(PlanState *ps, AttrNumber attno,
+											 AttrNumber *sk_attno_out);
+extern PGDLLEXPORT PlanState *AnserPushdownTarget(PlanState *top,
+												  AttrNumber attno,
+												  AttrNumber *sk_attno_out);
 
 #endif							/* ANSERPLAN_H */
