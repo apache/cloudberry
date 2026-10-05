@@ -646,6 +646,20 @@ anser_consume_receive(AnserBloomConsumeScanState *st)
  * pruning.  Runs before the child's first ExecProcNode, so the key is in
  * node->filters when the scan descriptor is created.  The filter stays owned
  * by us; anser_consume_end ends the child before freeing it.
+ *
+ * Declining (leaving pushed_down false) costs nothing but the pushdown: the
+ * caller then probes the filter itself in anser_consume_next.
+ *
+ * st->key_attno is NOT the attribute number to hand over.  It is a position in
+ * the scan's *output* targetlist, which is what anser_consume_next wants,
+ * because the slot it probes has already been projected.  PassByBloomFilter
+ * reads ss_ScanTupleSlot -- the table tuple, before projection -- so the key
+ * has to carry the table's own attribute number instead.  The two coincide
+ * only when the scan emits every column in order; for a projecting scan they
+ * do not, and filtering the wrong column drops rows that can join.  On
+ * repro_probe(payload, id) with a targetlist of just [id], key_attno is 1 and
+ * the table attno is 2: pushing 1 filters `payload` against a filter built on
+ * `id` and every row is discarded.
  */
 static void
 anser_consume_pushdown(CustomScanState *node)
@@ -653,6 +667,9 @@ anser_consume_pushdown(CustomScanState *node)
 	AnserBloomConsumeScanState *st = (AnserBloomConsumeScanState *) node;
 	PlanState  *child = (PlanState *) linitial(node->custom_ps);
 	SeqScanState *sss;
+	List	   *tlist;
+	TargetEntry *tle;
+	Var		   *var;
 	ScanKey		sk;
 	MemoryContext oldcxt;
 
@@ -662,9 +679,28 @@ anser_consume_pushdown(CustomScanState *node)
 	if (!sss->filter_in_seqscan)
 		return;
 
+	/* Map the output position back to the table attribute it comes from. */
+	tlist = child->plan->targetlist;
+	if (st->key_attno < 1 || st->key_attno > list_length(tlist))
+		return;
+	tle = (TargetEntry *) list_nth(tlist, st->key_attno - 1);
+	if (tle == NULL || !IsA(tle->expr, Var))
+		return;					/* a computed column has no table attno */
+	var = (Var *) tle->expr;
+
+	/*
+	 * Only a plain user column of this very relation can be pushed: a
+	 * whole-row reference (varattno 0) or a system column (negative) is not
+	 * something PassByBloomFilter can hash the same way the producer did, and
+	 * a Var belonging to some other range table entry would send the scan
+	 * looking at an attno that means nothing to it.
+	 */
+	if (var->varno != ((Scan *) child->plan)->scanrelid || var->varattno < 1)
+		return;
+
 	oldcxt = MemoryContextSwitchTo(node->ss.ps.state->es_query_cxt);
 	sk = (ScanKey) palloc0(sizeof(ScanKeyData));
-	sk->sk_attno = st->key_attno;
+	sk->sk_attno = var->varattno;
 	sk->sk_flags = SK_BLOOM_FILTER;
 	sk->sk_argument = PointerGetDatum(st->filter);
 	sss->filters = lappend(sss->filters, sk);
@@ -704,6 +740,12 @@ anser_consume_next(CustomScanState *node)
 		if (st->filter == NULL || st->pushed_down)
 			return anser_rf_child_slot(node, slot);
 
+		/*
+		 * key_attno is an output-targetlist position, which is how this slot
+		 * is numbered: it has already been projected.  The pushdown path sees
+		 * the table tuple instead and needs the table attno -- see
+		 * anser_consume_pushdown.
+		 */
 		value = slot_getattr(slot, st->key_attno, &isnull);
 
 		/* NULLs never match an equijoin key; let the join handle them. */

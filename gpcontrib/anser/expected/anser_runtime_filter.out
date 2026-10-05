@@ -144,6 +144,92 @@ SELECT count(*) AS only_off_push
 (1 row)
 
 RESET gp_enable_runtime_filter_pushdown;
+-- Pushdown where the key's table attribute number and its position in the
+-- scan's output targetlist disagree.  The case above cannot see the
+-- difference: anser_rf_probe's key is its first column and also the first
+-- thing the scan emits, so the two numbers coincide.  Here the key is the
+-- probe table's *second* column and its *only* projected one, so a scan key
+-- carrying the output position makes the scan test `payload` against a filter
+-- built on `id` -- and since no payload is ever a build key, every row is
+-- discarded.  Both counts must be 200.
+SET optimizer = on;
+CREATE TABLE anser_rf_proj_build (id int) DISTRIBUTED BY (id);
+CREATE TABLE anser_rf_proj_probe (payload int, id int) DISTRIBUTED BY (id);
+INSERT INTO anser_rf_proj_build SELECT g FROM generate_series(1, 200) g;
+INSERT INTO anser_rf_proj_probe SELECT -g, g FROM generate_series(1, 2000) g;
+ANALYZE anser_rf_proj_build;
+ANALYZE anser_rf_proj_probe;
+SET gp_enable_runtime_filter_pushdown = on;
+SET anser.runtime_filter = off;
+SELECT count(p.id) AS proj_push_off
+    FROM anser_rf_proj_build b LEFT JOIN anser_rf_proj_probe p ON b.id = p.id;
+ proj_push_off 
+---------------
+           200
+(1 row)
+
+SET anser.runtime_filter = on;
+SELECT count(p.id) AS proj_push_on
+    FROM anser_rf_proj_build b LEFT JOIN anser_rf_proj_probe p ON b.id = p.id;
+ proj_push_on 
+--------------
+          200
+(1 row)
+
+-- The alias is not the column.  This subquery renames `payload` to the name
+-- `id` and the real `id` to `id2`, and joins on id2 -- so resolving the key by
+-- name would land on `payload`, the one column guaranteed never to match a
+-- filter built from the build side.  Resolution runs position -> TargetEntry
+-- -> Var -> varattno and never reads a name, so the rename is invisible to it.
+-- Both counts must be 200.
+SET anser.runtime_filter = off;
+SELECT count(p.id2) AS rename_push_off
+    FROM anser_rf_proj_build b
+    LEFT JOIN (SELECT payload AS id, id AS id2 FROM anser_rf_proj_probe) p
+           ON b.id = p.id2;
+ rename_push_off 
+-----------------
+             200
+(1 row)
+
+SET anser.runtime_filter = on;
+SELECT count(p.id2) AS rename_push_on
+    FROM anser_rf_proj_build b
+    LEFT JOIN (SELECT payload AS id, id AS id2 FROM anser_rf_proj_probe) p
+           ON b.id = p.id2;
+ rename_push_on 
+----------------
+            200
+(1 row)
+
+-- A computed key has no table attribute number to push down: the scan would
+-- have to evaluate `id * 2`, which PassByBloomFilter cannot do.  Note the join
+-- clause itself still looks like a plain Var to the planner (it references the
+-- scan's output position), so the key resolves and the nodes are injected --
+-- it is the scan's own targetlist entry that is an expression.  The consumer
+-- must decline the pushdown and probe the projected slot itself.  Only the
+-- 100 even build ids match, so both counts must be 100.
+SET anser.runtime_filter = off;
+SELECT count(p.k) AS expr_push_off
+    FROM anser_rf_proj_build b
+    LEFT JOIN (SELECT id * 2 AS k FROM anser_rf_proj_probe) p ON b.id = p.k;
+ expr_push_off 
+---------------
+           100
+(1 row)
+
+SET anser.runtime_filter = on;
+SELECT count(p.k) AS expr_push_on
+    FROM anser_rf_proj_build b
+    LEFT JOIN (SELECT id * 2 AS k FROM anser_rf_proj_probe) p ON b.id = p.k;
+ expr_push_on 
+--------------
+          100
+(1 row)
+
+RESET gp_enable_runtime_filter_pushdown;
+DROP TABLE anser_rf_proj_build, anser_rf_proj_probe;
+SET optimizer = off;
 -- Everything above checks that the nodes were injected and that the results did
 -- not change.  Both of those also hold when the filter never arrives and every
 -- consumer fails open -- which is how a broken exchange passes a green test.
