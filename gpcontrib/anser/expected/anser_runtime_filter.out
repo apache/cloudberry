@@ -259,6 +259,31 @@ SELECT 'the filter pruned nothing: it never arrived, or it arrived empty' AS pro
 ---------
 (0 rows)
 
+-- Nested statement guard: a statement run through SPI from a function body
+-- goes through its whole Start/Run/End inside the *outer* query's Run, so the
+-- inner ExecutorEnd fires while the outer query is still executing.  Dropping
+-- channels there takes the running query's filters with it, and every consumer
+-- that has not read yet fails open -- the exchange still happens, the filter is
+-- just never used.
+--
+-- This needs an inner join, not the left join above: the consumer defers its
+-- first tuple only for INNER (see defer_first), which is what lets the join
+-- emit a row -- and so evaluate the function -- before the consumer reads.
+CREATE FUNCTION anser_rf_nested(x int) RETURNS int
+LANGUAGE plpgsql VOLATILE AS $$
+BEGIN
+    PERFORM 1;
+    RETURN x;
+END;
+$$;
+SELECT 'an inner statement dropped the running query''s filter' AS problem
+ WHERE anser_rf_pruned('SELECT anser_rf_nested(p.id) FROM anser_rf_build b
+                          JOIN anser_rf_probe p ON b.id = p.id') = 0;
+ problem 
+---------
+(0 rows)
+
+DROP FUNCTION anser_rf_nested(int);
 DROP FUNCTION anser_rf_pruned(text);
 DROP TABLE anser_rf_r_push;
 DROP TABLE anser_rf_r_on, anser_rf_r_off, anser_rf_r_orca;
