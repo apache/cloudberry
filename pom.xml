@@ -173,7 +173,6 @@ code or new licensing patterns.
             <exclude>gpMgmt/demo/gppkg/build_gppkg.mk</exclude>
             <exclude>gpMgmt/demo/gppkg/generate_sample_gppkg.sh</exclude>
 
-            <exclude>gpMgmt/demo/test/**</exclude>
             <exclude>gpMgmt/test/**</exclude>
 
             <exclude>gpMgmt/bin/gpload_test/gpload2/*.ans</exclude>
@@ -184,7 +183,6 @@ code or new licensing patterns.
             <exclude>gpMgmt/bin/test/suite.bash</exclude>
             <exclude>gpMgmt/bin/gpcheckcat_modules/**</exclude>
 
-            <exclude>gpMgmt/bin/.rcfile</exclude>
             <exclude>gpMgmt/bin/Makefile</exclude>
             <exclude>gpMgmt/bin/stream/Makefile</exclude>
             <exclude>gpMgmt/bin/stream/stream.f</exclude>
@@ -314,7 +312,6 @@ code or new licensing patterns.
             <exclude>gpMgmt/bin/pyproject.toml</exclude>
 
             <exclude>config/Makefile</exclude>
-            <exclude>config/ac_func_accept_argtypes.m4</exclude>
             <exclude>config/c-compiler.m4</exclude>
             <exclude>config/c-library.m4</exclude>
             <exclude>config/check_modules.pl</exclude>
@@ -332,7 +329,6 @@ code or new licensing patterns.
 
             <!-- GPLv2-AUTOEXC -->
             <exclude>config/pkg.m4</exclude>
-            <exclude>config/libtool.m4</exclude>
             <exclude>config/ax_pthread.m4</exclude>
 
             <exclude>.abi-check/**</exclude>
@@ -471,9 +467,6 @@ code or new licensing patterns.
             <exclude>contrib/pgcrypto/crypt-md5.c</exclude>
             <exclude>contrib/pgcrypto/openssl_redirect.c</exclude>
             <exclude>contrib/pgcrypto/crypt-gensalt.c</exclude>
-            <exclude>contrib/pgcrypto/rijndael.c</exclude>
-            <exclude>contrib/pgcrypto/rijndael.tbl</exclude>
-            <exclude>contrib/pgcrypto/rijndael.h</exclude>
             <exclude>contrib/pgcrypto/crypt-blowfish.c</exclude>
             <exclude>contrib/pgcrypto/package/gppkg_spec.yml.in</exclude>
             <exclude>contrib/pgcrypto/package/pgcrypto.spec</exclude>
@@ -617,7 +610,6 @@ code or new licensing patterns.
             <exclude>src/pl/plpython/plpy_procedure.c</exclude>
             <exclude>src/pl/plpython/plpy_util.c</exclude>
             <exclude>src/pl/plpython/plpy_exec.c</exclude>
-            <exclude>src/pl/plpython/regress-python3-mangle.mk</exclude>
             <exclude>src/pl/plpython/plpy_spi.c</exclude>
             <exclude>src/pl/plpython/plpy_subxactobject.h</exclude>
             <exclude>src/pl/plpython/nls.mk</exclude>
@@ -628,7 +620,6 @@ code or new licensing patterns.
             <exclude>src/pl/plperl/Util.xs</exclude>
             <exclude>src/pl/plperl/plperl.c</exclude>
             <exclude>src/pl/plperl/SPI.xs</exclude>
-            <exclude>src/pl/plperl/plperl_helpers.h</exclude>
             <exclude>src/pl/plperl/nls.mk</exclude>
             <exclude>src/pl/tcl/pltcl.c</exclude>
             <exclude>src/pl/tcl/nls.mk</exclude>
@@ -942,7 +933,6 @@ code or new licensing patterns.
             <exclude>src/include/utils/ps_status.h</exclude>
             <exclude>src/include/regex/regerrs.h</exclude>
             <exclude>src/include/common/pg_lzcompress.h</exclude>
-            <exclude>src/include/common/unicode_combining_table.h</exclude>
             <exclude>src/include/common/unicode_normprops_table.h</exclude>
             <exclude>src/include/fstream/fstream.h</exclude>
             <exclude>src/include/fstream/gfile.h</exclude>
@@ -960,7 +950,6 @@ code or new licensing patterns.
             <exclude>src/include/port/linux.h</exclude>
             <exclude>src/include/port/solaris.h</exclude>
             <exclude>src/include/port/win32.h</exclude>
-            <exclude>src/include/port/hpux.h</exclude>
             <exclude>src/include/port/pg_pthread.h</exclude>
             <exclude>src/include/port/freebsd.h</exclude>
             <exclude>src/include/port/darwin.h</exclude>
@@ -982,7 +971,6 @@ code or new licensing patterns.
             <exclude>src/include/port/win32_msvc/sys/time.h</exclude>
             <exclude>src/include/port/win32_msvc/sys/file.h</exclude>
             <exclude>src/include/port/win32_msvc/sys/param.h</exclude>
-            <exclude>src/template/hpux</exclude>
             <exclude>src/template/netbsd</exclude>
             <exclude>src/template/freebsd</exclude>
             <exclude>src/template/osf</exclude>
@@ -1189,8 +1177,6 @@ code or new licensing patterns.
             <exclude>src/backend/replication/test/gp_replication_test.c</exclude>
             <exclude>src/backend/commands/test/tablecmds_test.c</exclude>
             <exclude>src/backend/commands/analyzefuncs.c</exclude>
-            <exclude>src/backend/port/hpux/tas.c.template</exclude>
-            <exclude>src/backend/port/tas/hpux_hppa.s</exclude>
             <exclude>src/backend/port/tas/dummy.s</exclude>
             <exclude>src/backend/port/aix/mkldexport.sh</exclude>
             <exclude>src/backend/nls.mk</exclude>
@@ -1208,7 +1194,6 @@ code or new licensing patterns.
             <exclude>src/makefiles/Makefile.linux</exclude>
             <exclude>src/makefiles/Makefile.solaris</exclude>
             <exclude>src/makefiles/Makefile.darwin</exclude>
-            <exclude>src/makefiles/Makefile.hpux</exclude>
             <exclude>src/makefiles/Makefile.openbsd</exclude>
             <exclude>src/makefiles/Makefile.aix</exclude>
             <exclude>src/makefiles/Makefile.freebsd</exclude>
@@ -1225,7 +1210,6 @@ code or new licensing patterns.
             <exclude>src/interfaces/ecpg/README.dynSQL</exclude>
             <exclude>src/interfaces/ecpg/test/preproc/struct.h</exclude>
             <exclude>src/interfaces/ecpg/test/preproc/strings.h</exclude>
-            <exclude>src/interfaces/libpq/test/regress.in</exclude>
             <exclude>src/interfaces/libpq/pg_service.conf.sample</exclude>
             <exclude>src/interfaces/libpq/win32.h</exclude>
             <exclude>src/interfaces/libpq/exports.txt</exclude>
@@ -1249,11 +1233,13 @@ code or new licensing patterns.
 
             <!-- Markdown: every project-authored .md carries an ASF header.
                  What remains is README files, which by convention do not, plus
-                 documentation inherited from orafce and from Greenplum's ORCA. -->
+                 documentation inherited from orafce and from Greenplum's ORCA,
+                 and the docs of the third-party pax_storage submodules. -->
             <exclude>**/README*.md</exclude>
             <exclude>**/readme*.md</exclude>
             <exclude>gpcontrib/orafce/doc/**/*.md</exclude>
             <exclude>src/backend/gporca/**/*.md</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/*/**/*.md</exclude>
             <exclude>src/backend/cdb/dispatcher/extend_protocol_libpq.md</exclude>
 
             <!-- SQL scripts and regression expected-output inherited from
@@ -1299,7 +1285,6 @@ code or new licensing patterns.
             <exclude>contrib/file_fdw/**/*.sql</exclude>
             <exclude>contrib/file_fdw/**/*.out</exclude>
             <exclude>contrib/formatter_fixedwidth/**/*.sql</exclude>
-            <exclude>contrib/formatter_fixedwidth/**/*.out</exclude>
             <exclude>contrib/fuzzystrmatch/**/*.sql</exclude>
             <exclude>contrib/fuzzystrmatch/**/*.out</exclude>
             <exclude>contrib/hstore/**/*.sql</exclude>
@@ -1311,7 +1296,6 @@ code or new licensing patterns.
             <exclude>contrib/indexscan/**/*.sql</exclude>
             <exclude>contrib/indexscan/**/*.out</exclude>
             <exclude>contrib/intagg/**/*.sql</exclude>
-            <exclude>contrib/intagg/**/*.out</exclude>
             <exclude>contrib/intarray/**/*.sql</exclude>
             <exclude>contrib/intarray/**/*.out</exclude>
             <exclude>contrib/interconnect/**/*.sql</exclude>
@@ -1329,19 +1313,16 @@ code or new licensing patterns.
             <exclude>contrib/ltree_plpython/**/*.sql</exclude>
             <exclude>contrib/ltree_plpython/**/*.out</exclude>
             <exclude>contrib/old_snapshot/**/*.sql</exclude>
-            <exclude>contrib/old_snapshot/**/*.out</exclude>
             <exclude>contrib/pageinspect/**/*.sql</exclude>
             <exclude>contrib/pageinspect/**/*.out</exclude>
             <exclude>contrib/passwordcheck/**/*.sql</exclude>
             <exclude>contrib/passwordcheck/**/*.out</exclude>
             <exclude>contrib/pax_storage/sql/**/*.sql</exclude>
-            <exclude>contrib/pax_storage/sql/**/*.out</exclude>
             <exclude>contrib/pg_buffercache/**/*.sql</exclude>
             <exclude>contrib/pg_buffercache/**/*.out</exclude>
             <exclude>contrib/pg_freespacemap/**/*.sql</exclude>
             <exclude>contrib/pg_freespacemap/**/*.out</exclude>
             <exclude>contrib/pg_prewarm/**/*.sql</exclude>
-            <exclude>contrib/pg_prewarm/**/*.out</exclude>
             <exclude>contrib/pg_stat_statements/**/*.sql</exclude>
             <exclude>contrib/pg_stat_statements/**/*.out</exclude>
             <exclude>contrib/pg_surgery/**/*.sql</exclude>
@@ -1361,13 +1342,11 @@ code or new licensing patterns.
             <exclude>contrib/postgres_fdw/**/*.sql</exclude>
             <exclude>contrib/postgres_fdw/**/*.out</exclude>
             <exclude>contrib/sasdemo/sql/**/*.sql</exclude>
-            <exclude>contrib/sasdemo/sql/**/*.out</exclude>
             <exclude>contrib/seg/**/*.sql</exclude>
             <exclude>contrib/seg/**/*.out</exclude>
             <exclude>contrib/sepgsql/**/*.sql</exclude>
             <exclude>contrib/sepgsql/**/*.out</exclude>
             <exclude>contrib/spi/**/*.sql</exclude>
-            <exclude>contrib/spi/**/*.out</exclude>
             <exclude>contrib/sslinfo/**/*.sql</exclude>
             <exclude>contrib/sslinfo/**/*.out</exclude>
             <exclude>contrib/tablefunc/**/*.sql</exclude>
@@ -1380,7 +1359,6 @@ code or new licensing patterns.
             <exclude>contrib/tsm_system_rows/**/*.out</exclude>
             <exclude>contrib/tsm_system_time/**/*.sql</exclude>
             <exclude>contrib/tsm_system_time/**/*.out</exclude>
-            <exclude>contrib/unaccent/expected/**/*.sql</exclude>
             <exclude>contrib/unaccent/expected/**/*.out</exclude>
             <exclude>contrib/uuid-ossp/**/*.sql</exclude>
             <exclude>contrib/uuid-ossp/**/*.out</exclude>
@@ -1389,9 +1367,7 @@ code or new licensing patterns.
             <exclude>gpcontrib/gp_debug_numsegments/**/*.sql</exclude>
             <exclude>gpcontrib/gp_debug_numsegments/**/*.out</exclude>
             <exclude>gpcontrib/gp_distribution_policy/**/*.sql</exclude>
-            <exclude>gpcontrib/gp_distribution_policy/**/*.out</exclude>
             <exclude>gpcontrib/gp_exttable_fdw/**/*.sql</exclude>
-            <exclude>gpcontrib/gp_exttable_fdw/**/*.out</exclude>
             <exclude>gpcontrib/gp_inject_fault/**/*.sql</exclude>
             <exclude>gpcontrib/gp_inject_fault/**/*.out</exclude>
             <exclude>gpcontrib/gp_sparse_vector/**/*.sql</exclude>
@@ -1401,13 +1377,11 @@ code or new licensing patterns.
             <exclude>gpcontrib/pg_hint_plan/**/*.sql</exclude>
             <exclude>gpcontrib/pg_hint_plan/**/*.out</exclude>
             <exclude>gpcontrib/pg_hint_plan/sql/**/*.sql</exclude>
-            <exclude>gpcontrib/pg_hint_plan/sql/**/*.out</exclude>
             <exclude>gpcontrib/pxf_fdw/**/*.sql</exclude>
             <exclude>gpcontrib/pxf_fdw/**/*.out</exclude>
             <exclude>gpcontrib/zstd/**/*.sql</exclude>
             <exclude>gpcontrib/zstd/**/*.out</exclude>
             <exclude>src/bin/**/*.sql</exclude>
-            <exclude>src/bin/**/*.out</exclude>
             <exclude>src/interfaces/**/*.sql</exclude>
             <exclude>src/interfaces/**/*.out</exclude>
             <exclude>src/pl/**/*.sql</exclude>
@@ -1441,7 +1415,6 @@ code or new licensing patterns.
             <!-- The following files are from pg_cron under PostgreSQL 
                  license, introduced by Cloudberry.
             -->
-            <exclude>src/include/task/bitstring.h</exclude>
             <exclude>src/include/task/cron.h</exclude>
             <exclude>src/include/task/pg_cron.h</exclude>
             <exclude>src/include/task/task_states.h</exclude>
@@ -1511,7 +1484,6 @@ code or new licensing patterns.
             <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/clobber_memory_assembly_test.cc</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/output_test_helper.cc</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/perf_counters_gtest.cc</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/templated_fixture_method_test.cc</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/profiler_manager_iterations_test.cc</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/options_test.cc</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/spec_arg_test.cc</exclude>
@@ -1657,6 +1629,8 @@ code or new licensing patterns.
             <exclude>licenses/LICENSE-amalgamate.txt</exclude>
             <exclude>licenses/LICENSE-boost.txt</exclude>
             <exclude>licenses/LICENSE-termcolor.txt</exclude>
+            <exclude>licenses/LICENSE-vixie-cron.txt</exclude>
+            <exclude>licenses/LICENSE-x0213.txt</exclude>
 
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/tabulateConfig.cmake.in</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/tabulate.pri</exclude>
@@ -1699,7 +1673,6 @@ code or new licensing patterns.
             <exclude>devops/deploy/docker/build/rocky9/tests/requirements.txt</exclude>
             <exclude>devops/deploy/docker/build/rocky10/tests/requirements.txt</exclude>
             <exclude>devops/deploy/docker/build/ubuntu22.04/tests/requirements.txt</exclude>
-            <exclude>devops/deploy/docker/build/ubuntu24.04/tests/requirements.txt</exclude>
 
 	    <!-- Exclude ubuntu debian packaging files since they do not support comments
             -->

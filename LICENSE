@@ -232,6 +232,20 @@ The PostgreSQL software includes:
       src/common/sha2_int.h
       see licenses/LICENSE-bsd3-sha2.txt
 
+      src/timezone/strftime.c
+      see licenses/LICENSE-bsd3-strftime.txt
+
+      Snowball stemmers and stop word lists (https://snowballstem.org):
+      src/backend/snowball/libstemmer
+      src/backend/snowball/stopwords
+      src/include/snowball/libstemmer
+      see licenses/LICENSE-bsd3-snowball.txt
+
+      pg_bsd_indent, derived from FreeBSD indent(1); indent.h is under
+      the 2-clause variant also reproduced in the license file:
+      src/tools/pg_bsd_indent
+      see licenses/LICENSE-bsd-indent.txt
+
 ----------------------------
    Internet Systems Consortium/Internet Software Consortium (ISC) LICENSE
       
@@ -295,6 +309,50 @@ The PostgreSQL software includes:
       src/include/common/shortest_dec.h
       see licenses/LICENSE-boost.txt
 
+----------------------------
+   MIT License
+
+      HyperLogLog, based on Hideaki Ohno's C++ implementation:
+      src/backend/lib/hyperloglog.c
+      src/include/lib/hyperloglog.h
+      see licenses/LICENSE-hyperloglog.txt
+
+----------------------------
+   Apache License v2.0 with LLVM Exceptions
+
+      A modified copy of LLVM's SectionMemoryManager:
+      src/backend/jit/llvm/SectionMemoryManager.cpp
+      src/include/jit/SectionMemoryManager.h
+      see licenses/LICENSE-llvm.txt
+      (also shipped in-tree as
+       src/backend/jit/llvm/SectionMemoryManager.LICENSE)
+
+----------------------------
+   Public Domain
+
+      IANA time zone code and data (https://www.iana.org/time-zones):
+      src/timezone/localtime.c
+      src/timezone/private.h
+      src/timezone/tzfile.h
+      src/timezone/zic.c
+      src/timezone/data/tzdata.zi
+
+----------------------------
+   Project X0213 License
+
+      JIS X 0213 mapping tables from Project X0213 (http://x0213.org):
+      src/backend/utils/mb/Unicode/euc-jis-2004-std.txt
+      src/backend/utils/mb/Unicode/sjis-0213-2004-std.txt
+      see licenses/LICENSE-x0213.txt
+
+----------------------------
+   ICU License
+
+      GB 18030 mapping table from the ICU project's charset data
+      (https://github.com/unicode-org/icu-data):
+      src/backend/utils/mb/Unicode/gb-18030-2000.xml
+      see licenses/LICENSE-icu-data.txt
+
 ================================================================================
 This product contains significant parts that were originally based on software
 from VMware, Inc. or its affiliates.
@@ -309,6 +367,14 @@ Greenplum Database is licensed under the Apache License Version 2.0
 (see LICENSE) and is based on the PostgreSQL Database Management System.
 
 The Greenplum Database software includes:
+
+----------------------------
+   Apache License - Version 2.0
+
+      cmockery unit testing framework, copyright 2008 Google Inc.:
+      src/test/unit/cmockery
+      (see the Apache License above; also shipped in-tree as
+       src/test/unit/cmockery/LICENSE.txt)
 
 ----------------------------
    Stream License
@@ -369,6 +435,21 @@ Apache Cloudberry includes codes from
       /src/backend/task/pg_cron.c
 
       see licenses/LICENSE-citusdata.txt
+
+   pg_cron's copy of Vixie cron, under Paul Vixie's license:
+
+      /src/backend/task/entry.c
+      /src/backend/task/misc.c
+      /src/include/task/cron.h
+
+      see licenses/LICENSE-vixie-cron.txt
+
+   Berkeley's bitstring.h, as found in FreeBSD, under the 3-clause
+   BSD license:
+
+      /src/include/task/bitstring.h
+
+      see licenses/LICENSE-bitstring.txt
 
 ----------------------------
    Apache License - Version 2.0
