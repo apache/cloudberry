@@ -339,6 +339,90 @@ SELECT count(*) AS only_off
 (1 row)
 
 DROP TABLE anser_rf_z_on, anser_rf_z_off, anser_rf_build_z, anser_rf_probe_z;
+-- Parameterized rescan guard: a build side whose rows depend on a parameter an
+-- enclosing nested loop reassigns yields a different key set per outer tuple,
+-- and neither node rebuilds on rescan -- the producer stays published, the
+-- consumer keeps the filter it already has.  The second iteration would be
+-- probed against the first iteration's keys, dropping every row that joins.
+-- So the plan pass must refuse the join outright.
+--
+-- OFFSET 0 keeps the subquery from being pulled up, so it stays a nested loop
+-- with a correlated inner side.  Each group's ids are disjoint, which is what
+-- makes a stale filter visible: with the first group's filter still in place
+-- the second group matches nothing.
+CREATE TABLE anser_rf_nl_outer (g int) DISTRIBUTED REPLICATED;
+CREATE TABLE anser_rf_nl_build (g int, id int) DISTRIBUTED BY (id);
+CREATE TABLE anser_rf_nl_probe (id int) DISTRIBUTED BY (id);
+INSERT INTO anser_rf_nl_outer VALUES (1), (2);
+INSERT INTO anser_rf_nl_build SELECT 1, g FROM generate_series(1, 100) g;
+INSERT INTO anser_rf_nl_build SELECT 2, g FROM generate_series(101, 200) g;
+INSERT INTO anser_rf_nl_probe SELECT g FROM generate_series(1, 20000) g;
+ANALYZE anser_rf_nl_outer;
+ANALYZE anser_rf_nl_build;
+ANALYZE anser_rf_nl_probe;
+CREATE FUNCTION anser_rf_nodes(q text) RETURNS bigint
+LANGUAGE plpgsql AS $$
+DECLARE
+    line  text;
+    nodes bigint := 0;
+BEGIN
+    FOR line IN EXECUTE 'EXPLAIN (COSTS OFF) ' || q LOOP
+        IF line ~ 'Anser Bloom' THEN
+            nodes := nodes + 1;
+        END IF;
+    END LOOP;
+    RETURN nodes;
+END;
+$$;
+-- Both groups must report 100, with the filter on and off alike, and the plan
+-- must carry no Anser node at all.
+SET anser.runtime_filter = off;
+SELECT o.g, s.n AS nl_off
+FROM anser_rf_nl_outer o
+CROSS JOIN LATERAL (SELECT count(*) n FROM anser_rf_nl_probe p
+                      JOIN anser_rf_nl_build b ON p.id = b.id
+                     WHERE b.g = o.g OFFSET 0) s
+ORDER BY o.g;
+ g | nl_off 
+---+--------
+ 1 |    100
+ 2 |    100
+(2 rows)
+
+SET anser.runtime_filter = on;
+SELECT o.g, s.n AS nl_on
+FROM anser_rf_nl_outer o
+CROSS JOIN LATERAL (SELECT count(*) n FROM anser_rf_nl_probe p
+                      JOIN anser_rf_nl_build b ON p.id = b.id
+                     WHERE b.g = o.g OFFSET 0) s
+ORDER BY o.g;
+ g | nl_on 
+---+-------
+ 1 |   100
+ 2 |   100
+(2 rows)
+
+SELECT anser_rf_nodes('SELECT o.g, s.n FROM anser_rf_nl_outer o
+CROSS JOIN LATERAL (SELECT count(*) n FROM anser_rf_nl_probe p
+                      JOIN anser_rf_nl_build b ON p.id = b.id
+                     WHERE b.g = o.g OFFSET 0) s') AS nodes_in_parameterized_plan;
+ nodes_in_parameterized_plan 
+-----------------------------
+                           0
+(1 row)
+
+-- The same two tables joined without the correlation are still injected into:
+-- the guard must refuse a parameterized build side, not every build side.
+SELECT anser_rf_nodes('SELECT count(*) FROM anser_rf_nl_probe p
+                         JOIN anser_rf_nl_build b ON p.id = b.id
+                        WHERE b.g = 1') AS nodes_when_not_parameterized;
+ nodes_when_not_parameterized 
+------------------------------
+                            2
+(1 row)
+
+DROP FUNCTION anser_rf_nodes(text);
+DROP TABLE anser_rf_nl_outer, anser_rf_nl_build, anser_rf_nl_probe;
 -- ---------------------------------------------------------------------------
 -- Parallel execution.
 --

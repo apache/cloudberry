@@ -57,6 +57,9 @@ typedef struct AnserInjectCtx
 {
 	PlannedStmt *stmt;			/* for slices[]: see AnserSliceProducers */
 	int			slice_index;	/* slice the subtree being walked runs in */
+	Bitmapset  *nestloop_params;	/* PARAM_EXECs an enclosing nested loop
+									 * reassigns per outer tuple; see
+									 * anser_inject_walk */
 	uint32		next_condition_id;
 	int			next_plan_node_id;
 	List	   *consumer_keys;	/* condition_keys already given a consumer node;
@@ -482,6 +485,34 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 	if (probe == NULL)
 		return;
 
+	/*
+	 * Refuse a build side that depends on a parameter an enclosing nested loop
+	 * reassigns.  Such a side yields a different set of keys per outer tuple,
+	 * and nothing here rebuilds: the rescan callbacks rescan their child and
+	 * keep everything else, so the producer stays published and the consumer
+	 * keeps the filter it already received.  The second iteration would then be
+	 * probed against the first iteration's keys -- a filter that is no longer a
+	 * superset, which is the one way this feature can drop a row that joins.
+	 *
+	 * extParam is the whole build subtree's dependency on parameters set
+	 * outside it (SS_finalize_plan fills it in before set_plan_references, so
+	 * it is still here), and ctx->nestloop_params is what the nested loops we
+	 * are nested inside actually reassign.  An InitPlan's output parameter
+	 * appears in extParam too but is evaluated once, so intersecting against
+	 * the nestloop set rather than testing extParam for emptiness keeps those
+	 * plans eligible.
+	 *
+	 * Only the build side is tested.  A parameterized probe side is rescanned
+	 * too, but the filter it probes was built from keys that did not change, so
+	 * reusing it stays correct -- and skipping the rebuild is then a saving.
+	 *
+	 * The alternative is to re-exchange per iteration, which needs a generation
+	 * in the channel key and a barrier across every segment per outer tuple.
+	 * Not worth it for a shape this narrow.
+	 */
+	if (bms_overlap(hash->extParam, ctx->nestloop_params))
+		return;
+
 	if (!anser_hashjoin_keys(hj, &inner_attno, &outer_attno))
 		return;
 	if (!AnserResolveKeyScan(hash, inner_attno, ctx->slice_index,
@@ -619,7 +650,31 @@ anser_inject_walk(Plan *plan, AnserInjectCtx *ctx)
 		anser_try_inject((HashJoin *) plan, ctx);
 
 	anser_inject_walk(outerPlan(plan), ctx);
-	anser_inject_walk(innerPlan(plan), ctx);
+
+	/*
+	 * A nested loop re-executes its inner side once per outer tuple, after
+	 * assigning that tuple's values to the PARAM_EXECs in nestParams.  Carry
+	 * those paramids down the inner side so anser_try_inject can tell whether a
+	 * build side it is looking at will be rebuilt with different values.
+	 */
+	if (IsA(plan, NestLoop) && ((NestLoop *) plan)->nestParams != NIL)
+	{
+		Bitmapset  *saved = ctx->nestloop_params;
+		Bitmapset  *inner = bms_copy(saved);
+		ListCell   *lc;
+
+		foreach(lc, ((NestLoop *) plan)->nestParams)
+			inner = bms_add_member(inner,
+								   ((NestLoopParam *) lfirst(lc))->paramno);
+
+		ctx->nestloop_params = inner;
+		anser_inject_walk(innerPlan(plan), ctx);
+		ctx->nestloop_params = saved;
+		bms_free(inner);
+	}
+	else
+		anser_inject_walk(innerPlan(plan), ctx);
+
 	if (IsA(plan, CustomScan))
 	{
 		ListCell   *lc;
