@@ -1480,6 +1480,7 @@ code or new licensing patterns.
             <exclude>gpcontrib/yezzey/devops/scripts/conf_setup.sh</exclude>
             <exclude>gpcontrib/yezzey/devops/scripts/create_demo_yezzey_cloudberry.sh</exclude>
             <exclude>gpcontrib/yezzey/devops/scripts/create_demo_yezzey_gpdb.sh</exclude>
+	    <exclude>gpcontrib/yezzey/devops/scripts/generate_test_gpg_keys.sh</exclude>
             <exclude>gpcontrib/yezzey/devops/scripts/launch_yproxy.sh</exclude>
             <exclude>gpcontrib/yezzey/devops/scripts/prepare_test_yezzey.sh</exclude>
             <exclude>gpcontrib/yezzey/docs/README.cleanup.md</exclude>
