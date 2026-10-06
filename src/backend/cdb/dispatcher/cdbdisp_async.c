@@ -565,6 +565,34 @@ checkDispatchResult(CdbDispatcherState *ds, int timeout_sec)
 			}
 
 			/*
+			 * Take any notifications off this connection before deciding
+			 * whether to wait on it.
+			 *
+			 * The buffered[] check below cannot see them.  PQisBusy() parses
+			 * whatever is already in the buffer, and libpq's parser handles a
+			 * NOTIFY by queueing it on the connection and carrying on
+			 * (pqParseInput3's 'A' arm calls getNotify(), then breaks); it
+			 * never touches asyncStatus.  So a notification can be complete
+			 * and ready while PQisBusy() still answers true for the command
+			 * that has not finished, leaving buffered[] false.
+			 *
+			 * That would only be survivable while the socket stayed readable,
+			 * and it need not be: the flush just above can have absorbed those
+			 * very bytes, because a write that cannot complete in one go reads
+			 * the peer's pending output to avoid deadlocking against it.  The
+			 * notification is then in our own memory with nothing left in the
+			 * socket, and poll() sleeps until the QE happens to send something
+			 * else -- which, for a sender that does not wait for a reply, is
+			 * not until its command completes, since tuples travel over the
+			 * interconnect rather than over this connection.
+			 *
+			 * Draining here costs a pointer check when nothing is queued.
+			 * PQnotifies() runs the parser itself, so this also does the
+			 * parsing PQisBusy() would have done a few lines below.
+			 */
+			processNotifies(dispatchResult);
+
+			/*
 			 * Add socket to fd_set if still connected.
 			 */
 			sock = PQsocket(conn);
