@@ -90,7 +90,14 @@ AnserApplyRuntimeFilters(PlannedStmt *stmt)
 		return;
 
 	{
-		AnserInjectCtx ctx;
+		/*
+		 * Zeroed rather than filled field by field.  The fields below say what
+		 * they mean and are kept for that, but a pointer field added later and
+		 * missed here would hold whatever was on the stack -- and the first
+		 * thing done with nestloop_params is bms_copy(), which reads a word
+		 * count out of it and allocates that much.
+		 */
+		AnserInjectCtx ctx = {0};
 		ListCell   *lc;
 		int			maxid;
 
@@ -119,6 +126,7 @@ AnserApplyRuntimeFilters(PlannedStmt *stmt)
 		ctx.next_condition_id = 0;
 		ctx.next_plan_node_id = maxid + 1;
 		ctx.consumer_keys = NIL;
+		ctx.nestloop_params = NULL;	/* no loop encloses the root */
 
 		anser_inject_walk(stmt->planTree, &ctx);
 	}
