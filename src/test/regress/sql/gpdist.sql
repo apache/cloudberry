@@ -565,3 +565,27 @@ SELECT bool_and(seg >= 0) AS on_segments,
 -- An impossible filter must remain empty.
 SELECT count(*) FROM gp_dist_random('gdr_union') WHERE branch = 3;
 ROLLBACK;
+
+-- RTE equality must distinguish ordinary scans from gp_dist_random scans.
+-- ONLY makes the inheritance flag identical, leaving forceDistRandom different.
+BEGIN;
+SET LOCAL optimizer = off;
+SELECT EXISTS (SELECT 1 FROM ONLY gp_id WHERE gp_execution_segment() >= 0)
+         AS on_coordinator,
+       EXISTS (SELECT 1 FROM gp_dist_random('gp_id') WHERE gp_execution_segment() >= 0)
+         AS on_segments;
+-- Both OR orders must retain the distributed subquery and return one row.
+SELECT 1 AS result
+ WHERE EXISTS (SELECT 1 FROM ONLY gp_id WHERE gp_execution_segment() >= 0)
+    OR EXISTS (SELECT 1 FROM gp_dist_random('gp_id') WHERE gp_execution_segment() >= 0);
+SELECT 1 AS result
+ WHERE EXISTS (SELECT 1 FROM gp_dist_random('gp_id') WHERE gp_execution_segment() >= 0)
+    OR EXISTS (SELECT 1 FROM ONLY gp_id WHERE gp_execution_segment() >= 0);
+-- Both AND orders must retain the coordinator subquery and return no rows.
+SELECT 1 AS result
+ WHERE EXISTS (SELECT 1 FROM ONLY gp_id WHERE gp_execution_segment() >= 0)
+   AND EXISTS (SELECT 1 FROM gp_dist_random('gp_id') WHERE gp_execution_segment() >= 0);
+SELECT 1 AS result
+ WHERE EXISTS (SELECT 1 FROM gp_dist_random('gp_id') WHERE gp_execution_segment() >= 0)
+   AND EXISTS (SELECT 1 FROM ONLY gp_id WHERE gp_execution_segment() >= 0);
+ROLLBACK;
