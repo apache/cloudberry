@@ -535,3 +535,33 @@ CREATE TABLE "gp.dist.random.schema".gp_dist_random_table_with_schema
     AS SELECT * FROM gp_dist_random('"gp_dist_random_table"');
 SELECT * FROM gp_dist_random('"gp.dist.random.schema".gp_dist_random_table_with_schema');
 DROP SCHEMA "gp.dist.random.schema" CASCADE;
+
+-- gp_dist_random must preserve segment execution when a view is a UNION ALL.
+BEGIN;
+SET LOCAL optimizer = off;
+CREATE TEMP VIEW gdr_union AS
+  SELECT gp_execution_segment() AS seg, 1 AS branch FROM gp_id
+  UNION ALL
+  SELECT gp_execution_segment(), 2 FROM gp_id;
+SELECT branch,
+       bool_and(seg >= 0) AS on_segments,
+       count(*) = (SELECT count(*) FROM gp_segment_configuration
+                    WHERE role = 'p' AND content >= 0)
+         AND count(*) = count(DISTINCT seg) AS once_per_segment
+  FROM gp_dist_random('gdr_union')
+ GROUP BY branch
+ ORDER BY branch;
+-- Ordinary access still executes on the coordinator.
+SELECT count(*) = 2 AS two_rows, bool_and(seg = -1) AS on_coordinator
+  FROM gdr_union;
+-- A nested view with a filter must also execute on the segments.
+CREATE TEMP VIEW gdr_union_filtered AS
+  SELECT * FROM gdr_union WHERE branch = 2;
+SELECT bool_and(seg >= 0) AS on_segments,
+       count(*) = (SELECT count(*) FROM gp_segment_configuration
+                    WHERE role = 'p' AND content >= 0)
+         AND count(*) = count(DISTINCT seg) AS once_per_segment
+  FROM gp_dist_random('gdr_union_filtered');
+-- An impossible filter must remain empty.
+SELECT count(*) FROM gp_dist_random('gdr_union') WHERE branch = 3;
+ROLLBACK;
