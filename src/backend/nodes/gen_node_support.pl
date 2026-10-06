@@ -51,7 +51,6 @@ sub elem
 # able to make this list the only copy.  For now, we just check that
 # it matches the list of files passed on the command line.
 my @all_input_files = qw(
-  catalog/gp_distribution_policy.h
   nodes/nodes.h
   nodes/primnodes.h
   nodes/parsenodes.h
@@ -59,21 +58,33 @@ my @all_input_files = qw(
   nodes/plannodes.h
   nodes/execnodes.h
   access/amapi.h
+  access/extprotocol.h
+  access/formatter.h
   access/sdir.h
   access/tableam.h
   access/tsmapi.h
+  access/tupdesc.h
+  catalog/heap.h
+  cdb/cdbgang.h
   commands/event_trigger.h
+  commands/explain_gp.h
   commands/trigger.h
+  executor/execdesc.h
   executor/tuptable.h
   foreign/fdwapi.h
+  nodes/altertablenodes.h
   nodes/bitmapset.h
   nodes/extensible.h
   nodes/lockoptions.h
   nodes/miscnodes.h
   nodes/replnodes.h
   nodes/supportnodes.h
+  nodes/tidbitmap.h
   nodes/value.h
+  utils/queryenvironment.h
   utils/rel.h
+  catalog/gp_distribution_policy.h
+  cdb/cdbpathlocus.h
 );
 
 # Nodes from these input files are automatically treated as nodetag_only.
@@ -83,17 +94,21 @@ my @all_input_files = qw(
 my @nodetag_only_files = qw(
   nodes/execnodes.h
   access/amapi.h
+  access/extprotocol.h
+  access/formatter.h
   access/sdir.h
   access/tableam.h
   access/tsmapi.h
   commands/event_trigger.h
+  commands/explain_gp.h
   commands/trigger.h
   executor/tuptable.h
   foreign/fdwapi.h
   nodes/lockoptions.h
   nodes/miscnodes.h
   nodes/replnodes.h
-  nodes/supportnodes.h
+  nodes/supportnodes.h 
+  nodes/tidbitmap.h
 );
 
 # ARM ABI STABILITY CHECK HERE:
@@ -108,7 +123,7 @@ my @nodetag_only_files = qw(
 # ABI stability during development.
 
 my $last_nodetag = 'WindowObjectData';
-my $last_nodetag_no = 557;
+my $last_nodetag_no = 584;
 
 # output file names
 my @output_files;
@@ -351,6 +366,10 @@ foreach my $infile (@ARGV)
 						{
 							push @no_read, $in_struct;
 						}
+						elsif ($attr eq 'no_read_write')
+						{
+							push @no_read_write, $in_struct;
+						}
 						elsif ($attr eq 'nodetag_only')
 						{
 							push @nodetag_only, $in_struct;
@@ -474,6 +493,7 @@ foreach my $infile (@ARGV)
 								equal_as_scalar
 								equal_ignore
 								equal_ignore_if_zero
+								copy_ignore
 								query_jumble_ignore
 								query_jumble_location
 								read_write_ignore
@@ -716,7 +736,7 @@ _equal${n}(const $n *a, const $n *b)
 		my $copy_as_field;
 		my $copy_as_scalar = 0;
 		my $equal_as_scalar = 0;
-		foreach my $a (@a)
+		foreach my $a (@a) 
 		{
 			if ($a =~ /^array_size\(([\w.]+)\)$/)
 			{
@@ -741,6 +761,10 @@ _equal${n}(const $n *a, const $n *b)
 			elsif ($a eq 'equal_ignore')
 			{
 				$equal_ignore = 1;
+			}
+			elsif ($a eq 'copy_ignore')
+			{
+				$copy_ignore = 1;
 			}
 		}
 
@@ -865,6 +889,23 @@ _equal${n}(const $n *a, const $n *b)
 			print $cff "\tCOPY_SCALAR_FIELD($f);\n" unless $copy_ignore;
 			print $eff "\tCOMPARE_SCALAR_FIELD($f);\n" unless $equal_ignore;
 		}
+		elsif ($t eq 'bytea*')
+		{
+			print $cff "\tCOPY_VARLENA_FIELD($f, -1);\n" unless $copy_ignore;
+			print $eff "\tCOMPARE_VARLENA_FIELD($f, -1);\n" unless $equal_ignore;
+		}
+		elsif($t eq 'TupleDesc')
+		{
+			print $cff "\tnewnode->$f = CreateTupleDescCopyConstr(from->$f);\n" unless $copy_ignore;
+		}
+		elsif ($t eq 'ItemPointerData')
+		{
+			print $cff "\tCOPY_BINARY_FIELD($f, sizeof(ItemPointerData));\n" unless $copy_ignore;
+		}
+		elsif($t eq 'Relation')
+		{
+			
+		}
 		else
 		{
 			die
@@ -888,6 +929,720 @@ close $cff;
 close $eff;
 close $cfs;
 close $efs;
+
+
+# outfuncs.c, readfuncs.c
+
+push @output_files, 'outfuncs.funcs.c';
+open my $off, '>', "$output_path/outfuncs.funcs.c$tmpext" or die $!;
+push @output_files, 'readfuncs.funcs.c';
+open my $rff, '>', "$output_path/readfuncs.funcs.c$tmpext" or die $!;
+push @output_files, 'outfuncs.switch.c';
+open my $ofs, '>', "$output_path/outfuncs.switch.c$tmpext" or die $!;
+push @output_files, 'readfuncs.switch.c';
+open my $rfs, '>', "$output_path/readfuncs.switch.c$tmpext" or die $!;
+
+printf $off $header_comment, 'outfuncs.funcs.c';
+printf $rff $header_comment, 'readfuncs.funcs.c';
+printf $ofs $header_comment, 'outfuncs.switch.c';
+printf $rfs $header_comment, 'readfuncs.switch.c';
+
+print $off $node_includes;
+print $rff $node_includes;
+
+
+push @output_files, 'outfast.funcs.c';
+open my $ofaf, '>', "$output_path/outfast.funcs.c$tmpext" or die $!;
+push @output_files, 'readfast.funcs.c';
+open my $rfaf, '>', "$output_path/readfast.funcs.c$tmpext" or die $!;
+push @output_files, 'outfast.switch.c';
+open my $ofas, '>', "$output_path/outfast.switch.c$tmpext" or die $!;
+push @output_files, 'readfast.switch.c';
+open my $rfas, '>', "$output_path/readfast.switch.c$tmpext" or die $!;
+
+printf $ofaf $header_comment, 'outfast.funcs.c';
+printf $rfaf $header_comment, 'readfast.funcs.c';
+printf $ofas $header_comment, 'outfast.switch.c';
+printf $rfas $header_comment, 'readfast.switch.c';
+
+print $ofaf $node_includes;
+print $rfaf $node_includes;
+
+foreach my $n (@node_types)
+{
+	next if elem $n, @abstract_types;
+	next if elem $n, @nodetag_only;
+	next if elem $n, @no_read_write;
+	next if elem $n, @special_read_write;
+
+	my $no_read = (elem $n, @no_read);
+
+	# output format starts with upper case node type name
+	my $N = uc $n;
+
+	print $ofs "\t\t\tcase T_${n}:\n"
+	  . "\t\t\t\t_out${n}(str, obj);\n"
+	  . "\t\t\t\tbreak;\n";
+
+	print $rfs "\tif (MATCH(\"$N\", "
+	  . length($N) . "))\n"
+	  . "\t\treturn (Node *) _read${n}();\n"
+	  unless $no_read;
+
+	# for out and read fast
+	print $ofas "\t\t\tcase T_${n}:\n"
+		. "\t\t\t\t_out${n}(str, obj);\n"
+		. "\t\t\t\tbreak;\n";
+
+	print $rfas "\t\t\tcase T_${n}:\n"
+		. "\t\t\t\treturn_value = _read${n}();\n"
+		. "\t\t\t\tbreak;\n"
+		unless $no_read;
+
+	next if elem $n, @custom_read_write;
+
+	print $off "
+static void
+_out${n}(StringInfo str, const $n *node)
+{
+\tWRITE_NODE_TYPE(\"$N\");
+
+";
+	# for out fast
+	print $ofaf "
+static void
+_out${n}(StringInfo str, const $n *node)
+{
+\tWRITE_NODE_TYPE(\"$N\");
+
+";
+
+	if (!$no_read)
+	{
+		my $macro =
+		  (@{ $node_type_info{$n}->{fields} } > 0)
+		  ? 'READ_LOCALS'
+		  : 'READ_LOCALS_NO_FIELDS';
+		print $rff "
+static $n *
+_read${n}(void)
+{
+\t$macro($n);
+
+";
+		
+		# for read fast
+		my $macro =
+			(@{ $node_type_info{$n}->{fields} } > 0)
+				? 'READ_LOCALS'
+				: 'READ_LOCALS_NO_FIELDS';
+		print $rfaf "
+static $n *
+_read${n}(void)
+{
+\t$macro($n);
+
+";
+	}
+
+	# track already-processed fields to support field order checks
+	# (this isn't quite redundant with the previous loop, since
+	# we may be considering structs that lack copy/equal support)
+	my %previous_fields;
+
+	# print instructions for each field
+	foreach my $f (@{ $node_type_info{$n}->{fields} })
+	{
+		my $t = $node_type_info{$n}->{field_types}{$f};
+		my @a = @{ $node_type_info{$n}->{field_attrs}{$f} };
+
+		# extract per-field attributes
+		my $array_size_field;
+		my $read_as_field;
+		my $read_write_ignore = 0;
+		foreach my $a (@a)
+		{
+			if ($a =~ /^array_size\(([\w.]+)\)$/)
+			{
+				$array_size_field = $1;
+				# insist that we read the array size first!
+				die
+				  "array size field $array_size_field for field $n.$f must precede $f\n"
+				  if (!$previous_fields{$array_size_field} && !$no_read);
+			}
+			elsif ($a =~ /^read_as\(([\w.]+)\)$/)
+			{
+				$read_as_field = $1;
+			}
+			elsif ($a eq 'read_write_ignore')
+			{
+				$read_write_ignore = 1;
+			}
+		}
+
+		if ($read_write_ignore)
+		{
+			# nothing to do if no_read
+			next if $no_read;
+			# for read_write_ignore with read_as(), emit the appropriate
+			# assignment on the read side and move on.
+			if (defined $read_as_field)
+			{
+				print $rff "\tlocal_node->$f = $read_as_field;\n";
+				
+				#for read fast
+				print $rfaf "\tlocal_node->$f = $read_as_field;\n";
+				next;
+			}
+			# else, bad specification
+			die "$n.$f must not be marked read_write_ignore\n";
+		}
+
+		# select instructions by field type
+		if ($t eq 'bool')
+		{
+			print $off "\tWRITE_BOOL_FIELD($f);\n";
+			print $rff "\tREAD_BOOL_FIELD($f);\n" unless $no_read;
+			
+			# for out and read fast
+			print $ofaf "\tWRITE_BOOL_FIELD($f);\n";
+			print $rfaf "\tREAD_BOOL_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'int' && $f =~ 'location$')
+		{
+			print $off "\tWRITE_LOCATION_FIELD($f);\n";
+			print $rff "\tREAD_LOCATION_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_LOCATION_FIELD($f);\n";
+			print $rfaf "\tREAD_LOCATION_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'int'
+			|| $t eq 'int8'
+			|| $t eq 'int16'
+			|| $t eq 'int32'
+			|| $t eq 'AttrNumber'
+			|| $t eq 'StrategyNumber')
+		{
+			print $off "\tWRITE_INT_FIELD($f);\n";
+			print $rff "\tREAD_INT_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_INT_FIELD($f);\n";
+			print $rfaf "\tREAD_INT_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'int64')
+		{
+			print $off "\tWRITE_LONG_FIELD($f);\n";
+			print $rff "\tREAD_LONG_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_LONG_FIELD($f);\n";
+			print $rfaf "\tREAD_LONG_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'uint32'
+			|| $t eq 'uint8'
+			|| $t eq 'bits32'
+			|| $t eq 'BlockNumber'
+			|| $t eq 'Index'
+			|| $t eq 'SubTransactionId')
+		{
+			print $off "\tWRITE_UINT_FIELD($f);\n";
+			print $rff "\tREAD_UINT_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_UINT_FIELD($f);\n";
+			print $rfaf "\tREAD_UINT_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'uint64'
+			|| $t eq 'AclMode')
+		{
+			print $off "\tWRITE_UINT64_FIELD($f);\n";
+			print $rff "\tREAD_UINT64_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_UINT64_FIELD($f);\n";
+			print $rfaf "\tREAD_UINT64_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'Oid' || $t eq 'RelFileNumber')
+		{
+			print $off "\tWRITE_OID_FIELD($f);\n";
+			print $rff "\tREAD_OID_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_OID_FIELD($f);\n";
+			print $rfaf "\tREAD_OID_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'long')
+		{
+			print $off "\tWRITE_LONG_FIELD($f);\n";
+			print $rff "\tREAD_LONG_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_LONG_FIELD($f);\n";
+			print $rfaf "\tREAD_LONG_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'char')
+		{
+			print $off "\tWRITE_CHAR_FIELD($f);\n";
+			print $rff "\tREAD_CHAR_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_CHAR_FIELD($f);\n";
+			print $rfaf "\tREAD_CHAR_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'double')
+		{
+			print $off "\tWRITE_FLOAT_FIELD($f);\n";
+			print $rff "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_FLOAT_FIELD($f);\n";
+			print $rfaf "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'Cardinality')
+		{
+			print $off "\tWRITE_FLOAT_FIELD($f);\n";
+			print $rff "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_FLOAT_FIELD($f);\n";
+			print $rfaf "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'Cost')
+		{
+			print $off "\tWRITE_FLOAT_FIELD($f);\n";
+			print $rff "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_FLOAT_FIELD($f);\n";
+			print $rfaf "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'QualCost')
+		{
+			print $off "\tWRITE_FLOAT_FIELD($f.startup);\n";
+			print $off "\tWRITE_FLOAT_FIELD($f.per_tuple);\n";
+			print $rff "\tREAD_FLOAT_FIELD($f.startup);\n" unless $no_read;
+			print $rff "\tREAD_FLOAT_FIELD($f.per_tuple);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_FLOAT_FIELD($f.startup);\n";
+			print $ofaf "\tWRITE_FLOAT_FIELD($f.per_tuple);\n";
+			print $rfaf "\tREAD_FLOAT_FIELD($f.startup);\n" unless $no_read;
+			print $rfaf "\tREAD_FLOAT_FIELD($f.per_tuple);\n" unless $no_read;
+		}
+		elsif ($t eq 'Selectivity')
+		{
+			print $off "\tWRITE_FLOAT_FIELD($f);\n";
+			print $rff "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_FLOAT_FIELD($f);\n";
+			print $rfaf "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'char*')
+		{
+			print $off "\tWRITE_STRING_FIELD($f);\n";
+			print $rff "\tREAD_STRING_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_STRING_FIELD($f);\n";
+			print $rfaf "\tREAD_STRING_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'Bitmapset*' || $t eq 'Relids')
+		{
+			print $off "\tWRITE_BITMAPSET_FIELD($f);\n";
+			print $rff "\tREAD_BITMAPSET_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_BITMAPSET_FIELD($f);\n";
+			print $rfaf "\tREAD_BITMAPSET_FIELD($f);\n" unless $no_read;
+		}
+		elsif (elem $t, @enum_types)
+		{
+			print $off "\tWRITE_ENUM_FIELD($f, $t);\n";
+			print $rff "\tREAD_ENUM_FIELD($f, $t);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_ENUM_FIELD($f, $t);\n";
+			print $rfaf "\tREAD_ENUM_FIELD($f, $t);\n" unless $no_read;
+		}
+		# arrays of scalar types
+		elsif ($t =~ /^(\w+)(\*|\[\w+\])$/ and elem $1, @scalar_types)
+		{
+			my $tt = uc $1;
+			if (!defined $array_size_field)
+			{
+				die "no array size defined for $n.$f of type $t\n";
+			}
+			if ($node_type_info{$n}->{field_types}{$array_size_field} eq
+				'List*')
+			{
+				print $off
+				  "\tWRITE_${tt}_ARRAY($f, list_length(node->$array_size_field));\n";
+				print $rff
+				  "\tREAD_${tt}_ARRAY($f, list_length(local_node->$array_size_field));\n"
+				  unless $no_read;
+
+				# for out and read fast
+				print $ofaf
+					"\tWRITE_${tt}_ARRAY($f, list_length(node->$array_size_field));\n";
+				print $rfaf
+					"\tREAD_${tt}_ARRAY($f, list_length(local_node->$array_size_field));\n"
+					unless $no_read;
+			}
+			else
+			{
+				print $off
+				  "\tWRITE_${tt}_ARRAY($f, node->$array_size_field);\n";
+				print $rff
+				  "\tREAD_${tt}_ARRAY($f, local_node->$array_size_field);\n"
+				  unless $no_read;
+
+				# for out and read fast
+				print $ofaf
+					"\tWRITE_${tt}_ARRAY($f, node->$array_size_field);\n";
+				print $rfaf
+					"\tREAD_${tt}_ARRAY($f, local_node->$array_size_field);\n"
+					unless $no_read;
+			}
+		}
+		elsif ($t eq 'function pointer')
+		{
+			# We don't print these, and we can't read them either
+			die "cannot read function pointer in struct \"$n\" field \"$f\"\n"
+			  unless $no_read;
+		}
+		# Special treatments of several Path node fields
+		elsif ($t eq 'RelOptInfo*' && elem 'write_only_relids', @a)
+		{
+			print $off
+			  "\tappendStringInfoString(str, \" :parent_relids \");\n"
+			  . "\toutBitmapset(str, node->$f->relids);\n";
+
+			# for out and read fast
+			print $ofaf
+				"\tappendStringInfoString(str, \" :parent_relids \");\n"
+					. "\toutBitmapset(str, node->$f->relids);\n";
+		}
+		elsif ($t eq 'PathTarget*' && elem 'write_only_nondefault_pathtarget',
+			@a)
+		{
+			(my $f2 = $f) =~ s/pathtarget/parent/;
+			print $off "\tif (node->$f != node->$f2->reltarget)\n"
+			  . "\t\tWRITE_NODE_FIELD($f);\n";
+
+			# for out and read fast
+			print $ofaf "\tif (node->$f != node->$f2->reltarget)\n"
+				. "\t\tWRITE_NODE_FIELD($f);\n";
+		}
+		elsif ($t eq 'ParamPathInfo*' && elem 'write_only_req_outer', @a)
+		{
+			print $off
+			  "\tappendStringInfoString(str, \" :required_outer \");\n"
+			  . "\tif (node->$f)\n"
+			  . "\t\toutBitmapset(str, node->$f->ppi_req_outer);\n"
+			  . "\telse\n"
+			  . "\t\toutBitmapset(str, NULL);\n";
+
+			# for out and read fast
+			print $ofaf
+				"\tappendStringInfoString(str, \" :required_outer \");\n"
+					. "\tif (node->$f)\n"
+					. "\t\toutBitmapset(str, node->$f->ppi_req_outer);\n"
+					. "\telse\n"
+					. "\t\toutBitmapset(str, NULL);\n";
+		}
+		# node type
+		elsif (($t =~ /^(\w+)\*$/ or $t =~ /^struct\s+(\w+)\*$/)
+			and elem $1, @node_types)
+		{
+			die
+			  "node type \"$1\" lacks write support, which is required for struct \"$n\" field \"$f\"\n"
+			  if (elem $1, @no_read_write or elem $1, @nodetag_only);
+			die
+			  "node type \"$1\" lacks read support, which is required for struct \"$n\" field \"$f\"\n"
+			  if (elem $1, @no_read or elem $1, @nodetag_only)
+			  and !$no_read;
+
+			print $off "\tWRITE_NODE_FIELD($f);\n";
+			print $rff "\tREAD_NODE_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_NODE_FIELD($f);\n";
+			print $rfaf "\tREAD_NODE_FIELD($f);\n" unless $no_read;
+		}
+		# arrays of node pointers (currently supported for write only)
+		elsif (($t =~ /^(\w+)\*\*$/ or $t =~ /^struct\s+(\w+)\*\*$/)
+			and elem($1, @node_types))
+		{
+			if (!defined $array_size_field)
+			{
+				die "no array size defined for $n.$f of type $t\n";
+			}
+			if ($node_type_info{$n}->{field_types}{$array_size_field} eq
+				'List*')
+			{
+				print $off
+				  "\tWRITE_NODE_ARRAY($f, list_length(node->$array_size_field));\n";
+				print $rff
+				  "\tREAD_NODE_ARRAY($f, list_length(local_node->$array_size_field));\n"
+				  unless $no_read;
+
+				# for out and read fast
+				print $ofaf
+					"\tWRITE_NODE_ARRAY($f, list_length(node->$array_size_field));\n";
+				print $rfaf
+					"\tREAD_NODE_ARRAY($f, list_length(local_node->$array_size_field));\n"
+					unless $no_read;
+			}
+			else
+			{
+				print $off
+				  "\tWRITE_NODE_ARRAY($f, node->$array_size_field);\n";
+				print $rff
+				  "\tREAD_NODE_ARRAY($f, local_node->$array_size_field);\n"
+				  unless $no_read;
+				
+				# for out and read fast
+				print $ofaf
+					"\tWRITE_NODE_ARRAY($f, node->$array_size_field);\n";
+				print $rfaf
+					"\tREAD_NODE_ARRAY($f, local_node->$array_size_field);\n"
+					unless $no_read;
+			}
+		}
+		elsif ($t eq 'struct CustomPathMethods*'
+			|| $t eq 'struct CustomScanMethods*')
+		{
+			print $off q{
+	/* CustomName is a key to lookup CustomScanMethods */
+	appendStringInfoString(str, " :methods ");
+	outToken(str, node->methods->CustomName);
+};
+			print $rff q!
+	{
+		/* Lookup CustomScanMethods by CustomName */
+		char	   *custom_name;
+		const CustomScanMethods *methods;
+		token = pg_strtok(&length); /* skip methods: */
+		token = pg_strtok(&length); /* CustomName */
+		custom_name = nullable_string(token, length);
+		methods = GetCustomScanMethods(custom_name, false);
+		local_node->methods = methods;
+	}
+! unless $no_read;
+
+			# for out and read fast
+			print $ofaf q{
+	/* CustomName is a key to lookup CustomScanMethods */
+	appendStringInfoString(str, " :methods ");
+	outToken(str, node->methods->CustomName);
+};
+			print $rfaf q!
+	{
+		/* Lookup CustomScanMethods by CustomName */
+		char	   *custom_name;
+		const CustomScanMethods *methods;
+		READ_STRING_VAR(custom_name);
+		/* find custom scan methods from hash table. */
+		methods = GetCustomScanMethods(custom_name, false);
+		local_node->methods = methods;
+	}
+! unless $no_read;
+		}
+		elsif($t eq 'bytea*')
+		{
+			print $ofaf 
+				"\tWRITE_BYTEA_FIELD($f);\n";
+			print $rfaf
+				"\tREAD_BYTEA_FIELD($f);\n"
+				unless $no_read;
+		}
+		elsif($t eq 'CdbPathLocus')
+		{
+			print $off
+				"\t_outCdbPathLocus(str, &node->$f);\n";
+			
+			# for out and read fast
+			print $ofaf
+				"\t_outCdbPathLocus(str, &node->$f);\n";
+		}
+		elsif($t eq 'ItemPointerData')
+		{
+			print $off
+				"\tWRITE_UINT_FIELD($f.ip_blkid.bi_hi);
+	\tWRITE_UINT_FIELD($f.ip_blkid.bi_lo);
+	\tWRITE_UINT_FIELD($f.ip_posid);\n";
+			print $rff
+				"\tREAD_UINT_FIELD($f.ip_blkid.bi_hi);
+	\tREAD_UINT_FIELD($f.ip_blkid.bi_lo);
+	\tREAD_UINT_FIELD($f.ip_posid);\n"
+				unless $no_read;
+
+			# for out and read fast
+			print $ofaf
+				"\tWRITE_UINT_FIELD($f.ip_blkid.bi_hi);
+	\tWRITE_UINT_FIELD($f.ip_blkid.bi_lo);
+	\tWRITE_UINT_FIELD($f.ip_posid);\n";
+			print $rfaf
+				"\tREAD_UINT_FIELD($f.ip_blkid.bi_hi);
+	\tREAD_UINT_FIELD($f.ip_blkid.bi_lo);
+	\tREAD_UINT_FIELD($f.ip_posid);\n"
+				unless $no_read;
+		}
+		elsif($t eq 'TupleDesc')
+		{
+			print $ofaf "\tfor (int i = 0; i < node->$f->natts; i++)
+	\tappendBinaryStringInfo(str, (char *) &node->$f->attrs[i], ATTRIBUTE_FIXED_PART_SIZE);\n";
+			print $rfaf "\tlocal_node->tuple = CreateTemplateTupleDesc(local_node->natts);
+	if (local_node->$f->natts > 0)
+	{
+		int i = 0;
+		for (; i < local_node->$f->natts; i++)
+		{
+			memcpy(&local_node->$f->attrs[i], read_str_ptr, ATTRIBUTE_FIXED_PART_SIZE);
+			read_str_ptr+=ATTRIBUTE_FIXED_PART_SIZE;
+		}
+	}\n"
+				unless $no_read;
+		}
+		else
+		{
+			die
+			  "could not handle type \"$t\" in struct \"$n\" field \"$f\"\n";
+		}
+
+		# for read_as() without read_write_ignore, we have to read the value
+		# that outfuncs.c wrote and then overwrite it.
+		if (defined $read_as_field)
+		{
+			print $rff "\tlocal_node->$f = $read_as_field;\n" unless $no_read;
+			
+			# for out and read fast
+			print $rff "\tlocal_node->$f = $read_as_field;\n" unless $no_read;
+		}
+
+		$previous_fields{$f} = 1;
+	}
+
+	print $off "}
+";
+	print $rff "
+\tREAD_DONE();
+}
+" unless $no_read;
+
+	# for out and read fast
+	print $ofaf "}
+";
+	print $rfaf "
+\tREAD_DONE();
+}
+" unless $no_read;
+}
+
+close $off;
+close $rff;
+close $ofs;
+close $rfs;
+
+
+# queryjumblefuncs.c
+
+push @output_files, 'queryjumblefuncs.funcs.c';
+open my $jff, '>', "$output_path/queryjumblefuncs.funcs.c$tmpext" or die $!;
+push @output_files, 'queryjumblefuncs.switch.c';
+open my $jfs, '>', "$output_path/queryjumblefuncs.switch.c$tmpext" or die $!;
+
+printf $jff $header_comment, 'queryjumblefuncs.funcs.c';
+printf $jfs $header_comment, 'queryjumblefuncs.switch.c';
+
+print $jff $node_includes;
+
+foreach my $n (@node_types)
+{
+	next if elem $n, @abstract_types;
+	next if elem $n, @nodetag_only;
+	my $struct_no_query_jumble = (elem $n, @no_query_jumble);
+
+	print $jfs "\t\t\tcase T_${n}:\n"
+	  . "\t\t\t\t_jumble${n}(jstate, expr);\n"
+	  . "\t\t\t\tbreak;\n"
+	  unless $struct_no_query_jumble;
+
+	next if elem $n, @custom_query_jumble;
+
+	print $jff "
+static void
+_jumble${n}(JumbleState *jstate, Node *node)
+{
+\t${n} *expr = (${n} *) node;\n
+" unless $struct_no_query_jumble;
+
+	# print instructions for each field
+	foreach my $f (@{ $node_type_info{$n}->{fields} })
+	{
+		my $t = $node_type_info{$n}->{field_types}{$f};
+		my @a = @{ $node_type_info{$n}->{field_attrs}{$f} };
+		my $query_jumble_ignore = $struct_no_query_jumble;
+		my $query_jumble_location = 0;
+
+		# extract per-field attributes
+		foreach my $a (@a)
+		{
+			if ($a eq 'query_jumble_ignore')
+			{
+				$query_jumble_ignore = 1;
+			}
+			elsif ($a eq 'query_jumble_location')
+			{
+				$query_jumble_location = 1;
+			}
+		}
+
+		# node type
+		if (($t =~ /^(\w+)\*$/ or $t =~ /^struct\s+(\w+)\*$/)
+			and elem $1, @node_types)
+		{
+			print $jff "\tJUMBLE_NODE($f);\n"
+			  unless $query_jumble_ignore;
+		}
+		elsif ($t eq 'int' && $f =~ 'location$')
+		{
+			# Track the node's location only if directly requested.
+			if ($query_jumble_location)
+			{
+				print $jff "\tJUMBLE_LOCATION($f);\n"
+				  unless $query_jumble_ignore;
+			}
+		}
+		elsif ($t eq 'char*')
+		{
+			print $jff "\tJUMBLE_STRING($f);\n"
+			  unless $query_jumble_ignore;
+		}
+		else
+		{
+			print $jff "\tJUMBLE_FIELD($f);\n"
+			  unless $query_jumble_ignore;
+		}
+	}
+
+	# Some nodes have no attributes like CheckPointStmt,
+	# so tweak things for empty contents.
+	if (scalar(@{ $node_type_info{$n}->{fields} }) == 0)
+	{
+		print $jff "\t(void) expr;\n"
+		  unless $struct_no_query_jumble;
+	}
+
+	print $jff "}
+" unless $struct_no_query_jumble;
+}
+
+close $jff;
+close $jfs;
 
 # now rename the temporary files to their final names
 foreach my $file (@output_files)

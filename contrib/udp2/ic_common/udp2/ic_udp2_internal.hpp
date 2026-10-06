@@ -631,7 +631,7 @@ struct CursorICHistoryTable
 	}
 
 	void purge() {
-		for (uint8 index = 0; index < size; index++) {
+		for (uint32 index = 0; index < size; index++) {
 			while (table[index]) {
 				CursorICHistoryEntry *trash = table[index];
 				table[index] = trash->next;

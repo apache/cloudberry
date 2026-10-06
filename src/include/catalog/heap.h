@@ -48,11 +48,11 @@ typedef struct CookedConstraint
 	 */
 	NodeTag		type;
 	ConstrType	contype;		/* CONSTR_DEFAULT or CONSTR_CHECK */
-	Oid			conoid;			/* constr OID if created, otherwise Invalid */
+	Oid			conoid pg_node_attr(read_as(InvalidOid), read_write_ignore);			/* constr OID if created, otherwise Invalid */
 	char	   *name;			/* name, or NULL if none */
 	AttrNumber	attnum;			/* which attr (only for DEFAULT) */
 	Node	   *expr;			/* transformed default or check expr */
-	bool		skip_validation;	/* skip validation? (only for CHECK) */
+	bool		skip_validation pg_node_attr(read_as(false), read_write_ignore);	/* skip validation? (only for CHECK) */
 	bool		is_local;		/* constraint has local (non-inherited) def */
 	int			inhcount;		/* number of times constraint is inherited */
 	bool		is_no_inherit;	/* constraint has local def and cannot be

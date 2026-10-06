@@ -136,15 +136,36 @@ dl_can_log_cleanup_warning(void)
 					 errmsg("datalake_fdw: %s", dl_error_msg_))); \
 	} while (0)
 
+/*
+ * Class 2 guards record what happened as well as that it happened.
+ *
+ * The detail is one per-backend record, and dl_error_report() decides whether
+ * it belongs to the failure being reported by comparing codes -- which cannot
+ * tell this DL_ERR_INTERNAL from an earlier one.  A guard that set the code and
+ * recorded nothing would therefore report the previous statement's message as
+ * the cause of this one.  So it always records, and what a C++ exception has to
+ * say is the only description of it there is going to be.  PAX takes the same
+ * line in CBDB_END_TRY(), where an unnamed failure falls back to the function
+ * it happened in rather than to whatever was there before.
+ *
+ * `operation` names the call, the way the metadata engine's dispatch does.
+ */
 #define DL_ABI_GUARD_BEGIN \
 	try \
 	{
 
-#define DL_ABI_GUARD_END(errvar) \
+#define DL_ABI_GUARD_END(errvar, operation) \
+	} \
+	catch (const std::exception &e) \
+	{ \
+		(errvar) = DL_ERR_INTERNAL; \
+		dl_error_set(DL_ERR_INTERNAL, (operation), NULL, e.what()); \
 	} \
 	catch (...) \
 	{ \
 		(errvar) = DL_ERR_INTERNAL; \
+		dl_error_set(DL_ERR_INTERNAL, (operation), NULL, \
+					 "unknown C++ exception"); \
 	}
 
 #define DL_CLEANUP_GUARD_BEGIN \

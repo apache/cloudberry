@@ -1,6 +1,12 @@
 -- start_ignore
 \! gpconfig -c shared_preload_libraries -v "interconnect"
-\! gpstop -raiq
+-- Restart in fast mode, not immediate: an immediate shutdown skips the
+-- shutdown checkpoint, so the next startup runs crash recovery, and while the
+-- postmaster is in PM_RECOVERY it rejects the connection gpstart makes to read
+-- the segment configuration ("the database system is not accepting
+-- connections").  gpstop -r then fails, psql gives up at the \c below, and the
+-- whole file is skipped with only the coordinator left running.
+\! gpstop -rafq
 \c
 DROP TABLE IF EXISTS test_ic_data;
 CREATE EXTENSION IF NOT EXISTS interconnect;
@@ -83,5 +89,5 @@ DROP EXTENSION interconnect;
 
 -- start_ignore
 \! gpconfig -r shared_preload_libraries
-\! gpstop -raiq
+\! gpstop -rafq
 -- end_ignore

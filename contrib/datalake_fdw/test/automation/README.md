@@ -56,13 +56,16 @@ scripts/test/           category runners
 scripts/utils/          shared shell helpers
 sqlrepo/smoke/          one directory per category
   iceberg_am/           DDL, refusals and privileges -- no external service
+  format_parquet/       a table through a local Parquet file and back
 ```
 
-`sqlrepo/smoke/iceberg_am` holds the cases pg_regress runs; the module's
-`Makefile` points `--inputdir` here, so `make installcheck` from the module
-directory and `make test` from this one run the same cases.  They live here
-rather than in a `sql/` directory of their own so that there is one place to look
-for test material.
+Each of these holds cases pg_regress runs, and pg_regress takes one
+`--inputdir`, so each category is a run of its own: the module's `Makefile` has
+`installcheck` for `iceberg_am` and `installcheck-format-parquet` for the other,
+and hangs the second off the first so that asking for `installcheck` gets both.
+`make test` from this directory runs the same cases.  They live here rather than
+in a `sql/` directory of their own so that there is one place to look for test
+material.
 
 ## What arrives with the metadata engine
 

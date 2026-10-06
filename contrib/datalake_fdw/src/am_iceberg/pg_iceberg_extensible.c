@@ -33,6 +33,7 @@
 #include "access/table.h"
 #include "access/tableam.h"
 #include "am_iceberg/pg_iceberg_ddl.h"
+#include "common/dl_resource.h"
 #include "am_iceberg/pg_iceberg_guc.h"
 #include "am_iceberg/pg_iceberg_options.h"
 #include "am_iceberg/pg_iceberg_reject.h"
@@ -46,13 +47,16 @@
 #include "common/backend_registry.h"
 #include "fmgr.h"
 #include "foreign/foreign.h"
+#include "format/format_types.h"
 #include "meta/iceberg_meta_engine.h"
 #include "meta/meta_engine_init.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
+#include "parser/parse_type.h"
 #include "storage/lmgr.h"
 #include "tcop/utility.h"
+#include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/syscache.h"
 
@@ -84,6 +88,7 @@ static void unlock_create_servers(Oid catalog_srvid, Oid volume_srvid,
 								  LOCKMODE lockmode);
 static void validate_create_binding(const char *catalog_name,
 									const char *volume_name);
+static void check_iceberg_columns(CreateStmt *stmt);
 static void prepare_iceberg_create(CreateStmt *stmt);
 static void reject_utility_mode_ddl(const char *subject) pg_attribute_noreturn();
 static void reject_targeted_operation(const char *operation);
@@ -581,6 +586,64 @@ validate_create_binding(const char *catalog_name, const char *volume_name)
 	pg_iceberg_check_server_usage(volume_server->serverid);
 }
 
+/*
+ * Every column has to be one a data file can hold, and CREATE TABLE is the
+ * moment to say so: a table accepted here and refused at its first write is a
+ * table nothing can ever be put in, and ALTER TABLE cannot reach it either.
+ * The rule is the format layer's own, asked through the one function both
+ * sides use, so that what the DDL accepts and what the writer stores cannot
+ * drift apart.
+ */
+static void
+check_iceberg_columns(CreateStmt *stmt)
+{
+	ListCell   *lc;
+
+	foreach(lc, stmt->tableElts)
+	{
+		Node	   *element = (Node *) lfirst(lc);
+
+		if (IsA(element, ColumnDef))
+		{
+			ColumnDef  *coldef = (ColumnDef *) element;
+			Type		type;
+			Oid			typid;
+			int32		typmod;
+			const char *refusal;
+
+			/*
+			 * missing_ok, because "serial" and its relatives are not types:
+			 * the parser turns them into an integer column and a sequence
+			 * later, and the integer is fine.  Anything else that does not
+			 * resolve is refused by the parser, in its usual words.
+			 */
+			type = LookupTypeName(NULL, coldef->typeName, &typmod, true);
+			if (type == NULL)
+				continue;
+			typid = typeTypeId(type);
+			ReleaseSysCache(type);
+
+			refusal = dl_format_type_refusal(typid, typmod);
+			if (refusal != NULL)
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("iceberg: column \"%s\" has type %s, which %s",
+								coldef->colname,
+								format_type_with_typemod(typid, typmod),
+								refusal)));
+		}
+		else if (IsA(element, TableLikeClause))
+		{
+			/*
+			 * The columns LIKE copies are resolved by the parser after this
+			 * hook has run, so nothing here can see their types; refusing the
+			 * clause is what keeps an unchecked one out.
+			 */
+			pg_iceberg_not_supported("LIKE");
+		}
+	}
+}
+
 static void
 prepare_iceberg_create(CreateStmt *stmt)
 {
@@ -630,6 +693,8 @@ prepare_iceberg_create(CreateStmt *stmt)
 		pg_iceberg_not_supported("ON COMMIT");
 	if (stmt->tablespacename != NULL)
 		pg_iceberg_not_supported("TABLESPACE");
+
+	check_iceberg_columns(stmt);
 
 	if (Gp_role != GP_ROLE_EXECUTE)
 	{
@@ -951,6 +1016,7 @@ _PG_init(void)
 				 errmsg("datalake_fdw must be loaded via shared_preload_libraries"),
 				 errhint("Add \"datalake_fdw\" to shared_preload_libraries and restart the server.")));
 
+	dl_resource_init();
 	pg_iceberg_define_gucs();
 	pg_iceberg_register_reloptions();
 	DatalakeRegisterMetaEngines();

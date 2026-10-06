@@ -108,6 +108,10 @@ code or new licensing patterns.
             <exclude>gpcontrib/gpcloud/regress/**</exclude>
             <exclude>gpcontrib/gpcloud/test/**</exclude>
             <exclude>gpcontrib/gpcloud/bin/**</exclude>
+            <!-- The gpcloud S3 implementation was inherited from Greenplum,
+                 which ships these sources without a licence header.  They are
+                 not project-authored, so an ASF header must not be added; the
+                 files stay excluded instead. -->
             <exclude>gpcontrib/gpcloud/src/**.cpp</exclude>
 
             <exclude>gpcontrib/gp_debug_numsegments/Makefile</exclude>
@@ -169,7 +173,6 @@ code or new licensing patterns.
             <exclude>gpMgmt/demo/gppkg/build_gppkg.mk</exclude>
             <exclude>gpMgmt/demo/gppkg/generate_sample_gppkg.sh</exclude>
 
-            <exclude>gpMgmt/demo/test/**</exclude>
             <exclude>gpMgmt/test/**</exclude>
 
             <exclude>gpMgmt/bin/gpload_test/gpload2/*.ans</exclude>
@@ -180,7 +183,6 @@ code or new licensing patterns.
             <exclude>gpMgmt/bin/test/suite.bash</exclude>
             <exclude>gpMgmt/bin/gpcheckcat_modules/**</exclude>
 
-            <exclude>gpMgmt/bin/.rcfile</exclude>
             <exclude>gpMgmt/bin/Makefile</exclude>
             <exclude>gpMgmt/bin/stream/Makefile</exclude>
             <exclude>gpMgmt/bin/stream/stream.f</exclude>
@@ -310,7 +312,6 @@ code or new licensing patterns.
             <exclude>gpMgmt/bin/pyproject.toml</exclude>
 
             <exclude>config/Makefile</exclude>
-            <exclude>config/ac_func_accept_argtypes.m4</exclude>
             <exclude>config/c-compiler.m4</exclude>
             <exclude>config/c-library.m4</exclude>
             <exclude>config/check_modules.pl</exclude>
@@ -328,7 +329,6 @@ code or new licensing patterns.
 
             <!-- GPLv2-AUTOEXC -->
             <exclude>config/pkg.m4</exclude>
-            <exclude>config/libtool.m4</exclude>
             <exclude>config/ax_pthread.m4</exclude>
 
             <exclude>.abi-check/**</exclude>
@@ -467,9 +467,6 @@ code or new licensing patterns.
             <exclude>contrib/pgcrypto/crypt-md5.c</exclude>
             <exclude>contrib/pgcrypto/openssl_redirect.c</exclude>
             <exclude>contrib/pgcrypto/crypt-gensalt.c</exclude>
-            <exclude>contrib/pgcrypto/rijndael.c</exclude>
-            <exclude>contrib/pgcrypto/rijndael.tbl</exclude>
-            <exclude>contrib/pgcrypto/rijndael.h</exclude>
             <exclude>contrib/pgcrypto/crypt-blowfish.c</exclude>
             <exclude>contrib/pgcrypto/package/gppkg_spec.yml.in</exclude>
             <exclude>contrib/pgcrypto/package/pgcrypto.spec</exclude>
@@ -553,13 +550,7 @@ code or new licensing patterns.
             <exclude>gpAux/extensions/pljava/src/java/Makefile.global</exclude>
             <exclude>gpAux/releng/set_bld_arch.sh</exclude>
             <exclude>gpAux/releng/gppkg.mk</exclude>
-            <exclude>gpAux/client/install/src/windows/Makefile</exclude>
-            <exclude>gpAux/client/install/src/windows/greenplum-clients.wxs</exclude>
-            <exclude>gpAux/client/install/src/windows/CreatePackage.bat</exclude>
-            <exclude>gpAux/client/install/src/windows/CopyDependencies.bat</exclude>
-            <exclude>gpAux/client/install/src/windows/license.rtf</exclude>
             <exclude>gpAux/client/scripts/cloudberry_clients_path.sh</exclude>
-            <exclude>gpAux/client/scripts/cloudberry_clients_path.bat</exclude>
 
             <exclude>doc/**</exclude>
 
@@ -619,7 +610,6 @@ code or new licensing patterns.
             <exclude>src/pl/plpython/plpy_procedure.c</exclude>
             <exclude>src/pl/plpython/plpy_util.c</exclude>
             <exclude>src/pl/plpython/plpy_exec.c</exclude>
-            <exclude>src/pl/plpython/regress-python3-mangle.mk</exclude>
             <exclude>src/pl/plpython/plpy_spi.c</exclude>
             <exclude>src/pl/plpython/plpy_subxactobject.h</exclude>
             <exclude>src/pl/plpython/nls.mk</exclude>
@@ -630,7 +620,6 @@ code or new licensing patterns.
             <exclude>src/pl/plperl/Util.xs</exclude>
             <exclude>src/pl/plperl/plperl.c</exclude>
             <exclude>src/pl/plperl/SPI.xs</exclude>
-            <exclude>src/pl/plperl/plperl_helpers.h</exclude>
             <exclude>src/pl/plperl/nls.mk</exclude>
             <exclude>src/pl/tcl/pltcl.c</exclude>
             <exclude>src/pl/tcl/nls.mk</exclude>
@@ -944,7 +933,6 @@ code or new licensing patterns.
             <exclude>src/include/utils/ps_status.h</exclude>
             <exclude>src/include/regex/regerrs.h</exclude>
             <exclude>src/include/common/pg_lzcompress.h</exclude>
-            <exclude>src/include/common/unicode_combining_table.h</exclude>
             <exclude>src/include/common/unicode_normprops_table.h</exclude>
             <exclude>src/include/fstream/fstream.h</exclude>
             <exclude>src/include/fstream/gfile.h</exclude>
@@ -962,7 +950,6 @@ code or new licensing patterns.
             <exclude>src/include/port/linux.h</exclude>
             <exclude>src/include/port/solaris.h</exclude>
             <exclude>src/include/port/win32.h</exclude>
-            <exclude>src/include/port/hpux.h</exclude>
             <exclude>src/include/port/pg_pthread.h</exclude>
             <exclude>src/include/port/freebsd.h</exclude>
             <exclude>src/include/port/darwin.h</exclude>
@@ -984,7 +971,6 @@ code or new licensing patterns.
             <exclude>src/include/port/win32_msvc/sys/time.h</exclude>
             <exclude>src/include/port/win32_msvc/sys/file.h</exclude>
             <exclude>src/include/port/win32_msvc/sys/param.h</exclude>
-            <exclude>src/template/hpux</exclude>
             <exclude>src/template/netbsd</exclude>
             <exclude>src/template/freebsd</exclude>
             <exclude>src/template/osf</exclude>
@@ -1191,8 +1177,6 @@ code or new licensing patterns.
             <exclude>src/backend/replication/test/gp_replication_test.c</exclude>
             <exclude>src/backend/commands/test/tablecmds_test.c</exclude>
             <exclude>src/backend/commands/analyzefuncs.c</exclude>
-            <exclude>src/backend/port/hpux/tas.c.template</exclude>
-            <exclude>src/backend/port/tas/hpux_hppa.s</exclude>
             <exclude>src/backend/port/tas/dummy.s</exclude>
             <exclude>src/backend/port/aix/mkldexport.sh</exclude>
             <exclude>src/backend/nls.mk</exclude>
@@ -1210,7 +1194,6 @@ code or new licensing patterns.
             <exclude>src/makefiles/Makefile.linux</exclude>
             <exclude>src/makefiles/Makefile.solaris</exclude>
             <exclude>src/makefiles/Makefile.darwin</exclude>
-            <exclude>src/makefiles/Makefile.hpux</exclude>
             <exclude>src/makefiles/Makefile.openbsd</exclude>
             <exclude>src/makefiles/Makefile.aix</exclude>
             <exclude>src/makefiles/Makefile.freebsd</exclude>
@@ -1227,7 +1210,6 @@ code or new licensing patterns.
             <exclude>src/interfaces/ecpg/README.dynSQL</exclude>
             <exclude>src/interfaces/ecpg/test/preproc/struct.h</exclude>
             <exclude>src/interfaces/ecpg/test/preproc/strings.h</exclude>
-            <exclude>src/interfaces/libpq/test/regress.in</exclude>
             <exclude>src/interfaces/libpq/pg_service.conf.sample</exclude>
             <exclude>src/interfaces/libpq/win32.h</exclude>
             <exclude>src/interfaces/libpq/exports.txt</exclude>
@@ -1249,12 +1231,182 @@ code or new licensing patterns.
                  find out the origins of these.
             -->
 
-            <exclude>**/*.gif</exclude>
-            <exclude>**/*.md</exclude>
-            <exclude>**/*.json</exclude>
-            <exclude>**/*.sql</exclude>
-            <exclude>**/*.out</exclude>
-            <exclude>**/Thumbs.db</exclude>
+            <!-- Markdown: every project-authored .md carries an ASF header.
+                 What remains is README files, which by convention do not, plus
+                 documentation inherited from orafce and from Greenplum's ORCA,
+                 and the docs of the third-party pax_storage submodules. -->
+            <exclude>**/README*.md</exclude>
+            <exclude>**/readme*.md</exclude>
+            <exclude>gpcontrib/orafce/doc/**/*.md</exclude>
+            <exclude>src/backend/gporca/**/*.md</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/*/**/*.md</exclude>
+            <exclude>src/backend/cdb/dispatcher/extend_protocol_libpq.md</exclude>
+
+            <!-- SQL scripts and regression expected-output inherited from
+                 PostgreSQL, Greenplum and other upstreams.  Upstream ships these
+                 without a licence header and they must not be given an ASF one.
+                 Scoped to .sql/.out so that C, Perl and other sources in the
+                 same directories stay in the scan.  The 5354 project-authored
+                 .sql and .out files elsewhere in the tree do carry a header and
+                 remain checked, so a new one without a header is now reported
+                 rather than silently skipped. -->
+            <exclude>contrib/adminpack/**/*.sql</exclude>
+            <exclude>contrib/adminpack/**/*.out</exclude>
+            <exclude>contrib/amcheck/**/*.sql</exclude>
+            <exclude>contrib/amcheck/**/*.out</exclude>
+            <exclude>contrib/auto_explain/**/*.sql</exclude>
+            <exclude>contrib/auto_explain/**/*.out</exclude>
+            <exclude>contrib/basic_archive/**/*.sql</exclude>
+            <exclude>contrib/basic_archive/**/*.out</exclude>
+            <exclude>contrib/bloom/**/*.sql</exclude>
+            <exclude>contrib/bloom/**/*.out</exclude>
+            <exclude>contrib/bool_plperl/**/*.sql</exclude>
+            <exclude>contrib/bool_plperl/**/*.out</exclude>
+            <exclude>contrib/btree_gin/**/*.sql</exclude>
+            <exclude>contrib/btree_gin/**/*.out</exclude>
+            <exclude>contrib/btree_gist/**/*.sql</exclude>
+            <exclude>contrib/btree_gist/**/*.out</exclude>
+            <exclude>contrib/citext/**/*.sql</exclude>
+            <exclude>contrib/citext/**/*.out</exclude>
+            <exclude>contrib/cube/**/*.sql</exclude>
+            <exclude>contrib/cube/**/*.out</exclude>
+            <exclude>contrib/datalake_fdw/test/**/*.sql</exclude>
+            <exclude>contrib/datalake_fdw/test/**/*.out</exclude>
+            <exclude>contrib/dblink/**/*.sql</exclude>
+            <exclude>contrib/dblink/**/*.out</exclude>
+            <exclude>contrib/dict_int/**/*.sql</exclude>
+            <exclude>contrib/dict_int/**/*.out</exclude>
+            <exclude>contrib/dict_xsyn/**/*.sql</exclude>
+            <exclude>contrib/dict_xsyn/**/*.out</exclude>
+            <exclude>contrib/earthdistance/**/*.sql</exclude>
+            <exclude>contrib/earthdistance/**/*.out</exclude>
+            <exclude>contrib/extprotocol/**/*.sql</exclude>
+            <exclude>contrib/extprotocol/**/*.out</exclude>
+            <exclude>contrib/file_fdw/**/*.sql</exclude>
+            <exclude>contrib/file_fdw/**/*.out</exclude>
+            <exclude>contrib/formatter_fixedwidth/**/*.sql</exclude>
+            <exclude>contrib/fuzzystrmatch/**/*.sql</exclude>
+            <exclude>contrib/fuzzystrmatch/**/*.out</exclude>
+            <exclude>contrib/hstore/**/*.sql</exclude>
+            <exclude>contrib/hstore/**/*.out</exclude>
+            <exclude>contrib/hstore_plperl/**/*.sql</exclude>
+            <exclude>contrib/hstore_plperl/**/*.out</exclude>
+            <exclude>contrib/hstore_plpython/**/*.sql</exclude>
+            <exclude>contrib/hstore_plpython/**/*.out</exclude>
+            <exclude>contrib/indexscan/**/*.sql</exclude>
+            <exclude>contrib/indexscan/**/*.out</exclude>
+            <exclude>contrib/intagg/**/*.sql</exclude>
+            <exclude>contrib/intarray/**/*.sql</exclude>
+            <exclude>contrib/intarray/**/*.out</exclude>
+            <exclude>contrib/interconnect/**/*.sql</exclude>
+            <exclude>contrib/interconnect/**/*.out</exclude>
+            <exclude>contrib/isn/**/*.sql</exclude>
+            <exclude>contrib/isn/**/*.out</exclude>
+            <exclude>contrib/jsonb_plperl/**/*.sql</exclude>
+            <exclude>contrib/jsonb_plperl/**/*.out</exclude>
+            <exclude>contrib/jsonb_plpython/**/*.sql</exclude>
+            <exclude>contrib/jsonb_plpython/**/*.out</exclude>
+            <exclude>contrib/lo/**/*.sql</exclude>
+            <exclude>contrib/lo/**/*.out</exclude>
+            <exclude>contrib/ltree/**/*.sql</exclude>
+            <exclude>contrib/ltree/**/*.out</exclude>
+            <exclude>contrib/ltree_plpython/**/*.sql</exclude>
+            <exclude>contrib/ltree_plpython/**/*.out</exclude>
+            <exclude>contrib/old_snapshot/**/*.sql</exclude>
+            <exclude>contrib/pageinspect/**/*.sql</exclude>
+            <exclude>contrib/pageinspect/**/*.out</exclude>
+            <exclude>contrib/passwordcheck/**/*.sql</exclude>
+            <exclude>contrib/passwordcheck/**/*.out</exclude>
+            <exclude>contrib/pax_storage/sql/**/*.sql</exclude>
+            <exclude>contrib/pg_buffercache/**/*.sql</exclude>
+            <exclude>contrib/pg_buffercache/**/*.out</exclude>
+            <exclude>contrib/pg_freespacemap/**/*.sql</exclude>
+            <exclude>contrib/pg_freespacemap/**/*.out</exclude>
+            <exclude>contrib/pg_prewarm/**/*.sql</exclude>
+            <exclude>contrib/pg_stat_statements/**/*.sql</exclude>
+            <exclude>contrib/pg_stat_statements/**/*.out</exclude>
+            <exclude>contrib/pg_surgery/**/*.sql</exclude>
+            <exclude>contrib/pg_surgery/**/*.out</exclude>
+            <exclude>contrib/pg_trgm/**/*.sql</exclude>
+            <exclude>contrib/pg_trgm/**/*.out</exclude>
+            <exclude>contrib/pg_visibility/**/*.sql</exclude>
+            <exclude>contrib/pg_visibility/**/*.out</exclude>
+            <exclude>contrib/pg_walinspect/**/*.sql</exclude>
+            <exclude>contrib/pg_walinspect/**/*.out</exclude>
+            <exclude>contrib/pgcrypto/**/*.sql</exclude>
+            <exclude>contrib/pgcrypto/**/*.out</exclude>
+            <exclude>contrib/pgrowlocks/**/*.sql</exclude>
+            <exclude>contrib/pgrowlocks/**/*.out</exclude>
+            <exclude>contrib/pgstattuple/**/*.sql</exclude>
+            <exclude>contrib/pgstattuple/**/*.out</exclude>
+            <exclude>contrib/postgres_fdw/**/*.sql</exclude>
+            <exclude>contrib/postgres_fdw/**/*.out</exclude>
+            <exclude>contrib/sasdemo/sql/**/*.sql</exclude>
+            <exclude>contrib/seg/**/*.sql</exclude>
+            <exclude>contrib/seg/**/*.out</exclude>
+            <exclude>contrib/sepgsql/**/*.sql</exclude>
+            <exclude>contrib/sepgsql/**/*.out</exclude>
+            <exclude>contrib/spi/**/*.sql</exclude>
+            <exclude>contrib/sslinfo/**/*.sql</exclude>
+            <exclude>contrib/sslinfo/**/*.out</exclude>
+            <exclude>contrib/tablefunc/**/*.sql</exclude>
+            <exclude>contrib/tablefunc/**/*.out</exclude>
+            <exclude>contrib/tcn/**/*.sql</exclude>
+            <exclude>contrib/tcn/**/*.out</exclude>
+            <exclude>contrib/test_decoding/**/*.sql</exclude>
+            <exclude>contrib/test_decoding/**/*.out</exclude>
+            <exclude>contrib/tsm_system_rows/**/*.sql</exclude>
+            <exclude>contrib/tsm_system_rows/**/*.out</exclude>
+            <exclude>contrib/tsm_system_time/**/*.sql</exclude>
+            <exclude>contrib/tsm_system_time/**/*.out</exclude>
+            <exclude>contrib/unaccent/expected/**/*.out</exclude>
+            <exclude>contrib/uuid-ossp/**/*.sql</exclude>
+            <exclude>contrib/uuid-ossp/**/*.out</exclude>
+            <exclude>contrib/xml2/**/*.sql</exclude>
+            <exclude>contrib/xml2/**/*.out</exclude>
+            <exclude>gpcontrib/gp_debug_numsegments/**/*.sql</exclude>
+            <exclude>gpcontrib/gp_debug_numsegments/**/*.out</exclude>
+            <exclude>gpcontrib/gp_distribution_policy/**/*.sql</exclude>
+            <exclude>gpcontrib/gp_exttable_fdw/**/*.sql</exclude>
+            <exclude>gpcontrib/gp_inject_fault/**/*.sql</exclude>
+            <exclude>gpcontrib/gp_inject_fault/**/*.out</exclude>
+            <exclude>gpcontrib/gp_sparse_vector/**/*.sql</exclude>
+            <exclude>gpcontrib/gp_sparse_vector/**/*.out</exclude>
+            <exclude>gpcontrib/orafce/**/*.sql</exclude>
+            <exclude>gpcontrib/orafce/**/*.out</exclude>
+            <exclude>gpcontrib/pg_hint_plan/**/*.sql</exclude>
+            <exclude>gpcontrib/pg_hint_plan/**/*.out</exclude>
+            <exclude>gpcontrib/pg_hint_plan/sql/**/*.sql</exclude>
+            <exclude>gpcontrib/pxf_fdw/**/*.sql</exclude>
+            <exclude>gpcontrib/pxf_fdw/**/*.out</exclude>
+            <exclude>gpcontrib/zstd/**/*.sql</exclude>
+            <exclude>gpcontrib/zstd/**/*.out</exclude>
+            <exclude>src/bin/**/*.sql</exclude>
+            <exclude>src/interfaces/**/*.sql</exclude>
+            <exclude>src/interfaces/**/*.out</exclude>
+            <exclude>src/pl/**/*.sql</exclude>
+            <exclude>src/pl/**/*.out</exclude>
+            <exclude>contrib/unaccent/unaccent--1.0--1.1.sql</exclude>
+            <exclude>contrib/unaccent/unaccent--1.1.sql</exclude>
+            <exclude>src/backend/catalog/cdb_schema.sql</exclude>
+            <exclude>src/backend/catalog/gp_toolkit_test.sql</exclude>
+
+            <!-- Project-authored files that cannot carry a header.
+                 GitHub copies the pull request template into the body of
+                 every pull request, so a licence header on it would appear
+                 in each one. -->
+            <exclude>.github/pull_request_template.md</exclude>
+
+            <!-- Extensions brought into gpcontrib during Cloudberry's own
+                 development: gp_relsizes_stats, gp_relaccess_stats, and
+                 gp_stats_collector.  Their regression fixtures came with 
+                 them and carry no ASF header. -->
+            <exclude>gpcontrib/gp_relaccess_stats/**/*.sql</exclude>
+            <exclude>gpcontrib/gp_relaccess_stats/**/*.out</exclude>
+            <exclude>gpcontrib/gp_relsizes_stats/**/*.sql</exclude>
+            <exclude>gpcontrib/gp_relsizes_stats/**/*.out</exclude>
+            <exclude>gpcontrib/gp_stats_collector/**/*.sql</exclude>
+            <exclude>gpcontrib/gp_stats_collector/**/*.out</exclude>
             <exclude>.github/full_color_black.svg</exclude>
             <exclude>.github/full_color_white.svg</exclude>
             <exclude>sonar-project.properties</exclude>
@@ -1263,7 +1415,6 @@ code or new licensing patterns.
             <!-- The following files are from pg_cron under PostgreSQL 
                  license, introduced by Cloudberry.
             -->
-            <exclude>src/include/task/bitstring.h</exclude>
             <exclude>src/include/task/cron.h</exclude>
             <exclude>src/include/task/pg_cron.h</exclude>
             <exclude>src/include/task/task_states.h</exclude>
@@ -1281,6 +1432,9 @@ code or new licensing patterns.
             <exclude>gpcontrib/gp_relsizes_stats/gp_relsizes_stats.control</exclude>
             <exclude>gpcontrib/gp_relsizes_stats/test/postgresql.conf.add</exclude>
 
+            <exclude>gpcontrib/gp_relaccess_stats/Makefile</exclude>
+            <exclude>gpcontrib/gp_relaccess_stats/gp_relaccess_stats.control</exclude>
+
             <exclude>gpcontrib/reject_partition_fullscan/Makefile</exclude>
             <exclude>gpcontrib/reject_partition_fullscan/reject_partition_fullscan.control</exclude>
 
@@ -1297,255 +1451,6 @@ code or new licensing patterns.
             <exclude>contrib/pax_storage/src/api/python3/MANIFEST.in</exclude>
             <exclude>contrib/pax_storage/src/api/python3/setup.cfg</exclude>
 
-            <exclude>dependency/yyjson/.gitattributes</exclude>
-            <exclude>dependency/yyjson/.github/codecov.yml</exclude>
-            <exclude>dependency/yyjson/.github/workflows/cmake.yml</exclude>
-            <exclude>dependency/yyjson/CMakeLists.txt</exclude>
-            <exclude>dependency/yyjson/Package.swift</exclude>
-            <exclude>dependency/yyjson/cmake/FindGMP.cmake</exclude>
-            <exclude>dependency/yyjson/cmake/FindMPFR.cmake</exclude>
-            <exclude>dependency/yyjson/cmake/XcodeProperty.cmake</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/DoxyLayout.xml</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/Doxyfile.in</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/annotated.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/annotated_dup.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/api.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/building-and-testing.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/classes.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/cookie.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/data-structures.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/deprecated.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/dir_68267d1309a1af8e8297ef4c3efbcdba.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/dir_68267d1309a1af8e8297ef4c3efbcdba.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/dir_e68e8157741866f444e17edd764ebbae.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/doc.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/docd.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/doxygen.css</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/doxygen.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/doxygen_crawl.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/files.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/files_dup.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/folderclosed.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/folderclosedd.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/folderopen.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/folderopend.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/functions.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/functions_vars.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/globals.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/globals_defs.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/globals_dup.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/globals_func.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/globals_func.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/globals_type.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/globals_vars.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/globals_y.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/index.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/index.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/jquery.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/md__c_h_a_n_g_e_l_o_g.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/md_doc__a_p_i.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/md_doc__build_and_test.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/md_doc__data_structure.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/minus.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/minusd.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/navtree.css</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/navtreeindex0.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/navtreeindex1.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/navtreeindex2.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/pages.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/perf_reader_a14.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/perf_reader_ec2.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/plus.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/plusd.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_0.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_0.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_10.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_10.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_11.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_12.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_13.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_14.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_15.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_16.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_17.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_18.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_19.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1a.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1b.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1c.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1d.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1e.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1f.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_2.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_2.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_20.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_3.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_3.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_4.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_4.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_5.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_5.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_6.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_6.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_7.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_7.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_8.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_8.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_9.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_9.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_a.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_a.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_b.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_b.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_c.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_c.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_d.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_d.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_e.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_e.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_f.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/all_f.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/classes_0.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/classes_0.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/close.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/defines_0.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/defines_0.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/defines_1.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/defines_1.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/files_0.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/files_0.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/functions_0.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/functions_0.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/mag.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/mag_d.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/mag_sel.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/mag_seld.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/nomatches.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_0.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_0.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_1.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_1.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_2.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_2.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_3.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_3.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_4.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_4.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_5.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_6.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_7.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/search.css</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/searchdata.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/typedefs_0.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/typedefs_0.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_0.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_0.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_1.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_1.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_2.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_2.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_3.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_3.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_4.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_4.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_5.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_5.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_6.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_6.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_7.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_7.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_8.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_8.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_9.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_9.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_a.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_a.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_b.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_b.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_c.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_c.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_d.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_d.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_e.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_e.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/struct_idoc1.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/struct_idoc2.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/struct_ival.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/struct_mdoc.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/struct_mval.svg</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/structyyjson__alc.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/structyyjson__alc.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/tabs.css</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson-style.css</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__alc.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__arr__iter.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__doc.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__mut__arr__iter.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__mut__doc.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__mut__obj__iter.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__mut__val.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__obj__iter.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__patch__err.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__ptr__ctx.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__ptr__err.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__read__err.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__val.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__write__err.js</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/theme/yyjson-footer.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/theme/yyjson-header.html</exclude>
-            <exclude>dependency/yyjson/doc/doxygen/theme/yyjson-style.css</exclude>
-            <exclude>dependency/yyjson/doc/images/perf_reader_a14.svg</exclude>
-            <exclude>dependency/yyjson/doc/images/perf_reader_ec2.svg</exclude>
-            <exclude>dependency/yyjson/doc/images/struct_idoc1.svg</exclude>
-            <exclude>dependency/yyjson/doc/images/struct_idoc2.svg</exclude>
-            <exclude>dependency/yyjson/doc/images/struct_ival.svg</exclude>
-            <exclude>dependency/yyjson/doc/images/struct_mdoc.svg</exclude>
-            <exclude>dependency/yyjson/doc/images/struct_mval.svg</exclude>
-            <exclude>dependency/yyjson/fuzz/fuzzer.c</exclude>
-            <exclude>dependency/yyjson/fuzz/fuzzer.dict</exclude>
-            <exclude>dependency/yyjson/misc/jsoninfo.c</exclude>
-            <exclude>dependency/yyjson/misc/make_tables.c</exclude>
-            <exclude>dependency/yyjson/test/compile_ansi.c</exclude>
-            <exclude>dependency/yyjson/test/compile_ansi.cpp</exclude>
-            <exclude>dependency/yyjson/test/data/num/literal_fail.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/literal_pass.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/num_fail.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/num_overflow.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/real_pass_1.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/real_pass_2.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/real_pass_3.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/real_pass_4.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/real_pass_5.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/real_pass_6.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/real_pass_7.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/sint_bignum.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/sint_pass.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/uint_bignum.txt</exclude>
-            <exclude>dependency/yyjson/test/data/num/uint_pass.txt</exclude>
-            <exclude>dependency/yyjson/test/test_allocator.c</exclude>
-            <exclude>dependency/yyjson/test/test_err_code.c</exclude>
-            <exclude>dependency/yyjson/test/test_json_merge_patch.c</exclude>
-            <exclude>dependency/yyjson/test/test_json_mut_val.c</exclude>
-            <exclude>dependency/yyjson/test/test_json_patch.c</exclude>
-            <exclude>dependency/yyjson/test/test_json_pointer.c</exclude>
-            <exclude>dependency/yyjson/test/test_json_reader.c</exclude>
-            <exclude>dependency/yyjson/test/test_json_val.c</exclude>
-            <exclude>dependency/yyjson/test/test_json_writer.c</exclude>
-            <exclude>dependency/yyjson/test/test_number.c</exclude>
-            <exclude>dependency/yyjson/test/test_roundtrip.c</exclude>
-            <exclude>dependency/yyjson/test/test_string.c</exclude>
-            <exclude>dependency/yyjson/test/util/goo_double_conv.h</exclude>
-            <exclude>dependency/yyjson/test/util/yy_test_utils.c</exclude>
-            <exclude>dependency/yyjson/test/util/yy_test_utils.h</exclude>
-            <exclude>dependency/yyjson/test/xctest/Info.plist</exclude>
-            <exclude>dependency/yyjson/test/xctest/yy_xctest.h</exclude>
-            <exclude>dependency/yyjson/test/xctest/yy_xctest.m.in</exclude>
-            <exclude>dependency/yyjson/test/xctest/yy_xctest.m</exclude>
-            <exclude>dependency/yyjson/yyjson.pc.in</exclude>
 
             <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/tools/requirements.txt</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/tools/strip_asm.py</exclude>
@@ -1579,7 +1484,6 @@ code or new licensing patterns.
             <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/clobber_memory_assembly_test.cc</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/output_test_helper.cc</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/perf_counters_gtest.cc</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/templated_fixture_method_test.cc</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/profiler_manager_iterations_test.cc</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/options_test.cc</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/spec_arg_test.cc</exclude>
@@ -1717,6 +1621,17 @@ code or new licensing patterns.
             <exclude>contrib/pax_storage/src/cpp/cpp-stub/src/addr_pri.h</exclude>
             <exclude>contrib/pax_storage/src/cpp/cpp-stub/src/stub.h</exclude>
 
+            <!--
+                Verbatim third-party license texts referenced from the root
+                LICENSE file.  These are license grants, not source files, so
+                they carry no license header of their own.
+            -->
+            <exclude>licenses/LICENSE-amalgamate.txt</exclude>
+            <exclude>licenses/LICENSE-boost.txt</exclude>
+            <exclude>licenses/LICENSE-termcolor.txt</exclude>
+            <exclude>licenses/LICENSE-vixie-cron.txt</exclude>
+            <exclude>licenses/LICENSE-x0213.txt</exclude>
+
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/tabulateConfig.cmake.in</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/tabulate.pri</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/clang-format.bash</exclude>
@@ -1758,7 +1673,6 @@ code or new licensing patterns.
             <exclude>devops/deploy/docker/build/rocky9/tests/requirements.txt</exclude>
             <exclude>devops/deploy/docker/build/rocky10/tests/requirements.txt</exclude>
             <exclude>devops/deploy/docker/build/ubuntu22.04/tests/requirements.txt</exclude>
-            <exclude>devops/deploy/docker/build/ubuntu24.04/tests/requirements.txt</exclude>
 
 	    <!-- Exclude ubuntu debian packaging files since they do not support comments
             -->

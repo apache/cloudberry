@@ -672,6 +672,13 @@ CreateSubscription(ParseState *pstate, CreateSubscriptionStmt *stmt,
 		opts.synchronous_commit = "off";
 
 	conninfo = stmt->conninfo;
+	/*
+	 * conninfo can be an empty string, but the serialization
+	 * doesn't distinguish an empty string from NULL. The
+	 * code that executes the command in't prepared for a NULL.
+	 */
+	if (conninfo == NULL)
+		conninfo = pstrdup("");
 	publications = stmt->publication;
 
 	/* Load the library providing us libpq calls. */

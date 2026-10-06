@@ -58,6 +58,8 @@ typedef EphemeralNamedRelationData *EphemeralNamedRelation;
 
 typedef struct EphemeralNamedRelationInfo
 {
+	pg_node_attr(no_copy_equal)
+
 	NodeTag 	type;
 	char		*name;			/* name used to identify the relation */
 	Oid			reliddesc;		/* oid of relation to get tupdesc */

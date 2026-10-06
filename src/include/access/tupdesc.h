@@ -97,8 +97,10 @@ typedef struct TupleDescData *TupleDesc;
  * These are never serialized on disk, only in the read/outfast protocol,
  * as part of PlannedStmts.
  */
-typedef struct tupleDescNode
+typedef struct TupleDescNode
 {
+	pg_node_attr(no_copy_equal, custom_read_write)
+
 	NodeTag		type;
 	int			natts;
 	TupleDesc	tuple;
