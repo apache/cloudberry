@@ -245,7 +245,7 @@ AC_SUBST(enable_debug_extensions)
 # Anser adaptive information sharing (runtime filters)
 #
 PGAC_ARG_BOOL(with, anser, no,
-              [do not build the Anser runtime-filter extension])
+              [build the Anser runtime-filter extension])
 AC_SUBST(with_anser)
 
 #
