@@ -475,6 +475,10 @@ extern bool vacuum_get_cutoffs(Relation rel, const VacuumParams *params,
 							   struct VacuumCutoffs *cutoffs);
 extern bool vacuum_xid_failsafe_check(const struct VacuumCutoffs *cutoffs);
 extern void vac_update_datfrozenxid(void);
+extern void vacuum_report_index_stats(Relation indrel,
+									  const IndexBulkDeleteResult *istat,
+									  double prev_tuples_removed,
+									  BlockNumber prev_pages_newly_deleted, bool cleanup);
 extern void vacuum_delay_point(void);
 extern bool vacuum_is_relation_owner(Oid relid, Form_pg_class reltuple,
 									 bits32 options);
@@ -491,11 +495,6 @@ extern Size vac_max_items_to_alloc_size(int max_items);
 /* In postmaster/autovacuum.c */
 extern void AutoVacuumUpdateCostLimit(void);
 extern void VacuumUpdateCosts(void);
-extern void vacuum_measure_index_stats(Relation indrel,
-									  const IndexBulkDeleteResult *istat,
-									  double prev_tuples_removed,
-									  BlockNumber prev_pages_newly_deleted, bool cleanup);
-
 /* in commands/vacuumparallel.c */
 extern ParallelVacuumState *parallel_vacuum_init(Relation rel, Relation *indrels,
 												 int nindexes, int nrequested_workers,
