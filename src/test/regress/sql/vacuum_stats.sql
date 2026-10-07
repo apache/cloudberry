@@ -19,4 +19,5 @@ AND relallvisible =
     (SELECT SUM(relallvisible) FROM gp_dist_random('pg_class')
      WHERE oid='vacstat_test'::regclass);
 
-DROP TABLE vacstat_test
+DROP TABLE vacstat_test;
+

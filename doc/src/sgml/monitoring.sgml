@@ -460,6 +460,12 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
      </row>
 
      <row>
+      <entry><structname>pg_stat_vacuum</structname></entry>
+      <entry>One row per database, plus one for shared objects, showing cumulative
+       vacuum statistics. See <xref linkend="monitoring-pg-stat-vacuum-view"/>.</entry>
+     </row>
+
+     <row>
       <entry><structname>pg_stat_database_conflicts</structname><indexterm><primary>pg_stat_database_conflicts</primary></indexterm></entry>
       <entry>
        One row per database, showing database-wide statistics about
@@ -4697,6 +4703,137 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
 
  </sect2>
 
+ <sect2 id="monitoring-pg-stat-vacuum-view">
+  <title><structname>pg_stat_vacuum</structname></title>
+  <indexterm><primary>pg_stat_vacuum</primary></indexterm>
+  <para>
+   The <structname>pg_stat_vacuum</structname> view contains one row for each
+   database, plus one for shared objects, showing cumulative vacuum statistics
+   on the current instance. The current database's counters are reset
+   together with its other statistics by <function>pg_stat_reset()</function>.
+  </para>
+  <para>
+   In Cloudberry, <structname>gp_stat_vacuum</structname> shows these columns
+   for every instance, with <structfield>gp_segment_id</structfield> identifying
+   the instance. <structname>gp_stat_vacuum_summary</structname> sums the times
+   across instances and takes the maximum failsafe and interrupt counts and
+   the latest reset time for each database.
+  </para>
+  <table id="pg-stat-vacuum-view" xreflabel="pg_stat_vacuum">
+   <title><structname>pg_stat_vacuum</structname> View</title>
+   <tgroup cols="1">
+    <thead>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       Column Type
+      </para>
+      <para>
+       Description
+      </para></entry>
+     </row>
+    </thead>
+    <tbody>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>datid</structfield> <type>oid</type>
+      </para>
+      <para>
+       OID of this database, or 0 for objects belonging to a shared
+       relation
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>datname</structfield> <type>name</type>
+      </para>
+      <para>
+       Name of this database, or <literal>NULL</literal> for shared
+       objects.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_vacuum_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time manually invoked vacuums spent processing tables of this
+       database, in milliseconds (index processing is included in the owning
+       table's run)
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_autovacuum_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time the autovacuum daemon spent processing tables of this
+       database, in milliseconds
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_vacuum_delay_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time manually invoked vacuums of this database spent sleeping in
+       cost-based delay points, in milliseconds (counted only when
+       <xref linkend="guc-track-cost-delay-timing"/> is enabled)
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_autovacuum_delay_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time autovacuums of this database spent sleeping in cost-based
+       delay points, in milliseconds (counted only when
+       <xref linkend="guc-track-cost-delay-timing"/> is enabled)
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>vacuum_failsafe_count</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of vacuums in this database that entered the wraparound
+       failsafe mode (see <xref linkend="guc-vacuum-failsafe-age"/>)
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>vacuum_interrupt_count</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of times a vacuum in this database was interrupted by an error,
+       the vacuum of an append-optimized table included.  In a Cloudberry
+       cluster the count is kept by the instance on which the vacuum failed:
+       a vacuum dispatched to the segments that fails there is counted by
+       those segments, not by the coordinator.  A segment reports the count
+       once its part of the failed distributed transaction has ended, which
+       may be as late as the next command of the session.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>stats_reset</structfield> <type>timestamp with time zone</type>
+      </para>
+      <para>
+       Time at which these statistics were last reset
+      </para></entry>
+     </row>
+    </tbody>
+   </tgroup>
+  </table>
+ </sect2>
+
  <sect2 id="monitoring-pg-stat-database-conflicts-view">
   <title><structname>pg_stat_database_conflicts</structname></title>
 
@@ -4928,6 +5065,62 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
 
      <row>
       <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_vacuum_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time this index has been processed by manually invoked vacuums,
+       in milliseconds. (This includes the time spent sleeping due to
+       cost-based delays.)
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_autovacuum_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time this index has been processed by the autovacuum daemon,
+       in milliseconds. (This includes the time spent sleeping due to
+       cost-based delays.)
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_vacuum_delay_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time manually invoked vacuums spent sleeping in cost-based delay
+       points while processing this index, in milliseconds (counted only when
+       <xref linkend="guc-track-cost-delay-timing"/> is enabled)
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_autovacuum_delay_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time the autovacuum daemon spent sleeping in cost-based delay
+       points while processing this index, in milliseconds (counted only when
+       <xref linkend="guc-track-cost-delay-timing"/> is enabled)
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>vacuum_failsafe_count</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of vacuums of this table that entered the wraparound failsafe
+       mode (see <xref linkend="guc-vacuum-failsafe-age"/>).  Always zero for
+       append-optimized tables, which have no tuple transaction IDs to
+       freeze.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
        <structfield>n_tup_ins</structfield> <type>bigint</type>
       </para>
       <para>
@@ -5017,6 +5210,42 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
       </para></entry>
      </row>
 
+
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>visible_page_marks_cleared</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of times the all-visible mark in the
+       <link linkend="storage-vm">visibility map</link> was cleared for
+       pages of this table.  The all-visible mark of a heap page is
+       cleared whenever a backend process modifies a page that was
+       previously marked all-visible by vacuum activity (whether manual
+       <command>VACUUM</command> or autovacuum).  The page must then be
+       processed again by vacuum on a subsequent run.  A high rate of
+       change in this counter means that vacuum has to repeatedly
+       re-process pages of this table.  Always zero for append-optimized
+       tables, which have no visibility map.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>frozen_page_marks_cleared</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of times the all-frozen mark in the
+       <link linkend="storage-vm">visibility map</link> was cleared for
+       pages of this table.  The all-frozen mark of a heap page is cleared
+       whenever a backend process modifies a page that was previously
+       marked all-frozen by vacuum activity (manual <command>VACUUM</command>
+       or autovacuum).  The page must then be processed again by vacuum on
+       the next freeze run for this table.  Always zero for append-optimized
+       tables.
+      </para></entry>
+     </row>
+
      <row>
       <entry role="catalog_table_entry"><para role="column_definition">
        <structfield>last_vacuum</structfield> <type>timestamp with time zone</type>
@@ -5092,6 +5321,66 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
       <para>
        Number of times this table has been analyzed by the autovacuum
        daemon
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_vacuum_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time this table has been manually vacuumed, in milliseconds
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_autovacuum_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time this table has been vacuumed by the autovacuum daemon,
+       in milliseconds
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_analyze_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time this table has been manually analyzed, in milliseconds
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_autoanalyze_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time this table has been analyzed by the autovacuum daemon,
+       in milliseconds
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_vacuum_delay_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time this table's vacuums spent sleeping in cost-based delay
+       points, in milliseconds (counted only when
+       <xref linkend="guc-track-cost-delay-timing"/> is enabled)
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_autovacuum_delay_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time autovacuums of this table spent sleeping in cost-based
+       delay points, in milliseconds (counted only when
+       <xref linkend="guc-track-cost-delay-timing"/> is enabled)
       </para></entry>
      </row>
     </tbody>
@@ -6496,6 +6785,18 @@ FROM pg_stat_get_backend_idset() AS backendid;
        <literal>acquiring inherited sample rows</literal>.
       </para></entry>
      </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>delay_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time spent sleeping due to cost-based delay (see
+       <xref linkend="runtime-config-resource-vacuum-cost"/>, in milliseconds
+       (if <xref linkend="guc-track-cost-delay-timing"/> is enabled, otherwise
+       zero).
+      </para></entry>
+     </row>
     </tbody>
    </tgroup>
   </table>
@@ -7375,6 +7676,18 @@ FROM pg_stat_get_backend_idset() AS backendid;
       </para>
       <para>
        Number of dead tuples collected since the last index vacuum cycle.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>delay_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time spent sleeping due to cost-based delay (see
+       <xref linkend="runtime-config-resource-vacuum-cost"/>), in milliseconds
+       (if <xref linkend="guc-track-cost-delay-timing"/> is enabled, otherwise
+       zero).
       </para></entry>
      </row>
     </tbody>
