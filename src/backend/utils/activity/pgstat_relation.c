@@ -219,19 +219,30 @@ pgstat_report_vacuum(Oid tableoid, bool shared,
 					 TimestampTz starttime, PgStat_Counter delaytime,
 					 bool failsafe)
 {
+	pgstat_report_vacuum_elapsed(tableoid, shared, livetuples, deadtuples,
+								 TimestampDifferenceMilliseconds(starttime,
+														GetCurrentTimestamp()),
+								 delaytime, failsafe);
+}
+
+/* Report a completed vacuum whose active phases were timed separately (ms). */
+void
+pgstat_report_vacuum_elapsed(Oid tableoid, bool shared,
+							 PgStat_Counter livetuples, PgStat_Counter deadtuples,
+							 PgStat_Counter elapsedtime, PgStat_Counter delaytime,
+							 bool failsafe)
+{
 	PgStat_EntryRef *entry_ref;
 	PgStatShared_Relation *shtabentry;
 	PgStat_StatTabEntry *tabentry;
 	Oid			dboid = (shared ? InvalidOid : MyDatabaseId);
 	TimestampTz ts;
-	PgStat_Counter elapsedtime;
 
 	if (!pgstat_track_counts)
 		return;
 
 	/* Store the data in the table's hash table entry. */
 	ts = GetCurrentTimestamp();
-	elapsedtime = TimestampDifferenceMilliseconds(starttime, ts);
 
 	/* block acquiring lock for the same reason as pgstat_report_autovac() */
 	entry_ref = pgstat_get_entry_ref_locked(PGSTAT_KIND_RELATION,

@@ -312,17 +312,6 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 	vacrelstats->live_tuples = reltuples;
 	vacrelstats->dead_tuples = deadtuples;
 
-	/* report results to the stats collector, too */
-	pgstat_report_vacuum(RelationGetRelid(onerel),
-						 onerel->rd_rel->relisshared,
-						 reltuples,
-						 deadtuples,
-						 vacrelstats->starttime,
-						 (PgStat_Counter) rint(VacuumDelayTime -
-											   vacrelstats->startdelaytime),
-						 false);	/* no failsafe mode for AO tables */
-
-
 	SIMPLE_FAULT_INJECTOR("vacuum_ao_post_cleanup_end");
 }
 
@@ -429,8 +418,6 @@ init_vacrelstats()
 
 	old_context = MemoryContextSwitchTo(TopMemoryContext);
 	vacrelstats = (AOVacuumRelStats *) palloc0(sizeof(AOVacuumRelStats));
-	vacrelstats->starttime = GetCurrentTimestamp();
-	vacrelstats->startdelaytime = VacuumDelayTime;
 	MemoryContextSwitchTo(old_context);
 
 	return vacrelstats;
@@ -519,6 +506,13 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 
 	if (ao_vacuum_phase == VACOPT_AO_POST_CLEANUP_PHASE)
 	{
+		/* The last phase: report only the phases executed by this worker. */
+		pgstat_report_vacuum_elapsed(RelationGetRelid(rel),
+									 rel->rd_rel->relisshared,
+									 vacrelstats->live_tuples, vacrelstats->dead_tuples,
+									 (PgStat_Counter) rint(vacrelstats->vacuum_time),
+									 (PgStat_Counter) rint(vacrelstats->delay_time),
+									 false); /* AO has no failsafe mode. */
 		pgstat_progress_end_command();
 		cleanup_vacrelstats(&vacrelstats);
 	}

@@ -32,9 +32,6 @@ typedef struct AOVacuumRelStats
 	int64	nbytes_truncated;	/* current # of bytes truncated from segment file */
 	int64	num_dead_tuples;	/* current # of dead tuples */
 	int		num_index_vacuumed; /* current # of indexes been vacuumed */
-	/* Legacy timing-report baseline, retained until elapsed-time reporting. */
-	TimestampTz starttime;
-	double		startdelaytime;
 	/* Active phase durations and delays in milliseconds, excluding phase gaps. */
 	double		vacuum_time;
 	double		delay_time;
