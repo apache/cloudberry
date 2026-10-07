@@ -311,17 +311,6 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 	vacrelstats->live_tuples = reltuples;
 	vacrelstats->dead_tuples = deadtuples;
 
-	/* report results to the stats collector, too */
-	pgstat_report_vacuum(RelationGetRelid(onerel),
-						 onerel->rd_rel->relisshared,
-						 reltuples,
-						 deadtuples,
-						 vacrelstats->starttime,
-						 (PgStat_Counter) rint(VacuumDelayTime -
-											   vacrelstats->startdelaytime),
-						 false);	/* no failsafe mode for AO tables */
-
-
 	SIMPLE_FAULT_INJECTOR("vacuum_ao_post_cleanup_end");
 }
 
@@ -428,8 +417,6 @@ init_vacrelstats()
 
 	old_context = MemoryContextSwitchTo(TopMemoryContext);
 	vacrelstats = (AOVacuumRelStats *) palloc0(sizeof(AOVacuumRelStats));
-	vacrelstats->starttime = GetCurrentTimestamp();
-	vacrelstats->startdelaytime = VacuumDelayTime;
 	MemoryContextSwitchTo(old_context);
 
 	return vacrelstats;
@@ -512,12 +499,20 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 	{
 		INSTR_TIME_SET_CURRENT(phase_end);
 		INSTR_TIME_SUBTRACT(phase_end, phase_start);
-		vacrelstats->vacuum_time += INSTR_TIME_GET_MILLISEC(phase_end);
-		vacrelstats->delay_time += VacuumDelayTime - phase_start_delay;
+		/* Publish each completed phase before its QE can be replaced. */
+		pgstat_report_vacuum_phase(rel,
+			(PgStat_Counter) rint(INSTR_TIME_GET_MILLISEC(phase_end)),
+			(PgStat_Counter) rint(VacuumDelayTime - phase_start_delay));
 	}
 
 	if (ao_vacuum_phase == VACOPT_AO_POST_CLEANUP_PHASE)
 	{
+		/* Count completion once; phase timings have already been published. */
+		pgstat_report_vacuum_elapsed(RelationGetRelid(rel),
+									 rel->rd_rel->relisshared,
+									 vacrelstats->live_tuples, vacrelstats->dead_tuples,
+									 0, 0,
+									 false); /* AO has no failsafe mode. */
 		pgstat_progress_end_command();
 		cleanup_vacrelstats(&vacrelstats);
 	}

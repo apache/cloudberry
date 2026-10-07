@@ -219,19 +219,30 @@ pgstat_report_vacuum(Oid tableoid, bool shared,
 					 TimestampTz starttime, PgStat_Counter delaytime,
 					 bool failsafe)
 {
+	pgstat_report_vacuum_elapsed(tableoid, shared, livetuples, deadtuples,
+								 TimestampDifferenceMilliseconds(starttime,
+														GetCurrentTimestamp()),
+								 delaytime, failsafe);
+}
+
+/* Report a completed vacuum whose active phases were timed separately (ms). */
+void
+pgstat_report_vacuum_elapsed(Oid tableoid, bool shared,
+							 PgStat_Counter livetuples, PgStat_Counter deadtuples,
+							 PgStat_Counter elapsedtime, PgStat_Counter delaytime,
+							 bool failsafe)
+{
 	PgStat_EntryRef *entry_ref;
 	PgStatShared_Relation *shtabentry;
 	PgStat_StatTabEntry *tabentry;
 	Oid			dboid = (shared ? InvalidOid : MyDatabaseId);
 	TimestampTz ts;
-	PgStat_Counter elapsedtime;
 
 	if (!pgstat_track_counts)
 		return;
 
 	/* Store the data in the table's hash table entry. */
 	ts = GetCurrentTimestamp();
-	elapsedtime = TimestampDifferenceMilliseconds(starttime, ts);
 
 	/* block acquiring lock for the same reason as pgstat_report_autovac() */
 	entry_ref = pgstat_get_entry_ref_locked(PGSTAT_KIND_RELATION,
@@ -349,6 +360,37 @@ pgstat_report_index_vacuum_time(Relation rel, PgStat_Counter elapsedtime,
 	}
 
 	pgstat_unlock_entry(entry_ref);
+}
+
+/*
+ * Publish a completed AO phase without marking the whole vacuum complete.
+ * Workers can be replaced between phases, so backend-local accumulation is
+ * insufficient.  Index reporting adds relation times without changing counts;
+ * table phases must additionally contribute to the database totals.
+ */
+void
+pgstat_report_vacuum_phase(Relation rel, PgStat_Counter elapsedtime,
+						  PgStat_Counter delaytime)
+{
+	PgStat_StatDBEntry *dbentry;
+	Oid			dboid = (rel->rd_rel->relisshared ? InvalidOid : MyDatabaseId);
+	bool		is_autovacuum = IsAutoVacuumWorkerProcess();
+
+	if (!pgstat_track_counts)
+		return;
+
+	pgstat_report_index_vacuum_time(rel, elapsedtime, delaytime, is_autovacuum);
+	dbentry = pgstat_prep_database_pending(dboid);
+	if (is_autovacuum)
+	{
+		dbentry->total_autovacuum_time += elapsedtime * 1000;
+		dbentry->total_autovacuum_delay_time += delaytime * 1000;
+	}
+	else
+	{
+		dbentry->total_vacuum_time += elapsedtime * 1000;
+		dbentry->total_vacuum_delay_time += delaytime * 1000;
+	}
 }
 
 /*
