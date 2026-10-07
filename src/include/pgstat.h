@@ -65,7 +65,12 @@ typedef enum SessionEndType
  */
 typedef int64 PgStat_Counter;
 
-/* Backend-local work measurements for one VACUUM operation. */
+/*
+ * Work measured by VACUUM, stored in ordinary cumulative statistics.
+ * dead_tuples and total_file_segs are samples from the last completed run;
+ * all other fields accumulate across runs. Database totals omit snapshots
+ * and index reports, whose work is already part of the table vacuum.
+ */
 typedef struct PgStat_VacuumStats
 {
 	PgStat_Counter	tuples_deleted;
@@ -273,7 +278,7 @@ typedef struct PgStat_TableXactStatus
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCB6
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCB8
 
 typedef struct PgStat_ArchiverStats
 {
@@ -410,6 +415,7 @@ typedef struct PgStat_StatDBEntry
 	PgStat_Counter vacuum_interrupt_count;
 
 	TimestampTz stat_reset_timestamp;
+	PgStat_VacuumStats vacuum_stats;
 } PgStat_StatDBEntry;
 
 typedef struct PgStat_StatFuncEntry
@@ -506,6 +512,7 @@ typedef struct PgStat_StatTabEntry
 	/* Cumulative work of completed heap vacuums, not current VM sizes. */
 	PgStat_Counter pages_frozen;
 	PgStat_Counter pages_all_visible;
+	PgStat_VacuumStats vacuum_stats;
 } PgStat_StatTabEntry;
 
 typedef struct PgStat_WalStats
@@ -734,6 +741,8 @@ extern void pgstat_report_vacuum_elapsed(Oid tableoid, bool shared,
 										 PgStat_Counter elapsedtime, PgStat_Counter delaytime,
 										 bool failsafe, PgStat_Counter pages_frozen,
 										 PgStat_Counter pages_all_visible);
+extern void pgstat_report_vacuum_stats(Relation rel,
+										 const PgStat_VacuumStats *stats);
 extern void pgstat_report_vacuum(Oid tableoid, bool shared,
 								 PgStat_Counter livetuples, PgStat_Counter deadtuples,
 								 TimestampTz starttime, PgStat_Counter delaytime,
