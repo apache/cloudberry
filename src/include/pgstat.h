@@ -253,7 +253,7 @@ typedef struct PgStat_TableXactStatus
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCC4
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCC5
 
 typedef struct PgStat_ArchiverStats
 {
