@@ -263,6 +263,13 @@ typedef struct PgStat_KindInfo
 	void		(*delete_pending_cb) (PgStat_EntryRef *sr);
 
 	/*
+	 * For variable-numbered stats: reset counters while preserving identifying
+	 * metadata in the payload. Optional; otherwise the whole payload is zeroed.
+	 * Called with the entry's lock held exclusively, before reset_timestamp_cb.
+	 */
+	void		(*reset_data_cb) (PgStatShared_Common *header);
+
+	/*
 	 * For variable-numbered stats: reset the reset timestamp. Optional.
 	 */
 	void		(*reset_timestamp_cb) (PgStatShared_Common *header, TimestampTz ts);
