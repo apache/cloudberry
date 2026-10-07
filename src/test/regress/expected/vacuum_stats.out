@@ -28,4 +28,4 @@ AND relallvisible =
  t
 (1 row)
 
-DROP TABLE vacstat_test
+DROP TABLE vacstat_test;
