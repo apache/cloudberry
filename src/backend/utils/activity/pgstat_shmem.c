@@ -1019,8 +1019,11 @@ shared_stat_reset_contents(PgStat_Kind kind, PgStatShared_Common *header,
 {
 	const PgStat_KindInfo *kind_info = pgstat_get_kind_info(kind);
 
-	memset(pgstat_get_entry_data(kind, header), 0,
-		   pgstat_get_entry_len(kind));
+	if (kind_info->reset_data_cb)
+		kind_info->reset_data_cb(header);
+	else
+		memset(pgstat_get_entry_data(kind, header), 0,
+			   pgstat_get_entry_len(kind));
 
 	if (kind_info->reset_timestamp_cb)
 		kind_info->reset_timestamp_cb(header, ts);
