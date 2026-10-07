@@ -73,7 +73,18 @@ CREATE OR REPLACE FUNCTION ext_vacuum_statistics.pg_stats_get_vacuum_tables(
     OUT rel_blks_hit bigint,
     OUT tuples_deleted bigint,
     OUT pages_scanned bigint,
-    OUT pages_removed bigint
+    OUT pages_removed bigint,
+    OUT tuples_frozen bigint,
+    OUT recently_dead_tuples bigint,
+    OUT missed_dead_pages bigint,
+    OUT missed_dead_tuples bigint,
+    OUT pages_frozen bigint,
+    OUT pages_all_visible bigint,
+    OUT total_file_segs bigint,
+    OUT compacted_segments bigint,
+    OUT tuples_moved bigint,
+    OUT dead_pages bigint,
+    OUT freeze_age_vacuum_count bigint
 )
 RETURNS SETOF record
 AS 'MODULE_PATHNAME', 'pg_stats_get_vacuum_tables'
@@ -96,7 +107,8 @@ CREATE OR REPLACE FUNCTION ext_vacuum_statistics.pg_stats_get_vacuum_indexes(
     OUT rel_blks_read bigint,
     OUT rel_blks_hit bigint,
     OUT tuples_deleted bigint,
-    OUT pages_deleted bigint
+    OUT pages_deleted bigint,
+    OUT dead_pages bigint
 )
 RETURNS SETOF record
 AS 'MODULE_PATHNAME', 'pg_stats_get_vacuum_indexes'
@@ -120,7 +132,7 @@ RETURNS SETOF record
 AS 'MODULE_PATHNAME', 'pg_stats_get_vacuum_database'
 LANGUAGE C STRICT STABLE;
 
--- View: vacuum statistics per table (heap)
+-- View: vacuum statistics per table (heap and append-optimized)
 CREATE VIEW ext_vacuum_statistics.pg_stats_vacuum_tables AS
 SELECT
   rel.oid AS relid,
@@ -140,7 +152,18 @@ SELECT
   stats.rel_blks_hit,
   stats.tuples_deleted,
   stats.pages_scanned,
-  stats.pages_removed
+  stats.pages_removed,
+  stats.tuples_frozen,
+  stats.recently_dead_tuples,
+  stats.missed_dead_pages,
+  stats.missed_dead_tuples,
+  stats.pages_frozen,
+  stats.pages_all_visible,
+  stats.total_file_segs,
+  stats.compacted_segments,
+  stats.tuples_moved,
+  stats.dead_pages,
+  stats.freeze_age_vacuum_count
 FROM pg_database db,
      pg_class rel,
      pg_namespace ns,
@@ -151,7 +174,7 @@ WHERE db.datname = current_database()
   AND rel.oid = stats.relid;
 
 COMMENT ON VIEW ext_vacuum_statistics.pg_stats_vacuum_tables IS
-  'Extended vacuum statistics per table (heap)';
+  'Extended vacuum statistics per table (heap and append-optimized)';
 
 -- View: vacuum statistics per index
 CREATE VIEW ext_vacuum_statistics.pg_stats_vacuum_indexes AS
@@ -172,7 +195,8 @@ SELECT
   stats.rel_blks_read,
   stats.rel_blks_hit,
   stats.tuples_deleted,
-  stats.pages_deleted
+  stats.pages_deleted,
+  stats.dead_pages
 FROM pg_database db,
      pg_class rel,
      pg_namespace ns,

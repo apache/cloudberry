@@ -25,12 +25,22 @@ tests += {
   'name': 'ext_vacuum_statistics',
   'sd': meson.current_source_dir(),
   'bd': meson.current_build_dir(),
+  'isolation': {
+    'specs': [
+      'vacuum-extending-in-repetable-read',
+    ],
+    'regress_args': ['--temp-config', files('ext_vacuum_statistics.conf')],
+    'runningcheck': false,
+  },
   'tap': {
     'tests': [
       't/052_vacuum_extending_basic_test.pl',
       't/054_vacuum_extending_gucs_test.pl',
       't/056_vacuum_stats_gc.pl',
+      't/058_vacuum_stats_counters.pl',
       't/060_vacuum_stats_reset.pl',
+      't/060_heap_page_counters.pl',
+      't/061_vacuum_measurements.pl',
     ],
   },
 }

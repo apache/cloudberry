@@ -171,11 +171,11 @@ static void ao_report_index_vacuum_time(Relation indrel, TimestampTz starttime,
 static void ao_vacuum_error_callback(void *arg);
 static void ao_accum_resources(PgStat_CommonCounts *dst,
 							   const PgStat_CommonCounts *src, bool subtract);
-static void ao_measure_index_resources(Relation indrel,
+static void ao_report_index_extstats(Relation indrel,
 									 LVExtStatCounters *counters,
 									 IndexBulkDeleteResult *result,
 									 AOVacuumRelStats *vacrelstats, bool final_cleanup);
-static void ao_measure_table_resources(Relation rel,
+static void ao_report_table_extstats(Relation rel,
 									 AOVacuumRelStats *vacrelstats);
 
 static void
@@ -551,7 +551,7 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 									 (PgStat_Counter) rint(vacrelstats->delay_time),
 									 false); /* AO has no failsafe mode. */
 		if (extstats)
-			ao_measure_table_resources(rel, vacrelstats);
+			ao_report_table_extstats(rel, vacrelstats);
 		pgstat_progress_end_command();
 		cleanup_vacrelstats(&vacrelstats);
 	}
@@ -640,7 +640,7 @@ ao_accum_resources(PgStat_CommonCounts *dst, const PgStat_CommonCounts *src,
  * again.
  */
 static void
-ao_measure_index_resources(Relation indrel, LVExtStatCounters *counters,
+ao_report_index_extstats(Relation indrel, LVExtStatCounters *counters,
 						 IndexBulkDeleteResult *result,
 						 AOVacuumRelStats *vacrelstats, bool final_cleanup)
 {
@@ -653,6 +653,7 @@ ao_measure_index_resources(Relation indrel, LVExtStatCounters *counters,
 	if (final_cleanup && result->pages_deleted > result->pages_free)
 		report->dead_pages = result->pages_deleted - result->pages_free;
 
+	pgstat_report_vacuum_ext(indrel, -1, -1, 0, 0, false, report);
 
 	ao_accum_resources(&vacrelstats->extstats->indexes, &report->common, false);
 	pfree(counters);
@@ -669,7 +670,7 @@ ao_measure_index_resources(Relation indrel, LVExtStatCounters *counters,
  * heap visibility-map counters stay zero.
  */
 static void
-ao_measure_table_resources(Relation rel, AOVacuumRelStats *vacrelstats)
+ao_report_table_extstats(Relation rel, AOVacuumRelStats *vacrelstats)
 {
 	PgStat_VacuumRelationCounts report;
 
@@ -687,6 +688,7 @@ ao_measure_table_resources(Relation rel, AOVacuumRelStats *vacrelstats)
 		vacrelstats->nbytes_truncated / BLCKSZ +
 		(vacrelstats->nbytes_truncated % BLCKSZ != 0);
 
+	pgstat_report_vacuum_ext(rel, -1, -1, 0, 0, false, &report);
 }
 
 /*
@@ -809,7 +811,7 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 				vacuum_report_index_stats(Irel[i], &result, 0, 0, final_cleanup);
 				ao_report_index_vacuum_time(Irel[i], istarttime, startdelaytime);
 				if (set_report_vacuum_hook)
-					ao_measure_index_resources(Irel[i], extcounters, &result,
+					ao_report_index_extstats(Irel[i], extcounters, &result,
 											 vacrelstats, final_cleanup);
 			}
 		}
@@ -833,7 +835,7 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 				vacuum_report_index_stats(Irel[i], &result, 0, 0, final_cleanup);
 				ao_report_index_vacuum_time(Irel[i], istarttime, startdelaytime);
 				if (set_report_vacuum_hook)
-					ao_measure_index_resources(Irel[i], extcounters, &result,
+					ao_report_index_extstats(Irel[i], extcounters, &result,
 											 vacrelstats, final_cleanup);
 			}
 		}

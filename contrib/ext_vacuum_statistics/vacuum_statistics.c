@@ -136,11 +136,23 @@ pgstat_accumulate_extvac_stats(PgStat_VacuumRelationCounts * dst,
 	Assert(src->type == dst->type);
 
 	pgstat_accumulate_common(&dst->common, &src->common);
+	dst->dead_pages += src->dead_pages;
 
 	if (dst->type == PGSTAT_EXTVAC_TABLE)
 	{
 		dst->table.pages_scanned += src->table.pages_scanned;
 		dst->table.pages_removed += src->table.pages_removed;
+		dst->table.pages_frozen += src->table.pages_frozen;
+		dst->table.pages_all_visible += src->table.pages_all_visible;
+		dst->table.freeze_age_vacuum_count += src->table.freeze_age_vacuum_count;
+		dst->table.tuples_frozen += src->table.tuples_frozen;
+		dst->table.recently_dead_tuples += src->table.recently_dead_tuples;
+		dst->table.missed_dead_pages += src->table.missed_dead_pages;
+		dst->table.missed_dead_tuples += src->table.missed_dead_tuples;
+		/* Segment count is a snapshot, not work accumulated over vacuums. */
+		dst->table.total_file_segs = src->table.total_file_segs;
+		dst->table.compacted_segments += src->table.compacted_segments;
+		dst->table.tuples_moved += src->table.tuples_moved;
 	}
 	else if (dst->type == PGSTAT_EXTVAC_INDEX)
 	{
@@ -399,8 +411,8 @@ tuplestore_put_common(PgStat_CommonCounts * vacuum_ext,
 	Assert((*i - base) == EXTVAC_COMMON_STAT_COLS);
 }
 
-#define EXTVAC_HEAP_STAT_COLS	15
-#define EXTVAC_IDX_STAT_COLS	14
+#define EXTVAC_HEAP_STAT_COLS	26
+#define EXTVAC_IDX_STAT_COLS	15
 #define EXTVAC_MAX_STAT_COLS	Max(EXTVAC_HEAP_STAT_COLS, EXTVAC_IDX_STAT_COLS)
 
 static void
@@ -423,11 +435,23 @@ tuplestore_put_for_relation(Oid relid, Tuplestorestate *tupstore,
 		values[i++] = Int64GetDatum(vacuum_ext->common.tuples_deleted);
 		values[i++] = Int64GetDatum(vacuum_ext->table.pages_scanned);
 		values[i++] = Int64GetDatum(vacuum_ext->table.pages_removed);
+		values[i++] = Int64GetDatum(vacuum_ext->table.tuples_frozen);
+		values[i++] = Int64GetDatum(vacuum_ext->table.recently_dead_tuples);
+		values[i++] = Int64GetDatum(vacuum_ext->table.missed_dead_pages);
+		values[i++] = Int64GetDatum(vacuum_ext->table.missed_dead_tuples);
+		values[i++] = Int64GetDatum(vacuum_ext->table.pages_frozen);
+		values[i++] = Int64GetDatum(vacuum_ext->table.pages_all_visible);
+		values[i++] = Int64GetDatum(vacuum_ext->table.total_file_segs);
+		values[i++] = Int64GetDatum(vacuum_ext->table.compacted_segments);
+		values[i++] = Int64GetDatum(vacuum_ext->table.tuples_moved);
+		values[i++] = Int64GetDatum(vacuum_ext->dead_pages);
+		values[i++] = Int64GetDatum(vacuum_ext->table.freeze_age_vacuum_count);
 	}
 	else if (vacuum_ext->type == PGSTAT_EXTVAC_INDEX)
 	{
 		values[i++] = Int64GetDatum(vacuum_ext->common.tuples_deleted);
 		values[i++] = Int64GetDatum(vacuum_ext->pages_deleted);
+		values[i++] = Int64GetDatum(vacuum_ext->dead_pages);
 	}
 
 	Assert(i == ((vacuum_ext->type == PGSTAT_EXTVAC_TABLE) ? EXTVAC_HEAP_STAT_COLS : EXTVAC_IDX_STAT_COLS));

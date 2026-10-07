@@ -32,7 +32,7 @@ CREATE EXTENSION ext_vacuum_statistics;
 Query vacuum statistics via the provided views:
 
 ```sql
--- Per-table heap vacuum statistics
+-- Per-table heap and append-optimized vacuum statistics
 SELECT * FROM ext_vacuum_statistics.pg_stats_vacuum_tables;
 
 -- Per-index vacuum statistics
@@ -85,7 +85,7 @@ SET vacuum_statistics.enabled = off;
 
 | View | Description |
 |------|-------------|
-| `ext_vacuum_statistics.pg_stats_vacuum_tables` | Per-table heap vacuum stats (pages scanned, tuples deleted and resource usage) |
+| `ext_vacuum_statistics.pg_stats_vacuum_tables` | Per-table heap vacuum stats (pages scanned, tuples deleted, dead tuples, etc.) |
 | `ext_vacuum_statistics.pg_stats_vacuum_indexes` | Per-index vacuum stats |
 | `ext_vacuum_statistics.pg_stats_vacuum_database` | Per-database aggregate vacuum stats |
 
@@ -106,3 +106,64 @@ They obey `track_counts` and ordinary `pg_stat_reset*` functions. The extension
 retains its existing counters for compatibility and adds resource measurements
 such as buffers and WAL. Its counters obey `vacuum_statistics.enabled` and
 its own reset functions; resetting one collection does not reset the other.
+
+## Heap page counters
+
+`pages_frozen` accumulates pages on which vacuum froze at least one tuple.
+`pages_all_visible` accumulates pages whose visibility-map all-visible bit
+vacuum changed from unset to set, including empty pages. These count work
+across vacuums, not the current number of frozen or all-visible pages. A
+page can be counted again after later changes require new work; rescanning
+an unchanged page or adding only its all-frozen bit does not add to
+`pages_all_visible`. Both counters survive clean restarts and are cleared
+by statistics resets.
+
+`dead_pages` accumulates heap pages containing tuples that are dead but
+not yet removable (for example, because an old snapshot still needs them).
+It differs from `missed_dead_pages`, which counts pages with removable tuples
+that vacuum could not remove. For indexes, `dead_pages` accumulates deleted
+pages not yet reusable, sampled once after cleanup. Repeated observations
+are counted again; this is not a snapshot of the current relation.
+
+`freeze_age_vacuum_count` counts heap vacuums made aggressive by the XID or
+MultiXact freeze table age, including `VACUUM FREEZE`. Forcing a scan with
+`DISABLE_PAGE_SKIPPING` alone does not increment it, and entering failsafe
+mode is counted separately. Both new counters survive clean restarts and
+are cleared by statistics resets.
+
+## Append-optimized tables
+
+AO row and AOCS tables and their indexes are reported too.  For the table,
+`tuples_deleted` is the number of dead tuples the compaction discarded and
+`pages_removed` the space released by truncating and dropping segment files,
+in heap-equivalent pages. `pages_scanned` counts the data scanned during
+compaction in those units, rounded up per compacted segment (source EOF for
+AO row, scan bytes read for AOCS). `compacted_segments` and `tuples_moved`
+accumulate actual compactions and live rows moved; skipped candidates add
+nothing. `total_file_segs` is the segment metadata entry count after the
+latest vacuum, including empty and awaiting-drop entries. It is replaced on
+each vacuum, not accumulated; AOCS counts segment numbers, not individual
+column files. A statistics reset clears these values, and the next vacuum
+refreshes the segment count even without compaction. All three AO-specific
+fields stay zero for heap tables.
+
+`recently_dead_tuples` accumulates the hidden rows remaining in the AO
+visibility map after post-cleanup. This includes rows left because
+compaction is disabled or below its threshold. Each completed vacuum adds
+its remaining count, so two vacuums that both leave 100 hidden rows add
+200; it is not a snapshot or a count of distinct rows. Once compaction
+removes those rows, later vacuums add zero. Statistics resets clear the
+counter, and clean restarts preserve it.
+
+The heap-only counters (`pages_frozen`, `pages_all_visible`,
+`tuples_frozen`, `missed_dead_*`, `dead_pages`, `freeze_age_vacuum_count`) stay zero for AO. The
+resource usage covers all phases of the vacuum, which is reported at the end
+of the last one.  The compaction moves live tuples to another segment file,
+so an index's `tuples_deleted` counts the entries of the moved live tuples
+too.
+
+AO vacuum time and cost delay are summed over the active phases executed
+by the reporting worker. Gaps between phases are excluded. If a worker is
+replaced between phases, only the replacement worker's phases are reported.
+Removed tuple and byte counters use 64 bits; conversion of released bytes
+to heap-equivalent pages preserves the 64-bit range.
