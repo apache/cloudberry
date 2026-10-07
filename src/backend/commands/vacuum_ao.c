@@ -173,7 +173,8 @@ static void ao_accum_resources(PgStat_CommonCounts *dst,
 							   const PgStat_CommonCounts *src, bool subtract);
 static void ao_measure_index_resources(Relation indrel,
 									 LVExtStatCounters *counters,
-									 AOVacuumRelStats *vacrelstats);
+									 IndexBulkDeleteResult *result,
+									 AOVacuumRelStats *vacrelstats, bool final_cleanup);
 static void ao_measure_table_resources(Relation rel,
 									 AOVacuumRelStats *vacrelstats);
 
@@ -597,6 +598,7 @@ ao_report_index_vacuum_time(Relation indrel, TimestampTz starttime,
 
 /*
  * Add the resource usage counters of src to dst, or subtract them from it.
+ * The tuple counter is left alone.
  */
 static void
 ao_accum_resources(PgStat_CommonCounts *dst, const PgStat_CommonCounts *src,
@@ -639,12 +641,18 @@ ao_accum_resources(PgStat_CommonCounts *dst, const PgStat_CommonCounts *src,
  */
 static void
 ao_measure_index_resources(Relation indrel, LVExtStatCounters *counters,
-						 AOVacuumRelStats *vacrelstats)
+						 IndexBulkDeleteResult *result,
+						 AOVacuumRelStats *vacrelstats, bool final_cleanup)
 {
 	PgStat_VacuumRelationCounts *report = &counters->report;
 
 	extvac_stats_end(indrel, counters, &report->common);
 	report->type = PGSTAT_EXTVAC_INDEX;
+	report->common.tuples_deleted = (int64) result->tuples_removed;
+	report->pages_deleted = result->pages_newly_deleted;
+	if (final_cleanup && result->pages_deleted > result->pages_free)
+		report->dead_pages = result->pages_deleted - result->pages_free;
+
 
 	ao_accum_resources(&vacrelstats->extstats->indexes, &report->common, false);
 	pfree(counters);
@@ -653,6 +661,12 @@ ao_measure_index_resources(Relation indrel, LVExtStatCounters *counters,
 /*
  * Report the vacuum of an append-optimized table, all of its phases, to
  * set_report_vacuum_hook.
+ *
+ * The counters that mean something for append-optimized storage are set:
+ * the tuples discarded, moved or left hidden, the segments actually
+ * compacted, the segment count at completion, and the space scanned or
+ * released in heap-equivalent pages.  Per-tuple freezing, heap pruning and
+ * heap visibility-map counters stay zero.
  */
 static void
 ao_measure_table_resources(Relation rel, AOVacuumRelStats *vacrelstats)
@@ -663,6 +677,15 @@ ao_measure_table_resources(Relation rel, AOVacuumRelStats *vacrelstats)
 	report.type = PGSTAT_EXTVAC_TABLE;
 	report.common = vacrelstats->extstats->phases;
 	ao_accum_resources(&report.common, &vacrelstats->extstats->indexes, true);
+	report.common.tuples_deleted = vacrelstats->num_dead_tuples;
+	report.table.recently_dead_tuples = vacrelstats->dead_tuples;
+	report.table.pages_scanned = vacrelstats->pages_scanned;
+	report.table.total_file_segs = vacrelstats->total_file_segs;
+	report.table.compacted_segments = vacrelstats->compacted_segments;
+	report.table.tuples_moved = vacrelstats->tuples_moved;
+	report.table.pages_removed =
+		vacrelstats->nbytes_truncated / BLCKSZ +
+		(vacrelstats->nbytes_truncated % BLCKSZ != 0);
 
 }
 
@@ -786,8 +809,8 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 				vacuum_report_index_stats(Irel[i], &result, 0, 0, final_cleanup);
 				ao_report_index_vacuum_time(Irel[i], istarttime, startdelaytime);
 				if (set_report_vacuum_hook)
-					ao_measure_index_resources(Irel[i], extcounters,
-											 vacrelstats);
+					ao_measure_index_resources(Irel[i], extcounters, &result,
+											 vacrelstats, final_cleanup);
 			}
 		}
 		else
@@ -810,8 +833,8 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 				vacuum_report_index_stats(Irel[i], &result, 0, 0, final_cleanup);
 				ao_report_index_vacuum_time(Irel[i], istarttime, startdelaytime);
 				if (set_report_vacuum_hook)
-					ao_measure_index_resources(Irel[i], extcounters,
-											 vacrelstats);
+					ao_measure_index_resources(Irel[i], extcounters, &result,
+											 vacrelstats, final_cleanup);
 			}
 		}
 	}

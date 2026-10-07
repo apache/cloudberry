@@ -903,6 +903,14 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 
 		extvac_stats_end(indrel, extVacCounters, &extVacReport->common);
 		extVacReport->type = PGSTAT_EXTVAC_INDEX;
+		if (istat_res != NULL)
+		{
+			extVacReport->common.tuples_deleted =
+				istat_res->tuples_removed - prev_tuples_removed;
+			extVacReport->pages_deleted =
+				istat_res->pages_newly_deleted - prev_pages_newly_deleted;
+		}
+		pgstat_report_vacuum_ext(indrel, -1, -1, 0, 0, false, extVacReport);
 		pfree(extVacCounters);
 	}
 

@@ -399,6 +399,17 @@ static void
 accumulate_heap_vacuum_statistics(LVRelState *vacrel, PgStat_VacuumRelationCounts * extVacStats)
 {
 	extVacStats->type = PGSTAT_EXTVAC_TABLE;
+	extVacStats->table.pages_scanned = vacrel->scanned_pages;
+	extVacStats->table.pages_removed = vacrel->removed_pages;
+	extVacStats->table.pages_frozen = vacrel->frozen_pages;
+	extVacStats->table.pages_all_visible = vacrel->all_visible_pages;
+	extVacStats->common.tuples_deleted = vacrel->tuples_deleted;
+	extVacStats->table.tuples_frozen = vacrel->tuples_frozen;
+	extVacStats->table.recently_dead_tuples = vacrel->recently_dead_tuples;
+	extVacStats->table.missed_dead_tuples = vacrel->missed_dead_tuples;
+	extVacStats->table.missed_dead_pages = vacrel->missed_dead_pages;
+	extVacStats->dead_pages = vacrel->dead_pages;
+	extVacStats->table.freeze_age_vacuum_count = vacrel->freeze_age_vacuum ? 1 : 0;
 
 	/*
 	 * Subtract the resource usage of the index passes this process ran: they
@@ -794,17 +805,28 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 		extvac_stats_end(rel, extVacCounters, &extVacReport->common);
 		accumulate_heap_vacuum_statistics(vacrel, extVacReport);
 
+		pgstat_report_vacuum_ext(rel,
+								 Max(vacrel->new_live_tuples, 0),
+								 vacrel->recently_dead_tuples +
+								 vacrel->missed_dead_tuples,
+								 starttime,
+								 (PgStat_Counter) rint(VacuumDelayTime -
+													   startdelaytime),
+								 VacuumFailsafeActive,
+								 extVacReport);
 		pfree(extVacCounters);
 		pfree(vacrel->extVacReportIdx);
 	}
-	pgstat_report_vacuum(RelationGetRelid(rel),
-						 rel->rd_rel->relisshared,
-						 Max(vacrel->new_live_tuples, 0),
-						 vacrel->recently_dead_tuples +
-						 vacrel->missed_dead_tuples,
-						 starttime,
-						 (PgStat_Counter) rint(VacuumDelayTime - startdelaytime),
-						 VacuumFailsafeActive);
+	else
+		pgstat_report_vacuum_ext(rel,
+								 Max(vacrel->new_live_tuples, 0),
+								 vacrel->recently_dead_tuples +
+								 vacrel->missed_dead_tuples,
+								 starttime,
+								 (PgStat_Counter) rint(VacuumDelayTime -
+													   startdelaytime),
+								 VacuumFailsafeActive,
+								 NULL);
 	pgstat_progress_end_command();
 
 	if (instrument)
@@ -2993,6 +3015,16 @@ lazy_vacuum_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 
 		extvac_stats_end(indrel, extVacCounters, &extVacReport->common);
 		extVacReport->type = PGSTAT_EXTVAC_INDEX;
+		if (istat != NULL)
+		{
+			extVacReport->common.tuples_deleted =
+				istat->tuples_removed - prev_tuples_removed;
+			extVacReport->pages_deleted =
+				(istat->pages_newly_deleted >= prev_pages_newly_deleted) ?
+				istat->pages_newly_deleted - prev_pages_newly_deleted :
+				istat->pages_newly_deleted;
+		}
+		pgstat_report_vacuum_ext(indrel, -1, -1, 0, 0, false, extVacReport);
 		accumulate_idxs_vacuum_statistics(vacrel, extVacReport);
 		pfree(extVacCounters);
 	}
@@ -3078,6 +3110,18 @@ lazy_cleanup_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 
 		extvac_stats_end(indrel, extVacCounters, &extVacReport->common);
 		extVacReport->type = PGSTAT_EXTVAC_INDEX;
+		if (istat != NULL)
+		{
+			extVacReport->common.tuples_deleted =
+				istat->tuples_removed - prev_tuples_removed;
+			extVacReport->pages_deleted =
+				(istat->pages_newly_deleted >= prev_pages_newly_deleted) ?
+				istat->pages_newly_deleted - prev_pages_newly_deleted :
+				istat->pages_newly_deleted;
+			if (istat->pages_deleted > istat->pages_free)
+				extVacReport->dead_pages = istat->pages_deleted - istat->pages_free;
+		}
+		pgstat_report_vacuum_ext(indrel, -1, -1, 0, 0, false, extVacReport);
 		accumulate_idxs_vacuum_statistics(vacrel, extVacReport);
 		pfree(extVacCounters);
 	}

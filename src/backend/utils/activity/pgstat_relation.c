@@ -430,6 +430,30 @@ pgstat_report_vacuum_stats(Relation rel, const PgStat_VacuumStats *stats)
 set_report_vacuum_hook_type set_report_vacuum_hook = NULL;
 
 /*
+ * Report extended vacuum statistics to extensions via set_report_vacuum_hook.
+ * When livetuples/deadtuples/starttime are provided (heap case), also calls
+ * pgstat_report_vacuum. For indexes, pass -1, -1, 0, 0 to skip pgstat_report_vacuum.
+ */
+void
+pgstat_report_vacuum_ext(Relation rel, PgStat_Counter livetuples,
+						 PgStat_Counter deadtuples, TimestampTz starttime,
+						 PgStat_Counter delaytime, bool failsafe,
+						 PgStat_VacuumRelationCounts * extstats)
+{
+	/* Index reports pass starttime = 0: no per-vacuum pgstat side-effects */
+	if (starttime != 0)
+		pgstat_report_vacuum(RelationGetRelid(rel), rel->rd_rel->relisshared,
+							 livetuples, deadtuples, starttime, delaytime,
+							 failsafe);
+
+	if (extstats != NULL && set_report_vacuum_hook)
+		(*set_report_vacuum_hook) (RelationGetRelid(rel),
+								   rel->rd_rel->relisshared,
+								   extstats);
+}
+
+
+/*
  * Report that the table was just analyzed and flush IO statistics.
  *
  * Caller must provide new live- and dead-tuples estimates, as well as a
