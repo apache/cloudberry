@@ -178,3 +178,4 @@ test: vacuum-ao-concurrent-drop
 test: serializable-parallel-3
 test: matview-write-skew
 test: type-ddl-locking
+test: vacuum-extending-freeze
