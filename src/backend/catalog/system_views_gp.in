@@ -10,6 +10,9 @@ pg_replication_slots
 pg_settings
 pg_stat_activity
 pg_stat_all_indexes
+pg_stat_vacuum
+pg_stat_vacuum_tables
+pg_stat_vacuum_indexes
 pg_stat_all_tables
 pg_stat_archiver
 pg_stat_bgwriter

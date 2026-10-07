@@ -1205,6 +1205,62 @@ CREATE VIEW pg_stat_database AS
         UNION ALL
         SELECT oid, datname FROM pg_database
     ) D;
+CREATE VIEW pg_stat_vacuum AS
+    SELECT
+            D.oid AS datid,
+            D.datname AS datname,
+            pg_stat_get_db_stat_reset_time(D.oid) AS stats_reset,
+            V.tuples_deleted,
+            V.dead_pages,
+            V.pages_frozen,
+            V.pages_all_visible,
+            V.freeze_age_vacuum_count,
+            V.tuples_frozen,
+            V.recently_dead_tuples,
+            V.missed_dead_tuples,
+            V.pages_scanned,
+            V.pages_removed,
+            V.missed_dead_pages,
+            V.compacted_segments,
+            V.tuples_moved
+    FROM (
+        SELECT 0 AS oid, NULL::name AS datname
+        UNION ALL
+        SELECT oid, datname FROM pg_database
+    ) D, LATERAL pg_stat_get_vacuum_database_stats(D.oid) V;
+
+CREATE VIEW pg_stat_vacuum_tables AS
+    SELECT C.oid AS relid, N.nspname AS schema, C.relname,
+           current_database() AS dbname,
+           V.tuples_deleted,
+           V.dead_tuples,
+           V.dead_pages,
+           V.pages_frozen,
+           V.pages_all_visible,
+           V.freeze_age_vacuum_count,
+           V.tuples_frozen,
+           V.recently_dead_tuples,
+           V.missed_dead_tuples,
+           V.pages_scanned,
+           V.pages_removed,
+           V.missed_dead_pages,
+           V.total_file_segs,
+           V.compacted_segments,
+           V.tuples_moved
+      FROM pg_class C JOIN pg_namespace N ON N.oid = C.relnamespace,
+           LATERAL pg_stat_get_vacuum_stats(C.oid) V
+     WHERE C.relkind IN ('r', 't', 'm');
+
+CREATE VIEW pg_stat_vacuum_indexes AS
+    SELECT C.oid AS indexrelid, N.nspname AS schema, C.relname AS indexrelname,
+           current_database() AS dbname,
+           V.tuples_deleted,
+           V.pages_deleted,
+           V.dead_pages
+      FROM pg_class C JOIN pg_namespace N ON N.oid = C.relnamespace,
+           LATERAL pg_stat_get_vacuum_stats(C.oid) V
+     WHERE C.relkind IN ('i');
+
 CREATE VIEW pg_resqueue_status AS
     SELECT
             q.rsqname,

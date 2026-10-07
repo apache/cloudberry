@@ -94,6 +94,30 @@ GROUP BY
     sdb.datname;
 
 
+CREATE VIEW gp_stat_vacuum_summary AS
+SELECT
+    sdb.datid,
+    sdb.datname,
+    max(sdb.stats_reset) as stats_reset,
+    sum(sdb.tuples_deleted)::bigint AS tuples_deleted,
+    sum(sdb.dead_pages)::bigint AS dead_pages,
+    sum(sdb.pages_frozen)::bigint AS pages_frozen,
+    sum(sdb.pages_all_visible)::bigint AS pages_all_visible,
+    sum(sdb.freeze_age_vacuum_count)::bigint AS freeze_age_vacuum_count,
+    sum(sdb.tuples_frozen)::bigint AS tuples_frozen,
+    sum(sdb.recently_dead_tuples)::bigint AS recently_dead_tuples,
+    sum(sdb.missed_dead_tuples)::bigint AS missed_dead_tuples,
+    sum(sdb.pages_scanned)::bigint AS pages_scanned,
+    sum(sdb.pages_removed)::bigint AS pages_removed,
+    sum(sdb.missed_dead_pages)::bigint AS missed_dead_pages,
+    sum(sdb.compacted_segments)::bigint AS compacted_segments,
+    sum(sdb.tuples_moved)::bigint AS tuples_moved
+FROM
+    gp_stat_vacuum sdb
+GROUP BY
+    sdb.datid,
+    sdb.datname;
+
 -- Gather data from segments on user tables, and use data on coordinator on system tables.
 CREATE VIEW gp_stat_all_tables_summary AS
 SELECT
@@ -520,3 +544,92 @@ SELECT
     max(stats_reset) as stats_reset
 FROM gp_stat_io
 GROUP BY backend_type, object, context;
+
+CREATE VIEW gp_stat_vacuum_tables_summary AS
+SELECT
+  s.relid,
+  s.schema,
+  s.relname,
+  s.dbname,
+  (sum(s.tuples_deleted) / s.divisor)::bigint AS tuples_deleted,
+  (sum(s.pages_scanned) / s.divisor)::bigint AS pages_scanned,
+  (sum(s.pages_removed) / s.divisor)::bigint AS pages_removed,
+  (sum(s.tuples_frozen) / s.divisor)::bigint AS tuples_frozen,
+  (sum(s.recently_dead_tuples) / s.divisor)::bigint AS recently_dead_tuples,
+  (sum(s.missed_dead_pages) / s.divisor)::bigint AS missed_dead_pages,
+  (sum(s.missed_dead_tuples) / s.divisor)::bigint AS missed_dead_tuples,
+  (sum(s.pages_frozen) / s.divisor)::bigint AS pages_frozen,
+  (sum(s.pages_all_visible) / s.divisor)::bigint AS pages_all_visible,
+  (sum(s.freeze_age_vacuum_count) / s.divisor)::bigint AS freeze_age_vacuum_count,
+  (sum(s.total_file_segs) / s.divisor)::bigint AS total_file_segs,
+  (sum(s.compacted_segments) / s.divisor)::bigint AS compacted_segments,
+  (sum(s.tuples_moved) / s.divisor)::bigint AS tuples_moved,
+  (sum(s.dead_tuples) / s.divisor)::bigint AS dead_tuples,
+  (sum(s.dead_pages) / s.divisor)::bigint AS dead_pages
+FROM (
+  SELECT v.*,
+         CASE WHEN d.policytype = 'r' THEN d.numsegments ELSE 1 END AS divisor
+  FROM gp_dist_random('pg_stat_vacuum_tables') v
+  LEFT JOIN gp_distribution_policy d ON d.localoid = v.relid
+  WHERE v.relid >= 16384
+) s
+GROUP BY s.relid, s.schema, s.relname, s.dbname, s.divisor
+UNION ALL
+SELECT
+  relid,
+  schema,
+  relname,
+  dbname,
+  tuples_deleted,
+  pages_scanned,
+  pages_removed,
+  tuples_frozen,
+  recently_dead_tuples,
+  missed_dead_pages,
+  missed_dead_tuples,
+  pages_frozen,
+  pages_all_visible,
+  freeze_age_vacuum_count,
+  total_file_segs,
+  compacted_segments,
+  tuples_moved,
+  dead_tuples,
+  dead_pages
+FROM pg_stat_vacuum_tables
+WHERE relid < 16384;
+
+COMMENT ON VIEW gp_stat_vacuum_tables_summary IS
+  'Vacuum work statistics per table, summed over the cluster';
+
+CREATE VIEW gp_stat_vacuum_indexes_summary AS
+SELECT
+  s.indexrelid,
+  s.schema,
+  s.indexrelname,
+  s.dbname,
+  (sum(s.tuples_deleted) / s.divisor)::bigint AS tuples_deleted,
+  (sum(s.pages_deleted) / s.divisor)::bigint AS pages_deleted,
+  (sum(s.dead_pages) / s.divisor)::bigint AS dead_pages
+FROM (
+  SELECT v.*,
+         CASE WHEN d.policytype = 'r' THEN d.numsegments ELSE 1 END AS divisor
+  FROM gp_dist_random('pg_stat_vacuum_indexes') v
+  JOIN pg_index i ON i.indexrelid = v.indexrelid
+  LEFT JOIN gp_distribution_policy d ON d.localoid = i.indrelid
+  WHERE v.indexrelid >= 16384
+) s
+GROUP BY s.indexrelid, s.schema, s.indexrelname, s.dbname, s.divisor
+UNION ALL
+SELECT
+  indexrelid,
+  schema,
+  indexrelname,
+  dbname,
+  tuples_deleted,
+  pages_deleted,
+  dead_pages
+FROM pg_stat_vacuum_indexes
+WHERE indexrelid < 16384;
+
+COMMENT ON VIEW gp_stat_vacuum_indexes_summary IS
+  'Vacuum work statistics per index, summed over the cluster';
