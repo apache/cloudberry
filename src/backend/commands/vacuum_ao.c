@@ -498,6 +498,7 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 		stats.tuples_moved = vacrelstats->tuples_moved;
 		stats.pages_removed = vacrelstats->nbytes_truncated / BLCKSZ +
 			(vacrelstats->nbytes_truncated % BLCKSZ != 0);
+		pgstat_report_vacuum_stats(rel, &stats);
 
 		pgstat_progress_end_command();
 		cleanup_vacrelstats(&vacrelstats);
@@ -617,7 +618,7 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 						   elevel,
 						   bstrategy,
 						   &result);
-				vacuum_measure_index_stats(Irel[i], &result, 0, 0, final_cleanup);
+				vacuum_report_index_stats(Irel[i], &result, 0, 0, final_cleanup);
 			}
 		}
 		else
@@ -633,7 +634,7 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 										bstrategy,
 										vacrelstats,
 										&result);
-				vacuum_measure_index_stats(Irel[i], &result, 0, 0, final_cleanup);
+				vacuum_report_index_stats(Irel[i], &result, 0, 0, final_cleanup);
 			}
 		}
 	}
