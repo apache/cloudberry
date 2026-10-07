@@ -173,6 +173,9 @@ select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, he
 -- Also all segments should reach to the same "vacuum_worker_changed" point
 -- due to FTS version being changed.
 2: SELECT gp_wait_until_triggered_fault('vacuum_worker_changed', 1, dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
+-- Compaction time survives replacement of the QE gang before post-cleanup.
+SELECT bool_and(total_vacuum_time > 0 AND vacuum_count = 0) AS phase_time_survives
+  FROM gp_stat_all_tables WHERE relname = 'vacuum_progress_ao_column' AND gp_segment_id > -1;
 -- now seg1's mirror is marked as down
 2: SELECT content, role, preferred_role, mode, status FROM gp_segment_configuration WHERE content > -1;
 

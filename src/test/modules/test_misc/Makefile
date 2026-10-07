@@ -14,3 +14,8 @@ top_builddir = ../../../..
 include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
 endif
+
+# Native maintenance statistics coverage for the ic-tap CI job.
+.PHONY: installcheck-vacuum
+installcheck-vacuum: PROVE_TESTS = t/016_index_vacuum_time.pl t/017_vacuum_failsafe.pl t/018_vacuum_interrupts.pl
+installcheck-vacuum: installcheck
