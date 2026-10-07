@@ -219,19 +219,35 @@ pgstat_report_vacuum(Oid tableoid, bool shared,
 					 TimestampTz starttime, PgStat_Counter delaytime,
 					 bool failsafe)
 {
+	pgstat_report_vacuum_elapsed(tableoid, shared, livetuples, deadtuples,
+								 TimestampDifferenceMilliseconds(starttime,
+														GetCurrentTimestamp()),
+								 delaytime, failsafe, true);
+}
+
+/*
+ * Report elapsed time for a completed vacuum or one completed AO phase (ms).
+ * Only the final phase updates tuple estimates and the completed-vacuum count.
+ * Times measure work already performed, so they are intentionally not rolled
+ * back if a distributed transaction subsequently aborts.
+ */
+void
+pgstat_report_vacuum_elapsed(Oid tableoid, bool shared,
+							 PgStat_Counter livetuples, PgStat_Counter deadtuples,
+							 PgStat_Counter elapsedtime, PgStat_Counter delaytime,
+							 bool failsafe, bool is_complete)
+{
 	PgStat_EntryRef *entry_ref;
 	PgStatShared_Relation *shtabentry;
 	PgStat_StatTabEntry *tabentry;
 	Oid			dboid = (shared ? InvalidOid : MyDatabaseId);
 	TimestampTz ts;
-	PgStat_Counter elapsedtime;
 
 	if (!pgstat_track_counts)
 		return;
 
 	/* Store the data in the table's hash table entry. */
 	ts = GetCurrentTimestamp();
-	elapsedtime = TimestampDifferenceMilliseconds(starttime, ts);
 
 	/* block acquiring lock for the same reason as pgstat_report_autovac() */
 	entry_ref = pgstat_get_entry_ref_locked(PGSTAT_KIND_RELATION,
@@ -240,32 +256,42 @@ pgstat_report_vacuum(Oid tableoid, bool shared,
 	shtabentry = (PgStatShared_Relation *) entry_ref->shared_stats;
 	tabentry = &shtabentry->stats;
 
-	tabentry->live_tuples = livetuples;
-	tabentry->dead_tuples = deadtuples;
+	if (is_complete)
+	{
+		tabentry->live_tuples = livetuples;
+		tabentry->dead_tuples = deadtuples;
 
-	/*
-	 * It is quite possible that a non-aggressive VACUUM ended up skipping
-	 * various pages, however, we'll zero the insert counter here regardless.
-	 * It's currently used only to track when we need to perform an "insert"
-	 * autovacuum, which are mainly intended to freeze newly inserted tuples.
-	 * Zeroing this may just mean we'll not try to vacuum the table again
-	 * until enough tuples have been inserted to trigger another insert
-	 * autovacuum.  An anti-wraparound autovacuum will catch any persistent
-	 * stragglers.
-	 */
-	tabentry->ins_since_vacuum = 0;
+		/*
+		 * It is quite possible that a non-aggressive VACUUM ended up skipping
+		 * various pages, however, we'll zero the insert counter here regardless.
+		 * It's currently used only to track when we need to perform an "insert"
+		 * autovacuum, which are mainly intended to freeze newly inserted tuples.
+		 * Zeroing this may just mean we'll not try to vacuum the table again
+		 * until enough tuples have been inserted to trigger another insert
+		 * autovacuum.  An anti-wraparound autovacuum will catch any persistent
+		 * stragglers. For AO, wait until the post-cleanup phase completes.
+		 */
+		tabentry->ins_since_vacuum = 0;
+
+		if (IsAutoVacuumWorkerProcess())
+		{
+			tabentry->last_autovacuum_time = ts;
+			tabentry->autovacuum_count++;
+		}
+		else
+		{
+			tabentry->last_vacuum_time = ts;
+			tabentry->vacuum_count++;
+		}
+	}
 
 	if (IsAutoVacuumWorkerProcess())
 	{
-		tabentry->last_autovacuum_time = ts;
-		tabentry->autovacuum_count++;
 		tabentry->total_autovacuum_time += elapsedtime;
 		tabentry->total_autovacuum_delay_time += delaytime;
 	}
 	else
 	{
-		tabentry->last_vacuum_time = ts;
-		tabentry->vacuum_count++;
 		tabentry->total_vacuum_time += elapsedtime;
 		tabentry->total_vacuum_delay_time += delaytime;
 	}
