@@ -882,7 +882,7 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 				 RelationGetRelationName(indrel));
 	}
 
-	vacuum_measure_index_stats(indrel, istat_res, prev_tuples_removed,
+	vacuum_report_index_stats(indrel, istat_res, prev_tuples_removed,
 							  prev_pages_newly_deleted,
 							  indstats->status == PARALLEL_INDVAC_STATUS_NEED_CLEANUP);
 
