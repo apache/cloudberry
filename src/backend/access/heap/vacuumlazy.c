@@ -775,7 +775,7 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 						vacrel->NewRelfrozenXid, vacrel->NewRelminMxid,
 						&frozenxid_updated, &minmulti_updated, false, true);
 
-	/* Assemble backend-local measurements for subsequent reporting. */
+	/* Core work counters are collected even without an extension hook. */
 	{
 		PgStat_VacuumStats stats = {0};
 
@@ -789,6 +789,7 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 		stats.pages_scanned = vacrel->scanned_pages;
 		stats.pages_removed = vacrel->removed_pages;
 		stats.missed_dead_pages = vacrel->missed_dead_pages;
+		pgstat_report_vacuum_stats(rel, &stats);
 	}
 
 	/*
@@ -3035,7 +3036,7 @@ lazy_vacuum_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 
 	/* Do bulk deletion */
 	istat = vac_bulkdel_one_index(&ivinfo, istat, (void *) vacrel->dead_items);
-	vacuum_measure_index_stats(indrel, istat, prev_tuples_removed,
+	vacuum_report_index_stats(indrel, istat, prev_tuples_removed,
 							  prev_pages_newly_deleted, false);
 
 	if (extVacCounters != NULL)
@@ -3123,7 +3124,7 @@ lazy_cleanup_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 							 InvalidBlockNumber, InvalidOffsetNumber);
 
 	istat = vac_cleanup_one_index(&ivinfo, istat);
-	vacuum_measure_index_stats(indrel, istat, prev_tuples_removed,
+	vacuum_report_index_stats(indrel, istat, prev_tuples_removed,
 							  prev_pages_newly_deleted, true);
 
 	if (extVacCounters != NULL)
