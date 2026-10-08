@@ -14,6 +14,7 @@
 #define APPENDONLY_COMPACTION_H
 
 #include "datatype/timestamp.h"
+#include "pgstat.h"
 #include "nodes/pg_list.h"
 #include "access/appendonly_visimap.h"
 #include "utils/rel.h"
@@ -21,6 +22,13 @@
 #include "executor/tuptable.h"
 
 #define APPENDONLY_COMPACTION_SEGNO_INVALID (-1)
+
+/* Optional resource counters for the extended-statistics hook. */
+typedef struct AOVacuumExtStats
+{
+	PgStat_CommonCounts phases;
+	PgStat_CommonCounts indexes;
+} AOVacuumExtStats;
 
 /*
  * Stats for progress reporting.
@@ -44,6 +52,12 @@ typedef struct AOVacuumRelStats
 
 	/* the relation these stats were started for */
 	Oid			relid;
+	/*
+	 * Resource usage for set_report_vacuum_hook, accumulated over the phases:
+	 * of the phases as a whole, and of the index passes among them, which are
+	 * reported per index and subtracted from the table's report.
+	 */
+	AOVacuumExtStats *extstats; /* allocated only when the hook is installed */
 } AOVacuumRelStats;
 
 extern Bitmapset *AppendOptimizedCollectDeadSegments(Relation aorel);

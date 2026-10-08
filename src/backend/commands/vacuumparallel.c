@@ -847,6 +847,7 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 	double		startdelaytime = VacuumDelayTime;
 	double		prev_tuples_removed = 0;
 	BlockNumber prev_pages_newly_deleted = 0;
+	LVExtStatCounters *extVacCounters;
 
 	/*
 	 * Update the pointer to the corresponding bulk-deletion result if someone
@@ -864,6 +865,7 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 		prev_tuples_removed = istat->tuples_removed;
 		prev_pages_newly_deleted = istat->pages_newly_deleted;
 	}
+	extVacCounters = extvac_stats_start(indrel);
 	ivinfo.index = indrel;
 	ivinfo.heaprel = pvs->heaprel;
 	ivinfo.analyze_only = false;
@@ -894,6 +896,15 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 	vacuum_report_index_stats(indrel, istat_res, prev_tuples_removed,
 							  prev_pages_newly_deleted,
 							  indstats->status == PARALLEL_INDVAC_STATUS_NEED_CLEANUP);
+
+	if (extVacCounters != NULL)
+	{
+		PgStat_VacuumRelationCounts *extVacReport = &extVacCounters->report;
+
+		extvac_stats_end(indrel, extVacCounters, &extVacReport->common);
+		extVacReport->type = PGSTAT_EXTVAC_INDEX;
+		pfree(extVacCounters);
+	}
 
 	/*
 	 * Accumulate this pass into the index's cumulative vacuum times.  Use the
