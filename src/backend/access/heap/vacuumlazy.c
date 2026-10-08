@@ -166,6 +166,7 @@ typedef struct LVRelState
 
 	/* Aggressive VACUUM? (must set relfrozenxid >= FreezeLimit) */
 	bool		aggressive;
+	bool		freeze_age_vacuum; /* aggressive before DISABLE_PAGE_SKIPPING */
 	/* Use visibility map to skip? (disabled by DISABLE_PAGE_SKIPPING) */
 	bool		skipwithvm;
 	/* Consider index vacuuming bypass optimization? */
@@ -206,7 +207,9 @@ typedef struct LVRelState
 	BlockNumber scanned_pages;	/* # pages examined (not skipped via VM) */
 	BlockNumber removed_pages;	/* # pages removed by relation truncation */
 	BlockNumber frozen_pages;	/* # pages with newly frozen tuples */
+	BlockNumber all_visible_pages; /* # pages newly marked all-visible in VM */
 	BlockNumber lpdead_item_pages;	/* # pages with LP_DEAD items */
+	BlockNumber dead_pages;		/* # pages with not-yet-removable tuples */
 	BlockNumber missed_dead_pages;	/* # pages with missed dead tuples */
 	BlockNumber nonempty_pages; /* actually, last nonempty page + 1 */
 
@@ -447,6 +450,7 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 	vacrel->scanned_pages = 0;
 	vacrel->removed_pages = 0;
 	vacrel->frozen_pages = 0;
+	vacrel->all_visible_pages = 0;
 	vacrel->lpdead_item_pages = 0;
 	vacrel->missed_dead_pages = 0;
 	vacrel->nonempty_pages = 0;
@@ -483,6 +487,8 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 	 * time to time, to increase the number of dead tuples it can prune away.)
 	 */
 	vacrel->aggressive = vacuum_get_cutoffs(rel, params, &vacrel->cutoffs);
+	/* DISABLE_PAGE_SKIPPING alone must not count as a freeze-age run. */
+	vacrel->freeze_age_vacuum = vacrel->aggressive;
 	vacrel->rel_pages = orig_rel_pages = RelationGetNumberOfBlocks(rel);
 	vacrel->vistest = GlobalVisTestFor(rel);
 	/* Initialize state used to track oldest extant XID/MXID */
@@ -618,6 +624,25 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 						vacrel->nindexes > 0,
 						vacrel->NewRelfrozenXid, vacrel->NewRelminMxid,
 						&frozenxid_updated, &minmulti_updated, false, true);
+
+	/* Core work counters are collected even without an extension hook. */
+	{
+		PgStat_VacuumStats stats = {0};
+
+		stats.tuples_deleted = vacrel->tuples_deleted;
+		stats.dead_tuples = vacrel->recently_dead_tuples + vacrel->missed_dead_tuples;
+		stats.dead_pages = vacrel->dead_pages;
+		stats.pages_frozen = vacrel->frozen_pages;
+		stats.pages_all_visible = vacrel->all_visible_pages;
+		stats.freeze_age_vacuum_count = vacrel->freeze_age_vacuum ? 1 : 0;
+		stats.tuples_frozen = vacrel->tuples_frozen;
+		stats.recently_dead_tuples = vacrel->recently_dead_tuples;
+		stats.missed_dead_tuples = vacrel->missed_dead_tuples;
+		stats.pages_scanned = vacrel->scanned_pages;
+		stats.pages_removed = vacrel->removed_pages;
+		stats.missed_dead_pages = vacrel->missed_dead_pages;
+		pgstat_report_vacuum_stats(rel, &stats);
+	}
 
 	/*
 	 * Report results to the cumulative stats system, too.
@@ -1159,6 +1184,12 @@ lazy_scan_heap(LVRelState *vacrel)
 			 */
 			PageSetAllVisible(page);
 			MarkBufferDirty(buf);
+			/*
+			 * Count only new VM marks, using the current bit under the heap
+			 * lock rather than the possibly stale lazy_scan_skip() result.
+			 */
+			if (!VM_ALL_VISIBLE(vacrel->rel, blkno, &vmbuffer))
+				vacrel->all_visible_pages++;
 			visibilitymap_set(vacrel->rel, blkno, buf, InvalidXLogRecPtr,
 							  vmbuffer, prunestate.visibility_cutoff_xid,
 							  flags);
@@ -1232,6 +1263,8 @@ lazy_scan_heap(LVRelState *vacrel)
 			 * safe for REDO was logged when the page's tuples were frozen.
 			 */
 			Assert(!TransactionIdIsValid(prunestate.visibility_cutoff_xid));
+			if (!VM_ALL_VISIBLE(vacrel->rel, blkno, &vmbuffer))
+				vacrel->all_visible_pages++;
 			visibilitymap_set(vacrel->rel, blkno, buf, InvalidXLogRecPtr,
 							  vmbuffer, InvalidTransactionId,
 							  VISIBILITYMAP_ALL_VISIBLE |
@@ -1540,6 +1573,8 @@ lazy_scan_new_or_empty(LVRelState *vacrel, Buffer buf, BlockNumber blkno,
 				log_newpage_buffer(buf, true);
 
 			PageSetAllVisible(page);
+			if (!VM_ALL_VISIBLE(vacrel->rel, blkno, &vmbuffer))
+				vacrel->all_visible_pages++;
 			visibilitymap_set(vacrel->rel, blkno, buf, InvalidXLogRecPtr,
 							  vmbuffer, InvalidTransactionId,
 							  VISIBILITYMAP_ALL_VISIBLE | VISIBILITYMAP_ALL_FROZEN);
@@ -1980,6 +2015,8 @@ retry:
 	vacrel->lpdead_items += lpdead_items;
 	vacrel->live_tuples += live_tuples;
 	vacrel->recently_dead_tuples += recently_dead_tuples;
+	if (recently_dead_tuples > 0)
+		vacrel->dead_pages++;
 }
 
 /*
@@ -2214,6 +2251,8 @@ lazy_scan_noprune(LVRelState *vacrel,
 	 */
 	vacrel->live_tuples += live_tuples;
 	vacrel->recently_dead_tuples += recently_dead_tuples;
+	if (recently_dead_tuples > 0)
+		vacrel->dead_pages++;
 	vacrel->missed_dead_tuples += missed_dead_tuples;
 	if (missed_dead_tuples > 0)
 		vacrel->missed_dead_pages++;
@@ -2640,6 +2679,8 @@ lazy_vacuum_heap_page(LVRelState *vacrel, BlockNumber blkno, Buffer buffer,
 		}
 
 		PageSetAllVisible(page);
+		if (!VM_ALL_VISIBLE(vacrel->rel, blkno, &vmbuffer))
+			vacrel->all_visible_pages++;
 		visibilitymap_set(vacrel->rel, blkno, buffer, InvalidXLogRecPtr,
 						  vmbuffer, visibility_cutoff_xid, flags);
 	}
@@ -2760,7 +2801,18 @@ lazy_vacuum_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 	LVSavedErrInfo saved_err_info;
 	TimestampTz istarttime = GetCurrentTimestamp();
 	double		startdelaytime = VacuumDelayTime;
+	double		prev_tuples_removed = 0;
+	BlockNumber prev_pages_newly_deleted = 0;
 
+	/*
+	 * Snapshot the running bulkdelete totals: an index may be processed
+	 * several times per vacuum, and the report below covers this pass only.
+	 */
+	if (istat != NULL)
+	{
+		prev_tuples_removed = istat->tuples_removed;
+		prev_pages_newly_deleted = istat->pages_newly_deleted;
+	}
 	ivinfo.index = indrel;
 	ivinfo.heaprel = vacrel->rel;
 	ivinfo.analyze_only = false;
@@ -2784,6 +2836,8 @@ lazy_vacuum_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 
 	/* Do bulk deletion */
 	istat = vac_bulkdel_one_index(&ivinfo, istat, (void *) vacrel->dead_items);
+	vacuum_report_index_stats(indrel, istat, prev_tuples_removed,
+							  prev_pages_newly_deleted, false);
 
 	/* Accumulate this pass into the index's cumulative vacuum times */
 	pgstat_report_index_vacuum_time(indrel,
@@ -2819,7 +2873,18 @@ lazy_cleanup_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 	LVSavedErrInfo saved_err_info;
 	TimestampTz istarttime = GetCurrentTimestamp();
 	double		startdelaytime = VacuumDelayTime;
+	double		prev_tuples_removed = 0;
+	BlockNumber prev_pages_newly_deleted = 0;
 
+	/*
+	 * Snapshot the running bulkdelete totals: an index may be processed
+	 * several times per vacuum, and the report below covers this pass only.
+	 */
+	if (istat != NULL)
+	{
+		prev_tuples_removed = istat->tuples_removed;
+		prev_pages_newly_deleted = istat->pages_newly_deleted;
+	}
 	ivinfo.index = indrel;
 	ivinfo.heaprel = vacrel->rel;
 	ivinfo.analyze_only = false;
@@ -2843,6 +2908,8 @@ lazy_cleanup_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 							 InvalidBlockNumber, InvalidOffsetNumber);
 
 	istat = vac_cleanup_one_index(&ivinfo, istat);
+	vacuum_report_index_stats(indrel, istat, prev_tuples_removed,
+							  prev_pages_newly_deleted, true);
 
 	/* Accumulate this pass into the index's cumulative vacuum times */
 	pgstat_report_index_vacuum_time(indrel,

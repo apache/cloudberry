@@ -152,7 +152,8 @@ static void vacuum_appendonly_index(Relation indexRelation,
 									Bitmapset *dead_segs,
 									int elevel,
 									BufferAccessStrategy bstrategy,
-									AOVacuumRelStats *vacrelstats);
+									AOVacuumRelStats *vacrelstats,
+									IndexBulkDeleteResult *result);
 
 static bool appendonly_tid_reaped(ItemPointer itemptr, void *state);
 
@@ -307,6 +308,8 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 						NULL,
 						false,
 						true /* isvacuum */);
+
+	vacrelstats->total_file_segs = total_file_segs;
 
 	/* Report once all phase timers have been stopped. */
 	vacrelstats->live_tuples = reltuples;
@@ -506,6 +509,19 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 
 	if (ao_vacuum_phase == VACOPT_AO_POST_CLEANUP_PHASE)
 	{
+		PgStat_VacuumStats stats = {0};
+
+		stats.tuples_deleted = vacrelstats->num_dead_tuples;
+		stats.dead_tuples = vacrelstats->dead_tuples;
+		stats.recently_dead_tuples = vacrelstats->dead_tuples;
+		stats.pages_scanned = vacrelstats->pages_scanned;
+		stats.total_file_segs = vacrelstats->total_file_segs;
+		stats.compacted_segments = vacrelstats->compacted_segments;
+		stats.tuples_moved = vacrelstats->tuples_moved;
+		stats.pages_removed = vacrelstats->nbytes_truncated / BLCKSZ +
+			(vacrelstats->nbytes_truncated % BLCKSZ != 0);
+		pgstat_report_vacuum_stats(rel, &stats);
+
 		/* The last phase: report only the phases executed by this worker. */
 		pgstat_report_vacuum_elapsed(RelationGetRelid(rel),
 									 rel->rd_rel->relisshared,
@@ -662,11 +678,14 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 			{
 				TimestampTz istarttime = GetCurrentTimestamp();
 				double		startdelaytime = VacuumDelayTime;
+				IndexBulkDeleteResult result = {0};
 
 				scan_index(Irel[i],
 						   aoRelation,
 						   elevel,
-						   bstrategy);
+						   bstrategy,
+						   &result);
+				vacuum_report_index_stats(Irel[i], &result, 0, 0, final_cleanup);
 				ao_report_index_vacuum_time(Irel[i], istarttime, startdelaytime);
 			}
 		}
@@ -676,13 +695,16 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 			{
 				TimestampTz istarttime = GetCurrentTimestamp();
 				double		startdelaytime = VacuumDelayTime;
+				IndexBulkDeleteResult result = {0};
 
 				vacuum_appendonly_index(Irel[i],
 										aoRelation,
 										dead_segs,
 										elevel,
 										bstrategy,
-										vacrelstats);
+										vacrelstats,
+										&result);
+				vacuum_report_index_stats(Irel[i], &result, 0, 0, final_cleanup);
 				ao_report_index_vacuum_time(Irel[i], istarttime, startdelaytime);
 			}
 		}
@@ -707,7 +729,8 @@ vacuum_appendonly_index(Relation indexRelation,
 						Bitmapset *dead_segs,
 						int elevel,
 						BufferAccessStrategy bstrategy,
-						AOVacuumRelStats *vacrelstats)
+						AOVacuumRelStats *vacrelstats,
+						IndexBulkDeleteResult *result)
 {
 	IndexBulkDeleteResult *stats;
 	IndexVacuumInfo ivinfo = {0};
@@ -744,6 +767,10 @@ vacuum_appendonly_index(Relation indexRelation,
 
 	if (!stats)
 		return;
+
+	/* Hand the counts of the pass to the caller, for the statistics */
+	if (result)
+		*result = *stats;
 
 	/*
 	 * Now update statistics in pg_class, but only if the index says the count
@@ -885,7 +912,8 @@ cleanup_vacrelstats(AOVacuumRelStats **vacrelstats)
  * We use this when we have no deletions to do.
  */
 void
-scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac_strategy)
+scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac_strategy,
+		   IndexBulkDeleteResult *result)
 {
 	IndexBulkDeleteResult *stats;
 	IndexVacuumInfo ivinfo = {0};
@@ -912,6 +940,10 @@ scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac
 
 	if (!stats)
 		return;
+
+	/* Hand the counts of the pass to the caller, for the statistics */
+	if (result)
+		*result = *stats;
 
 	/*
 	 * Now update statistics in pg_class, but only if the index says the count

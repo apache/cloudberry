@@ -91,6 +91,32 @@ typedef enum SessionEndType
  */
 typedef int64 PgStat_Counter;
 
+/*
+ * Work measured by VACUUM, stored in ordinary cumulative statistics.
+ * dead_tuples and total_file_segs are samples from the last completed run;
+ * all other fields accumulate across runs. Database totals omit snapshots
+ * and index reports, whose work is already part of the table vacuum.
+ */
+typedef struct PgStat_VacuumStats
+{
+	PgStat_Counter	tuples_deleted;
+	PgStat_Counter	dead_tuples;
+	PgStat_Counter	pages_deleted;
+	PgStat_Counter	dead_pages;
+	PgStat_Counter	pages_frozen;
+	PgStat_Counter	pages_all_visible;
+	PgStat_Counter	freeze_age_vacuum_count;
+	PgStat_Counter	tuples_frozen;
+	PgStat_Counter	recently_dead_tuples;
+	PgStat_Counter	missed_dead_tuples;
+	PgStat_Counter	pages_scanned;
+	PgStat_Counter	pages_removed;
+	PgStat_Counter	missed_dead_pages;
+	PgStat_Counter	total_file_segs;
+	PgStat_Counter	compacted_segments;
+	PgStat_Counter	tuples_moved;
+} PgStat_VacuumStats;
+
 
 /* ------------------------------------------------------------
  * Structures kept in backend local memory while accumulating counts
@@ -246,7 +272,7 @@ typedef struct PgStat_TableXactStatus
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCB4
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCB7
 
 typedef struct PgStat_ArchiverStats
 {
@@ -383,6 +409,7 @@ typedef struct PgStat_StatDBEntry
 	PgStat_Counter vacuum_interrupt_count;
 
 	TimestampTz stat_reset_timestamp;
+	PgStat_VacuumStats vacuum_stats;
 } PgStat_StatDBEntry;
 
 typedef struct PgStat_StatFuncEntry
@@ -476,6 +503,7 @@ typedef struct PgStat_StatTabEntry
 	 * failsafe mode (see vacuum_failsafe_age).
 	 */
 	PgStat_Counter vacuum_failsafe_count;
+	PgStat_VacuumStats vacuum_stats;
 } PgStat_StatTabEntry;
 
 typedef struct PgStat_WalStats
@@ -699,6 +727,8 @@ extern void pgstat_init_relation(Relation rel);
 extern void pgstat_assoc_relation(Relation rel);
 extern void pgstat_unlink_relation(Relation rel);
 
+extern void pgstat_report_vacuum_stats(Relation rel,
+										 const PgStat_VacuumStats *stats);
 extern void pgstat_report_vacuum_elapsed(Oid tableoid, bool shared,
 										 PgStat_Counter livetuples, PgStat_Counter deadtuples,
 										 PgStat_Counter elapsedtime, PgStat_Counter delaytime,

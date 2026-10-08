@@ -14,6 +14,12 @@ tests += {
       't/017_vacuum_failsafe.pl',
       't/018_vacuum_interrupts.pl',
       't/020_relallfrozen.pl',
+      't/021_heap_page_counters.pl',
+      't/022_ao_hidden_tuples.pl',
+      't/023_dead_pages.pl',
+      't/024_ao_dead_pages.pl',
+      't/027_freeze_age_vacuum_count.pl',
+      't/028_vacuum_work_core.pl',
     ],
   },
 }

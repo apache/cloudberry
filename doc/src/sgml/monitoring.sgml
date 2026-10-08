@@ -466,6 +466,13 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
      </row>
 
      <row>
+      <entry><structname>pg_stat_vacuum_tables</structname>,
+       <structname>pg_stat_vacuum_indexes</structname></entry>
+      <entry>One row per table or index, showing vacuum work counters.
+       See <xref linkend="monitoring-pg-stat-vacuum-work"/>.</entry>
+     </row>
+
+     <row>
       <entry><structname>pg_stat_database_conflicts</structname><indexterm><primary>pg_stat_database_conflicts</primary></indexterm></entry>
       <entry>
        One row per database, showing database-wide statistics about
@@ -4832,6 +4839,112 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
     </tbody>
    </tgroup>
   </table>
+ </sect2>
+
+ <sect2 id="monitoring-pg-stat-vacuum-work">
+  <title>VACUUM Work Statistics</title>
+  <indexterm><primary>pg_stat_vacuum_tables</primary></indexterm>
+  <indexterm><primary>pg_stat_vacuum_indexes</primary></indexterm>
+  <para>
+   <structname>pg_stat_vacuum_tables</structname> and
+   <structname>pg_stat_vacuum_indexes</structname> report work performed by
+   <command>VACUUM</command>, including autovacuum. Collection uses
+   the built-in cumulative statistics system and
+   <xref linkend="guc-track-counts"/>; no extension or preload library is
+   required. Heap <command>VACUUM FULL</command> rewrites the relation and does
+   not update these work counters; AO <command>VACUUM FULL</command> uses the
+   AO compaction phases and reports their work.
+   Each view identifies the relation by <structfield>relid</structfield> or
+   <structfield>indexrelid</structfield>, its <structfield>schema</structfield>,
+   <structfield>relname</structfield> or <structfield>indexrelname</structfield>,
+   and <structfield>dbname</structfield>. Table statistics include materialized
+   views and TOAST relations. Relations without statistics have zero counters.
+  </para>
+  <table id="pg-stat-vacuum-work-counters">
+   <title>VACUUM Work Counters</title>
+   <tgroup cols="2"><thead><row><entry>Columns</entry><entry>Meaning</entry></row></thead>
+    <tbody>
+     <row><entry><structfield>tuples_deleted</structfield></entry><entry>
+      Cumulative tuples removed from a table, or entries removed from an index.
+      Index reports add only the work of each bulkdelete or cleanup call.
+     </entry></row>
+     <row><entry><structfield>dead_tuples</structfield></entry><entry>
+      Table dead tuples observed after the latest completed vacuum, including
+      missed removable tuples for heap and hidden rows for AO. This is a
+      snapshot; skipped pages may limit the heap observation.
+     </entry></row>
+     <row><entry><structfield>recently_dead_tuples</structfield>,
+      <structfield>missed_dead_tuples</structfield></entry><entry>
+      Cumulative observations of heap tuples not yet removable, and removable
+      tuples missed because a cleanup lock could not be obtained. For AO,
+      recently dead tuples accumulate hidden rows left after each vacuum;
+      missed tuples remain zero. Repeated observations count again.
+     </entry></row>
+     <row><entry><structfield>dead_pages</structfield>,
+      <structfield>missed_dead_pages</structfield></entry><entry>
+      Cumulative observations of heap pages with not-yet-removable tuples,
+      and pages with missed removable tuples. For indexes, dead pages are
+      deleted pages not yet reusable, observed once after final cleanup.
+      AO tables have no heap dead-page counters.
+     </entry></row>
+     <row><entry><structfield>pages_scanned</structfield>,
+      <structfield>pages_removed</structfield>,
+      <structfield>pages_deleted</structfield></entry><entry>
+      Cumulative table pages scanned and removed by vacuum; AO uses
+      heap-equivalent pages, rounded up per scanned segment or per completed
+      vacuum's released space. The index-only pages_deleted counter counts
+      newly deleted pages, excluding already empty or deleted pages.
+     </entry></row>
+     <row><entry><structfield>tuples_frozen</structfield>,
+      <structfield>pages_frozen</structfield>,
+      <structfield>pages_all_visible</structfield></entry><entry>
+      Cumulative heap tuples frozen, pages on which tuples were frozen, and
+      pages whose all-visible VM bit was newly set. Rescanning unchanged
+      pages adds no work. These counters are zero for AO.
+     </entry></row>
+     <row><entry><structfield>freeze_age_vacuum_count</structfield></entry><entry>
+      Heap vacuums made aggressive by the XID or MultiXact freeze table age,
+      including <command>VACUUM FREEZE</command>. Forcing an aggressive scan
+      with <literal>DISABLE_PAGE_SKIPPING</literal> alone does not count.
+      This is separate from the wraparound-failsafe counter.
+     </entry></row>
+     <row><entry><structfield>total_file_segs</structfield>,
+      <structfield>compacted_segments</structfield>,
+      <structfield>tuples_moved</structfield></entry><entry>
+      AO segment metadata entries at the last vacuum, cumulative segments
+      actually compacted, and cumulative live tuples moved. Skipped candidates
+      add no compaction work. Heap tables report zero for these columns.
+     </entry></row>
+    </tbody>
+   </tgroup>
+  </table>
+  <para>
+   All work columns have type <type>bigint</type>. The relation and database
+   getters are <function>pg_stat_get_vacuum_stats(oid)</function> and
+   <function>pg_stat_get_vacuum_database_stats(oid)</function>.
+   <structname>pg_stat_vacuum</structname> additionally exposes cumulative table
+   work per database. It excludes index reports to avoid counting table work
+   twice, and excludes the <structfield>dead_tuples</structfield> and
+   <structfield>total_file_segs</structfield> snapshots. Shared relations use
+   the database entry with OID zero.
+  </para>
+  <para>
+   The <structname>gp_stat_vacuum_tables</structname> and
+   <structname>gp_stat_vacuum_indexes</structname> views expose individual
+   instances. Their <literal>_summary</literal> views sum distributed table
+   work and normalize replicated table work by the segment count. System
+   relations use coordinator statistics. <structname>gp_stat_vacuum_summary</structname>
+   sums database work across instances.
+  </para>
+  <para>
+   Core counters survive clean shutdown and restart, use the ordinary
+   statistics snapshot rules, and are removed when their relation or database
+   is dropped. <function>pg_stat_reset_single_table_counters(oid)</function>
+   resets a relation's counters; <function>pg_stat_reset()</function> resets
+   the current database statistics. These resets are independent of the
+   compatibility counters and resource statistics in
+   <filename>ext_vacuum_statistics</filename>.
+  </para>
  </sect2>
 
  <sect2 id="monitoring-pg-stat-database-conflicts-view">

@@ -101,3 +101,74 @@ SELECT relallfrozen = 0 AND relallvisible = 0 AS rewrite_clears_map
 (1 row)
 
 DROP TABLE frozen_stats_repl;
+-- Native work counters and cluster summaries need no statistics extension.
+CREATE TABLE work_stats_dist (a int PRIMARY KEY) DISTRIBUTED BY (a);
+CREATE TABLE work_stats_repl (a int) DISTRIBUTED REPLICATED;
+INSERT INTO work_stats_dist SELECT generate_series(1, 2000);
+ANALYZE work_stats_dist;
+INSERT INTO work_stats_repl SELECT generate_series(1, 2000);
+ANALYZE work_stats_repl;
+VACUUM (FREEZE) work_stats_dist, work_stats_repl;
+SELECT relname, freeze_age_vacuum_count =
+       CASE WHEN relname = 'work_stats_repl' THEN 1
+            ELSE (SELECT numsegments FROM gp_distribution_policy
+                  WHERE localoid = 'work_stats_dist'::regclass) END AS freeze_count_matches,
+       pages_frozen > 0 AND pages_all_visible > 0 AS page_work_recorded
+  FROM gp_stat_vacuum_tables_summary
+ WHERE relname IN ('work_stats_dist', 'work_stats_repl') ORDER BY relname;
+     relname     | freeze_count_matches | page_work_recorded 
+-----------------+----------------------+--------------------
+ work_stats_dist | t                    | t
+ work_stats_repl | t                    | t
+(2 rows)
+
+SELECT count(*) = 2 * (SELECT numsegments FROM gp_distribution_policy
+                      WHERE localoid = 'work_stats_dist'::regclass)
+       AND bool_and(freeze_age_vacuum_count = 1) AS per_segment_counts
+  FROM gp_stat_vacuum_tables
+ WHERE relname IN ('work_stats_dist', 'work_stats_repl') AND gp_segment_id >= 0;
+ per_segment_counts 
+--------------------
+ t
+(1 row)
+
+DELETE FROM work_stats_dist WHERE a <= 100;
+DELETE FROM work_stats_repl WHERE a <= 100;
+VACUUM work_stats_dist, work_stats_repl;
+SELECT relname, tuples_deleted = 100 AS deleted_matches
+  FROM gp_stat_vacuum_tables_summary
+ WHERE relname IN ('work_stats_dist', 'work_stats_repl') ORDER BY relname;
+     relname     | deleted_matches 
+-----------------+-----------------
+ work_stats_dist | t
+ work_stats_repl | t
+(2 rows)
+
+SELECT tuples_deleted = 100 AS index_work_matches
+  FROM gp_stat_vacuum_indexes_summary WHERE indexrelname = 'work_stats_dist_pkey';
+ index_work_matches 
+--------------------
+ t
+(1 row)
+
+DROP TABLE work_stats_dist, work_stats_repl;
+CREATE TABLE work_stats_ao (a int) WITH (appendonly = true) DISTRIBUTED BY (a);
+CREATE TABLE work_stats_aoco (a int) WITH (appendonly = true, orientation = column) DISTRIBUTED BY (a);
+INSERT INTO work_stats_ao SELECT generate_series(1, 2000);
+ANALYZE work_stats_ao;
+INSERT INTO work_stats_aoco SELECT generate_series(1, 2000);
+ANALYZE work_stats_aoco;
+DELETE FROM work_stats_ao WHERE a <= 1000;
+DELETE FROM work_stats_aoco WHERE a <= 1000;
+VACUUM work_stats_ao, work_stats_aoco;
+SELECT relname, tuples_deleted = 1000 AND tuples_moved = 1000
+       AND compacted_segments > 0 AND pages_scanned > 0 AS compaction_matches
+  FROM gp_stat_vacuum_tables_summary
+ WHERE relname IN ('work_stats_ao', 'work_stats_aoco') ORDER BY relname;
+     relname     | compaction_matches 
+-----------------+--------------------
+ work_stats_ao   | t
+ work_stats_aoco | t
+(2 rows)
+
+DROP TABLE work_stats_ao, work_stats_aoco;

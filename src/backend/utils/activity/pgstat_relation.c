@@ -363,6 +363,67 @@ pgstat_report_index_vacuum_time(Relation rel, PgStat_Counter elapsedtime,
 }
 
 /*
+ * Persist the work measured by VACUUM independently of any extension hook.
+ * Index calls report deltas, while a table reports once on completion.  The
+ * database aggregate describes table work only.  Use the regular relation
+ * kind so snapshots, resets, drop handling and persistence work as usual.
+ */
+void
+pgstat_report_vacuum_stats(Relation rel, const PgStat_VacuumStats *stats)
+{
+	Oid			dboid = rel->rd_rel->relisshared ? InvalidOid : MyDatabaseId;
+	PgStat_EntryRef *entry_ref;
+	PgStatShared_Relation *shared;
+	PgStat_VacuumStats *dst;
+
+	if (!pgstat_track_counts)
+		return;
+
+	entry_ref = pgstat_get_entry_ref_locked(PGSTAT_KIND_RELATION, dboid,
+											RelationGetRelid(rel), false);
+	shared = (PgStatShared_Relation *) entry_ref->shared_stats;
+	dst = &shared->stats.vacuum_stats;
+	dst->tuples_deleted += stats->tuples_deleted;
+	dst->pages_deleted += stats->pages_deleted;
+	dst->dead_pages += stats->dead_pages;
+	dst->pages_frozen += stats->pages_frozen;
+	dst->pages_all_visible += stats->pages_all_visible;
+	dst->freeze_age_vacuum_count += stats->freeze_age_vacuum_count;
+	dst->tuples_frozen += stats->tuples_frozen;
+	dst->recently_dead_tuples += stats->recently_dead_tuples;
+	dst->missed_dead_tuples += stats->missed_dead_tuples;
+	dst->pages_scanned += stats->pages_scanned;
+	dst->pages_removed += stats->pages_removed;
+	dst->missed_dead_pages += stats->missed_dead_pages;
+	dst->compacted_segments += stats->compacted_segments;
+	dst->tuples_moved += stats->tuples_moved;
+	dst->dead_tuples = stats->dead_tuples;
+	dst->total_file_segs = stats->total_file_segs;
+	pgstat_unlock_entry(entry_ref);
+
+	if (rel->rd_rel->relkind != RELKIND_INDEX)
+	{
+		PgStat_StatDBEntry *dbentry = pgstat_prep_database_pending(dboid);
+
+		dst = &dbentry->vacuum_stats;
+		dst->tuples_deleted += stats->tuples_deleted;
+		dst->pages_deleted += stats->pages_deleted;
+		dst->dead_pages += stats->dead_pages;
+		dst->pages_frozen += stats->pages_frozen;
+		dst->pages_all_visible += stats->pages_all_visible;
+		dst->freeze_age_vacuum_count += stats->freeze_age_vacuum_count;
+		dst->tuples_frozen += stats->tuples_frozen;
+		dst->recently_dead_tuples += stats->recently_dead_tuples;
+		dst->missed_dead_tuples += stats->missed_dead_tuples;
+		dst->pages_scanned += stats->pages_scanned;
+		dst->pages_removed += stats->pages_removed;
+		dst->missed_dead_pages += stats->missed_dead_pages;
+		dst->compacted_segments += stats->compacted_segments;
+		dst->tuples_moved += stats->tuples_moved;
+	}
+}
+
+/*
  * Report that the table was just analyzed and flush IO statistics.
  *
  * Caller must provide new live- and dead-tuples estimates, as well as a

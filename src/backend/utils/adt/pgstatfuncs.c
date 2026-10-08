@@ -2272,3 +2272,57 @@ pg_stat_have_stats(PG_FUNCTION_ARGS)
 
 	PG_RETURN_BOOL(pgstat_have_entry(kind, dboid, objoid));
 }
+
+/* Native VACUUM work statistics, independent of ext_vacuum_statistics. */
+static Datum
+pgstat_vacuum_stats_tuple(FunctionCallInfo fcinfo, const PgStat_VacuumStats *stats,
+						 bool database)
+{
+	TupleDesc	tupdesc;
+	Datum		values[16];
+	bool		nulls[16] = {false};
+	int			i = 0;
+
+	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+		elog(ERROR, "return type must be a row type");
+
+	values[i++] = Int64GetDatum(stats ? stats->tuples_deleted : 0);
+	if (!database)
+		values[i++] = Int64GetDatum(stats ? stats->dead_tuples : 0);
+	if (!database)
+		values[i++] = Int64GetDatum(stats ? stats->pages_deleted : 0);
+	values[i++] = Int64GetDatum(stats ? stats->dead_pages : 0);
+	values[i++] = Int64GetDatum(stats ? stats->pages_frozen : 0);
+	values[i++] = Int64GetDatum(stats ? stats->pages_all_visible : 0);
+	values[i++] = Int64GetDatum(stats ? stats->freeze_age_vacuum_count : 0);
+	values[i++] = Int64GetDatum(stats ? stats->tuples_frozen : 0);
+	values[i++] = Int64GetDatum(stats ? stats->recently_dead_tuples : 0);
+	values[i++] = Int64GetDatum(stats ? stats->missed_dead_tuples : 0);
+	values[i++] = Int64GetDatum(stats ? stats->pages_scanned : 0);
+	values[i++] = Int64GetDatum(stats ? stats->pages_removed : 0);
+	values[i++] = Int64GetDatum(stats ? stats->missed_dead_pages : 0);
+	if (!database)
+		values[i++] = Int64GetDatum(stats ? stats->total_file_segs : 0);
+	values[i++] = Int64GetDatum(stats ? stats->compacted_segments : 0);
+	values[i++] = Int64GetDatum(stats ? stats->tuples_moved : 0);
+	Assert(i == tupdesc->natts);
+	return HeapTupleGetDatum(heap_form_tuple(BlessTupleDesc(tupdesc), values, nulls));
+}
+
+Datum
+pg_stat_get_vacuum_stats(PG_FUNCTION_ARGS)
+{
+	PgStat_StatTabEntry *entry = pgstat_fetch_stat_tabentry(PG_GETARG_OID(0));
+
+	return pgstat_vacuum_stats_tuple(fcinfo, entry ? &entry->vacuum_stats : NULL,
+								   false);
+}
+
+Datum
+pg_stat_get_vacuum_database_stats(PG_FUNCTION_ARGS)
+{
+	PgStat_StatDBEntry *entry = pgstat_fetch_stat_dbentry(PG_GETARG_OID(0));
+
+	return pgstat_vacuum_stats_tuple(fcinfo, entry ? &entry->vacuum_stats : NULL,
+								   true);
+}

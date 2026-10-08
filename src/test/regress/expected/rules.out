@@ -2256,13 +2256,61 @@ pg_stat_vacuum| SELECT d.oid AS datid,
     pg_stat_get_db_total_autovacuum_delay_time(d.oid) AS total_autovacuum_delay_time,
     pg_stat_get_db_vacuum_failsafe_count(d.oid) AS vacuum_failsafe_count,
     pg_stat_get_db_vacuum_interrupt_count(d.oid) AS vacuum_interrupt_count,
-    pg_stat_get_db_stat_reset_time(d.oid) AS stats_reset
+    pg_stat_get_db_stat_reset_time(d.oid) AS stats_reset,
+    v.tuples_deleted,
+    v.dead_pages,
+    v.pages_frozen,
+    v.pages_all_visible,
+    v.freeze_age_vacuum_count,
+    v.tuples_frozen,
+    v.recently_dead_tuples,
+    v.missed_dead_tuples,
+    v.pages_scanned,
+    v.pages_removed,
+    v.missed_dead_pages,
+    v.compacted_segments,
+    v.tuples_moved
    FROM ( SELECT 0 AS oid,
             NULL::name AS datname
         UNION ALL
          SELECT pg_database.oid,
             pg_database.datname
-           FROM pg_database) d;
+           FROM pg_database) d,
+    LATERAL pg_stat_get_vacuum_database_stats(d.oid) v(tuples_deleted, dead_pages, pages_frozen, pages_all_visible, freeze_age_vacuum_count, tuples_frozen, recently_dead_tuples, missed_dead_tuples, pages_scanned, pages_removed, missed_dead_pages, compacted_segments, tuples_moved);
+pg_stat_vacuum_indexes| SELECT c.oid AS indexrelid,
+    n.nspname AS schema,
+    c.relname AS indexrelname,
+    current_database() AS dbname,
+    v.tuples_deleted,
+    v.pages_deleted,
+    v.dead_pages
+   FROM (pg_class c
+     JOIN pg_namespace n ON ((n.oid = c.relnamespace))),
+    LATERAL pg_stat_get_vacuum_stats(c.oid) v(tuples_deleted, dead_tuples, pages_deleted, dead_pages, pages_frozen, pages_all_visible, freeze_age_vacuum_count, tuples_frozen, recently_dead_tuples, missed_dead_tuples, pages_scanned, pages_removed, missed_dead_pages, total_file_segs, compacted_segments, tuples_moved)
+  WHERE (c.relkind = 'i'::"char");
+pg_stat_vacuum_tables| SELECT c.oid AS relid,
+    n.nspname AS schema,
+    c.relname,
+    current_database() AS dbname,
+    v.tuples_deleted,
+    v.dead_tuples,
+    v.dead_pages,
+    v.pages_frozen,
+    v.pages_all_visible,
+    v.freeze_age_vacuum_count,
+    v.tuples_frozen,
+    v.recently_dead_tuples,
+    v.missed_dead_tuples,
+    v.pages_scanned,
+    v.pages_removed,
+    v.missed_dead_pages,
+    v.total_file_segs,
+    v.compacted_segments,
+    v.tuples_moved
+   FROM (pg_class c
+     JOIN pg_namespace n ON ((n.oid = c.relnamespace))),
+    LATERAL pg_stat_get_vacuum_stats(c.oid) v(tuples_deleted, dead_tuples, pages_deleted, dead_pages, pages_frozen, pages_all_visible, freeze_age_vacuum_count, tuples_frozen, recently_dead_tuples, missed_dead_tuples, pages_scanned, pages_removed, missed_dead_pages, total_file_segs, compacted_segments, tuples_moved)
+  WHERE (c.relkind = ANY (ARRAY['r'::"char", 't'::"char", 'm'::"char"]));
 pg_stat_wal| SELECT wal_records,
     wal_fpi,
     wal_bytes,

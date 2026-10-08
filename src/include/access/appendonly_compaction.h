@@ -37,6 +37,10 @@ typedef struct AOVacuumRelStats
 	double		delay_time;
 	int64		live_tuples;
 	int64		dead_tuples;
+	int64		pages_scanned;
+	int64		total_file_segs;
+	int64		compacted_segments;
+	int64		tuples_moved;
 
 	/* the relation these stats were started for */
 	Oid			relid;
