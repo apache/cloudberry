@@ -54,6 +54,7 @@ SUBDIRS = \
 		tsm_system_rows \
 		tsm_system_time \
 		unaccent	\
+		vacuum_stats	\
 		vacuumlo
 
 # Cloudberry-specific additions (to ease merge pain).

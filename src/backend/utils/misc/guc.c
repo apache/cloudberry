@@ -1628,6 +1628,24 @@ static struct config_bool ConfigureNamesBool[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"track_vacuum_statistics", PGC_POSTMASTER, STATS_COLLECTOR,
+			gettext_noop("Collects statistics on what vacuum did and what it cost."),
+			gettext_noop("The counters are exposed by the vacuum_stats extension.")
+		},
+		&pgstat_track_vacuum_statistics,
+		false,
+		NULL, NULL, NULL
+	},
+	{
+		{"track_cost_delay_timing", PGC_SUSET, STATS_COLLECTOR,
+			gettext_noop("Collects timing statistics for cost-based vacuum delay."),
+			NULL
+		},
+		&track_cost_delay_timing,
+		false,
+		NULL, NULL, NULL
+	},
+	{
 		{"track_io_timing", PGC_SUSET, STATS_COLLECTOR,
 			gettext_noop("Collects timing statistics for database I/O activity."),
 			NULL
