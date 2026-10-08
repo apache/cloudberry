@@ -13,6 +13,7 @@ tests += {
       't/016_index_vacuum_time.pl',
       't/017_vacuum_failsafe.pl',
       't/018_vacuum_interrupts.pl',
+      't/019_resqueue_stats_restart.pl',
       't/020_relallfrozen.pl',
       't/021_heap_page_counters.pl',
       't/022_ao_hidden_tuples.pl',
