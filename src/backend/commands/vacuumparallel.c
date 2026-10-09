@@ -845,7 +845,7 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 	if (indstats->istat_updated)
 		istat = &(indstats->istat);
 
-	extVacCounters = extvac_stats_start(indrel);
+	extVacCounters = extvac_stats_start(indrel, pvs->shared->elevel == INFO);
 	ivinfo.index = indrel;
 	ivinfo.heaprel = pvs->heaprel;
 	ivinfo.analyze_only = false;
@@ -878,6 +878,11 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 		PgStat_VacuumRelationCounts *extVacReport = &extVacCounters->report;
 
 		extvac_stats_end(indrel, extVacCounters, &extVacReport->common);
+		if (pvs->shared->elevel == INFO)
+			extvac_stats_log(indrel,
+							  indstats->status == PARALLEL_INDVAC_STATUS_NEED_CLEANUP ?
+							  _("index cleanup") : _("index bulk delete"),
+							  &extVacReport->common);
 		extVacReport->type = PGSTAT_EXTVAC_INDEX;
 		pfree(extVacCounters);
 	}
