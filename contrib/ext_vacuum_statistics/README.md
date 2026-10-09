@@ -35,6 +35,9 @@ Query vacuum statistics via the provided views:
 -- Per-table heap and append-optimized vacuum statistics
 SELECT * FROM ext_vacuum_statistics.pg_stats_vacuum_tables;
 
+-- AO/AOCS parent tables, including resource usage by vacuum phase
+SELECT * FROM ext_vacuum_statistics.pg_stats_vacuum_ao_tables;
+
 -- Per-index vacuum statistics
 SELECT * FROM ext_vacuum_statistics.pg_stats_vacuum_indexes;
 
@@ -92,7 +95,8 @@ SET vacuum_statistics.enabled = off;
 
 | View | Description |
 |------|-------------|
-| `ext_vacuum_statistics.pg_stats_vacuum_tables` | Per-table heap vacuum stats (pages scanned, tuples deleted, dead tuples, etc.) |
+| `ext_vacuum_statistics.pg_stats_vacuum_tables` | Per-table heap and AO work/resource counters, without the AO phase columns |
+| `ext_vacuum_statistics.pg_stats_vacuum_ao_tables` | AO/AOCS parent tables: applicable work counters, resource totals and resources by phase |
 | `ext_vacuum_statistics.pg_stats_vacuum_indexes` | Per-index vacuum stats |
 | `ext_vacuum_statistics.pg_stats_vacuum_database` | Per-database aggregate vacuum stats |
 
@@ -141,6 +145,29 @@ are cleared by statistics resets.
 
 ## Append-optimized tables
 
+Use `pg_stats_vacuum_ao_tables` for local AO/AOCS statistics.
+
+These views contain only parent AO/AOCS tables identified by `pg_appendonly`.
+They include relation identifiers, total buffer/WAL/I/O usage, applicable work
+counters and the 27 phase resource columns. Heap-only fields such as
+`tuples_frozen`, `pages_all_visible` and `dead_pages` are omitted.
+The general `*_vacuum_tables` views still include AO rows and their summary
+counters, but do not expose `ao_pre_cleanup_*`, `ao_compaction_*` or
+`ao_post_cleanup_*` columns. AO auxiliary heaps remain in those general views;
+indexes remain in the index views.
+
+For example, query phase WAL usage on the connected instance:
+
+```sql
+SELECT relname, tuples_deleted, awaiting_drop_segments,
+       ao_pre_cleanup_wal_bytes, ao_compaction_wal_bytes,
+       ao_post_cleanup_wal_bytes
+FROM ext_vacuum_statistics.pg_stats_vacuum_ao_tables;
+```
+
+The AO and general table views read the same statistics entry. Existing reset
+functions reset both views together; no separate AO reset is needed.
+
 AO row and AOCS tables and their indexes are reported too.  For the table,
 `tuples_deleted` is the number of dead tuples the compaction discarded and
 `pages_removed` the space released by truncating and dropping segment files,
@@ -162,14 +189,14 @@ replaced, not accumulated; AOCS counts segment numbers, not column files.
 It is zero for heap tables and after reset.
 
 The `ao_pre_cleanup_*`, `ao_compaction_*` and `ao_post_cleanup_*` columns
-break down cumulative resource usage by phase. Each prefix has `blks_read`,
-`blks_hit`, `blks_dirtied`, `blks_written`, `wal_records`, `wal_fpi`,
+in the AO views break down cumulative resource usage by phase. Each prefix has
+`blks_read`, `blks_hit`, `blks_dirtied`, `blks_written`, `wal_records`, `wal_fpi`,
 `wal_bytes`, `blk_read_time` and `blk_write_time`. Buffer counts include
 shared and local buffers, as in `total_blks_*`; I/O times are milliseconds
 and require `track_io_timing`. Index resource usage is excluded from its
 phase and remains in the index statistics. The three phase counters sum to
 the corresponding table total (apart from floating-point rounding of times).
-Heap tables have zero phase counters.
+Heap tables do not appear in the AO views.
 
 All new fields obey collection control and resets and survive clean
 restarts. Failed vacuums do not publish a table report; replacement workers

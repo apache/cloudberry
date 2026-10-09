@@ -32,7 +32,7 @@ my $phase_sums = join(' AND ', map {
     my $sum = join(' + ', map { "${_}_$resource" } @phases);
     $resource =~ /_time$/ ? "abs($total - ($sum)) < 0.000001" : "$total = ($sum)"
 } @resources);
-my $view = 'ext_vacuum_statistics.pg_stats_vacuum_tables';
+my $view = 'ext_vacuum_statistics.pg_stats_vacuum_ao_tables';
 my %saved;
 
 for my $orientation ('row', 'column')
@@ -92,8 +92,13 @@ INSERT INTO phase_heap SELECT generate_series(1, 1000);
 DELETE FROM phase_heap;
 VACUUM phase_heap;
 });
-is($node->safe_psql('postgres', "SELECT $zero FROM $view WHERE relname = 'phase_heap'"), 't',
-   'heap vacuums leave AO-only fields zero');
+is($node->safe_psql('postgres', "SELECT string_agg(relname, ',' ORDER BY relname) FROM $view"),
+   'phases_column,phases_row', 'AO view contains only parent AO/AOCS tables, excluding heap and auxiliary relations');
+is($node->safe_psql('postgres', q{
+SELECT count(*) FROM pg_attribute
+WHERE attrelid = 'ext_vacuum_statistics.pg_stats_vacuum_tables'::regclass
+  AND attname ~ '^ao_(pre_cleanup|compaction|post_cleanup)_'
+}), '0', 'general table view does not expose AO phase columns');
 
 $node->restart;
 for my $orientation ('row', 'column')

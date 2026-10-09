@@ -92,6 +92,36 @@ CREATE OR REPLACE FUNCTION ext_vacuum_statistics.pg_stats_get_vacuum_tables(
     OUT tuples_moved bigint,
     OUT dead_pages bigint,
     OUT freeze_age_vacuum_count bigint,
+    OUT awaiting_drop_segments bigint
+)
+RETURNS SETOF record
+AS 'MODULE_PATHNAME', 'pg_stats_get_vacuum_tables'
+LANGUAGE C STRICT STABLE;
+
+-- Internal C function to fetch AO totals and phases from one statistics snapshot.
+-- The AO view below selects parent AO/AOCS relations through pg_appendonly.
+CREATE FUNCTION ext_vacuum_statistics.pg_stats_get_vacuum_ao_tables(
+    IN dboid oid,
+    IN reloid oid,
+    OUT relid oid,
+    OUT total_blks_read bigint,
+    OUT total_blks_hit bigint,
+    OUT total_blks_dirtied bigint,
+    OUT total_blks_written bigint,
+    OUT wal_records bigint,
+    OUT wal_fpi bigint,
+    OUT wal_bytes numeric,
+    OUT blk_read_time double precision,
+    OUT blk_write_time double precision,
+    OUT rel_blks_read bigint,
+    OUT rel_blks_hit bigint,
+    OUT tuples_deleted bigint,
+    OUT pages_scanned bigint,
+    OUT pages_removed bigint,
+    OUT recently_dead_tuples bigint,
+    OUT total_file_segs bigint,
+    OUT compacted_segments bigint,
+    OUT tuples_moved bigint,
     OUT awaiting_drop_segments bigint,
     OUT ao_pre_cleanup_blks_read bigint,
     OUT ao_pre_cleanup_blks_hit bigint,
@@ -122,7 +152,7 @@ CREATE OR REPLACE FUNCTION ext_vacuum_statistics.pg_stats_get_vacuum_tables(
     OUT ao_post_cleanup_blk_write_time double precision
 )
 RETURNS SETOF record
-AS 'MODULE_PATHNAME', 'pg_stats_get_vacuum_tables'
+AS 'MODULE_PATHNAME', 'pg_stats_get_vacuum_ao_tables'
 LANGUAGE C STRICT STABLE;
 
 -- Internal C function to fetch index vacuum stats
@@ -199,6 +229,45 @@ SELECT
   stats.tuples_moved,
   stats.dead_pages,
   stats.freeze_age_vacuum_count,
+  stats.awaiting_drop_segments
+FROM pg_database db,
+     pg_class rel,
+     pg_namespace ns,
+     LATERAL ext_vacuum_statistics.pg_stats_get_vacuum_tables(db.oid, rel.oid) stats
+WHERE db.datname = current_database()
+  AND rel.relkind IN ('r', 'm', 't', 'o', 'b', 'M')
+  AND rel.relnamespace = ns.oid
+  AND rel.oid = stats.relid;
+
+COMMENT ON VIEW ext_vacuum_statistics.pg_stats_vacuum_tables IS
+  'Extended vacuum statistics per table (heap and append-optimized)';
+
+-- View: AO/AOCS parent tables, with phase resources and applicable work counters.
+-- Read totals and phase counters together, including with stats_fetch_consistency = none.
+CREATE VIEW ext_vacuum_statistics.pg_stats_vacuum_ao_tables AS
+SELECT
+  rel.oid AS relid,
+  ns.nspname AS schema,
+  rel.relname,
+  db.datname AS dbname,
+  stats.total_blks_read,
+  stats.total_blks_hit,
+  stats.total_blks_dirtied,
+  stats.total_blks_written,
+  stats.wal_records,
+  stats.wal_fpi,
+  stats.wal_bytes,
+  stats.blk_read_time,
+  stats.blk_write_time,
+  stats.rel_blks_read,
+  stats.rel_blks_hit,
+  stats.tuples_deleted,
+  stats.pages_scanned,
+  stats.pages_removed,
+  stats.recently_dead_tuples,
+  stats.total_file_segs,
+  stats.compacted_segments,
+  stats.tuples_moved,
   stats.awaiting_drop_segments,
   stats.ao_pre_cleanup_blks_read,
   stats.ao_pre_cleanup_blks_hit,
@@ -227,17 +296,14 @@ SELECT
   stats.ao_post_cleanup_wal_bytes,
   stats.ao_post_cleanup_blk_read_time,
   stats.ao_post_cleanup_blk_write_time
-FROM pg_database db,
-     pg_class rel,
-     pg_namespace ns,
-     LATERAL ext_vacuum_statistics.pg_stats_get_vacuum_tables(db.oid, rel.oid) stats
-WHERE db.datname = current_database()
-  AND rel.relkind IN ('r', 'm', 't', 'o', 'b', 'M')
-  AND rel.relnamespace = ns.oid
-  AND rel.oid = stats.relid;
+FROM pg_appendonly a
+JOIN pg_class rel ON rel.oid = a.relid
+JOIN pg_namespace ns ON ns.oid = rel.relnamespace
+JOIN pg_database db ON db.datname = current_database()
+CROSS JOIN LATERAL ext_vacuum_statistics.pg_stats_get_vacuum_ao_tables(db.oid, rel.oid) stats;
 
-COMMENT ON VIEW ext_vacuum_statistics.pg_stats_vacuum_tables IS
-  'Extended vacuum statistics per table (heap and append-optimized)';
+COMMENT ON VIEW ext_vacuum_statistics.pg_stats_vacuum_ao_tables IS
+  'Extended vacuum statistics and phase resources for AO/AOCS parent tables on the connected instance';
 
 -- View: vacuum statistics per index
 CREATE VIEW ext_vacuum_statistics.pg_stats_vacuum_indexes AS

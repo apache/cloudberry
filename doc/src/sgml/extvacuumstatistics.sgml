@@ -40,6 +40,7 @@
  <para>
   When active, the module provides views
   <structname>ext_vacuum_statistics.pg_stats_vacuum_tables</structname>,
+  <structname>ext_vacuum_statistics.pg_stats_vacuum_ao_tables</structname>,
   <structname>ext_vacuum_statistics.pg_stats_vacuum_indexes</structname>, and
   <structname>ext_vacuum_statistics.pg_stats_vacuum_database</structname>,
   plus functions to reset statistics and manage tracking.
@@ -73,6 +74,9 @@
    contains one row for each vacuumed table in the current database (including
    materialized views, TOAST tables and AO auxiliary tables), showing statistics about vacuuming that specific table.  The columns
    are shown in <xref linkend="extvacuumstatistics-pg-stats-vacuum-tables-columns"/>.
+   AO phase resources are exposed separately by
+   <structname>ext_vacuum_statistics.pg_stats_vacuum_ao_tables</structname>;
+   they are not columns of this general table view.
   </para>
 
   <table id="extvacuumstatistics-pg-stats-vacuum-tables-columns">
@@ -358,6 +362,49 @@
        For AOCS, counts segment numbers, not column files. Zero for heap and after reset.
       </para></entry>
      </row>
+    </tbody>
+   </tgroup>
+  </table>
+ </sect2>
+
+ <sect2 id="extvacuumstatistics-pg-stats-vacuum-ao-tables">
+  <title>The <structname>ext_vacuum_statistics.pg_stats_vacuum_ao_tables</structname> View</title>
+
+  <indexterm zone="extvacuumstatistics">
+   <secondary>pg_stats_vacuum_ao_tables</secondary>
+  </indexterm>
+
+  <para>
+   This view contains one row for each vacuumed AO or AOCS parent table in the
+   current database on the connected instance. Membership is determined by
+   <structname>pg_appendonly</structname>, so heap tables, AO auxiliary heaps
+   and indexes are excluded even after a statistics reset. Auxiliary tables
+   remain in <structname>pg_stats_vacuum_tables</structname>, and indexes in
+   <structname>pg_stats_vacuum_indexes</structname>.
+  </para>
+
+  <para>
+   It includes the relation identifiers <structfield>relid</structfield>,
+   <structfield>schema</structfield>, <structfield>relname</structfield> and
+   <structfield>dbname</structfield>; total buffer, WAL and I/O timing fields;
+   <structfield>rel_blks_read</structfield> and <structfield>rel_blks_hit</structfield>;
+   and the applicable work counters <structfield>tuples_deleted</structfield>,
+   <structfield>pages_scanned</structfield>, <structfield>pages_removed</structfield>,
+   <structfield>recently_dead_tuples</structfield>, <structfield>total_file_segs</structfield>,
+   <structfield>compacted_segments</structfield>, <structfield>tuples_moved</structfield>
+   and <structfield>awaiting_drop_segments</structfield>. These fields have the
+   same types and meaning as in <structname>pg_stats_vacuum_tables</structname>.
+   Heap-only counters are omitted. The additional 27 columns below report
+   resource usage separately for each AO vacuum phase.
+  </para>
+
+  <table id="extvacuumstatistics-ao-phase-columns">
+   <title>AO Vacuum Phase Resource Columns</title>
+   <tgroup cols="1">
+    <thead>
+     <row><entry>Columns and meaning</entry></row>
+    </thead>
+    <tbody>
      <row>
       <entry role="catalog_table_entry"><para role="column_definition">
        <structfield>ao_pre_cleanup_*</structfield>,
@@ -374,12 +421,21 @@
        phase's resource usage, excluding separately reported index work.
        Buffer counts include shared and local buffers, as in
        <structfield>total_blks_read</structfield>. I/O timing requires
-       <varname>track_io_timing</varname>. Zero for heap and after reset.
+       <varname>track_io_timing</varname>. Zero after reset.
       </para></entry>
      </row>
     </tbody>
    </tgroup>
   </table>
+
+  <para>
+   The general and AO views read the same statistics entry and share collection
+   control, resets and persistence. A reset leaves the AO row visible with zero
+   counters; no separate reset function is needed. Totals and phase resources
+   are read together from a single entry snapshot by
+   <function>ext_vacuum_statistics.pg_stats_get_vacuum_ao_tables(dboid, reloid)</function>.
+  </para>
+
  </sect2>
 
  <sect2 id="extvacuumstatistics-pg-stats-vacuum-indexes">
@@ -833,8 +889,8 @@
      of a vacuum, and the vacuum is reported once, at the end of the last
      one; a vacuum that fails in between reports nothing for the table.
      The <literal>ao_pre_cleanup_*</literal>, <literal>ao_compaction_*</literal>
-     and <literal>ao_post_cleanup_*</literal> columns split these cumulative
-     resources by phase. Their sum equals the corresponding table total,
+     and <literal>ao_post_cleanup_*</literal> columns in the AO table views
+     split these cumulative resources by phase. Their sum equals the corresponding table total,
      apart from floating-point rounding of I/O times. Phase counters exclude
      index resources.
     </para>
