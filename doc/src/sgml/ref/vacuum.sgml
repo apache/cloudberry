@@ -140,6 +140,13 @@ VACUUM [ FULL ] [ FREEZE ] [ VERBOSE ] [ ANALYZE ] [ <replaceable class="paramet
     <listitem>
      <para>
       Prints a detailed vacuum activity report for each table.
+      Resource reports include buffer hits, reads, dirtied and written buffers,
+      WAL records, full-page images and bytes, and I/O times when
+      <xref linkend="guc-track-io-timing"/> is enabled. Heap table resources
+      exclude the separately reported index passes. For append-optimized
+      tables, resources are reported separately for pre-cleanup, compaction
+      and post-cleanup, also excluding index work. These reports do not
+      require a statistics extension to be loaded.
      </para>
     </listitem>
    </varlistentry>
