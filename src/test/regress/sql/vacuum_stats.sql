@@ -29,6 +29,8 @@ VACUUM (FREEZE) frozen_stats_dist;
 SELECT relallfrozen > 0 AND relallfrozen <= relallvisible
        AND relallfrozen = (SELECT sum(relallfrozen) FROM gp_dist_random('pg_class')
                           WHERE oid = 'frozen_stats_dist'::regclass)
+       AND relallvisible = (SELECT sum(relallvisible) FROM gp_dist_random('pg_class')
+                           WHERE oid = 'frozen_stats_dist'::regclass)
          AS frozen_stats_match
   FROM pg_class WHERE oid = 'frozen_stats_dist'::regclass;
 UPDATE frozen_stats_dist SET a = a + 10000 WHERE a = 1;
@@ -36,6 +38,8 @@ ANALYZE frozen_stats_dist;
 SELECT relallfrozen > 0 AND relallfrozen <= relallvisible
        AND relallfrozen = (SELECT sum(relallfrozen) FROM gp_dist_random('pg_class')
                           WHERE oid = 'frozen_stats_dist'::regclass)
+       AND relallvisible = (SELECT sum(relallvisible) FROM gp_dist_random('pg_class')
+                           WHERE oid = 'frozen_stats_dist'::regclass)
          AS frozen_stats_match
   FROM pg_class WHERE oid = 'frozen_stats_dist'::regclass;
 VACUUM (FULL) frozen_stats_dist;
@@ -51,6 +55,8 @@ VACUUM (FREEZE) frozen_stats_repl;
 SELECT relallfrozen > 0 AND relallfrozen <= relallvisible
        AND relallfrozen = (SELECT sum(relallfrozen) FROM gp_dist_random('pg_class')
                           WHERE oid = 'frozen_stats_repl'::regclass) / (SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'frozen_stats_repl'::regclass)
+       AND relallvisible = (SELECT sum(relallvisible) FROM gp_dist_random('pg_class')
+                           WHERE oid = 'frozen_stats_repl'::regclass) / (SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'frozen_stats_repl'::regclass)
          AS frozen_stats_match
   FROM pg_class WHERE oid = 'frozen_stats_repl'::regclass;
 UPDATE frozen_stats_repl SET a = a + 10000 WHERE a = 1;
@@ -58,6 +64,8 @@ ANALYZE frozen_stats_repl;
 SELECT relallfrozen > 0 AND relallfrozen <= relallvisible
        AND relallfrozen = (SELECT sum(relallfrozen) FROM gp_dist_random('pg_class')
                           WHERE oid = 'frozen_stats_repl'::regclass) / (SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'frozen_stats_repl'::regclass)
+       AND relallvisible = (SELECT sum(relallvisible) FROM gp_dist_random('pg_class')
+                           WHERE oid = 'frozen_stats_repl'::regclass) / (SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'frozen_stats_repl'::regclass)
          AS frozen_stats_match
   FROM pg_class WHERE oid = 'frozen_stats_repl'::regclass;
 VACUUM (FULL) frozen_stats_repl;
