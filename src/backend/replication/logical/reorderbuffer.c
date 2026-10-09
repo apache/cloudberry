@@ -2675,10 +2675,19 @@ ReorderBufferReplay(ReorderBufferTXN *txn,
 	 * database, so there's nothing to decode.  Note that
 	 * ReorderBufferCommitChild will have transferred any snapshots from
 	 * subtransactions if there were any.
+	 *
+	 * Its invalidation messages are another matter: nothing to decode is not
+	 * nothing to do, since the transaction could still have manipulated the
+	 * catalog, and below this the transaction may be freed and they would be
+	 * freed with it.  Executing them needs no snapshot (see
+	 * ReorderBufferForget), so the one this transaction has not got is no
+	 * reason to leave them unexecuted.
 	 */
 	if (txn->base_snapshot == NULL)
 	{
-		Assert(txn->ninvalidations == 0);
+		if (txn->ninvalidations > 0)
+			ReorderBufferImmediateInvalidation(rb, txn->ninvalidations,
+											   txn->invalidations);
 
 		/*
 		 * Removing this txn before a commit might result in the computation
@@ -3006,12 +3015,18 @@ ReorderBufferForget(ReorderBuffer *rb, TransactionId xid, XLogRecPtr lsn)
 	 * Process cache invalidation messages if there are any. Even if we're not
 	 * interested in the transaction's contents, it could have manipulated the
 	 * catalog and we need to update the caches according to that.
+	 *
+	 * Whether the transaction has a base snapshot does not come into it.  It
+	 * used to: the messages were executed under the transaction's own
+	 * historic snapshot, so there had to be one, and the assertion that used
+	 * to stand here said as much.  They are executed outside a valid
+	 * transaction now, which is the whole point of doing it that way -- no
+	 * snapshot is needed, and a transaction that has none is no reason to
+	 * leave its messages unexecuted.
 	 */
-	if (txn->base_snapshot != NULL && txn->ninvalidations > 0)
+	if (txn->ninvalidations > 0)
 		ReorderBufferImmediateInvalidation(rb, txn->ninvalidations,
 										   txn->invalidations);
-	else
-		Assert(txn->ninvalidations == 0);
 
 	/* remove potential on-disk data, and deallocate */
 	ReorderBufferCleanupTXN(rb, txn);
@@ -3041,12 +3056,17 @@ ReorderBufferInvalidate(ReorderBuffer *rb, TransactionId xid, XLogRecPtr lsn)
 	 * Process cache invalidation messages if there are any. Even if we're not
 	 * interested in the transaction's contents, it could have manipulated the
 	 * catalog and we need to update the caches according to that.
+	 *
+	 * A prepared transaction arrives here with no base snapshot whenever it
+	 * is one we are not decoding, because nothing on the way to a PREPARE
+	 * ever gives it one: SnapBuildCommitTxn() is what hands a
+	 * catalog-modifying transaction a snapshot so that its messages can be
+	 * executed, and a prepare is not a commit.  Executing them needs no
+	 * snapshot anyway; see ReorderBufferForget.
 	 */
-	if (txn->base_snapshot != NULL && txn->ninvalidations > 0)
+	if (txn->ninvalidations > 0)
 		ReorderBufferImmediateInvalidation(rb, txn->ninvalidations,
 										   txn->invalidations);
-	else
-		Assert(txn->ninvalidations == 0);
 }
 
 
@@ -4040,11 +4060,17 @@ ReorderBufferStreamTXN(ReorderBuffer *rb, ReorderBufferTXN *txn)
 
 		/*
 		 * If this transaction has no snapshot, it didn't make any changes to
-		 * the database till now, so there's nothing to decode.
+		 * the database till now, so there's nothing to decode.  Its
+		 * invalidation messages are executed all the same, for the reason
+		 * given in ReorderBufferForget: they need no snapshot, and a
+		 * transaction whose contents do not interest us may still have
+		 * manipulated the catalog.
 		 */
 		if (txn->base_snapshot == NULL)
 		{
-			Assert(txn->ninvalidations == 0);
+			if (txn->ninvalidations > 0)
+				ReorderBufferImmediateInvalidation(rb, txn->ninvalidations,
+												   txn->invalidations);
 			return;
 		}
 
