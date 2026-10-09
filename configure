@@ -796,6 +796,7 @@ CLANG
 LLVM_CONFIG
 AWK
 with_llvm
+with_copy_program
 SUN_STUDIO_CC
 ac_ct_CXX
 CXXFLAGS
@@ -904,6 +905,7 @@ with_segsize_blocks
 with_wal_blocksize
 with_CC
 with_llvm
+with_copy_program
 enable_depend
 enable_cassert
 enable_orca
@@ -1670,6 +1672,7 @@ Optional Packages:
                           set WAL block size in kB [8]
   --with-CC=CMD           set compiler (deprecated)
   --with-llvm             build with LLVM based JIT support
+  --without-copy-program  build without COPY TO/FROM PROGRAM support
   --without-icu           build without ICU support
   --with-tcl              build Tcl modules (PL/Tcl)
   --with-tclconfig=DIR    tclConfig.sh is in DIR
@@ -5376,6 +5379,31 @@ $as_echo "#define USE_LLVM 1" >>confdefs.h
 
 else
   with_llvm=no
+
+fi
+
+
+# Check whether --with-copy-program was given.
+if test "${with_copy_program+set}" = set; then :
+  withval=$with_copy_program;
+  case $withval in
+    yes)
+
+$as_echo "#define USE_COPY_PROGRAM 1" >>confdefs.h
+
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --with-copy-program option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  with_copy_program=yes
+
+$as_echo "#define USE_COPY_PROGRAM 1" >>confdefs.h
 
 fi
 

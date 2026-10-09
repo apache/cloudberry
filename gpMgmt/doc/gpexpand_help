@@ -8,7 +8,8 @@ SYNOPSIS
 
 gpexpand 
       [-f <hosts_file>]
-      | -i <input_file> [-B <batch_size>] [-V] [-t segment_tar_dir] [-S]
+      | -i <input_file> [-B <batch_size>] [-M <shutdown_mode>] [-V]
+        [-t segment_tar_dir] [-S]
       | {-d <hh:mm:ss> | -e '<YYYY-MM-DD hh:mm:ss>'} 
         [-analyze] [-n <parallel_processes>]
       | --hba-hostnames
@@ -137,6 +138,13 @@ OPTIONS
   ...
 
 
+-M <fast | immediate | smart> | --mode <fast | immediate | smart>
+ Specifies the pg_ctl shutdown mode used to stop newly configured primary
+ segments during the initialization phase with -i. This option does not apply
+ when generating an input file interactively or during table redistribution.
+ The default is smart.
+
+
 -n <parallel_processes>
  The number of tables to redistribute simultaneously. Valid values 
  are 1 - 96. Each table redistribution process requires two database
@@ -200,4 +208,3 @@ SEE ALSO
 ******************************************************
 
 gpssh-exkeys
-

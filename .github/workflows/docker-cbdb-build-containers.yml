@@ -63,6 +63,7 @@ on:
       - 'devops/deploy/docker/build/rocky10/**'
       - 'devops/deploy/docker/build/ubuntu22.04/**'
       - 'devops/deploy/docker/build/ubuntu24.04/**'
+      - 'devops/deploy/docker/build/ubuntu26.04/**'
   pull_request:
     paths:
       - 'devops/deploy/docker/build/**'
@@ -82,7 +83,7 @@ jobs:
     # Matrix strategy to build for both Rocky Linux 8 and 9, Ubuntu 22.04 and 24.04
     strategy:
       matrix:
-        platform: ['rocky8', 'rocky9', 'rocky10', 'ubuntu22.04', 'ubuntu24.04']
+        platform: ['rocky8', 'rocky9', 'rocky10', 'ubuntu22.04', 'ubuntu24.04', 'ubuntu26.04']
 
     steps:
       # Checkout repository code with full history
@@ -102,7 +103,7 @@ jobs:
       # This prevents unnecessary builds if only one platform was modified
       - name: Determine if platform changed
         id: platform-filter
-        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: |
             rocky8:
@@ -115,18 +116,20 @@ jobs:
               - 'devops/deploy/docker/build/ubuntu22.04/**'
             ubuntu24.04:
               - 'devops/deploy/docker/build/ubuntu24.04/**'
+            ubuntu26.04:
+              - 'devops/deploy/docker/build/ubuntu26.04/**'
 
       # Set up QEMU for multi-architecture support
       # This allows building ARM64 images on AMD64 infrastructure and vice versa
       - name: Set up QEMU
         if: ${{ steps.platform-filter.outputs[matrix.platform] == 'true' }}
-        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       # Login to DockerHub for pushing images
       # Requires DOCKERHUB_USER and DOCKERHUB_TOKEN secrets to be set
       - name: Login to Docker Hub
         if: ${{ steps.platform-filter.outputs[matrix.platform] == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -135,7 +138,7 @@ jobs:
       # Enable debug mode for better troubleshooting
       - name: Set up Docker Buildx
         if: ${{ steps.platform-filter.outputs[matrix.platform] == 'true' }}
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
           buildkitd-flags: --debug
 
@@ -175,7 +178,7 @@ jobs:
       # This creates a manifest list that supports both architectures
       - name: Build and Push Multi-arch Docker images
         if: ${{ steps.platform-filter.outputs[matrix.platform] == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ./devops/deploy/docker/build/${{ matrix.platform }}
           push: true
