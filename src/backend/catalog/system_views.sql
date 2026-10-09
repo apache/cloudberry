@@ -1245,7 +1245,7 @@ CREATE VIEW pg_stat_vacuum_tables AS
            V.tuples_moved
       FROM pg_class C JOIN pg_namespace N ON N.oid = C.relnamespace,
            LATERAL pg_stat_get_vacuum_stats(C.oid) V
-     WHERE C.relkind IN ('r', 't', 'm');
+     WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M');
 
 CREATE VIEW pg_stat_vacuum_indexes AS
     SELECT C.oid AS indexrelid, N.nspname AS schema, C.relname AS indexrelname,
@@ -1930,6 +1930,15 @@ $$
     UNION ALL
     SELECT pg_stat_reset_shared(target) FROM gp_dist_random('gp_id');
 $$ LANGUAGE SQL;
+
+-- Reset native VACUUM work on the coordinator and every primary segment.
+CREATE FUNCTION gp_stat_reset_vacuum_stats(relid oid DEFAULT NULL) RETURNS void AS
+$$
+    SELECT pg_stat_reset_vacuum_stats(relid) FROM gp_dist_random('gp_id');
+    SELECT pg_stat_reset_vacuum_stats(relid);
+$$ LANGUAGE SQL VOLATILE PARALLEL UNSAFE;
+
+REVOKE EXECUTE ON FUNCTION gp_stat_reset_vacuum_stats(oid) FROM public;
 
 CREATE FUNCTION gp_stat_reset_single_table_counters(tableoid oid) RETURNS VOID AS
 $$
