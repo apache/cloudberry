@@ -434,6 +434,7 @@ void
 ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy)
 {
 	static AOVacuumRelStats *vacrelstats = NULL;
+	AOVacuumRelStats phase_start_stats;
 	Assert(RelationStorageIsAO(rel));
 	Assert(params != NULL);
 
@@ -472,6 +473,9 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 		vacrelstats->relid = RelationGetRelid(rel);
 	}
 
+	/* Snapshot cumulative progress without resetting it between phases. */
+	phase_start_stats = *vacrelstats;
+
 	/*
 	 * Do the actual work --- either FULL or "lazy" vacuum
 	 */
@@ -485,21 +489,34 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 		/* Do nothing here, we will launch the stages later */
 		Assert(ao_vacuum_phase == 0);
 
-	if (ao_vacuum_phase == VACOPT_AO_POST_CLEANUP_PHASE)
+	if (ao_vacuum_phase != 0)
 	{
 		PgStat_VacuumStats stats = {0};
+		int64		removed_bytes = vacrelstats->nbytes_truncated -
+			phase_start_stats.nbytes_truncated;
+		bool		final_sample = (ao_vacuum_phase == VACOPT_AO_POST_CLEANUP_PHASE);
 
-		stats.tuples_deleted = vacrelstats->num_dead_tuples;
-		stats.dead_tuples = vacrelstats->dead_tuples;
-		stats.recently_dead_tuples = vacrelstats->dead_tuples;
-		stats.pages_scanned = vacrelstats->pages_scanned;
-		stats.total_file_segs = vacrelstats->total_file_segs;
-		stats.compacted_segments = vacrelstats->compacted_segments;
-		stats.tuples_moved = vacrelstats->tuples_moved;
-		stats.pages_removed = vacrelstats->nbytes_truncated / BLCKSZ +
-			(vacrelstats->nbytes_truncated % BLCKSZ != 0);
-		pgstat_report_vacuum_stats(rel, &stats);
+		/* Publish each completed phase before its QE can be replaced. */
+		stats.tuples_deleted = vacrelstats->num_dead_tuples -
+			phase_start_stats.num_dead_tuples;
+		stats.pages_scanned = vacrelstats->pages_scanned -
+			phase_start_stats.pages_scanned;
+		stats.compacted_segments = vacrelstats->compacted_segments -
+			phase_start_stats.compacted_segments;
+		stats.tuples_moved = vacrelstats->tuples_moved -
+			phase_start_stats.tuples_moved;
+		stats.pages_removed = removed_bytes / BLCKSZ + (removed_bytes % BLCKSZ != 0);
+		if (final_sample)
+		{
+			stats.dead_tuples = vacrelstats->dead_tuples;
+			stats.recently_dead_tuples = vacrelstats->dead_tuples;
+			stats.total_file_segs = vacrelstats->total_file_segs;
+		}
+		pgstat_report_vacuum_stats_phase(rel, &stats, final_sample);
+	}
 
+	if (ao_vacuum_phase == VACOPT_AO_POST_CLEANUP_PHASE)
+	{
 		pgstat_progress_end_command();
 		cleanup_vacrelstats(&vacrelstats);
 	}

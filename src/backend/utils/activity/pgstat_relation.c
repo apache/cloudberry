@@ -368,6 +368,14 @@ pgstat_report_analyze(Relation rel,
 void
 pgstat_report_vacuum_stats(Relation rel, const PgStat_VacuumStats *stats)
 {
+	pgstat_report_vacuum_stats_phase(rel, stats, true);
+}
+
+/* Publish phase work without replacing final samples until post-cleanup. */
+void
+pgstat_report_vacuum_stats_phase(Relation rel, const PgStat_VacuumStats *stats,
+								 bool final_sample)
+{
 	Oid			dboid = rel->rd_rel->relisshared ? InvalidOid : MyDatabaseId;
 	PgStat_EntryRef *entry_ref;
 	PgStatShared_Relation *shared;
@@ -392,8 +400,11 @@ pgstat_report_vacuum_stats(Relation rel, const PgStat_VacuumStats *stats)
 	dst->missed_dead_pages += stats->missed_dead_pages;
 	dst->compacted_segments += stats->compacted_segments;
 	dst->tuples_moved += stats->tuples_moved;
-	dst->dead_tuples = stats->dead_tuples;
-	dst->total_file_segs = stats->total_file_segs;
+	if (final_sample)
+	{
+		dst->dead_tuples = stats->dead_tuples;
+		dst->total_file_segs = stats->total_file_segs;
+	}
 	pgstat_unlock_entry(entry_ref);
 
 	if (rel->rd_rel->relkind != RELKIND_INDEX)

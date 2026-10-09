@@ -800,15 +800,17 @@ _hash_initbitmapbuffer(Buffer buf, uint16 bmsize, bool initpage)
  *	split can start.
  *
  *	Since this function is invoked in VACUUM, we provide an access strategy
- *	parameter that controls fetches of the bucket pages.
+ *	parameter that controls fetches of the bucket pages.  Returns the number
+ *	of overflow pages released.
  */
-void
+BlockNumber
 _hash_squeezebucket(Relation rel,
 					Bucket bucket pg_attribute_unused(),
 					BlockNumber bucket_blkno,
 					Buffer bucket_buf,
 					BufferAccessStrategy bstrategy)
 {
+	BlockNumber pages_freed = 0;
 	BlockNumber wblkno;
 	BlockNumber rblkno;
 	Buffer		wbuf;
@@ -833,7 +835,7 @@ _hash_squeezebucket(Relation rel,
 	if (!BlockNumberIsValid(wopaque->hasho_nextblkno))
 	{
 		LockBuffer(wbuf, BUFFER_LOCK_UNLOCK);
-		return;
+		return pages_freed;
 	}
 
 	/*
@@ -1000,7 +1002,7 @@ readpage:
 				if (rblkno == wblkno)
 				{
 					_hash_relbuf(rel, rbuf);
-					return;
+					return pages_freed;
 				}
 
 				wbuf = next_wbuf;
@@ -1054,6 +1056,7 @@ readpage:
 		/* free this overflow page (releases rbuf) */
 		_hash_freeovflpage(rel, bucket_buf, rbuf, wbuf, itups, itup_offsets,
 						   tups_size, nitups, bstrategy);
+		pages_freed++;
 
 		/* be tidy */
 		for (i = 0; i < nitups; i++)
@@ -1067,7 +1070,7 @@ readpage:
 				LockBuffer(wbuf, BUFFER_LOCK_UNLOCK);
 			else
 				_hash_relbuf(rel, wbuf);
-			return;
+			return pages_freed;
 		}
 
 		rbuf = _hash_getbuf_with_strategy(rel,
