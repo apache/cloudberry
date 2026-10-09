@@ -13092,6 +13092,11 @@
   proname => 'pg_stat_get_pages_all_visible', provolatile => 's',
   proparallel => 'r', prorettype => 'int8', proargtypes => 'oid',
   prosrc => 'pg_stat_get_pages_all_visible' },
+{ oid => '9222', descr => 'statistics: reset native vacuum work counters',
+  proname => 'pg_stat_reset_vacuum_stats', proisstrict => 'f', provolatile => 'v',
+  prorettype => 'void', proargtypes => 'oid', proargnames => '{relid}',
+  prosrc => 'pg_stat_reset_vacuum_stats' },
+
 { oid => '9220', descr => 'statistics: vacuum work counters',
   proname => 'pg_stat_get_vacuum_stats', provolatile => 's', proparallel => 'r',
   prorettype => 'record', proargtypes => 'oid',

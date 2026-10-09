@@ -626,6 +626,7 @@ extern void pgstat_force_next_flush(void);
 extern void pgstat_reset_counters(void);
 extern void pgstat_reset(PgStat_Kind kind, Oid dboid, Oid objoid);
 extern void pgstat_reset_of_kind(PgStat_Kind kind);
+extern void pgstat_reset_vacuum_counters(Oid dboid, Oid relid);
 
 /* stats accessors */
 extern void pgstat_clear_snapshot(void);
@@ -736,6 +737,9 @@ extern void pgstat_init_relation(Relation rel);
 extern void pgstat_assoc_relation(Relation rel);
 extern void pgstat_unlink_relation(Relation rel);
 
+extern void pgstat_report_vacuum_stats_phase(Relation rel,
+											  const PgStat_VacuumStats *stats,
+											  bool final_sample);
 extern void pgstat_report_vacuum_elapsed(Oid tableoid, bool shared,
 										 PgStat_Counter livetuples, PgStat_Counter deadtuples,
 										 PgStat_Counter elapsedtime, PgStat_Counter delaytime,
