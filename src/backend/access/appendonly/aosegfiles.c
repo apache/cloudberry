@@ -995,6 +995,8 @@ GetSegFilesTotals(Relation parentrel, Snapshot appendOnlyMetaDataSnapshot)
 		{
 			result->totaltuples += DatumGetInt64(tupcount);
 		}
+		else
+			result->awaiting_drop_segments++;
 		result->totalvarblocks += DatumGetInt64(varblockcount);
 		result->totalfilesegs++;
 

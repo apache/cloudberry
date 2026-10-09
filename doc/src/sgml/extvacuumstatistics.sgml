@@ -1,0 +1,1189 @@
+<!-- doc/src/sgml/extvacuumstatistics.sgml -->
+
+<sect1 id="extvacuumstatistics" xreflabel="ext_vacuum_statistics">
+ <title>ext_vacuum_statistics &mdash; extended vacuum statistics</title>
+
+ <indexterm zone="extvacuumstatistics">
+  <primary>ext_vacuum_statistics</primary>
+ </indexterm>
+
+ <para>
+  The <filename>ext_vacuum_statistics</filename> module provides
+  extended per-table, per-index, and per-database vacuum statistics
+  (buffer I/O, WAL, general, timing) via views in the
+  <literal>ext_vacuum_statistics</literal> schema.
+ </para>
+
+ <para>
+  The module must be loaded by adding <literal>ext_vacuum_statistics</literal> to
+  <xref linkend="guc-shared-preload-libraries"/> in
+  <filename>postgresql.conf</filename>, because it registers a vacuum hook at
+  server startup.  This means that a server restart is needed to add or remove
+  the module.  After installation, run
+  <command>CREATE EXTENSION ext_vacuum_statistics</command> in each database
+  where you want to use it.
+ </para>
+
+ <para>
+  Note that starting the server without the module in
+  <xref linkend="guc-shared-preload-libraries"/>, even once, discards
+  <emphasis>all</emphasis> cumulative statistics, not only those of this
+  module.  The statistics file then holds entries of a statistics kind that
+  is not registered, so the server reports the file as corrupted and resets
+  every statistics kind, built-in ones such as those shown in
+  <structname>pg_stat_user_tables</structname> included.  To stop collecting
+  extension resource statistics without that side effect, keep the module loaded and
+  set <varname>vacuum_statistics.enabled</varname> to <literal>off</literal>
+  instead.
+ </para>
+
+ <para>
+  When active, the module provides views
+  <structname>ext_vacuum_statistics.pg_stats_vacuum_tables</structname>,
+  <structname>ext_vacuum_statistics.pg_stats_vacuum_ao_tables</structname>,
+  <structname>ext_vacuum_statistics.pg_stats_vacuum_indexes</structname>, and
+  <structname>ext_vacuum_statistics.pg_stats_vacuum_database</structname>,
+  plus functions to reset statistics and manage tracking.
+ </para>
+
+ <para>
+  Each tracked object (one table or one index) uses a fixed-size shared
+  memory entry; the exact size depends on the platform.
+ </para>
+
+ <para>
+  The statistics of a table or an index are dropped together with it, when
+  the transaction that drops it commits, and a new table or index starts
+  from empty statistics even if it gets the OID of an old one; both work
+  the way they do for the built-in relation statistics.  The module does
+  that with an <literal>object_access_hook</literal>, so the statistics file
+  does not accumulate the entries of relations long gone.  The statistics
+  of a dropped database are dropped along with the rest of its cumulative
+  statistics.
+ </para>
+
+ <para>
+  Work counters are accumulated only by native pgstat. The module's table and
+  index views read the same counters as the native VACUUM views via
+  <function>pg_stat_get_vacuum_stats()</function>, and add separately stored
+  resource measurements. Work obeys <varname>track_counts</varname>;
+  <varname>vacuum_statistics.enabled</varname> controls only extension metrics,
+  including AO phase resources and the awaiting-drop snapshot. Work remains
+  visible when extension collection is disabled. Relations without a resource
+  entry show zero resource counters.
+ </para>
+
+ <sect2 id="extvacuumstatistics-pg-stats-vacuum-tables">
+  <title>The <structname>ext_vacuum_statistics.pg_stats_vacuum_tables</structname> View</title>
+
+  <indexterm zone="extvacuumstatistics">
+   <secondary>pg_stats_vacuum_tables</secondary>
+  </indexterm>
+
+  <para>
+   The view <structname>ext_vacuum_statistics.pg_stats_vacuum_tables</structname>
+   contains one row for each table in the current database (including
+   materialized views, TOAST tables and AO auxiliary tables), showing statistics about vacuuming that specific table.  The columns
+   are shown in <xref linkend="extvacuumstatistics-pg-stats-vacuum-tables-columns"/>.
+   AO phase resources are exposed separately by
+   <structname>ext_vacuum_statistics.pg_stats_vacuum_ao_tables</structname>;
+   they are not columns of this general table view.
+  </para>
+
+  <table id="extvacuumstatistics-pg-stats-vacuum-tables-columns">
+   <title><structname>ext_vacuum_statistics.pg_stats_vacuum_tables</structname> Columns</title>
+   <tgroup cols="1">
+    <thead>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       Column Type
+      </para>
+      <para>
+       Description
+      </para></entry>
+     </row>
+    </thead>
+    <tbody>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>relid</structfield> <type>oid</type>
+      </para>
+      <para>
+       OID of a table
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>schema</structfield> <type>name</type>
+      </para>
+      <para>
+       Name of the schema this table is in
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>relname</structfield> <type>name</type>
+      </para>
+      <para>
+       Name of this table
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>dbname</structfield> <type>name</type>
+      </para>
+      <para>
+       Name of the database containing this table
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_blks_read</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of database blocks read by vacuum operations performed on this table
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_blks_hit</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of times database blocks were found in the buffer cache by vacuum operations
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_blks_dirtied</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of database blocks dirtied by vacuum operations
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_blks_written</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of database blocks written by vacuum operations
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>wal_records</structfield> <type>int8</type>
+      </para>
+      <para>
+       Total number of WAL records generated by vacuum operations performed on this table
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>wal_fpi</structfield> <type>int8</type>
+      </para>
+      <para>
+       Total number of WAL full page images generated by vacuum operations
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>wal_bytes</structfield> <type>numeric</type>
+      </para>
+      <para>
+       Total amount of WAL bytes generated by vacuum operations
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>blk_read_time</structfield> <type>float8</type>
+      </para>
+      <para>
+       Time spent reading blocks by vacuum operations, in milliseconds
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>blk_write_time</structfield> <type>float8</type>
+      </para>
+      <para>
+       Time spent writing blocks by vacuum operations, in milliseconds
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>rel_blks_read</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of blocks vacuum operations read from this table
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>rel_blks_hit</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of times blocks of this table were found in the buffer cache by vacuum
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>tuples_deleted</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of dead tuples vacuum operations deleted from this table
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>pages_scanned</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of pages examined by vacuum operations. For append-optimized
+       tables, the data scanned during compaction expressed in heap-equivalent
+       pages of <xref linkend="guc-block-size"/> bytes.
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>pages_removed</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of pages removed from physical storage by vacuum operations
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>tuples_frozen</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of tuples that vacuum operations marked as frozen
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>recently_dead_tuples</structfield> <type>int8</type>
+      </para>
+      <para>
+       Cumulative number of dead tuples left by vacuum operations. For heap
+       tables, these are tuples retained for transaction visibility. For
+       append-optimized tables, these are hidden rows remaining in the AO
+       visibility map after post-cleanup, including rows left because
+       compaction is disabled or below its threshold. Each completed vacuum
+       adds its remaining count, so the same row can be counted repeatedly;
+       this is not a snapshot or a count of distinct rows.
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>missed_dead_pages</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of pages that had at least one missed dead tuple
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>missed_dead_tuples</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of fully DEAD tuples that could not be pruned due to failure to acquire a cleanup lock
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>pages_frozen</structfield> <type>int8</type>
+      </para>
+      <para>
+       Cumulative number of heap pages on which vacuum froze at least one
+       tuple. A page is counted again if a later vacuum freezes more tuples
+       on it. Zero for append-optimized tables.
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>pages_all_visible</structfield> <type>int8</type>
+      </para>
+      <para>
+       Cumulative number of heap pages whose visibility-map all-visible bit
+       vacuum changed from unset to set, including empty pages. A page can
+       be counted again after the bit is cleared by later changes. Rescanning
+       an already all-visible page or setting only its all-frozen bit adds
+       nothing. Zero for append-optimized tables.
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>dead_pages</structfield> <type>int8</type>
+      </para>
+      <para>
+       Cumulative observations of heap pages containing dead tuples not yet
+       removable, for example because of an old snapshot. Unlike
+       <structfield>missed_dead_pages</structfield>, these tuples are not yet
+       eligible for removal. Repeated observations add to this counter.
+       Zero for append-optimized tables.
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>freeze_age_vacuum_count</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of heap vacuums made aggressive by the XID or MultiXact freeze
+       table age, including <command>VACUUM FREEZE</command>.
+       <literal>DISABLE_PAGE_SKIPPING</literal> alone does not increment it.
+       This is distinct from entering failsafe mode. Zero for append-optimized tables.
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_file_segs</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of segment metadata entries observed at the end of the last
+       append-optimized vacuum, including empty and awaiting-drop entries.
+       This is a snapshot, not a cumulative counter. For column-oriented
+       storage, each segment number is counted once, not once per column.
+       Zero for heap tables and after a statistics reset.
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>compacted_segments</structfield> <type>int8</type>
+      </para>
+      <para>
+       Cumulative number of append-optimized segments actually compacted.
+       Segments considered but skipped are not counted. Zero for heap tables.
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>tuples_moved</structfield> <type>int8</type>
+      </para>
+      <para>
+       Cumulative number of live tuples moved by append-optimized compaction.
+       Zero for heap tables.
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>awaiting_drop_segments</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of AO segment metadata entries still in <literal>AWAITING_DROP</literal>
+       after the last completed vacuum. Replaced on each vacuum, not accumulated.
+       For AOCS, counts segment numbers, not column files. Zero for heap and after reset.
+      </para></entry>
+     </row>
+    </tbody>
+   </tgroup>
+  </table>
+ </sect2>
+
+ <sect2 id="extvacuumstatistics-pg-stats-vacuum-ao-tables">
+  <title>The <structname>ext_vacuum_statistics.pg_stats_vacuum_ao_tables</structname> View</title>
+
+  <indexterm zone="extvacuumstatistics">
+   <secondary>pg_stats_vacuum_ao_tables</secondary>
+  </indexterm>
+
+  <para>
+   This view contains one row for each AO or AOCS parent table in the
+   current database on the connected instance. Membership is determined by
+   <structname>pg_appendonly</structname>, so heap tables, AO auxiliary heaps
+   and indexes are excluded even after a statistics reset. Auxiliary tables
+   remain in <structname>pg_stats_vacuum_tables</structname>, and indexes in
+   <structname>pg_stats_vacuum_indexes</structname>.
+  </para>
+
+  <para>
+   It includes the relation identifiers <structfield>relid</structfield>,
+   <structfield>schema</structfield>, <structfield>relname</structfield> and
+   <structfield>dbname</structfield>; total buffer, WAL and I/O timing fields;
+   <structfield>rel_blks_read</structfield> and <structfield>rel_blks_hit</structfield>;
+   and the applicable work counters <structfield>tuples_deleted</structfield>,
+   <structfield>pages_scanned</structfield>, <structfield>pages_removed</structfield>,
+   <structfield>recently_dead_tuples</structfield>, <structfield>total_file_segs</structfield>,
+   <structfield>compacted_segments</structfield>, <structfield>tuples_moved</structfield>
+   and <structfield>awaiting_drop_segments</structfield>. These fields have the
+   same types and meaning as in <structname>pg_stats_vacuum_tables</structname>.
+   Heap-only counters are omitted. The additional 27 columns below report
+   resource usage separately for each AO vacuum phase.
+  </para>
+
+  <table id="extvacuumstatistics-ao-phase-columns">
+   <title>AO Vacuum Phase Resource Columns</title>
+   <tgroup cols="1">
+    <thead>
+     <row><entry>Columns and meaning</entry></row>
+    </thead>
+    <tbody>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>ao_pre_cleanup_*</structfield>,
+       <structfield>ao_compaction_*</structfield>,
+       <structfield>ao_post_cleanup_*</structfield>
+      </para>
+      <para>
+       Each phase prefix provides <literal>blks_read</literal>, <literal>blks_hit</literal>,
+       <literal>blks_dirtied</literal>, <literal>blks_written</literal>,
+       <literal>wal_records</literal> and <literal>wal_fpi</literal> as <type>int8</type>,
+       <literal>wal_bytes</literal> as <type>numeric</type>, and
+       <literal>blk_read_time</literal> and <literal>blk_write_time</literal> as
+       <type>double precision</type> in milliseconds. These accumulate the
+       phase's resource usage, excluding separately reported index work.
+       Buffer counts include shared and local buffers, as in
+       <structfield>total_blks_read</structfield>. I/O timing requires
+       <varname>track_io_timing</varname>. Zero after reset.
+      </para></entry>
+     </row>
+    </tbody>
+   </tgroup>
+  </table>
+
+  <para>
+   The general and AO views read the same native work counters and extension
+   resource entry. Extension resets clear resources and the awaiting-drop
+   snapshot in both views while leaving native work intact. Resource totals
+   and phase resources are read together from a single entry snapshot by
+   <function>ext_vacuum_statistics.pg_stats_get_vacuum_ao_tables(dboid, reloid)</function>,
+   including with <varname>stats_fetch_consistency</varname> set to
+   <literal>none</literal>. Native work and resources are separate entries
+   and need not reflect the same instant during a vacuum.
+  </para>
+
+  <para>
+   On Cloudberry, use <structname>gp_stats_vacuum_ao_tables</structname> for rows
+   from all instances and <structname>gp_stats_vacuum_ao_tables_summary</structname>
+   for totals over primary segments, normalized for replicated tables. For
+   example, run on the coordinator:
+<programlisting>
+SELECT relname, tuples_deleted, awaiting_drop_segments,
+       ao_pre_cleanup_wal_bytes, ao_compaction_wal_bytes,
+       ao_post_cleanup_wal_bytes
+FROM ext_vacuum_statistics.gp_stats_vacuum_ao_tables_summary;
+</programlisting>
+  </para>
+ </sect2>
+
+ <sect2 id="extvacuumstatistics-pg-stats-vacuum-indexes">
+  <title>The <structname>ext_vacuum_statistics.pg_stats_vacuum_indexes</structname> View</title>
+
+  <indexterm zone="extvacuumstatistics">
+   <secondary>pg_stats_vacuum_indexes</secondary>
+  </indexterm>
+
+  <para>
+   The view <structname>ext_vacuum_statistics.pg_stats_vacuum_indexes</structname>
+   contains one row for each index in the current database, showing statistics
+   about vacuuming that specific index.  The columns are shown in
+   <xref linkend="extvacuumstatistics-pg-stats-vacuum-indexes-columns"/>.
+  </para>
+
+  <table id="extvacuumstatistics-pg-stats-vacuum-indexes-columns">
+   <title><structname>ext_vacuum_statistics.pg_stats_vacuum_indexes</structname> Columns</title>
+   <tgroup cols="1">
+    <thead>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       Column Type
+      </para>
+      <para>
+       Description
+      </para></entry>
+     </row>
+    </thead>
+    <tbody>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>indexrelid</structfield> <type>oid</type>
+      </para>
+      <para>
+       OID of this index
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>schema</structfield> <type>name</type>
+      </para>
+      <para>
+       Name of the schema this index is in
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>indexrelname</structfield> <type>name</type>
+      </para>
+      <para>
+       Name of this index
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>dbname</structfield> <type>name</type>
+      </para>
+      <para>
+       Name of the database containing this index
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_blks_read</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of database blocks read by vacuum operations while processing
+       this index
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_blks_hit</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of times database blocks were found in the buffer cache by
+       vacuum operations while processing this index
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_blks_dirtied</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of database blocks dirtied by vacuum operations while
+       processing this index
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_blks_written</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of database blocks written by vacuum operations while
+       processing this index
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>wal_records</structfield> <type>int8</type>
+      </para>
+      <para>
+       Total number of WAL records generated by vacuum operations while
+       processing this index
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>wal_fpi</structfield> <type>int8</type>
+      </para>
+      <para>
+       Total number of WAL full page images generated by vacuum operations
+       while processing this index
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>wal_bytes</structfield> <type>numeric</type>
+      </para>
+      <para>
+       Total amount of WAL bytes generated by vacuum operations while
+       processing this index
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>blk_read_time</structfield> <type>float8</type>
+      </para>
+      <para>
+       Time spent reading blocks by vacuum operations while processing this
+       index, in milliseconds
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>blk_write_time</structfield> <type>float8</type>
+      </para>
+      <para>
+       Time spent writing blocks by vacuum operations while processing this
+       index, in milliseconds
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>rel_blks_read</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of blocks of this index read by vacuum operations
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>rel_blks_hit</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of blocks of this index found in the buffer cache by vacuum
+       operations
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>tuples_deleted</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of index entries removed by the bulkdelete passes of vacuums
+       of the parent table
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>pages_deleted</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of index pages marked deleted by vacuum operations
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>dead_pages</structfield> <type>int8</type>
+      </para>
+      <para>
+       Cumulative observations of deleted index pages not yet reusable,
+       sampled once after index cleanup as deleted pages minus reusable
+       pages. Repeated observations add to this counter.
+      </para></entry>
+     </row>
+    </tbody>
+   </tgroup>
+  </table>
+ </sect2>
+
+ <sect2 id="extvacuumstatistics-pg-stats-vacuum-database">
+  <title>The <structname>ext_vacuum_statistics.pg_stats_vacuum_database</structname> View</title>
+
+  <indexterm zone="extvacuumstatistics">
+   <secondary>pg_stats_vacuum_database</secondary>
+  </indexterm>
+
+  <para>
+   The view <structname>ext_vacuum_statistics.pg_stats_vacuum_database</structname>
+   contains one row for each database in the cluster, showing aggregate vacuum
+   statistics for that database.  Columns include
+   <structfield>dboid</structfield>, <structfield>dbname</structfield>,
+   <structfield>db_blks_read</structfield>, <structfield>db_blks_hit</structfield>,
+   <structfield>db_blks_dirtied</structfield>, <structfield>db_blks_written</structfield>,
+   WAL stats (<structfield>db_wal_records</structfield>,
+   <structfield>db_wal_fpi</structfield>, <structfield>db_wal_bytes</structfield>),
+   and I/O timing (<structfield>db_blk_read_time</structfield>,
+   <structfield>db_blk_write_time</structfield>).
+  </para>
+
+  <table id="extvacuumstatistics-pg-stats-vacuum-database-columns">
+   <title><structname>ext_vacuum_statistics.pg_stats_vacuum_database</structname> Columns</title>
+   <tgroup cols="1">
+    <thead>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       Column Type
+      </para>
+      <para>
+       Description
+      </para></entry>
+     </row>
+    </thead>
+    <tbody>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>dboid</structfield> <type>oid</type>
+      </para>
+      <para>
+       OID of the database
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>dbname</structfield> <type>name</type>
+      </para>
+      <para>
+       Name of the database
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>db_blks_read</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of shared buffers read by vacuums in this database (tables and indexes)
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>db_blks_hit</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of shared buffer hits of vacuums in this database
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>db_blks_dirtied</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of shared buffers dirtied by vacuums in this database
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>db_blks_written</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of shared buffers written by vacuums in this database
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>db_wal_records</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of WAL records generated by vacuums in this database
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>db_wal_fpi</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of WAL full page images generated by vacuums in this database
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>db_wal_bytes</structfield> <type>numeric</type>
+      </para>
+      <para>
+       Amount of WAL generated by vacuums in this database, in bytes
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>db_blk_read_time</structfield> <type>float8</type>
+      </para>
+      <para>
+       Time spent reading data file blocks by vacuums in this database, in milliseconds (if <xref linkend="guc-track-io-timing"/> is enabled, otherwise zero)
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>db_blk_write_time</structfield> <type>float8</type>
+      </para>
+      <para>
+       Time spent writing data file blocks by vacuums in this database, in milliseconds (if <xref linkend="guc-track-io-timing"/> is enabled, otherwise zero)
+      </para></entry>
+     </row>
+    </tbody>
+   </tgroup>
+  </table>
+ </sect2>
+
+ <sect2 id="extvacuumstatistics-functions">
+  <title>Functions</title>
+
+  <para>
+   These functions reset only the extension's own metrics. Native VACUUM
+   work counters and other core statistics are never reset by the module.
+   Use <function>pg_stat_reset_vacuum_stats(relid)</function> for one relation
+   or <function>pg_stat_reset_vacuum_stats()</function> for the current database
+   and its non-shared relations. These preserve timing, invocation counts and
+   other native statistics. On Cloudberry, use the corresponding
+   <function>gp_stat_reset_vacuum_stats()</function> wrapper from the coordinator
+   to include every primary segment. A native relation reset leaves extension resources intact;
+   <function>pg_stat_reset()</function> clears both for the current database.
+   The counters can cover different periods after a reset or a change in
+   collection settings.
+  </para>
+
+  <para>
+   Reset functions require superuser privileges by default. Access can be
+   delegated with <command>GRANT EXECUTE</command>. Existing entries remain
+   visible with zero extension counters after a reset; native work is unchanged; their table, index, or database
+   type is preserved. Missing entries are not created by a reset.
+   <function>pg_stat_reset()</function> also resets the module's counters for
+   the current database.
+  </para>
+
+  <para>
+   For Cloudberry, use the <literal>gp_</literal> wrappers from a normal
+   coordinator connection to reset statistics across the cluster. These
+   wrappers reset the coordinator and all primary segments. For example,
+   to reset vacuum statistics for all databases across the cluster:
+<programlisting>
+SELECT ext_vacuum_statistics.gp_vacuum_statistics_reset();
+</programlisting>
+   Delegating access to a cluster wrapper also requires granting access to
+   its corresponding local reset function.
+  </para>
+
+  <note>
+   <para>
+    Functions without the <literal>gp_</literal> prefix reset statistics
+    <emphasis>only on the current node</emphasis>. Calling
+    <function>ext_vacuum_statistics.vacuum_statistics_reset()</function>
+    on the coordinator (QD) resets only the coordinator's counters;
+    segment counters remain unchanged. The same applies to
+    <function>ext_vacuum_statistics.extvac_reset_entry()</function> and
+    <function>ext_vacuum_statistics.extvac_reset_db_entry()</function>.
+    Use the local functions in a utility connection to an individual segment.
+   </para>
+  </note>
+
+  <variablelist>
+   <varlistentry>
+    <term>
+     <function>ext_vacuum_statistics.vacuum_statistics_reset()</function>
+     <returnvalue>void</returnvalue>
+    </term>
+    <listitem>
+     <para>
+      Resets all vacuum statistics of the module only on the current node,
+      including relation and database statistics for all databases.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term>
+     <function>ext_vacuum_statistics.extvac_reset_entry(<parameter>dboid</parameter> <type>oid</type>, <parameter>relid</parameter> <type>oid</type>)</function>
+     <returnvalue>void</returnvalue>
+    </term>
+    <listitem>
+     <para>
+      Resets the module's own vacuum metrics for one table or index only on the current
+      node. Use
+      <literal>0</literal> as <parameter>dboid</parameter> for a shared
+      catalog. The database aggregate and other relations are unchanged.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term>
+     <function>ext_vacuum_statistics.extvac_reset_db_entry(<parameter>dboid</parameter> <type>oid</type>)</function>
+     <returnvalue>void</returnvalue>
+    </term>
+    <listitem>
+     <para>
+      Resets the module's own vacuum metrics for a database only on the current node:
+      its aggregate and the statistics of all its tables and indexes.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term>
+     <function>ext_vacuum_statistics.gp_vacuum_statistics_reset()</function>
+     <returnvalue>void</returnvalue>
+    </term>
+    <listitem>
+     <para>
+      Calls <function>vacuum_statistics_reset()</function> on the coordinator
+      and all primary segments, resetting statistics for all databases.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term>
+     <function>ext_vacuum_statistics.gp_extvac_reset_entry(<parameter>dboid</parameter> <type>oid</type>, <parameter>relid</parameter> <type>oid</type>)</function>
+     <returnvalue>void</returnvalue>
+    </term>
+    <listitem>
+     <para>
+      Calls <function>extvac_reset_entry(<parameter>dboid</parameter>, <parameter>relid</parameter>)</function>
+      on the coordinator and all primary segments, resetting statistics for
+      one table or index. The database aggregate and other relations are
+      unchanged.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term>
+     <function>ext_vacuum_statistics.gp_extvac_reset_db_entry(<parameter>dboid</parameter> <type>oid</type>)</function>
+     <returnvalue>void</returnvalue>
+    </term>
+    <listitem>
+     <para>
+      Calls <function>extvac_reset_db_entry(<parameter>dboid</parameter>)</function>
+      on the coordinator and all primary segments, resetting the database
+      aggregate and the statistics of all its tables and indexes.
+     </para>
+    </listitem>
+   </varlistentry>
+  </variablelist>
+
+  <para>
+   To reset the current database across the cluster, run on the coordinator:
+<programlisting>
+SELECT ext_vacuum_statistics.gp_extvac_reset_db_entry(oid)
+FROM pg_database WHERE datname = current_database();
+</programlisting>
+  </para>
+ </sect2>
+
+ <sect2 id="extvacuumstatistics-append-optimized">
+  <title>Append-Optimized Tables</title>
+
+  <para>
+   Append-optimized tables, row- and column-oriented, and their indexes are
+   reported like heap tables, with the counters that have a meaning for
+   their storage:
+  </para>
+
+  <para>
+   Append-optimized vacuum time and cost delay sum active phases executed by
+   the reporting worker, excluding gaps between phases. If the worker changes,
+   only phases executed by the replacement worker are reported.
+  </para>
+
+  <itemizedlist>
+   <listitem>
+    <para>
+     <structfield>tuples_deleted</structfield> of the table is the number of
+     dead tuples that the compaction of its segment files discarded, and
+     <structfield>pages_removed</structfield> the space released by
+     truncating segment files and dropping compacted ones, in heap-equivalent
+     pages of <xref linkend="guc-block-size"/> bytes.
+    </para>
+   </listitem>
+   <listitem>
+    <para>
+     <structfield>pages_frozen</structfield>,
+     <structfield>pages_all_visible</structfield>,
+     <structfield>tuples_frozen</structfield>,
+     <structfield>dead_pages</structfield>,
+     <structfield>freeze_age_vacuum_count</structfield>,
+     <structfield>missed_dead_tuples</structfield> and
+     <structfield>missed_dead_pages</structfield> have no append-optimized
+     counterpart and stay zero.
+    </para>
+   </listitem>
+   <listitem>
+    <para>
+     <structfield>recently_dead_tuples</structfield> accumulates the hidden
+     rows left after each completed vacuum. Two vacuums that each leave
+     100 hidden rows add 200; after compaction removes them, later vacuums
+     add zero. The counter survives clean restarts and is cleared by
+     statistics resets.
+    </para>
+   </listitem>
+   <listitem>
+    <para>
+     <structfield>compacted_segments</structfield> and
+     <structfield>tuples_moved</structfield> accumulate the segments actually
+     compacted and the live tuples moved. <structfield>pages_scanned</structfield>
+     accumulates the scanned data in heap-equivalent pages, rounded up for
+     each compacted segment. For row-oriented storage this uses the source
+     segment EOF; for column-oriented storage it uses the scan's bytes read.
+     <structfield>total_file_segs</structfield> instead records the segment
+     metadata entry count at the end of the latest vacuum. It includes empty
+     and awaiting-drop entries, and is not the number of physical column files.
+     <structfield>awaiting_drop_segments</structfield> records only entries
+     still in <literal>AWAITING_DROP</literal> at this point; older snapshots
+     can prevent recycling them even after compaction completes.
+     Native resets clear work counters and the total segment snapshot;
+     extension resets clear resources and the awaiting-drop snapshot; the next
+     vacuum refreshes the snapshot even if it performs no compaction.
+    </para>
+   </listitem>
+   <listitem>
+    <para>
+     The vacuum of an append-optimized table runs in phases (pre-cleanup,
+     compaction, post-cleanup), each dispatched as a step of its own.  The
+     buffer, WAL and I/O timing counters of the table cover all the phases
+     of a vacuum, and the vacuum is reported once, at the end of the last
+     one; a vacuum that fails in between reports nothing for the table.
+     The <literal>ao_pre_cleanup_*</literal>, <literal>ao_compaction_*</literal>
+     and <literal>ao_post_cleanup_*</literal> columns in the AO table views
+     split these cumulative resources by phase. Their sum equals the corresponding table total,
+     apart from floating-point rounding of I/O times. Phase counters exclude
+     index resources and use the same replicated-table normalization as
+     other table counters in cluster summaries. Independently rounded integer
+     fields in replicated summaries can differ by rounding.
+    </para>
+   </listitem>
+   <listitem>
+    <para>
+     The compaction moves the live tuples of a segment file to another one,
+     so the index pass that follows removes the index entries of all tuples
+     of the compacted file: <structfield>tuples_deleted</structfield> of an
+     index counts the moved live tuples too, not only the dead ones.  As for
+     heap tables, the resource usage of the index passes is reported with
+     the indexes and not counted again with the table.
+    </para>
+   </listitem>
+  </itemizedlist>
+ <para>
+  AO auxiliary tables (<literal>aoseg</literal>, <literal>visimap</literal>,
+  <literal>blkdir</literal>) have separate heap-statistics rows under their
+  own OIDs; their indexes appear in the index views. Their later heap vacuum
+  is not added to the parent AO phase counters. The auxiliary table OIDs in
+  <structname>pg_appendonly</structname> associate these rows with the parent.
+  Cluster summaries use that parent's replication divisor for auxiliary
+  tables and their indexes.
+ </para>
+
+ </sect2>
+
+ <sect2 id="extvacuumstatistics-cloudberry">
+  <title>Using the Module in a Cloudberry Cluster</title>
+
+  <para>
+   Every instance of the cluster, the coordinator and each segment, keeps
+   the statistics of the vacuums it runs itself: a <command>VACUUM</command>
+   issued on the coordinator is dispatched to the segments, and each segment
+   vacuums and counts its own part of the tables.  The
+   <structname>pg_stats_vacuum_*</structname> views show the statistics of
+   the instance they are queried on, so on the coordinator they show only
+   what the coordinator itself vacuumed, which for distributed tables is next
+   to nothing.  The module therefore also provides cluster-wide views, which
+   query every instance:
+  </para>
+
+  <itemizedlist>
+   <listitem>
+    <para>
+     <structname>ext_vacuum_statistics.gp_stats_vacuum_tables</structname>,
+     <structname>ext_vacuum_statistics.gp_stats_vacuum_ao_tables</structname>,
+     <structname>ext_vacuum_statistics.gp_stats_vacuum_indexes</structname> and
+     <structname>ext_vacuum_statistics.gp_stats_vacuum_database</structname>
+     have the columns of the corresponding <structname>pg_stats_vacuum_*</structname>
+     view, preceded by <structfield>gp_segment_id</structfield>: one row per
+     instance, <literal>-1</literal> being the coordinator, like the
+     <structname>gp_stat_*</structname> views of the core.
+    </para>
+   </listitem>
+   <listitem>
+    <para>
+     <structname>ext_vacuum_statistics.gp_stats_vacuum_tables_summary</structname>,
+     <structname>ext_vacuum_statistics.gp_stats_vacuum_ao_tables_summary</structname>
+     and <structname>ext_vacuum_statistics.gp_stats_vacuum_indexes_summary</structname>
+     have one row per relation, like the
+     <structname>gp_stat_*_summary</structname> views of the core: the
+     counters of user relations are summed over the segments, divided by the
+     number of segments for replicated tables, which every segment stores and
+     vacuums in full; system catalogs are shown as the coordinator counts
+     them.
+    </para>
+   </listitem>
+   <listitem>
+    <para>
+     <structname>ext_vacuum_statistics.gp_stats_vacuum_database_summary</structname>
+     sums the database aggregates over all instances, the coordinator
+     included.
+    </para>
+   </listitem>
+  </itemizedlist>
+
+  <para>
+   Like the other <structname>gp_*</structname> views, the cluster-wide views
+   must not be queried in utility mode, where they read the local instance
+   twice.
+  </para>
+
+  <para>
+   The reset functions without the <literal>gp_</literal> prefix act only on
+   the connected instance.
+   <function>ext_vacuum_statistics.gp_vacuum_statistics_reset()</function>,
+   <function>ext_vacuum_statistics.gp_extvac_reset_entry(<parameter>dboid</parameter>, <parameter>relid</parameter>)</function>
+   and
+   <function>ext_vacuum_statistics.gp_extvac_reset_db_entry(<parameter>dboid</parameter>)</function>
+   call them on the coordinator and on every primary segment. Call these
+   wrappers from a normal coordinator connection; use the local functions
+   in utility mode. See <xref linkend="extvacuumstatistics-functions"/>.
+  </para>
+
+  <para>
+   Install the matching extension library, control and SQL files in the
+   Cloudberry installation on every host, including mirror and standby
+   coordinator hosts. <command>gpconfig</command> updates configuration files;
+   it does not distribute the extension files. The module must be preloaded
+   on every instance so that it is available after promotion.
+  </para>
+
+  <para>
+   Inspect the active setting and the configuration files:
+<programlisting>
+gpconfig -s shared_preload_libraries
+gpconfig -s shared_preload_libraries --file
+</programlisting>
+   If the existing list is empty, set it as follows:
+<programlisting>
+gpconfig -c shared_preload_libraries -v 'ext_vacuum_statistics'
+</programlisting>
+   Otherwise pass the complete existing list with
+   <literal>ext_vacuum_statistics</literal> appended. Preserve other preloaded
+   libraries and any intentional differences between coordinator, primary
+   and mirror settings. With <option>-v</option> and no role restriction,
+   <command>gpconfig</command> updates the coordinator, standby, primaries and
+   mirrors. Resolve any reported unreachable hosts before relying on their
+   configuration. Check the resulting files and restart the cluster:
+<programlisting>
+gpconfig -s shared_preload_libraries --file
+gpstop -ar
+gpconfig -s shared_preload_libraries --file-compare
+</programlisting>
+   A reload with <command>gpstop -u</command> alone cannot load a new preload
+   library. Check that the mirror and standby instances also restarted
+   successfully. Then run
+   <command>CREATE EXTENSION IF NOT EXISTS ext_vacuum_statistics</command>
+   on the coordinator in each database where the views are needed; this
+   command is dispatched to the segments.
+  </para>
+
+  <para>
+   The warning above about starting without the module applies separately
+   to each instance that has saved statistics of its custom kinds. Keep the
+   module preloaded when disabling collection to preserve that instance's
+   cumulative statistics.
+  </para>
+
+  <para>
+   The counters are local <literal>pgstat</literal> state, not replicated
+   through WAL. Preloading the module on a mirror enables collection after
+   promotion but does not copy its primary's accumulated counters. A promoted
+   instance reports its own local statistics and cannot continue the former
+   primary's counter history. This also applies to standby coordinator
+   promotion. A compatible clean restart can preserve an instance's own
+   statistics; crash recovery resets them.
+  </para>
+
+  <para>
+   Start a new measurement interval for an instance after promotion, even
+   when its <structfield>gp_segment_id</structfield> is unchanged. Other
+   instances keep their counters, but cluster summaries can decrease when
+   a primary is replaced. Monitoring should retain earlier samples externally
+   and establish a new baseline after failover; the discontinuity does not
+   represent negative vacuum work.
+  </para>
+
+  <para>
+   <varname>vacuum_statistics.enabled</varname> is read by the instance that
+   runs the vacuum.  A <command>SET</command> on the coordinator is passed on
+   to the segments of the session; to stop collecting extension resources in the whole cluster,
+   set it with <command>gpconfig</command> and reload the configuration
+   (<command>gpstop -u</command>).
+  </para>
+ </sect2>
+
+ <sect2 id="extvacuumstatistics-configuration">
+  <title>Configuration Parameters</title>
+
+  <variablelist>
+   <varlistentry>
+    <term><varname>vacuum_statistics.enabled</varname> (<type>boolean</type>)</term>
+    <listitem>
+     <para>
+      Enables collection of extension resource metrics. Native work counters
+      obey <varname>track_counts</varname> independently.  Default: <literal>on</literal>.
+     </para>
+    </listitem>
+   </varlistentry>
+  </variablelist>
+ </sect2>
+</sect1>

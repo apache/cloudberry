@@ -12,6 +12,8 @@
  *
  * INTERFACE ROUTINES
  *		visibilitymap_clear  - clear bits for one page in the visibility map
+ *		visibilitymap_clear_rel - clear bits for an open relation, counting the
+ *			clears in its statistics
  *		visibilitymap_pin	 - pin a map page for setting a bit
  *		visibilitymap_pin_ok - check whether correct map page is already pinned
  *		visibilitymap_set	 - set a bit in a previously pinned page
@@ -91,6 +93,7 @@
 #include "access/xloginsert.h"
 #include "access/xlogutils.h"
 #include "miscadmin.h"
+#include "pgstat.h"
 #include "port/pg_bitutils.h"
 #include "storage/bufmgr.h"
 #include "storage/lmgr.h"
@@ -125,6 +128,8 @@
 														 * bit pair */
 
 /* prototypes for internal routines */
+static bool vm_do_clear(Relation rel, BlockNumber heapBlk, Buffer vmbuf,
+						uint8 flags, bool count_stats);
 static Buffer vm_readbuf(Relation rel, BlockNumber blkno, bool extend);
 static Buffer vm_extend(Relation rel, BlockNumber vm_nblocks);
 
@@ -135,9 +140,38 @@ static Buffer vm_extend(Relation rel, BlockNumber vm_nblocks);
  * You must pass a buffer containing the correct map page to this function.
  * Call visibilitymap_pin first to pin the right one. This function doesn't do
  * any I/O.  Returns true if any bits have been cleared and false otherwise.
+ *
+ * This variant is for callers such as recovery, which use a fake relcache
+ * entry and cannot count the clears in the relation's statistics; callers
+ * holding an open relation should use visibilitymap_clear_rel() instead.
  */
 bool
 visibilitymap_clear(Relation rel, BlockNumber heapBlk, Buffer vmbuf, uint8 flags)
+{
+	return vm_do_clear(rel, heapBlk, vmbuf, flags, false);
+}
+
+/*
+ *	visibilitymap_clear_rel - visibilitymap_clear() for an open relation
+ *
+ * Same as visibilitymap_clear(), but additionally counts the cleared
+ * all-visible and all-frozen marks in the relation's statistics, which
+ * makes the stability of its visibility map observable.
+ */
+bool
+visibilitymap_clear_rel(Relation rel, BlockNumber heapBlk, Buffer vmbuf,
+						uint8 flags)
+{
+	return vm_do_clear(rel, heapBlk, vmbuf, flags, true);
+}
+
+/*
+ * Workhorse of visibilitymap_clear() and visibilitymap_clear_rel().
+ * count_stats is false when the caller has no real relcache entry at hand.
+ */
+static bool
+vm_do_clear(Relation rel, BlockNumber heapBlk, Buffer vmbuf, uint8 flags,
+			bool count_stats)
 {
 	BlockNumber mapBlock = HEAPBLK_TO_MAPBLOCK(heapBlk);
 	int			mapByte = HEAPBLK_TO_MAPBYTE(heapBlk);
@@ -162,6 +196,18 @@ visibilitymap_clear(Relation rel, BlockNumber heapBlk, Buffer vmbuf, uint8 flags
 
 	if (map[mapByte] & mask)
 	{
+		/*
+		 * Track how often all-visible or all-frozen bits are cleared in the
+		 * visibility map.
+		 */
+		if (count_stats)
+		{
+			if (map[mapByte] & ((flags & VISIBILITYMAP_ALL_VISIBLE) << mapOffset))
+				pgstat_count_visible_page_marks_cleared(rel);
+			if (map[mapByte] & ((flags & VISIBILITYMAP_ALL_FROZEN) << mapOffset))
+				pgstat_count_frozen_page_marks_cleared(rel);
+		}
+
 		map[mapByte] &= ~mask;
 
 		MarkBufferDirty(vmbuf);

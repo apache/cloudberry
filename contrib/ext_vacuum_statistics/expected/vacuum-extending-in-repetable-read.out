@@ -1,0 +1,52 @@
+unused step name: s2_delete
+Parsed test spec with 2 sessions
+
+starting permutation: s2_insert s2_print_vacuum_stats_table s1_begin_repeatable_read s2_update s2_insert_interrupt s2_vacuum s2_print_vacuum_stats_table s1_commit s2_checkpoint s2_vacuum s2_print_vacuum_stats_table
+step s2_insert: INSERT INTO test_vacuum_stat_isolation(id, ival) SELECT ival, ival%10 FROM generate_series(1,1000) As ival;
+step s2_print_vacuum_stats_table: 
+    SELECT
+        vt.relname, vt.tuples_deleted, vt.recently_dead_tuples, vt.missed_dead_tuples, vt.missed_dead_pages, vt.tuples_frozen
+    FROM ext_vacuum_statistics.pg_stats_vacuum_tables vt, pg_class c
+    WHERE vt.relname = 'test_vacuum_stat_isolation' AND vt.relid = c.oid;
+
+relname|tuples_deleted|recently_dead_tuples|missed_dead_tuples|missed_dead_pages|tuples_frozen
+-------+--------------+--------------------+------------------+-----------------+-------------
+(0 rows)
+
+step s1_begin_repeatable_read: 
+    BEGIN transaction ISOLATION LEVEL REPEATABLE READ;
+    select count(ival) from test_vacuum_stat_isolation where id>900;
+
+count
+-----
+  100
+(1 row)
+
+step s2_update: UPDATE test_vacuum_stat_isolation SET ival = ival + 2 where id > 900;
+step s2_insert_interrupt: INSERT INTO test_vacuum_stat_isolation values (1,1);
+step s2_vacuum: VACUUM test_vacuum_stat_isolation;
+step s2_print_vacuum_stats_table: 
+    SELECT
+        vt.relname, vt.tuples_deleted, vt.recently_dead_tuples, vt.missed_dead_tuples, vt.missed_dead_pages, vt.tuples_frozen
+    FROM ext_vacuum_statistics.pg_stats_vacuum_tables vt, pg_class c
+    WHERE vt.relname = 'test_vacuum_stat_isolation' AND vt.relid = c.oid;
+
+relname                   |tuples_deleted|recently_dead_tuples|missed_dead_tuples|missed_dead_pages|tuples_frozen
+--------------------------+--------------+--------------------+------------------+-----------------+-------------
+test_vacuum_stat_isolation|             0|                 100|                 0|                0|            0
+(1 row)
+
+step s1_commit: COMMIT;
+step s2_checkpoint: CHECKPOINT;
+step s2_vacuum: VACUUM test_vacuum_stat_isolation;
+step s2_print_vacuum_stats_table: 
+    SELECT
+        vt.relname, vt.tuples_deleted, vt.recently_dead_tuples, vt.missed_dead_tuples, vt.missed_dead_pages, vt.tuples_frozen
+    FROM ext_vacuum_statistics.pg_stats_vacuum_tables vt, pg_class c
+    WHERE vt.relname = 'test_vacuum_stat_isolation' AND vt.relid = c.oid;
+
+relname                   |tuples_deleted|recently_dead_tuples|missed_dead_tuples|missed_dead_pages|tuples_frozen
+--------------------------+--------------+--------------------+------------------+-----------------+-------------
+test_vacuum_stat_isolation|           100|                 100|                 0|                0|         1001
+(1 row)
+

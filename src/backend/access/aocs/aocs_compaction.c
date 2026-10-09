@@ -323,7 +323,7 @@ AOCSSegmentFileFullCompaction(Relation aorel,
 		tupleCount++;
 		if (VacuumCostActive && tupleCount % tuplePerPage == 0)
 		{
-			vacuum_delay_point();
+			vacuum_delay_point(false);
 		}
 
 		/*
@@ -349,6 +349,12 @@ AOCSSegmentFileFullCompaction(Relation aorel,
 	vacrelstats->num_dead_tuples += scanDesc->segrowsprocessed - tupleCount;
 
 	MarkAOCSFileSegInfoAwaitingDrop(aorel, compact_segno);
+
+	/* Count completed compaction, including a scan with no surviving tuples. */
+	vacrelstats->compacted_segments++;
+	vacrelstats->tuples_moved += tupleCount;
+	vacrelstats->pages_scanned +=
+		scanDesc->totalBytesRead / BLCKSZ + (scanDesc->totalBytesRead % BLCKSZ != 0);
 
 	AppendOnlyVisimap_DeleteSegmentFile(&visiMap,
 										compact_segno);
