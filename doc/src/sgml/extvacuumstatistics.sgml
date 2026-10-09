@@ -682,6 +682,12 @@
    the current database.
   </para>
 
+  <para>
+   Reset functions operate only on the current node. Calling one on the
+   coordinator (QD) leaves the segment counters unchanged. They can also be
+   used in a utility connection to an individual segment.
+  </para>
+
   <variablelist>
    <varlistentry>
     <term>
@@ -690,8 +696,8 @@
     </term>
     <listitem>
      <para>
-      Resets all vacuum statistics of the module, those of relations and of
-      databases.
+      Resets all vacuum statistics of the module only on the current node,
+      including relation and database statistics for all databases.
      </para>
     </listitem>
    </varlistentry>
@@ -703,7 +709,8 @@
     </term>
     <listitem>
      <para>
-      Resets the vacuum statistics of one table or index.  Use
+      Resets the vacuum statistics of one table or index only on the current
+      node. Use
       <literal>0</literal> as <parameter>dboid</parameter> for a shared
       catalog. The database aggregate and other relations are unchanged.
      </para>
@@ -717,8 +724,8 @@
     </term>
     <listitem>
      <para>
-      Resets the vacuum statistics of a database: its aggregate and the
-      statistics of all its tables and indexes.
+      Resets the vacuum statistics of a database only on the current node:
+      its aggregate and the statistics of all its tables and indexes.
      </para>
     </listitem>
    </varlistentry>

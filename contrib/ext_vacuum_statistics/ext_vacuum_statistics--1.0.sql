@@ -50,6 +50,13 @@ RETURNS void
 AS 'MODULE_PATHNAME', 'vacuum_statistics_reset'
 LANGUAGE C STRICT VOLATILE PARALLEL UNSAFE;
 
+COMMENT ON FUNCTION ext_vacuum_statistics.extvac_reset_entry(oid, oid) IS
+  'Reset vacuum statistics for one table or index on the connected instance only';
+COMMENT ON FUNCTION ext_vacuum_statistics.extvac_reset_db_entry(oid) IS
+  'Reset vacuum statistics for a database and its relations on the connected instance only';
+COMMENT ON FUNCTION ext_vacuum_statistics.vacuum_statistics_reset() IS
+  'Reset vacuum statistics for all databases on the connected instance only';
+
 -- Reset privileges can be delegated explicitly, as for pg_stat_reset().
 REVOKE EXECUTE ON FUNCTION ext_vacuum_statistics.extvac_reset_entry(oid, oid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION ext_vacuum_statistics.extvac_reset_db_entry(oid) FROM PUBLIC;
