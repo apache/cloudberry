@@ -1082,6 +1082,78 @@ pgstat_reset_matching_entries(bool (*do_reset) (PgStatShared_HashEntry *, Datum)
 	dshash_seq_term(&hstat);
 }
 
+/* Reset just the work payload while the caller holds the entry lock. */
+static void
+shared_vacuum_stat_reset(PgStat_Kind kind, PgStatShared_Common *header)
+{
+	PgStat_VacuumStats *stats;
+
+	Assert(kind == PGSTAT_KIND_RELATION || kind == PGSTAT_KIND_DATABASE);
+	if (kind == PGSTAT_KIND_RELATION)
+		stats = &((PgStatShared_Relation *) header)->stats.vacuum_stats;
+	else
+		stats = &((PgStatShared_Database *) header)->stats.vacuum_stats;
+	memset(stats, 0, sizeof(*stats));
+}
+
+/*
+ * Reset native VACUUM work for a relation, or for a database and all its
+ * relations when relid is InvalidOid. Shared catalogs require dboid InvalidOid
+ * and a valid relid; a database-wide reset leaves shared entries alone.
+ * Do not reset timing, vacuum/analyze counts, timestamps, other native
+ * counters, or custom statistics kinds. Cached snapshots follow the usual
+ * pgstat reset rules; concurrent backends can later flush pending work.
+ */
+void
+pgstat_reset_vacuum_counters(Oid dboid, Oid relid)
+{
+	PgStat_EntryRef *entry_ref;
+	dshash_seq_status hstat;
+	PgStatShared_HashEntry *p;
+
+	Assert(OidIsValid(dboid) || OidIsValid(relid));
+
+	if (OidIsValid(relid))
+	{
+		entry_ref = pgstat_get_entry_ref(PGSTAT_KIND_RELATION, dboid, relid,
+										   false, NULL);
+		if (!entry_ref || entry_ref->shared_entry->dropped)
+			return;
+		(void) pgstat_lock_entry(entry_ref, false);
+		shared_vacuum_stat_reset(PGSTAT_KIND_RELATION, entry_ref->shared_stats);
+		pgstat_unlock_entry(entry_ref);
+		return;
+	}
+
+	/* Discard this backend's unflushed database work too. */
+	entry_ref = pgstat_get_entry_ref(PGSTAT_KIND_DATABASE, dboid, InvalidOid,
+									   false, NULL);
+	if (entry_ref && entry_ref->pending)
+	{
+		PgStat_StatDBEntry *pending = entry_ref->pending;
+
+		memset(&pending->vacuum_stats, 0, sizeof(pending->vacuum_stats));
+	}
+
+	/* The hash keys are read-only; each payload has its own exclusive lock. */
+	dshash_seq_init(&hstat, pgStatLocal.shared_hash, false);
+	while ((p = dshash_seq_next(&hstat)) != NULL)
+	{
+		PgStatShared_Common *header;
+
+		if (p->dropped || p->key.dboid != dboid ||
+			(p->key.kind != PGSTAT_KIND_RELATION &&
+			 p->key.kind != PGSTAT_KIND_DATABASE))
+			continue;
+
+		header = dsa_get_address(pgStatLocal.dsa, p->body);
+		LWLockAcquire(&header->lock, LW_EXCLUSIVE);
+		shared_vacuum_stat_reset(p->key.kind, header);
+		LWLockRelease(&header->lock);
+	}
+	dshash_seq_term(&hstat);
+}
+
 static bool
 match_kind(PgStatShared_HashEntry *p, Datum match_data)
 {
