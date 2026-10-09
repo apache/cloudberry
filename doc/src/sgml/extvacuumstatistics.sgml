@@ -32,7 +32,7 @@
   is not registered, so the server reports the file as corrupted and resets
   every statistics kind, built-in ones such as those shown in
   <structname>pg_stat_user_tables</structname> included.  To stop collecting
-  vacuum statistics without that side effect, keep the module loaded and
+  extension resource statistics without that side effect, keep the module loaded and
   set <varname>vacuum_statistics.enabled</varname> to <literal>off</literal>
   instead.
  </para>
@@ -126,9 +126,23 @@
   <title>Functions</title>
 
   <para>
+   These functions reset only the extension's own metrics. Native VACUUM
+   work counters and other core statistics are never reset by the module.
+   Use <function>pg_stat_reset_vacuum_stats(relid)</function> for one relation
+   or <function>pg_stat_reset_vacuum_stats()</function> for the current database
+   and its non-shared relations. These preserve timing, invocation counts and
+   other native statistics. On Cloudberry, use the corresponding
+   <function>gp_stat_reset_vacuum_stats()</function> wrapper from the coordinator
+   to include every primary segment. A native relation reset leaves extension resources intact;
+   <function>pg_stat_reset()</function> clears both for the current database.
+   The counters can cover different periods after a reset or a change in
+   collection settings.
+  </para>
+
+  <para>
    Reset functions require superuser privileges by default. Access can be
    delegated with <command>GRANT EXECUTE</command>. Existing entries remain
-   visible with zero counters after a reset; their table, index, or database
+   visible with zero extension counters after a reset; native work is unchanged; their table, index, or database
    type is preserved. Missing entries are not created by a reset.
    <function>pg_stat_reset()</function> also resets the module's counters for
    the current database.
@@ -161,7 +175,7 @@
     </term>
     <listitem>
      <para>
-      Resets the vacuum statistics of one table or index only on the current
+      Resets the module's own vacuum metrics for one table or index only on the current
       node. Use
       <literal>0</literal> as <parameter>dboid</parameter> for a shared
       catalog. The database aggregate and other relations are unchanged.
@@ -176,7 +190,7 @@
     </term>
     <listitem>
      <para>
-      Resets the vacuum statistics of a database only on the current node:
+      Resets the module's own vacuum metrics for a database only on the current node:
       its aggregate and the statistics of all its tables and indexes.
      </para>
     </listitem>
@@ -192,7 +206,8 @@
     <term><varname>vacuum_statistics.enabled</varname> (<type>boolean</type>)</term>
     <listitem>
      <para>
-      Enables extended vacuum statistics collection.  Default: <literal>on</literal>.
+      Enables collection of extension resource metrics. Native work counters
+      obey <varname>track_counts</varname> independently.  Default: <literal>on</literal>.
      </para>
     </listitem>
    </varlistentry>

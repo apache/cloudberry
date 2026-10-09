@@ -122,7 +122,6 @@ pgstat_accumulate_common(PgStat_CommonCounts * dst, const PgStat_CommonCounts * 
 	dst->wal_records += src->wal_records;
 	dst->wal_fpi += src->wal_fpi;
 	dst->wal_bytes += src->wal_bytes;
-	dst->tuples_deleted += src->tuples_deleted;
 }
 
 static inline void
@@ -136,16 +135,6 @@ pgstat_accumulate_extvac_stats(PgStat_VacuumRelationCounts * dst,
 	Assert(src->type == dst->type);
 
 	pgstat_accumulate_common(&dst->common, &src->common);
-
-	if (dst->type == PGSTAT_EXTVAC_TABLE)
-	{
-		dst->table.pages_scanned += src->table.pages_scanned;
-		dst->table.pages_removed += src->table.pages_removed;
-	}
-	else if (dst->type == PGSTAT_EXTVAC_INDEX)
-	{
-		dst->pages_deleted += src->pages_deleted;
-	}
 }
 
 void
@@ -158,7 +147,7 @@ _PG_init(void)
 				 errdetail("Add 'ext_vacuum_statistics' into the shared_preload_libraries list.")));
 
 	DefineCustomBoolVariable("vacuum_statistics.enabled",
-							 "Enable extended vacuum statistics collection.",
+							 "Collect VACUUM resources and extension-only metrics; work counters obey track_counts.",
 							 NULL, &evs_enabled, true,
 							 PGC_SUSET, GUC_GPDB_NEED_SYNC,
 							 NULL, NULL, NULL);
@@ -399,8 +388,8 @@ tuplestore_put_common(PgStat_CommonCounts * vacuum_ext,
 	Assert((*i - base) == EXTVAC_COMMON_STAT_COLS);
 }
 
-#define EXTVAC_HEAP_STAT_COLS	15
-#define EXTVAC_IDX_STAT_COLS	14
+#define EXTVAC_HEAP_STAT_COLS	12
+#define EXTVAC_IDX_STAT_COLS	12
 #define EXTVAC_MAX_STAT_COLS	Max(EXTVAC_HEAP_STAT_COLS, EXTVAC_IDX_STAT_COLS)
 
 static void
@@ -418,17 +407,6 @@ tuplestore_put_for_relation(Oid relid, Tuplestorestate *tupstore,
 	values[i++] = Int64GetDatum(vacuum_ext->common.blks_fetched - vacuum_ext->common.blks_hit);
 	values[i++] = Int64GetDatum(vacuum_ext->common.blks_hit);
 
-	if (vacuum_ext->type == PGSTAT_EXTVAC_TABLE)
-	{
-		values[i++] = Int64GetDatum(vacuum_ext->common.tuples_deleted);
-		values[i++] = Int64GetDatum(vacuum_ext->table.pages_scanned);
-		values[i++] = Int64GetDatum(vacuum_ext->table.pages_removed);
-	}
-	else if (vacuum_ext->type == PGSTAT_EXTVAC_INDEX)
-	{
-		values[i++] = Int64GetDatum(vacuum_ext->common.tuples_deleted);
-		values[i++] = Int64GetDatum(vacuum_ext->pages_deleted);
-	}
 
 	Assert(i == ((vacuum_ext->type == PGSTAT_EXTVAC_TABLE) ? EXTVAC_HEAP_STAT_COLS : EXTVAC_IDX_STAT_COLS));
 	tuplestore_putvalues(tupstore, tupdesc, values, nulls);

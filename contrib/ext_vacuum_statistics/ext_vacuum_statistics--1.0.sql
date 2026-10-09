@@ -51,18 +51,18 @@ AS 'MODULE_PATHNAME', 'vacuum_statistics_reset'
 LANGUAGE C STRICT VOLATILE PARALLEL UNSAFE;
 
 COMMENT ON FUNCTION ext_vacuum_statistics.extvac_reset_entry(oid, oid) IS
-  'Reset vacuum statistics for one table or index on the connected instance only';
+  'Reset extension-owned vacuum metrics for one table or index on the connected instance only';
 COMMENT ON FUNCTION ext_vacuum_statistics.extvac_reset_db_entry(oid) IS
-  'Reset vacuum statistics for a database and its relations on the connected instance only';
+  'Reset extension-owned vacuum metrics for a database and its relations on the connected instance only';
 COMMENT ON FUNCTION ext_vacuum_statistics.vacuum_statistics_reset() IS
-  'Reset vacuum statistics for all databases on the connected instance only';
+  'Reset extension-owned vacuum metrics for all databases on the connected instance only';
 
 -- Reset privileges can be delegated explicitly, as for pg_stat_reset().
 REVOKE EXECUTE ON FUNCTION ext_vacuum_statistics.extvac_reset_entry(oid, oid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION ext_vacuum_statistics.extvac_reset_db_entry(oid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION ext_vacuum_statistics.vacuum_statistics_reset() FROM PUBLIC;
 
--- Internal C function to fetch table vacuum stats
+-- Internal C function to fetch table VACUUM resources
 CREATE OR REPLACE FUNCTION ext_vacuum_statistics.pg_stats_get_vacuum_tables(
     IN  dboid oid,
     IN  reloid oid,
@@ -77,16 +77,13 @@ CREATE OR REPLACE FUNCTION ext_vacuum_statistics.pg_stats_get_vacuum_tables(
     OUT blk_read_time double precision,
     OUT blk_write_time double precision,
     OUT rel_blks_read bigint,
-    OUT rel_blks_hit bigint,
-    OUT tuples_deleted bigint,
-    OUT pages_scanned bigint,
-    OUT pages_removed bigint
+    OUT rel_blks_hit bigint
 )
 RETURNS SETOF record
 AS 'MODULE_PATHNAME', 'pg_stats_get_vacuum_tables'
 LANGUAGE C STRICT STABLE;
 
--- Internal C function to fetch index vacuum stats
+-- Internal C function to fetch index VACUUM resources
 CREATE OR REPLACE FUNCTION ext_vacuum_statistics.pg_stats_get_vacuum_indexes(
     IN  dboid oid,
     IN  reloid oid,
@@ -101,9 +98,7 @@ CREATE OR REPLACE FUNCTION ext_vacuum_statistics.pg_stats_get_vacuum_indexes(
     OUT blk_read_time double precision,
     OUT blk_write_time double precision,
     OUT rel_blks_read bigint,
-    OUT rel_blks_hit bigint,
-    OUT tuples_deleted bigint,
-    OUT pages_deleted bigint
+    OUT rel_blks_hit bigint
 )
 RETURNS SETOF record
 AS 'MODULE_PATHNAME', 'pg_stats_get_vacuum_indexes'
@@ -134,28 +129,26 @@ SELECT
   ns.nspname AS schema,
   rel.relname AS relname,
   db.datname AS dbname,
-  stats.total_blks_read,
-  stats.total_blks_hit,
-  stats.total_blks_dirtied,
-  stats.total_blks_written,
-  stats.wal_records,
-  stats.wal_fpi,
-  stats.wal_bytes,
-  stats.blk_read_time,
-  stats.blk_write_time,
-  stats.rel_blks_read,
-  stats.rel_blks_hit,
-  stats.tuples_deleted,
-  stats.pages_scanned,
-  stats.pages_removed
-FROM pg_database db,
-     pg_class rel,
-     pg_namespace ns,
-     LATERAL ext_vacuum_statistics.pg_stats_get_vacuum_tables(db.oid, rel.oid) stats
-WHERE db.datname = current_database()
-  AND rel.relkind IN ('r', 'm', 't')
-  AND rel.relnamespace = ns.oid
-  AND rel.oid = stats.relid;
+  COALESCE(stats.total_blks_read, 0) AS total_blks_read,
+  COALESCE(stats.total_blks_hit, 0) AS total_blks_hit,
+  COALESCE(stats.total_blks_dirtied, 0) AS total_blks_dirtied,
+  COALESCE(stats.total_blks_written, 0) AS total_blks_written,
+  COALESCE(stats.wal_records, 0) AS wal_records,
+  COALESCE(stats.wal_fpi, 0) AS wal_fpi,
+  COALESCE(stats.wal_bytes, 0) AS wal_bytes,
+  COALESCE(stats.blk_read_time, 0) AS blk_read_time,
+  COALESCE(stats.blk_write_time, 0) AS blk_write_time,
+  COALESCE(stats.rel_blks_read, 0) AS rel_blks_read,
+  COALESCE(stats.rel_blks_hit, 0) AS rel_blks_hit,
+  work.tuples_deleted,
+  work.pages_scanned,
+  work.pages_removed
+FROM pg_class rel
+JOIN pg_namespace ns ON ns.oid = rel.relnamespace
+JOIN pg_database db ON db.datname = current_database()
+CROSS JOIN LATERAL pg_catalog.pg_stat_get_vacuum_stats(rel.oid) work
+LEFT JOIN LATERAL ext_vacuum_statistics.pg_stats_get_vacuum_tables(db.oid, rel.oid) stats ON true
+WHERE rel.relkind IN ('r', 'm', 't', 'o', 'b', 'M');
 
 COMMENT ON VIEW ext_vacuum_statistics.pg_stats_vacuum_tables IS
   'Extended vacuum statistics per table (heap)';
@@ -167,27 +160,25 @@ SELECT
   ns.nspname AS schema,
   rel.relname AS indexrelname,
   db.datname AS dbname,
-  stats.total_blks_read,
-  stats.total_blks_hit,
-  stats.total_blks_dirtied,
-  stats.total_blks_written,
-  stats.wal_records,
-  stats.wal_fpi,
-  stats.wal_bytes,
-  stats.blk_read_time,
-  stats.blk_write_time,
-  stats.rel_blks_read,
-  stats.rel_blks_hit,
-  stats.tuples_deleted,
-  stats.pages_deleted
-FROM pg_database db,
-     pg_class rel,
-     pg_namespace ns,
-     LATERAL ext_vacuum_statistics.pg_stats_get_vacuum_indexes(db.oid, rel.oid) stats
-WHERE db.datname = current_database()
-  AND rel.relkind = 'i'
-  AND rel.relnamespace = ns.oid
-  AND rel.oid = stats.relid;
+  COALESCE(stats.total_blks_read, 0) AS total_blks_read,
+  COALESCE(stats.total_blks_hit, 0) AS total_blks_hit,
+  COALESCE(stats.total_blks_dirtied, 0) AS total_blks_dirtied,
+  COALESCE(stats.total_blks_written, 0) AS total_blks_written,
+  COALESCE(stats.wal_records, 0) AS wal_records,
+  COALESCE(stats.wal_fpi, 0) AS wal_fpi,
+  COALESCE(stats.wal_bytes, 0) AS wal_bytes,
+  COALESCE(stats.blk_read_time, 0) AS blk_read_time,
+  COALESCE(stats.blk_write_time, 0) AS blk_write_time,
+  COALESCE(stats.rel_blks_read, 0) AS rel_blks_read,
+  COALESCE(stats.rel_blks_hit, 0) AS rel_blks_hit,
+  work.tuples_deleted,
+  work.pages_deleted
+FROM pg_class rel
+JOIN pg_namespace ns ON ns.oid = rel.relnamespace
+JOIN pg_database db ON db.datname = current_database()
+CROSS JOIN LATERAL pg_catalog.pg_stat_get_vacuum_stats(rel.oid) work
+LEFT JOIN LATERAL ext_vacuum_statistics.pg_stats_get_vacuum_indexes(db.oid, rel.oid) stats ON true
+WHERE rel.relkind = 'i';
 
 COMMENT ON VIEW ext_vacuum_statistics.pg_stats_vacuum_indexes IS
   'Extended vacuum statistics per index';

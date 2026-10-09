@@ -4941,9 +4941,12 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
    statistics snapshot rules, and are removed when their relation or database
    is dropped. <function>pg_stat_reset_single_table_counters(oid)</function>
    resets a relation's counters; <function>pg_stat_reset()</function> resets
-   the current database statistics. These resets are independent of the
-   compatibility counters and resource statistics in
-   <filename>ext_vacuum_statistics</filename>.
+   the current database statistics. The table and index views of
+   <filename>ext_vacuum_statistics</filename> read these same work counters.
+   A native relation reset leaves extension resource counters intact;
+   <function>pg_stat_reset()</function> resets both for the current database.
+   Extension reset functions clear only extension metrics and never modify
+   native work or other core statistics.
   </para>
   <para>
    <function>pg_stat_reset_vacuum_stats()</function> resets just native work

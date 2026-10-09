@@ -64,7 +64,7 @@ coordinator (QD) leaves segment counters unchanged. This also applies to
 
 | GUC | Default | Description |
 |-----|---------|-------------|
-| `vacuum_statistics.enabled` | on | Enable extended vacuum statistics collection |
+| `vacuum_statistics.enabled` | on | Collect extension resource metrics; native work obeys `track_counts` |
 
 ## Memory usage
 
@@ -81,7 +81,7 @@ of an old one starts from zero.  The module does that with an
 
 ## Recipes
 
-**Disable statistics collection temporarily:**
+**Disable extension resource collection temporarily (native work continues):**
 
 ```sql
 SET vacuum_statistics.enabled = off;

@@ -142,34 +142,12 @@ typedef struct PgStat_CommonCounts
 	int64		wal_records;
 	int64		wal_fpi;
 	uint64		wal_bytes;
-	int64		tuples_deleted;
 }			PgStat_CommonCounts;
 
 typedef struct PgStat_VacuumRelationCounts
 {
 	PgStat_CommonCounts common;
 	ExtVacReportType type;
-	int64		dead_pages; /* remaining dead pages observed at each vacuum */
-	union
-	{
-		struct
-		{
-			int64		tuples_frozen;
-			int64		recently_dead_tuples;
-			int64		missed_dead_tuples;
-			int64		pages_scanned;
-			int64		pages_removed;
-			int64		missed_dead_pages;
-			int64		pages_frozen;
-			int64		pages_all_visible;
-			int64		freeze_age_vacuum_count;
-			/* AO-only: last segment count and cumulative compaction work. */
-			int64		total_file_segs;
-			int64		compacted_segments;
-			int64		tuples_moved;
-		}			table;
-		int64		pages_deleted; /* index-only counter */
-	};
 }			PgStat_VacuumRelationCounts;
 
 typedef struct PgStat_FunctionCallUsage
