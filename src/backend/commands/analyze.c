@@ -2444,18 +2444,42 @@ AcquireVisibilityMapCounts(Relation onerel, BlockNumber *all_visible,
 	if (Gp_role == GP_ROLE_DISPATCH &&
 		onerel->rd_cdbpolicy && !GpPolicyIsEntry(onerel->rd_cdbpolicy))
 	{
-		char		relvm_sql[100];
-		int64		visible;
-		int64		frozen;
+		char		relvm_sql[128];
+		int64		visible = 0;
+		int64		frozen = 0;
+		CdbPgResults cdb_pgresults = {NULL, 0};
 
+		/* Read both counters from the same catalog row in one dispatch. */
 		snprintf(relvm_sql, sizeof(relvm_sql),
-				 "select relallvisible from pg_catalog.pg_class where oid = %u",
+				 "select relallvisible, relallfrozen from pg_catalog.pg_class where oid = %u",
 				 RelationGetRelid(onerel));
-		visible = get_size_from_segDBs(relvm_sql);
-		snprintf(relvm_sql, sizeof(relvm_sql),
-				 "select relallfrozen from pg_catalog.pg_class where oid = %u",
-				 RelationGetRelid(onerel));
-		frozen = get_size_from_segDBs(relvm_sql);
+		CdbDispatchCommand(relvm_sql, DF_WITH_SNAPSHOT, &cdb_pgresults);
+		PG_TRY();
+		{
+			for (int i = 0; i < cdb_pgresults.numResults; i++)
+			{
+				PGresult   *result = cdb_pgresults.pg_results[i];
+				ExecStatusType status = PQresultStatus(result);
+				int			ntuples = PQntuples(result);
+				int			nfields = PQnfields(result);
+
+				if (status != PGRES_TUPLES_OK)
+					elog(ERROR, "unexpected result from segment: %d", status);
+				if (ntuples != 1 || nfields != 2)
+					elog(ERROR, "unexpected shape of visibility-map result from segment (%d rows, %d cols)",
+						 ntuples, nfields);
+				if (PQgetisnull(result, 0, 0) || PQgetisnull(result, 0, 1))
+					elog(ERROR, "unexpected NULL visibility-map count from segment");
+
+				visible += pg_strtoint64(PQgetvalue(result, 0, 0));
+				frozen += pg_strtoint64(PQgetvalue(result, 0, 1));
+			}
+		}
+		PG_FINALLY();
+		{
+			cdbdisp_clearCdbPgResults(&cdb_pgresults);
+		}
+		PG_END_TRY();
 
 		if (GpPolicyIsReplicated(onerel->rd_cdbpolicy))
 		{
