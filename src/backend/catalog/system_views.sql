@@ -1935,6 +1935,15 @@ $$
     SELECT pg_stat_reset_shared(target) FROM gp_dist_random('gp_id');
 $$ LANGUAGE SQL;
 
+-- Reset native VACUUM work on the coordinator and every primary segment.
+CREATE FUNCTION gp_stat_reset_vacuum_stats(relid oid DEFAULT NULL) RETURNS void AS
+$$
+    SELECT pg_stat_reset_vacuum_stats(relid) FROM gp_dist_random('gp_id');
+    SELECT pg_stat_reset_vacuum_stats(relid);
+$$ LANGUAGE SQL VOLATILE PARALLEL UNSAFE;
+
+REVOKE EXECUTE ON FUNCTION gp_stat_reset_vacuum_stats(oid) FROM public;
+
 CREATE FUNCTION gp_stat_reset_single_table_counters(tableoid oid) RETURNS VOID AS
 $$
     WITH table_info AS (

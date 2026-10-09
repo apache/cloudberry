@@ -49,6 +49,32 @@ SELECT relname, tuples_deleted = 100 AS deleted_matches
  WHERE relname IN ('work_stats_dist', 'work_stats_repl') ORDER BY relname;
 SELECT tuples_deleted = 100 AS index_work_matches
   FROM gp_stat_vacuum_indexes_summary WHERE indexrelname = 'work_stats_dist_pkey';
+-- Native work-only resets preserve other counters and relation scope.
+CREATE TEMP TABLE work_other_before AS
+  SELECT relid, sum(n_tup_ins) AS n_tup_ins, sum(n_tup_del) AS n_tup_del,
+         sum(vacuum_count) AS vacuum_count, sum(analyze_count) AS analyze_count,
+         sum(total_vacuum_time) AS total_vacuum_time
+    FROM gp_stat_all_tables WHERE relname = 'work_stats_dist' GROUP BY relid
+  DISTRIBUTED BY (relid);
+SELECT gp_stat_reset_vacuum_stats('work_stats_dist'::regclass);
+SELECT count(*) = (SELECT count(*) FROM gp_segment_configuration WHERE role = 'p')
+       AND bool_and(tuples_deleted = 0 AND pages_scanned = 0
+                    AND pages_frozen = 0 AND freeze_age_vacuum_count = 0)
+         AS work_reset_on_all_instances
+  FROM gp_stat_vacuum_tables WHERE relname = 'work_stats_dist';
+SELECT tuples_deleted = 100 AS other_relation_preserved
+  FROM gp_stat_vacuum_tables_summary WHERE relname = 'work_stats_repl';
+SELECT tuples_deleted = 100 AS index_preserved
+  FROM gp_stat_vacuum_indexes_summary WHERE indexrelname = 'work_stats_dist_pkey';
+SELECT s.n_tup_ins = b.n_tup_ins AND s.n_tup_del = b.n_tup_del
+       AND s.vacuum_count = b.vacuum_count AND s.analyze_count = b.analyze_count
+       AND s.total_vacuum_time = b.total_vacuum_time AS other_counters_preserved
+  FROM (SELECT relid, sum(n_tup_ins) AS n_tup_ins, sum(n_tup_del) AS n_tup_del,
+               sum(vacuum_count) AS vacuum_count, sum(analyze_count) AS analyze_count,
+               sum(total_vacuum_time) AS total_vacuum_time
+          FROM gp_stat_all_tables WHERE relname = 'work_stats_dist' GROUP BY relid) s
+  JOIN work_other_before b USING (relid);
+DROP TABLE work_other_before;
 DROP TABLE work_stats_dist, work_stats_repl;
 
 CREATE TABLE work_stats_ao (a int) WITH (appendonly = true) DISTRIBUTED BY (a);
@@ -64,4 +90,15 @@ SELECT relname, tuples_deleted = 1000 AND tuples_moved = 1000
        AND compacted_segments > 0 AND pages_scanned > 0 AS compaction_matches
   FROM gp_stat_vacuum_tables_summary
  WHERE relname IN ('work_stats_ao', 'work_stats_aoco') ORDER BY relname;
+-- The database form clears AO work and aggregates on all instances.
+SELECT gp_stat_force_next_flush();
+SELECT gp_stat_reset_vacuum_stats();
+SELECT bool_and(tuples_deleted = 0 AND tuples_moved = 0
+                AND compacted_segments = 0 AND pages_scanned = 0
+                AND total_file_segs = 0) AS ao_work_reset
+  FROM gp_stat_vacuum_tables
+ WHERE relname IN ('work_stats_ao', 'work_stats_aoco');
+SELECT bool_and(tuples_deleted = 0 AND pages_scanned = 0
+                AND pages_frozen = 0 AND compacted_segments = 0) AS database_work_reset
+  FROM gp_stat_vacuum WHERE datname = current_database();
 DROP TABLE work_stats_ao, work_stats_aoco;

@@ -1858,6 +1858,25 @@ pg_stat_reset_single_table_counters(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
+/* Reset native VACUUM work, without affecting other cumulative statistics. */
+Datum
+pg_stat_reset_vacuum_stats(PG_FUNCTION_ARGS)
+{
+	if (PG_ARGISNULL(0))
+		pgstat_reset_vacuum_counters(MyDatabaseId, InvalidOid);
+	else
+	{
+		Oid			relid = PG_GETARG_OID(0);
+		Oid			dboid = IsSharedRelation(relid) ? InvalidOid : MyDatabaseId;
+
+		/* OID zero is a missing relation, not a request to reset a database. */
+		if (OidIsValid(relid))
+			pgstat_reset_vacuum_counters(dboid, relid);
+	}
+
+	PG_RETURN_VOID();
+}
+
 Datum
 pg_stat_reset_single_function_counters(PG_FUNCTION_ARGS)
 {
