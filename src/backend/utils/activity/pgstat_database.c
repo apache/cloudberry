@@ -418,6 +418,21 @@ pgstat_database_flush_cb(PgStat_EntryRef *entry_ref, bool nowait)
 	PGSTAT_ACCUM_DBCOUNT(blk_read_time);
 	PGSTAT_ACCUM_DBCOUNT(blk_write_time);
 
+	PGSTAT_ACCUM_DBCOUNT(vacuum_stats.tuples_deleted);
+	PGSTAT_ACCUM_DBCOUNT(vacuum_stats.pages_deleted);
+	PGSTAT_ACCUM_DBCOUNT(vacuum_stats.dead_pages);
+	PGSTAT_ACCUM_DBCOUNT(vacuum_stats.pages_frozen);
+	PGSTAT_ACCUM_DBCOUNT(vacuum_stats.pages_all_visible);
+	PGSTAT_ACCUM_DBCOUNT(vacuum_stats.freeze_age_vacuum_count);
+	PGSTAT_ACCUM_DBCOUNT(vacuum_stats.tuples_frozen);
+	PGSTAT_ACCUM_DBCOUNT(vacuum_stats.recently_dead_tuples);
+	PGSTAT_ACCUM_DBCOUNT(vacuum_stats.missed_dead_tuples);
+	PGSTAT_ACCUM_DBCOUNT(vacuum_stats.pages_scanned);
+	PGSTAT_ACCUM_DBCOUNT(vacuum_stats.pages_removed);
+	PGSTAT_ACCUM_DBCOUNT(vacuum_stats.missed_dead_pages);
+	PGSTAT_ACCUM_DBCOUNT(vacuum_stats.compacted_segments);
+	PGSTAT_ACCUM_DBCOUNT(vacuum_stats.tuples_moved);
+
 	PGSTAT_ACCUM_DBCOUNT(sessions);
 	PGSTAT_ACCUM_DBCOUNT(session_time);
 	PGSTAT_ACCUM_DBCOUNT(active_time);

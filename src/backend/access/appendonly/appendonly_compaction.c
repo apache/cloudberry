@@ -517,6 +517,12 @@ AppendOnlySegmentFileFullCompaction(Relation aorel,
 
 	MarkFileSegInfoAwaitingDrop(aorel, compact_segno);
 
+	/* Count completed compaction, not merely a candidate considered by VACUUM. */
+	vacrelstats->compacted_segments++;
+	vacrelstats->tuples_moved += movedTupleCount;
+	vacrelstats->pages_scanned +=
+		fsinfo->eof / BLCKSZ + (fsinfo->eof % BLCKSZ != 0);
+
 	AppendOnlyVisimap_DeleteSegmentFile(&visiMap, compact_segno);
 
 	/* Delete all mini pages of the segment files if block directory exists */
