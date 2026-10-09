@@ -334,16 +334,16 @@ static void restore_vacuum_error_info(LVRelState *vacrel,
 /*
  * extvac_stats_start - Allocate and snapshot extended instrumentation.
  *
- * Return NULL without allocating anything when there is no consumer. The
- * caller frees a non-NULL result after reporting the phase, or its vacuum
- * memory context cleans it up on error.
+ * Return NULL without allocating anything unless VERBOSE is requested.
+ * The caller frees a non-NULL result after reporting the phase, or its
+ * vacuum memory context cleans it up on error.
  */
 LVExtStatCounters *
-extvac_stats_start(Relation rel)
+extvac_stats_start(Relation rel, bool verbose)
 {
 	LVExtStatCounters *counters;
 
-	if (set_report_vacuum_hook == NULL)
+	if (!verbose)
 		return NULL;
 
 	counters = palloc0(sizeof(LVExtStatCounters));
@@ -376,7 +376,7 @@ extvac_stats_end(Relation rel, LVExtStatCounters * counters,
 	report->total_blks_read = bufusage.local_blks_read + bufusage.shared_blks_read;
 	report->total_blks_hit = bufusage.local_blks_hit + bufusage.shared_blks_hit;
 	report->total_blks_dirtied = bufusage.local_blks_dirtied + bufusage.shared_blks_dirtied;
-	report->total_blks_written = bufusage.shared_blks_written;
+	report->total_blks_written = bufusage.local_blks_written + bufusage.shared_blks_written;
 	/* PostgreSQL 16 keeps a single timer for shared and local blocks */
 	report->blk_read_time = INSTR_TIME_GET_MILLISEC(bufusage.blk_read_time);
 	report->blk_write_time = INSTR_TIME_GET_MILLISEC(bufusage.blk_write_time);
@@ -389,6 +389,41 @@ extvac_stats_end(Relation rel, LVExtStatCounters * counters,
 		report->blks_fetched = rel->pgstat_info->counts.blocks_fetched - counters->blocks_fetched;
 		report->blks_hit = rel->pgstat_info->counts.blocks_hit - counters->blocks_hit;
 	}
+}
+
+/*
+ * Print resource measurements for VACUUM VERBOSE.
+ */
+void
+extvac_stats_log(Relation rel, const char *phase, const PgStat_CommonCounts *report)
+{
+	StringInfoData buf;
+
+	initStringInfo(&buf);
+	appendStringInfo(&buf, _("vacuum resource usage for \"%s.%s\" (%s):\n"),
+					 get_namespace_name(RelationGetNamespace(rel)),
+					 RelationGetRelationName(rel), phase);
+	appendStringInfo(&buf,
+					 _("buffer usage: %lld hits, %lld misses, %lld dirtied, %lld written\n"),
+					 (long long) report->total_blks_hit,
+					 (long long) report->total_blks_read,
+					 (long long) report->total_blks_dirtied,
+					 (long long) report->total_blks_written);
+	if (pgstat_track_counts)
+		appendStringInfo(&buf, _("relation buffer usage: %lld hits, %lld misses\n"),
+						 (long long) report->blks_hit,
+						 (long long) (report->blks_fetched - report->blks_hit));
+	appendStringInfo(&buf,
+					 _("WAL usage: %lld records, %lld full page images, %llu bytes\n"),
+					 (long long) report->wal_records,
+					 (long long) report->wal_fpi,
+					 (unsigned long long) report->wal_bytes);
+	if (track_io_timing)
+		appendStringInfo(&buf, _("I/O timings: read: %.3f ms, write: %.3f ms\n"),
+						 report->blk_read_time, report->blk_write_time);
+
+	ereport(INFO, (errmsg_internal("%s", buf.data)));
+	pfree(buf.data);
 }
 
 /*
@@ -489,7 +524,7 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 	starttime = GetCurrentTimestamp();
 	startdelaytime = VacuumDelayTime;
 
-	extVacCounters = extvac_stats_start(rel);
+	extVacCounters = extvac_stats_start(rel, verbose);
 
 	pgstat_progress_start_command(PROGRESS_COMMAND_VACUUM,
 								  RelationGetRelid(rel));
@@ -793,6 +828,9 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 
 		extvac_stats_end(rel, extVacCounters, &extVacReport->common);
 		accumulate_heap_vacuum_statistics(vacrel, extVacReport);
+		if (verbose)
+			extvac_stats_log(rel, _("heap (excluding indexes)"),
+							  &extVacReport->common);
 
 		pfree(extVacCounters);
 		pfree(vacrel->extVacReportIdx);
@@ -2951,7 +2989,7 @@ lazy_vacuum_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 		prev_tuples_removed = istat->tuples_removed;
 		prev_pages_newly_deleted = istat->pages_newly_deleted;
 	}
-	extVacCounters = extvac_stats_start(indrel);
+	extVacCounters = extvac_stats_start(indrel, vacrel->verbose);
 	ivinfo.index = indrel;
 	ivinfo.heaprel = vacrel->rel;
 	ivinfo.analyze_only = false;
@@ -2992,6 +3030,8 @@ lazy_vacuum_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 		PgStat_VacuumRelationCounts *extVacReport = &extVacCounters->report;
 
 		extvac_stats_end(indrel, extVacCounters, &extVacReport->common);
+		if (vacrel->verbose)
+			extvac_stats_log(indrel, _("index bulk delete"), &extVacReport->common);
 		extVacReport->type = PGSTAT_EXTVAC_INDEX;
 		accumulate_idxs_vacuum_statistics(vacrel, extVacReport);
 		pfree(extVacCounters);
@@ -3036,7 +3076,7 @@ lazy_cleanup_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 		prev_tuples_removed = istat->tuples_removed;
 		prev_pages_newly_deleted = istat->pages_newly_deleted;
 	}
-	extVacCounters = extvac_stats_start(indrel);
+	extVacCounters = extvac_stats_start(indrel, vacrel->verbose);
 	ivinfo.index = indrel;
 	ivinfo.heaprel = vacrel->rel;
 	ivinfo.analyze_only = false;
@@ -3077,6 +3117,8 @@ lazy_cleanup_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 		PgStat_VacuumRelationCounts *extVacReport = &extVacCounters->report;
 
 		extvac_stats_end(indrel, extVacCounters, &extVacReport->common);
+		if (vacrel->verbose)
+			extvac_stats_log(indrel, _("index cleanup"), &extVacReport->common);
 		extVacReport->type = PGSTAT_EXTVAC_INDEX;
 		accumulate_idxs_vacuum_statistics(vacrel, extVacReport);
 		pfree(extVacCounters);

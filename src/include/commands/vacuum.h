@@ -445,7 +445,7 @@ extern PGDLLIMPORT pg_atomic_uint32 *VacuumSharedCostBalance;
 extern PGDLLIMPORT pg_atomic_uint32 *VacuumActiveNWorkers;
 extern PGDLLIMPORT int VacuumCostBalanceLocal;
 
-/* Allocated only when a hook consumes the extended statistics. */
+/* Allocated only for VERBOSE. */
 typedef struct LVExtStatCounters
 {
 	WalUsage	walusage;
@@ -455,9 +455,12 @@ typedef struct LVExtStatCounters
 	PgStat_VacuumRelationCounts report;
 } LVExtStatCounters;
 
-extern LVExtStatCounters *extvac_stats_start(Relation rel);
+extern LVExtStatCounters *extvac_stats_start(Relation rel, bool verbose);
 extern void extvac_stats_end(Relation rel, LVExtStatCounters *counters,
 							 PgStat_CommonCounts *report);
+
+extern void extvac_stats_log(Relation rel, const char *phase,
+							  const PgStat_CommonCounts *report);
 
 extern PGDLLIMPORT bool VacuumFailsafeActive;
 extern PGDLLIMPORT double vacuum_cost_delay;
