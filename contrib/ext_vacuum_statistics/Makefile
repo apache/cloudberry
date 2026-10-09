@@ -22,3 +22,20 @@ top_builddir = ../..
 include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
 endif
+
+# Cloudberry: the test of the cluster-wide views needs a running cluster
+# with the module in shared_preload_libraries of every instance, which the
+# temporary instances of "make check" are not, so it has a target of its
+# own, run against such a cluster.
+.PHONY: installcheck-cluster installcheck-cluster-isolation2
+
+installcheck-cluster:
+	$(pg_regress_installcheck) --dbname=contrib_regression_vacstat gp_vacuum_statistics gp_vacuum_statistics_ao gp_vacuum_statistics_gc
+
+# Concurrent checks at the segment COMMIT PREPARED boundary need isolation2.
+installcheck-cluster-isolation2:
+	$(MAKE) -C $(top_builddir)/src/test/isolation2 install
+	cd $(top_builddir)/src/test/isolation2 && ./pg_isolation2_regress \
+	  --inputdir=$(abspath $(srcdir))/isolation2 \
+	  --outputdir=$(CURDIR)/output_isolation2 --bindir='$(bindir)' \
+	  --dbname=contrib_vacstat_isolation2 vacuum_statistics_drop

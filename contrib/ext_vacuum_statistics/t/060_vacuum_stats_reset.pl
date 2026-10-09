@@ -45,7 +45,8 @@ CREATE ROLE reset_reader;
 GRANT USAGE ON SCHEMA ext_vacuum_statistics TO reset_reader;
 });
 for my $call ('extvac_reset_entry(0, 0)', 'extvac_reset_db_entry(0)',
-	'vacuum_statistics_reset()')
+	'vacuum_statistics_reset()', 'gp_extvac_reset_entry(0, 0)',
+	'gp_extvac_reset_db_entry(0)', 'gp_vacuum_statistics_reset()')
 {
 	my ($stdout, $stderr);
 	my $ret = $node->psql('postgres',
