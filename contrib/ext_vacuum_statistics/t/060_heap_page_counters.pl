@@ -83,10 +83,9 @@ is($node->safe_psql('postgres', $counts_sql), $expected,
    'heap page counters survive a clean restart');
 
 $node->safe_psql('postgres', q{
-SELECT ext_vacuum_statistics.extvac_reset_entry(
-  (SELECT oid FROM pg_database WHERE datname = current_database()), 'heap_pages'::regclass)});
+SELECT pg_stat_reset_vacuum_stats('heap_pages'::regclass)});
 is($node->safe_psql('postgres', $counts_sql), '0|0',
-   'relation reset clears both heap page counters');
+   'native relation reset clears both heap page counters');
 $node->safe_psql('postgres', 'VACUUM (FREEZE, DISABLE_PAGE_SKIPPING) heap_pages');
 is($node->safe_psql('postgres', $counts_sql), '0|0',
    'post-reset vacuum does not report existing frozen or visible pages as work');

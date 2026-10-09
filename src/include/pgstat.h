@@ -142,7 +142,6 @@ typedef struct PgStat_CommonCounts
 	int64		wal_records;
 	int64		wal_fpi;
 	uint64		wal_bytes;
-	int64		tuples_deleted;
 }			PgStat_CommonCounts;
 
 /* Array indexes for AO resource measurements, in execution order. */
@@ -158,30 +157,12 @@ typedef struct PgStat_VacuumRelationCounts
 {
 	PgStat_CommonCounts common;
 	ExtVacReportType type;
-	int64		dead_pages; /* remaining dead pages observed at each vacuum */
-	union
+	struct
 	{
-		struct
-		{
-			int64		tuples_frozen;
-			int64		recently_dead_tuples;
-			int64		missed_dead_tuples;
-			int64		pages_scanned;
-			int64		pages_removed;
-			int64		missed_dead_pages;
-			int64		pages_frozen;
-			int64		pages_all_visible;
-			int64		freeze_age_vacuum_count;
-			/* AO-only: last segment count and cumulative compaction work. */
-			int64		total_file_segs;
-			int64		compacted_segments;
-			int64		tuples_moved;
-			int64		awaiting_drop_segments; /* last post-cleanup observation */
-			/* Cumulative resources, excluding separately reported indexes. */
-			PgStat_CommonCounts ao_phases[PGSTAT_NUM_AO_PHASES];
-		}			table;
-		int64		pages_deleted; /* index-only counter */
-	};
+		int64		awaiting_drop_segments; /* last post-cleanup observation */
+		/* Cumulative resources, excluding separately reported indexes. */
+		PgStat_CommonCounts ao_phases[PGSTAT_NUM_AO_PHASES];
+	}			table;
 }			PgStat_VacuumRelationCounts;
 
 typedef struct PgStat_FunctionCallUsage
@@ -313,7 +294,7 @@ typedef struct PgStat_TableXactStatus
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCB8
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCBA
 
 typedef struct PgStat_ArchiverStats
 {
@@ -658,6 +639,7 @@ extern void pgstat_force_next_flush(void);
 extern void pgstat_reset_counters(void);
 extern void pgstat_reset(PgStat_Kind kind, Oid dboid, Oid objoid);
 extern void pgstat_reset_of_kind(PgStat_Kind kind);
+extern void pgstat_reset_vacuum_counters(Oid dboid, Oid relid);
 
 /* stats accessors */
 extern void pgstat_clear_snapshot(void);

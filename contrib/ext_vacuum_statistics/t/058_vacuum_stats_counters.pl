@@ -131,12 +131,11 @@ SELECT total_file_segs, compacted_segments, tuples_moved, pages_scanned, pages_r
   FROM ext_vacuum_statistics.pg_stats_vacuum_tables WHERE relname = '$table'}),
        $ao_snapshots{$table}, "$table metrics survive a clean restart");
     $node->safe_psql('postgres', qq{
-SELECT ext_vacuum_statistics.extvac_reset_entry(
-  (SELECT oid FROM pg_database WHERE datname = current_database()), '$table'::regclass)});
+SELECT pg_stat_reset_vacuum_stats('$table'::regclass)});
     is($node->safe_psql('postgres', qq{
 SELECT total_file_segs, compacted_segments, tuples_moved, pages_scanned, pages_removed
   FROM ext_vacuum_statistics.pg_stats_vacuum_tables WHERE relname = '$table'}),
-       '0|0|0|0|0', "$table reset clears AO counters and the last segment snapshot");
+       '0|0|0|0|0', "$table native reset clears AO counters and the last segment snapshot");
     $node->safe_psql('postgres', "VACUUM $table");
     my $segrel = $node->safe_psql('postgres', qq{
 SELECT segrelid::regclass FROM pg_appendonly WHERE relid = '$table'::regclass});

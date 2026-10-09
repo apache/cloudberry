@@ -30,8 +30,8 @@ my $dboid = $node->safe_psql('postgres',
 	q[SELECT oid FROM pg_database WHERE datname = current_database()]);
 my $relid = $node->safe_psql('postgres', q[SELECT 'reset_t'::regclass::oid]);
 my $idxid = $node->safe_psql('postgres', q[SELECT 'reset_t_pkey'::regclass::oid]);
-my $table = q[SELECT pages_scanned FROM ext_vacuum_statistics.pg_stats_vacuum_tables WHERE relname = 'reset_t'];
-my $index = q[SELECT tuples_deleted FROM ext_vacuum_statistics.pg_stats_vacuum_indexes WHERE indexrelname = 'reset_t_pkey'];
+my $table = q[SELECT total_blks_read + total_blks_hit FROM ext_vacuum_statistics.pg_stats_vacuum_tables WHERE relname = 'reset_t'];
+my $index = q[SELECT total_blks_read + total_blks_hit FROM ext_vacuum_statistics.pg_stats_vacuum_indexes WHERE indexrelname = 'reset_t_pkey'];
 my $database = q[SELECT db_blks_read + db_blks_hit FROM ext_vacuum_statistics.pg_stats_vacuum_database WHERE dbname = current_database()];
 my $table_before = $node->safe_psql('postgres', $table);
 my $index_before = $node->safe_psql('postgres', $index);

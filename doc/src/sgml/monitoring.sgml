@@ -4941,9 +4941,20 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
    statistics snapshot rules, and are removed when their relation or database
    is dropped. <function>pg_stat_reset_single_table_counters(oid)</function>
    resets a relation's counters; <function>pg_stat_reset()</function> resets
-   the current database statistics. These resets are independent of the
-   compatibility counters and resource statistics in
-   <filename>ext_vacuum_statistics</filename>.
+   the current database statistics. The table and index views of
+   <filename>ext_vacuum_statistics</filename> read these same work counters.
+   A native relation reset leaves extension resource counters intact;
+   <function>pg_stat_reset()</function> resets both for the current database.
+   Extension reset functions clear only extension metrics and never modify
+   native work or other core statistics.
+  </para>
+  <para>
+   <function>pg_stat_reset_vacuum_stats()</function> resets just native work
+   counters, preserving other cumulative statistics. Supply a relation OID
+   to reset one table or index, or omit it to reset the current database and
+   its non-shared relations. On Cloudberry, the corresponding
+   <function>gp_stat_reset_vacuum_stats()</function> wrapper applies the same
+   reset on the coordinator and every primary segment.
   </para>
  </sect2>
 
@@ -6346,6 +6357,36 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
        <para>
         This function is restricted to superusers by default, but other users
         can be granted EXECUTE to run the function.
+       </para></entry>
+      </row>
+
+      <row>
+       <entry role="func_table_entry"><para role="func_signature">
+        <indexterm><primary>pg_stat_reset_vacuum_stats</primary></indexterm>
+        <function>pg_stat_reset_vacuum_stats</function> (
+        <parameter>relid</parameter> <type>oid</type> <literal>DEFAULT NULL</literal> )
+        <returnvalue>void</returnvalue>
+       </para>
+       <para>
+        Resets only native VACUUM work counters for one table or index, including
+        a shared catalog. With no argument, or <literal>NULL</literal>, resets
+        those counters for the current database and all its non-shared relations.
+        A relation reset leaves its database aggregate and indexes unchanged.
+        Missing relation entries are not created. OID zero is a no-op.
+       </para>
+       <para>
+        Timing, last-vacuum timestamps, vacuum and analyze invocation counts,
+        other native counters, and extension resource statistics are preserved.
+        Cached snapshots follow the ordinary statistics reset rules; concurrently
+        running backends can subsequently publish pending work.
+       </para>
+       <para>
+        The function acts only on the connected instance. From a Cloudberry
+        coordinator, use <function>gp_stat_reset_vacuum_stats</function> with
+        the same argument to reset the coordinator and every primary segment.
+        Both functions require superuser privileges by default; access can be
+        delegated with <command>GRANT EXECUTE</command>. A delegated cluster
+        wrapper also requires access to its local function.
        </para></entry>
       </row>
 

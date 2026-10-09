@@ -122,7 +122,6 @@ pgstat_accumulate_common(PgStat_CommonCounts * dst, const PgStat_CommonCounts * 
 	dst->wal_records += src->wal_records;
 	dst->wal_fpi += src->wal_fpi;
 	dst->wal_bytes += src->wal_bytes;
-	dst->tuples_deleted += src->tuples_deleted;
 }
 
 static inline void
@@ -136,31 +135,13 @@ pgstat_accumulate_extvac_stats(PgStat_VacuumRelationCounts * dst,
 	Assert(src->type == dst->type);
 
 	pgstat_accumulate_common(&dst->common, &src->common);
-	dst->dead_pages += src->dead_pages;
-
 	if (dst->type == PGSTAT_EXTVAC_TABLE)
 	{
-		dst->table.pages_scanned += src->table.pages_scanned;
-		dst->table.pages_removed += src->table.pages_removed;
-		dst->table.pages_frozen += src->table.pages_frozen;
-		dst->table.pages_all_visible += src->table.pages_all_visible;
-		dst->table.freeze_age_vacuum_count += src->table.freeze_age_vacuum_count;
-		dst->table.tuples_frozen += src->table.tuples_frozen;
-		dst->table.recently_dead_tuples += src->table.recently_dead_tuples;
-		dst->table.missed_dead_pages += src->table.missed_dead_pages;
-		dst->table.missed_dead_tuples += src->table.missed_dead_tuples;
-		/* Segment count is a snapshot, not work accumulated over vacuums. */
-		dst->table.total_file_segs = src->table.total_file_segs;
+		/* A snapshot of the most recent post-cleanup phase. */
 		dst->table.awaiting_drop_segments = src->table.awaiting_drop_segments;
 		for (int phase = 0; phase < PGSTAT_NUM_AO_PHASES; phase++)
 			pgstat_accumulate_common(&dst->table.ao_phases[phase],
 									 &src->table.ao_phases[phase]);
-		dst->table.compacted_segments += src->table.compacted_segments;
-		dst->table.tuples_moved += src->table.tuples_moved;
-	}
-	else if (dst->type == PGSTAT_EXTVAC_INDEX)
-	{
-		dst->pages_deleted += src->pages_deleted;
 	}
 }
 
@@ -174,7 +155,7 @@ _PG_init(void)
 				 errdetail("Add 'ext_vacuum_statistics' into the shared_preload_libraries list.")));
 
 	DefineCustomBoolVariable("vacuum_statistics.enabled",
-							 "Enable extended vacuum statistics collection.",
+							 "Collect VACUUM resources and extension-only metrics; work counters obey track_counts.",
 							 NULL, &evs_enabled, true,
 							 PGC_SUSET, GUC_GPDB_NEED_SYNC,
 							 NULL, NULL, NULL);
@@ -415,9 +396,9 @@ tuplestore_put_common(PgStat_CommonCounts * vacuum_ext,
 	Assert((*i - base) == EXTVAC_COMMON_STAT_COLS);
 }
 
-#define EXTVAC_HEAP_STAT_COLS	27
-#define EXTVAC_AO_STAT_COLS	(20 + PGSTAT_NUM_AO_PHASES * EXTVAC_COMMON_STAT_COLS)
-#define EXTVAC_IDX_STAT_COLS	15
+#define EXTVAC_HEAP_STAT_COLS	13
+#define EXTVAC_AO_STAT_COLS	(13 + PGSTAT_NUM_AO_PHASES * EXTVAC_COMMON_STAT_COLS)
+#define EXTVAC_IDX_STAT_COLS	12
 #define EXTVAC_MAX_STAT_COLS	Max(EXTVAC_HEAP_STAT_COLS, EXTVAC_IDX_STAT_COLS)
 
 static void
@@ -437,27 +418,7 @@ tuplestore_put_for_relation(Oid relid, Tuplestorestate *tupstore,
 
 	if (vacuum_ext->type == PGSTAT_EXTVAC_TABLE)
 	{
-		values[i++] = Int64GetDatum(vacuum_ext->common.tuples_deleted);
-		values[i++] = Int64GetDatum(vacuum_ext->table.pages_scanned);
-		values[i++] = Int64GetDatum(vacuum_ext->table.pages_removed);
-		values[i++] = Int64GetDatum(vacuum_ext->table.tuples_frozen);
-		values[i++] = Int64GetDatum(vacuum_ext->table.recently_dead_tuples);
-		values[i++] = Int64GetDatum(vacuum_ext->table.missed_dead_pages);
-		values[i++] = Int64GetDatum(vacuum_ext->table.missed_dead_tuples);
-		values[i++] = Int64GetDatum(vacuum_ext->table.pages_frozen);
-		values[i++] = Int64GetDatum(vacuum_ext->table.pages_all_visible);
-		values[i++] = Int64GetDatum(vacuum_ext->table.total_file_segs);
-		values[i++] = Int64GetDatum(vacuum_ext->table.compacted_segments);
-		values[i++] = Int64GetDatum(vacuum_ext->table.tuples_moved);
-		values[i++] = Int64GetDatum(vacuum_ext->dead_pages);
-		values[i++] = Int64GetDatum(vacuum_ext->table.freeze_age_vacuum_count);
 		values[i++] = Int64GetDatum(vacuum_ext->table.awaiting_drop_segments);
-	}
-	else if (vacuum_ext->type == PGSTAT_EXTVAC_INDEX)
-	{
-		values[i++] = Int64GetDatum(vacuum_ext->common.tuples_deleted);
-		values[i++] = Int64GetDatum(vacuum_ext->pages_deleted);
-		values[i++] = Int64GetDatum(vacuum_ext->dead_pages);
 	}
 
 	Assert(i == ((vacuum_ext->type == PGSTAT_EXTVAC_TABLE) ? EXTVAC_HEAP_STAT_COLS : EXTVAC_IDX_STAT_COLS));
@@ -477,13 +438,6 @@ tuplestore_put_for_ao_table(Oid relid, Tuplestorestate *tupstore,
 	tuplestore_put_common(&vacuum_ext->common, values, nulls, &i);
 	values[i++] = Int64GetDatum(vacuum_ext->common.blks_fetched - vacuum_ext->common.blks_hit);
 	values[i++] = Int64GetDatum(vacuum_ext->common.blks_hit);
-	values[i++] = Int64GetDatum(vacuum_ext->common.tuples_deleted);
-	values[i++] = Int64GetDatum(vacuum_ext->table.pages_scanned);
-	values[i++] = Int64GetDatum(vacuum_ext->table.pages_removed);
-	values[i++] = Int64GetDatum(vacuum_ext->table.recently_dead_tuples);
-	values[i++] = Int64GetDatum(vacuum_ext->table.total_file_segs);
-	values[i++] = Int64GetDatum(vacuum_ext->table.compacted_segments);
-	values[i++] = Int64GetDatum(vacuum_ext->table.tuples_moved);
 	values[i++] = Int64GetDatum(vacuum_ext->table.awaiting_drop_segments);
 	for (int phase = 0; phase < PGSTAT_NUM_AO_PHASES; phase++)
 		tuplestore_put_common(&vacuum_ext->table.ao_phases[phase],

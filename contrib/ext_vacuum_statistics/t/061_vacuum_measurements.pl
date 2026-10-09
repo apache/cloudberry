@@ -95,8 +95,7 @@ is($node->safe_psql('postgres', $freeze_sql), '2', 'freeze-age counter survives 
 is($node->safe_psql('postgres', $dead_sql), (2 * $pages) . '|0',
    'dead-page counter survives restart');
 $node->safe_psql('postgres', q{
-SELECT ext_vacuum_statistics.extvac_reset_entry(
- (SELECT oid FROM pg_database WHERE datname = current_database()), relid)
+SELECT pg_stat_reset_vacuum_stats(relid)
  FROM ext_vacuum_statistics.pg_stats_vacuum_tables
  WHERE relname IN ('freeze_age', 'held_rows');
 });

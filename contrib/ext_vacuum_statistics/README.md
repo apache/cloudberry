@@ -67,7 +67,7 @@ coordinator (QD) leaves segment counters unchanged. This also applies to
 
 | GUC | Default | Description |
 |-----|---------|-------------|
-| `vacuum_statistics.enabled` | on | Enable extended vacuum statistics collection |
+| `vacuum_statistics.enabled` | on | Collect extension resource metrics; native work obeys `track_counts` |
 
 ## Memory usage
 
@@ -85,7 +85,7 @@ of an old one starts from zero.  The module does that with an
 
 ## Recipes
 
-**Disable statistics collection temporarily:**
+**Disable extension resource collection temporarily (native work continues):**
 
 ```sql
 SET vacuum_statistics.enabled = off;
@@ -110,14 +110,36 @@ SET vacuum_statistics.enabled = off;
 
 ## Native work counters
 
-Heap, index and AO work is also collected by the built-in statistics system
-without this module. Use `pg_stat_vacuum_tables`, `pg_stat_vacuum_indexes`
-and `pg_stat_vacuum` (and their `gp_stat_*` counterparts) for native counters.
-They obey `track_counts` and ordinary `pg_stat_reset*` functions. The extension
-retains its existing counters for compatibility and adds resource measurements
-such as buffers and WAL. Its counters obey `vacuum_statistics.enabled` and
-its own reset functions. Extension-specific resets do not clear native counters;
-`pg_stat_reset()` also clears the extension's entries for the current database.
+Heap, index and AO work counters are accumulated once, by native pgstat.
+The extension's table and index views read those same counters through
+`pg_stat_get_vacuum_stats()`, alongside separately stored buffer, WAL and I/O
+measurements. They have the same work-counter history as `pg_stat_vacuum_tables`,
+`pg_stat_vacuum_indexes` and their `gp_stat_*` counterparts; enabling the
+extension does not start a second history.
+
+Work counters obey `track_counts`. `vacuum_statistics.enabled` controls only
+extension metrics, including AO phase resources and the awaiting-drop snapshot.
+With extension collection disabled, native work remains visible in these views.
+Relations without a resource entry show zero resource counters.
+
+Extension reset functions clear only the extension's own metrics, without
+touching native work or any other core statistics. To reset native work, use
+`pg_stat_reset_vacuum_stats(relid)` for one table or index, or
+`pg_stat_reset_vacuum_stats()` for the current database and its non-shared
+relations. These functions preserve native timing, vacuum/analyze invocation
+counts, and other statistics. On Cloudberry, call the corresponding
+`gp_stat_reset_vacuum_stats(relid)` or `gp_stat_reset_vacuum_stats()` on the
+coordinator to reach all primary segments. The broader native reset
+`pg_stat_reset_single_table_counters()`
+clears native work but leaves extension resources intact; `pg_stat_reset()`
+clears both for the current database. The two sets of metrics can therefore
+cover different periods after a reset or a change in collection settings.
+
+The resource getter signatures and shared payload changed in this development
+series. Rebuild the server and extension together and recreate the extension's
+SQL objects when updating an earlier 1.0 installation. The new statistics-file
+format discards previously saved counters; the new core function also requires
+the matching catalog version.
 
 ## Heap page counters
 
@@ -128,7 +150,7 @@ across vacuums, not the current number of frozen or all-visible pages. A
 page can be counted again after later changes require new work; rescanning
 an unchanged page or adding only its all-frozen bit does not add to
 `pages_all_visible`. Both counters survive clean restarts and are cleared
-by statistics resets.
+by native statistics resets.
 
 `dead_pages` accumulates heap pages containing tuples that are dead but
 not yet removable (for example, because an old snapshot still needs them).
@@ -141,7 +163,7 @@ are counted again; this is not a snapshot of the current relation.
 MultiXact freeze table age, including `VACUUM FREEZE`. Forcing a scan with
 `DISABLE_PAGE_SKIPPING` alone does not increment it, and entering failsafe
 mode is counted separately. Both new counters survive clean restarts and
-are cleared by statistics resets.
+are cleared by native statistics resets.
 
 ## Append-optimized tables
 
@@ -165,7 +187,10 @@ SELECT relname, tuples_deleted, awaiting_drop_segments,
 FROM ext_vacuum_statistics.pg_stats_vacuum_ao_tables;
 ```
 
-The AO and general table views read the same statistics entry. Existing reset
+The AO and general table views read the same native work counters and extension
+resource entry. AO resource totals and phase counters come from one fetched
+entry, even with `stats_fetch_consistency = none`; native work and resources
+are separate entries and need not reflect the same instant during a vacuum. Existing reset
 functions reset both views together; no separate AO reset is needed.
 
 AO row and AOCS tables and their indexes are reported too.  For the table,
@@ -178,7 +203,7 @@ accumulate actual compactions and live rows moved; skipped candidates add
 nothing. `total_file_segs` is the segment metadata entry count after the
 latest vacuum, including empty and awaiting-drop entries. It is replaced on
 each vacuum, not accumulated; AOCS counts segment numbers, not individual
-column files. A statistics reset clears these values, and the next vacuum
+column files. A native statistics reset clears these values, and the next vacuum
 refreshes the segment count even without compaction. All three AO-specific
 fields stay zero for heap tables.
 
@@ -198,8 +223,8 @@ phase and remains in the index statistics. The three phase counters sum to
 the corresponding table total (apart from floating-point rounding of times).
 Heap tables do not appear in the AO views.
 
-All new fields obey collection control and resets and survive clean
-restarts. Failed vacuums do not publish a table report; replacement workers
+Native work obeys `track_counts`; resource metrics and the awaiting-drop
+snapshot obey `vacuum_statistics.enabled`. Both survive clean restarts. Failed vacuums do not publish a table report; replacement workers
 report only phases they executed. This development-series payload change
 bumps the statistics-file format: installing the new build discards saved
 statistics from the previous format. Rebuild the server and extension
@@ -211,7 +236,7 @@ visibility map after post-cleanup. This includes rows left because
 compaction is disabled or below its threshold. Each completed vacuum adds
 its remaining count, so two vacuums that both leave 100 hidden rows add
 200; it is not a snapshot or a count of distinct rows. Once compaction
-removes those rows, later vacuums add zero. Statistics resets clear the
+removes those rows, later vacuums add zero. Native statistics resets clear the
 counter, and clean restarts preserve it.
 
 The heap-only counters (`pages_frozen`, `pages_all_visible`,

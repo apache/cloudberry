@@ -78,7 +78,7 @@ subtest 'vacuum_statistics.enabled' => sub {
     ok($count > 0, 'stats collected when enabled');
 
     # Reset preserves existing rows. With collection disabled, their counters
-    # must stay zero even after another vacuum.
+    # keep resources at zero while native work continues.
     reset_and_vacuum($dbname, 'guc_test', { gucs => ['vacuum_statistics.enabled = off'] });
 
     $count = $node->safe_psql($dbname,
@@ -86,12 +86,18 @@ subtest 'vacuum_statistics.enabled' => sub {
     is($count, 1, 'reset preserves the row when collection is disabled');
 
     my $sums = $node->safe_psql($dbname, q{
-        SELECT COALESCE(SUM(tuples_deleted), 0)
-             + COALESCE(SUM(pages_scanned), 0)
+        SELECT COALESCE(SUM(total_blks_read), 0)
+             + COALESCE(SUM(total_blks_hit), 0)
           FROM ext_vacuum_statistics.pg_stats_vacuum_tables
          WHERE relname = 'guc_test'
     });
-    is($sums, '0', 'no counters accumulated when disabled');
+    is($sums, '0', 'no resource counters accumulated when disabled');
+    is($node->safe_psql($dbname, q{
+        SELECT e.pages_scanned > 0 AND e.pages_scanned = n.pages_scanned
+          FROM ext_vacuum_statistics.pg_stats_vacuum_tables e
+          JOIN pg_stat_vacuum_tables n USING (relid)
+         WHERE e.relname = 'guc_test'
+    }), 't', 'disabled resource collection still displays native work');
 };
 
 $node->stop;
