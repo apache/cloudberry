@@ -22,10 +22,9 @@
 
 #define APPENDONLY_COMPACTION_SEGNO_INVALID (-1)
 
-/* Optional resource counters for the extended-statistics hook. */
+/* Optional resource counters for VACUUM VERBOSE. */
 typedef struct AOVacuumExtStats
 {
-	PgStat_CommonCounts phases;
 	PgStat_CommonCounts indexes;
 } AOVacuumExtStats;
 
@@ -41,12 +40,8 @@ typedef struct AOVacuumRelStats
 	int		num_index_vacuumed; /* current # of indexes been vacuumed */
 	/* the relation these stats were started for */
 	Oid			relid;
-	/*
-	 * Resource usage for set_report_vacuum_hook, accumulated over the phases:
-	 * of the phases as a whole, and of the index passes among them, which are
-	 * reported per index and subtracted from the table's report.
-	 */
-	AOVacuumExtStats *extstats; /* allocated only when the hook is installed */
+	/* Index resources are excluded from each phase's VERBOSE report. */
+	AOVacuumExtStats *extstats; /* allocated only for VERBOSE */
 } AOVacuumRelStats;
 
 extern Bitmapset *AppendOptimizedCollectDeadSegments(Relation aorel);
