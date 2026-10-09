@@ -50,7 +50,8 @@ DELETE FROM $table WHERE id <= 2000;
     # still needs the old segfile and prevents post-cleanup from recycling it.
     my $reader = $node->background_psql('postgres');
     $reader->query_safe("BEGIN ISOLATION LEVEL REPEATABLE READ; SELECT count(*) FROM $table");
-    $node->safe_psql('postgres', "VACUUM $table");
+    # VERBOSE and the extension consume the same measurements, once each.
+    $node->safe_psql('postgres', "VACUUM (VERBOSE) $table");
     my $awaiting = $node->safe_psql('postgres', "SELECT awaiting_drop_segments $where");
     cmp_ok($awaiting, '>', 0, "$orientation retains compacted segments for the old snapshot");
     my $segrel = $node->safe_psql('postgres', qq{

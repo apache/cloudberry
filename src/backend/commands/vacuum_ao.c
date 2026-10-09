@@ -165,7 +165,7 @@ static int vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset
 									 BufferAccessStrategy bstrategy, AOVacuumRelStats *vacrelstats);
 static void ao_vacuum_rel_recycle_dead_segments(Relation onerel, VacuumParams *params,
 												BufferAccessStrategy bstrategy, AOVacuumRelStats *vacrelstats);
-static AOVacuumRelStats *init_vacrelstats(void);
+static AOVacuumRelStats *init_vacrelstats(bool instrument);
 static void cleanup_vacrelstats(AOVacuumRelStats **vacrelstatsp);
 static void ao_report_index_vacuum_time(Relation indrel, TimestampTz starttime,
 										double startdelaytime);
@@ -175,7 +175,7 @@ static void ao_accum_resources(PgStat_CommonCounts *dst,
 static void ao_report_index_extstats(Relation indrel,
 									 LVExtStatCounters *counters,
 									 IndexBulkDeleteResult *result,
-									 AOVacuumRelStats *vacrelstats, bool final_cleanup);
+									 AOVacuumRelStats *vacrelstats, bool final_cleanup, bool verbose);
 static void ao_report_table_extstats(Relation rel,
 									 AOVacuumRelStats *vacrelstats);
 
@@ -424,14 +424,14 @@ ao_vacuum_rel_compact(Relation onerel, VacuumParams *params, BufferAccessStrateg
 }
 
 static AOVacuumRelStats *
-init_vacrelstats()
+init_vacrelstats(bool instrument)
 {
 	AOVacuumRelStats *vacrelstats;
 	MemoryContext old_context;
 
 	old_context = MemoryContextSwitchTo(TopMemoryContext);
 	vacrelstats = (AOVacuumRelStats *) palloc0(sizeof(AOVacuumRelStats));
-	if (set_report_vacuum_hook != NULL)
+	if (instrument)
 		vacrelstats->extstats = palloc0(sizeof(AOVacuumExtStats));
 	MemoryContextSwitchTo(old_context);
 
@@ -452,7 +452,9 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 	instr_time	phase_end;
 	double		phase_start_delay;
 	LVExtStatCounters *extcounters;
-	bool		extstats = (set_report_vacuum_hook != NULL);
+	bool		verbose = (params->options & VACOPT_VERBOSE) != 0;
+	bool		extstats = verbose || (set_report_vacuum_hook != NULL);
+	PgStat_CommonCounts index_start = {0};
 	Assert(RelationStorageIsAO(rel));
 	Assert(params != NULL);
 
@@ -487,7 +489,7 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 		}
 
 		pgstat_progress_start_command(PROGRESS_COMMAND_VACUUM, RelationGetRelid(rel));
-		vacrelstats = init_vacrelstats();
+		vacrelstats = init_vacrelstats(extstats);
 		vacrelstats->relid = RelationGetRelid(rel);
 	}
 
@@ -498,7 +500,9 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 	error_context_stack = &errcallback;
 
 	/* Sample the resource usage of the phase for the extended statistics */
-	extcounters = extvac_stats_start(rel);
+	extcounters = extvac_stats_start(rel, verbose);
+	if (verbose)
+		index_start = vacrelstats->extstats->indexes;
 	INSTR_TIME_SET_CURRENT(phase_start);
 	phase_start_delay = VacuumDelayTime;
 
@@ -531,6 +535,20 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 			PGSTAT_AO_POST_CLEANUP;
 
 		extvac_stats_end(rel, extcounters, &extcounters->report.common);
+		if (verbose && Gp_role != GP_ROLE_DISPATCH)
+		{
+			PgStat_CommonCounts phase_usage = extcounters->report.common;
+			PgStat_CommonCounts index_usage = vacrelstats->extstats->indexes;
+			const char *phase_name =
+				ao_vacuum_phase == VACOPT_AO_PRE_CLEANUP_PHASE ? _("AO pre-cleanup (excluding indexes)") :
+				ao_vacuum_phase == VACOPT_AO_COMPACT_PHASE ? _("AO compaction (excluding indexes)") :
+				_("AO post-cleanup (excluding indexes)");
+
+			/* Only index passes executed during this phase are excluded. */
+			ao_accum_resources(&index_usage, &index_start, true);
+			ao_accum_resources(&phase_usage, &index_usage, true);
+			extvac_stats_log(rel, phase_name, &phase_usage);
+		}
 		/* Charge index work to its own report, not to the table's phase. */
 		ao_accum_resources(&extcounters->report.common,
 						   &vacrelstats->extstats->indexes, true);
@@ -654,11 +672,13 @@ ao_accum_resources(PgStat_CommonCounts *dst, const PgStat_CommonCounts *src,
 static void
 ao_report_index_extstats(Relation indrel, LVExtStatCounters *counters,
 						 IndexBulkDeleteResult *result,
-						 AOVacuumRelStats *vacrelstats, bool final_cleanup)
+						 AOVacuumRelStats *vacrelstats, bool final_cleanup, bool verbose)
 {
 	PgStat_VacuumRelationCounts *report = &counters->report;
 
 	extvac_stats_end(indrel, counters, &report->common);
+	if (verbose)
+		extvac_stats_log(indrel, _("AO index vacuum"), &report->common);
 	report->type = PGSTAT_EXTVAC_INDEX;
 	report->common.tuples_deleted = (int64) result->tuples_removed;
 	report->pages_deleted = result->pages_newly_deleted;
@@ -818,7 +838,7 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 				LVExtStatCounters *extcounters;
 				IndexBulkDeleteResult result = {0};
 
-				extcounters = extvac_stats_start(Irel[i]);
+				extcounters = extvac_stats_start(Irel[i], elevel == INFO);
 				scan_index(Irel[i],
 						   aoRelation,
 						   elevel,
@@ -826,9 +846,10 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 						   &result);
 				vacuum_report_index_stats(Irel[i], &result, 0, 0, final_cleanup);
 				ao_report_index_vacuum_time(Irel[i], istarttime, startdelaytime);
-				if (set_report_vacuum_hook)
+				if (extcounters != NULL)
 					ao_report_index_extstats(Irel[i], extcounters, &result,
-											 vacrelstats, final_cleanup);
+											 vacrelstats, final_cleanup,
+											 elevel == INFO && Gp_role != GP_ROLE_DISPATCH);
 			}
 		}
 		else
@@ -840,7 +861,7 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 				LVExtStatCounters *extcounters;
 				IndexBulkDeleteResult result = {0};
 
-				extcounters = extvac_stats_start(Irel[i]);
+				extcounters = extvac_stats_start(Irel[i], elevel == INFO);
 				vacuum_appendonly_index(Irel[i],
 										aoRelation,
 										dead_segs,
@@ -850,9 +871,10 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 										&result);
 				vacuum_report_index_stats(Irel[i], &result, 0, 0, final_cleanup);
 				ao_report_index_vacuum_time(Irel[i], istarttime, startdelaytime);
-				if (set_report_vacuum_hook)
+				if (extcounters != NULL)
 					ao_report_index_extstats(Irel[i], extcounters, &result,
-											 vacrelstats, final_cleanup);
+											 vacrelstats, final_cleanup,
+											 elevel == INFO && Gp_role != GP_ROLE_DISPATCH);
 			}
 		}
 	}
