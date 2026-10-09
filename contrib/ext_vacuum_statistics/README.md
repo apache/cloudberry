@@ -50,11 +50,15 @@ Example output:
  mytable   |             120 |            340 |          15 |            500 |            10
 ```
 
-Reset statistics when needed:
+Reset statistics only on the current node:
 
 ```sql
 SELECT ext_vacuum_statistics.vacuum_statistics_reset();
 ```
+
+The reset functions act only on the current node. Calling one on the
+coordinator (QD) leaves segment counters unchanged. This also applies to
+`extvac_reset_entry()` and `extvac_reset_db_entry()`.
 
 ## Configuration (GUCs)
 
@@ -66,7 +70,9 @@ SELECT ext_vacuum_statistics.vacuum_statistics_reset();
 
 Each tracked object (table or index) uses a fixed-size shared memory entry; the exact size depends on the platform.
 
-Example: a database with 1000 tables and 2000 indexes, all tracked, uses about **700 KB** on Ubuntu (3001 entries × 232 bytes). Per-database entries add one entry per tracked database.
+Per-database aggregates add one entry per tracked database. Entry size includes
+pgstat bookkeeping; memory estimates must use the structures of the actual
+build rather than a fixed byte count from an earlier version.
 
 The entry of a table or an index is dropped when the relation is dropped (at
 commit, so a rolled back `DROP` keeps it), and a new relation that gets the OID
@@ -105,4 +111,5 @@ and `pg_stat_vacuum` (and their `gp_stat_*` counterparts) for native counters.
 They obey `track_counts` and ordinary `pg_stat_reset*` functions. The extension
 retains its existing counters for compatibility and adds resource measurements
 such as buffers and WAL. Its counters obey `vacuum_statistics.enabled` and
-its own reset functions; resetting one collection does not reset the other.
+its own reset functions. Extension-specific resets do not clear native counters;
+`pg_stat_reset()` also clears the extension's entries for the current database.
