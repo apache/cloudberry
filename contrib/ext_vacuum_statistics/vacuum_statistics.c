@@ -151,6 +151,10 @@ pgstat_accumulate_extvac_stats(PgStat_VacuumRelationCounts * dst,
 		dst->table.missed_dead_tuples += src->table.missed_dead_tuples;
 		/* Segment count is a snapshot, not work accumulated over vacuums. */
 		dst->table.total_file_segs = src->table.total_file_segs;
+		dst->table.awaiting_drop_segments = src->table.awaiting_drop_segments;
+		for (int phase = 0; phase < PGSTAT_NUM_AO_PHASES; phase++)
+			pgstat_accumulate_common(&dst->table.ao_phases[phase],
+									 &src->table.ao_phases[phase]);
 		dst->table.compacted_segments += src->table.compacted_segments;
 		dst->table.tuples_moved += src->table.tuples_moved;
 	}
@@ -411,7 +415,7 @@ tuplestore_put_common(PgStat_CommonCounts * vacuum_ext,
 	Assert((*i - base) == EXTVAC_COMMON_STAT_COLS);
 }
 
-#define EXTVAC_HEAP_STAT_COLS	26
+#define EXTVAC_HEAP_STAT_COLS	(27 + PGSTAT_NUM_AO_PHASES * EXTVAC_COMMON_STAT_COLS)
 #define EXTVAC_IDX_STAT_COLS	15
 #define EXTVAC_MAX_STAT_COLS	Max(EXTVAC_HEAP_STAT_COLS, EXTVAC_IDX_STAT_COLS)
 
@@ -446,6 +450,10 @@ tuplestore_put_for_relation(Oid relid, Tuplestorestate *tupstore,
 		values[i++] = Int64GetDatum(vacuum_ext->table.tuples_moved);
 		values[i++] = Int64GetDatum(vacuum_ext->dead_pages);
 		values[i++] = Int64GetDatum(vacuum_ext->table.freeze_age_vacuum_count);
+		values[i++] = Int64GetDatum(vacuum_ext->table.awaiting_drop_segments);
+		for (int phase = 0; phase < PGSTAT_NUM_AO_PHASES; phase++)
+			tuplestore_put_common(&vacuum_ext->table.ao_phases[phase],
+								  values, nulls, &i);
 	}
 	else if (vacuum_ext->type == PGSTAT_EXTVAC_INDEX)
 	{

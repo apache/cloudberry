@@ -159,7 +159,8 @@ static bool appendonly_tid_reaped(ItemPointer itemptr, void *state);
 
 static void vacuum_appendonly_fill_stats(Relation aorel, Snapshot snapshot, int elevel,
 										 BlockNumber *rel_pages, double *rel_tuples,
-										 int64 *dead_tuples, bool *relhasindex, BlockNumber *total_file_segs);
+										 int64 *dead_tuples, bool *relhasindex, BlockNumber *total_file_segs,
+										 int64 *awaiting_drop_segments);
 static int vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs,
 									 BufferAccessStrategy bstrategy, AOVacuumRelStats *vacrelstats);
 static void ao_vacuum_rel_recycle_dead_segments(Relation onerel, VacuumParams *params,
@@ -295,7 +296,8 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 								 &reltuples,
 								 &deadtuples,
 								 &relhasindex,
-								 &total_file_segs);
+								 &total_file_segs,
+								 &vacrelstats->awaiting_drop_segments);
 
 	/*
 	 * AO/AOCO tables have no per-tuple xmin/xmax, so freeze limits don't
@@ -523,9 +525,19 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 
 	if (extstats && ao_vacuum_phase != 0)
 	{
+		PgStat_AOVacuumPhase phase =
+			ao_vacuum_phase == VACOPT_AO_PRE_CLEANUP_PHASE ? PGSTAT_AO_PRE_CLEANUP :
+			ao_vacuum_phase == VACOPT_AO_COMPACT_PHASE ? PGSTAT_AO_COMPACTION :
+			PGSTAT_AO_POST_CLEANUP;
+
 		extvac_stats_end(rel, extcounters, &extcounters->report.common);
-		ao_accum_resources(&vacrelstats->extstats->phases,
+		/* Charge index work to its own report, not to the table's phase. */
+		ao_accum_resources(&extcounters->report.common,
+						   &vacrelstats->extstats->indexes, true);
+		ao_accum_resources(&vacrelstats->extstats->phases[phase],
 						   &extcounters->report.common, false);
+		memset(&vacrelstats->extstats->indexes, 0,
+			   sizeof(vacrelstats->extstats->indexes));
 	}
 
 	if (ao_vacuum_phase == VACOPT_AO_POST_CLEANUP_PHASE)
@@ -676,12 +688,16 @@ ao_report_table_extstats(Relation rel, AOVacuumRelStats *vacrelstats)
 
 	memset(&report, 0, sizeof(report));
 	report.type = PGSTAT_EXTVAC_TABLE;
-	report.common = vacrelstats->extstats->phases;
-	ao_accum_resources(&report.common, &vacrelstats->extstats->indexes, true);
+	for (int phase = 0; phase < PGSTAT_NUM_AO_PHASES; phase++)
+	{
+		report.table.ao_phases[phase] = vacrelstats->extstats->phases[phase];
+		ao_accum_resources(&report.common, &report.table.ao_phases[phase], false);
+	}
 	report.common.tuples_deleted = vacrelstats->num_dead_tuples;
 	report.table.recently_dead_tuples = vacrelstats->dead_tuples;
 	report.table.pages_scanned = vacrelstats->pages_scanned;
 	report.table.total_file_segs = vacrelstats->total_file_segs;
+	report.table.awaiting_drop_segments = vacrelstats->awaiting_drop_segments;
 	report.table.compacted_segments = vacrelstats->compacted_segments;
 	report.table.tuples_moved = vacrelstats->tuples_moved;
 	report.table.pages_removed =
@@ -967,7 +983,8 @@ appendonly_tid_reaped(ItemPointer itemptr, void *state)
 static void
 vacuum_appendonly_fill_stats(Relation aorel, Snapshot snapshot, int elevel,
 							 BlockNumber *rel_pages, double *rel_tuples,
-							 int64 *dead_tuples, bool *relhasindex, BlockNumber *total_file_segs)
+							 int64 *dead_tuples, bool *relhasindex, BlockNumber *total_file_segs,
+							 int64 *awaiting_drop_segments)
 {
 	FileSegTotals *fstotal;
 	BlockNumber nblocks;
@@ -1023,6 +1040,7 @@ vacuum_appendonly_fill_stats(Relation aorel, Snapshot snapshot, int elevel,
 	*dead_tuples = hidden_tupcount;
 	*relhasindex = aorel->rd_rel->relhasindex;
 	*total_file_segs = fstotal->totalfilesegs;
+	*awaiting_drop_segments = fstotal->awaiting_drop_segments;
 
 	ereport(elevel,
 			(errmsg("\"%s\": found %.0f rows in %u pages.",

@@ -41,6 +41,8 @@ tests += {
       't/060_vacuum_stats_reset.pl',
       't/060_heap_page_counters.pl',
       't/061_vacuum_measurements.pl',
+      't/062_ao_hidden_tuples.pl',
+      't/063_ao_phase_stats.pl',
     ],
   },
 }

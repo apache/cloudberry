@@ -71,8 +71,9 @@ coordinator (QD) leaves segment counters unchanged. This also applies to
 Each tracked object (table or index) uses a fixed-size shared memory entry; the exact size depends on the platform.
 
 Per-database aggregates add one entry per tracked database. Entry size includes
-pgstat bookkeeping; memory estimates must use the structures of the actual
-build rather than a fixed byte count from an earlier version.
+the AO phase counters and pgstat bookkeeping; memory estimates must use the
+structures of the actual build rather than a fixed byte count from an earlier
+version.
 
 The entry of a table or an index is dropped when the relation is dropped (at
 commit, so a rolled back `DROP` keeps it), and a new relation that gets the OID
@@ -154,6 +155,30 @@ column files. A statistics reset clears these values, and the next vacuum
 refreshes the segment count even without compaction. All three AO-specific
 fields stay zero for heap tables.
 
+`awaiting_drop_segments` is the number of segment metadata entries still in
+`AWAITING_DROP` at the end of the last completed vacuum. An older snapshot
+can delay their recycling even after compaction has finished. This value is
+replaced, not accumulated; AOCS counts segment numbers, not column files.
+It is zero for heap tables and after reset.
+
+The `ao_pre_cleanup_*`, `ao_compaction_*` and `ao_post_cleanup_*` columns
+break down cumulative resource usage by phase. Each prefix has `blks_read`,
+`blks_hit`, `blks_dirtied`, `blks_written`, `wal_records`, `wal_fpi`,
+`wal_bytes`, `blk_read_time` and `blk_write_time`. Buffer counts include
+shared and local buffers, as in `total_blks_*`; I/O times are milliseconds
+and require `track_io_timing`. Index resource usage is excluded from its
+phase and remains in the index statistics. The three phase counters sum to
+the corresponding table total (apart from floating-point rounding of times).
+Heap tables have zero phase counters.
+
+All new fields obey collection control and resets and survive clean
+restarts. Failed vacuums do not publish a table report; replacement workers
+report only phases they executed. This development-series payload change
+bumps the statistics-file format: installing the new build discards saved
+statistics from the previous format. Rebuild the server and extension
+together and recreate the extension's SQL objects when updating a test
+installation from the earlier 1.0 definition.
+
 `recently_dead_tuples` accumulates the hidden rows remaining in the AO
 visibility map after post-cleanup. This includes rows left because
 compaction is disabled or below its threshold. Each completed vacuum adds
@@ -174,3 +199,10 @@ by the reporting worker. Gaps between phases are excluded. If a worker is
 replaced between phases, only the replacement worker's phases are reported.
 Removed tuple and byte counters use 64 bits; conversion of released bytes
 to heap-equivalent pages preserves the 64-bit range.
+
+AO auxiliary relations (`aoseg`, `visimap`, `blkdir`) are shown as separate
+heap-statistics rows under their own OIDs and names. Their indexes are shown
+in the index views. The parent AO row describes its phases; the later heap
+vacuum of auxiliary relations is not added to it. To associate an auxiliary
+row with its parent, join its `relid` to `pg_appendonly.segrelid`,
+`visimaprelid` or `blkdirrelid`.

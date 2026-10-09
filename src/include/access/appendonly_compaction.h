@@ -26,7 +26,8 @@
 /* Optional resource counters for the extended-statistics hook. */
 typedef struct AOVacuumExtStats
 {
-	PgStat_CommonCounts phases;
+	PgStat_CommonCounts phases[PGSTAT_NUM_AO_PHASES];
+	/* Index resources of the current phase, cleared after subtraction. */
 	PgStat_CommonCounts indexes;
 } AOVacuumExtStats;
 
@@ -47,6 +48,7 @@ typedef struct AOVacuumRelStats
 	int64		dead_tuples;
 	int64		pages_scanned;
 	int64		total_file_segs;
+	int64		awaiting_drop_segments;
 	int64		compacted_segments;
 	int64		tuples_moved;
 
@@ -54,8 +56,8 @@ typedef struct AOVacuumRelStats
 	Oid			relid;
 	/*
 	 * Resource usage for set_report_vacuum_hook, accumulated over the phases:
-	 * of the phases as a whole, and of the index passes among them, which are
-	 * reported per index and subtracted from the table's report.
+	 * separately for each phase, after subtracting its index passes. Index
+	 * resources are reported per index and excluded from the table's totals.
 	 */
 	AOVacuumExtStats *extstats; /* allocated only when the hook is installed */
 } AOVacuumRelStats;

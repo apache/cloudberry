@@ -91,7 +91,35 @@ CREATE OR REPLACE FUNCTION ext_vacuum_statistics.pg_stats_get_vacuum_tables(
     OUT compacted_segments bigint,
     OUT tuples_moved bigint,
     OUT dead_pages bigint,
-    OUT freeze_age_vacuum_count bigint
+    OUT freeze_age_vacuum_count bigint,
+    OUT awaiting_drop_segments bigint,
+    OUT ao_pre_cleanup_blks_read bigint,
+    OUT ao_pre_cleanup_blks_hit bigint,
+    OUT ao_pre_cleanup_blks_dirtied bigint,
+    OUT ao_pre_cleanup_blks_written bigint,
+    OUT ao_pre_cleanup_wal_records bigint,
+    OUT ao_pre_cleanup_wal_fpi bigint,
+    OUT ao_pre_cleanup_wal_bytes numeric,
+    OUT ao_pre_cleanup_blk_read_time double precision,
+    OUT ao_pre_cleanup_blk_write_time double precision,
+    OUT ao_compaction_blks_read bigint,
+    OUT ao_compaction_blks_hit bigint,
+    OUT ao_compaction_blks_dirtied bigint,
+    OUT ao_compaction_blks_written bigint,
+    OUT ao_compaction_wal_records bigint,
+    OUT ao_compaction_wal_fpi bigint,
+    OUT ao_compaction_wal_bytes numeric,
+    OUT ao_compaction_blk_read_time double precision,
+    OUT ao_compaction_blk_write_time double precision,
+    OUT ao_post_cleanup_blks_read bigint,
+    OUT ao_post_cleanup_blks_hit bigint,
+    OUT ao_post_cleanup_blks_dirtied bigint,
+    OUT ao_post_cleanup_blks_written bigint,
+    OUT ao_post_cleanup_wal_records bigint,
+    OUT ao_post_cleanup_wal_fpi bigint,
+    OUT ao_post_cleanup_wal_bytes numeric,
+    OUT ao_post_cleanup_blk_read_time double precision,
+    OUT ao_post_cleanup_blk_write_time double precision
 )
 RETURNS SETOF record
 AS 'MODULE_PATHNAME', 'pg_stats_get_vacuum_tables'
@@ -170,13 +198,41 @@ SELECT
   stats.compacted_segments,
   stats.tuples_moved,
   stats.dead_pages,
-  stats.freeze_age_vacuum_count
+  stats.freeze_age_vacuum_count,
+  stats.awaiting_drop_segments,
+  stats.ao_pre_cleanup_blks_read,
+  stats.ao_pre_cleanup_blks_hit,
+  stats.ao_pre_cleanup_blks_dirtied,
+  stats.ao_pre_cleanup_blks_written,
+  stats.ao_pre_cleanup_wal_records,
+  stats.ao_pre_cleanup_wal_fpi,
+  stats.ao_pre_cleanup_wal_bytes,
+  stats.ao_pre_cleanup_blk_read_time,
+  stats.ao_pre_cleanup_blk_write_time,
+  stats.ao_compaction_blks_read,
+  stats.ao_compaction_blks_hit,
+  stats.ao_compaction_blks_dirtied,
+  stats.ao_compaction_blks_written,
+  stats.ao_compaction_wal_records,
+  stats.ao_compaction_wal_fpi,
+  stats.ao_compaction_wal_bytes,
+  stats.ao_compaction_blk_read_time,
+  stats.ao_compaction_blk_write_time,
+  stats.ao_post_cleanup_blks_read,
+  stats.ao_post_cleanup_blks_hit,
+  stats.ao_post_cleanup_blks_dirtied,
+  stats.ao_post_cleanup_blks_written,
+  stats.ao_post_cleanup_wal_records,
+  stats.ao_post_cleanup_wal_fpi,
+  stats.ao_post_cleanup_wal_bytes,
+  stats.ao_post_cleanup_blk_read_time,
+  stats.ao_post_cleanup_blk_write_time
 FROM pg_database db,
      pg_class rel,
      pg_namespace ns,
      LATERAL ext_vacuum_statistics.pg_stats_get_vacuum_tables(db.oid, rel.oid) stats
 WHERE db.datname = current_database()
-  AND rel.relkind IN ('r', 'm', 't')
+  AND rel.relkind IN ('r', 'm', 't', 'o', 'b', 'M')
   AND rel.relnamespace = ns.oid
   AND rel.oid = stats.relid;
 

@@ -71,7 +71,7 @@
   <para>
    The view <structname>ext_vacuum_statistics.pg_stats_vacuum_tables</structname>
    contains one row for each vacuumed table in the current database (including
-   materialized views and TOAST tables), showing statistics about vacuuming that specific table.  The columns
+   materialized views, TOAST tables and AO auxiliary tables), showing statistics about vacuuming that specific table.  The columns
    are shown in <xref linkend="extvacuumstatistics-pg-stats-vacuum-tables-columns"/>.
   </para>
 
@@ -346,6 +346,35 @@
       <para>
        Cumulative number of live tuples moved by append-optimized compaction.
        Zero for heap tables.
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>awaiting_drop_segments</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of AO segment metadata entries still in <literal>AWAITING_DROP</literal>
+       after the last completed vacuum. Replaced on each vacuum, not accumulated.
+       For AOCS, counts segment numbers, not column files. Zero for heap and after reset.
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>ao_pre_cleanup_*</structfield>,
+       <structfield>ao_compaction_*</structfield>,
+       <structfield>ao_post_cleanup_*</structfield>
+      </para>
+      <para>
+       Each phase prefix provides <literal>blks_read</literal>, <literal>blks_hit</literal>,
+       <literal>blks_dirtied</literal>, <literal>blks_written</literal>,
+       <literal>wal_records</literal> and <literal>wal_fpi</literal> as <type>int8</type>,
+       <literal>wal_bytes</literal> as <type>numeric</type>, and
+       <literal>blk_read_time</literal> and <literal>blk_write_time</literal> as
+       <type>double precision</type> in milliseconds. These accumulate the
+       phase's resource usage, excluding separately reported index work.
+       Buffer counts include shared and local buffers, as in
+       <structfield>total_blks_read</structfield>. I/O timing requires
+       <varname>track_io_timing</varname>. Zero for heap and after reset.
       </para></entry>
      </row>
     </tbody>
@@ -789,7 +818,10 @@
      <structfield>total_file_segs</structfield> instead records the segment
      metadata entry count at the end of the latest vacuum. It includes empty
      and awaiting-drop entries, and is not the number of physical column files.
-     A reset clears both the cumulative counters and this snapshot; the next
+     <structfield>awaiting_drop_segments</structfield> records only entries
+     still in <literal>AWAITING_DROP</literal> at this point; older snapshots
+     can prevent recycling them even after compaction completes.
+     A reset clears both the cumulative counters and these snapshots; the next
      vacuum refreshes the snapshot even if it performs no compaction.
     </para>
    </listitem>
@@ -799,7 +831,12 @@
      compaction, post-cleanup), each dispatched as a step of its own.  The
      buffer, WAL and I/O timing counters of the table cover all the phases
      of a vacuum, and the vacuum is reported once, at the end of the last
-     one; a vacuum that fails in between reports nothing.
+     one; a vacuum that fails in between reports nothing for the table.
+     The <literal>ao_pre_cleanup_*</literal>, <literal>ao_compaction_*</literal>
+     and <literal>ao_post_cleanup_*</literal> columns split these cumulative
+     resources by phase. Their sum equals the corresponding table total,
+     apart from floating-point rounding of I/O times. Phase counters exclude
+     index resources.
     </para>
    </listitem>
    <listitem>
@@ -813,6 +850,14 @@
     </para>
    </listitem>
   </itemizedlist>
+ <para>
+  AO auxiliary tables (<literal>aoseg</literal>, <literal>visimap</literal>,
+  <literal>blkdir</literal>) have separate heap-statistics rows under their
+  own OIDs; their indexes appear in the index views. Their later heap vacuum
+  is not added to the parent AO phase counters. The auxiliary table OIDs in
+  <structname>pg_appendonly</structname> associate these rows with the parent.
+ </para>
+
  </sect2>
 
  <sect2 id="extvacuumstatistics-configuration">
