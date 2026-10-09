@@ -384,6 +384,10 @@ END
 -- src/backend/postmaster/README.auto-ANALYZE.
 --
 
+-- Refresh the collector snapshot until the expected counters are visible.
+CREATE FUNCTION wait_for_analyze_stats(rel regclass, expected_analyze bigint, expected_autoanalyze bigint, expected_mod bigint) RETURNS bool AS $$ DECLARE retries int; /* in func */ BEGIN FOR retries IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); /* in func */ IF pg_stat_get_analyze_count(rel) = expected_analyze AND pg_stat_get_autoanalyze_count(rel) = expected_autoanalyze AND pg_stat_get_mod_since_analyze(rel) = expected_mod THEN RETURN true; /* in func */ END IF; /* in func */ PERFORM pg_sleep(0.1); /* in func */ END LOOP; /* in func */ RAISE EXCEPTION 'timed out waiting for analyze statistics for %', rel; /* in func */ END; /* in func */ $$ LANGUAGE plpgsql;
+CREATE
+
 -- Case 1 --
 2: SET gp_autostats_mode = 'on_no_stats';
 SET
@@ -408,7 +412,14 @@ SELECT gp_inject_fault('auto_vac_worker_after_report_activity', 'suspend', '', '
 -- with auto_stats, the auto-ANALYZE still trigger
 2: INSERT INTO autostatstbl select i from generate_series(1, 1000) as i;
 INSERT 1000
-2: select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat. 
+-- Disconnect the writer to flush pending statistics to the collector.
+2q: ... <quitting>
+SELECT wait_for_analyze_stats('autostatstbl', 1, 0, 1000);
+ wait_for_analyze_stats 
+------------------------
+ t                      
+(1 row)
+
 -- auto_stats executed but auto-ANALYZE not execute yet since we suspend before finish ANALYZE.
 SELECT count(*) FROM pg_statistic where starelid = 'autostatstbl'::regclass;
  count 
@@ -458,6 +469,11 @@ SELECT gp_inject_fault('analyze_finished_one_relation', 'reset', 1);
  Success:        
 (1 row)
 
+SELECT wait_for_analyze_stats('autostatstbl', 1, 1, 0);
+ wait_for_analyze_stats 
+------------------------
+ t                      
+(1 row)
 -- we can see the auto-ANALYZE finished
 select relpages, reltuples from pg_class where oid = 'autostatstbl'::regclass;
  relpages | reltuples 
@@ -493,7 +509,14 @@ SELECT gp_inject_fault('auto_vac_worker_after_report_activity', 'suspend', '', '
 
 2: INSERT INTO autostatstbl select i from generate_series(1001, 2000) as i;
 INSERT 1000
-2: select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat. 
+-- Disconnect the writer to flush pending statistics to the collector.
+2q: ... <quitting>
+SELECT wait_for_analyze_stats('autostatstbl', 2, 1, 1000);
+ wait_for_analyze_stats 
+------------------------
+ t                      
+(1 row)
+
 -- auto_stats executed but auto-ANALYZE not execute yet since we suspend before finish ANALYZE.
 select relpages, reltuples from pg_class where oid = 'autostatstbl'::regclass;
  relpages | reltuples 
@@ -538,6 +561,11 @@ SELECT gp_inject_fault('analyze_finished_one_relation', 'reset', 1);
  Success:        
 (1 row)
 
+SELECT wait_for_analyze_stats('autostatstbl', 2, 2, 0);
+ wait_for_analyze_stats 
+------------------------
+ t                      
+(1 row)
 -- we can see the auto-ANALYZE finished, check statistic and analyze count
 select relpages, reltuples from pg_class where oid = 'autostatstbl'::regclass;
  relpages | reltuples 
@@ -554,6 +582,8 @@ select analyze_count, autoanalyze_count, n_mod_since_analyze from pg_stat_all_ta
 
 -- Case 3 --
 -- reset the threshold, so auto_stats will not be triggered and then auto-ANALYZE will be triggered.
+2: SET gp_autostats_mode = 'on_change';
+SET
 2: RESET gp_autostats_on_change_threshold;
 RESET
 
@@ -572,7 +602,14 @@ SELECT gp_inject_fault('auto_vac_worker_after_report_activity', 'suspend', '', '
 
 2: INSERT INTO autostatstbl select i from generate_series(2001, 3000) as i;
 INSERT 1000
-2: select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat. 
+-- Disconnect the writer to flush pending statistics to the collector.
+2q: ... <quitting>
+SELECT wait_for_analyze_stats('autostatstbl', 2, 2, 1000);
+ wait_for_analyze_stats 
+------------------------
+ t                      
+(1 row)
+
 -- auto_stats should not executed and auto-ANALYZE not execute yet since we suspend before finish ANALYZE.
 select relpages, reltuples from pg_class where oid = 'autostatstbl'::regclass;
  relpages | reltuples 
@@ -617,6 +654,11 @@ SELECT gp_inject_fault('analyze_finished_one_relation', 'reset', 1);
  Success:        
 (1 row)
 
+SELECT wait_for_analyze_stats('autostatstbl', 2, 3, 0);
+ wait_for_analyze_stats 
+------------------------
+ t                      
+(1 row)
 -- we can see the auto-ANALYZE finished, check statistic and analyze count
 select relpages, reltuples from pg_class where oid = 'autostatstbl'::regclass;
  relpages | reltuples 
@@ -629,6 +671,9 @@ select analyze_count, autoanalyze_count, n_mod_since_analyze from pg_stat_all_ta
 ---------------+-------------------+---------------------
  2             | 3                 | 0                   
 (1 row)
+
+DROP FUNCTION wait_for_analyze_stats(regclass, bigint, bigint, bigint);
+DROP
 
 -- Reset GUCs.
 ALTER SYSTEM RESET autovacuum_naptime;
