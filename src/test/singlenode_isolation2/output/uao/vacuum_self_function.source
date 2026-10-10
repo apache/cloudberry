@@ -11,11 +11,32 @@ INSERT 100
 DELETE FROM ao WHERE a <= 30;
 DELETE 30
 
-create or replace function myfunc() returns bigint as $$ begin  /* inside a function */ perform pg_sleep(10); /* inside a function */ return (select count(*) from ao);  /* inside a function */ end;  /* inside a function */ $$ stable language plpgsql;
+create or replace function myfunc() returns bigint as $$ begin  /* inside a function */ perform count(*) from pg_database; /* inside a function */ perform pg_advisory_xact_lock(2045, 250925); /* inside a function */ return (select count(*) from ao);  /* inside a function */ end;  /* inside a function */ $$ stable language plpgsql;
+CREATE
+
+create or replace function wait_for_reader_lock() returns boolean as $$ declare deadline timestamptz := clock_timestamp() + interval '60 seconds'; /* inside a function */ begin /* inside a function */ loop /* inside a function */ perform pg_stat_clear_snapshot(); /* inside a function */ if exists ( /* inside a function */ select 1 from pg_locks l join pg_stat_activity a on a.pid = l.pid /* inside a function */ where a.application_name = 'vacuum_self_function_@amname@_reader' /* inside a function */ and a.datname = current_database() and l.locktype = 'advisory' /* inside a function */ and l.database = (select oid from pg_database where datname = current_database()) /* inside a function */ and l.classid = 2045::oid and l.objid = 250925::oid /* inside a function */ and l.objsubid = 2 and l.mode = 'ExclusiveLock' /* inside a function */ and not l.granted and l.gp_segment_id = -1 /* inside a function */ ) then /* inside a function */ return true; /* inside a function */ end if; /* inside a function */ if clock_timestamp() >= deadline then /* inside a function */ return false; /* inside a function */ end if; /* inside a function */ perform pg_sleep(0.1); /* inside a function */ end loop; /* inside a function */ end; /* inside a function */ $$ volatile language plpgsql;
 CREATE
 
 -- Launch function into the background.
+1: SET application_name = 'vacuum_self_function_@amname@_reader';
+SET
+1: SET statement_timeout = '300s';
+SET
+2: SELECT pg_advisory_lock(2045, 250925);
+ pg_advisory_lock 
+------------------
+                  
+(1 row)
 1&: select myfunc();  <waiting ...>
+2: SET statement_timeout = '90s';
+SET
+2: SELECT wait_for_reader_lock();
+ wait_for_reader_lock 
+----------------------
+ t                    
+(1 row)
+2: RESET statement_timeout;
+RESET
 
 -- Meanwhile, DELETE some rows and VACUUM. VACUUM should not recycle the
 -- old tuple versions that are still needed by the function later. It will
@@ -45,11 +66,20 @@ VACUUM
  0     | 100      | 2     
  1     | 50       | 1     
 (2 rows)
+2: SELECT pg_advisory_unlock(2045, 250925);
+ pg_advisory_unlock 
+--------------------
+ t                  
+(1 row)
 1<:  <... completed>
  myfunc 
 --------
  70     
 (1 row)
+1: RESET statement_timeout;
+RESET
+1: RESET application_name;
+RESET
 
 -- Now that the first transaction has finished, VACUUM can recycle.
 2: VACUUM ao;

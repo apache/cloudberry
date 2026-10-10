@@ -7,15 +7,77 @@ INSERT INTO ao SELECT i as a, i as b FROM generate_series(1, 100) AS i;
 
 DELETE FROM ao WHERE a <= 30;
 
+-- Save the original segment identities before the reader takes its snapshot.
+2: CREATE TEMP TABLE old_segments (segment_id int, segno int, tupcount bigint);
+create or replace function capture_old_segments() returns void as $$
+declare s record; /* inside a function */
+begin /* inside a function */
+  for s in select segment_id, segno, tupcount from gp_ao_or_aocs_seg('ao') loop /* inside a function */
+    insert into old_segments values (s.segment_id, s.segno, s.tupcount); /* inside a function */
+  end loop; /* inside a function */
+end; /* inside a function */
+$$ volatile language plpgsql;
+2: SELECT capture_old_segments();
+
+create or replace function old_segments_in_state(expected_state int) returns boolean as $$
+declare s record; original_tupcount bigint; matched int := 0; /* inside a function */
+begin /* inside a function */
+  for s in select segment_id, segno, tupcount, state from gp_ao_or_aocs_seg('ao') loop /* inside a function */
+    select tupcount into original_tupcount from old_segments /* inside a function */
+      where segment_id = s.segment_id and segno = s.segno; /* inside a function */
+    if found then /* inside a function */
+      if s.state <> expected_state or /* inside a function */
+         (expected_state = 2 and s.tupcount <> original_tupcount) or /* inside a function */
+         (expected_state = 1 and s.tupcount <> 0) then /* inside a function */
+        return false; /* inside a function */
+      end if; /* inside a function */
+      matched := matched + 1; /* inside a function */
+    end if; /* inside a function */
+  end loop; /* inside a function */
+  return matched > 0 and matched = (select count(*) from old_segments); /* inside a function */
+end; /* inside a function */
+$$ volatile language plpgsql;
+
 create or replace function myfunc() returns bigint as $$
 begin  /* inside a function */
-  perform pg_sleep(10); /* inside a function */
+  perform count(*) from pg_database; /* inside a function */
+  perform pg_advisory_xact_lock(2045, 250925); /* inside a function */
   return (select count(*) from ao);  /* inside a function */
 end;  /* inside a function */
 $$ stable language plpgsql;
 
+create or replace function wait_for_reader_lock() returns boolean as $$
+declare deadline timestamptz := clock_timestamp() + interval '60 seconds'; /* inside a function */
+begin /* inside a function */
+  loop /* inside a function */
+    perform pg_stat_clear_snapshot(); /* inside a function */
+    if exists ( /* inside a function */
+      select 1 from pg_locks l join pg_stat_activity a on a.pid = l.pid /* inside a function */
+      where a.application_name = 'vacuum_self_function_@amname@_reader' /* inside a function */
+        and a.datname = current_database() and l.locktype = 'advisory' /* inside a function */
+        and l.database = (select oid from pg_database where datname = current_database()) /* inside a function */
+        and l.classid = 2045::oid and l.objid = 250925::oid /* inside a function */
+        and l.objsubid = 2 and l.mode = 'ExclusiveLock' /* inside a function */
+        and not l.granted and l.gp_segment_id = -1 /* inside a function */
+    ) then /* inside a function */
+      return true; /* inside a function */
+    end if; /* inside a function */
+    if clock_timestamp() >= deadline then /* inside a function */
+      return false; /* inside a function */
+    end if; /* inside a function */
+    perform pg_sleep(0.1); /* inside a function */
+  end loop; /* inside a function */
+end; /* inside a function */
+$$ volatile language plpgsql;
+
 -- Launch function into the background.
+1: SET application_name = 'vacuum_self_function_@amname@_reader';
+1: SET statement_timeout = '300s';
+2: SELECT pg_advisory_lock(2045, 250925);
 1&: select myfunc();
+2: SET statement_timeout = '90s';
+2: SELECT wait_for_reader_lock();
+2: RESET statement_timeout;
 
 -- Meanwhile, DELETE some rows and VACUUM. VACUUM should not recycle the
 -- old tuple versions that are still needed by the function later. It will
@@ -24,14 +86,20 @@ $$ stable language plpgsql;
 2: SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('ao');
 2: VACUUM ao;
 2: SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('ao');
+2: SELECT old_segments_in_state(2) AS old_segments_awaiting_drop;
 
 -- A second VACUUM shouldn't recycle them either.
 2: VACUUM ao;
 -- start_ignore
 2: SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('ao');
 -- end_ignore
+2: SELECT old_segments_in_state(2) AS old_segments_awaiting_drop;
+2: SELECT pg_advisory_unlock(2045, 250925);
 1<:
+1: RESET statement_timeout;
+1: RESET application_name;
 
 -- Now that the first transaction has finished, VACUUM can recycle.
 2: VACUUM ao;
 2: SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('ao');
+2: SELECT old_segments_in_state(1) AS old_segments_recycled;
