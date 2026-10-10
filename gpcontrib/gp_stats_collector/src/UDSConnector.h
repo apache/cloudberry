@@ -29,6 +29,8 @@
 #define UDSCONNECTOR_H
 
 #include "protos/gpsc_set_service.pb.h"
+#include "protos/yagpcc_plan.pb.h"
+#include "protos/yagpcc_set_per_node.pb.h"
 
 class Config;
 
@@ -37,6 +39,22 @@ class UDSConnector
 public:
 	bool static report_query(const gpsc::SetQueryReq &req,
 							 const std::string &event, const Config &config);
+
+	// The two calls below use the extended 8-byte header:
+	//   bytes 0-3: payload_size | 0x80000000  (uint32)
+	//   bytes 4-5: request type               (uint16)
+	//   bytes 6-7: reserved, zero             (uint16)
+	//   bytes 8+:  serialized message
+	// Delivery is the same best-effort push as report_query(): the message is
+	// dropped when the socket cannot take it.
+
+	// Sends a whole plan-tree snapshot of one backend, request type 1.
+	bool static report_per_node_batch(const yagpcc::SetPerNodeBatchReq &req,
+									  const Config &config);
+
+	// Sends the coordinator-only deparsed plan document, request type 2.
+	bool static report_query_plan(const yagpcc::SetQueryPlanReq &req,
+								  const Config &config);
 };
 
 #endif /* UDSCONNECTOR_H */
