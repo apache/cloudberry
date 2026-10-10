@@ -24,28 +24,41 @@ Covers reading lance_fdw foreign tables through the MCP tools: discovery, plain
 reads, Lance struct and binary columns, and vector search with and without a
 filter.
 
-These are integration tests. They write their own Lance datasets with pylance
+Most are integration tests. They write their own Lance datasets with pylance
 into the directory named by CBMCP_LANCE_TEST_DIR, which every segment of the
 cluster must be able to read at the same path. Without that variable, pylance,
 or lance_fdw 0.2 or later (the version that defines the distance operators),
-the whole module skips.
+they skip. The tests of what happens on lance_fdw older than 0.2 need none of
+that: they run against a stand-in connection.
 """
 
 import os
 import shutil
 import tempfile
+import uuid
+from contextlib import asynccontextmanager
 
 import pytest
 import pytest_asyncio
 
 from cbmcp.client import CloudberryMCPClient
 from cbmcp.config import DatabaseConfig
+from cbmcp.database import DatabaseManager
 
-SCHEMA = "cbmcp_lance_test"
-SERVER = "cbmcp_lance_test"
+# A suffix keeps two runs against one database from dropping each other's
+# fixtures.
+SUFFIX = uuid.uuid4().hex[:8]
+SCHEMA = f"cbmcp_lance_test_{SUFFIX}"
+SERVER = f"cbmcp_lance_test_{SUFFIX}"
 ROWS = 300
 DIMENSIONS = 8
 QUERY_VECTOR = [0.25, -1.0, 0.5, 2.0, -0.75, 1.5, 0.0, -2.5]
+MAX_VALUE_LENGTH = 10000
+LIMITS = {
+    "MCP_MAX_ROWS": "1000",
+    "MCP_MAX_VALUE_LENGTH": str(MAX_VALUE_LENGTH),
+    "MCP_MAX_RESULT_BYTES": "1000000",
+}
 
 
 def unwrap(result):
@@ -102,6 +115,17 @@ def write_datasets(directory):
     )
     lance.write_dataset(shapes, os.path.join(directory, "shapes.lance"))
 
+    notes = pa.table(
+        {
+            "id": pa.array([0, 1, 2], pa.int32()),
+            "body": pa.array(["n" * (MAX_VALUE_LENGTH + 5)] * 3),
+            "emb": pa.FixedSizeListArray.from_arrays(
+                pa.array(vectors[:3].reshape(-1), pa.float32()), DIMENSIONS
+            ),
+        }
+    )
+    lance.write_dataset(notes, os.path.join(directory, "notes.lance"))
+
 
 def exact_nearest(metric, limit=5, cat=None):
     """The true nearest docs, computed outside the database."""
@@ -119,8 +143,18 @@ def exact_nearest(metric, limit=5, cat=None):
     return [(int(i), float(distance[i])) for i in ids[:limit]]
 
 
+@pytest.fixture(scope="module")
+def result_limits():
+    # load_dotenv() does not override a variable that is already set, so a
+    # developer's .env cannot change the limits these tests assume.
+    with pytest.MonkeyPatch.context() as patch:
+        for name, value in LIMITS.items():
+            patch.setenv(name, value)
+        yield
+
+
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
-async def fixture_tables():
+async def fixture_tables(result_limits):
     base = os.environ.get("CBMCP_LANCE_TEST_DIR")
     if not base:
         pytest.skip("Skipping Lance tests - CBMCP_LANCE_TEST_DIR is not set")
@@ -136,10 +170,15 @@ async def fixture_tables():
         pytest.skip(f"Skipping Lance tests - no reachable cluster: {e}")
 
     directory = None
+    created_extension = False
     try:
         try:
+            created_extension = not await conn.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'lance_fdw')"
+            )
             await conn.execute("CREATE EXTENSION IF NOT EXISTS lance_fdw")
         except Exception as e:
+            created_extension = False
             pytest.skip(f"Skipping Lance tests - lance_fdw unavailable: {e}")
         if not await conn.fetchval(
             "SELECT EXISTS (SELECT 1 FROM pg_operator WHERE oprname = '<->' "
@@ -167,6 +206,10 @@ async def fixture_tables():
             f"meta {SCHEMA}.meta, parts {SCHEMA}.meta[]) "
             f"SERVER {SERVER} OPTIONS (uri 'shapes.lance')"
         )
+        await conn.execute(
+            f"CREATE FOREIGN TABLE {SCHEMA}.notes (id integer, body text, emb real[]) "
+            f"SERVER {SERVER} OPTIONS (uri 'notes.lance')"
+        )
         # A real[] column outside lance_fdw is just an array.
         await conn.execute(
             f"CREATE TABLE {SCHEMA}.plain_arrays (id integer, emb real[]) DISTRIBUTED BY (id)"
@@ -177,6 +220,9 @@ async def fixture_tables():
             if not conn.is_closed():
                 await conn.execute(f"DROP SCHEMA IF EXISTS {SCHEMA} CASCADE")
                 await conn.execute(f"DROP SERVER IF EXISTS {SERVER} CASCADE")
+                # Leave the database as it was found.
+                if created_extension:
+                    await conn.execute("DROP EXTENSION IF EXISTS lance_fdw")
         finally:
             await conn.close()
             if directory:
@@ -199,10 +245,10 @@ class TestDiscovery:
     """An agent has to find a Lance table before it can read one."""
 
     async def test_list_tables_includes_foreign_tables(self, client):
-        assert await call(client, "list_tables", schema=SCHEMA) == ["docs", "plain_arrays", "shapes"]
+        assert await call(client, "list_tables", schema=SCHEMA) == ["docs", "notes", "plain_arrays", "shapes"]
 
     async def test_list_tables_can_narrow_to_foreign_tables(self, client):
-        assert await call(client, "list_tables", schema=SCHEMA, table_type="foreign") == ["docs", "shapes"]
+        assert await call(client, "list_tables", schema=SCHEMA, table_type="foreign") == ["docs", "notes", "shapes"]
         assert await call(client, "list_tables", schema=SCHEMA, table_type="base") == ["plain_arrays"]
 
     async def test_list_columns_reports_real_array(self, client):
@@ -226,9 +272,16 @@ class TestDiscovery:
 
     async def test_searchable_columns_report_the_lance_embedding(self, client):
         rows = await call(client, "list_searchable_columns", schema=SCHEMA)
-        vectors = [(r["table"], r["column"], r["kind"], r["embedding"], r["dimension"])
+        vectors = [(r["table"], r["column"], r["kind"], r["embedding"], r["dimension"], r["indexes"])
                    for r in rows if r["kind"] == "vector"]
-        assert vectors == [("docs", "emb", "vector", "lance", None)]
+        assert vectors == [
+            ("docs", "emb", "vector", "lance", None, []),
+            ("notes", "emb", "vector", "lance", None, []),
+        ]
+
+    async def test_database_summary_counts_foreign_tables(self, client):
+        summary = await call(client, "get_database_summary")
+        assert summary[SCHEMA]["tables"] == ["docs", "notes", "plain_arrays", "shapes"]
 
 
 @pytest.mark.asyncio(loop_scope="module")
@@ -353,9 +406,63 @@ class TestVectorSearch:
         )
         assert "which is not an embedding type" in result["error"]
 
+    async def test_long_values_in_search_results_are_cut_and_reported(self, client):
+        result = await call(
+            client, "vector_search", schema=SCHEMA, table="notes", vector_column="emb",
+            query_vector=QUERY_VECTOR, limit=3, select_columns=["id", "body"],
+        )
+        assert [len(r[1]) for r in result["rows"]] == [MAX_VALUE_LENGTH] * 3
+        assert result["truncated_values"] == 3
+        assert result["truncated_columns"] == ["body"]
+
     async def test_hybrid_search_is_rejected(self, client):
         result = await call(
             client, "hybrid_search", schema=SCHEMA, table="docs", vector_column="emb",
             text_column="title", query_vector=QUERY_VECTOR, query="doc",
         )
         assert "hybrid_search does not support the Lance column 'emb'" in result["error"]
+
+
+class StandInConnection:
+    """Answers the catalog queries of a database whose lance_fdw is older than 0.2."""
+
+    def __init__(self, records):
+        self.records = records
+
+    async def fetch(self, sql, *args):
+        return self.records if "FROM pg_class c" in sql else []
+
+    async def fetchval(self, sql, *args):
+        # LANCE_OPERATOR_SQL: no lance_fdw operator on real[].
+        return False
+
+
+class StandInManager(DatabaseManager):
+    def __init__(self, conn):
+        super().__init__(DatabaseConfig("localhost", 5432, "db", "user", ""))
+        self.conn = conn
+
+    @asynccontextmanager
+    async def get_connection(self):
+        yield self.conn
+
+
+@pytest.mark.asyncio
+class TestLanceOlderThanTheOperators:
+    """lance_fdw 0.1 has the foreign tables but no distance operators."""
+
+    async def test_vector_search_says_to_update_the_extension(self):
+        column = {"column_name": "emb"}
+        with pytest.raises(ValueError, match="ALTER EXTENSION lance_fdw UPDATE"):
+            await DatabaseManager._check_lance_search(
+                StandInConnection([]), column, "l2", "<->", None, None
+            )
+
+    async def test_the_column_is_not_reported_as_searchable(self):
+        record = {
+            "relid": 1, "schema_name": "s", "table_name": "t", "column_name": "emb",
+            "attribute_number": 1, "type_name": "_float4", "type_display": "real[]",
+            "type_modifier": -1, "foreign_data_wrapper": "lance_fdw",
+        }
+        manager = StandInManager(StandInConnection([record]))
+        assert await manager.list_searchable_columns() == []

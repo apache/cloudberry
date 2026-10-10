@@ -86,6 +86,7 @@ MCP_DEBUG=false
 # Query result limits (see "Query Results")
 MCP_MAX_ROWS=1000
 MCP_MAX_VALUE_LENGTH=10000
+MCP_MAX_RESULT_BYTES=1000000
 ```
 
 ## Usage
@@ -127,7 +128,7 @@ python -m cbmcp.client
 - `hybrid_search(schema, table, vector_column, text_column, query_vector, query, limit, select_columns, filters, metric, language, query_mode, match_mode, rrf_k, candidates, probes, ef_search)` - Both of the above, fused by reciprocal rank
 
 #### Query Tools
-- `execute_query(query, params, readonly, max_rows)` - Execute a SQL query. `params` is a list bound to `$1, $2, ...` in order; at most `max_rows` rows come back (see "Query Results")
+- `execute_query(query, params, readonly, max_rows)` - Execute a SQL query. `params` is a list bound to `$1, $2, ...` in order; with `readonly` on, the statement runs in a `READ ONLY` transaction; at most `max_rows` rows come back (see "Query Results")
 - `explain_query(query, params)` - Get query execution plan. Read-only statements only, because `EXPLAIN ANALYZE` runs what it is given
 - `get_table_stats(schema, table)` - Get table statistics
 - `list_large_tables(limit)` - List largest tables
@@ -143,7 +144,7 @@ python -m cbmcp.client
 - `list_constraints(schema, table)` - List constraints for a table
 - `list_foreign_keys(schema, table)` - List foreign keys for a table
 - `list_referenced_tables(schema, table)` - List tables that reference this table
-- `get_table_ddl(schema, table)` - Get DDL statement for a table; for a foreign table, `CREATE FOREIGN TABLE` with its server and options
+- `get_table_ddl(schema, table)` - Get the column definitions of a table as DDL; for a foreign table, `CREATE FOREIGN TABLE` with its server and table options, credentials redacted. Constraints, indexes and the distribution policy are not included
 
 #### Performance & Monitoring
 - `get_slow_queries(limit)` - List slow queries
@@ -318,44 +319,68 @@ values that have no JSON form of their own:
 
 | Column type | Comes back as |
 |---|---|
-| `bytea` | its hex text form, `"\\x4530a8..."`, which `'...'::bytea` reads back |
+| `bytea` | its hex text form, `"\\x4530a8"`, which `'...'::bytea` reads back |
 | composite (including a Lance struct) | an object keyed by attribute name |
 | array | a list, converted element by element |
 | range | `{"lower", "upper", "lower_inc", "upper_inc", "isempty"}` |
 | `numeric` | a string, so that no digits are lost |
+| `float4`, `float8` NaN or infinity | `"NaN"`, `"Infinity"`, `"-Infinity"`, as PostgreSQL spells them; JSON has no such numbers, and `null` would read as SQL NULL |
+| `bit`, `varbit` | the bit string, `"101"` |
+| `path` | `{"points": [[x, y], ...], "is_closed": ...}`; `polygon` is the list of points; `point` is `[x, y]` and the other geometric types are nested lists of points and numbers |
+| any other type | its text form, such as `"10.0.0.1"` for `inet`; a type with no text form in the driver is named instead of shown |
+
+With `readonly` left at its default, `execute_query` runs the statement in a
+`READ ONLY` transaction, so a `SELECT` that calls a function with a side
+effect, such as `nextval()`, is refused. With `readonly` off, rows are still
+read only up to the limit below, so such a function runs for those rows alone.
 
 Everything a tool returns lands in the agent's context, so a result is bounded
-twice:
+three ways:
 
 - `execute_query` returns at most `MCP_MAX_ROWS` rows (default 1000), or fewer
   when `max_rows` asks for fewer. The query is read through a cursor and stops
   one row past the limit, so a `SELECT` with no `LIMIT` costs what it returns,
-  not the whole table. `"truncated": true` means there were more rows; page
-  with `ORDER BY` and `LIMIT`/`OFFSET`.
-- A value longer than `MCP_MAX_VALUE_LENGTH` characters (default 10000) is cut
-  to that length. The result then reports how many values were cut and in
-  which columns:
+  not the whole table.
+- A string longer than `MCP_MAX_VALUE_LENGTH` characters (default 10000) is cut
+  to that length, with no marker in the value itself; a `bytea` is cut on a
+  byte boundary, so it still reads back. Strings inside arrays and composites
+  are cut too, and reported under the outer column.
+- Rows stop being added once the result reaches `MCP_MAX_RESULT_BYTES` of JSON
+  (default 1000000). This is what bounds arrays, which have no length to cut:
+  a thousand rows of 1536-dimension embeddings would otherwise be tens of
+  megabytes. A single row larger than the budget comes back as no rows; select
+  fewer columns.
+
+`"truncated": true` means there were more rows, and `truncated_by` says which
+limit stopped them; page with `ORDER BY` and `LIMIT`/`OFFSET`. When a value was
+cut, the result says how many and in which columns:
 
 ```json
-{"columns": ["id", "txt"], "rows": [[4, "70c16d..."]], "row_count": 1,
+{"columns": ["id", "txt"], "rows": [[4, "70c16db31fb8"]], "row_count": 1,
  "truncated": false, "max_rows": 1000,
  "truncated_values": 1, "truncated_columns": ["txt"], "max_value_length": 10000}
 ```
 
+The retrieval tools apply the value limit and the byte budget in the same way.
+All three limits must be positive integers; the server refuses to start
+otherwise.
+
 ## Lance Datasets
 
-`lance_fdw` exposes a Lance dataset as a foreign table. The tools read it like
-any other table, and `lance_fdw` hands filters, projections and vector searches
-to Lance.
+`lance_fdw` is a separately installed foreign data wrapper, not part of Apache
+Cloudberry, that exposes a Lance dataset as a foreign table. The tools read it
+like any other table, and `lance_fdw` hands filters, projections and vector
+searches to Lance. Vector search needs `lance_fdw` 0.2 or later.
 
 - **Finding the tables.** `list_tables` lists foreign tables beside ordinary
   ones, and `table_type: "foreign"` lists only them. `get_table_ddl` shows the
-  server and the dataset `uri`. Server options and user mappings, where
-  credentials live, are not shown.
+  server and the table options, such as the dataset `uri`. Option values that
+  look like credentials are shown as `<redacted>`, and server options and user
+  mappings are never read.
 - **Reading.** `execute_query` reads a Lance table with plain SQL. A Lance
   vector column is `real[]` and comes back as a list of numbers; a struct comes
   back as an object.
-- **Vector search.** `lance_fdw` 0.2 defines `<->` (Euclidean), `<=>` (cosine
+- **Vector search.** `lance_fdw` defines `<->` (Euclidean), `<=>` (cosine
   distance) and `<#>` (negative inner product) on `real[]`. `vector_search`
   accepts a `real[]` column of a `lance_fdw` table, and so does a hand-written
   query:
@@ -377,8 +402,13 @@ On a Lance column `vector_search` supports the `l2`, `cosine` and
 settings and are rejected; a Lance search is tuned by the server settings
 `lance_fdw.nprobes` and `lance_fdw.refine_factor`. `hybrid_search` does not
 accept a Lance column yet; run `vector_search` and `fulltext_search` on it
-separately. A `real[]` column outside a `lance_fdw` table is an ordinary array,
-not an embedding.
+separately.
+
+Every `real[]` column of a `lance_fdw` table counts as an embedding, because
+the catalog cannot tell a vector from any other list of floats: a variable
+length list of scores reads as `real[]` too, and is reported and searchable
+like a vector. A `real[]` column outside a `lance_fdw` table is an ordinary
+array, not an embedding.
 
 ## Security Features
 

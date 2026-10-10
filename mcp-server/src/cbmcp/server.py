@@ -28,7 +28,7 @@ from typing import Annotated, Any, Dict, List, Optional
 import logging
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
-from pydantic import Field
+from pydantic import Field, StrictInt
 
 from .config import DatabaseConfig, ServerConfig
 from .database import DatabaseManager
@@ -132,14 +132,14 @@ class CloudberryMCPServer:
             try:
                 return await self.db_manager.list_columns(schema, table)
             except Exception as e:
-                return f"Error listing columns: {str(e)}"
+                raise ToolError(f"Error listing columns: {str(e)}") from e
         
         @self.mcp.tool()
         async def execute_query(
             query: Annotated[str, Field(description="The SQL query to execute")],
             params: Annotated[Optional[List[Any]], Field(description="Values bound to $1, $2, ... in the query, in order")] = None,
             readonly: Annotated[bool, Field(description="Whether the query is read-only")] = True,
-            max_rows: Annotated[Optional[int], Field(description="Return at most this many rows; defaults to, and cannot exceed, the server's MCP_MAX_ROWS")] = None
+            max_rows: Annotated[Optional[StrictInt], Field(description="Return at most this many rows; defaults to, and cannot exceed, the server's MCP_MAX_ROWS")] = None
         ) -> Dict[str, Any]:
             """
             Execute a safe SQL query with parameters.
@@ -435,7 +435,7 @@ class CloudberryMCPServer:
                     schema, table, include_unindexed_text
                 )
             except Exception as e:
-                return f"Error listing searchable columns: {str(e)}"
+                raise ToolError(f"Error listing searchable columns: {str(e)}") from e
 
         @self.mcp.tool()
         async def vector_search(

@@ -30,7 +30,9 @@ MCP_HOST=localhost
 MCP_PORT=8000
 MCP_DEBUG=false
 
-# Query result limits: rows per execute_query call, and characters per value
-# (longer values are cut and reported as truncated)
+# Query result limits: rows per execute_query call, characters per value
+# (longer values are cut and reported), and bytes of JSON per result. Each must
+# be a positive integer, or the server does not start.
 MCP_MAX_ROWS=1000
 MCP_MAX_VALUE_LENGTH=10000
+MCP_MAX_RESULT_BYTES=1000000

@@ -24,23 +24,32 @@
 This project uses the `pytest` framework for testing, supporting both asynchronous testing and parameterized testing.
 
 ### Test Files
-- `test_cbmcp.py` - Main test file containing all MCP client functionality tests
+- `test_cbmcp.py` - MCP client functionality: tools, resources and prompts over both transports
 - `test_database_tools.py` - Database management tools
 - `test_search_tools.py` - Retrieval tools; needs the `pgvector` extension, and skips without it
-- `test_result_values.py` - How query results carry bytea, composite and range values, and the row and value limits
+- `test_result_values.py` - How query results carry values with no JSON form, the row, value and byte limits, the read-only transaction, and declared types in `list_columns` and `get_table_ddl`
 - `test_lance_tools.py` - Reading and vector-searching `lance_fdw` foreign tables; see below
+
+`test_result_values.py` and `test_lance_tools.py` set the result limits they
+assume, so a `.env` with other values does not affect them, and suffix their
+schema and server names so that two runs can share a database.
 
 ### Lance Tests
 `test_lance_tools.py` writes its own Lance datasets with pylance and reads them
 back through `lance_fdw`, so it needs:
 
-- `lance_fdw` 0.2 or later installed in the cluster;
-- `pip install pylance pyarrow numpy` in the test environment;
+- `lance_fdw` 0.2 or later available to the cluster. If the database does not
+  have the extension yet, the tests create it and drop it again afterwards;
+- `pip install pylance pyarrow numpy` in the test environment. These are not
+  in the `dev` extras, since only this module needs them;
 - `CBMCP_LANCE_TEST_DIR`, a directory the tests can write to and every segment
   can read at the same path - any local directory on a single-host demo
   cluster.
 
-Without any of these the module skips.
+Without one of these the integration tests skip; two tests of how an older
+`lance_fdw` is handled run anyway, against a stand-in connection. A directory
+that some segment hosts cannot read is not detected up front: the tests fail
+rather than skip.
 
 ```bash
 CBMCP_LANCE_TEST_DIR=/home/gpadmin/lance_test pytest tests/test_lance_tools.py

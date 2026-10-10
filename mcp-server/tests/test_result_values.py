@@ -28,14 +28,31 @@ These are integration tests. They build their own fixture tables and need a
 reachable cluster, but no extension; without a cluster the module skips.
 """
 
+import json
+import os
+import uuid
+
 import pytest
 import pytest_asyncio
 
 from cbmcp.client import CloudberryMCPClient
 from cbmcp.config import DatabaseConfig
 
-SCHEMA = "cbmcp_values_test"
+# A suffix keeps two runs against one database from dropping each other's
+# fixtures.
+SCHEMA = f"cbmcp_values_test_{uuid.uuid4().hex[:8]}"
 MANY_ROWS = 1500
+
+# The limits under test, set here so that a developer's .env cannot change
+# them.  load_dotenv() does not override a variable that is already set.
+MAX_ROWS = 1000
+MAX_VALUE_LENGTH = 10000
+MAX_RESULT_BYTES = 1000000
+LIMITS = {
+    "MCP_MAX_ROWS": str(MAX_ROWS),
+    "MCP_MAX_VALUE_LENGTH": str(MAX_VALUE_LENGTH),
+    "MCP_MAX_RESULT_BYTES": str(MAX_RESULT_BYTES),
+}
 
 
 def unwrap(result):
@@ -56,8 +73,16 @@ async def open_connection():
     )
 
 
+@pytest.fixture(scope="module", autouse=True)
+def result_limits():
+    with pytest.MonkeyPatch.context() as patch:
+        for name, value in LIMITS.items():
+            patch.setenv(name, value)
+        yield
+
+
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
-async def fixture_tables():
+async def fixture_tables(result_limits):
     try:
         conn = await open_connection()
     except Exception as e:
@@ -91,6 +116,17 @@ async def fixture_tables():
             f"CREATE TABLE {SCHEMA}.many AS "
             f"SELECT g AS id FROM generate_series(1, {MANY_ROWS}) g DISTRIBUTED BY (id)"
         )
+        await conn.execute(
+            f"""
+            CREATE TABLE {SCHEMA}.generated (
+                id integer GENERATED ALWAYS AS IDENTITY,
+                a integer,
+                b integer GENERATED ALWAYS AS (a * 2) STORED,
+                c text DEFAULT 'x'
+            ) DISTRIBUTED BY (a)
+            """
+        )
+        await conn.execute(f"CREATE SEQUENCE {SCHEMA}.seq")
         yield conn
     finally:
         try:
@@ -135,6 +171,36 @@ class TestValuesWithoutAJsonForm:
         result = await query(client, f"SELECT emb FROM {SCHEMA}.typed")
         assert result["rows"] == [[[1.5, 2.5]]]
 
+    async def test_numeric_comes_back_as_a_string(self, client):
+        result = await query(client, f"SELECT price FROM {SCHEMA}.typed")
+        assert result["rows"] == [["9.50"]]
+
+    async def test_nan_and_infinity_are_not_null(self, client):
+        result = await query(
+            client,
+            "SELECT 'NaN'::float8, 'Infinity'::float8, '-Infinity'::float4, "
+            "'NaN'::numeric, NULL::float8",
+        )
+        assert result["rows"] == [["NaN", "Infinity", "-Infinity", "NaN", None]]
+
+    async def test_bit_string_and_geometry(self, client):
+        result = await query(
+            client,
+            "SELECT B'101', '((0,0),(1,1))'::path, '[(0,0),(1,1)]'::path, "
+            "'((0,0),(1,1),(1,0))'::polygon, '(1,2)'::point",
+        )
+        assert result["rows"] == [[
+            "101",
+            {"points": [[0.0, 0.0], [1.0, 1.0]], "is_closed": True},
+            {"points": [[0.0, 0.0], [1.0, 1.0]], "is_closed": False},
+            [[0.0, 0.0], [1.0, 1.0], [1.0, 0.0]],
+            [1.0, 2.0],
+        ]]
+
+    async def test_a_type_with_a_text_form_uses_it(self, client):
+        result = await query(client, "SELECT '10.0.0.1'::inet, '10.0.0.0/8'::cidr")
+        assert result["rows"] == [["10.0.0.1", "10.0.0.0/8"]]
+
 
 @pytest.mark.asyncio(loop_scope="module")
 class TestResultLimits:
@@ -147,7 +213,7 @@ class TestResultLimits:
         assert result["max_rows"] == 10
 
     async def test_default_limit_is_the_server_maximum(self, client):
-        maximum = DatabaseConfig.from_env().max_rows
+        maximum = MAX_ROWS
         result = await query(client, f"SELECT id FROM {SCHEMA}.many")
         assert result["row_count"] == min(MANY_ROWS, maximum)
         assert result["truncated"] is (MANY_ROWS > maximum)
@@ -159,17 +225,63 @@ class TestResultLimits:
         assert result["truncated"] is False
 
     async def test_max_rows_above_the_server_maximum_is_rejected(self, client):
-        maximum = DatabaseConfig.from_env().max_rows
+        maximum = MAX_ROWS
         result = await query(client, "SELECT 1", max_rows=maximum + 1)
         assert result["error"] == f"max_rows must be between 1 and {maximum}, got {maximum + 1}"
 
     async def test_long_value_is_cut_and_reported(self, client):
-        maximum = DatabaseConfig.from_env().max_value_length
+        maximum = MAX_VALUE_LENGTH
         result = await query(client, f"SELECT 1 AS id, repeat('x', {maximum + 5}) AS t")
         assert len(result["rows"][0][1]) == maximum
         assert result["truncated_values"] == 1
         assert result["truncated_columns"] == ["t"]
         assert result["max_value_length"] == maximum
+
+    async def test_a_cut_inside_an_array_names_the_outer_column(self, client):
+        result = await query(
+            client, f"SELECT 1 AS id, ARRAY['short', repeat('y', {MAX_VALUE_LENGTH + 1})] AS words"
+        )
+        assert [len(word) for word in result["rows"][0][1]] == [5, MAX_VALUE_LENGTH]
+        assert result["truncated_columns"] == ["words"]
+
+    async def test_a_cut_bytea_still_reads_back(self, client, fixture_tables):
+        result = await query(
+            client, f"SELECT decode(repeat('ab', {MAX_VALUE_LENGTH}), 'hex') AS raw"
+        )
+        value = result["rows"][0][0]
+        assert len(value) <= MAX_VALUE_LENGTH
+        assert result["truncated_columns"] == ["raw"]
+        # An even number of hex digits after \x, so bytea accepts it.
+        assert await fixture_tables.fetchval("SELECT length($1::text::bytea)", value) == (len(value) - 2) // 2
+
+    async def test_one_row_over_the_byte_budget_returns_no_rows(self, client):
+        result = await query(client, "SELECT array_agg(g) FROM generate_series(1, 300000) g")
+        assert result["rows"] == []
+        assert result["truncated"] is True
+        assert result["truncated_by"] == "max_result_bytes"
+        assert result["max_result_bytes"] == MAX_RESULT_BYTES
+
+    async def test_rows_stop_at_the_byte_budget(self, client):
+        result = await query(
+            client, "SELECT g, repeat('z', 9000) FROM generate_series(1, 200) g ORDER BY g"
+        )
+        assert 100 <= result["row_count"] < 200
+        assert result["rows"][0][0] == 1
+        assert result["truncated_by"] == "max_result_bytes"
+        assert len(json.dumps(result["rows"])) <= MAX_RESULT_BYTES
+
+    async def test_row_limit_reports_what_stopped_it(self, client):
+        result = await query(client, f"SELECT id FROM {SCHEMA}.many", max_rows=3)
+        assert result["truncated_by"] == "max_rows"
+
+    async def test_params_must_be_a_list(self, client):
+        # The tool schema refuses it before the query runs.
+        with pytest.raises(Exception, match="params"):
+            await client.call_tool("execute_query", {"query": "SELECT $1::int", "params": {"a": 1}})
+
+    async def test_empty_params_run_the_query(self, client):
+        result = await query(client, "SELECT 1", params=[])
+        assert result["rows"] == [[1]]
 
     async def test_short_values_report_nothing(self, client):
         result = await query(client, "SELECT 'short' AS t")
@@ -179,6 +291,19 @@ class TestResultLimits:
         result = await query(client, f"SELECT id, label FROM {SCHEMA}.typed WHERE false")
         assert result["columns"] == ["id", "label"]
         assert result["rows"] == []
+
+
+@pytest.mark.asyncio(loop_scope="module")
+class TestReadOnly:
+    """execute_query with readonly left on runs in a READ ONLY transaction."""
+
+    async def test_the_transaction_is_read_only(self, client):
+        result = await query(client, "SELECT current_setting('transaction_read_only')")
+        assert result["rows"] == [["on"]]
+
+    async def test_a_select_with_a_side_effect_is_refused(self, client):
+        result = await query(client, f"SELECT nextval('{SCHEMA}.seq')")
+        assert "read-only transaction" in result["error"]
 
 
 @pytest.mark.asyncio(loop_scope="module")
@@ -225,6 +350,48 @@ class TestDeclaredTypes:
         await fixture_tables.execute(f"DROP TABLE {SCHEMA}.typed_copy")
         assert [tuple(r) for r in copied] == [tuple(r) for r in original]
 
+    async def test_ddl_spells_generated_and_identity_columns(self, client):
+        ddl = unwrap(
+            await client.call_tool("get_table_ddl", {"schema": SCHEMA, "table": "generated"})
+        )
+        assert "  id integer NOT NULL GENERATED ALWAYS AS IDENTITY,\n" in ddl
+        assert "  b integer GENERATED ALWAYS AS ((a * 2)) STORED,\n" in ddl
+        assert "  c text DEFAULT 'x'::text\n" in ddl
+
+    async def test_ddl_of_something_that_is_not_a_table(self, client):
+        ddl = unwrap(
+            await client.call_tool("get_table_ddl", {"schema": SCHEMA, "table": "pair"})
+        )
+        assert ddl == f'Table DDL not found: "{SCHEMA}"."pair" is not a table'
+
+    async def test_ddl_redacts_credentials_in_table_options(self, client, fixture_tables):
+        # An FDW with no validator takes any option, which is what a PXF or
+        # s3 location carrying keys looks like to the catalog.
+        wrapper = f"{SCHEMA}_fdw"
+        try:
+            await fixture_tables.execute(f"CREATE FOREIGN DATA WRAPPER {wrapper}")
+        except Exception as e:
+            pytest.skip(f"cannot create a foreign data wrapper: {e}")
+        try:
+            await fixture_tables.execute(f"CREATE SERVER {wrapper}_srv FOREIGN DATA WRAPPER {wrapper}")
+            await fixture_tables.execute(
+                f"CREATE FOREIGN TABLE {SCHEMA}.ext (id integer OPTIONS (api_token 't0k')) "
+                f"SERVER {wrapper}_srv OPTIONS ("
+                f"location 's3://b/x?ACCESS_KEY=AKIA1&SECRET_KEY=abc/def', "
+                f"aws_secret_access_key 'zzz', note 'it''s fine')"
+            )
+            ddl = unwrap(
+                await client.call_tool("get_table_ddl", {"schema": SCHEMA, "table": "ext"})
+            )
+        finally:
+            await fixture_tables.execute(f"DROP FOREIGN DATA WRAPPER {wrapper} CASCADE")
+        assert "AKIA1" not in ddl and "abc/def" not in ddl and "zzz" not in ddl and "t0k" not in ddl
+        assert "id integer OPTIONS (api_token '<redacted>')" in ddl
+        assert (
+            "OPTIONS (location 's3://b/x?ACCESS_KEY=<redacted>&SECRET_KEY=<redacted>', "
+            "aws_secret_access_key '<redacted>', note 'it''s fine');"
+        ) in ddl
+
     async def test_list_tables_rejects_an_unknown_type(self, client):
         with pytest.raises(Exception, match="table_type 'view' is not supported"):
             await client.call_tool("list_tables", {"schema": SCHEMA, "table_type": "view"})
@@ -233,4 +400,4 @@ class TestDeclaredTypes:
         tables = unwrap(
             await client.call_tool("list_tables", {"schema": SCHEMA, "table_type": "base"})
         )
-        assert tables == ["many", "typed"]
+        assert tables == ["generated", "many", "typed"]

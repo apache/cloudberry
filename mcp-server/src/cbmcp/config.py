@@ -31,6 +31,7 @@ from dotenv import load_dotenv
 # writes itself.
 DEFAULT_MAX_ROWS = 1000
 DEFAULT_MAX_VALUE_LENGTH = 10000
+DEFAULT_MAX_RESULT_BYTES = 1000000
 
 
 def _positive_int_env(name: str, default: int) -> int:
@@ -56,6 +57,7 @@ class DatabaseConfig:
     password: str
     max_rows: int = DEFAULT_MAX_ROWS
     max_value_length: int = DEFAULT_MAX_VALUE_LENGTH
+    max_result_bytes: int = DEFAULT_MAX_RESULT_BYTES
     
     @classmethod
     def from_env(cls) -> "DatabaseConfig":
@@ -70,6 +72,9 @@ class DatabaseConfig:
             max_rows=_positive_int_env("MCP_MAX_ROWS", DEFAULT_MAX_ROWS),
             max_value_length=_positive_int_env(
                 "MCP_MAX_VALUE_LENGTH", DEFAULT_MAX_VALUE_LENGTH
+            ),
+            max_result_bytes=_positive_int_env(
+                "MCP_MAX_RESULT_BYTES", DEFAULT_MAX_RESULT_BYTES
             ),
         )
     

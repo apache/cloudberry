@@ -54,6 +54,7 @@ class CloudberryMCPClient:
         self.mode = mode
         self.server_url = server_url
         self.client: Optional[Client] = None
+        self.server: Optional[CloudberryMCPServer] = None
     
     @classmethod
     async def create(cls, mode: str = "stdio", server_url: str = "http://localhost:8000/mcp/") -> "CloudberryMCPClient":
@@ -67,8 +68,8 @@ class CloudberryMCPClient:
         if self.mode == "stdio":
             server_config = ServerConfig.from_env()
             db_config = DatabaseConfig.from_env()
-            server = CloudberryMCPServer(server_config, db_config)
-            self.client = Client(server.mcp)
+            self.server = CloudberryMCPServer(server_config, db_config)
+            self.client = Client(self.server.mcp)
         else:
             self.client = Client(self.server_url)
         
@@ -79,13 +80,21 @@ class CloudberryMCPClient:
         if self.client:
             await self.client.__aexit__(None, None, None)
             self.client = None
+        await self._close_server()
+
+    async def _close_server(self):
+        # An in-process server owns a connection pool; left open, every
+        # client leaks database connections until the cluster refuses more.
+        if self.server:
+            await self.server.close()
+            self.server = None
     
     async def __aenter__(self):
         if self.mode == "stdio":
             server_config = ServerConfig.from_env()
             db_config = DatabaseConfig.from_env()
-            server = CloudberryMCPServer(server_config, db_config)
-            self.client = Client(server.mcp)
+            self.server = CloudberryMCPServer(server_config, db_config)
+            self.client = Client(self.server.mcp)
         else:
             self.client = Client(self.server_url)
 
@@ -95,6 +104,7 @@ class CloudberryMCPClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if self.client:
             await self.client.__aexit__(exc_type, exc_val, exc_tb)
+        await self._close_server()
     
     async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
         """Call a tool on the MCP server"""
