@@ -77,10 +77,12 @@ class CloudberryMCPClient:
     
     async def close(self):
         """Close the client connection"""
-        if self.client:
-            await self.client.__aexit__(None, None, None)
+        try:
+            if self.client:
+                await self.client.__aexit__(None, None, None)
+        finally:
             self.client = None
-        await self._close_server()
+            await self._close_server()
 
     async def _close_server(self):
         # An in-process server owns a connection pool; left open, every
@@ -102,9 +104,11 @@ class CloudberryMCPClient:
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.client:
-            await self.client.__aexit__(exc_type, exc_val, exc_tb)
-        await self._close_server()
+        try:
+            if self.client:
+                await self.client.__aexit__(exc_type, exc_val, exc_tb)
+        finally:
+            await self._close_server()
     
     async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
         """Call a tool on the MCP server"""

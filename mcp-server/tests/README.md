@@ -32,14 +32,17 @@ This project uses the `pytest` framework for testing, supporting both asynchrono
 
 `test_result_values.py` and `test_lance_tools.py` set the result limits they
 assume, so a `.env` with other values does not affect them, and suffix their
-schema and server names so that two runs can share a database.
+schema and server names so that two runs can share a database. When the Lance
+tests created `lance_fdw` themselves they drop it afterwards, without
+`CASCADE`, so the drop is skipped while another run still has a server on it.
 
 ### Lance Tests
 `test_lance_tools.py` writes its own Lance datasets with pylance and reads them
 back through `lance_fdw`, so it needs:
 
 - `lance_fdw` 0.2 or later available to the cluster. If the database does not
-  have the extension yet, the tests create it and drop it again afterwards;
+  have the extension yet, the tests create it and, unless another run is still
+  using it, drop it again afterwards;
 - `pip install pylance pyarrow numpy` in the test environment. These are not
   in the `dev` extras, since only this module needs them;
 - `CBMCP_LANCE_TEST_DIR`, a directory the tests can write to and every segment

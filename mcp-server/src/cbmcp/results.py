@@ -51,6 +51,10 @@ _PASSTHROUGH = (
 )
 
 
+def _json_size(value: Any) -> int:
+    return len(json.dumps(value, default=str, ensure_ascii=False).encode())
+
+
 class RowShaper:
     """Convert rows to JSON-ready values within a value limit and a byte budget.
 
@@ -66,6 +70,15 @@ class RowShaper:
         self.result_bytes = 0
         self.out_of_budget = False
 
+    def reserve(self, envelope: Dict[str, Any]) -> None:
+        """Count the rest of the result against the budget before any row.
+
+        envelope is the result without its rows, carrying every field it can
+        end up with, so that the budget bounds the whole JSON and not just
+        the rows inside it.
+        """
+        self.result_bytes += _json_size(envelope)
+
     def shape(self, records: Sequence[Any]) -> List[List[Any]]:
         rows: List[List[Any]] = []
         for record in records:
@@ -79,7 +92,8 @@ class RowShaper:
                 row.append(self._convert(value))
                 if self.truncated_values != before and column not in self.truncated_columns:
                     self.truncated_columns.append(column)
-            size = len(json.dumps(row, default=str, ensure_ascii=False).encode()) + 1
+            # The comma that separates it from the row before.
+            size = _json_size(row) + 1
             if self.result_bytes + size > self.max_result_bytes:
                 self.truncated_values = values_before
                 del self.truncated_columns[columns_before:]

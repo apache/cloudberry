@@ -127,6 +127,11 @@ async def fixture_tables(result_limits):
             """
         )
         await conn.execute(f"CREATE SEQUENCE {SCHEMA}.seq")
+        await conn.execute(f"CREATE TABLE {SCHEMA}.calls (n integer) DISTRIBUTED RANDOMLY")
+        await conn.execute(
+            f"CREATE FUNCTION {SCHEMA}.log_call(i integer) RETURNS integer LANGUAGE sql "
+            f"VOLATILE AS 'INSERT INTO {SCHEMA}.calls VALUES (i) RETURNING i'"
+        )
         yield conn
     finally:
         try:
@@ -268,7 +273,8 @@ class TestResultLimits:
         assert 100 <= result["row_count"] < 200
         assert result["rows"][0][0] == 1
         assert result["truncated_by"] == "max_result_bytes"
-        assert len(json.dumps(result["rows"])) <= MAX_RESULT_BYTES
+        # The budget bounds the whole result, not only its rows.
+        assert len(json.dumps(result).encode()) <= MAX_RESULT_BYTES
 
     async def test_row_limit_reports_what_stopped_it(self, client):
         result = await query(client, f"SELECT id FROM {SCHEMA}.many", max_rows=3)
@@ -301,9 +307,23 @@ class TestReadOnly:
         result = await query(client, "SELECT current_setting('transaction_read_only')")
         assert result["rows"] == [["on"]]
 
-    async def test_a_select_with_a_side_effect_is_refused(self, client):
+    async def test_a_select_that_writes_is_refused(self, client):
         result = await query(client, f"SELECT nextval('{SCHEMA}.seq')")
         assert "read-only transaction" in result["error"]
+
+    async def test_without_readonly_one_row_past_the_limit_is_evaluated(self, client, fixture_tables):
+        # Reading one row past max_rows is how truncation is detected, so a
+        # function with a side effect runs for that row too.
+        # A sequence would not show it: Cloudberry hands out values in
+        # batches, so last_value runs ahead of the calls.
+        result = await query(
+            client,
+            f"SELECT {SCHEMA}.log_call(g) FROM generate_series(1, 10) g",
+            readonly=False, max_rows=1,
+        )
+        assert result["row_count"] == 1
+        assert result["truncated"] is True
+        assert await fixture_tables.fetchval(f"SELECT count(*) FROM {SCHEMA}.calls") == 2
 
 
 @pytest.mark.asyncio(loop_scope="module")
@@ -364,9 +384,26 @@ class TestDeclaredTypes:
         )
         assert ddl == f'Table DDL not found: "{SCHEMA}"."pair" is not a table'
 
-    async def test_ddl_redacts_credentials_in_table_options(self, client, fixture_tables):
-        # An FDW with no validator takes any option, which is what a PXF or
-        # s3 location carrying keys looks like to the catalog.
+    async def test_ddl_of_a_partitioned_table(self, client, fixture_tables):
+        await fixture_tables.execute(
+            f'CREATE TABLE {SCHEMA}.parted (a integer, b text COLLATE "C") '
+            f"PARTITION BY RANGE (a) DISTRIBUTED BY (a)"
+        )
+        try:
+            ddl = unwrap(
+                await client.call_tool("get_table_ddl", {"schema": SCHEMA, "table": "parted"})
+            )
+        finally:
+            await fixture_tables.execute(f"DROP TABLE {SCHEMA}.parted")
+        assert ddl == (
+            f"CREATE TABLE {SCHEMA}.parted (\n  a integer,\n"
+            f'  b text COLLATE pg_catalog."C"\n)\nPARTITION BY RANGE (a);'
+        )
+
+    async def test_ddl_shows_no_option_value_of_another_wrapper(self, client, fixture_tables):
+        # An FDW with no validator takes any option, which is how a PXF or s3
+        # location carrying keys looks to the catalog.  No pattern recognises
+        # every way of writing a credential, so none of these values is shown.
         wrapper = f"{SCHEMA}_fdw"
         try:
             await fixture_tables.execute(f"CREATE FOREIGN DATA WRAPPER {wrapper}")
@@ -378,18 +415,21 @@ class TestDeclaredTypes:
                 f"CREATE FOREIGN TABLE {SCHEMA}.ext (id integer OPTIONS (api_token 't0k')) "
                 f"SERVER {wrapper}_srv OPTIONS ("
                 f"location 's3://b/x?ACCESS_KEY=AKIA1&SECRET_KEY=abc/def', "
-                f"aws_secret_access_key 'zzz', note 'it''s fine')"
+                f"sas 'https://a.blob.core.windows.net/c?sp=r&sig=SIG1', "
+                f"dsn 'https://user:pw1@host/x', conf '{{\"password\":\"pw2\"}}', "
+                f"note 'it''s fine')"
             )
             ddl = unwrap(
                 await client.call_tool("get_table_ddl", {"schema": SCHEMA, "table": "ext"})
             )
         finally:
             await fixture_tables.execute(f"DROP FOREIGN DATA WRAPPER {wrapper} CASCADE")
-        assert "AKIA1" not in ddl and "abc/def" not in ddl and "zzz" not in ddl and "t0k" not in ddl
+        for secret in ("AKIA1", "abc/def", "SIG1", "pw1", "pw2", "t0k"):
+            assert secret not in ddl
         assert "id integer OPTIONS (api_token '<redacted>')" in ddl
         assert (
-            "OPTIONS (location 's3://b/x?ACCESS_KEY=<redacted>&SECRET_KEY=<redacted>', "
-            "aws_secret_access_key '<redacted>', note 'it''s fine');"
+            "OPTIONS (location '<redacted>', sas '<redacted>', dsn '<redacted>', "
+            "conf '<redacted>', note '<redacted>');"
         ) in ddl
 
     async def test_list_tables_rejects_an_unknown_type(self, client):
@@ -400,4 +440,4 @@ class TestDeclaredTypes:
         tables = unwrap(
             await client.call_tool("list_tables", {"schema": SCHEMA, "table_type": "base"})
         )
-        assert tables == ["generated", "many", "typed"]
+        assert tables == ["calls", "generated", "many", "typed"]

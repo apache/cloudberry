@@ -144,7 +144,7 @@ python -m cbmcp.client
 - `list_constraints(schema, table)` - List constraints for a table
 - `list_foreign_keys(schema, table)` - List foreign keys for a table
 - `list_referenced_tables(schema, table)` - List tables that reference this table
-- `get_table_ddl(schema, table)` - Get the column definitions of a table as DDL; for a foreign table, `CREATE FOREIGN TABLE` with its server and table options, credentials redacted. Constraints, indexes and the distribution policy are not included
+- `get_table_ddl(schema, table)` - Get the column definitions of a table as DDL, with a partitioned table's partition key; for a foreign table, `CREATE FOREIGN TABLE` with its server and table options, values redacted except for `lance_fdw`'s own options. It describes the columns rather than recreating the table: constraints, indexes, the distribution policy and identity sequence parameters are not included
 
 #### Performance & Monitoring
 - `get_slow_queries(limit)` - List slow queries
@@ -330,9 +330,14 @@ values that have no JSON form of their own:
 | any other type | its text form, such as `"10.0.0.1"` for `inet`; a type with no text form in the driver is named instead of shown |
 
 With `readonly` left at its default, `execute_query` runs the statement in a
-`READ ONLY` transaction, so a `SELECT` that calls a function with a side
-effect, such as `nextval()`, is refused. With `readonly` off, rows are still
-read only up to the limit below, so such a function runs for those rows alone.
+`READ ONLY` transaction, so a `SELECT` that writes to a table, or calls a
+function that does, such as `nextval()`, is refused. That is all it refuses:
+PostgreSQL's read-only transactions stop writes to ordinary tables, not every
+side effect, and functions such as `pg_terminate_backend()` or
+`pg_read_file()` still run for a role allowed to call them. It is not a
+sandbox; see "Security Features". With `readonly` off, rows are read up to one
+past the row limit below, so a function with a side effect runs for at most
+one more row than comes back.
 
 Everything a tool returns lands in the agent's context, so a result is bounded
 three ways:
@@ -345,8 +350,8 @@ three ways:
   to that length, with no marker in the value itself; a `bytea` is cut on a
   byte boundary, so it still reads back. Strings inside arrays and composites
   are cut too, and reported under the outer column.
-- Rows stop being added once the result reaches `MCP_MAX_RESULT_BYTES` of JSON
-  (default 1000000). This is what bounds arrays, which have no length to cut:
+- Rows stop being added once the result, rows and every other field together,
+  reaches `MCP_MAX_RESULT_BYTES` of JSON (default 1000000). This is what bounds arrays, which have no length to cut:
   a thousand rows of 1536-dimension embeddings would otherwise be tens of
   megabytes. A single row larger than the budget comes back as no rows; select
   fewer columns.
@@ -374,9 +379,11 @@ searches to Lance. Vector search needs `lance_fdw` 0.2 or later.
 
 - **Finding the tables.** `list_tables` lists foreign tables beside ordinary
   ones, and `table_type: "foreign"` lists only them. `get_table_ddl` shows the
-  server and the table options, such as the dataset `uri`. Option values that
-  look like credentials are shown as `<redacted>`, and server options and user
-  mappings are never read.
+  server and the table options, such as the dataset `uri`. It shows the values
+  of `lance_fdw`'s own table and column options, which hold no credentials,
+  with any `user:password@` taken out of a URI; every option of another
+  wrapper is shown by name with its value as `<redacted>`, since a wrapper may
+  keep keys there. Server options and user mappings are never read.
 - **Reading.** `execute_query` reads a Lance table with plain SQL. A Lance
   vector column is `real[]` and comes back as a list of numbers; a struct comes
   back as an object.
@@ -413,7 +420,7 @@ array, not an embedding.
 ## Security Features
 
 - **SQL Injection Prevention**: Comprehensive query validation
-- **Read-Only Constraints**: Configurable write protection
+- **Read-Only Constraints**: With `readonly` on, `execute_query` refuses statements that write and runs the rest in a `READ ONLY` transaction. This guards against writes, not against every side effect: run the server as a role with the least privilege it needs, without superuser and without `EXECUTE` on administrative functions such as `pg_terminate_backend()`, `pg_reload_conf()` and `pg_read_file()`
 - **Parameterized Queries**: Safe parameter handling
 - **Connection Pooling**: Secure connection management
 - **Sensitive Table Protection**: Blocks access to system tables

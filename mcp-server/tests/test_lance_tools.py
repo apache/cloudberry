@@ -32,6 +32,7 @@ they skip. The tests of what happens on lance_fdw older than 0.2 need none of
 that: they run against a stand-in connection.
 """
 
+import json
 import os
 import shutil
 import tempfile
@@ -172,14 +173,15 @@ async def fixture_tables(result_limits):
     directory = None
     created_extension = False
     try:
+        installed = "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'lance_fdw')"
         try:
-            created_extension = not await conn.fetchval(
-                "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'lance_fdw')"
-            )
+            created_extension = not await conn.fetchval(installed)
             await conn.execute("CREATE EXTENSION IF NOT EXISTS lance_fdw")
         except Exception as e:
-            created_extension = False
-            pytest.skip(f"Skipping Lance tests - lance_fdw unavailable: {e}")
+            # Another run may have created it in the meantime.
+            if not await conn.fetchval(installed):
+                created_extension = False
+                pytest.skip(f"Skipping Lance tests - lance_fdw unavailable: {e}")
         if not await conn.fetchval(
             "SELECT EXISTS (SELECT 1 FROM pg_operator WHERE oprname = '<->' "
             "AND oprleft = 'real[]'::regtype AND oprright = 'real[]'::regtype)"
@@ -220,9 +222,14 @@ async def fixture_tables(result_limits):
             if not conn.is_closed():
                 await conn.execute(f"DROP SCHEMA IF EXISTS {SCHEMA} CASCADE")
                 await conn.execute(f"DROP SERVER IF EXISTS {SERVER} CASCADE")
-                # Leave the database as it was found.
+                # Leave the database as it was found.  Without CASCADE the
+                # drop fails while another run still has a server on it, and
+                # that run then drops it.
                 if created_extension:
-                    await conn.execute("DROP EXTENSION IF EXISTS lance_fdw")
+                    try:
+                        await conn.execute("DROP EXTENSION IF EXISTS lance_fdw")
+                    except Exception:
+                        pass
         finally:
             await conn.close()
             if directory:
@@ -269,6 +276,17 @@ class TestDiscovery:
             assert await fixture_tables.fetchval(f"SELECT count(*) FROM {SCHEMA}.docs_copy") == ROWS
         finally:
             await fixture_tables.execute(f"DROP FOREIGN TABLE {SCHEMA}.docs_copy")
+
+    async def test_ddl_takes_credentials_out_of_a_uri(self, client, fixture_tables):
+        await fixture_tables.execute(
+            f"CREATE FOREIGN TABLE {SCHEMA}.remote (id integer) "
+            f"SERVER {SERVER} OPTIONS (uri 's3://ak:sk@bucket/remote.lance', version '3')"
+        )
+        try:
+            ddl = await call(client, "get_table_ddl", schema=SCHEMA, table="remote")
+        finally:
+            await fixture_tables.execute(f"DROP FOREIGN TABLE {SCHEMA}.remote")
+        assert ddl.endswith("OPTIONS (uri 's3://bucket/remote.lance', version '3');")
 
     async def test_searchable_columns_report_the_lance_embedding(self, client):
         rows = await call(client, "list_searchable_columns", schema=SCHEMA)
@@ -414,6 +432,26 @@ class TestVectorSearch:
         assert [len(r[1]) for r in result["rows"]] == [MAX_VALUE_LENGTH] * 3
         assert result["truncated_values"] == 3
         assert result["truncated_columns"] == ["body"]
+
+    async def test_byte_budget_bounds_search_results(self, fixture_tables):
+        # Each notes row carries a body cut to MAX_VALUE_LENGTH, so a budget of
+        # two and a half rows keeps two of the three.
+        budget = int(MAX_VALUE_LENGTH * 2.5)
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setenv("MCP_MAX_RESULT_BYTES", str(budget))
+            instance = await CloudberryMCPClient.create(mode="stdio")
+            try:
+                result = await call(
+                    instance, "vector_search", schema=SCHEMA, table="notes", vector_column="emb",
+                    query_vector=QUERY_VECTOR, limit=3, select_columns=["id", "body"],
+                )
+            finally:
+                await instance.close()
+        assert len(result["rows"]) == 2
+        assert result["row_count"] == 2
+        assert result["truncated"] is True
+        assert result["truncated_by"] == "max_result_bytes"
+        assert len(json.dumps(result).encode()) <= budget
 
     async def test_hybrid_search_is_rejected(self, client):
         result = await call(

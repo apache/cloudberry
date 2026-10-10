@@ -188,10 +188,15 @@ class DatabaseManager:
                     cursor = await statement.cursor(*(params or []))
                     records = await cursor.fetch(limit + 1)
 
+                columns = [attribute.name for attribute in statement.get_attributes()]
                 shaper = RowShaper(self.config.max_value_length, self.config.max_result_bytes)
+                shaper.reserve(self._envelope(
+                    {"columns": columns, "row_count": limit, "truncated": False,
+                     "max_rows": limit}, columns,
+                ))
                 rows = shaper.shape(records[:limit])
                 result = {
-                    "columns": [attribute.name for attribute in statement.get_attributes()],
+                    "columns": columns,
                     "rows": rows,
                     "row_count": len(rows),
                     "truncated": False,
@@ -823,33 +828,44 @@ class DatabaseManager:
                 for r in records
             ]
 
-    # Option names whose values are credentials, and the same names inside a
-    # value, as in a PXF or s3 location URI: ...&ACCESS_KEY=...&SECRET_KEY=...
-    SECRET_OPTION_PATTERN = "(key|secret|password|passwd|token|credential)"
+    # The lance_fdw options that hold no credentials: its table options and its
+    # column option.  lance_fdw keeps credentials in user mappings only.
+    LANCE_TABLE_OPTIONS = [
+        "uri", "version", "batch_size", "batch_size_bytes", "rows_hint", "mpp_execute",
+    ]
+    LANCE_COLUMN_OPTIONS = ["column_name"]
 
     async def get_table_ddl(self, schema: str, table: str) -> str:
-        """Get DDL statement for a table.
+        """Get the column definitions of a table as DDL.
 
         Built from pg_attribute: format_type gives the declared type (real[],
         numeric(10,2)), where information_schema only says ARRAY or numeric.
-        A foreign table also gets its server and table options, without which
-        the statement does not recreate it; option values that look like
-        credentials are shown as <redacted>.  Server options and user
-        mappings are never read.  Constraints, indexes and the distribution
-        policy are not included.
+        A partitioned table gets its partition key, and a foreign table its
+        server and options.
+
+        Option values are shown only for options known to hold no secret: the
+        lance_fdw options listed above, with any user:password@ taken out of a
+        URI.  Every other option is shown by name with its value as
+        <redacted>, because a wrapper is free to keep keys in a table option
+        (a PXF or s3 location carrying ACCESS_KEY=...) and no pattern can tell
+        every such value apart.  Server options and user mappings are never
+        read.  Constraints, indexes, the distribution policy and identity
+        sequence parameters are not included, so the result describes the
+        columns rather than recreating every property of the table.
         """
-        redacted = (
-            f"CASE WHEN o.option_name ~* '{self.SECRET_OPTION_PATTERN}' "
-            f"THEN '<redacted>' "
-            f"ELSE regexp_replace(o.option_value, "
-            f"'({self.SECRET_OPTION_PATTERN}[A-Za-z0-9_]*=)[^&;[:space:]]*', "
-            f"'\\1<redacted>', 'gi') END"
+        shown = (
+            "CASE WHEN w.fdwname = $3 AND o.option_name = ANY({allowed}) "
+            "THEN regexp_replace(o.option_value, "
+            "'^([A-Za-z][A-Za-z0-9+.-]*://)[^/@]*@', '\\1') "
+            "ELSE '<redacted>' END"
         )
         options = (
             "SELECT string_agg(quote_ident(o.option_name) || ' ' || "
-            f"quote_literal({redacted}), ', ') "
-            "FROM pg_options_to_table({}) o"
+            "quote_literal(" + shown + "), ', ') "
+            "FROM pg_options_to_table({source}) o"
         )
+        column_options = options.format(allowed="$5::text[]", source="a.attfdwoptions")
+        table_options = options.format(allowed="$4::text[]", source="ft.ftoptions")
         ddl_query = f"""
         SELECT CASE WHEN c.relkind = 'f' THEN 'CREATE FOREIGN TABLE '
                     ELSE 'CREATE TABLE ' END ||
@@ -858,7 +874,10 @@ class DatabaseManager:
                string_agg(
                  '  ' || quote_ident(a.attname) || ' ' ||
                  format_type(a.atttypid, a.atttypmod) ||
-                 COALESCE(' OPTIONS (' || ({options.format('a.attfdwoptions')}) || ')', '') ||
+                 COALESCE(' OPTIONS (' || ({column_options}) || ')', '') ||
+                 CASE WHEN a.attcollation <> 0 AND a.attcollation <> ty.typcollation
+                      THEN ' COLLATE ' || quote_ident(cn.nspname) || '.' || quote_ident(co.collname)
+                      ELSE '' END ||
                  CASE WHEN a.attnotnull THEN ' NOT NULL' ELSE '' END ||
                  CASE WHEN a.attgenerated = 's'
                       THEN ' GENERATED ALWAYS AS (' || pg_get_expr(d.adbin, d.adrelid) || ') STORED'
@@ -870,23 +889,33 @@ class DatabaseManager:
                                     ELSE '' END,
                  E',\\n' ORDER BY a.attnum
                ) || E'\\n)' ||
+               CASE WHEN c.relkind = 'p'
+                    THEN E'\\nPARTITION BY ' || pg_get_partkeydef(c.oid)
+                    ELSE '' END ||
                CASE WHEN c.relkind = 'f' THEN
                  E'\\nSERVER ' || quote_ident(s.srvname) ||
-                 COALESCE(E'\\nOPTIONS (' || ({options.format('ft.ftoptions')}) || ')', '')
+                 COALESCE(E'\\nOPTIONS (' || ({table_options}) || ')', '')
                ELSE '' END || ';' AS ddl
         FROM pg_class c
         JOIN pg_namespace n ON n.oid = c.relnamespace
         JOIN pg_attribute a ON a.attrelid = c.oid
              AND a.attnum > 0 AND NOT a.attisdropped
+        JOIN pg_type ty ON ty.oid = a.atttypid
+        LEFT JOIN pg_collation co ON co.oid = a.attcollation
+        LEFT JOIN pg_namespace cn ON cn.oid = co.collnamespace
         LEFT JOIN pg_attrdef d ON d.adrelid = c.oid AND d.adnum = a.attnum
         LEFT JOIN pg_foreign_table ft ON ft.ftrelid = c.oid
         LEFT JOIN pg_foreign_server s ON s.oid = ft.ftserver
+        LEFT JOIN pg_foreign_data_wrapper w ON w.oid = s.srvfdw
         WHERE n.nspname = $1 AND c.relname = $2 AND c.relkind IN ('r', 'p', 'f')
-        GROUP BY n.nspname, c.relname, c.relkind, s.srvname, ft.ftoptions
+        GROUP BY c.oid, n.nspname, c.relname, c.relkind, s.srvname, ft.ftoptions, w.fdwname
         """
         try:
             async with self.get_connection() as conn:
-                ddl = await conn.fetchval(ddl_query, schema, table)
+                ddl = await conn.fetchval(
+                    ddl_query, schema, table, LANCE_FDW,
+                    self.LANCE_TABLE_OPTIONS, self.LANCE_COLUMN_OPTIONS,
+                )
                 return ddl or f'Table DDL not found: "{schema}"."{table}" is not a table'
         except Exception as e:
             return f"Error getting table DDL: {str(e)}"
@@ -1215,16 +1244,34 @@ class DatabaseManager:
         if applied:
             search_meta["settings"] = applied
 
-        shaper = RowShaper(self.config.max_value_length, self.config.max_result_bytes)
+        columns = list(records[0].keys()) if records else []
         result = {
-            "columns": list(records[0].keys()) if records else [],
-            "rows": shaper.shape(records),
+            "columns": columns,
+            "rows": [],
             "row_count": len(records),
             "sql": sql,
             "search": search_meta,
         }
+        shaper = RowShaper(self.config.max_value_length, self.config.max_result_bytes)
+        shaper.reserve(self._envelope(result, columns))
+        # The byte budget may drop rows from the end, so count what is kept.
+        result["rows"] = shaper.shape(records)
+        result["row_count"] = len(result["rows"])
         result.update(shaper.report())
         return result
+
+    def _envelope(self, fields: Dict[str, Any], columns: List[str]) -> Dict[str, Any]:
+        """A result without rows, with the largest truncation report it can carry."""
+        return {
+            **fields,
+            "rows": [],
+            "truncated": True,
+            "truncated_by": "max_result_bytes",
+            "max_result_bytes": self.config.max_result_bytes,
+            "truncated_values": self.config.max_rows,
+            "truncated_columns": columns,
+            "max_value_length": self.config.max_value_length,
+        }
 
     @staticmethod
     def _expression_names_column(expression: Optional[str], column_name: str) -> bool:
