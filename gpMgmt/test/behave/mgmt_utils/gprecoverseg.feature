@@ -1,7 +1,4 @@
-# needs_fix: the gprecoverseg fixes from #1639 (a3bfe47d5c3, 879b5638026,
-# 7056e02e306, 0aa26662c2c, 51955ac3d8f); without them a scenario hangs and
-# the job reaches its timeout.
-@gprecoverseg @needs_fix
+@gprecoverseg
 Feature: gprecoverseg tests
 
     @differential
@@ -1779,8 +1776,6 @@ Feature: gprecoverseg tests
 
 
   @concourse_cluster
-    # needs_fix: hostname in the -i recovery config file (#1639 0aa26662c2c)
-    @needs_fix
     Scenario: gprecoverseg recovery to new host populates hostname and address from the config file correctly
         Given the database is running
           And all the segments are running
@@ -1798,8 +1793,6 @@ Feature: gprecoverseg tests
           And the segments are synchronized
 
     @concourse_cluster
-    # needs_fix: hostname in the -i recovery config file (#1639 0aa26662c2c)
-    @needs_fix
     Scenario: gprecoverseg recovery to same host (full inplace) populates hostname and address from the config file correctly
         Given the database is running
           And all the segments are running
@@ -1818,8 +1811,6 @@ Feature: gprecoverseg tests
 
 
   @concourse_cluster
-    # needs_fix: hostname in the -i recovery config file (#1639 0aa26662c2c)
-    @needs_fix
     Scenario: gprecoverseg recovery with invalid format with hostname in config file
         Given the database is running
           And all the segments are running
@@ -1839,8 +1830,6 @@ Feature: gprecoverseg tests
 
 
   @concourse_cluster
-    # needs_fix: hostname in the -i recovery config file (#1639 0aa26662c2c)
-    @needs_fix
     Scenario: gprecoverseg incremental recovery populates hostname and address from the config file correctly
         Given the database is running
           And all the segments are running
@@ -1858,8 +1847,6 @@ Feature: gprecoverseg tests
           And the segments are synchronized
 
     @concourse_cluster
-    # needs_fix: hostname in the -i recovery config file (#1639 0aa26662c2c)
-    @needs_fix
     Scenario: gprecoverseg recovery with and without hostname parameter in config file
         Given the database is running
           And all the segments are running
@@ -1874,8 +1861,6 @@ Feature: gprecoverseg tests
           And the segments are synchronized
 
     @concourse_cluster
-    # needs_fix: hostname in the -i recovery config file (#1639 0aa26662c2c)
-    @needs_fix
     Scenario: gprecoverseg throws warning and skips recovery if provided hostname and address can not be resolved to same host
         Given the database is running
           And all the segments are running
@@ -1894,8 +1879,6 @@ Feature: gprecoverseg tests
           And the segments are synchronized
 
     @concourse_cluster
-    # needs_fix: hostname in the -i recovery config file (#1639 0aa26662c2c)
-    @needs_fix
     Scenario: gprecoverseg incremental recovery fails if config file contains wrong hostname of failed segment
         Given the database is running
           And all the segments are running
@@ -1913,8 +1896,6 @@ Feature: gprecoverseg tests
           And gprecoverseg should return a return code of 0
           And the cluster is rebalanced
 
-  # needs_fix: hostname in the -i recovery config file (#1639 0aa26662c2c)
-  @needs_fix
   @demo_cluster
   Scenario: gprecoverseg recovers segment when config file contains hostname on demo cluster
     Given the database is running
@@ -1933,8 +1914,6 @@ Feature: gprecoverseg tests
     And the cluster configuration has no segments where "content=0 and status='d'"
     Then the cluster is rebalanced
 
-  # needs_fix: hostname in the -i recovery config file (#1639 0aa26662c2c)
-  @needs_fix
   @demo_cluster
   Scenario: gprecoverseg skips recovery when config file contains invalid hostname on demo cluster
     Given the database is running
