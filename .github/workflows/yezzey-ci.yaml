@@ -1,0 +1,466 @@
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+# Yezzey CI Workflow
+# --------------------------------------------------------------------
+name: Yezzey CI Pipeline
+
+on:
+  push:
+    branches: [ REL_2_STABLE ]
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CLOUDBERRY_HOME: "/usr/local/cloudberry-db"
+  CLOUDBERRY_VERSION: "REL_2_STABLE"
+
+jobs:
+
+  ## Stage 1: Build artifacts and run tests for cloudberry
+
+  test-cloudberry:
+    name: Build and Test Yezzey Cloudberry (${{ matrix.os }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu22.04
+            image: apache/incubator-cloudberry:cbdb-build-ubuntu22.04-latest
+          - os: ubuntu24.04
+            image: apache/incubator-cloudberry:cbdb-build-ubuntu24.04-latest
+          - os: rocky8
+            image: apache/incubator-cloudberry:cbdb-build-rocky8-latest
+          - os: rocky9
+            image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+          - os: rocky10
+            image: apache/incubator-cloudberry:cbdb-build-rocky10-latest
+    container:
+      image: ${{ matrix.image }}
+      options: >-
+        --user root
+        -h cdw
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
+
+    steps:
+      - name: Checkout Cloudberry source
+        uses: actions/checkout@v7
+        with:
+          repository: apache/cloudberry
+          path: cloudberry
+          submodules: true
+
+      - name: Checkout Yproxy source
+        uses: actions/checkout@v7
+        with:
+          repository: open-gpdb/yproxy
+          ref: master
+          path: yproxy
+
+      - name: Cloudberry Environment Initialization
+        shell: bash
+        env:
+          LOGS_DIR: build-logs
+          SRC_DIR: ${{ github.workspace }}/cloudberry
+        run: |
+          set -eo pipefail
+          if ! su - gpadmin -c "/tmp/init_system.sh"; then
+            echo "::error::Container initialization failed"
+            exit 1
+          fi
+
+          mkdir -p "${SRC_DIR}/build-logs"
+          chown -R gpadmin:gpadmin "${SRC_DIR}/build-logs"
+          mkdir -p "${LOGS_DIR}/details"
+          chown -R gpadmin:gpadmin .
+          chmod -R 755 .
+          chmod 777 "${LOGS_DIR}"
+
+          df -kh /
+          rm -rf /__t/*
+          df -kh /
+
+          df -h | tee -a "${LOGS_DIR}/details/disk-usage.log"
+          free -h | tee -a "${LOGS_DIR}/details/memory-usage.log"
+
+          {
+            echo "=== Environment Information ==="
+            uname -a
+            df -h
+            free -h
+            env
+          } | tee -a "${LOGS_DIR}/details/environment.log"
+
+          echo "SRC_DIR=${GITHUB_WORKSPACE}" | tee -a "$GITHUB_ENV"
+
+      - name: Setup MinIO
+        run: |
+          set -ex pipefail
+
+          # Make sure configs that use the "minio" hostname resolve it to the
+          # local MinIO server started below.
+          if ! getent hosts minio >/dev/null 2>&1; then
+            echo "127.0.0.1 minio" >> /etc/hosts
+          fi
+          getent hosts minio
+
+          # Download MinIO server binary and mc client.
+          #
+          # dl.min.io now returns HTTP 410 for every artifact: MinIO archived
+          # the open-source Server and Client and no longer serves them from
+          # that host.  The final open-source releases are still published as
+          # GitHub release assets, so pin them there and verify the checksums
+          # MinIO publishes alongside each binary.
+          #
+          # These are plain shell variables on purpose: exporting anything
+          # with a MINIO_ prefix would leak into the server's configuration
+          # environment below.
+          minio_release="RELEASE.2025-09-07T16-13-09Z"
+          minio_sha256="7c5bd8512c6e966455b1d198209358b2d191c77a83ab377c4073281065fb855f"
+          mc_release="RELEASE.2025-08-13T08-35-41Z"
+          mc_sha256="01f866e9c5f9b87c2b09116fa5d7c06695b106242d829a8bb32990c00312e891"
+
+          curl -fsSL -o minio \
+            "https://github.com/minio/minio/releases/download/${minio_release}/minio.linux-amd64.${minio_release}"
+          echo "${minio_sha256}  minio" | sha256sum -c -
+          chmod +x minio
+          sudo mv minio /usr/local/bin/minio
+
+          curl -fsSL -o mc \
+            "https://github.com/minio/mc/releases/download/${mc_release}/mc.linux-amd64.${mc_release}"
+          echo "${mc_sha256}  mc" | sha256sum -c -
+          chmod +x mc
+          sudo mv mc /usr/local/bin/mc
+
+          # Start MinIO server in single-node single-drive mode as a background process.
+          # GitHub Actions service containers do not support passing a CMD/subcommand
+          # after the image name, so the Docker-based service approach prints help and
+          # exits instead of starting the server.  Running the binary directly avoids
+          # this limitation entirely.
+          mkdir -p /tmp/minio-data
+          MINIO_ROOT_USER=some_key \
+          MINIO_ROOT_PASSWORD=some_key \
+          minio server /tmp/minio-data \
+            --address ":9000" \
+            --console-address ":9001" \
+            > /tmp/minio.log 2>&1 &
+          echo $! > /tmp/minio.pid
+          echo "MinIO started with PID $(cat /tmp/minio.pid)"
+
+          # Wait for MinIO to be fully ready before issuing any requests
+          echo "Waiting for MinIO to be ready..."
+          for i in $(seq 1 30); do
+            if curl -sf http://minio:9000/minio/health/live; then
+              echo "MinIO is ready after ${i} attempts"
+              break
+            fi
+            if [ "${i}" -eq 30 ]; then
+              echo "::error::MinIO did not become ready in time"
+              cat /tmp/minio.log || true
+              exit 1
+            fi
+            sleep 2
+          done
+
+          # Add alias and verify
+          mc alias set minio-ci http://minio:9000 some_key some_key
+          mc admin info minio-ci
+
+          # Create buckets sequentially with retry/backoff
+          for bucket in gpyezzey gpyezzey2 gpyezzey3; do
+            for attempt in $(seq 1 5); do
+              if mc mb --ignore-existing minio-ci/${bucket}; then
+                echo "Bucket ${bucket} ready"
+                break
+              fi
+              if [ "${attempt}" -eq 5 ]; then
+                echo "::error::Failed to create bucket ${bucket} after 5 attempts"
+                cat /tmp/minio.log || true
+                exit 1
+              fi
+              echo "Retrying bucket ${bucket} (attempt ${attempt})..."
+              sleep $((attempt * 3))
+            done
+          done
+
+      - name: Collect MinIO logs on failure
+        if: failure()
+        run: |
+          mkdir -p minio-logs
+
+          echo "=== MinIO process logs ===" | tee minio-logs/minio-container.log
+          cat /tmp/minio.log 2>/dev/null | tee -a minio-logs/minio-container.log \
+            || echo "Could not retrieve MinIO process logs" | tee -a minio-logs/minio-container.log
+
+          echo "=== MinIO service health ===" | tee minio-logs/minio-health.log
+          curl -sv http://localhost:9000/minio/health/live 2>&1 | tee -a minio-logs/minio-health.log || true
+
+          echo "=== mc admin info ===" | tee minio-logs/minio-admin.log
+          mc admin info minio-ci 2>&1 | tee -a minio-logs/minio-admin.log || true
+
+          echo "=== mc admin logs ===" | tee -a minio-logs/minio-admin.log
+          mc admin logs minio-ci --last 100 2>&1 | tee -a minio-logs/minio-admin.log || true
+
+      - name: Upload MinIO logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: minio-logs-${{ matrix.os }}
+          path: minio-logs/
+          retention-days: 7
+
+      - name: Run Apache Cloudberry configure script
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}/cloudberry
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ENABLE_DEBUG=${{ env.ENABLE_DEBUG }} ENABLE_YEZZEY=true ${SRC_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"; then
+            echo "::error::Configure script failed"
+            exit 1
+          fi
+
+      - name: Run Apache Cloudberry build script
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}/cloudberry
+        run: |
+          set -eo pipefail
+
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/build-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/build-cloudberry.sh"; then
+            echo "::error::Build script failed"
+            exit 1
+          fi
+
+      - name: Run Yezzey build script
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}/cloudberry
+        run: |
+          set -eo pipefail
+
+          if ! time su - gpadmin -c "cd ${SRC_DIR}/gpcontrib/yezzey && make && make install"; then
+            echo "::error::Build yezzey failed"
+            exit 1
+          fi
+
+      - name: Deploy yezzey config
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}/cloudberry
+        run: |
+          set -eo pipefail
+
+          chmod +x "${SRC_DIR}"/gpcontrib/yezzey/devops/scripts/prepare_test_yezzey.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR}/gpcontrib/yezzey && devops/scripts/prepare_test_yezzey.sh"; then
+            echo "::error::Config yezzey failed"
+            exit 1
+          fi
+
+      - name: Install yproxy
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}/yproxy
+        run: |
+          set -eo pipefail
+
+          # Install Go compiler and lib dependencies
+          if command -v apt >/dev/null 2>&1; then
+            sudo apt update
+            sudo apt install -y software-properties-common
+            sudo add-apt-repository ppa:longsleep/golang-backports
+            sudo apt update
+            sudo apt install -y golang-go libbrotli-dev liblzo2-dev libsodium-dev curl cmake
+          elif command -v dnf >/dev/null 2>&1; then
+            sudo dnf install -y epel-release
+            sudo dnf install -y --enablerepo=epel golang brotli-devel lzo-devel libsodium-devel cmake
+            if ! command -v curl >/dev/null 2>&1; then
+              sudo dnf install -y curl
+            fi
+          else
+            echo "::error::Unsupported package manager. Expected apt or dnf."
+            exit 1
+          fi
+
+          # Fetch project and build
+          git config --global --add safe.directory ${SRC_DIR}
+          cd ${SRC_DIR}
+          make build
+
+          mv devbin/yproxy /usr/bin/yproxy
+
+          #Check the installation
+          yproxy --version
+
+      - name: Create demo cluster with yezzey
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}/cloudberry
+        run: |
+          set -eo pipefail
+
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && gpcontrib/yezzey/devops/scripts/create_demo_yezzey_cloudberry.sh"; then
+            echo "::error::Create cluster with yezzey failed"
+            exit 1
+          fi
+
+      - name: Run tests
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}/cloudberry
+        run: |
+          set -eo pipefail
+          set -x
+
+          # Verify MinIO hostname remains resolvable in the test step.
+          getent hosts minio
+
+          chmod +x "${SRC_DIR}"/gpcontrib/yezzey/devops/scripts/launch_yproxy.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && gpcontrib/yezzey/devops/scripts/launch_yproxy.sh && cd ${SRC_DIR}/gpcontrib/yezzey && source /usr/local/cloudberry-db/cloudberry-env.sh && source ../../gpAux/gpdemo/gpdemo-env.sh && IS_CLOUDBERRY=true make installcheck"; then
+            echo "::error::Test yezzey failed"
+            cat ${SRC_DIR}/gpcontrib/yezzey/regression.diffs
+            exit 1
+          fi
+
+      - name: Save matrix job result
+        if: always()
+        run: |
+          mkdir -p matrix-results
+          echo "${{ job.status }}" > matrix-results/result-${{ matrix.os }}.txt
+
+      - name: Upload matrix job result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: matrix-result-${{ matrix.os }}
+          path: matrix-results/result-${{ matrix.os }}.txt
+          retention-days: 1
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs-cloudberry-${{ matrix.os }}
+          path: |
+            build-logs/
+          retention-days: 7
+
+      - name: Upload test results files
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: results-cloudberry-${{ matrix.os }}
+          path: |
+            **/regression.out
+            **/regression.diffs
+            **/results/
+          retention-days: 7
+
+      - name: Upload test regression logs
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v7
+        with:
+          name: regression-logs-cloudberry-${{ matrix.os }}
+          path: |
+            **/regression.out
+            **/regression.diffs
+            **/results/
+            **/yproxy.log
+            cloudberry/gpAux/gpdemo/datadirs/standby/log/
+            cloudberry/gpAux/gpdemo/datadirs/qddir/demoDataDir-1/log/
+            cloudberry/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0/log/
+            cloudberry/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1/log/
+            cloudberry/gpAux/gpdemo/datadirs/dbfast3/demoDataDir2/log/
+            cloudberry/gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0/log/
+            cloudberry/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1/log/
+            cloudberry/gpAux/gpdemo/datadirs/dbfast_mirror3/demoDataDir2/log/
+          retention-days: 7
+
+  ## ======================================================================
+  ## Job: report
+  ## ======================================================================
+
+  report:
+    name: Generate Apache Cloudberry Build Report
+    needs: [test-cloudberry]
+    if: always()
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download matrix job results
+        uses: actions/download-artifact@v8
+        with:
+          pattern: matrix-result-*
+          merge-multiple: true
+          path: matrix-results/
+
+      - name: Generate Final Report
+        run: |
+          {
+            echo "# Yezzey Test Pipeline Report"
+            echo ""
+            echo "## Matrix Job Results"
+            echo ""
+
+            overall_ok=true
+            for result_file in matrix-results/result-*.txt; do
+              if [ -f "$result_file" ]; then
+                os=$(basename "$result_file" .txt | sed 's/^result-//')
+                status=$(cat "$result_file")
+                if [[ "$status" == "success" ]]; then
+                  echo "- ✅ **${os}**: ${status}"
+                else
+                  echo "- ❌ **${os}**: ${status}"
+                  overall_ok=false
+                fi
+              fi
+            done
+
+            echo ""
+            echo "## Overall Status"
+            echo "- Completion Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            echo ""
+
+            if [[ "$overall_ok" == "true" && "${{ needs.test-cloudberry.result }}" == "success" ]]; then
+              echo "✅ Pipeline completed successfully across all matrix entries"
+            else
+              echo "⚠️ Pipeline completed with failures — check per-OS results above"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Notify on failure
+        if: needs.test-cloudberry.result != 'success'
+        run: |
+          echo "::error::Build/Test pipeline failed! Check job summaries and logs for details"
+          echo "Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          echo "Cloudberry Result: ${{ needs.test-cloudberry.result }}"
+
+
