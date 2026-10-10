@@ -76,7 +76,7 @@ ULONG
 CScalarSubquery::HashValue() const
 {
 	return gpos::CombineHashes(COperator::HashValue(),
-							   gpos::HashPtr<CColRef>(m_pcr));
+							   CColRef::HashValue(m_pcr));
 }
 
 
