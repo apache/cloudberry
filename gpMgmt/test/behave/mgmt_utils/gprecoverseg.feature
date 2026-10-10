@@ -420,8 +420,6 @@ Feature: gprecoverseg tests
         And the segments are synchronized
         And the cluster is rebalanced
 
-    # needs_fix: drop a stale replication slot (#1639 83778564c0f)
-    @needs_fix
     Scenario: gprecoverseg should drop existing slot on full recovery
         Given the database is running
         And all the segments are running
@@ -442,8 +440,6 @@ Feature: gprecoverseg tests
         And the segments are synchronized
         And the cluster is rebalanced
 
-    # needs_fix: drop a stale replication slot (#1639 83778564c0f)
-    @needs_fix
     Scenario Outline: <scenario> recovery should not try to drop slot if slot does not exist
         Given the database is running
         And all the segments are running
