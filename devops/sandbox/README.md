@@ -230,3 +230,6 @@ docker exec -it cbdb-cdw /bin/bash
 
 [gpadmin@cdw /] gpstart -a
 ```
+## Testing
+For instructions on creating a container that is convenient for running tests,
+see [devops/README.md](../README.md).
