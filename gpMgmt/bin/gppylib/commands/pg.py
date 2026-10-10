@@ -8,6 +8,9 @@ import shlex
 
 from gppylib.gplog import *
 from gppylib.gparray import *
+from gppylib.db import dbconn
+from contextlib import closing
+from pgdb import DatabaseError
 from .base import *
 from .unix import *
 from gppylib.commands.base import *
@@ -205,6 +208,63 @@ class PgRewind(Command):
 
         Command.__init__(self, name, self.cmdStr, LOCAL)
 
+# cherry-pick from Greenplum Database
+# greenplum-db/gpdb-archive @ 482967c1b4, gpMgmt/bin/gppylib/commands/pg.py
+class PgReplicationSlot:
+    """
+    PgReplicationSlot have utility function related to replication slot
+    """
+    def __init__(self, host, port, slot_name):
+        """
+        @param host
+        @param port
+        @param slot_name
+        """
+        self.host = host
+        self.port = port
+        self.name = slot_name
+
+    def slot_exists(self):
+        count = -1
+        logger.debug('Checking if slot {} exists for host:{}, port:{}'.format(self.name, self.host, self.port))
+        sql = "SELECT count(*) FROM pg_catalog.pg_replication_slots WHERE slot_name = '{}'". format(self.name)
+        try:
+            dburl = dbconn.DbURL(hostname=self.host, port=self.port)
+            with closing(dbconn.connect(dburl, utility=True, encoding='UTF8')) as conn:
+                count = dbconn.querySingleton(conn, sql)
+        except Exception as ex:
+            raise Exception("Failed to query pg_replication_slots for host:{}, port:{}: {}".
+                            format(self.host, self.port, str(ex)))
+
+        if count == 0:
+            logger.debug("Slot {} does not exist for host:{}, port:{}".
+                         format(self.name, self.host, self.port))
+            return False
+
+        return True
+
+    def drop_slot(self):
+        logger.debug("Dropping slot {} for host:{}, port:{}".format(self.name, self.host, self.port))
+        sql = "SELECT pg_drop_replication_slot('{}');".format(self.name)
+        try:
+            dburl = dbconn.DbURL(hostname=self.host, port=self.port)
+            with closing(dbconn.connect(dburl, utility=True, encoding='UTF8')) as conn:
+                dbconn.query(conn, sql)
+        except DatabaseError as e:
+            # one of the case can be where slot is present but currently in active state
+            logger.exception("Failed to query pg_drop_replication_slot for host:{}, port:{}: {}".
+                             format(self.host, self.port, str(e)))
+            return False
+        except Exception as ex:
+            raise Exception("Failed to drop replication slot for host:{}, port:{} : {}".
+                            format(self.host, self.port, str(ex)))
+
+        logger.debug("Successfully dropped replication slot {} for host:{}, port:{}".
+                     format(self.name, self.host, self.port))
+
+        return True
+
+
 class PgBaseBackup(Command):
     def __init__(self, target_datadir, source_host, source_port, create_slot=False, replication_slot_name=None,
                  excludePaths=[], ctxt=LOCAL, remoteHost=None, forceoverwrite=False, target_gp_dbid=0,
@@ -217,8 +277,19 @@ class PgBaseBackup(Command):
         cmd_tokens.append('-p')
         cmd_tokens.append(source_port)
 
+        # if there is already slot present and create-slot arg is true it will give error,
+        # there is no option available in upstream postgres so that existing slot can be reused
+        # it's good choice to drop a existing available slot and recreate the new one
+        # if the slot does not already exist or drop slot is success we will create a new slot
+        # but if we are not able to drop the slot in that case,
+        # we will consider it as an error and will avoid creating a new slot
         if create_slot:
-            cmd_tokens.append('--create-slot')
+            pg_slot = PgReplicationSlot(source_host, source_port, replication_slot_name)
+            if pg_slot.slot_exists():
+                if pg_slot.drop_slot():
+                    cmd_tokens.append('--create-slot')
+            else:
+                cmd_tokens.append('--create-slot')
 
         cmd_tokens.extend(self._xlog_arguments(replication_slot_name))
 
