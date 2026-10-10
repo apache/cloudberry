@@ -1,11 +1,76 @@
 import abc
 from typing import List
 
+from contextlib import closing
+from gppylib.db import dbconn
+from gppylib import gplog
 from gppylib.mainUtils import ExceptionNoStackTraceNeeded
 from gppylib.operations.detect_unreachable_hosts import get_unreachable_segment_hosts
 from gppylib.parseutils import line_reader, check_values, canonicalize_address
 from gppylib.utils import checkNotNone, normalizeAndValidateInputPath
 from gppylib.gparray import GpArray, Segment
+from gppylib.commands.gp import RECOVERY_REWIND_APPNAME
+
+logger = gplog.get_default_logger()
+
+
+# cherry-pick from Greenplum Database
+# greenplum-db/gpdb-archive @ 482967c1b4,
+# gpMgmt/bin/gppylib/programs/clsRecoverSegment_triples.py
+def get_segments_with_running_basebackup():
+    """
+    Returns a list of contentIds of source segments of running pg_basebackup processes
+    At present gp_stat_replication table does not contain any info about datadir and dbid of the target of running pg_basebackup
+    """
+
+    sql = "select gp_segment_id from gp_stat_replication where application_name = 'pg_basebackup'"
+
+    try:
+        with closing(dbconn.connect(dbconn.DbURL())) as conn:
+            res = dbconn.query(conn, sql)
+            rows = res.fetchall()
+    except Exception as e:
+        raise Exception("Failed to query gp_stat_replication: %s" %str(e))
+
+    segments_with_running_basebackup = {row[0] for row in rows}
+
+    if len(segments_with_running_basebackup) == 0:
+        logger.debug("No basebackup running")
+    return segments_with_running_basebackup
+
+
+# cherry-pick from Greenplum Database
+# greenplum-db/gpdb-archive @ 482967c1b4,
+# gpMgmt/bin/gppylib/programs/clsRecoverSegment_triples.py
+def is_pg_rewind_running(hostname, port):
+    """
+        Returns true if a pg_rewind process is running for the given segment
+    """
+    logger.debug(
+        "Checking for running instances of pg_rewind with host {} and port {} as source server".format(hostname, port))
+
+    """
+        Reasons to depend on pg_stat_activity table:
+            * pg_rewind is invoked using --source-server connection string as it needs libpq connection
+              with source server, which will be remote to the target server and --source-pgdata can not
+              be used in that case. Thus pg_stat_activity will always contain entry for active pg_rewind.
+            * pg_rewind keeps a connection open throughout it's lifecycle, so pg_stat_activity will contain
+              entries for active pg_rewind process till the end of execution.
+            * gpstate uses the above mentioned approach (pg_stat_activity entry check) to check for
+              incremental recoveries in progress.Thus, using the same approach will make it consistent
+              everywhere.
+    """
+
+    sql = "SELECT count(*) FROM pg_stat_activity WHERE application_name = '{}'".format(RECOVERY_REWIND_APPNAME)
+    try:
+        url = dbconn.DbURL(hostname=hostname, port=port, dbname='template1')
+        with closing(dbconn.connect(url, utility=True)) as conn:
+            res = dbconn.querySingleton(conn, sql)
+            return res > 0
+
+    except Exception as e:
+        raise Exception("Failed to query pg_stat_activity for segment hostname: {}, port: {}, error: {}".format(
+            hostname, str(port), str(e)))
 
 
 class RecoveryTriplet:
@@ -142,7 +207,31 @@ class RecoveryTriplets(abc.ABC):
         triplets = []
 
         dbIdToPeerMap = self.gpArray.getDbIdToPeerMap()
+
+        failed_segments_with_running_basebackup = []
+        failed_segments_with_running_pgrewind = []
+        segments_with_running_basebackup = get_segments_with_running_basebackup()
+
         for req in requests:
+            """
+                When running gprecoverseg (any sort of recovery full/incremental), if the pg_rewind, pg_basebackup is
+                already running for a segment, that segment should be skipped from the recovery. The reason being that
+                there should be only one writer per target segment at a time. Having several writers to a target will
+                eventually make the segment inconsistent and in a weird state.
+
+                Although technically we could allow user to run a full recovery to a new host even if there is a
+                pg_rewind/pg_basebackup running for that segment. This is a pretty rare scenario and we have decided not
+                to over complicates the code just to support this scenario.
+            """
+            # The peer has to be looked up before the failover block below, which
+            # replaces req.failed with a copy; the dbid is the same either way,
+            # but the lookup is needed here to decide whether to skip at all.
+            failed_segment_dbid = req.failed.getSegmentDbId()
+            peer = dbIdToPeerMap.get(failed_segment_dbid)
+            if peer is None:
+                raise Exception("No peer found for dbid {}. liveSegment is None".format(failed_segment_dbid))
+            peer_contentid = peer.getSegmentContentId()
+
             # TODO: These 2 cases have different behavior which might be confusing to the user.
             # "<failed_address>|<failed_port>|<failed_data_dir> <failed_address>|<failed_port>|<failed_data_dir>" does full recovery
             # "<failed_address>|<failed_port>|<failed_data_dir>" does incremental recovery
@@ -166,9 +255,31 @@ class RecoveryTriplets(abc.ABC):
             if req.failed.unreachable and not req.failover_to_new_host:
                 continue
 
-            peer = dbIdToPeerMap.get(req.failed.getSegmentDbId())
+            # Only now, once this segment is actually going to be recovered.
+            # is_pg_rewind_running() connects to the peer, and on a double
+            # fault -- failed segment and peer both down -- that connection
+            # raises. Asked before the skip above, it would abort the whole
+            # gprecoverseg run rather than skip the one segment, which is the
+            # opposite of what is wanted when a cluster is already degraded.
+            if peer_contentid in segments_with_running_basebackup:
+                failed_segments_with_running_basebackup.append(peer_contentid)
+                continue
+
+            if is_pg_rewind_running(peer.getSegmentHostName(), peer.getSegmentPort()):
+                failed_segments_with_running_pgrewind.append(peer_contentid)
+                continue
 
             triplets.append(RecoveryTriplet(req.failed, peer, failover))
+
+        if len(failed_segments_with_running_basebackup) > 0:
+            logger.warning(
+                "Found pg_basebackup running for segments with contentIds %s, skipping recovery of these segments" % (
+                    failed_segments_with_running_basebackup))
+
+        if len(failed_segments_with_running_pgrewind) > 0:
+            logger.warning(
+                "Found pg_rewind running for segments with contentIds %s, skipping recovery of these segments" % (
+                    failed_segments_with_running_pgrewind))
 
         return triplets
 
