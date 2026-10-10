@@ -4615,13 +4615,15 @@ explain (costs off) delete from inh_lp where a = 1;
 -- Ensure we don't exclude normal relations when we only expect to exclude
 -- inheritance children
 explain (costs off) update inh_lp1 set value = 10 where a = 2;
-             QUERY PLAN              
--------------------------------------
+                 QUERY PLAN                 
+--------------------------------------------
  Update on inh_lp1
-   ->  Seq Scan on inh_lp1
-         Filter: (a = 2)
- Optimizer: Postgres query optimizer
-(4 rows)
+   ->  Result
+         ->  Result
+               ->  Result
+                     One-Time Filter: false
+ Optimizer: GPORCA
+(6 rows)
 
 drop table inh_lp cascade;
 NOTICE:  drop cascades to 2 other objects

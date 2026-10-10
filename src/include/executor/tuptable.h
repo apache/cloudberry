@@ -224,10 +224,17 @@ extern PGDLLIMPORT const TupleTableSlotOps TTSOpsHeapTuple;
 extern PGDLLIMPORT const TupleTableSlotOps TTSOpsMinimalTuple;
 extern PGDLLIMPORT const TupleTableSlotOps TTSOpsBufferHeapTuple;
 
+/*
+ * Append-only row tables store tuples in the MemTuple format, which needs a
+ * MemTupleBinding to be interpreted.  See access/appendonly/memtuple_slot.c.
+ */
+extern PGDLLIMPORT const TupleTableSlotOps TTSOpsMemTuple;
+
 #define TTS_IS_VIRTUAL(slot) ((slot)->tts_ops == &TTSOpsVirtual)
 #define TTS_IS_HEAPTUPLE(slot) ((slot)->tts_ops == &TTSOpsHeapTuple)
 #define TTS_IS_MINIMALTUPLE(slot) ((slot)->tts_ops == &TTSOpsMinimalTuple)
 #define TTS_IS_BUFFERTUPLE(slot) ((slot)->tts_ops == &TTSOpsBufferHeapTuple)
+#define TTS_IS_MEMTUPLE(slot) ((slot)->tts_ops == &TTSOpsMemTuple)
 
 /*
  * Tuple table slot implementations.
@@ -293,6 +300,24 @@ typedef struct MinimalTupleTableSlot
 } MinimalTupleTableSlot;
 
 /*
+ * Slot for a MemTuple, the format used by append-only row tables.
+ *
+ * A MemTuple is not self describing, so the binding needed to locate its
+ * attributes is kept here alongside the tuple.  Attributes are fetched on
+ * demand in getsomeattrs; tts_nvalid is the resume point.
+ */
+typedef struct MemTupleTableSlot
+{
+	pg_node_attr(abstract)
+
+	TupleTableSlot base;
+
+	MemTuple	tuple;			/* physical tuple, or NULL if none */
+	MemTupleBinding *mt_bind;	/* binding describing tuple */
+	bool		own_bind;		/* did this slot create mt_bind itself? */
+} MemTupleTableSlot;
+
+/*
  * TupIsNull -- is a TupleTableSlot empty?
  */
 #define TupIsNull(slot) \
@@ -325,6 +350,12 @@ extern TupleTableSlot *ExecStoreMinimalTuple(MinimalTuple mtup,
 											 bool shouldFree);
 extern void ExecForceStoreMinimalTuple(MinimalTuple mtup, TupleTableSlot *slot,
 									   bool shouldFree);
+/* in access/appendonly/memtuple_slot.c */
+extern TupleTableSlot *ExecStoreMemTuple(MemTuple mtup,
+										 MemTupleBinding *mt_bind,
+										 TupleTableSlot *slot,
+										 bool shouldFree);
+
 extern TupleTableSlot *ExecStoreVirtualTuple(TupleTableSlot *slot);
 extern TupleTableSlot *ExecStoreAllNullTuple(TupleTableSlot *slot);
 extern void ExecStoreHeapTupleDatum(Datum data, TupleTableSlot *slot);

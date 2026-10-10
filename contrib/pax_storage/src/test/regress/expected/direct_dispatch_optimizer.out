@@ -50,8 +50,9 @@ INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 -- DO direct dispatch
 -- Known_opt_diff: MPP-21346
 update direct_test set value = 'horse' where key = 100;
-INFO:  (slice 0) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
+INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 -- verify
 select * from direct_test order by key, value;
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
@@ -123,8 +124,9 @@ INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 -- DO direct dispatch
 -- Known_opt_diff: MPP-21346
 update direct_test_two_column set value = 'horse' where key1 = 100 and key2 = 101;
-INFO:  (slice 0) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
+INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 -- verify
 select * from direct_test_two_column order by key1, key2, value;
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
@@ -176,17 +178,17 @@ INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL cont
 --                hash all these values to the same content! (and so test would change)
 --
 update direct_test set value = 'pig' where key in (1,2,3,4,5);
-INFO:  (slice 0) Dispatch command to ALL contents: 1 0 2
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 1 0 2
+INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 0 1 2
 update direct_test_two_column set value = 'pig' where key1 = 100 and key2 in (1,2,3,4);
-INFO:  (slice 0) Dispatch command to PARTIAL contents: 1 2
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to PARTIAL contents: 1 2
+INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 0 1 2
 update direct_test_two_column set value = 'pig' where key1 in (100,101,102,103,104) and key2 in (1);
-INFO:  (slice 0) Dispatch command to ALL contents: 1 0 2
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 1 0 2
+INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 0 1 2
 update direct_test_two_column set value = 'pig' where key1 in (100,101) and key2 in (1,2);
-INFO:  (slice 0) Dispatch command to PARTIAL contents: 1 2
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to PARTIAL contents: 1 2
+INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 0 1 2
 -- Multiple row update, where clause lists values which all hash to same segment
 -- DO direct dispatch
 -- CAN'T IMPLEMENT THIS TEST BECAUSE THE # of segments changes again (unless we use a # of segments function, and exploit the simple nature of int4 hashing -- can we do that?)
@@ -274,8 +276,9 @@ INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 prepare test_update (int) as update direct_test set value = 'boo' where key = $1;
 -- Known_opt_diff: MPP-21346
 execute test_update(2);
-INFO:  (slice 0) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
+INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 select * from direct_test;
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
  key | value 
@@ -342,9 +345,10 @@ INFO:  (slice 1) Dispatch command to SINGLE content
 
 -- main plan is direct dispatch and also has init plans
 update direct_dispatch_bar set id2 = 1 where id1 = 1 and exists (select * from direct_dispatch_foo where id = 2);
-INFO:  (slice 2) Dispatch command to SINGLE content
-INFO:  (slice 0) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to PARTIAL contents: 0 1
+INFO:  (slice 2) Dispatch command to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
+INFO:  (slice 1) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 0 1 2
 -- init plan to see how transaction escalation happens
 -- Known_opt_diff: MPP-21346
 delete from direct_dispatch_foo where id = (select max(id2) from direct_dispatch_bar where id1 = 5);
@@ -528,23 +532,29 @@ INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGL
 -- update case
 prepare p2 as update test_prepare set j =2 where i =$1;
 execute p2(1);
-INFO:  (slice 0) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
+INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 execute p2(1);
-INFO:  (slice 0) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
+INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 execute p2(1);
-INFO:  (slice 0) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
+INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 execute p2(1);
-INFO:  (slice 0) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
+INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 execute p2(1);
-INFO:  (slice 0) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
+INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 execute p2(1);
-INFO:  (slice 0) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
+INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 -- select case
 prepare p3 as select * from test_prepare where i =$1;
 execute p3(1);
@@ -1526,9 +1536,9 @@ INFO:  Distributed transaction command 'Distributed Abort (No Prepared)' to SING
 begin;
 -- orca does not handle direct dispatch for DELETE or UPDATE now
 update t_hash_partition_1_prt_region1 set r_name = 'CHINA' where r_regionkey=1;
-INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
 abort;
-INFO:  Distributed transaction command 'Distributed Abort (No Prepared)' to SINGLE content
+INFO:  Distributed transaction command 'Distributed Abort (No Prepared)' to ALL contents: 0 1 2
 -- insert
 begin;
 -- only consider target's policy, will direct dispatch

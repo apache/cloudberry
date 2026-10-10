@@ -755,6 +755,28 @@ ExecInitUpdateProjection(ModifyTableState *mtstate,
 								  resultRelInfo->ri_newTupleSlot,
 								  &mtstate->ps);
 
+	/*
+	 * The projection copies a column from the old tuple whenever the subplan
+	 * does not assign it.  Record whether that happens at all: when the
+	 * subplan assigns every live column the old tuple is never read, and the
+	 * caller can skip fetching it.  ORCA emits such a target list for a
+	 * non-split UPDATE, which is the only way an append-optimized table can
+	 * run one, since it cannot fetch a tuple by tid.
+	 */
+	resultRelInfo->ri_projectNewNeedsOldTuple = false;
+	for (int attno = 1; attno <= relDesc->natts; attno++)
+	{
+		Form_pg_attribute attr = TupleDescAttr(relDesc, attno - 1);
+
+		if (attr->attisdropped)
+			continue;
+		if (!list_member_int(updateColnos, attno))
+		{
+			resultRelInfo->ri_projectNewNeedsOldTuple = true;
+			break;
+		}
+	}
+
 	resultRelInfo->ri_projectNewInfoValid = true;
 }
 
@@ -4318,6 +4340,17 @@ ExecModifyTable(PlanState *pstate)
 						Assert(!resultRelInfo->ri_needLockTagTuple);
 						/* Use the wholerow junk attr as the old tuple. */
 						ExecForceStoreHeapTuple(oldtuple, oldSlot, false);
+					}
+					else if (!resultRelInfo->ri_projectNewNeedsOldTuple &&
+							 RelationIsNonblockRelation(resultRelInfo->ri_RelationDesc))
+					{
+						/*
+						 * The plan slot already carries every column, so the
+						 * old tuple is not read.  Skipping the fetch is what
+						 * lets append-optimized tables run a non-split UPDATE
+						 * at all: they cannot fetch a tuple by tid.
+						 */
+						ExecStoreAllNullTuple(oldSlot);
 					}
 					else
 					{

@@ -156,8 +156,6 @@ SELECT * FROM hash_f8_heap
 UPDATE hash_i4_heap
    SET random = 1
    WHERE hash_i4_heap.seqno = 1492;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 11 not found in project list
 SELECT h.seqno AS i1492, h.random AS i1
    FROM hash_i4_heap h
    WHERE h.random = 1;
@@ -180,8 +178,6 @@ SELECT h.seqno AS i20000
 UPDATE hash_name_heap
    SET random = '0123456789abcdef'::name
    WHERE hash_name_heap.seqno = 6543;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 11 not found in project list
 SELECT h.seqno AS i6543, h.random AS c0_to_f
    FROM hash_name_heap h
    WHERE h.random = '0123456789abcdef'::name;
@@ -206,8 +202,6 @@ SELECT h.seqno AS emptyset
 UPDATE hash_txt_heap
    SET random = '0123456789abcdefghijklmnop'::text
    WHERE hash_txt_heap.seqno = 4002;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 11 not found in project list
 SELECT h.seqno AS i4002, h.random AS c0_to_p
    FROM hash_txt_heap h
    WHERE h.random = '0123456789abcdefghijklmnop'::text;
@@ -230,8 +224,6 @@ SELECT h.seqno AS t20000
 UPDATE hash_f8_heap
    SET random = '-1234.1234'::float8
    WHERE hash_f8_heap.seqno = 8906;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 11 not found in project list
 SELECT h.seqno AS i8096, h.random AS f1234_1234
    FROM hash_f8_heap h
    WHERE h.random = '-1234.1234'::float8;

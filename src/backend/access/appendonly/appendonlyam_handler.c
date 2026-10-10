@@ -505,7 +505,7 @@ get_or_create_unique_check_desc(Relation relation, Snapshot snapshot)
 static const TupleTableSlotOps *
 appendonly_slot_callbacks(Relation relation)
 {
-	return &TTSOpsVirtual;
+	return &TTSOpsMemTuple;
 }
 
 MemTuple
