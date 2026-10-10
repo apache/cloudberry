@@ -10,7 +10,7 @@ import tempfile
 import gppylib
 from gparray import Segment, GpArray
 from gppylib.programs.clsRecoverSegment_triples import RecoveryTripletsUserConfigFile, RecoveryTripletsFactory, \
-    RecoveryTriplet, get_segments_with_running_basebackup, is_pg_rewind_running
+    RecoveryTriplet, get_segments_with_running_basebackup, is_pg_rewind_running, extract_recovery_config_info
 from test.unit.gp_unittest import GpTestCase, FakeCursor
 
 
@@ -191,6 +191,14 @@ class RecoveryTripletsFactoryTestCase(GpTestCase):
                              sdw2|20000|/primary/gpseg2""",
                 "is_pgrewind_running": [True, True, True],
                 "expected": []
+            },
+            {
+                "name": "in_place_1_part_with_4_parameter",
+                "gparray": self.all_up_gparray_str,
+                "config": "sdw2|sdw2|21000|/mirror/gpseg0",
+                "expected": [self._triplet('10|0|m|m|s|u|sdw2|sdw2|21000|/mirror/gpseg0',
+                                           '2|0|p|p|s|u|sdw1|sdw1|20000|/primary/gpseg0',
+                                           None)]
             },
         ]
         self.run_pass_tests(tests, self.run_single_ConfigFile_test)
@@ -760,7 +768,9 @@ class RecoveryTripletsUserConfigFileParserTestCase(GpTestCase):
             "config": """sdw1|20000|/primary/gpseg0 sdw3|20001|/primary/gpseg5
                       sdw1|20001|/primary/gpseg1 sdw1|40001|/primary/gpseg_new
                       sdw3|20000|/primary/gpseg4
-                      sdw4|20000|/primary/gpseg6 sdw4|20000|/primary/gpseg6"""
+                      sdw4|20000|/primary/gpseg6 sdw4|20000|/primary/gpseg6
+                      sdw5|sdw5|20000|/primary/gpseg0 sdw3|10.0.34.5|20001|/primary/gpseg5
+                      sdw6|sdw6|20000|/primary/gpseg4"""
         },
         {
             "name": "6X_web_doc",
@@ -802,7 +812,7 @@ class RecoveryTripletsUserConfigFileParserTestCase(GpTestCase):
                 """sdw1|20000|/mirror/gpseg0 sdw3|20001|/mirror/gpseg5
                    sdw1|20000 sdw3|20001|/mirror/gpseg5""",
             "expected":
-                "line 2 of file .*: expected 3 parts on failed segment group, obtained 2"
+                "line 2 of file .*: expected 3 or 4 parts on failed segment group, obtained 2"
         },
         {
             "name":
@@ -810,7 +820,7 @@ class RecoveryTripletsUserConfigFileParserTestCase(GpTestCase):
             "config": """sdw1|20000|/mirror/gpseg0 sdw3|20001|/mirror/gpseg5
                          sdw2|50001|/data2/mirror/gpseg1 sdw4|50001""",
             "expected":
-                "line 2 of file .*: expected 3 parts on new segment group, obtained 2"
+                "line 2 of file .*: expected equal parts, either 3 or 4 on both segment group, obtained 3 on group1 and 2 on group2"
         },
         {
             "name":
@@ -917,7 +927,25 @@ class RecoveryTripletsUserConfigFileParserTestCase(GpTestCase):
             "name": "new_port_invalid",
             "config": """sdw2|50001|/data2/mirror/gpseg1 sdw4|new_invalid_port|relative/new/mirror/gpseg1""",
             "expected": "Invalid port on line 1"
-        }
+        },
+        {
+            "name":
+                "invalid_parts_present_in_group_1",
+            "config":
+                """sdw1|10.0.34.2|20000|/primary/gpseg0 sdw3|10.0.34.5|20001|/primary/gpseg5
+                   sdw1|20000|/primary/gpseg0 sdw3|10.0.34.5|20001|/primary/gpseg5""",
+            "expected":
+                "line 2 of file .*: expected equal parts, either 3 or 4 on both segment group, obtained 3 on group1 and 4 on group2"
+        },
+        {
+            "name":
+                "invalid_parts_present_in_group_2",
+            "config":
+                """sdw1|10.0.34.2|20000|/primary/gpseg0 sdw3|10.0.34.5|20001|/primary/gpseg5
+                   sdw1|10.0.34.2|20000|/primary/gpseg0 sdw3|20001|/primary/gpseg5""",
+            "expected":
+                "line 2 of file .*: expected equal parts, either 3 or 4 on both segment group, obtained 4 on group1 and 3 on group2"
+        },
     ]
 
     def test_parsing_should_fail(self):
@@ -937,21 +965,30 @@ class RecoveryTripletsUserConfigFileParserTestCase(GpTestCase):
         for line in config_str.splitlines():
             lineno += 1
             groups = line.split()
+            parts = groups[0].split('|')
+            hostname, address, port, datadir, hostname_check_required = extract_recovery_config_info(parts)
 
-            address, port, datadir = groups[0].split('|')
             row = {
+                'failedHostname': hostname,
                 'failedAddress': address,
                 'failedPort': port,
                 'failedDataDirectory': datadir,
-                'lineno': lineno
+                'lineno': lineno,
+                'hostname_check_required': hostname_check_required
             }
 
             if len(groups) > 1:
-                address, port, datadir = groups[1].split('|')
+                parts2 = groups[1].split('|')
+                if len(parts2) == 4:
+                    hostname2, address2, port2, datadir2 = parts2
+                else:
+                    address2, port2, datadir2 = parts2
+                    hostname2 = address2
                 row.update({
-                    'newAddress': address,
-                    'newPort': port,
-                    'newDataDirectory': datadir
+                    'newHostname': hostname2,
+                    'newAddress': address2,
+                    'newPort': port2,
+                    'newDataDirectory': datadir2
                 })
 
             rows.append(row)
