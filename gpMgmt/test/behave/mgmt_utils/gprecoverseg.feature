@@ -816,8 +816,6 @@ Feature: gprecoverseg tests
 
   @demo_cluster
   @concourse_cluster
-  # needs_fix: skip segments that already have a recovery running (#1639 7056e02e306)
-  @needs_fix
   Scenario: gprecoverseg gives warning if pg_basebackup already running for one of the failed segments
     Given the database is running
     And all the segments are running
@@ -850,8 +848,6 @@ Feature: gprecoverseg tests
 
   @demo_cluster
   @concourse_cluster
-  # needs_fix: skip segments that already have a recovery running (#1639 7056e02e306)
-  @needs_fix
   Scenario: gprecoverseg gives warning if pg_basebackup already running for some of the failed segments
     Given the database is running
     And all the segments are running
@@ -886,8 +882,6 @@ Feature: gprecoverseg tests
 
   @demo_cluster
   @concourse_cluster
-  # needs_fix: skip segments that already have a recovery running (#1639 7056e02e306)
-  @needs_fix
   Scenario: gprecoverseg -aF gives warning if pg_basebackup already running for all of the failed segments
     Given the database is running
     And all the segments are running
@@ -921,8 +915,6 @@ Feature: gprecoverseg tests
 
   @demo_cluster
   @concourse_cluster
-  # needs_fix: skip segments that already have a recovery running (#1639 7056e02e306)
-  @needs_fix
   Scenario: gprecoverseg -i gives warning if pg_basebackup already running for all failed segments
     Given the database is running
     And all the segments are running
