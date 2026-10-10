@@ -1,6 +1,19 @@
+import importlib.machinery
+import importlib.util
+import sys
 import unittest
 
 from mock import MagicMock, Mock
+
+
+# Replaces imp.load_source(), removed in Python 3.12.
+def load_source(name, path):
+    loader = importlib.machinery.SourceFileLoader(name, path)
+    spec = importlib.util.spec_from_file_location(name, path, loader=loader)
+    module = sys.modules.get(name) or importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    loader.exec_module(module)
+    return module
 
 class Contains(str):
     """

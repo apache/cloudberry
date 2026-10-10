@@ -9,9 +9,9 @@ import sys
 import shutil
 import tempfile
 
-import imp
+from gppylib.test.unit.gp_unittest import load_source
 gpcheckresgroupimpl_path = os.path.abspath('gpcheckresgroupimpl')
-gpcheckresgroupimpl = imp.load_source('gpcheckresgroupimpl', gpcheckresgroupimpl_path)
+gpcheckresgroupimpl = load_source('gpcheckresgroupimpl', gpcheckresgroupimpl_path)
 import gpcheckresgroupimpl
 
 from gppylib.commands import gp
