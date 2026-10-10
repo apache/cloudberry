@@ -46,7 +46,7 @@
  * back to the next available PG_CATCH();
  */
 static void
-_ExceptionalCondition()
+_ExceptionalCondition(void *arg)
 {
      PG_RE_THROW();
 }
