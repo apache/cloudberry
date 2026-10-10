@@ -13,6 +13,8 @@
 #ifndef APPENDONLY_COMPACTION_H
 #define APPENDONLY_COMPACTION_H
 
+#include "datatype/timestamp.h"
+#include "pgstat.h"
 #include "nodes/pg_list.h"
 #include "access/appendonly_visimap.h"
 #include "utils/rel.h"
@@ -21,6 +23,13 @@
 
 #define APPENDONLY_COMPACTION_SEGNO_INVALID (-1)
 
+/* Optional resource counters for VACUUM VERBOSE and extensions. */
+typedef struct AOVacuumExtStats
+{
+	PgStat_CommonCounts phases;
+	PgStat_CommonCounts indexes;
+} AOVacuumExtStats;
+
 /*
  * Stats for progress reporting.
  * This is AO/AOCO counterpart of LVRelStats for Heap. It lives throughout
@@ -28,9 +37,27 @@
  */
 typedef struct AOVacuumRelStats
 {
-	int		nbytes_truncated;	/* current # of bytes truncated from segment file */
-	int		num_dead_tuples;	/* current # of dead tuples */
+	int64	nbytes_truncated;	/* current # of bytes truncated from segment file */
+	int64	num_dead_tuples;	/* current # of dead tuples */
 	int		num_index_vacuumed; /* current # of indexes been vacuumed */
+	/* Active phase durations and delays in milliseconds, excluding phase gaps. */
+	double		vacuum_time;
+	double		delay_time;
+	int64		live_tuples;
+	int64		dead_tuples;
+	int64		pages_scanned;
+	int64		total_file_segs;
+	int64		compacted_segments;
+	int64		tuples_moved;
+
+	/* the relation these stats were started for */
+	Oid			relid;
+	/*
+	 * Resource usage for set_report_vacuum_hook, accumulated over the phases:
+	 * of the phases as a whole, and of the index passes among them, which are
+	 * reported per index and subtracted from the table's report.
+	 */
+	AOVacuumExtStats *extstats; /* allocated for VERBOSE or an installed hook */
 } AOVacuumRelStats;
 
 extern Bitmapset *AppendOptimizedCollectDeadSegments(Relation aorel);

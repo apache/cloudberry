@@ -1,0 +1,427 @@
+<!-- doc/src/sgml/extvacuumstatistics.sgml -->
+
+<sect1 id="extvacuumstatistics" xreflabel="ext_vacuum_statistics">
+ <title>ext_vacuum_statistics &mdash; extended vacuum statistics</title>
+
+ <indexterm zone="extvacuumstatistics">
+  <primary>ext_vacuum_statistics</primary>
+ </indexterm>
+
+ <para>
+  The <filename>ext_vacuum_statistics</filename> module provides
+  extended per-table, per-index, and per-database vacuum statistics
+  (buffer I/O, WAL, general, timing) via views in the
+  <literal>ext_vacuum_statistics</literal> schema.
+ </para>
+
+ <para>
+  The module must be loaded by adding <literal>ext_vacuum_statistics</literal> to
+  <xref linkend="guc-shared-preload-libraries"/> in
+  <filename>postgresql.conf</filename>, because it registers a vacuum hook at
+  server startup.  This means that a server restart is needed to add or remove
+  the module.  After installation, run
+  <command>CREATE EXTENSION ext_vacuum_statistics</command> in each database
+  where you want to use it.
+ </para>
+
+ <para>
+  Note that starting the server without the module in
+  <xref linkend="guc-shared-preload-libraries"/>, even once, discards
+  <emphasis>all</emphasis> cumulative statistics, not only those of this
+  module.  The statistics file then holds entries of a statistics kind that
+  is not registered, so the server reports the file as corrupted and resets
+  every statistics kind, built-in ones such as those shown in
+  <structname>pg_stat_user_tables</structname> included.  To stop collecting
+  extension resource statistics without that side effect, keep the module loaded and
+  set <varname>vacuum_statistics.enabled</varname> to <literal>off</literal>
+  instead.
+ </para>
+
+ <para>
+  When active, the module provides views
+  <structname>ext_vacuum_statistics.pg_stats_vacuum_tables</structname>,
+  <structname>ext_vacuum_statistics.pg_stats_vacuum_indexes</structname>, and
+  <structname>ext_vacuum_statistics.pg_stats_vacuum_database</structname>,
+  plus functions to reset statistics and manage tracking.
+ </para>
+
+ <para>
+  Each tracked object (one table or one index) uses a fixed-size shared
+  memory entry; the exact size depends on the platform.
+ </para>
+
+ <para>
+  The statistics of a table or an index are dropped together with it, when
+  the transaction that drops it commits, and a new table or index starts
+  from empty statistics even if it gets the OID of an old one; both work
+  the way they do for the built-in relation statistics.  The module does
+  that with an <literal>object_access_hook</literal>, so the statistics file
+  does not accumulate the entries of relations long gone.  The statistics
+  of a dropped database are dropped along with the rest of its cumulative
+  statistics.
+ </para>
+
+ <sect2 id="extvacuumstatistics-local-counters">
+  <title>Local Counters</title>
+  <para>
+   The table and index views identify entries by <structfield>relid</structfield>
+   or <structfield>indexrelid</structfield>, together with the schema, relation
+   name and database name. They include materialized views and TOAST relations.
+   Counters accumulate over completed vacuum work on the current instance.
+   Heap <command>VACUUM FULL</command> does not update these counters.
+  </para>
+  <variablelist>
+   <varlistentry>
+    <term><structfield>total_blks_read</structfield>, <structfield>total_blks_hit</structfield>,
+     <structfield>total_blks_dirtied</structfield>, <structfield>total_blks_written</structfield></term>
+    <listitem><para><type>bigint</type> buffer-manager activity during vacuum.
+     Table-only totals exclude index work, which is reported separately.</para></listitem>
+   </varlistentry>
+   <varlistentry>
+    <term><structfield>rel_blks_read</structfield>, <structfield>rel_blks_hit</structfield></term>
+    <listitem><para><type>bigint</type> reads and buffer hits attributed to the
+     relation itself, excluding accesses to other relations.</para></listitem>
+   </varlistentry>
+   <varlistentry>
+    <term><structfield>wal_records</structfield>, <structfield>wal_fpi</structfield>,
+     <structfield>wal_bytes</structfield></term>
+    <listitem><para>WAL records and full-page images (<type>bigint</type>) and
+     WAL bytes (<type>numeric</type>) generated during vacuum.</para></listitem>
+   </varlistentry>
+   <varlistentry>
+    <term><structfield>blk_read_time</structfield>, <structfield>blk_write_time</structfield></term>
+    <listitem><para><type>double precision</type> block I/O time in milliseconds,
+     available when <xref linkend="guc-track-io-timing"/> is enabled.</para></listitem>
+   </varlistentry>
+   <varlistentry>
+    <term><structfield>tuples_deleted</structfield>, <structfield>pages_scanned</structfield>,
+     <structfield>pages_removed</structfield>, <structfield>pages_deleted</structfield></term>
+    <listitem><para><type>bigint</type> tuples removed from a table or index,
+     table pages scanned and removed, and newly deleted index pages.
+     Repeated index passes count only their additional deletion work.</para></listitem>
+   </varlistentry>
+  </variablelist>
+  <para>
+   The database view identifies entries by <structfield>dboid</structfield>
+   and <structfield>dbname</structfield>. Its resource totals sum table-only
+   and index reports. Columns use the <literal>db_</literal> prefix:
+   <literal>db_blks_read</literal>, <literal>db_blks_hit</literal>,
+   <literal>db_blks_dirtied</literal>, <literal>db_blks_written</literal>,
+   <literal>db_wal_records</literal>, <literal>db_wal_fpi</literal>,
+   <literal>db_wal_bytes</literal>, <literal>db_blk_read_time</literal> and
+   <literal>db_blk_write_time</literal>.
+  </para>
+  <para>
+   The views read the corresponding
+   <function>ext_vacuum_statistics.pg_stats_get_vacuum_tables(dboid, reloid)</function>,
+   <function>ext_vacuum_statistics.pg_stats_get_vacuum_indexes(dboid, reloid)</function>
+   and <function>ext_vacuum_statistics.pg_stats_get_vacuum_database(dboid)</function>
+   functions for resource metrics. Missing resource entries produce zero
+   resource counters in the table and index views. Work counters are read
+   from <function>pg_stat_get_vacuum_stats()</function> and remain visible
+   when resource collection is disabled. Extension-specific resets
+   do not clear native VACUUM work counters. <function>pg_stat_reset()</function>
+   also clears the extension's counters for the current database.
+  </para>
+ </sect2>
+
+ <sect2 id="extvacuumstatistics-functions">
+  <title>Functions</title>
+
+  <para>
+   These functions reset only the extension's own metrics. Native VACUUM
+   work counters and other core statistics are never reset by the module.
+   Use <function>pg_stat_reset_vacuum_stats(relid)</function> for one relation
+   or <function>pg_stat_reset_vacuum_stats()</function> for the current database
+   and its non-shared relations. These preserve timing, invocation counts and
+   other native statistics. On Cloudberry, use the corresponding
+   <function>gp_stat_reset_vacuum_stats()</function> wrapper from the coordinator
+   to include every primary segment. A native relation reset leaves extension resources intact;
+   <function>pg_stat_reset()</function> clears both for the current database.
+   The counters can cover different periods after a reset or a change in
+   collection settings.
+  </para>
+
+  <para>
+   Reset functions require superuser privileges by default. Access can be
+   delegated with <command>GRANT EXECUTE</command>. Existing entries remain
+   visible with zero extension counters after a reset; native work is unchanged; their table, index, or database
+   type is preserved. Missing entries are not created by a reset.
+   <function>pg_stat_reset()</function> also resets the module's counters for
+   the current database.
+  </para>
+
+  <para>
+   For Cloudberry, use the <literal>gp_</literal> wrappers from a normal
+   coordinator connection to reset statistics across the cluster. These
+   wrappers reset the coordinator and all primary segments. For example,
+   to reset vacuum statistics for all databases across the cluster:
+<programlisting>
+SELECT ext_vacuum_statistics.gp_vacuum_statistics_reset();
+</programlisting>
+   Delegating access to a cluster wrapper also requires granting access to
+   its corresponding local reset function.
+  </para>
+
+  <note>
+   <para>
+    Functions without the <literal>gp_</literal> prefix reset statistics
+    <emphasis>only on the current node</emphasis>. Calling
+    <function>ext_vacuum_statistics.vacuum_statistics_reset()</function>
+    on the coordinator (QD) resets only the coordinator's counters;
+    segment counters remain unchanged. The same applies to
+    <function>ext_vacuum_statistics.extvac_reset_entry()</function> and
+    <function>ext_vacuum_statistics.extvac_reset_db_entry()</function>.
+    Use the local functions in a utility connection to an individual segment.
+   </para>
+  </note>
+
+  <variablelist>
+   <varlistentry>
+    <term>
+     <function>ext_vacuum_statistics.vacuum_statistics_reset()</function>
+     <returnvalue>void</returnvalue>
+    </term>
+    <listitem>
+     <para>
+      Resets all vacuum statistics of the module only on the current node,
+      including relation and database statistics for all databases.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term>
+     <function>ext_vacuum_statistics.extvac_reset_entry(<parameter>dboid</parameter> <type>oid</type>, <parameter>relid</parameter> <type>oid</type>)</function>
+     <returnvalue>void</returnvalue>
+    </term>
+    <listitem>
+     <para>
+      Resets the module's own vacuum metrics for one table or index only on the current
+      node. Use
+      <literal>0</literal> as <parameter>dboid</parameter> for a shared
+      catalog. The database aggregate and other relations are unchanged.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term>
+     <function>ext_vacuum_statistics.extvac_reset_db_entry(<parameter>dboid</parameter> <type>oid</type>)</function>
+     <returnvalue>void</returnvalue>
+    </term>
+    <listitem>
+     <para>
+      Resets the module's own vacuum metrics for a database only on the current node:
+      its aggregate and the statistics of all its tables and indexes.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term>
+     <function>ext_vacuum_statistics.gp_vacuum_statistics_reset()</function>
+     <returnvalue>void</returnvalue>
+    </term>
+    <listitem>
+     <para>
+      Calls <function>vacuum_statistics_reset()</function> on the coordinator
+      and all primary segments, resetting statistics for all databases.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term>
+     <function>ext_vacuum_statistics.gp_extvac_reset_entry(<parameter>dboid</parameter> <type>oid</type>, <parameter>relid</parameter> <type>oid</type>)</function>
+     <returnvalue>void</returnvalue>
+    </term>
+    <listitem>
+     <para>
+      Calls <function>extvac_reset_entry(<parameter>dboid</parameter>, <parameter>relid</parameter>)</function>
+      on the coordinator and all primary segments, resetting statistics for
+      one table or index. The database aggregate and other relations are
+      unchanged.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term>
+     <function>ext_vacuum_statistics.gp_extvac_reset_db_entry(<parameter>dboid</parameter> <type>oid</type>)</function>
+     <returnvalue>void</returnvalue>
+    </term>
+    <listitem>
+     <para>
+      Calls <function>extvac_reset_db_entry(<parameter>dboid</parameter>)</function>
+      on the coordinator and all primary segments, resetting the database
+      aggregate and the statistics of all its tables and indexes.
+     </para>
+    </listitem>
+   </varlistentry>
+  </variablelist>
+
+  <para>
+   To reset the current database across the cluster, run on the coordinator:
+<programlisting>
+SELECT ext_vacuum_statistics.gp_extvac_reset_db_entry(oid)
+FROM pg_database WHERE datname = current_database();
+</programlisting>
+  </para>
+ </sect2>
+
+ <sect2 id="extvacuumstatistics-cloudberry">
+  <title>Using the Module in a Cloudberry Cluster</title>
+
+  <para>
+   Every instance of the cluster, the coordinator and each segment, keeps
+   the statistics of the vacuums it runs itself: a <command>VACUUM</command>
+   issued on the coordinator is dispatched to the segments, and each segment
+   vacuums and counts its own part of the tables.  The
+   <structname>pg_stats_vacuum_*</structname> views show the statistics of
+   the instance they are queried on, so on the coordinator they show only
+   what the coordinator itself vacuumed, which for distributed tables is next
+   to nothing.  The module therefore also provides cluster-wide views, which
+   query every instance:
+  </para>
+
+  <itemizedlist>
+   <listitem>
+    <para>
+     <structname>ext_vacuum_statistics.gp_stats_vacuum_tables</structname>,
+     <structname>ext_vacuum_statistics.gp_stats_vacuum_indexes</structname> and
+     <structname>ext_vacuum_statistics.gp_stats_vacuum_database</structname>
+     have the columns of the corresponding <structname>pg_stats_vacuum_*</structname>
+     view, preceded by <structfield>gp_segment_id</structfield>: one row per
+     instance, <literal>-1</literal> being the coordinator, like the
+     <structname>gp_stat_*</structname> views of the core.
+    </para>
+   </listitem>
+   <listitem>
+    <para>
+     <structname>ext_vacuum_statistics.gp_stats_vacuum_tables_summary</structname>
+     and <structname>ext_vacuum_statistics.gp_stats_vacuum_indexes_summary</structname>
+     have one row per relation, like the
+     <structname>gp_stat_*_summary</structname> views of the core: the
+     counters of user relations are summed over the segments, divided by the
+     number of segments for replicated tables, which every segment stores and
+     vacuums in full; system catalogs are shown as the coordinator counts
+     them.
+    </para>
+   </listitem>
+   <listitem>
+    <para>
+     <structname>ext_vacuum_statistics.gp_stats_vacuum_database_summary</structname>
+     sums the database aggregates over all instances, the coordinator
+     included.
+    </para>
+   </listitem>
+  </itemizedlist>
+
+  <para>
+   Like the other <structname>gp_*</structname> views, the cluster-wide views
+   must not be queried in utility mode, where they read the local instance
+   twice.
+  </para>
+
+  <para>
+   The reset functions without the <literal>gp_</literal> prefix act only on
+   the connected instance.
+   <function>ext_vacuum_statistics.gp_vacuum_statistics_reset()</function>,
+   <function>ext_vacuum_statistics.gp_extvac_reset_entry(<parameter>dboid</parameter>, <parameter>relid</parameter>)</function>
+   and
+   <function>ext_vacuum_statistics.gp_extvac_reset_db_entry(<parameter>dboid</parameter>)</function>
+   call them on the coordinator and on every primary segment. Call these
+   wrappers from a normal coordinator connection; use the local functions
+   in utility mode. See <xref linkend="extvacuumstatistics-functions"/>.
+  </para>
+
+  <para>
+   Install the matching extension library, control and SQL files in the
+   Cloudberry installation on every host, including mirror and standby
+   coordinator hosts. <command>gpconfig</command> updates configuration files;
+   it does not distribute the extension files. The module must be preloaded
+   on every instance so that it is available after promotion.
+  </para>
+
+  <para>
+   Inspect the active setting and the configuration files:
+<programlisting>
+gpconfig -s shared_preload_libraries
+gpconfig -s shared_preload_libraries --file
+</programlisting>
+   If the existing list is empty, set it as follows:
+<programlisting>
+gpconfig -c shared_preload_libraries -v 'ext_vacuum_statistics'
+</programlisting>
+   Otherwise pass the complete existing list with
+   <literal>ext_vacuum_statistics</literal> appended. Preserve other preloaded
+   libraries and any intentional differences between coordinator, primary
+   and mirror settings. With <option>-v</option> and no role restriction,
+   <command>gpconfig</command> updates the coordinator, standby, primaries and
+   mirrors. Resolve any reported unreachable hosts before relying on their
+   configuration. Check the resulting files and restart the cluster:
+<programlisting>
+gpconfig -s shared_preload_libraries --file
+gpstop -ar
+gpconfig -s shared_preload_libraries --file-compare
+</programlisting>
+   A reload with <command>gpstop -u</command> alone cannot load a new preload
+   library. Check that the mirror and standby instances also restarted
+   successfully. Then run
+   <command>CREATE EXTENSION IF NOT EXISTS ext_vacuum_statistics</command>
+   on the coordinator in each database where the views are needed; this
+   command is dispatched to the segments.
+  </para>
+
+  <para>
+   The warning above about starting without the module applies separately
+   to each instance that has saved statistics of its custom kinds. Keep the
+   module preloaded when disabling collection to preserve that instance's
+   cumulative statistics.
+  </para>
+
+  <para>
+   The counters are local <literal>pgstat</literal> state, not replicated
+   through WAL. Preloading the module on a mirror enables collection after
+   promotion but does not copy its primary's accumulated counters. A promoted
+   instance reports its own local statistics and cannot continue the former
+   primary's counter history. This also applies to standby coordinator
+   promotion. A compatible clean restart can preserve an instance's own
+   statistics; crash recovery resets them.
+  </para>
+
+  <para>
+   Start a new measurement interval for an instance after promotion, even
+   when its <structfield>gp_segment_id</structfield> is unchanged. Other
+   instances keep their counters, but cluster summaries can decrease when
+   a primary is replaced. Monitoring should retain earlier samples externally
+   and establish a new baseline after failover; the discontinuity does not
+   represent negative vacuum work.
+  </para>
+
+  <para>
+   <varname>vacuum_statistics.enabled</varname> is read by the instance that
+   runs the vacuum.  A <command>SET</command> on the coordinator is passed on
+   to the segments of the session; to stop collecting extension resources in the whole cluster,
+   set it with <command>gpconfig</command> and reload the configuration
+   (<command>gpstop -u</command>).
+  </para>
+ </sect2>
+
+ <sect2 id="extvacuumstatistics-configuration">
+  <title>Configuration Parameters</title>
+
+  <variablelist>
+   <varlistentry>
+    <term><varname>vacuum_statistics.enabled</varname> (<type>boolean</type>)</term>
+    <listitem>
+     <para>
+      Enables collection of extension resource metrics. Native work counters
+      obey <varname>track_counts</varname> independently.  Default: <literal>on</literal>.
+     </para>
+    </listitem>
+   </varlistentry>
+  </variablelist>
+ </sect2>
+</sect1>

@@ -1544,7 +1544,7 @@ appendonly_acquire_sample_rows(Relation onerel, int elevel, HeapTuple *rows,
 	{
 		aoscan->targrow = RowSampler_Next(&rs);
 
-		vacuum_delay_point();
+		vacuum_delay_point(true);
 
 		if (appendonly_get_target_tuple(aoscan, aoscan->targrow, slot))
 		{
