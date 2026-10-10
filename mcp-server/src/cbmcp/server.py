@@ -477,7 +477,7 @@ class CloudberryMCPServer:
                     ef_search=ef_search,
                 )
             except Exception as e:
-                return {"error": f"Error running vector search: {str(e)}"}
+                return {"error": f"Error running vector search: {self.db_manager.describe_error(e)}"}
 
         @self.mcp.tool()
         async def fulltext_search(
@@ -513,7 +513,7 @@ class CloudberryMCPServer:
                     match_mode=match_mode,
                 )
             except Exception as e:
-                return {"error": f"Error running full-text search: {str(e)}"}
+                return {"error": f"Error running full-text search: {self.db_manager.describe_error(e)}"}
 
         @self.mcp.tool()
         async def hybrid_search(
@@ -565,7 +565,7 @@ class CloudberryMCPServer:
                     ef_search=ef_search,
                 )
             except Exception as e:
-                return {"error": f"Error running hybrid search: {str(e)}"}
+                return {"error": f"Error running hybrid search: {self.db_manager.describe_error(e)}"}
 
     def _setup_prompts(self):
         """Setup MCP prompts for common database tasks"""

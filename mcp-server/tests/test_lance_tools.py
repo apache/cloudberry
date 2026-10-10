@@ -32,6 +32,7 @@ they skip. The tests of what happens on lance_fdw older than 0.2 need none of
 that: they run against a stand-in connection.
 """
 
+import asyncio
 import json
 import os
 import shutil
@@ -452,6 +453,35 @@ class TestVectorSearch:
         assert result["truncated"] is True
         assert result["truncated_by"] == "max_result_bytes"
         assert len(json.dumps(result).encode()) <= budget
+
+    async def test_a_timed_out_lance_query_leaves_nothing_running(self, fixture_tables):
+        # Three Lance scans joined into 27 million rows take seconds; the
+        # timeout cancels the statement on the coordinator and every segment.
+        sql = (
+            f"SELECT count(*) FROM {SCHEMA}.docs a, {SCHEMA}.docs b, {SCHEMA}.docs c "
+            f"WHERE a.cat + b.cat + c.cat >= 0"
+        )
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setenv("MCP_QUERY_TIMEOUT", "0.3")
+            instance = await CloudberryMCPClient.create(mode="stdio")
+            try:
+                result = await call(instance, "execute_query", query=sql)
+                after = await call(instance, "execute_query", query=f"SELECT count(*) FROM {SCHEMA}.docs")
+            finally:
+                await instance.close()
+        assert "did not finish within MCP_QUERY_TIMEOUT (0.3 s) and was cancelled" in result["error"]
+        assert after["rows"] == [[ROWS]]
+        running = (
+            "SELECT count(*) FROM (SELECT query, state, pid FROM pg_stat_activity "
+            "UNION ALL SELECT query, state, pid FROM gp_dist_random('pg_stat_activity')) a "
+            "WHERE state = 'active' AND query LIKE $1"
+        )
+        for _ in range(100):
+            if not await fixture_tables.fetchval(running, f"%{SCHEMA}.docs a, %"):
+                break
+            await asyncio.sleep(0.05)
+        else:
+            pytest.fail("the cancelled Lance scans were still running 5 s later")
 
     async def test_hybrid_search_is_rejected(self, client):
         result = await call(

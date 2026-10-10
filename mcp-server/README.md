@@ -87,6 +87,9 @@ MCP_DEBUG=false
 MCP_MAX_ROWS=1000
 MCP_MAX_VALUE_LENGTH=10000
 MCP_MAX_RESULT_BYTES=1000000
+
+# Seconds a statement may run before it is cancelled
+MCP_QUERY_TIMEOUT=60
 ```
 
 ## Usage
@@ -369,6 +372,12 @@ cut, the result says how many and in which columns:
 The retrieval tools apply the value limit and the byte budget in the same way.
 All three limits must be positive integers; the server refuses to start
 otherwise.
+
+A statement that runs longer than `MCP_QUERY_TIMEOUT` seconds (default 60;
+fractions allowed) is cancelled on the coordinator and on every segment, and
+the tool reports `the query did not finish within MCP_QUERY_TIMEOUT (60 s) and
+was cancelled`. On a `lance_fdw` table the cancel reaches the Lance scan or
+search too, which stops within a fraction of a second.
 
 ## Lance Datasets
 

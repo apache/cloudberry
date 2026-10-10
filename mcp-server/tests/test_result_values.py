@@ -28,8 +28,10 @@ These are integration tests. They build their own fixture tables and need a
 reachable cluster, but no extension; without a cluster the module skips.
 """
 
+import asyncio
 import json
 import os
+import time
 import uuid
 
 import pytest
@@ -324,6 +326,62 @@ class TestReadOnly:
         assert result["row_count"] == 1
         assert result["truncated"] is True
         assert await fixture_tables.fetchval(f"SELECT count(*) FROM {SCHEMA}.calls") == 2
+
+
+@pytest.mark.asyncio(loop_scope="module")
+class TestTimeout:
+    """A statement past MCP_QUERY_TIMEOUT is cancelled and says so."""
+
+    async def test_a_slow_query_is_cancelled_with_a_message(self, fixture_tables):
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setenv("MCP_QUERY_TIMEOUT", "0.5")
+            instance = await CloudberryMCPClient.create(mode="stdio")
+            try:
+                started = time.monotonic()
+                result = await query(instance, f"SELECT pg_sleep(30), '{SCHEMA}' AS marker")
+                elapsed = time.monotonic() - started
+                after = await query(instance, "SELECT 1")
+            finally:
+                await instance.close()
+        assert result["error"] == (
+            "Error executing query: the query did not finish within MCP_QUERY_TIMEOUT "
+            "(0.5 s) and was cancelled"
+        )
+        assert elapsed < 10
+        # The connection went back to the pool usable.
+        assert after["rows"] == [[1]]
+        assert not await fixture_tables.fetchval(
+            "SELECT count(*) FROM pg_stat_activity WHERE state = 'active' "
+            "AND query LIKE $1 AND pid <> pg_backend_pid()",
+            f"%'{SCHEMA}' AS marker%",
+        )
+
+
+class TestConfiguration:
+    """Limits are checked when the server starts."""
+
+    @pytest.mark.parametrize("name, value", [
+        ("MCP_MAX_ROWS", "0"), ("MCP_MAX_VALUE_LENGTH", "-1"),
+        ("MCP_MAX_RESULT_BYTES", "lots"), ("MCP_QUERY_TIMEOUT", "0"),
+        ("MCP_QUERY_TIMEOUT", "inf"),
+    ])
+    def test_an_invalid_limit_is_refused(self, name, value, monkeypatch):
+        monkeypatch.setenv(name, value)
+        with pytest.raises(ValueError, match=name):
+            DatabaseConfig.from_env()
+
+    def test_a_fractional_timeout_is_accepted(self, monkeypatch):
+        monkeypatch.setenv("MCP_QUERY_TIMEOUT", "2.5")
+        assert DatabaseConfig.from_env().query_timeout == 2.5
+
+    def test_a_timeout_error_gets_a_message(self):
+        from cbmcp.database import DatabaseManager
+
+        manager = DatabaseManager(DatabaseConfig("h", 1, "d", "u", "", query_timeout=2.5))
+        assert manager.describe_error(asyncio.TimeoutError()) == (
+            "the query did not finish within MCP_QUERY_TIMEOUT (2.5 s) and was cancelled"
+        )
+        assert manager.describe_error(ValueError("boom")) == "boom"
 
 
 @pytest.mark.asyncio(loop_scope="module")

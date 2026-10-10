@@ -21,6 +21,7 @@
 Database utilities for the Apache Cloudberry MCP server
 """
 
+import asyncio
 import logging
 import re
 from typing import Any, Dict, List, Optional, Sequence
@@ -98,7 +99,7 @@ class DatabaseManager:
                 password=self.config.password,
                 min_size=1,
                 max_size=10,
-                command_timeout=60.0,
+                command_timeout=self.config.query_timeout,
                 init=self._register_vector_codecs,
             )
         
@@ -209,8 +210,8 @@ class DatabaseManager:
                 return result
 
         except Exception as e:
-            logger.error(f"Query execution error: {e}")
-            return {"error": f"Error executing query: {str(e)}"}
+            logger.error(f"Query execution error: {e!r}")
+            return {"error": f"Error executing query: {self.describe_error(e)}"}
     
     
     async def get_table_info(self, schema: str, table: str) -> Dict[str, Any]:
@@ -649,7 +650,7 @@ class DatabaseManager:
                 
                 return "\n".join([row["QUERY PLAN"] for row in result])
         except Exception as e:
-            return f"Error explaining query: {str(e)}"
+            return f"Error explaining query: {self.describe_error(e)}"
 
     async def get_slow_queries(self, limit: int = 10) -> list[dict]:
         """Get slow queries from pg_stat_statements"""
@@ -1084,6 +1085,20 @@ class DatabaseManager:
         # An OID is an integer read out of the catalog, so interpolating it
         # cannot inject anything.
         return language, f"{int(oid)}::regconfig"
+
+    def describe_error(self, error: Exception) -> str:
+        """The text of an error, for a tool result.
+
+        On a timeout asyncpg cancels the statement on the server and raises a
+        TimeoutError with no text at all, which leaves the caller with an
+        empty message.
+        """
+        if isinstance(error, (asyncio.TimeoutError, TimeoutError)) and not str(error):
+            return (
+                f"the query did not finish within MCP_QUERY_TIMEOUT "
+                f"({self.config.query_timeout:g} s) and was cancelled"
+            )
+        return str(error)
 
     @staticmethod
     async def _check_lance_search(
