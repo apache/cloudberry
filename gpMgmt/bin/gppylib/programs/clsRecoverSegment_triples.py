@@ -7,7 +7,7 @@ from gppylib import gplog
 from gppylib.mainUtils import ExceptionNoStackTraceNeeded
 from gppylib.operations.detect_unreachable_hosts import get_unreachable_segment_hosts
 from gppylib.parseutils import line_reader, check_values, canonicalize_address
-from gppylib.utils import checkNotNone, normalizeAndValidateInputPath
+from gppylib.utils import checkNotNone, normalizeAndValidateInputPath, validateHostnameAddress
 from gppylib.gparray import GpArray, Segment
 from gppylib.commands.gp import RECOVERY_REWIND_APPNAME
 
@@ -71,6 +71,29 @@ def is_pg_rewind_running(hostname, port):
     except Exception as e:
         raise Exception("Failed to query pg_stat_activity for segment hostname: {}, port: {}, error: {}".format(
             hostname, str(port), str(e)))
+
+
+# cherry-pick from Greenplum Database
+# greenplum-db/gpdb-archive @ 482967c1b4,
+# gpMgmt/bin/gppylib/programs/clsRecoverSegment_triples.py
+def extract_recovery_config_info(parts):
+    """
+    Extracts relevant recovery configuration information from a list of parts.
+
+    Three parts is the historical form, "<address>|<port>|<datadir>", and the
+    hostname is taken to be the address. Four parts puts an explicit hostname
+    first; it is then cross-checked against the address, and against the
+    hostname the segment is registered under.
+    """
+    address, port, datadir = parts[-3:]
+    hostname_check_required = False
+    hostname = address
+
+    if len(parts) == 4:
+        hostname = parts[0]
+        hostname_check_required = True
+
+    return hostname, address, port, datadir, hostname_check_required
 
 
 class RecoveryTriplet:
@@ -149,10 +172,12 @@ class RecoveryTriplet:
 
 
 class RecoveryTripletRequest:
-    def __init__(self, failed, failover_host=None, failover_port=None, failover_datadir=None, is_new_host=False):
+    def __init__(self, failed, failover_host_name=None, failover_host_address=None, failover_port=None,
+                 failover_datadir=None, is_new_host=False):
         self.failed = failed
 
-        self.failover_host = failover_host
+        self.failover_host_name = failover_host_name
+        self.failover_host_address = failover_host_address
         self.failover_port = failover_port
         self.failover_datadir = failover_datadir
         self.failover_to_new_host = is_new_host
@@ -236,7 +261,7 @@ class RecoveryTriplets(abc.ABC):
             # "<failed_address>|<failed_port>|<failed_data_dir> <failed_address>|<failed_port>|<failed_data_dir>" does full recovery
             # "<failed_address>|<failed_port>|<failed_data_dir>" does incremental recovery
             failover = None
-            if req.failover_host:
+            if req.failover_host_address:
 
                 # these two lines make it so that failover points to the object that is registered in gparray
                 #   as the failed segment(!).
@@ -244,8 +269,17 @@ class RecoveryTriplets(abc.ABC):
                 req.failed = failover.copy()
 
                 # now update values in failover segment
-                failover.setSegmentAddress(req.failover_host)
-                failover.setSegmentHostName(req.failover_host)
+                if req.failover_host_name != req.failover_host_address:
+                    # Validate if the hostname and address are of the same host
+                    if not validateHostnameAddress(req.failover_host_name, req.failover_host_address):
+                        logger.warning(
+                            "Not able to co-relate hostname:{0} with address:{1}. "
+                            "Skipping recovery for segments with contentId {2}"
+                            .format(req.failover_host_name, req.failover_host_address, peer_contentid))
+                        continue
+
+                failover.setSegmentHostName(req.failover_host_name)
+                failover.setSegmentAddress(req.failover_host_address)
                 failover.setSegmentPort(int(req.failover_port))
                 failover.setSegmentDataDirectory(req.failover_datadir)
                 failover.unreachable = False if req.failover_to_new_host else failover.unreachable
@@ -333,7 +367,11 @@ class RecoveryTripletsNewHosts(RecoveryTriplets):
         for failedHost, failoverHost in zip(sorted(failedSegments.keys()), self.newHosts):
             for failed in failedSegments[failedHost]:
                 failoverPort = self.portAssigner.findAndReservePort(failoverHost, failoverHost)
-                req = RecoveryTripletRequest(failed, failoverHost, failoverPort, failed.getSegmentDataDirectory(), True)
+                req = RecoveryTripletRequest(failed, failover_host_name=failoverHost,
+                                             failover_host_address=failoverHost,
+                                             failover_port=failoverPort,
+                                             failover_datadir=failed.getSegmentDataDirectory(),
+                                             is_new_host=True)
                 requests.append(req)
 
         return self._convert_requests_to_triplets(requests)
@@ -396,6 +434,11 @@ class RecoveryTripletsUserConfigFile(RecoveryTriplets):
         def _find_failed_from_row():
             failed = None
             for segment in self.gpArray.getDbList():
+                # When the input configuration file carries an explicit hostname
+                # it has to match the one the segment is registered under, or
+                # this is not the segment the operator meant.
+                if row['hostname_check_required'] and segment.getSegmentHostName() != row['failedHostname']:
+                    continue
                 if (segment.getSegmentAddress() == row['failedAddress']
                         and str(segment.getSegmentPort()) == row['failedPort']
                         and segment.getSegmentDataDirectory() == row['failedDataDirectory']):
@@ -403,15 +446,32 @@ class RecoveryTripletsUserConfigFile(RecoveryTriplets):
                     break
 
             if failed is None:
-                raise Exception("A segment to recover was not found in configuration.  " \
-                                "This segment is described by address|port|directory '%s|%s|%s'" %
-                                (row['failedAddress'], row['failedPort'], row['failedDataDirectory']))
+                # Keep Cloudberry's wording -- the two spaces and the names of
+                # the fields -- rather than upstream's terser form. It tells
+                # the operator which field is which, and the scenario that
+                # covers this asserts on it literally.
+                msg = "A segment to recover was not found in configuration.  " \
+                      "This segment is described by "
+                if row['hostname_check_required']:
+                    msg += "hostname|address|port|directory '{}|{}|{}|{}'".format(
+                        row['failedHostname'], row['failedAddress'],
+                        row['failedPort'], row['failedDataDirectory'])
+                else:
+                    msg += "address|port|directory '{}|{}|{}'".format(
+                        row['failedAddress'], row['failedPort'],
+                        row['failedDataDirectory'])
+
+                raise Exception(msg)
 
             return failed
 
         requests = []
         for row in self.rows:
-            req = RecoveryTripletRequest(_find_failed_from_row(), row.get('newAddress'), row.get('newPort'), row.get('newDataDirectory'))
+            req = RecoveryTripletRequest(_find_failed_from_row(),
+                                         failover_host_name=row.get('newHostname'),
+                                         failover_host_address=row.get('newAddress'),
+                                         failover_port=row.get('newPort'),
+                                         failover_datadir=row.get('newDataDirectory'))
             requests.append(req)
 
         return self._convert_requests_to_triplets(requests)
@@ -433,31 +493,43 @@ class RecoveryTripletsUserConfigFile(RecoveryTriplets):
                     msg = "line %d of file %s: expected 1 or 2 groups but found %d" % (lineno, config_file, len(groups))
                     raise ExceptionNoStackTraceNeeded(msg)
                 parts = groups[0].split('|')
-                if len(parts) != 3:
-                    msg = "line %d of file %s: expected 3 parts on failed segment group, obtained %d" % (
+
+                if len(parts) not in {3, 4}:
+                    msg = "line {0} of file {1}: expected 3 or 4 parts on failed segment group, obtained {2}" .format(
                         lineno, config_file, len(parts))
                     raise ExceptionNoStackTraceNeeded(msg)
-                address, port, datadir = parts
-                check_values(lineno, address=address, port=port, datadir=datadir)
+
+                hostname, address, port, datadir, hostname_check_required = extract_recovery_config_info(parts)
+
+                check_values(lineno, hostname=hostname, address=address, port=port, datadir=datadir)
                 datadir = normalizeAndValidateInputPath(datadir, f.name, lineno)
 
                 row = {
+                    'failedHostname': hostname,
                     'failedAddress': address,
                     'failedPort': port,
                     'failedDataDirectory': datadir,
-                    'lineno': lineno
+                    'lineno': lineno,
+                    'hostname_check_required': hostname_check_required
                 }
                 if len(groups) == 2:
                     parts2 = groups[1].split('|')
-                    if len(parts2) != 3:
-                        msg = "line %d of file %s: expected 3 parts on new segment group, obtained %d" % (
-                            lineno, config_file, len(parts2))
+                    if len(parts2) not in [3, 4] or len(parts) != len(parts2):
+                        msg = "line {0} of file {1}: expected equal parts, either 3 or 4 on both segment group, obtained {2} on " \
+                              "group1 and {3} on group2" .format(
+                            lineno, config_file, len(parts), len(parts2))
                         raise ExceptionNoStackTraceNeeded(msg)
-                    address2, port2, datadir2 = parts2
-                    check_values(lineno, address=address2, port=port2, datadir=datadir2)
+                    if len(parts2) == 4:
+                        hostname2, address2, port2, datadir2 = parts2
+                    else:
+                        address2, port2, datadir2 = parts2
+                        hostname2 = address2
+
+                    check_values(lineno, hostname=hostname2, address=address2, port=port2, datadir=datadir2)
                     datadir2 = normalizeAndValidateInputPath(datadir2, f.name, lineno)
 
                     row.update({
+                        'newHostname': hostname2,
                         'newAddress': address2,
                         'newPort': port2,
                         'newDataDirectory': datadir2
