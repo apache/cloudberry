@@ -22,8 +22,6 @@ Feature: Tests for gpmovemirrors
         When the user runs gpmovemirrors with additional args "--invalid-option"
         Then gpmovemirrors should return a return code of 2
 
-    # needs_fix: gprecoverseg/gppylib fixes (#1639 a3bfe47d5c3 / 51955ac3d8f / 7056e02e306)
-    @needs_fix
     Scenario: gpmovemirrors can change the location of mirrors within a single host
         Given a standard local demo cluster is created
         And a gpmovemirrors directory under '/tmp/gpmovemirrors' with mode '0700' is created
@@ -39,8 +37,6 @@ Feature: Tests for gpmovemirrors
         And check segment conf: postgresql.conf
         And verify that mirrors are recognized after a restart
 
-    # needs_fix: gprecoverseg/gppylib fixes (#1639 a3bfe47d5c3 / 51955ac3d8f / 7056e02e306)
-    @needs_fix
     Scenario: gpmovemirrors can change the port of mirrors within a single host
         Given a standard local demo cluster is created
         And a gpmovemirrors directory under '/tmp/gpmovemirrors' with mode '0700' is created
@@ -117,8 +113,6 @@ Feature: Tests for gpmovemirrors
                 assert that gp_seg_config wasn't updated
         """
     @skip_cleanup
-    # needs_fix: gprecoverseg/gppylib fixes (#1639 a3bfe47d5c3 / 51955ac3d8f / 7056e02e306)
-    @needs_fix
     Scenario Outline: user can <correction> if <failed_count> mirrors failed to move initially
         Given the database is running
         And all the segments are running
@@ -163,8 +157,6 @@ Feature: Tests for gpmovemirrors
         | run gprecoverseg          | all          | None               | 0,1,2          | running in place full recovery for all failed contents |
 
     @skip_cleanup
-    # needs_fix: gprecoverseg/gppylib fixes (#1639 a3bfe47d5c3 / 51955ac3d8f / 7056e02e306)
-    @needs_fix
     Scenario: gpmovemirrors can move mirrors even if start fails for some mirrors
         Given the database is running
         And all the segments are running
@@ -251,8 +243,6 @@ Feature: Tests for gpmovemirrors
   @demo_cluster
   @concourse_cluster
   @skip_cleanup
-  # needs_fix: skip segments that already have a recovery running (#1639 7056e02e306)
-  @needs_fix
   Scenario: gpmovemirrors gives warning if pg_basebackup is already running for one of the mirrors to be moved
     Given the database is running
     And all the segments are running
@@ -292,8 +282,6 @@ Feature: Tests for gpmovemirrors
   @demo_cluster
   @concourse_cluster
   @skip_cleanup
-  # needs_fix: skip segments that already have a recovery running (#1639 7056e02e306)
-  @needs_fix
   Scenario: gpmovemirrors gives warning if pg_basebackup is already running for some of the mirrors to be moved
     Given the database is running
     And all the segments are running
@@ -334,8 +322,6 @@ Feature: Tests for gpmovemirrors
   @demo_cluster
   @concourse_cluster
   @skip_cleanup
-  # needs_fix: skip segments that already have a recovery running (#1639 7056e02e306)
-  @needs_fix
   Scenario: gpmovemirrors gives warning if pg_basebackup is already running for all mirrors to be moved
     Given the database is running
     And all the segments are running

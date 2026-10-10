@@ -2,29 +2,44 @@
 
 import copy
 import io
-from mock import Mock, patch, MagicMock
+import itertools
+import os
+from mock import Mock, patch, MagicMock, call
 import tempfile
 
 import gppylib
 from gparray import Segment, GpArray
-from gppylib.programs.clsRecoverSegment_triples import RecoveryTripletsUserConfigFile, RecoveryTripletsFactory, RecoveryTriplet
-from test.unit.gp_unittest import GpTestCase
+from gppylib.programs.clsRecoverSegment_triples import RecoveryTripletsUserConfigFile, RecoveryTripletsFactory, \
+    RecoveryTriplet, get_segments_with_running_basebackup, is_pg_rewind_running
+from test.unit.gp_unittest import GpTestCase, FakeCursor
 
 
 class RecoveryTripletsFactoryTestCase(GpTestCase):
     def setUp(self):
         # Set maxDiff to None to see the entire diff on the console in case of failure
         self.maxDiff = None
+        mock_logger = Mock(spec=['log', 'warn', 'info', 'debug', 'error', 'warning', 'fatal'])
+
+        self.apply_patches([
+            patch('gppylib.programs.clsRecoverSegment_triples.logger', return_value=mock_logger),
+        ])
+
+        self.mock_logger = self.get_mock_from_apply_patch('logger')
 
     def run_single_ConfigFile_test(self, test):
         with tempfile.NamedTemporaryFile() as f:
             f.write(test["config"].encode("utf-8"))
             f.flush()
-            return self._run_single_FromGpArray_test(test["gparray"], f.name, None, None, test.get("unreachable_existing_hosts"))
+            return self._run_single_FromGpArray_test(test["gparray"], f.name, None, None,
+                                                     test.get("is_pgrewind_running", itertools.repeat(False)),
+                                                     test.get("segments_with_running_basebackup", set()),
+                                                     test.get("unreachable_existing_hosts"))
 
     def run_single_GpArray_test(self, test):
         return self._run_single_FromGpArray_test(test["gparray"], None, test["new_hosts"], test.get("unreachable_hosts"),
-                                     test.get("unreachable_existing_hosts"))
+                                                 test.get("is_pgrewind_running", itertools.repeat(False)),
+                                                 test.get("segments_with_running_basebackup", set()),
+                                                 test.get("unreachable_existing_hosts"))
 
     #TODO: do we want new hosts here?  We do not officially support new hosts with "-i"
     def test_RecoveryTripletsUserConfigFile_getMirrorTriples_should_pass(self):
@@ -100,7 +115,83 @@ class RecoveryTripletsFactoryTestCase(GpTestCase):
                 "config": "sdw2|21000|/mirror/gpseg0",
                 "unreachable_existing_hosts": ['sdw2'],
                 "expected": []
-            }
+            },
+            # A skipped segment that the config file moves must keep its
+            # location in gpArray; run_pass_tests() checks that only the
+            # expected triplets changed it.
+            {
+                "name": "one_mirror_inconfig_has_running_basebackup",
+                "gparray": self.all_up_gparray_str,
+                "config": """sdw2|21000|/mirror/gpseg0 sdw2|21000|/mirror/gpseg0_new
+                             sdw1|21000|/mirror/gpseg6 sdw1|21000|/mirror/gpseg6_new""",
+                "segments_with_running_basebackup": {0},
+                "expected": [self._triplet('16|6|m|m|s|u|sdw1|sdw1|21000|/mirror/gpseg6',
+                                           '8|6|p|p|s|u|sdw4|sdw4|20000|/primary/gpseg6',
+                                           '16|6|m|m|s|u|sdw1|sdw1|21000|/mirror/gpseg6_new')]
+            },
+            {
+                "name": "some_mirrors_inconfig_have_running_basebackup",
+                "gparray": self.all_up_gparray_str,
+                "config": """sdw2|21000|/mirror/gpseg0 sdw2|21000|/mirror/gpseg0_new
+                             sdw2|21001|/mirror/gpseg1 sdw2|21000|/mirror/gpseg1_new
+                             sdw1|21000|/mirror/gpseg6 sdw1|21000|/mirror/gpseg6_new""",
+                "segments_with_running_basebackup": {0, 1},
+                "expected": [self._triplet('16|6|m|m|s|u|sdw1|sdw1|21000|/mirror/gpseg6',
+                                           '8|6|p|p|s|u|sdw4|sdw4|20000|/primary/gpseg6',
+                                           '16|6|m|m|s|u|sdw1|sdw1|21000|/mirror/gpseg6_new')]
+            },
+            {
+                "name": "all_mirrors_inconfig_have_running_basebackup",
+                "gparray": self.all_up_gparray_str,
+                "config": """sdw2|21000|/mirror/gpseg0 sdw2|21000|/mirror/gpseg0_new
+                             sdw2|21001|/mirror/gpseg1 sdw2|21000|/mirror/gpseg1_new
+                             sdw1|21000|/mirror/gpseg6 sdw1|21000|/mirror/gpseg6_new""",
+                "segments_with_running_basebackup": {0, 1, 6},
+                "expected": []
+            },
+            {
+                "name": "one_moved_mirror_inconfig_has_running_pgrewind",
+                "gparray": self.all_up_gparray_str,
+                "config": """sdw2|21000|/mirror/gpseg0 sdw2|21000|/mirror/gpseg0_new
+                             sdw1|21000|/mirror/gpseg6 sdw1|21000|/mirror/gpseg6_new""",
+                "is_pgrewind_running": [True, False],
+                "expected": [self._triplet('16|6|m|m|s|u|sdw1|sdw1|21000|/mirror/gpseg6',
+                                           '8|6|p|p|s|u|sdw4|sdw4|20000|/primary/gpseg6',
+                                           '16|6|m|m|s|u|sdw1|sdw1|21000|/mirror/gpseg6_new')]
+            },
+            {
+                "name": "one_mirror_inconfig_has_running_pgrewind",
+                "gparray": self.three_failedover_segs_gparray_str,
+                "config": """sdw1|20000|/primary/gpseg0
+                             sdw1|20001|/primary/gpseg1
+                             sdw2|20000|/primary/gpseg2""",
+                "is_pgrewind_running": [True, False, False],
+                "expected": [self._triplet('3|1|m|p|s|d|sdw1|sdw1|20001|/primary/gpseg1',
+                                           '7|1|p|m|s|u|sdw2|sdw2|21001|/mirror/gpseg1',
+                                           None),
+                             self._triplet('4|2|m|p|s|d|sdw2|sdw2|20000|/primary/gpseg2',
+                                           '8|2|p|m|s|u|sdw3|sdw3|21000|/mirror/gpseg2',
+                                           None)]
+            },
+            {
+                "name": "mirrors_inconfig_have_running_pgrewind_and_pgbasebackup",
+                "gparray": self.three_failedover_segs_gparray_str,
+                "config": """sdw1|20000|/primary/gpseg0
+                             sdw1|20001|/primary/gpseg1
+                             sdw2|20000|/primary/gpseg2""",
+                "segments_with_running_basebackup": {1, 2},
+                "is_pgrewind_running": [True, False, False],
+                "expected": []
+            },
+            {
+                "name": "all_mirrors_inconfig_have_running_pgrewind",
+                "gparray": self.three_failedover_segs_gparray_str,
+                "config": """sdw1|20000|/primary/gpseg0
+                             sdw1|20001|/primary/gpseg1
+                             sdw2|20000|/primary/gpseg2""",
+                "is_pgrewind_running": [True, True, True],
+                "expected": []
+            },
         ]
         self.run_pass_tests(tests, self.run_single_ConfigFile_test)
 
@@ -269,6 +360,70 @@ class RecoveryTripletsFactoryTestCase(GpTestCase):
                                            '6|0|p|m|s|u|sdw2|sdw2|21000|/mirror/gpseg0',
                                            '2|0|m|p|s|d|new_1|new_1|20000|/primary/gpseg0', failed_unreachable=True)]
             },
+            {
+                "name": "one_failed_segments_has_running_basebackup",
+                "gparray": self.three_failedover_segs_gparray_str,
+                "new_hosts": [],
+                "segments_with_running_basebackup": {0},
+                "expected": [self._triplet('3|1|m|p|s|d|sdw1|sdw1|20001|/primary/gpseg1',
+                                           '7|1|p|m|s|u|sdw2|sdw2|21001|/mirror/gpseg1',
+                                           None),
+                             self._triplet('4|2|m|p|s|d|sdw2|sdw2|20000|/primary/gpseg2',
+                                           '8|2|p|m|s|u|sdw3|sdw3|21000|/mirror/gpseg2',
+                                           None)]
+            },
+            {
+                "name": "all_failed_segments_have_running_basebackup",
+                "gparray": self.three_failedover_segs_gparray_str,
+                "new_hosts": [],
+                "segments_with_running_basebackup": {0, 1, 2},
+                "expected": []
+            },
+            {
+                "name": "failed_segments_have_running_pgrewind_or_pgbasebackup",
+                "gparray": self.three_failedover_segs_gparray_str,
+                "new_hosts": [],
+                "segments_with_running_basebackup": {1},
+                "is_pgrewind_running": [True, False, False],
+                "expected": [self._triplet('4|2|m|p|s|d|sdw2|sdw2|20000|/primary/gpseg2',
+                                           '8|2|p|m|s|u|sdw3|sdw3|21000|/mirror/gpseg2',
+                                           None)]
+            },
+            {
+                "name": "some_failed_segments_have_running_pgrewind",
+                "gparray": self.three_failedover_segs_gparray_str,
+                "new_hosts": [],
+                "is_pgrewind_running": [True, False, True],
+                "expected": [self._triplet('3|1|m|p|s|d|sdw1|sdw1|20001|/primary/gpseg1',
+                                           '7|1|p|m|s|u|sdw2|sdw2|21001|/mirror/gpseg1',
+                                           None)]
+            },
+            # Moving to new hosts rewrites gpArray too; a skipped segment
+            # must keep its old host.
+            {
+                "name": "new_hosts_one_failed_segment_has_running_basebackup",
+                "gparray": self.three_failedover_segs_gparray_str,
+                "new_hosts": ['new_1', 'new_2'],
+                "segments_with_running_basebackup": {0},
+                "expected": [self._triplet('3|1|m|p|s|d|sdw1|sdw1|20001|/primary/gpseg1',
+                                           '7|1|p|m|s|u|sdw2|sdw2|21001|/mirror/gpseg1',
+                                           '3|1|m|p|s|d|new_1|new_1|20001|/primary/gpseg1'),
+                             self._triplet('4|2|m|p|s|d|sdw2|sdw2|20000|/primary/gpseg2',
+                                           '8|2|p|m|s|u|sdw3|sdw3|21000|/mirror/gpseg2',
+                                           '4|2|m|p|s|d|new_2|new_2|20000|/primary/gpseg2')]
+            },
+            {
+                "name": "new_hosts_one_failed_segment_has_running_pgrewind",
+                "gparray": self.three_failedover_segs_gparray_str,
+                "new_hosts": ['new_1', 'new_2'],
+                "is_pgrewind_running": [False, True, False],
+                "expected": [self._triplet('2|0|m|p|s|d|sdw1|sdw1|20000|/primary/gpseg0',
+                                           '6|0|p|m|s|u|sdw2|sdw2|21000|/mirror/gpseg0',
+                                           '2|0|m|p|s|d|new_1|new_1|20000|/primary/gpseg0'),
+                             self._triplet('4|2|m|p|s|d|sdw2|sdw2|20000|/primary/gpseg2',
+                                           '8|2|p|m|s|u|sdw3|sdw3|21000|/mirror/gpseg2',
+                                           '4|2|m|p|s|d|new_2|new_2|20000|/primary/gpseg2')]
+            },
         ]
 
         self.run_pass_tests(tests, self.run_single_GpArray_test)
@@ -347,6 +502,68 @@ class RecoveryTripletsFactoryTestCase(GpTestCase):
             }
         ]
         self.run_fail_tests(tests, self.run_single_GpArray_test)
+
+    @patch('gppylib.db.dbconn.connect', side_effect=Exception())
+    def test_get_segments_with_running_basebackup_conn_exception(self, mock1):
+        with self.assertRaises(Exception) as ex:
+            get_segments_with_running_basebackup(15432)
+
+        self.assertTrue('Failed to query gp_stat_replication' in str(ex.exception))
+
+    @patch('gppylib.db.dbconn.connect', autospec=True)
+    @patch('gppylib.db.dbconn.query', side_effect=Exception())
+    def test_get_segments_with_running_basebackup_query_exception(self, mock1, mock2):
+        with self.assertRaises(Exception) as ex:
+            get_segments_with_running_basebackup(15432)
+
+        self.assertTrue('Failed to query gp_stat_replication:' in str(ex.exception))
+
+    @patch('gppylib.db.dbconn.connect', autospec=True)
+    @patch('gppylib.db.dbconn.query', return_value=FakeCursor(my_list=[]))
+    def test_get_segments_with_running_basebackup_no_basebackup(self, mock1, mock2):
+        segments_with_running_basebackup = get_segments_with_running_basebackup(15432)
+        self.assertEqual(list(segments_with_running_basebackup), [])
+        self.assertEqual([call("No basebackup running")], self.mock_logger.debug.call_args_list)
+
+    @patch('gppylib.db.dbconn.connect', autospec=True)
+    @patch('gppylib.db.dbconn.query', return_value=FakeCursor(my_list=[[1]]))
+    def test_get_segments_with_running_basebackup_has_basebackup(self, mock1, mock2):
+        segments_with_running_basebackup = get_segments_with_running_basebackup(15432)
+        self.assertEqual(list(segments_with_running_basebackup), [1])
+        self.assertEqual(0, self.mock_logger.debug.call_count)
+
+    # PGPORT need not be set, or set to the coordinator's port.
+    @patch.dict(os.environ, {'PGPORT': '5432'})
+    @patch('gppylib.db.dbconn.connect', autospec=True)
+    @patch('gppylib.db.dbconn.query', return_value=FakeCursor(my_list=[]))
+    def test_get_segments_with_running_basebackup_uses_coordinator_port(self, mock_query, mock_connect):
+        get_segments_with_running_basebackup(15432)
+        self.assertEqual(15432, mock_connect.call_args[0][0].pgport)
+
+    def test_triplets_check_basebackup_on_coordinator_port(self):
+        self.run_single_GpArray_test({
+            "gparray": self.all_up_gparray_str.replace('|mdw|mdw|5432|', '|mdw|mdw|15432|'),
+            "new_hosts": [],
+        })
+        gppylib.programs.clsRecoverSegment_triples.get_segments_with_running_basebackup.assert_called_once_with(15432)
+
+    @patch('gppylib.db.dbconn.connect', side_effect=Exception())
+    def test_is_pg_rewind_running_conn_exception(self, mock1):
+        with self.assertRaises(Exception) as ex:
+            is_pg_rewind_running("sdw1", 6001)
+        self.assertEqual('Failed to query pg_stat_activity for segment hostname: sdw1, port: 6001, error: ', str(ex.exception))
+
+    @patch('gppylib.db.dbconn.connect', autospec=True)
+    @patch('gppylib.db.dbconn.querySingleton', return_value=2)
+    def test_is_pg_rewind_running_returns_true_for_query_result_greater_than_one(self, mock1, mock2):
+        self.assertEqual(is_pg_rewind_running("sdw1", 6001), True)
+
+    @patch('gppylib.db.dbconn.connect', autospec=True)
+    @patch('gppylib.db.dbconn.querySingleton', return_value=0)
+    def test_is_pg_rewind_running_returns_false(self, mock1, mock2):
+        self.assertEqual(is_pg_rewind_running("sdw1", 6001), False)
+        self.assertEqual([call("Checking for running instances of pg_rewind with host sdw1 and port 6001 as source "
+                               "server")], self.mock_logger.debug.call_args_list)
 
     def run_pass_tests(self, tests, fn_to_test):
         for test in tests:
@@ -438,10 +655,13 @@ class RecoveryTripletsFactoryTestCase(GpTestCase):
                                   4|2|p|p|s|u|sdw2|sdw2|20000|/primary/gpseg2
                                   5|3|p|p|s|u|sdw2|sdw2|20001|/primary/gpseg3'''
 
-    def _run_single_FromGpArray_test(self, gparray_str, config_file, new_hosts, unreachable_hosts,
-                                              unreachable_existing_hosts=None):
+    def _run_single_FromGpArray_test(self, gparray_str, config_file, new_hosts, unreachable_hosts, is_pgrewind_running,
+                                     segments_with_running_basebackup, unreachable_existing_hosts=None):
         unreachable_hosts = unreachable_hosts if unreachable_hosts else []
         gppylib.programs.clsRecoverSegment_triples.get_unreachable_segment_hosts = Mock(return_value=unreachable_hosts)
+        gppylib.programs.clsRecoverSegment_triples.get_segments_with_running_basebackup = Mock(
+            return_value=segments_with_running_basebackup)
+        gppylib.programs.clsRecoverSegment_triples.is_pg_rewind_running = Mock(side_effect=is_pgrewind_running)
 
         initial_gparray = self.get_gp_array(gparray_str, unreachable_existing_hosts)
         mutated_gparray = self.get_gp_array(gparray_str, unreachable_existing_hosts)
