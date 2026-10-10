@@ -13,12 +13,13 @@ from gppylib.commands.unix import terminate_proc_tree
 
 
 class FullRecovery(Command):
-    def __init__(self, name, recovery_info, forceoverwrite, logger, era):
+    def __init__(self, name, recovery_info, forceoverwrite, logger, era, maxRate):
         self.name = name
         self.recovery_info = recovery_info
         self.replicationSlotName = 'internal_wal_replication_slot'
         self.forceoverwrite = forceoverwrite
         self.era = era
+        self.maxRate = maxRate
         # FIXME test for this cmdstr. also what should this cmdstr be ?
         cmdStr = ''
         #cmdstr = 'TODO? : {} {}'.format(str(recovery_info), self.verbose)
@@ -37,7 +38,8 @@ class FullRecovery(Command):
                            replication_slot_name=self.replicationSlotName,
                            forceoverwrite=self.forceoverwrite,
                            target_gp_dbid=self.recovery_info.target_segment_dbid,
-                           progress_file=self.recovery_info.progress_file)
+                           progress_file=self.recovery_info.progress_file,
+                           max_rate=self.maxRate)
         self.logger.info("Running pg_basebackup with progress output temporarily in %s" % self.recovery_info.progress_file)
         try:
             cmd.run(validateAfter=True)
@@ -56,7 +58,8 @@ class FullRecovery(Command):
                                replication_slot_name=self.replicationSlotName,
                                forceoverwrite=True,
                                target_gp_dbid=self.recovery_info.target_segment_dbid,
-                               progress_file=self.recovery_info.progress_file)
+                               progress_file=self.recovery_info.progress_file,
+                               max_rate=self.maxRate)
             self.logger.info("Re-running pg_basebackup, creating the slot this time")
             cmd.run(validateAfter=True)
 
@@ -145,9 +148,10 @@ class SegRecovery(object):
         signal.signal(signal.SIGTERM, signal_handler)
 
         recovery_base.main(self.get_recovery_cmds(recovery_base.seg_recovery_info_list, recovery_base.options.forceoverwrite,
-                                                  recovery_base.logger, recovery_base.options.era))
+                                                  recovery_base.logger, recovery_base.options.era,
+                                                  recovery_base.options.maxRate))
 
-    def get_recovery_cmds(self, seg_recovery_info_list, forceoverwrite, logger, era):
+    def get_recovery_cmds(self, seg_recovery_info_list, forceoverwrite, logger, era, maxRate):
         cmd_list = []
         for seg_recovery_info in seg_recovery_info_list:
             if seg_recovery_info.is_full_recovery:
@@ -155,7 +159,8 @@ class SegRecovery(object):
                                    recovery_info=seg_recovery_info,
                                    forceoverwrite=forceoverwrite,
                                    logger=logger,
-                                   era=era)
+                                   era=era,
+                                   maxRate=maxRate)
             else:
                 cmd = IncrementalRecovery(name='Run pg_rewind',
                                           recovery_info=seg_recovery_info,

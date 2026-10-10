@@ -34,6 +34,7 @@ class Options:
         self.quiet = None
         self.interactive = False
         self.hba_hostnames = False
+        self.maxRate = None
 
 
 class GpRecoversegTestCase(GpTestCase):
@@ -90,6 +91,7 @@ class GpRecoversegTestCase(GpTestCase):
             patch.object(GpMirrorListToBuild, "recover_mirrors"),
             patch.object(GpMirrorListToBuild, "getAdditionalWarnings"),
             patch.object(GpMirrorListToBuild, "getMirrorsToBuild"),
+            patch.object(GpMirrorListToBuild, "getMaxTransferRate"),
             patch.object(HeapChecksum, "check_segment_consistency"),
             patch.object(HeapChecksum, "get_segments_checksum_settings"),
         ])
