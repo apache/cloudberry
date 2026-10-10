@@ -246,15 +246,74 @@ The PostgreSQL software includes:
       src/tools/pg_bsd_indent
       see licenses/LICENSE-bsd-indent.txt
 
+      Code from the BSD C library, each file under its own University of
+      California copyright notice and the 3-clause BSD terms (in some
+      files the rescinded advertising clause is left as a numbered gap):
+      src/include/lib/sort_template.h
+      src/port/bsearch_arg.c
+      src/port/getopt.c
+      src/port/getopt_long.c
+      src/port/mkdtemp.c
+      src/port/pgmkdirp.c
+      see licenses/LICENSE-bsd3-regents.txt
+
+      MD5 and SHA-1 implementations from the KAME project:
+      src/common/md5.c
+      src/common/md5_int.h
+      src/common/sha1.c
+      src/common/sha1_int.h
+      see licenses/LICENSE-bsd3-wide.txt
+
+      contrib/pgcrypto/crypt-des.c
+      see licenses/LICENSE-bsd3-crypt-des.txt
+
+----------------------------
+   BSD 2 Clause License
+
+      pgcrypto, copyright Marko Kreen:
+      contrib/pgcrypto/internal-sha2.c
+      contrib/pgcrypto/internal.c
+      contrib/pgcrypto/mbuf.c
+      contrib/pgcrypto/mbuf.h
+      contrib/pgcrypto/openssl.c
+      contrib/pgcrypto/pgcrypto.c
+      contrib/pgcrypto/pgcrypto.h
+      contrib/pgcrypto/pgp-armor.c
+      contrib/pgcrypto/pgp-cfb.c
+      contrib/pgcrypto/pgp-compress.c
+      contrib/pgcrypto/pgp-decrypt.c
+      contrib/pgcrypto/pgp-encrypt.c
+      contrib/pgcrypto/pgp-info.c
+      contrib/pgcrypto/pgp-mpi-openssl.c
+      contrib/pgcrypto/pgp-mpi.c
+      contrib/pgcrypto/pgp-pgsql.c
+      contrib/pgcrypto/pgp-pubdec.c
+      contrib/pgcrypto/pgp-pubenc.c
+      contrib/pgcrypto/pgp-pubkey.c
+      contrib/pgcrypto/pgp-s2k.c
+      contrib/pgcrypto/pgp.c
+      contrib/pgcrypto/pgp.h
+      contrib/pgcrypto/px-crypt.c
+      contrib/pgcrypto/px-crypt.h
+      contrib/pgcrypto/px-hmac.c
+      contrib/pgcrypto/px.c
+      contrib/pgcrypto/px.h
+      see licenses/LICENSE-bsd2-pgcrypto.txt
+
 ----------------------------
    Internet Systems Consortium/Internet Software Consortium (ISC) LICENSE
       
+      src/port/strlcat.c
       src/port/strlcpy.c
       see licenses/LICENSE-strlcpy.txt
       
       src/backend/utils/adt/inet_cidr_ntop.c
       src/backend/utils/adt/inet_net_pton.c
+      src/port/inet_net_ntop.c
       see licenses/LICENSE-isc.txt
+
+      src/port/timingsafe_bcmp.c
+      see licenses/LICENSE-isc-timingsafe_bcmp.txt
 
 ----------------------------
    Perl Artistic License 2.0 (exception)
@@ -283,7 +342,8 @@ The PostgreSQL software includes:
 ----------------------------
    regex LICENSE
       
-      src/backend/regex 
+      src/backend/regex
+      src/include/regex
       see licenses/LICENSE-regex.txt
 
 ----------------------------
@@ -291,6 +351,12 @@ The PostgreSQL software includes:
 
       src/port/win32gettimeofday.c
       see licenses/LICENSE-gettimeofday.txt
+
+      contrib/pageinspect/btreefuncs.c
+      contrib/pgrowlocks/pgrowlocks.c
+      contrib/pgstattuple/pgstatindex.c
+      contrib/pgstattuple/pgstattuple.c
+      see licenses/LICENSE-pgstattuple.txt
 
 ----------------------------
    Boost Software License - Version 1.0
@@ -317,6 +383,9 @@ The PostgreSQL software includes:
       src/include/lib/hyperloglog.h
       see licenses/LICENSE-hyperloglog.txt
 
+      contrib/pgcrypto/imath.c
+      see licenses/LICENSE-imath.txt
+
 ----------------------------
    Apache License v2.0 with LLVM Exceptions
 
@@ -337,6 +406,17 @@ The PostgreSQL software includes:
       src/timezone/zic.c
       src/timezone/data/tzdata.zi
 
+      bcrypt, written by Solar Designer:
+      contrib/pgcrypto/crypt-blowfish.c
+      contrib/pgcrypto/crypt-gensalt.c
+
+      Message translations whose headers place them in the public domain:
+      src/bin/initdb/po/zh_CN.po
+      src/bin/pg_config/po/zh_CN.po
+      src/bin/pg_controldata/po/sv.po
+      src/bin/pg_ctl/po/zh_CN.po
+      src/bin/scripts/po/zh_CN.po
+
 ----------------------------
    Project X0213 License
 
@@ -353,6 +433,45 @@ The PostgreSQL software includes:
       src/backend/utils/mb/Unicode/gb-18030-2000.xml
       see licenses/LICENSE-icu-data.txt
 
+----------------------------
+   Other permissive licenses
+
+      Genetic query optimizer recombination operators, adopted from
+      Genitor, copyright Darrell L. Whitley:
+      src/backend/optimizer/geqo/geqo_copy.c
+      src/backend/optimizer/geqo/geqo_cx.c
+      src/backend/optimizer/geqo/geqo_erx.c
+      src/backend/optimizer/geqo/geqo_ox1.c
+      src/backend/optimizer/geqo/geqo_ox2.c
+      src/backend/optimizer/geqo/geqo_pmx.c
+      src/backend/optimizer/geqo/geqo_px.c
+      src/backend/optimizer/geqo/geqo_selection.c
+      see licenses/LICENSE-geqo.txt
+
+      pg_dump archiver, copyright Philip Warner:
+      src/bin/pg_dump/pg_backup.h
+      src/bin/pg_dump/pg_backup_archiver.c
+      src/bin/pg_dump/pg_backup_archiver.h
+      src/bin/pg_dump/pg_backup_custom.c
+      src/bin/pg_dump/pg_backup_directory.c
+      src/bin/pg_dump/pg_backup_null.c
+      src/bin/pg_dump/pg_backup_tar.c
+      src/bin/pg_dump/pg_restore.c
+      see licenses/LICENSE-pg_dump.txt
+
+----------------------------
+   Perl License, and a PostgreSQL-style License
+
+      Double Metaphone, ported from the Text::DoubleMetaphone Perl module:
+      contrib/fuzzystrmatch/dmetaphone.c
+
+      The portions from Text::DoubleMetaphone, copyright Maurice Aubrey,
+      may be redistributed and/or modified under the same terms as Perl
+      itself.  The remaining code, copyright North Carolina State Highway
+      Patrol, is under a PostgreSQL-style license.  The file carries both
+      notices; they are reproduced in:
+      see licenses/LICENSE-dmetaphone.txt
+
 ================================================================================
 This product contains significant parts that were originally based on software
 from VMware, Inc. or its affiliates.
@@ -362,6 +481,11 @@ Greenplum Database
 Copyright (c) 2004-2020 VMware, Inc. or its affiliates. All Rights Reserved.
 
 All Rights Reserved.
+
+Some ORCA query optimizer files that Greenplum Database added in 2024
+carry a "Copyright (C) 2024 Broadcom" or "Copyright (C) 2024 VMware by
+Broadcom" notice instead; they are part of Greenplum Database and are
+covered by the same license.
 
 Greenplum Database is licensed under the Apache License Version 2.0
 (see LICENSE) and is based on the PostgreSQL Database Management System.
@@ -375,6 +499,15 @@ The Greenplum Database software includes:
       src/test/unit/cmockery
       (see the Apache License above; also shipped in-tree as
        src/test/unit/cmockery/LICENSE.txt)
+
+----------------------------
+   BSD 2 Clause License
+
+      HyperLogLog extension, copyright Tomas Vondra, Conversant, Inc. and
+      VMware, Inc.:
+      src/backend/utils/hyperloglog/gp_hyperloglog.c
+      src/include/utils/hyperloglog/gp_hyperloglog.h
+      see licenses/LICENSE-gp-hyperloglog.txt
 
 ----------------------------
    Stream License

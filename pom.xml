@@ -1628,6 +1628,8 @@ code or new licensing patterns.
             -->
             <exclude>licenses/LICENSE-amalgamate.txt</exclude>
             <exclude>licenses/LICENSE-boost.txt</exclude>
+            <exclude>licenses/LICENSE-geqo.txt</exclude>
+            <exclude>licenses/LICENSE-pg_dump.txt</exclude>
             <exclude>licenses/LICENSE-termcolor.txt</exclude>
             <exclude>licenses/LICENSE-vixie-cron.txt</exclude>
             <exclude>licenses/LICENSE-x0213.txt</exclude>

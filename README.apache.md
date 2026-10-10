@@ -50,6 +50,7 @@ The following compressed files are included in the source tree. These files are 
 - src/bin/gpfdist/regress/data/gpfdist2/gz_multi_chunk_2.tbl.gz
 - src/bin/gpfdist/regress/data/gpfdist2/lineitem.tbl.bz2
 - src/bin/gpfdist/regress/data/gpfdist2/lineitem.tbl.gz
+- src/bin/gpfdist/regress/data/gpfdist2/lineitem.tbl.zst
 
 ## Binary Files in Source
 
