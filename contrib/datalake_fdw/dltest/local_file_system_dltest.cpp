@@ -17,32 +17,21 @@
  * specific language governing permissions and limitations
  * under the License.
  *
- * parquet_internal.h
- *	  What the halves of the Parquet format say to each other.
+ * local_file_system_dltest.cpp
+ *	  The create-only local file system, compiled into this library.
  *
- * Reading and writing a Parquet file have nothing in common but the name of
- * the format, so they are separate translation units; this is the only thing
- * they share, and parquet_format.cpp is the only other file that needs it.
+ * The same source the extension uses, built here without the part that
+ * registers it, so that this library has no symbol it expects datalake_fdw
+ * to supply.  Including it from a file of its own name, rather than compiling
+ * the other file under a renamed target, lets the ordinary rules build both
+ * the object and, on a server configured --with-llvm, its bitcode.
  *
  * IDENTIFICATION
- *	  contrib/datalake_fdw/src/format/parquet/parquet_internal.h
+ *	  contrib/datalake_fdw/dltest/local_file_system_dltest.cpp
  *
  *-------------------------------------------------------------------------
  */
 
-#ifndef DL_PARQUET_INTERNAL_H
-#define DL_PARQUET_INTERNAL_H
+#define DL_LOCAL_FS_NO_REGISTER
 
-#include "format/format.h"
-
-extern DlErrCode parquet_open_reader(const Fragment *fragment,
-									 const ProjectionSet *projection,
-									 const RowGroupFilterSet *filters,
-									 FormatReader **out);
-
-extern DlErrCode parquet_open_writer(DatalakeFileSystem fs, const char *path,
-									 void *tupdesc,
-									 const WriterOptions *options,
-									 FormatWriter **out);
-
-#endif							/* DL_PARQUET_INTERNAL_H */
+#include "common/local_file_system.cpp"
