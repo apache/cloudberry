@@ -1,0 +1,89 @@
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+// Compatibility policy: only append fields; never change field numbers or
+// remove fields. Reserve retired field numbers permanently.
+
+syntax = "proto3";
+
+package cloudberry.datalake.v1;
+
+option java_multiple_files = true;
+option java_package = "org.apache.cloudberry.dlagent.proto";
+
+import "common.proto";
+
+service CatalogManagementService {
+  rpc CreateCatalog   (CreateCatalogRequest)   returns (CreateCatalogResponse);
+  rpc ListCatalogs    (ListCatalogsRequest)    returns (ListCatalogsResponse);
+  rpc CreateNamespace (CreateNamespaceRequest) returns (CreateNamespaceResponse);
+  rpc ListNamespaces  (ListNamespacesRequest)  returns (ListNamespacesResponse);
+}
+
+message CatalogInfo {
+  string name = 1;
+  string type = 2;
+  map<string, string> properties = 3;
+  StorageConfig storage = 4;
+}
+
+message NamespaceInfo {
+  repeated string namespace = 1;     // v1 requires exactly one segment
+  string catalog_name = 2;
+  map<string, string> properties = 3;
+}
+
+message CreateCatalogRequest {
+  repeated Header headers = 1;
+  string prefix = 2;
+  CatalogInfo catalog = 3;
+  repeated string default_namespace = 4;  // v1 accepts at most one segment
+}
+message CreateCatalogResponse {
+  CatalogInfo catalog = 1;
+  ResponseHeader response_header = 2;
+}
+
+message ListCatalogsRequest {
+  repeated Header headers = 1;
+  string prefix = 2;
+}
+message ListCatalogsResponse {
+  repeated CatalogInfo catalogs = 1;
+  ResponseHeader response_header = 2;
+}
+
+message CreateNamespaceRequest {
+  repeated Header headers = 1;
+  string prefix = 2;
+  NamespaceInfo namespace = 3;
+}
+message CreateNamespaceResponse {
+  NamespaceInfo namespace = 1;
+  ResponseHeader response_header = 2;
+}
+
+message ListNamespacesRequest {
+  repeated Header headers = 1;
+  string prefix = 2;
+  string catalog_name = 3;
+  repeated string parent_namespace = 4;   // empty for top-level; v1 rejects multiple segments
+}
+message ListNamespacesResponse {
+  repeated NamespaceInfo namespaces = 1;
+  ResponseHeader response_header = 2;
+}
