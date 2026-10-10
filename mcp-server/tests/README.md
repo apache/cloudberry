@@ -25,6 +25,26 @@ This project uses the `pytest` framework for testing, supporting both asynchrono
 
 ### Test Files
 - `test_cbmcp.py` - Main test file containing all MCP client functionality tests
+- `test_database_tools.py` - Database management tools
+- `test_search_tools.py` - Retrieval tools; needs the `pgvector` extension, and skips without it
+- `test_result_values.py` - How query results carry bytea, composite and range values, and the row and value limits
+- `test_lance_tools.py` - Reading and vector-searching `lance_fdw` foreign tables; see below
+
+### Lance Tests
+`test_lance_tools.py` writes its own Lance datasets with pylance and reads them
+back through `lance_fdw`, so it needs:
+
+- `lance_fdw` 0.2 or later installed in the cluster;
+- `pip install pylance pyarrow numpy` in the test environment;
+- `CBMCP_LANCE_TEST_DIR`, a directory the tests can write to and every segment
+  can read at the same path - any local directory on a single-host demo
+  cluster.
+
+Without any of these the module skips.
+
+```bash
+CBMCP_LANCE_TEST_DIR=/home/gpadmin/lance_test pytest tests/test_lance_tools.py
+```
 
 ### Test Categories
 - **Unit Tests** - Test individual features independently

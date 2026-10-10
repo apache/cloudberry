@@ -26,6 +26,26 @@ from dataclasses import dataclass
 from dotenv import load_dotenv
 
 
+# How much of a query result one tool call returns.  Everything a tool returns
+# lands in the agent's context, and nothing else bounds a SELECT the agent
+# writes itself.
+DEFAULT_MAX_ROWS = 1000
+DEFAULT_MAX_VALUE_LENGTH = 10000
+
+
+def _positive_int_env(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be a positive integer, got {raw!r}") from None
+    if value < 1:
+        raise ValueError(f"{name} must be a positive integer, got {value}")
+    return value
+
+
 @dataclass
 class DatabaseConfig:
     """Database connection configuration"""
@@ -34,6 +54,8 @@ class DatabaseConfig:
     database: str
     username: str
     password: str
+    max_rows: int = DEFAULT_MAX_ROWS
+    max_value_length: int = DEFAULT_MAX_VALUE_LENGTH
     
     @classmethod
     def from_env(cls) -> "DatabaseConfig":
@@ -45,6 +67,10 @@ class DatabaseConfig:
             database=os.getenv("DB_NAME", "postgres"),
             username=os.getenv("DB_USER", "postgres"),
             password=os.getenv("DB_PASSWORD", ""),
+            max_rows=_positive_int_env("MCP_MAX_ROWS", DEFAULT_MAX_ROWS),
+            max_value_length=_positive_int_env(
+                "MCP_MAX_VALUE_LENGTH", DEFAULT_MAX_VALUE_LENGTH
+            ),
         )
     
     @property

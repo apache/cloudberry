@@ -27,6 +27,7 @@ providing resources, tools, and prompts for database management.
 from typing import Annotated, Any, Dict, List, Optional
 import logging
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
 from pydantic import Field
 
 from .config import DatabaseConfig, ServerConfig
@@ -81,14 +82,17 @@ class CloudberryMCPServer:
         
         @self.mcp.tool()
         async def list_tables(
-            schema: Annotated[str, Field(description="The schema name to list tables from")]
+            schema: Annotated[str, Field(description="The schema name to list tables from")],
+            table_type: Annotated[Optional[str], Field(description="'base' for ordinary tables, 'foreign' for foreign tables such as Lance datasets; omit for both")] = None
         ) -> List[str]:
-            """List tables in a specific schema"""
+            """List tables in a specific schema, foreign tables included"""
             logger.info(f"Listing tables in schema: {schema}")
             try:
-                return await self.db_manager.list_tables(schema)
+                return await self.db_manager.list_tables(schema, table_type)
             except Exception as e:
-                return f"Error listing tables: {str(e)}"
+                # Raised rather than returned: a string is not a List[str], and
+                # the client rejects a result that breaks the output schema.
+                raise ToolError(f"Error listing tables: {str(e)}") from e
         
         @self.mcp.tool()
         async def list_views(
@@ -119,7 +123,11 @@ class CloudberryMCPServer:
             schema: Annotated[str, Field(description="The schema name")],
             table: Annotated[str, Field(description="The table name to list columns for")]
         ) -> List[Dict[str, Any]]:
-            """List columns for a specific table"""
+            """List columns for a specific table.
+
+            data_type is the information_schema name; type is the full
+            declared type, such as real[] or numeric(10,2).
+            """
             logger.info(f"Listing columns for table: {schema}.{table}")
             try:
                 return await self.db_manager.list_columns(schema, table)
@@ -130,14 +138,20 @@ class CloudberryMCPServer:
         async def execute_query(
             query: Annotated[str, Field(description="The SQL query to execute")],
             params: Annotated[Optional[List[Any]], Field(description="Values bound to $1, $2, ... in the query, in order")] = None,
-            readonly: Annotated[bool, Field(description="Whether the query is read-only")] = True
+            readonly: Annotated[bool, Field(description="Whether the query is read-only")] = True,
+            max_rows: Annotated[Optional[int], Field(description="Return at most this many rows; defaults to, and cannot exceed, the server's MCP_MAX_ROWS")] = None
         ) -> Dict[str, Any]:
             """
-            Execute a safe SQL query with parameters
+            Execute a safe SQL query with parameters.
+
+            "truncated" is true when the query had more rows than were
+            returned; page with ORDER BY and LIMIT/OFFSET to read the rest.
+            A value longer than the server's MCP_MAX_VALUE_LENGTH is cut, and
+            "truncated_columns" names the columns where that happened.
             """
             logger.info(f"Executing query: {query}")
             try:
-                return await self.db_manager.execute_query(query, params, readonly)
+                return await self.db_manager.execute_query(query, params, readonly, max_rows)
             except Exception as e:
                 return {"error": f"Error executing query: {str(e)}"}
         
@@ -409,7 +423,10 @@ class CloudberryMCPServer:
 
             Reports embedding columns with their dimension, tsvector columns,
             and text columns carrying a full-text index, each with the indexes
-            defined on it. Call this before vector_search, fulltext_search or
+            defined on it. "embedding" says whose operators rank a vector
+            column: "pgvector", or "lance" for a real[] column of a lance_fdw
+            foreign table, whose index lives in the Lance dataset and whose
+            dimension is checked when the search runs. Call this before vector_search, fulltext_search or
             hybrid_search to choose a target instead of guessing from names.
             """
             logger.info(f"Listing searchable columns in schema: {schema}, table: {table}")
@@ -439,6 +456,11 @@ class CloudberryMCPServer:
             index, so this is a pre-filtered nearest neighbour search, not a
             filter over an already truncated result. The generated SQL is
             returned alongside the rows.
+
+            Works on pgvector columns and on real[] columns of lance_fdw
+            foreign tables, where lance_fdw hands the filter and the search to
+            Lance. A Lance column supports l2, cosine and inner_product, and
+            takes neither probes nor ef_search.
             """
             logger.info(f"Vector search on {schema}.{table}.{vector_column}, limit: {limit}")
             try:

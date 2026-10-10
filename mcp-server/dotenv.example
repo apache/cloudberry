@@ -29,3 +29,8 @@ DB_PASSWORD=your_password_here
 MCP_HOST=localhost
 MCP_PORT=8000
 MCP_DEBUG=false
+
+# Query result limits: rows per execute_query call, and characters per value
+# (longer values are cut and reported as truncated)
+MCP_MAX_ROWS=1000
+MCP_MAX_VALUE_LENGTH=10000

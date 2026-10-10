@@ -25,6 +25,7 @@ A Model Communication Protocol (MCP) server for Apache Cloudberry database inter
 
 - **Database Metadata Resources**: Access schemas, tables, views, indexes, and column information
 - **Retrieval Tools**: Vector, full-text, and hybrid search for agent and RAG workloads
+- **Lance Datasets**: Read and vector-search Lance datasets exposed through `lance_fdw` foreign tables
 - **Safe Query Tools**: Execute parameterized SQL queries with security validation
 - **Administrative Tools**: Table statistics, large table analysis, and query optimization
 - **Context-Aware Prompts**: Predefined prompts for common database tasks
@@ -81,6 +82,10 @@ DB_PASSWORD=your_password
 MCP_HOST=localhost
 MCP_PORT=8000
 MCP_DEBUG=false
+
+# Query result limits (see "Query Results")
+MCP_MAX_ROWS=1000
+MCP_MAX_VALUE_LENGTH=10000
 ```
 
 ## Usage
@@ -117,12 +122,12 @@ python -m cbmcp.client
 
 #### Retrieval Tools
 - `list_searchable_columns(schema, table, include_unindexed_text)` - Discover embedding columns, tsvector columns, and text columns with a full-text index
-- `vector_search(schema, table, vector_column, query_vector, limit, select_columns, filters, metric, probes, ef_search)` - Nearest neighbour search, optionally pre-filtered
+- `vector_search(schema, table, vector_column, query_vector, limit, select_columns, filters, metric, probes, ef_search)` - Nearest neighbour search, optionally pre-filtered, on a pgvector column or a Lance vector column
 - `fulltext_search(schema, table, text_column, query, limit, select_columns, filters, language, query_mode, match_mode)` - Keyword search ranked by `ts_rank`
 - `hybrid_search(schema, table, vector_column, text_column, query_vector, query, limit, select_columns, filters, metric, language, query_mode, match_mode, rrf_k, candidates, probes, ef_search)` - Both of the above, fused by reciprocal rank
 
 #### Query Tools
-- `execute_query(query, params, readonly)` - Execute a SQL query. `params` is a list bound to `$1, $2, ...` in order
+- `execute_query(query, params, readonly, max_rows)` - Execute a SQL query. `params` is a list bound to `$1, $2, ...` in order; at most `max_rows` rows come back (see "Query Results")
 - `explain_query(query, params)` - Get query execution plan. Read-only statements only, because `EXPLAIN ANALYZE` runs what it is given
 - `get_table_stats(schema, table)` - Get table statistics
 - `list_large_tables(limit)` - List largest tables
@@ -133,10 +138,12 @@ python -m cbmcp.client
 - `list_table_privileges(schema, table)` - List privileges for a specific table
 
 #### Schema & Structure
+- `list_tables(schema, table_type)` - List the tables in a schema, foreign tables included; `table_type` narrows it to `base` or `foreign`
+- `list_columns(schema, table)` - List a table's columns; `type` is the declared type, such as `real[]` or `numeric(10,2)`, where `data_type` is the information_schema name
 - `list_constraints(schema, table)` - List constraints for a table
 - `list_foreign_keys(schema, table)` - List foreign keys for a table
 - `list_referenced_tables(schema, table)` - List tables that reference this table
-- `get_table_ddl(schema, table)` - Get DDL statement for a table
+- `get_table_ddl(schema, table)` - Get DDL statement for a table; for a foreign table, `CREATE FOREIGN TABLE` with its server and options
 
 #### Performance & Monitoring
 - `get_slow_queries(limit)` - List slow queries
@@ -303,6 +310,75 @@ that arm did not return the row. A row scores
 `1 / (rrf_k + rank)` from each arm it appears in, so a row that only one arm
 found still places. Ranks are fused rather than raw scores because a distance
 and a `ts_rank` share no scale, but their orderings do.
+
+## Query Results
+
+A tool result is JSON, so `execute_query` and the retrieval tools convert the
+values that have no JSON form of their own:
+
+| Column type | Comes back as |
+|---|---|
+| `bytea` | its hex text form, `"\\x4530a8..."`, which `'...'::bytea` reads back |
+| composite (including a Lance struct) | an object keyed by attribute name |
+| array | a list, converted element by element |
+| range | `{"lower", "upper", "lower_inc", "upper_inc", "isempty"}` |
+| `numeric` | a string, so that no digits are lost |
+
+Everything a tool returns lands in the agent's context, so a result is bounded
+twice:
+
+- `execute_query` returns at most `MCP_MAX_ROWS` rows (default 1000), or fewer
+  when `max_rows` asks for fewer. The query is read through a cursor and stops
+  one row past the limit, so a `SELECT` with no `LIMIT` costs what it returns,
+  not the whole table. `"truncated": true` means there were more rows; page
+  with `ORDER BY` and `LIMIT`/`OFFSET`.
+- A value longer than `MCP_MAX_VALUE_LENGTH` characters (default 10000) is cut
+  to that length. The result then reports how many values were cut and in
+  which columns:
+
+```json
+{"columns": ["id", "txt"], "rows": [[4, "70c16d..."]], "row_count": 1,
+ "truncated": false, "max_rows": 1000,
+ "truncated_values": 1, "truncated_columns": ["txt"], "max_value_length": 10000}
+```
+
+## Lance Datasets
+
+`lance_fdw` exposes a Lance dataset as a foreign table. The tools read it like
+any other table, and `lance_fdw` hands filters, projections and vector searches
+to Lance.
+
+- **Finding the tables.** `list_tables` lists foreign tables beside ordinary
+  ones, and `table_type: "foreign"` lists only them. `get_table_ddl` shows the
+  server and the dataset `uri`. Server options and user mappings, where
+  credentials live, are not shown.
+- **Reading.** `execute_query` reads a Lance table with plain SQL. A Lance
+  vector column is `real[]` and comes back as a list of numbers; a struct comes
+  back as an object.
+- **Vector search.** `lance_fdw` 0.2 defines `<->` (Euclidean), `<=>` (cosine
+  distance) and `<#>` (negative inner product) on `real[]`. `vector_search`
+  accepts a `real[]` column of a `lance_fdw` table, and so does a hand-written
+  query:
+
+  ```sql
+  SELECT id FROM lance.docs WHERE cat = $2 ORDER BY emb <-> $1 LIMIT 10
+  ```
+
+  `explain_query` shows whether the search went to Lance: look for
+  `Lance Vector Search` and `Lance Filter` under the foreign scan.
+- **Discovery.** `list_searchable_columns` reports such a column with
+  `"embedding": "lance"`. Its `dimension` is `null`, because `real[]` declares
+  none; a query vector of the wrong length fails when the search starts, with
+  `lance_fdw: vectors of different dimensions`. Its `indexes` list is empty,
+  because a Lance index lives in the dataset, not in `pg_index`.
+
+On a Lance column `vector_search` supports the `l2`, `cosine` and
+`inner_product` metrics, not `l1`. `probes` and `ef_search` are pgvector
+settings and are rejected; a Lance search is tuned by the server settings
+`lance_fdw.nprobes` and `lance_fdw.refine_factor`. `hybrid_search` does not
+accept a Lance column yet; run `vector_search` and `fulltext_search` on it
+separately. A `real[]` column outside a `lance_fdw` table is an ordinary array,
+not an embedding.
 
 ## Security Features
 

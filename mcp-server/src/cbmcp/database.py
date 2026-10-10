@@ -28,7 +28,12 @@ from contextlib import asynccontextmanager
 import asyncpg
 
 from .config import DatabaseConfig
+from .results import RowShaper
 from .search import (
+    LANCE_EMBEDDING,
+    LANCE_FDW,
+    LANCE_METRICS,
+    LANCE_VECTOR_TYPE,
     MAX_CANDIDATES,
     SearchMetric,
     SqlParams,
@@ -41,6 +46,7 @@ from .search import (
     build_select_list,
     build_tsquery,
     coerce_filters,
+    embedding_kind,
     format_vector_literal,
     quote_column,
     resolve_column,
@@ -127,9 +133,14 @@ class DatabaseManager:
         self, 
         query: str, 
         params: Optional[Sequence[Any]] = None,
-        readonly: bool = True
+        readonly: bool = True,
+        max_rows: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Execute a SQL query with safety validation"""
+        """Execute a SQL query with safety validation.
+
+        At most max_rows rows come back, never more than the configured
+        maximum; "truncated" says whether the query had more.
+        """
         # Validate query for security
         is_valid, error_msg = SQLValidator.validate_query(query)
         if not is_valid:
@@ -139,34 +150,45 @@ class DatabaseManager:
         if readonly and not SQLValidator.is_readonly_query(query):
             return {"error": "Only read-only queries are allowed"}
         
+        # asyncpg binds by position, so the query uses $1, $2, ... and the
+        # values arrive in the same order.
+        if params and not isinstance(params, (list, tuple)):
+            return {
+                "error": (
+                    f"params must be a list of values bound to $1, $2, ... "
+                    f"in order, got {type(params).__name__}"
+                )
+            }
+        try:
+            limit = self.config.max_rows
+            if max_rows is not None:
+                limit = validate_limit(max_rows, "max_rows", maximum=self.config.max_rows)
+        except ValueError as e:
+            return {"error": str(e)}
+
         try:
             async with self.get_connection() as conn:
-                if params:
-                    # asyncpg binds by position, so the query uses $1, $2, ...
-                    # and the values arrive in the same order.
-                    if not isinstance(params, (list, tuple)):
-                        return {
-                            "error": (
-                                f"params must be a list of values bound to $1, $2, ... "
-                                f"in order, got {type(params).__name__}"
-                            )
-                        }
-                    result = await conn.fetch(query, *params)
-                else:
-                    result = await conn.fetch(query)
-                
-                if not result:
-                    return {"columns": [], "rows": [], "row_count": 0}
-                
-                columns = list(result[0].keys())
-                rows = [list(row.values()) for row in result]
-                
-                return {
-                    "columns": columns,
+                # Reading through a cursor stops the query one row past the
+                # limit, so a SELECT with no LIMIT costs what it returns rather
+                # than the whole table.  A cursor needs a transaction.
+                async with conn.transaction(readonly=readonly):
+                    statement = await conn.prepare(query)
+                    cursor = await statement.cursor(*(params or []))
+                    records = await cursor.fetch(limit + 1)
+
+                truncated = len(records) > limit
+                shaper = RowShaper(self.config.max_value_length)
+                rows = shaper.shape(records[:limit])
+                result = {
+                    "columns": [attribute.name for attribute in statement.get_attributes()],
                     "rows": rows,
-                    "row_count": len(rows)
+                    "row_count": len(rows),
+                    "truncated": truncated,
+                    "max_rows": limit,
                 }
-                
+                result.update(shaper.report())
+                return result
+
         except Exception as e:
             logger.error(f"Query execution error: {e}")
             return {"error": f"Error executing query: {str(e)}"}
@@ -243,7 +265,8 @@ class DatabaseManager:
             size = await conn.fetchval("SELECT pg_size_pretty(pg_database_size(current_database()))")
             stats = await conn.fetchrow(
                 "SELECT COUNT(*) as total_tables FROM information_schema.tables "
-                "WHERE table_type = 'BASE TABLE' AND table_schema NOT LIKE 'pg_%'"
+                "WHERE table_type = ANY($1::text[]) AND table_schema NOT LIKE 'pg_%'",
+                list(self.TABLE_TYPES.values()),
             )
             
             return {
@@ -271,9 +294,9 @@ class DatabaseManager:
                 # Get tables
                 tables = await conn.fetch(
                     "SELECT table_name FROM information_schema.tables "
-                    "WHERE table_schema = $1 AND table_type = 'BASE TABLE' "
+                    "WHERE table_schema = $1 AND table_type = ANY($2::text[]) "
                     "ORDER BY table_name",
-                    schema
+                    schema, list(self.TABLE_TYPES.values())
                 )
                 summary[schema]["tables"] = [t["table_name"] for t in tables]
                 
@@ -288,14 +311,32 @@ class DatabaseManager:
         
         return summary
 
-    async def list_tables(self, schema: str) -> list[str]:
-        """List tables in a specific schema"""
+    # information_schema's names for the tables a query can read.  A foreign
+    # table - a Lance dataset through lance_fdw, or any other FDW - is read
+    # like any other table, so it is listed with them.
+    TABLE_TYPES = {"base": "BASE TABLE", "foreign": "FOREIGN"}
+
+    async def list_tables(self, schema: str, table_type: Optional[str] = None) -> list[str]:
+        """List tables in a specific schema, foreign tables included.
+
+        table_type narrows the list to "base" or "foreign" tables.
+        """
+        if table_type is None:
+            types = list(self.TABLE_TYPES.values())
+        elif table_type in self.TABLE_TYPES:
+            types = [self.TABLE_TYPES[table_type]]
+        else:
+            supported = ", ".join(sorted(self.TABLE_TYPES))
+            raise ValueError(
+                f"table_type '{table_type}' is not supported; use one of: {supported}, "
+                f"or omit it to list both"
+            )
         async with self.get_connection() as conn:
             records = await conn.fetch(
                 "SELECT table_name FROM information_schema.tables "
-                "WHERE table_schema = $1 AND table_type = 'BASE TABLE' "
+                "WHERE table_schema = $1 AND table_type = ANY($2::text[]) "
                 "ORDER BY table_name",
-                schema
+                schema, types
             )
             return [r["table_name"] for r in records]
 
@@ -322,19 +363,29 @@ class DatabaseManager:
             return [{"indexname": r["indexname"], "indexdef": r["indexdef"]} for r in records]
 
     async def list_columns(self, schema: str, table: str) -> list[dict]:
-        """List columns for a specific table"""
+        """List columns for a specific table.
+
+        data_type is information_schema's name, which says only ARRAY for an
+        array and drops a type's modifiers; type is the full declared type,
+        such as real[] or numeric(10,2).
+        """
         async with self.get_connection() as conn:
             records = await conn.fetch(
-                "SELECT column_name, data_type, is_nullable, column_default "
-                "FROM information_schema.columns "
-                "WHERE table_schema = $1 AND table_name = $2 "
-                "ORDER BY ordinal_position",
+                "SELECT c.column_name, c.data_type, c.is_nullable, c.column_default, "
+                "format_type(a.atttypid, a.atttypmod) AS type "
+                "FROM information_schema.columns c "
+                "JOIN pg_namespace n ON n.nspname = c.table_schema "
+                "JOIN pg_class r ON r.relnamespace = n.oid AND r.relname = c.table_name "
+                "JOIN pg_attribute a ON a.attrelid = r.oid AND a.attname = c.column_name "
+                "WHERE c.table_schema = $1 AND c.table_name = $2 "
+                "ORDER BY c.ordinal_position",
                 schema, table
             )
             return [
                 {
                     "column_name": r["column_name"],
                     "data_type": r["data_type"],
+                    "type": r["type"],
                     "is_nullable": r["is_nullable"],
                     "column_default": r["column_default"]
                 }
@@ -773,23 +824,43 @@ class DatabaseManager:
                 except Exception:
                     pass
                 
-                # Fallback to a more compatible approach
+                # Otherwise build it from pg_attribute: format_type gives the
+                # declared type (real[], numeric(10,2)), where
+                # information_schema only says ARRAY or numeric.  A foreign
+                # table also needs its server and options, without which the
+                # statement does not recreate it.
                 ddl_query = """
-                SELECT 'CREATE TABLE ' || $1 || '.' || $2 || ' (' || E'\n' ||
+                SELECT CASE WHEN c.relkind = 'f' THEN 'CREATE FOREIGN TABLE '
+                            ELSE 'CREATE TABLE ' END ||
+                       quote_ident(n.nspname) || '.' || quote_ident(c.relname) ||
+                       ' (' || E'\n' ||
                        string_agg(
-                         '  ' || column_name || ' ' || 
-                         data_type || 
-                         CASE WHEN character_maximum_length IS NOT NULL 
-                              THEN '(' || character_maximum_length || ')' 
-                              ELSE '' END ||
-                         CASE WHEN is_nullable = 'NO' THEN ' NOT NULL' ELSE '' END ||
-                         CASE WHEN column_default IS NOT NULL 
-                              THEN ' DEFAULT ' || column_default 
-                              ELSE '' END,
-                         E',\n' ORDER BY ordinal_position
-                       ) || E'\n);' as ddl
-                FROM information_schema.columns
-                WHERE table_schema = $1 AND table_name = $2
+                         '  ' || quote_ident(a.attname) || ' ' ||
+                         format_type(a.atttypid, a.atttypmod) ||
+                         COALESCE(' OPTIONS (' || (
+                           SELECT string_agg(quote_ident(o.option_name) || ' ' ||
+                                             quote_literal(o.option_value), ', ')
+                           FROM pg_options_to_table(a.attfdwoptions) o) || ')', '') ||
+                         CASE WHEN a.attnotnull THEN ' NOT NULL' ELSE '' END ||
+                         COALESCE(' DEFAULT ' || pg_get_expr(d.adbin, d.adrelid), ''),
+                         E',\n' ORDER BY a.attnum
+                       ) || E'\n)' ||
+                       CASE WHEN c.relkind = 'f' THEN
+                         E'\nSERVER ' || quote_ident(s.srvname) ||
+                         COALESCE(E'\nOPTIONS (' || (
+                           SELECT string_agg(quote_ident(o.option_name) || ' ' ||
+                                             quote_literal(o.option_value), ', ')
+                           FROM pg_options_to_table(ft.ftoptions) o) || ')', '')
+                       ELSE '' END || ';' AS ddl
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                JOIN pg_attribute a ON a.attrelid = c.oid
+                     AND a.attnum > 0 AND NOT a.attisdropped
+                LEFT JOIN pg_attrdef d ON d.adrelid = c.oid AND d.adnum = a.attnum
+                LEFT JOIN pg_foreign_table ft ON ft.ftrelid = c.oid
+                LEFT JOIN pg_foreign_server s ON s.oid = ft.ftserver
+                WHERE n.nspname = $1 AND c.relname = $2
+                GROUP BY n.nspname, c.relname, c.relkind, s.srvname, ft.ftoptions
                 """
                 ddl = await conn.fetchval(ddl_query, schema, table)
                 return ddl or "Table DDL not found"
@@ -877,11 +948,15 @@ class DatabaseManager:
         records = await conn.fetch(
             "SELECT c.oid AS relid, a.attname AS column_name, t.typname AS type_name, "
             "format_type(a.atttypid, a.atttypmod) AS type_display, "
-            "a.atttypmod AS type_modifier, a.attnum AS attribute_number "
+            "a.atttypmod AS type_modifier, a.attnum AS attribute_number, "
+            "w.fdwname AS foreign_data_wrapper "
             "FROM pg_class c "
             "JOIN pg_namespace n ON n.oid = c.relnamespace "
             "JOIN pg_attribute a ON a.attrelid = c.oid "
             "JOIN pg_type t ON t.oid = a.atttypid "
+            "LEFT JOIN pg_foreign_table ft ON ft.ftrelid = c.oid "
+            "LEFT JOIN pg_foreign_server fs ON fs.oid = ft.ftserver "
+            "LEFT JOIN pg_foreign_data_wrapper w ON w.oid = fs.srvfdw "
             "WHERE n.nspname = $1 AND c.relname = $2 "
             "AND a.attnum > 0 AND NOT a.attisdropped "
             "ORDER BY a.attnum",
@@ -897,6 +972,7 @@ class DatabaseManager:
             "schema": schema,
             "table": table,
             "qualified_name": SQLValidator.quote_qualified_name(schema, table),
+            "foreign_data_wrapper": records[0]["foreign_data_wrapper"],
             "columns": [
                 {
                     "column_name": record["column_name"],
@@ -904,6 +980,9 @@ class DatabaseManager:
                     "type_display": record["type_display"],
                     "type_modifier": record["type_modifier"],
                     "attribute_number": record["attribute_number"],
+                    "embedding": embedding_kind(
+                        record["type_name"], record["foreign_data_wrapper"]
+                    ),
                 }
                 for record in records
             ],
@@ -952,6 +1031,44 @@ class DatabaseManager:
         # An OID is an integer read out of the catalog, so interpolating it
         # cannot inject anything.
         return language, f"{int(oid)}::regconfig"
+
+    @staticmethod
+    async def _check_lance_search(
+        conn,
+        column: Dict[str, Any],
+        metric: Any,
+        operator: str,
+        probes: Optional[int],
+        ef_search: Optional[int],
+    ) -> None:
+        """Reject what a search on a lance_fdw column cannot do, before it runs."""
+        name = column["column_name"]
+        if probes is not None or ef_search is not None:
+            raise ValueError(
+                f"probes and ef_search tune pgvector indexes and do not apply to the "
+                f"Lance column '{name}'; Lance searches are tuned by the server settings "
+                f"lance_fdw.nprobes and lance_fdw.refine_factor"
+            )
+        value = metric.value if isinstance(metric, SearchMetric) else str(metric)
+        if value not in LANCE_METRICS:
+            supported = ", ".join(sorted(LANCE_METRICS))
+            raise ValueError(
+                f"metric '{value}' is not available on the Lance column '{name}'; "
+                f"{LANCE_FDW} supports: {supported}"
+            )
+        # The operators came with lance_fdw 0.2; an extension still at 0.1 has
+        # the foreign tables but nothing to rank them with.
+        defined = await conn.fetchval(
+            "SELECT EXISTS (SELECT 1 FROM pg_operator WHERE oprname = $1 "
+            "AND oprleft = 'real[]'::regtype AND oprright = 'real[]'::regtype)",
+            operator,
+        )
+        if not defined:
+            raise ValueError(
+                f"this database has no {operator} operator on real[], which "
+                f"{LANCE_FDW} defines from extension version 0.2; run "
+                f"ALTER EXTENSION {LANCE_FDW} UPDATE"
+            )
 
     # Cloudberry dispatches a SET to the segments only when a query executor
     # gang already exists. Issued on an otherwise idle connection the value
@@ -1078,13 +1195,16 @@ class DatabaseManager:
         if applied:
             search_meta["settings"] = applied
 
-        return {
+        shaper = RowShaper(self.config.max_value_length)
+        result = {
             "columns": list(records[0].keys()) if records else [],
-            "rows": [list(record.values()) for record in records],
+            "rows": shaper.shape(records),
             "row_count": len(records),
             "sql": sql,
             "search": search_meta,
         }
+        result.update(shaper.report())
+        return result
 
     @staticmethod
     def _expression_names_column(expression: Optional[str], column_name: str) -> bool:
@@ -1108,7 +1228,9 @@ class DatabaseManager:
         columns carry a full-text index, has no way to choose a target other
         than guessing from names.
         """
-        searchable_types = sorted(VECTOR_TYPES | TEXT_TYPES | {TSVECTOR_TYPE})
+        searchable_types = sorted(
+            VECTOR_TYPES | TEXT_TYPES | {TSVECTOR_TYPE, LANCE_VECTOR_TYPE}
+        )
 
         conditions = [
             "c.relkind IN ('r', 'p', 'f', 'm', 'v')",
@@ -1131,11 +1253,14 @@ class DatabaseManager:
                 "a.attname AS column_name, a.attnum AS attribute_number, "
                 "t.typname AS type_name, "
                 "format_type(a.atttypid, a.atttypmod) AS type_display, "
-                "a.atttypmod AS type_modifier "
+                "a.atttypmod AS type_modifier, w.fdwname AS foreign_data_wrapper "
                 "FROM pg_class c "
                 "JOIN pg_namespace n ON n.oid = c.relnamespace "
                 "JOIN pg_attribute a ON a.attrelid = c.oid "
                 "JOIN pg_type t ON t.oid = a.atttypid "
+                "LEFT JOIN pg_foreign_table ft ON ft.ftrelid = c.oid "
+                "LEFT JOIN pg_foreign_server fs ON fs.oid = ft.ftserver "
+                "LEFT JOIN pg_foreign_data_wrapper w ON w.oid = fs.srvfdw "
                 f"WHERE {' AND '.join(conditions)} "
                 "ORDER BY n.nspname, c.relname, a.attnum",
                 *values,
@@ -1156,6 +1281,12 @@ class DatabaseManager:
                 "ORDER BY ic.relname",
                 relids,
             )
+            # A Lance column is searchable only once lance_fdw defines the
+            # distance operators on real[], which it does from version 0.2.
+            lance_operators = await conn.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM pg_operator WHERE oprname = '<->' "
+                "AND oprleft = 'real[]'::regtype AND oprright = 'real[]'::regtype)"
+            )
 
         indexes_by_relid: Dict[int, List[dict]] = {}
         for record in index_records:
@@ -1166,6 +1297,12 @@ class DatabaseManager:
             column_name = record["column_name"]
             attribute_number = record["attribute_number"]
             type_name = record["type_name"]
+            embedding = embedding_kind(type_name, record["foreign_data_wrapper"])
+            # real[] anywhere but a lance_fdw table is an ordinary array.
+            if type_name == LANCE_VECTOR_TYPE and (
+                embedding != LANCE_EMBEDDING or not lance_operators
+            ):
+                continue
 
             matching: List[dict] = []
             for index in indexes_by_relid.get(record["relid"], []):
@@ -1188,7 +1325,7 @@ class DatabaseManager:
                     }
                 )
 
-            if type_name in VECTOR_TYPES:
+            if embedding:
                 kind = "vector"
             elif type_name == TSVECTOR_TYPE:
                 kind = "tsvector"
@@ -1206,6 +1343,8 @@ class DatabaseManager:
             if kind == "text" and not full_text_indexed and not include_unindexed_text:
                 continue
 
+            # Lance indexes live in the dataset, not in pg_index, and real[]
+            # declares no dimension, so a Lance column reports neither.
             dimension = None
             if kind == "vector" and record["type_modifier"] and record["type_modifier"] > 0:
                 dimension = record["type_modifier"]
@@ -1216,6 +1355,7 @@ class DatabaseManager:
                     "table": record["table_name"],
                     "column": column_name,
                     "kind": kind,
+                    "embedding": embedding,
                     "type": record["type_display"],
                     "dimension": dimension,
                     "full_text_indexed": full_text_indexed,
@@ -1260,16 +1400,23 @@ class DatabaseManager:
             columns = relation["columns"]
             column = resolve_column(vector_column, columns, "vector_column")
             validate_vector_column(column, query_vector)
-            vector_literal = format_vector_literal(query_vector, column["type_name"])
 
             params = SqlParams()
-            quoted_type = SQLValidator.quote_identifier(column["type_name"])
-            # The literal is bound as text and cast, because asyncpg has no
-            # wire format for an embedding type.
-            distance = (
-                f"{quote_column(column)} {operator} "
-                f"{params.add(vector_literal)}::text::{quoted_type}"
-            )
+            if column["embedding"] == LANCE_EMBEDDING:
+                await self._check_lance_search(conn, column, metric, operator, probes, ef_search)
+                # real[] has a wire format, so the vector is bound as an array.
+                # lance_fdw evaluates the parameter once and hands it to
+                # Lance's own nearest-neighbour search.
+                query_value = f"{params.add(validate_query_vector(query_vector))}::real[]"
+                vector_type = None
+            else:
+                vector_literal = format_vector_literal(query_vector, column["type_name"])
+                quoted_type = SQLValidator.quote_identifier(column["type_name"])
+                # The literal is bound as text and cast, because asyncpg has no
+                # wire format for an embedding type.
+                query_value = f"{params.add(vector_literal)}::text::{quoted_type}"
+                vector_type = column["type_name"]
+            distance = f"{quote_column(column)} {operator} {query_value}"
 
             projection, output_names = build_select_list(select_columns, columns)
             distance_column = unique_alias("distance", output_names)
@@ -1291,7 +1438,7 @@ class DatabaseManager:
                 conn,
                 sql,
                 params,
-                vector_type=column["type_name"],
+                vector_type=vector_type,
                 probes=probes,
                 ef_search=ef_search,
                 meta={
@@ -1299,6 +1446,7 @@ class DatabaseManager:
                     "schema": schema,
                     "table": table,
                     "vector_column": column["column_name"],
+                    "embedding": column["embedding"],
                     "metric": metric.value if isinstance(metric, SearchMetric) else metric,
                     "distance_column": distance_column,
                     "dimensions": len(query_vector),
@@ -1544,6 +1692,12 @@ class DatabaseManager:
 
             embedding = resolve_column(vector_column, columns, "vector_column")
             validate_vector_column(embedding, query_vector)
+            if embedding["embedding"] == LANCE_EMBEDDING:
+                raise ValueError(
+                    f"hybrid_search does not support the Lance column "
+                    f"'{embedding['column_name']}' yet; run vector_search and "
+                    f"fulltext_search on it separately"
+                )
             vector_literal = format_vector_literal(query_vector, embedding["type_name"])
             document_column = resolve_column(text_column, columns, "text_column")
             if (
