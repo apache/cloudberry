@@ -68,6 +68,19 @@ using CExpressionArrays = CDynamicPtrArray<CExpressionArray, CleanupRelease>;
 //---------------------------------------------------------------------------
 class CXformUtils
 {
+public:
+	// which columns of an index to consider
+	enum EIndexCols
+	{
+		// KEY columns only: these are the only columns an index condition
+		// (index qual) may be built on
+		EicKey,
+
+		// KEY columns followed by INCLUDE ("payload") columns: everything
+		// physically stored in the index
+		EicKeyAndIncluded
+	};
+
 private:
 	// create a logical assert for the not nullable columns of the given table
 	// on top of the given child expression
@@ -83,11 +96,12 @@ private:
 													CColRefArray *colref_array);
 
 	// return the set of columns from the given array of columns which appear
-	// in the index included / key columns
+	// in the index columns of the specified type (key only, or key + included)
 	static CColRefSet *PcrsIndexColumns(CMemoryPool *mp,
 										CColRefArray *colref_array,
 										const IMDIndex *pmdindex,
-										const IMDRelation *pmdrel);
+										const IMDRelation *pmdrel,
+										EIndexCols eic);
 
 	// return the set of columns from the given array of columns which are
 	// returnable through the index (to determine index-only scan capable)
@@ -95,13 +109,6 @@ private:
 												  CColRefArray *colref_array,
 												  const IMDIndex *pmdindex,
 												  const IMDRelation *pmdrel);
-
-	// return the ordered array of columns from the given array of columns which appear
-	// in the index included / key columns
-	static CColRefArray *PdrgpcrIndexColumns(CMemoryPool *mp,
-											 CColRefArray *colref_array,
-											 const IMDIndex *pmdindex,
-											 const IMDRelation *pmdrel);
 
 	// lookup join keys in scalar child group
 	static void LookupJoinKeys(CMemoryPool *mp, CExpression *pexpr,
@@ -369,8 +376,18 @@ public:
 	static CWStringConst *PstrErrorMessage(CMemoryPool *mp, ULONG major,
 										   ULONG minor, ...);
 
+	// return the ordered array of columns from the given array of columns which
+	// appear in the index columns of the specified type (key only, or
+	// key + included)
+	static CColRefArray *PdrgpcrIndexColumns(CMemoryPool *mp,
+											 CColRefArray *colref_array,
+											 const IMDIndex *pmdindex,
+											 const IMDRelation *pmdrel,
+											 EIndexCols eic);
+
 	// return the array of key columns from the given array of columns which appear
-	// in the index key columns
+	// in the index key columns (INCLUDE columns are deliberately excluded:
+	// a predicate on them must never become an index condition)
 	static CColRefArray *PdrgpcrIndexKeys(CMemoryPool *mp,
 										  CColRefArray *colref_array,
 										  const IMDIndex *pmdindex,
