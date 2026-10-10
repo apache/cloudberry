@@ -507,8 +507,6 @@ Feature: gprecoverseg tests
         And the segments are synchronized
         And the cluster is rebalanced
 
-    # needs_fix: --max-rate (#1639 993b99d5758)
-    @needs_fix
     Scenario: gprecoverseg recovers segment for valid max-rate options and errors out for others
       Given the database is running
         And all the segments are running
