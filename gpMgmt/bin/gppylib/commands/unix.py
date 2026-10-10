@@ -55,16 +55,41 @@ def check_pid_on_remotehost(pid, host):
 
 
 def check_pid(pid):
-    """ Check For the existence of a unix pid. """
+    """
+    Check for the existence of a unix pid, meaning a process that is still
+    running.
+
+    os.kill(pid, 0) on its own is not that question: it keeps succeeding for a
+    process that has exited and has not been reaped, and nothing reaps an orphan
+    in a container started without an init, so such a zombie answers yes for the
+    life of the container. Every caller here is deciding whether something is
+    still working -- a postmaster, a utility holding a lock, a segment that was
+    just signalled -- and for all of them a zombie has gone.
+    """
+
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        # A lock file that was created but never written leaves an empty PID
+        # behind; whatever wrote it is not running either way, and the callers
+        # ask this question to decide whether to clean up.
+        return False
 
     if pid == 0:
         return False
 
     try:
-        os.kill(int(pid), signal.SIG_DFL)
+        os.kill(pid, signal.SIG_DFL)
     except OSError:
         return False
-    else:
+
+    try:
+        with open('/proc/%d/stat' % pid) as statfile:
+            # The comm field is parenthesised and may itself contain spaces and
+            # parentheses, so state is the first field after the last ')'.
+            return statfile.read().rpartition(')')[2].split()[0] != 'Z'
+    except (IOError, OSError, IndexError, ValueError):
+        # No /proc to consult; the kill() above is the best answer available.
         return True
 
 

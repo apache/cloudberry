@@ -189,6 +189,9 @@ bool	pljava_release_lingering_savepoints = false;
 bool	pljava_debug = false;
 bool	pljava_classpath_insecure = false;
 
+/* Utility mode restriction */
+bool should_reject_connection = false;
+
 
 /* Memory protection GUCs*/
 int gp_vmem_protect_limit = 8192;

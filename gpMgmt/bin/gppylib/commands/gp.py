@@ -53,6 +53,11 @@ DEFAULT_COORDINATOR_NUM_WORKERS=16
 #max batch size of thread pool on coordinator
 MAX_COORDINATOR_NUM_WORKERS=64
 
+# Maximum replay lag (in GBs) allowed on mirror when rebalancing the segments
+# The default value for ALLOWED_REPLAY_LAG has been decided to be 10 GBs as mirror
+# took 5 mins to replay 10 GB lag on a local demo cluster.
+ALLOWED_REPLAY_LAG = 10
+
 # Application name used by the pg_rewind instance that gprecoverseg starts
 # during incremental recovery. gpstate uses this to figure out when incremental
 # recovery is active.
@@ -1034,12 +1039,12 @@ class GpSegRecovery(Command):
     """
     Format gpsegrecovery call for running pg_basebackup/pg_rewind on remoteHost for the segments passed in confinfo
     """
-    def __init__(self, name, confinfo, logdir, batchSize, verbose, remoteHost, forceoverwrite, era):
-        cmdStr = _get_cmd_for_recovery_wrapper('gpsegrecovery', confinfo, logdir, batchSize, verbose, forceoverwrite, era)
+    def __init__(self, name, confinfo, logdir, batchSize, verbose, remoteHost, forceoverwrite, era, maxRate):
+        cmdStr = _get_cmd_for_recovery_wrapper('gpsegrecovery', confinfo, logdir, batchSize, verbose, forceoverwrite, era, maxRate)
         Command.__init__(self, name, cmdStr, REMOTE, remoteHost, start_new_session=True)
 
 
-def _get_cmd_for_recovery_wrapper(wrapper_filename, confinfo, logdir, batchSize, verbose, forceoverwrite, era=None):
+def _get_cmd_for_recovery_wrapper(wrapper_filename, confinfo, logdir, batchSize, verbose, forceoverwrite, era=None, maxRate=None):
     cmdStr = '$GPHOME/sbin/{}.py -c {} -l {}'.format(wrapper_filename, shlex.quote(confinfo), shlex.quote(logdir))
 
     if verbose:
@@ -1050,6 +1055,8 @@ def _get_cmd_for_recovery_wrapper(wrapper_filename, confinfo, logdir, batchSize,
         cmdStr += " --force-overwrite"
     if era:
         cmdStr += " --era={}".format(era)
+    if maxRate:
+        cmdStr += " --max-rate {}".format(maxRate)
 
     return cmdStr
 
@@ -1669,6 +1676,18 @@ def createTempDirectoryName(coordinatorDataDirectory, tempDirPrefix):
                                 tempDirPrefix,
                                 datetime.datetime.now().strftime('%m%d%Y'),
                                 os.getpid())
+
+# Cherry-picked from Greenplum Database (greenplum-db/gpdb-archive @ 482967c1b4),
+# gpMgmt/bin/gppylib/commands/gp.py.
+def is_gprecoverseg_running():
+    gprecoverseg_pidfile = os.path.join(get_coordinatordatadir(), 'gprecoverseg.lock', 'PID')
+    try:
+        with open(gprecoverseg_pidfile) as pidfile:
+            gprecoverseg_pid = pidfile.read()
+    except Exception:
+        return False
+
+    return check_pid(gprecoverseg_pid)
 
 #-------------------------------------------------------------------------
 class GpRecoverSeg(Command):

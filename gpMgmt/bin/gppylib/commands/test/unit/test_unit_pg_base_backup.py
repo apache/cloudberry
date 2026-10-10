@@ -1,4 +1,5 @@
 import unittest
+from mock import patch
 from gppylib.commands import pg
 
 
@@ -19,7 +20,9 @@ class TestUnitPgBaseBackup(unittest.TestCase):
         self.assertIn("fetch", tokens)
         self.assertNotIn("stream", tokens)
 
-    def test_base_backup_passes_parameters_necessary_to_create_replication_slot_when_given_slotname(self):
+    @patch('gppylib.commands.pg.PgReplicationSlot.slot_exists', return_value=True)
+    @patch('gppylib.commands.pg.PgReplicationSlot.drop_slot', return_value=True)
+    def test_base_backup_passes_parameters_necessary_to_create_replication_slot_when_given_slotname(self, mock1, mock2):
         base_backup = pg.PgBaseBackup(
             create_slot=True,
             replication_slot_name='some-replication-slot-name',
@@ -32,8 +35,10 @@ class TestUnitPgBaseBackup(unittest.TestCase):
         self.assertIn("some-replication-slot-name", base_backup.command_tokens)
         self.assertIn("--wal-method", base_backup.command_tokens)
         self.assertIn("stream", base_backup.command_tokens)
+        self.assertIn("--create-slot", base_backup.command_tokens)
 
-    def test_base_backup_does_not_pass_conflicting_xlog_method_argument_when_given_replication_slot(self):
+    @patch('gppylib.commands.pg.PgReplicationSlot.slot_exists', return_value=False)
+    def test_base_backup_does_not_pass_conflicting_xlog_method_argument_when_given_replication_slot(self, mock1):
         base_backup = pg.PgBaseBackup(
             create_slot=True,
             replication_slot_name='some-replication-slot-name',

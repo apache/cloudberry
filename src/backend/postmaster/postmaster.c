@@ -5756,6 +5756,26 @@ process_pm_pmsignal(void)
 			promotion_requested = true;
 
 		/*
+		 * GPDB: A configured promote_trigger_file whose file is already
+		 * present means a promotion is imminent (for example
+		 * gpactivatestandby's force path creates the trigger file before
+		 * starting the standby coordinator in utility mode).  Treat that the
+		 * same as an explicit promotion request so that, with hot standby
+		 * disabled, we do not prematurely report PM_STATUS_STANDBY.  Otherwise
+		 * "pg_ctl -w" would return as soon as recovery starts and the caller
+		 * (gpstart) would try to read the catalog before the server has
+		 * actually finished promoting and can accept connections.
+		 */
+		if (!promotion_requested &&
+			PromoteTriggerFile != NULL && PromoteTriggerFile[0] != '\0')
+		{
+			struct stat stat_buf;
+
+			if (stat(PromoteTriggerFile, &stat_buf) == 0)
+				promotion_requested = true;
+		}
+
+		/*
 		 * If we aren't planning to enter hot standby mode later, treat
 		 * RECOVERY_STARTED as meaning we're out of startup, and report status
 		 * accordingly.

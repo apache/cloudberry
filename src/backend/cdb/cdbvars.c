@@ -451,6 +451,14 @@ assign_gp_role(const char *newval, void *extra)
 
 	if (IS_UTILITY_BUT_NOT_SINGLENODE() && MyProc != NULL)
 		MyProc->mppIsWriter = false;
+
+	/*
+	 * A postmaster started in utility mode rejects connections that do not
+	 * ask for utility mode themselves (see InitPostgres). This client did,
+	 * so let it through.
+	 */
+	if (IS_UTILITY_BUT_NOT_SINGLENODE())
+		should_reject_connection = false;
 }
 
 /*

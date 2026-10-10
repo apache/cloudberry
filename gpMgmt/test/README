@@ -60,3 +60,37 @@ From behave documentation (behave is now installed via pip):
 | you have to use logical AND::
 | 
 |     --tags ~@fixme --tags ~@buggy.
+
+---------------------------ORIGIN OF THIS SUITE------------------------
+
+These tests come from Greenplum Database and are kept aligned with it, so
+that a fix made upstream can be compared against ours file by file. Every
+file under test/behave/ has the same path in
+
+    greenplum-db/gpdb-archive @ 482967c1b4
+
+Where a block was taken from Greenplum into product code rather than into
+the suite, the source is named in a comment at that block.
+
+Cloudberry does not implement everything the Greenplum suite covers, and
+some scenarios describe a cluster this project does not run in CI. Rather
+than delete them -- which loses the coverage the day the feature arrives --
+they carry a tag, and the CI matrix filters on it:
+
+    @concourse_cluster  needs more than one host. Greenplum runs these on a
+                        fresh multi-host cluster per job; CI here builds a
+                        single-host demo cluster, so they are filtered out.
+    @demo_cluster       runs against the demo cluster CI builds.
+    @not_implemented    the behaviour was never built in Cloudberry. No
+                        scenario carries this today -- the suite's remaining
+                        gaps were ported from Greenplum -- but the CI matrix
+                        still filters on it, so it is the tag to reach for if
+                        an imported scenario ever outruns the product again.
+    @differential       needs gprecoverseg --differential, which Cloudberry
+                        does not have.
+    @extended           long-running; not part of the per-commit matrix.
+    @requires_netem     needs the netem kernel module to shape traffic.
+
+A scenario carrying @concourse_cluster is excluded by --tags ~@concourse_cluster
+whatever else it carries, so a scenario tagged both @concourse_cluster and
+@demo_cluster does not run in CI.

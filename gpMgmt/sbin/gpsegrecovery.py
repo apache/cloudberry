@@ -7,18 +7,19 @@ from gppylib.recoveryinfo import RecoveryErrorType
 from gppylib.commands.pg import PgBaseBackup, PgRewind
 from recovery_base import RecoveryBase, set_recovery_cmd_results
 from gppylib.commands.base import Command
-from gppylib.commands.gp import SegmentStart
+from gppylib.commands.gp import SegmentStart, ModifyConfSetting
 from gppylib.gparray import Segment
 from gppylib.commands.unix import terminate_proc_tree
 
 
 class FullRecovery(Command):
-    def __init__(self, name, recovery_info, forceoverwrite, logger, era):
+    def __init__(self, name, recovery_info, forceoverwrite, logger, era, maxRate):
         self.name = name
         self.recovery_info = recovery_info
         self.replicationSlotName = 'internal_wal_replication_slot'
         self.forceoverwrite = forceoverwrite
         self.era = era
+        self.maxRate = maxRate
         # FIXME test for this cmdstr. also what should this cmdstr be ?
         cmdStr = ''
         #cmdstr = 'TODO? : {} {}'.format(str(recovery_info), self.verbose)
@@ -33,36 +34,22 @@ class FullRecovery(Command):
         cmd = PgBaseBackup(self.recovery_info.target_datadir,
                            self.recovery_info.source_hostname,
                            str(self.recovery_info.source_port),
-                           create_slot=False,
+                           create_slot=True,
                            replication_slot_name=self.replicationSlotName,
                            forceoverwrite=self.forceoverwrite,
                            target_gp_dbid=self.recovery_info.target_segment_dbid,
-                           progress_file=self.recovery_info.progress_file)
+                           progress_file=self.recovery_info.progress_file,
+                           max_rate=self.maxRate)
         self.logger.info("Running pg_basebackup with progress output temporarily in %s" % self.recovery_info.progress_file)
-        try:
-            cmd.run(validateAfter=True)
-        except Exception as e: #TODO should this be ExecutionError?
-            self.logger.info("Running pg_basebackup failed: {}".format(str(e)))
-
-            #  If the cluster never has mirrors, cmd will fail
-            #  quickly because the internal slot doesn't exist.
-            #  Re-run with `create_slot`.
-            #  GPDB_12_MERGE_FIXME could we check it before? or let
-            #  pg_basebackup create slot if not exists.
-            cmd = PgBaseBackup(self.recovery_info.target_datadir,
-                               self.recovery_info.source_hostname,
-                               str(self.recovery_info.source_port),
-                               create_slot=True,
-                               replication_slot_name=self.replicationSlotName,
-                               forceoverwrite=True,
-                               target_gp_dbid=self.recovery_info.target_segment_dbid,
-                               progress_file=self.recovery_info.progress_file)
-            self.logger.info("Re-running pg_basebackup, creating the slot this time")
-            cmd.run(validateAfter=True)
+        cmd.run(validateAfter=True)
 
         self.error_type = RecoveryErrorType.DEFAULT_ERROR
         self.logger.info("Successfully ran pg_basebackup for dbid: {}".format(
             self.recovery_info.target_segment_dbid))
+
+        # Updating port number on conf after recovery
+        update_port_in_conf(self.recovery_info, self.logger)
+
         self.error_type = RecoveryErrorType.START_ERROR
         start_segment(self.recovery_info, self.logger, self.era)
 
@@ -87,8 +74,25 @@ class IncrementalRecovery(Command):
         cmd.run(validateAfter=True)
         self.logger.info("Successfully ran pg_rewind for dbid: {}".format(self.recovery_info.target_segment_dbid))
 
+        # Updating port number on conf after recovery
+        update_port_in_conf(self.recovery_info, self.logger)
+
         self.error_type = RecoveryErrorType.START_ERROR
         start_segment(self.recovery_info, self.logger, self.era)
+
+
+def update_port_in_conf(recovery_info, logger):
+    """
+    pg_basebackup and pg_rewind both copy the source segment's
+    postgresql.conf, which carries the *source* port. Point it back at this
+    segment before it is started, or the mirror comes up on its primary's
+    port.
+    """
+    logger.info("Updating %s/postgresql.conf" % recovery_info.target_datadir)
+    modifyConfCmd = ModifyConfSetting('Updating %s/postgresql.conf' % recovery_info.target_datadir,
+                                      "{}/{}".format(recovery_info.target_datadir, 'postgresql.conf'),
+                                      'port', recovery_info.target_port, optType='number')
+    modifyConfCmd.run(validateAfter=True)
 
 
 def start_segment(recovery_info, logger, era):
@@ -124,9 +128,10 @@ class SegRecovery(object):
         signal.signal(signal.SIGTERM, signal_handler)
 
         recovery_base.main(self.get_recovery_cmds(recovery_base.seg_recovery_info_list, recovery_base.options.forceoverwrite,
-                                                  recovery_base.logger, recovery_base.options.era))
+                                                  recovery_base.logger, recovery_base.options.era,
+                                                  recovery_base.options.maxRate))
 
-    def get_recovery_cmds(self, seg_recovery_info_list, forceoverwrite, logger, era):
+    def get_recovery_cmds(self, seg_recovery_info_list, forceoverwrite, logger, era, maxRate):
         cmd_list = []
         for seg_recovery_info in seg_recovery_info_list:
             if seg_recovery_info.is_full_recovery:
@@ -134,7 +139,8 @@ class SegRecovery(object):
                                    recovery_info=seg_recovery_info,
                                    forceoverwrite=forceoverwrite,
                                    logger=logger,
-                                   era=era)
+                                   era=era,
+                                   maxRate=maxRate)
             else:
                 cmd = IncrementalRecovery(name='Run pg_rewind',
                                           recovery_info=seg_recovery_info,

@@ -657,4 +657,6 @@ extern void GpRecoveryFromError(void);
 } while(0)
 
 
+extern bool should_reject_connection;
+
 #endif							/* MISCADMIN_H */

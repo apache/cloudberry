@@ -224,6 +224,20 @@ CREATE_QES_MIRROR () {
     fi
     RUN_COMMAND_REMOTE ${PRIMARY_HOSTADDRESS} "${EXPORT_GPHOME}; . ${GPHOME}/cloudberry-env.sh; cat - >> ${PRIMARY_DIR}/pg_hba.conf; pg_ctl -D ${PRIMARY_DIR} reload" <<< "${PG_HBA_ENTRIES}"
     RUN_COMMAND_REMOTE ${GP_HOSTADDRESS} "${EXPORT_GPHOME}; . ${GPHOME}/cloudberry-env.sh; rm -rf ${GP_DIR}; ${GPHOME}/bin/pg_basebackup --wal-method=stream --create-slot --slot='internal_wal_replication_slot' -R -c fast -E ./db_dumps -D ${GP_DIR} -h ${PRIMARY_HOSTADDRESS} -p ${PRIMARY_PORT} --target-gp-dbid ${GP_DBID};"
+    # pg_basebackup copies the primary's postgresql.conf verbatim, so the
+    # mirror would otherwise start on the primary's port. Append the right
+    # one before starting; the last setting in the file wins.
+    #
+    # $PORT_TXT ("#port") finds nothing in the copied file -- the port line is
+    # already active there -- so SED_PG_CONF takes its append path. That is
+    # what we want: its replace path runs an unanchored
+    # "s/<search>/<sub> #<search>/", which with a search string of "port"
+    # would also rewrite every "support", "report" and "transport" in the
+    # file's comments.
+    LOG_MSG "[INFO][$INST_COUNT]:-Configuring segment $PG_CONF"
+    SED_PG_CONF ${GP_DIR}/$PG_CONF "$PORT_TXT" port=$GP_PORT 0 $GP_HOSTADDRESS
+    RETVAL=$?
+    PARA_EXIT $RETVAL "Update port number to $GP_PORT"
     START_QE "-w"
     RETVAL=$?
     PARA_EXIT $RETVAL "pg_basebackup of segment data directory from ${PRIMARY_HOSTADDRESS} to ${GP_HOSTADDRESS}"

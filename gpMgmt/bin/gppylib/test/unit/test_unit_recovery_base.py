@@ -324,7 +324,7 @@ class SetCmdResultsTestCase(GpTestCase):
             raise Exception('running the cmd failed')
 
         recovery_info = RecoveryInfo('/tmp/datadir2', 7002, 2, None, None, None, '/tmp/progress_file2')
-        test_cmd = FullRecovery('original name', recovery_info, True,None,None)
+        test_cmd = FullRecovery('original name', recovery_info, True,None,None,None)
         test_decorator(test_cmd)
         self.assertEqual('new name', test_cmd.name)
 
@@ -339,7 +339,7 @@ class SetCmdResultsTestCase(GpTestCase):
             cmd.error_type = None
             raise Exception('running the cmd failed')
         recovery_info = RecoveryInfo('/tmp/datadir2', 7002, 2, None, None, None, '/tmp/progress_file2')
-        test_cmd = FullRecovery('original name', recovery_info, True,None,None)
+        test_cmd = FullRecovery('original name', recovery_info, True,None,None,None)
         test_decorator(test_cmd)
         self.assertEqual('new name', test_cmd.name)
 
