@@ -5634,7 +5634,7 @@ explain select b from epsilon_test where b in (11,30) limit 30;
                                       QUERY PLAN                                      
 --------------------------------------------------------------------------------------
  Limit  (cost=0.00..8771.18 rows=10 width=2)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..8771.18 rows=30 width=2)
+   ->  Gather Motion 2:1  (slice1; segments: 2)  (cost=0.00..8771.18 rows=30 width=2)
          ->  Limit  (cost=0.00..8771.18 rows=10 width=2)
                ->  Seq Scan on epsilon_test  (cost=0.00..8771.18 rows=10677 width=2)
                      Filter: (b = ANY ('{11,30}'::integer[]))
