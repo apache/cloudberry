@@ -1,0 +1,64 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 790 330" width="100%" role="img" style="font:11px ui-monospace,SFMono-Regular,Menlo,monospace">
+<defs>
+<marker id="m171a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#1f2328"></path></marker>
+<marker id="m171b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8a6d1a"></path></marker>
+</defs>
+<rect x="8" y="38" width="86" height="46" rx="6" fill="#eafaf0" stroke="#7fb894" stroke-width="1.5"></rect>
+<text x="51" y="58" text-anchor="middle" fill="#1f2328">Query</text>
+<text x="51" y="72" text-anchor="middle" fill="#6a737d" font-size="9.5">from rewrite</text>
+<rect x="118" y="38" width="124" height="46" rx="6" fill="#eafaf0" stroke="#7fb894" stroke-width="1.5"></rect>
+<text x="180" y="58" text-anchor="middle" fill="#1f2328">copyObject</text>
+<text x="180" y="72" text-anchor="middle" fill="#6a737d" font-size="9.5">orca.c:248</text>
+<rect x="266" y="38" width="132" height="46" rx="6" fill="#eafaf0" stroke="#7fb894" stroke-width="1.5"></rect>
+<text x="332" y="58" text-anchor="middle" fill="#1f2328">fold_constants</text>
+<text x="332" y="72" text-anchor="middle" fill="#6a737d" font-size="9.5">orca.c:274</text>
+<rect x="422" y="38" width="156" height="46" rx="6" fill="#eafaf0" stroke="#7fb894" stroke-width="1.5"></rect>
+<text x="500" y="57" text-anchor="middle" fill="#1f2328" font-size="10">transformGroupedWindows</text>
+<text x="500" y="72" text-anchor="middle" fill="#6a737d" font-size="9.5">orca.c:280</text>
+<line x1="94" y1="61" x2="114" y2="61" stroke="#1f2328" stroke-width="1.5" marker-end="url(#m171a)"></line>
+<line x1="242" y1="61" x2="262" y2="61" stroke="#1f2328" stroke-width="1.5" marker-end="url(#m171a)"></line>
+<line x1="398" y1="61" x2="418" y2="61" stroke="#1f2328" stroke-width="1.5" marker-end="url(#m171a)"></line>
+<line x1="578" y1="61" x2="598" y2="61" stroke="#1f2328" stroke-width="1.5" marker-end="url(#m171a)"></line>
+<rect x="602" y="24" width="180" height="120" rx="7" fill="#f5edff" stroke="#8250df" stroke-width="1.5"></rect>
+<text x="692" y="46" text-anchor="middle" fill="#3c1e70" font-weight="600">GPOPTOptimizedPlan</text>
+<text x="692" y="64" text-anchor="middle" fill="#5e4b86" font-size="10">C++ · GPOS task</text>
+<text x="692" y="80" text-anchor="middle" fill="#5e4b86" font-size="10">own memory pools</text>
+<text x="692" y="96" text-anchor="middle" fill="#5e4b86" font-size="10">DXL · memo · xforms</text>
+<text x="692" y="122" text-anchor="middle" fill="#8250df" font-size="10">⟦opaque to the planner⟧</text>
+<line x1="692" y1="144" x2="692" y2="192" stroke="#1f2328" stroke-width="1.5" marker-end="url(#m171a)"></line>
+<rect x="560" y="196" width="222" height="74" rx="6" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.5"></rect>
+<text x="671" y="216" text-anchor="middle" fill="#4a3908" font-weight="600">PlannedStmt</text>
+<text x="671" y="233" text-anchor="middle" fill="#6b5410" font-size="10">rtable · subplans</text>
+<text x="671" y="248" text-anchor="middle" fill="#6b5410" font-size="10">subplan_sliceIds</text>
+<text x="671" y="263" text-anchor="middle" fill="#6b5410" font-size="10">numSlices · slices</text>
+<rect x="8" y="190" width="300" height="86" rx="6" fill="#faf6ff" stroke="#cdb4db" stroke-width="1.5"></rect>
+<text x="158" y="210" text-anchor="middle" fill="#3c1e70">dummy PlannerGlobal + PlannerInfo</text>
+<text x="158" y="226" text-anchor="middle" fill="#8a7aa8" font-size="9.5">orca.c:225 · orca.c:240</text>
+<text x="158" y="246" text-anchor="middle" fill="#1f2328" font-size="10">glob-&gt;finalrtable, glob-&gt;subplans</text>
+<text x="158" y="262" text-anchor="middle" fill="#1f2328" font-size="10">glob-&gt;subplan_sliceIds, numSlices</text>
+<line x1="556" y1="233" x2="314" y2="233" stroke="#8a6d1a" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#m171b)"></line>
+<text x="435" y="225" text-anchor="middle" fill="#8a6d1a" font-size="9.5">copied back · orca.c:305</text>
+<path d="M 158 188 C 158 140 250 118 328 88" fill="none" stroke="#8a6d1a" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#m171b)"></path>
+<text x="243" y="150" text-anchor="middle" fill="#8a6d1a" font-size="9.5">root, only so folding</text>
+<text x="243" y="163" text-anchor="middle" fill="#8a6d1a" font-size="9.5">can record dependencies</text>
+<text x="8" y="300" fill="#6a737d" font-size="10">No RelOptInfo is ever built, no pathlist, no add_path (§15.1) — ORCA builds its own memo (§17.2)</text>
+<text x="8" y="316" fill="#6a737d" font-size="10">from DXL (§17.5), and materializes the slice table itself (§16.3) rather than deriving it from Paths.</text>
+</svg>
