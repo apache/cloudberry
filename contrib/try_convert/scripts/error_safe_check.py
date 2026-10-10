@@ -21,11 +21,11 @@ import re
 
 import os, glob
 
-p_any = '(?:\S| |\t|\n+\t|\n+ |\n+#|\n+/|\n+\$)+?'
-p_spaces = '\s*'
+p_any = '(?:\\S| |\t|\n+\t|\n+ |\n+#|\n+/|\n+\\$)+?'
+p_spaces = '\\s*'
 
 def create_pattern(funcCall):
-    return '\n(\w+)\s+?(\w+)' + p_spaces + '\((' + p_any + ')\)' + p_spaces + '(\n\{' + '(' + p_any + ')' + f'({funcCall})' + '\s*' + '(' + p_any + ')' + '\n+\})'
+    return '\n(\\w+)\\s+?(\\w+)' + p_spaces + '\\((' + p_any + ')\\)' + p_spaces + '(\n\\{' + '(' + p_any + ')' + f'({funcCall})' + '\\s*' + '(' + p_any + ')' + '\n+\\})'
 
 pattern = create_pattern('ereturn')
 
@@ -100,9 +100,9 @@ def find_functions_with_call(functions):
 
                             if m[5] != 'ereturn':
                                 func_call = m[4][-20:] + m[5] + m[6][:20]
-                                safe_call_pattern = f'if{p_spaces}\(!{m[5]}\({p_any}\)\)'
-                                safe_call_void_pattern = f'\(void\){p_spaces}{m[5]}\({p_any}\)\)'
-                                direct_safe_call_pattern = f'DirectFunctionCall1Safe\({m[5]}'
+                                safe_call_pattern = f'if{p_spaces}\\(!{m[5]}\\({p_any}\\)\\)'
+                                safe_call_void_pattern = f'\\(void\\){p_spaces}{m[5]}\\({p_any}\\)\\)'
+                                direct_safe_call_pattern = f'DirectFunctionCall1Safe\\({m[5]}'
                                 if re.search(safe_call_pattern, func_call) is None and \
                                     re.search(safe_call_void_pattern, func_call) is None and \
                                     re.search(direct_safe_call_pattern, func_call) is None:

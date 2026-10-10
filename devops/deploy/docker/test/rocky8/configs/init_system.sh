@@ -100,7 +100,7 @@ ssh-keyscan -t rsa cdw > /home/gpadmin/.ssh/known_hosts 2>/dev/null
 # --------------------------------------------------------------------
 sudo rm -rf /data1/*
 sudo mkdir -p /data1/coordinator /data1/standby_coordinator /data1/primary /data1/mirror
-sudo chown -R gpadmin.gpadmin /data1
+sudo chown -R gpadmin:gpadmin /data1
 
 # Copy the gpinitsystem configuration file to the home directory
 cp /tmp/gpinitsystem.conf /home/gpadmin
