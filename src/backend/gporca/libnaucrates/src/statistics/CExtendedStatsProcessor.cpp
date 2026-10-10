@@ -34,7 +34,29 @@ using namespace gpopt;
 static BOOL
 IsDependencyCapablePredicate(CStatsPred *child_pred GPOS_UNUSED)
 {
+	/*
+	 * TODO: EsptPoint covers all constant comparisons (Eq/G/GEq/L/LEq, see
+	 * CStatsPredUtils::StatsCmpType()), so range predicates are let into
+	 * functional-dependency estimation where they get equality semantics.
+	 * The backend analogue, dependency_is_compatible_clause(), accepts
+	 * equality-to-pseudoconstant only; this should gate on the point
+	 * predicate's comparison type being EstatscmptEq.
+	 */
 	return child_pred->GetPredStatsType() == CStatsPred::EsptPoint;
+}
+
+/*
+ * A colid -> attno mapping entry is usable for extended-statistics estimation
+ * only if it exists and refers to a user column. Unlike the backend, ORCA has
+ * to translate its column ids back to attnos and the mapping is not
+ * guaranteed to cover every column. System columns (attno <= 0) are never
+ * covered by extended statistics and cannot be represented in a CBitSet; the
+ * backend rejects them too (dependency_is_compatible_clause()).
+ */
+static BOOL
+FUsableAttno(const INT *attnum)
+{
+	return nullptr != attnum && 0 < *attnum;
 }
 
 /*
@@ -277,6 +299,14 @@ CExtendedStatsProcessor::ApplyCorrelatedStatsToScaleFactorFilterCalculation(
 		{
 			ULONG colid = child_pred->GetColId();
 			INT *attnum = colid_to_attno_mapping->Find(&colid);
+			if (!FUsableAttno(attnum))
+			{
+				/*
+				 * Skip such clauses; they fall back to the independence
+				 * assumption.
+				 */
+				continue;
+			}
 			clauses_attnums->ExchangeSet(*attnum);
 		}
 	}
@@ -353,6 +383,12 @@ CExtendedStatsProcessor::ApplyCorrelatedStatsToScaleFactorFilterCalculation(
 
 			ULONG colid = child_pred->GetColId();
 			INT *attnum = colid_to_attno_mapping->Find(&colid);
+			if (!FUsableAttno(attnum))
+			{
+				/* no usable attno for this clause; it was never collected
+				 * into clauses_attnums by the pre-processing loop above */
+				continue;
+			}
 
 			/*
 			 * Technically we could find more than one clause for a given
@@ -365,7 +401,24 @@ CExtendedStatsProcessor::ApplyCorrelatedStatsToScaleFactorFilterCalculation(
 			 */
 			if (dependency_implies_attribute(dependency, *attnum))
 			{
-				s2 = 1 / result_histograms->Find(&colid)->GetFrequency().Get();
+				const CHistogram *histogram = result_histograms->Find(&colid);
+				if (nullptr == histogram)
+				{
+					/*
+					 * No histogram to estimate the implied clause with; give
+					 * up on the dependency for this attribute. The attnum
+					 * bit must still be cleared: the outer loop terminates
+					 * only once no dependency is fully matched by the
+					 * remaining attnums, so leaving the bit set would make
+					 * find_strongest_dependency() return the same dependency
+					 * forever. The clause stays unestimated here and is later
+					 * given the default selectivity by the regular per-column
+					 * path (see MakeHistHashMapConjFilter()).
+					 */
+					clauses_attnums->ExchangeClear(*attnum);
+					continue;
+				}
+				s2 = 1 / histogram->GetFrequency().Get();
 
 				/* mark this one as done, so we don't touch it again. */
 				child_pred->SetEstimated();
@@ -428,10 +481,21 @@ CExtendedStatsProcessor::ApplyCorrelatedStatsToNDistinctCalculation(
 		ULONG colid = *(*src_grouping_cols)[ul];
 
 		INT *attnum = colid_to_attno_mapping->Find(&colid);
-		if (!attnum)
+		if (nullptr == attnum)
 		{
+			/* no colid -> attno mapping; extended stats are unusable */
 			attnums->Release();
 			return false;
+		}
+		if (0 >= *attnum)
+		{
+			/*
+			 * System column: extended statistics never cover it and CBitSet
+			 * cannot represent it. Skip just this column; it never enters
+			 * 'attnums', so it stays unmatched below and is kept for the
+			 * regular per-column ndistinct path.
+			 */
+			continue;
 		}
 		attnums->ExchangeSet(*attnum);
 	}
@@ -512,6 +576,14 @@ CExtendedStatsProcessor::ApplyCorrelatedStatsToNDistinctCalculation(
 				item = tmpitem;
 				break;
 			}
+		}
+
+		if (nullptr == item)
+		{
+			/* there should be an item for every attribute combination */
+			matched->Release();
+			attnums->Release();
+			return false;
 		}
 
 		/* Form the output varinfo list, keeping only unmatched ones */
