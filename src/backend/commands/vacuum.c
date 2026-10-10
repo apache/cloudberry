@@ -47,6 +47,7 @@
 #include "catalog/pg_namespace.h"
 #include "commands/cluster.h"
 #include "commands/defrem.h"
+#include "commands/progress.h"
 #include "commands/tablecmds.h"
 #include "commands/vacuum.h"
 #include "miscadmin.h"
@@ -106,6 +107,7 @@ int			vacuum_multixact_freeze_min_age;
 int			vacuum_multixact_freeze_table_age;
 int			vacuum_failsafe_age;
 int			vacuum_multixact_failsafe_age;
+bool		track_cost_delay_timing;
 
 /*
  * Variables for cost-based vacuum delay. The defaults differ between
@@ -115,6 +117,16 @@ int			vacuum_multixact_failsafe_age;
  */
 double		vacuum_cost_delay = 0;
 int			vacuum_cost_limit = 200;
+
+/* Variable for reporting cost-based vacuum delay from parallel workers. */
+int64		parallel_vacuum_worker_delay_ns = 0;
+
+/*
+ * Cumulative cost-based VACUUM delay time (ms) for this process, excluding
+ * ANALYZE.
+ * Callers save the starting value and report the delta.
+ */
+double		VacuumDelayTime = 0;
 
 /*
  * VacuumFailsafeActive is a defined as a global so that we can determine
@@ -1788,6 +1800,7 @@ void
 vac_update_relstats(Relation relation,
 					BlockNumber num_pages, double num_tuples,
 					BlockNumber num_all_visible_pages,
+					BlockNumber num_all_frozen_pages,
 					bool hasindex, TransactionId frozenxid,
 					MultiXactId minmulti,
 					bool *frozenxid_updated, bool *minmulti_updated,
@@ -1825,13 +1838,15 @@ vac_update_relstats(Relation relation,
 			num_pages = relation->rd_rel->relpages;
 			num_tuples = relation->rd_rel->reltuples;
 			num_all_visible_pages = relation->rd_rel->relallvisible;
+			num_all_frozen_pages = relation->rd_rel->relallfrozen;
 		}
 		else if (Gp_role == GP_ROLE_EXECUTE)
 		{
 			vac_send_relstats_to_qd(relation,
 									num_pages,
 									num_tuples,
-									num_all_visible_pages);
+									num_all_visible_pages,
+									num_all_frozen_pages);
 		}
 	}
 	
@@ -1909,6 +1924,11 @@ vac_update_relstats(Relation relation,
 	if (pgcform->relallvisible != (int32) num_all_visible_pages)
 	{
 		pgcform->relallvisible = (int32) num_all_visible_pages;
+		dirty = true;
+	}
+	if (pgcform->relallfrozen != (int32) num_all_frozen_pages)
+	{
+		pgcform->relallfrozen = (int32) num_all_frozen_pages;
 		dirty = true;
 	}
 
@@ -3179,7 +3199,7 @@ vac_close_indexes(int nindexes, Relation *Irel, LOCKMODE lockmode)
  * typically once per page processed.
  */
 void
-vacuum_delay_point(void)
+vacuum_delay_point(bool is_analyze)
 {
 	double		msec = 0;
 
@@ -3222,12 +3242,53 @@ vacuum_delay_point(void)
 	/* Nap if appropriate */
 	if (msec > 0)
 	{
+		instr_time	delay_start;
+
 		if (msec > vacuum_cost_delay * 4)
 			msec = vacuum_cost_delay * 4;
+
+		if (track_cost_delay_timing)
+			INSTR_TIME_SET_CURRENT(delay_start);
 
 		pgstat_report_wait_start(WAIT_EVENT_VACUUM_DELAY);
 		pg_usleep(msec * 1000);
 		pgstat_report_wait_end();
+
+		if (track_cost_delay_timing)
+		{
+			instr_time	delay_end;
+			instr_time	delay;
+
+			INSTR_TIME_SET_CURRENT(delay_end);
+			INSTR_TIME_SET_ZERO(delay);
+			INSTR_TIME_ACCUM_DIFF(delay, delay_end, delay_start);
+			if (!is_analyze)
+				VacuumDelayTime += INSTR_TIME_GET_MILLISEC(delay);
+
+			/*
+			 * For parallel workers, we only report the delay time every once
+			 * in a while to avoid overloading the leader with messages and
+			 * interrupts.
+			 */
+			if (IsParallelWorker())
+			{
+				/*
+				 * Upstream sends the sleep time of a parallel worker to the
+				 * leader's progress entry now and then, which needs
+				 * pgstat_progress_parallel_incr_param() of PostgreSQL 17.
+				 * Cloudberry does not run parallel vacuum, so just
+				 * accumulate it.
+				 */
+				Assert(!is_analyze);
+				parallel_vacuum_worker_delay_ns += INSTR_TIME_GET_NANOSEC(delay);
+			}
+			else if (is_analyze)
+				pgstat_progress_incr_param(PROGRESS_ANALYZE_DELAY_TIME,
+										   INSTR_TIME_GET_NANOSEC(delay));
+			else
+				pgstat_progress_incr_param(PROGRESS_VACUUM_DELAY_TIME,
+										   INSTR_TIME_GET_NANOSEC(delay));
+		}
 
 		/*
 		 * We don't want to ignore postmaster death during very long vacuums
@@ -3563,6 +3624,7 @@ vacuum_combine_stats(VacuumStatsContext *stats_context, CdbPgResults *cdb_pgresu
 				tmp_stats_combo->rel_pages += pgclass_stats_combo->rel_pages;
 				tmp_stats_combo->rel_tuples += pgclass_stats_combo->rel_tuples;
 				tmp_stats_combo->relallvisible += pgclass_stats_combo->relallvisible;
+				tmp_stats_combo->relallfrozen += pgclass_stats_combo->relallfrozen;
 				/*
 				 * Accumulate the number of QEs, assuming sending only once
 				 * per QE for each relid in the VACUUM scenario.
@@ -3616,6 +3678,7 @@ vac_update_relstats_from_list(VacuumStatsContext *stats_context)
 			stats->rel_pages = stats->rel_pages / rel->rd_cdbpolicy->numsegments;
 			stats->rel_tuples = stats->rel_tuples / rel->rd_cdbpolicy->numsegments;
 			stats->relallvisible = stats->relallvisible / rel->rd_cdbpolicy->numsegments;
+			stats->relallfrozen = stats->relallfrozen / rel->rd_cdbpolicy->numsegments;
 		}
 
 		if (RelationIsAppendOptimized(rel))
@@ -3667,6 +3730,7 @@ vac_update_relstats_from_list(VacuumStatsContext *stats_context)
 			vac_update_relstats(rel,
 								stats->rel_pages, stats->rel_tuples,
 								stats->relallvisible,
+								stats->relallfrozen,
 								rel->rd_rel->relhasindex,
 								InvalidTransactionId,
 								InvalidMultiXactId,
@@ -3718,7 +3782,8 @@ void
 vac_send_relstats_to_qd(Relation relation,
 						BlockNumber num_pages,
 						double num_tuples,
-						BlockNumber num_all_visible_pages)
+						BlockNumber num_all_visible_pages,
+						BlockNumber num_all_frozen_pages)
 {
 
 	StringInfoData buf;
@@ -3732,6 +3797,7 @@ vac_send_relstats_to_qd(Relation relation,
 	stats.rel_pages = num_pages;
 	stats.rel_tuples = num_tuples;
 	stats.relallvisible = num_all_visible_pages;
+	stats.relallfrozen = num_all_frozen_pages;
 	pq_sendbyte(&buf, true); /* Mark the result ready when receive this message */
 	pq_sendint(&buf, PGExtraTypeVacuumStats, sizeof(PGExtraType));
 	pq_sendint(&buf, sizeof(VPgClassStats), sizeof(int));
