@@ -133,6 +133,9 @@ typedef struct PgStat_TableCounts
 
 	PgStat_Counter t_blocks_fetched;
 	PgStat_Counter t_blocks_hit;
+
+	PgStat_Counter t_frozen_page_marks_cleared;
+	PgStat_Counter t_visible_page_marks_cleared;
 } PgStat_TableCounts;
 
 /* Possible targets for resetting cluster-wide shared values */
@@ -413,11 +416,35 @@ typedef struct PgStat_MsgVacuum
 	Oid			m_databaseid;
 	Oid			m_tableoid;
 	bool		m_autovacuum;
+	bool		m_isindex; /* index time does not update tuple/count fields or DB totals */
 	TimestampTz m_vacuumtime;
 	PgStat_Counter m_live_tuples;
 	PgStat_Counter m_dead_tuples;
+	PgStat_Counter m_elapsedtime; /* microseconds */
+	PgStat_Counter m_delaytime; /* microseconds */
 } PgStat_MsgVacuum;
 
+
+/* ----------
+ * PgStat_VacuumStats        Vacuum statistics reported for a relation.
+ * ----------
+ */
+typedef struct PgStat_VacuumStats
+{
+	PgStat_Counter tuples_deleted;	/* tuples removed by vacuum */
+	PgStat_Counter dead_tuples; /* dead tuples left unremoved */
+	PgStat_Counter pages_deleted;	/* pages removed/deleted by vacuum */
+	PgStat_Counter dead_pages;	/* pages with unremoved dead tuples */
+	PgStat_Counter pages_frozen;	/* pages where vacuum froze tuples */
+	PgStat_Counter pages_all_visible;	/* pages marked all-visible by vacuum */
+
+	/*
+	 * Number of heap vacuum runs made aggressive by the XID or MultiXact
+	 * freeze table age.  This includes VACUUM FREEZE, which sets those
+	 * age thresholds to zero, but not DISABLE_PAGE_SKIPPING alone.
+	 */
+	PgStat_Counter freeze_age_vacuum_count;
+} PgStat_VacuumStats;
 
 /* ----------
  * PgStat_MsgAnalyze			Sent by the backend or autovacuum daemon
@@ -434,6 +461,7 @@ typedef struct PgStat_MsgAnalyze
 	TimestampTz m_analyzetime;
 	PgStat_Counter m_live_tuples;
 	PgStat_Counter m_dead_tuples;
+	PgStat_Counter m_elapsedtime; /* microseconds */
 } PgStat_MsgAnalyze;
 
 
@@ -730,7 +758,7 @@ typedef union PgStat_Msg
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCA2
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCA5
 
 /* ----------
  * PgStat_StatDBEntry			The collector's data per database
@@ -768,6 +796,17 @@ typedef struct PgStat_StatDBEntry
 	PgStat_Counter n_sessions_abandoned;
 	PgStat_Counter n_sessions_fatal;
 	PgStat_Counter n_sessions_killed;
+
+	/* Cumulative table vacuum times; index work is already included. */
+	PgStat_Counter total_vacuum_time; /* microseconds */
+	PgStat_Counter total_autovacuum_time; /* microseconds */
+	PgStat_Counter total_vacuum_delay_time; /* microseconds */
+	PgStat_Counter total_autovacuum_delay_time; /* microseconds */
+
+
+	/* VM revisions are fed by ordinary relation statistics. */
+	PgStat_Counter n_frozen_page_marks_cleared;
+	PgStat_Counter n_visible_page_marks_cleared;
 
 	TimestampTz stat_reset_timestamp;
 	TimestampTz stats_timestamp;	/* time of db stats file update */
@@ -816,6 +855,18 @@ typedef struct PgStat_StatTabEntry
 	PgStat_Counter analyze_count;
 	TimestampTz autovac_analyze_timestamp;	/* autovacuum initiated */
 	PgStat_Counter autovac_analyze_count;
+
+	/* Cumulative maintenance times, in microseconds. */
+	PgStat_Counter total_vacuum_time;
+	PgStat_Counter total_autovacuum_time;
+	PgStat_Counter total_analyze_time;
+	PgStat_Counter total_autoanalyze_time;
+	PgStat_Counter total_vacuum_delay_time;
+	PgStat_Counter total_autovacuum_delay_time;
+
+	/* VM revisions are fed by ordinary relation statistics. */
+	PgStat_Counter frozen_page_marks_cleared;
+	PgStat_Counter visible_page_marks_cleared;
 } PgStat_StatTabEntry;
 
 
@@ -1059,10 +1110,27 @@ extern void pgstat_reset_replslot_counter(const char *name);
 extern void pgstat_report_connect(Oid dboid);
 extern void pgstat_report_autovac(Oid dboid);
 extern void pgstat_report_vacuum(Oid tableoid, bool shared,
-								 PgStat_Counter livetuples, PgStat_Counter deadtuples);
+								 PgStat_Counter livetuples, PgStat_Counter deadtuples,
+								 TimestampTz starttime, PgStat_Counter delaytime);
+extern void pgstat_report_index_vacuum_time(Relation rel,
+											PgStat_Counter elapsedtime,
+											PgStat_Counter delaytime, bool is_autovacuum);
+
+/* count a page whose all-visible bit is being cleared */
+#define pgstat_count_visible_page_marks_cleared(rel)						\
+	do {																	\
+		if ((rel)->pgstat_info != NULL)										\
+			(rel)->pgstat_info->t_counts.t_visible_page_marks_cleared++;	\
+	} while (0)
+/* count a page whose all-frozen bit is being cleared */
+#define pgstat_count_frozen_page_marks_cleared(rel)							\
+	do {																	\
+		if ((rel)->pgstat_info != NULL)										\
+			(rel)->pgstat_info->t_counts.t_frozen_page_marks_cleared++;		\
+	} while (0)
 extern void pgstat_report_analyze(Relation rel,
 								  PgStat_Counter livetuples, PgStat_Counter deadtuples,
-								  bool resetcounter);
+								  bool resetcounter, TimestampTz starttime);
 
 extern void pgstat_report_recovery_conflict(int reason);
 extern void pgstat_report_deadlock(void);
