@@ -701,7 +701,16 @@ CREATE VIEW pg_stat_all_tables AS
             pg_stat_get_vacuum_count(C.oid) AS vacuum_count,
             pg_stat_get_autovacuum_count(C.oid) AS autovacuum_count,
             pg_stat_get_analyze_count(C.oid) AS analyze_count,
-            pg_stat_get_autoanalyze_count(C.oid) AS autoanalyze_count
+            pg_stat_get_autoanalyze_count(C.oid) AS autoanalyze_count,
+            pg_stat_get_total_vacuum_time(C.oid) AS total_vacuum_time,
+            pg_stat_get_total_autovacuum_time(C.oid) AS total_autovacuum_time,
+            pg_stat_get_total_analyze_time(C.oid) AS total_analyze_time,
+            pg_stat_get_total_autoanalyze_time(C.oid) AS total_autoanalyze_time,
+            pg_stat_get_total_vacuum_delay_time(C.oid) AS total_vacuum_delay_time,
+            pg_stat_get_total_autovacuum_delay_time(C.oid) AS total_autovacuum_delay_time,
+            pg_stat_get_vacuum_failsafe_count(C.oid) AS vacuum_failsafe_count,
+            pg_stat_get_visible_page_marks_cleared(C.oid) AS visible_page_marks_cleared,
+            pg_stat_get_frozen_page_marks_cleared(C.oid) AS frozen_page_marks_cleared
     FROM pg_class C LEFT JOIN
          pg_index I ON C.oid = I.indrelid
          LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
@@ -821,7 +830,11 @@ CREATE VIEW pg_stat_all_indexes AS
             pg_stat_get_numscans(I.oid) AS idx_scan,
             pg_stat_get_lastscan(I.oid) AS last_idx_scan,
             pg_stat_get_tuples_returned(I.oid) AS idx_tup_read,
-            pg_stat_get_tuples_fetched(I.oid) AS idx_tup_fetch
+            pg_stat_get_tuples_fetched(I.oid) AS idx_tup_fetch,
+            pg_stat_get_total_vacuum_time(I.oid) AS total_vacuum_time,
+            pg_stat_get_total_autovacuum_time(I.oid) AS total_autovacuum_time,
+            pg_stat_get_total_vacuum_delay_time(I.oid) AS total_vacuum_delay_time,
+            pg_stat_get_total_autovacuum_delay_time(I.oid) AS total_autovacuum_delay_time
     FROM pg_class C JOIN
             pg_index X ON C.oid = X.indrelid JOIN
             pg_class I ON I.oid = X.indexrelid
@@ -1205,6 +1218,69 @@ CREATE VIEW pg_stat_database AS
         UNION ALL
         SELECT oid, datname FROM pg_database
     ) D;
+
+CREATE VIEW pg_stat_vacuum AS
+    SELECT
+            D.oid AS datid,
+            D.datname AS datname,
+            pg_stat_get_db_total_vacuum_time(D.oid) AS total_vacuum_time,
+            pg_stat_get_db_total_autovacuum_time(D.oid) AS total_autovacuum_time,
+            pg_stat_get_db_total_vacuum_delay_time(D.oid) AS total_vacuum_delay_time,
+            pg_stat_get_db_total_autovacuum_delay_time(D.oid) AS total_autovacuum_delay_time,
+            pg_stat_get_db_vacuum_failsafe_count(D.oid) AS vacuum_failsafe_count,
+            pg_stat_get_db_vacuum_interrupt_count(D.oid) AS vacuum_interrupt_count,
+            pg_stat_get_db_stat_reset_time(D.oid) AS stats_reset,
+            V.tuples_deleted,
+            V.dead_pages,
+            V.pages_frozen,
+            V.pages_all_visible,
+            V.freeze_age_vacuum_count,
+            V.tuples_frozen,
+            V.recently_dead_tuples,
+            V.missed_dead_tuples,
+            V.pages_scanned,
+            V.pages_removed,
+            V.missed_dead_pages,
+            V.compacted_segments,
+            V.tuples_moved
+    FROM (
+        SELECT 0 AS oid, NULL::name AS datname
+        UNION ALL
+        SELECT oid, datname FROM pg_database
+    ) D, LATERAL pg_stat_get_vacuum_database_stats(D.oid) V;
+
+CREATE VIEW pg_stat_vacuum_tables AS
+    SELECT C.oid AS relid, N.nspname AS schema, C.relname,
+           current_database() AS dbname,
+           V.tuples_deleted,
+           V.dead_tuples,
+           V.dead_pages,
+           V.pages_frozen,
+           V.pages_all_visible,
+           V.freeze_age_vacuum_count,
+           V.tuples_frozen,
+           V.recently_dead_tuples,
+           V.missed_dead_tuples,
+           V.pages_scanned,
+           V.pages_removed,
+           V.missed_dead_pages,
+           V.total_file_segs,
+           V.compacted_segments,
+           V.tuples_moved
+      FROM pg_class C JOIN pg_namespace N ON N.oid = C.relnamespace,
+           LATERAL pg_stat_get_vacuum_stats(C.oid) V
+     WHERE C.relkind IN ('r', 't', 'm');
+
+CREATE VIEW pg_stat_vacuum_indexes AS
+    SELECT C.oid AS indexrelid, N.nspname AS schema, C.relname AS indexrelname,
+           current_database() AS dbname,
+           V.tuples_deleted,
+           V.pages_deleted,
+           V.dead_pages
+      FROM pg_class C JOIN pg_namespace N ON N.oid = C.relnamespace,
+           LATERAL pg_stat_get_vacuum_stats(C.oid) V
+     WHERE C.relkind IN ('i');
+
 CREATE VIEW pg_resqueue_status AS
     SELECT
             q.rsqname,
@@ -1564,7 +1640,8 @@ CREATE VIEW pg_stat_progress_analyze AS
         S.param5 AS ext_stats_computed,
         S.param6 AS child_tables_total,
         S.param7 AS child_tables_done,
-        CAST(S.param8 AS oid) AS current_child_table_relid
+        CAST(S.param8 AS oid) AS current_child_table_relid,
+        S.param9 / 1000000::double precision AS delay_time
     FROM pg_stat_get_progress_info('ANALYZE') AS S
         LEFT JOIN pg_database D ON S.datid = D.oid;
 
@@ -1585,7 +1662,8 @@ CREATE VIEW pg_stat_progress_vacuum AS
                       END AS phase,
         S.param2 AS heap_blks_total, S.param3 AS heap_blks_scanned,
         S.param4 AS heap_blks_vacuumed, S.param5 AS index_vacuum_count,
-        S.param6 AS max_dead_tuples, S.param7 AS num_dead_tuples
+        S.param6 AS max_dead_tuples, S.param7 AS num_dead_tuples,
+        S.param8 / 1000000::double precision AS delay_time
     FROM pg_stat_get_progress_info('VACUUM') AS S
         LEFT JOIN pg_database D ON S.datid = D.oid;
 
@@ -1878,6 +1956,15 @@ $$
     UNION ALL
     SELECT pg_stat_reset_shared(target) FROM gp_dist_random('gp_id');
 $$ LANGUAGE SQL;
+
+-- Reset native VACUUM work on the coordinator and every primary segment.
+CREATE FUNCTION gp_stat_reset_vacuum_stats(relid oid DEFAULT NULL) RETURNS void AS
+$$
+    SELECT pg_stat_reset_vacuum_stats(relid) FROM gp_dist_random('gp_id');
+    SELECT pg_stat_reset_vacuum_stats(relid);
+$$ LANGUAGE SQL VOLATILE PARALLEL UNSAFE;
+
+REVOKE EXECUTE ON FUNCTION gp_stat_reset_vacuum_stats(oid) FROM public;
 
 CREATE FUNCTION gp_stat_reset_single_table_counters(tableoid oid) RETURNS VOID AS
 $$
