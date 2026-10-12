@@ -13,6 +13,7 @@
 #ifndef APPENDONLY_COMPACTION_H
 #define APPENDONLY_COMPACTION_H
 
+#include "pgstat.h"
 #include "nodes/pg_list.h"
 #include "access/appendonly_visimap.h"
 #include "utils/rel.h"
@@ -20,6 +21,12 @@
 #include "executor/tuptable.h"
 
 #define APPENDONLY_COMPACTION_SEGNO_INVALID (-1)
+
+/* Optional resource counters for VACUUM VERBOSE. */
+typedef struct AOVacuumExtStats
+{
+	PgStat_CommonCounts indexes;
+} AOVacuumExtStats;
 
 /*
  * Stats for progress reporting.
@@ -31,6 +38,10 @@ typedef struct AOVacuumRelStats
 	int		nbytes_truncated;	/* current # of bytes truncated from segment file */
 	int		num_dead_tuples;	/* current # of dead tuples */
 	int		num_index_vacuumed; /* current # of indexes been vacuumed */
+	/* the relation these stats were started for */
+	Oid			relid;
+	/* Index resources are excluded from each phase's VERBOSE report. */
+	AOVacuumExtStats *extstats; /* allocated only for VERBOSE */
 } AOVacuumRelStats;
 
 extern Bitmapset *AppendOptimizedCollectDeadSegments(Relation aorel);
