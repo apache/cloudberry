@@ -36,6 +36,13 @@ static int	pgStatXactCommit = 0;
 static int	pgStatXactRollback = 0;
 static PgStat_Counter pgLastSessionReportTime = 0;
 
+/*
+ * Vacuums interrupted by an error, counted from the vacuum error callback
+ * and folded into the pending database entries at transaction end.
+ */
+static PgStat_Counter pgStatVacuumErrors = 0;
+static PgStat_Counter pgStatSharedVacuumErrors = 0;
+
 
 /*
  * Remove entry for the database being dropped.
@@ -245,6 +252,20 @@ pgstat_fetch_stat_dbentry(Oid dboid)
 		pgstat_fetch_entry(PGSTAT_KIND_DATABASE, dboid, InvalidOid);
 }
 
+/*
+ * Add the vacuum errors counted for a database to its pending entry, and
+ * reset the counter.
+ */
+static void
+pgstat_fold_vacuum_errors(Oid dboid, PgStat_Counter *count)
+{
+	if (*count == 0)
+		return;
+
+	pgstat_prep_database_pending(dboid)->vacuum_interrupt_count += *count;
+	*count = 0;
+}
+
 void
 AtEOXact_PgStat_Database(bool isCommit, bool parallel)
 {
@@ -260,6 +281,15 @@ AtEOXact_PgStat_Database(bool isCommit, bool parallel)
 		else
 			pgStatXactRollback++;
 	}
+
+	/*
+	 * Fold in the vacuums that pgstat_count_vacuum_error() saw failing.  We
+	 * are past LWLockReleaseAll() of the aborting transaction here, so it is
+	 * safe to touch the pending entries, which the next pgstat_report_stat()
+	 * flushes to shared memory as usual.
+	 */
+	pgstat_fold_vacuum_errors(MyDatabaseId, &pgStatVacuumErrors);
+	pgstat_fold_vacuum_errors(InvalidOid, &pgStatSharedVacuumErrors);
 }
 
 /*
@@ -324,6 +354,31 @@ static bool
 pgstat_should_report_connstat(void)
 {
 	return MyBackendType == B_BACKEND;
+}
+
+/*
+ * Count a vacuum that was interrupted by an error.
+ *
+ * This is called from the vacuum error callback, that is from inside the
+ * error handler, so it must not do anything that could fail or block: the
+ * error may well have been raised by the locking code itself, possibly
+ * while holding an LWLock.  Just bump a counter here; the counter reaches
+ * the pending database entry in AtEOXact_PgStat_Database(), once the
+ * transaction end has released the locks we might have been holding.
+ *
+ * Vacuums of shared relations are counted in the InvalidOid entry, matching
+ * how their other stats are accounted.
+ */
+void
+pgstat_count_vacuum_error(bool shared)
+{
+	if (!pgstat_track_counts)
+		return;
+
+	if (shared)
+		pgStatSharedVacuumErrors++;
+	else
+		pgStatVacuumErrors++;
 }
 
 /*
@@ -417,6 +472,12 @@ pgstat_database_flush_cb(PgStat_EntryRef *entry_ref, bool nowait)
 
 	PGSTAT_ACCUM_DBCOUNT(blk_read_time);
 	PGSTAT_ACCUM_DBCOUNT(blk_write_time);
+	PGSTAT_ACCUM_DBCOUNT(total_vacuum_time);
+	PGSTAT_ACCUM_DBCOUNT(total_autovacuum_time);
+	PGSTAT_ACCUM_DBCOUNT(total_vacuum_delay_time);
+	PGSTAT_ACCUM_DBCOUNT(total_autovacuum_delay_time);
+	PGSTAT_ACCUM_DBCOUNT(vacuum_failsafe_count);
+	PGSTAT_ACCUM_DBCOUNT(vacuum_interrupt_count);
 
 	PGSTAT_ACCUM_DBCOUNT(sessions);
 	PGSTAT_ACCUM_DBCOUNT(session_time);
