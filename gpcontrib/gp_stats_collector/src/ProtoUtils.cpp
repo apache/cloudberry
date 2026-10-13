@@ -286,6 +286,15 @@ set_gp_metrics(gpsc::GPMetrics *metrics, QueryDesc *query_desc,
 		set_metric_instrumentation(metrics->mutable_instrumentation(),
 								   query_desc, nested_calls, nested_time);
 	}
+
+	/*
+	 * The executor also records interrupted waits without instrumentation.
+	 * Do not create an empty submessage for queries with no consumer wait.
+	 */
+	if (query_desc->estate && query_desc->estate->es_cross_slice_wait > 0)
+		metrics->mutable_instrumentation()->set_cross_slice_wait_ms(
+			query_desc->estate->es_cross_slice_wait * 1000.0);
+
 	fill_self_stats(metrics->mutable_systemstat());
 	metrics->mutable_systemstat()->set_runningtimeseconds(
 		time(NULL) - metrics->mutable_systemstat()->runningtimeseconds());
