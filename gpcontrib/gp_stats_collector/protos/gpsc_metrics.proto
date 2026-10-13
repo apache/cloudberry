@@ -193,6 +193,12 @@ message MetricInstrumentation {
     uint64  inherited_calls    = 22; /* the number of executed sub-queries */
     double  inherited_time     = 23; /* total time spend on inherited execution */
     InterconnectStat interconnect = 24;
+    /* Maximum accumulated ShareInputScan consumer wait among nodes in the
+     * reporting process (one per slice), in milliseconds. Includes waits
+     * interrupted by ERROR, even without node instrumentation. Completed
+     * waits only; this is neither a cluster total nor a live wait gauge.
+     */
+    double  cross_slice_wait_ms = 25;
 }
 
 message SpillInfo {
