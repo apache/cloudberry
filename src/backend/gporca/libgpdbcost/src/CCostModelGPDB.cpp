@@ -1823,8 +1823,12 @@ CCostModelGPDB::GetCommonIndexData(T *ptr, ULONG &ulIndexKeys,
 	const IMDIndex *pmdindex =
 		md_accessor->RetrieveIndex(ptr->Pindexdesc()->MDId());
 
-	pdrgpcrIndexColumns = CXformUtils::PdrgpcrIndexKeys(
-		mp, ptr->PdrgpcrOutput(), pmdindex, pmdrel);
+	// Costing has always weighed every column stored in the index (keys and
+	// INCLUDE columns alike) in ComputeUnusedIndexWeight; keep that behavior
+	// here so plan costs are unaffected by PdrgpcrIndexKeys becoming key-only.
+	pdrgpcrIndexColumns = CXformUtils::PdrgpcrIndexColumns(
+		mp, ptr->PdrgpcrOutput(), pmdindex, pmdrel,
+		CXformUtils::EicKeyAndIncluded);
 
 	stats = ptr->PstatsBaseTable();
 }

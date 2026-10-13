@@ -1784,7 +1784,9 @@ CXformUtils::PstrErrorMessage(CMemoryPool *mp, ULONG major, ULONG minor, ...)
 //
 //	@doc:
 //		Return the array of columns from the given array of columns which appear
-//		in the index key columns
+//		in the index key columns. INCLUDE columns are not keys: the executor
+//		only accepts index quals on key attributes (see ExecIndexBuildScanKeys),
+//		so callers building index conditions must never see them here.
 //
 //---------------------------------------------------------------------------
 CColRefArray *
@@ -1792,7 +1794,7 @@ CXformUtils::PdrgpcrIndexKeys(CMemoryPool *mp, CColRefArray *colref_array,
 							  const IMDIndex *pmdindex,
 							  const IMDRelation *pmdrel)
 {
-	return PdrgpcrIndexColumns(mp, colref_array, pmdindex, pmdrel);
+	return PdrgpcrIndexColumns(mp, colref_array, pmdindex, pmdrel, EicKey);
 }
 
 //---------------------------------------------------------------------------
@@ -1808,7 +1810,7 @@ CColRefSet *
 CXformUtils::PcrsIndexKeys(CMemoryPool *mp, CColRefArray *colref_array,
 						   const IMDIndex *pmdindex, const IMDRelation *pmdrel)
 {
-	return PcrsIndexColumns(mp, colref_array, pmdindex, pmdrel);
+	return PcrsIndexColumns(mp, colref_array, pmdindex, pmdrel, EicKey);
 }
 
 //---------------------------------------------------------------------------
@@ -1817,16 +1819,16 @@ CXformUtils::PcrsIndexKeys(CMemoryPool *mp, CColRefArray *colref_array,
 //
 //	@doc:
 //		Return the set of columns from the given array of columns which appear
-//		in the index columns of the specified type (included / key)
+//		in the index columns of the specified type (key only / key + included)
 //
 //---------------------------------------------------------------------------
 CColRefSet *
 CXformUtils::PcrsIndexColumns(CMemoryPool *mp, CColRefArray *colref_array,
 							  const IMDIndex *pmdindex,
-							  const IMDRelation *pmdrel)
+							  const IMDRelation *pmdrel, EIndexCols eic)
 {
 	CColRefArray *pdrgpcrIndexColumns =
-		PdrgpcrIndexColumns(mp, colref_array, pmdindex, pmdrel);
+		PdrgpcrIndexColumns(mp, colref_array, pmdindex, pmdrel, eic);
 	CColRefSet *pcrsCols = GPOS_NEW(mp) CColRefSet(mp, pdrgpcrIndexColumns);
 
 	pdrgpcrIndexColumns->Release();
@@ -1836,7 +1838,7 @@ CXformUtils::PcrsIndexColumns(CMemoryPool *mp, CColRefArray *colref_array,
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CXformUtils::PdrgpcrIndexColumns
+//		CXformUtils::PcrsIndexReturnableColumns
 //
 //	@doc:
 //		Return the set of columns from the given array of columns which are
@@ -1872,14 +1874,17 @@ CXformUtils::PcrsIndexReturnableColumns(CMemoryPool *mp,
 //
 //	@doc:
 //		Return the ordered list of columns from the given array of columns which
-//		appear in the index columns of the specified type (included / key)
+//		appear in the index columns of the specified type: key columns only
+//		(EicKey), or key columns followed by INCLUDE columns (EicKeyAndIncluded)
 //
 //---------------------------------------------------------------------------
 CColRefArray *
 CXformUtils::PdrgpcrIndexColumns(CMemoryPool *mp, CColRefArray *colref_array,
 								 const IMDIndex *pmdindex,
-								 const IMDRelation *pmdrel)
+								 const IMDRelation *pmdrel, EIndexCols eic)
 {
+	GPOS_ASSERT(EicKey == eic || EicKeyAndIncluded == eic);
+
 	CColRefArray *pdrgpcrIndex = GPOS_NEW(mp) CColRefArray(mp);
 
 	// key columns
@@ -1892,6 +1897,11 @@ CXformUtils::PdrgpcrIndexColumns(CMemoryPool *mp, CColRefArray *colref_array,
 		GPOS_ASSERT(ulPosNonDropped < colref_array->Size());
 		CColRef *colref = (*colref_array)[ulPosNonDropped];
 		pdrgpcrIndex->Append(colref);
+	}
+
+	if (EicKey == eic)
+	{
+		return pdrgpcrIndex;
 	}
 
 	// included columns
