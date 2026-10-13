@@ -5530,9 +5530,6 @@ CTranslatorDXLToPlStmt::TranslateDXLDirectDispatchInfo(
 		return NIL;
 	}
 
-	CDXLDatumArray *dxl_datum_array = (*dispatch_identifier_datum_arrays)[0];
-	GPOS_ASSERT(0 < dxl_datum_array->Size());
-
 	const ULONG length = dispatch_identifier_datum_arrays->Size();
 
 	if (dxl_direct_dispatch_info->FContainsRawValues())
@@ -5568,23 +5565,29 @@ CTranslatorDXLToPlStmt::TranslateDXLDirectDispatchInfo(
 		return segids_list;
 	}
 
-	ULONG hash_code = GetDXLDatumGPDBHash(dxl_datum_array, pRTEHashFuncCal);
+	// Each datum array is one value combination of the distribution key
+	// (e.g. one array per IN-list constant). Dispatch to the union of the
+	// segments they hash to, like the planner does.
+	List *segids_list = NIL;
 	for (ULONG ul = 0; ul < length; ul++)
 	{
 		CDXLDatumArray *dispatch_identifier_datum_array =
 			(*dispatch_identifier_datum_arrays)[ul];
 		GPOS_ASSERT(0 < dispatch_identifier_datum_array->Size());
-		ULONG hash_code_new = GetDXLDatumGPDBHash(
-			dispatch_identifier_datum_array, pRTEHashFuncCal);
+		ULONG hash_code = GetDXLDatumGPDBHash(dispatch_identifier_datum_array,
+											  pRTEHashFuncCal);
 
-		if (hash_code != hash_code_new)
-		{
-			// values don't hash to the same segment
-			return NIL;
-		}
+		segids_list = gpdb::LAppendUniqueInt(segids_list, hash_code);
 	}
 
-	List *segids_list = gpdb::LAppendInt(NIL, hash_code);
+	// a value set that spans every segment is equivalent to not direct
+	// dispatching at all
+	if (gpdb::ListLength(segids_list) == m_num_of_segments)
+	{
+		gpdb::ListFree(segids_list);
+		return NIL;
+	}
+
 	return segids_list;
 }
 

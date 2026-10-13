@@ -6499,7 +6499,7 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
                                                QUERY PLAN                                               
 --------------------------------------------------------------------------------------------------------
  Finalize Aggregate
-   ->  Gather Motion 3:1  (slice1; segments: 3)
+   ->  Gather Motion 2:1  (slice1; segments: 2)
          ->  Partial Aggregate
                ->  Append
                      ->  Seq Scan on test_rangepartition_1_prt_pn_20221022
