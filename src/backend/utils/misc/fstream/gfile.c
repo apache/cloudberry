@@ -253,7 +253,628 @@ static int bz_file_open(gfile_t *fd)
 	fd->u.bz->s.next_in = fd->u.bz->in;
 	fd->read = bz_file_read;
 	fd->close = bz_file_close;
-	
+
+	return 0;
+}
+#endif
+
+#ifdef USE_LZO
+/*
+ * LZO-compressed file support (standard lzop container format).
+ *
+ * Uses in-process liblzo2 decompression, following the same pattern as
+ * .gz (zlib) / .bz2 (bzlib) / .zst (zstd).  The file format is auto-detected
+ * in lzo_file_open() by probing the first 9 bytes:
+ *
+ *   - standard lzop container format: 9-byte magic + full header + block
+ *     checksums
+ *   - Hadoop Raw LZO format: no magic/header/checksum, plain LZO block
+ *     stream (handled as a bonus path; only the standard lzop format is
+ *     advertised via the .lzo extension)
+ *
+ * lzop header layout:
+ *     magic         9 bytes  fixed magic \x89LZO\x00\x0d\x0a\x1a\x0a
+ *     version       2 bytes  version (big endian)
+ *     lib_version   2 bytes  library version
+ *     ver_needed    2 bytes  minimum version required to decompress
+ *     method        1 byte   compression algorithm
+ *     level         1 byte   compression level
+ *     flags         4 bytes  flags (control checksum types etc.)
+ *     mode          4 bytes  file mode
+ *     mtime_low     4 bytes  mtime low 32 bits
+ *     mtime_high    4 bytes  mtime high 32 bits
+ *     [extra_ver]   1 byte   if F_H_EXTRA_FIELD(0x40) set
+ *     [filter]      4 bytes  if F_H_FILTER(0x800) set
+ *     name_len      1 byte   original file name length
+ *     name          N bytes  original file name
+ *     [path_len]    4 bytes  if F_H_PATH(0x2000) set
+ *     [path]        N bytes  if F_H_PATH(0x2000) set
+ *     checksum      4 bytes  header checksum
+ *
+ * Data block layout (common to both formats):
+ *     uncomp_len    4 bytes  decompressed size, big endian (0 = EOF marker)
+ *     comp_len      4 bytes  compressed size, big endian
+ *     [d_adler32]   4 bytes  adler32 of decompressed data (F_ADLER32_D=0x01)
+ *     [d_crc32]     4 bytes  crc32 of decompressed data   (F_CRC32_D=0x100)
+ *     [c_adler32]   4 bytes  adler32 of compressed data   (F_ADLER32_C=0x02)
+ *     [c_crc32]     4 bytes  crc32 of compressed data     (F_CRC32_C=0x200)
+ *     data          comp_len bytes  LZO compressed data (or raw data if
+ *                                   incompressible)
+ *
+ * The only difference between the two formats is whether the magic/header
+ * and checksum fields are present.  The decompression path is driven by
+ * flags: Raw LZO format has flags=0 so all checksum logic is naturally
+ * skipped.  The 9 probe bytes (which belong to the first data block in Raw
+ * LZO) are cached in peek_buf and consumed first by lzo_read_peek /
+ * lzo_read_uint32_peek to keep byte alignment.
+ */
+
+/* LZO block buffer size: standard lzop default block size is 256KB */
+#define LZO_BUFFER_SIZE		(256 * 1024)
+
+/*
+ * LZO decompression state structure (complete definition; gfile.h only
+ * declares the pointer).  Same heap-allocated double buffer design as
+ * zlib_stuff / bzlib_stuff.
+ */
+struct lzo_stuff
+{
+	int		out_size;
+	int		out_pos;
+	int		eof;
+	unsigned int	flags;          /* flags from lzop header; 0 for raw LZO */
+	bool_t		has_lzop_header; /* TRUE=standard lzop, FALSE=raw LZO */
+	int		peek_size;      /* valid bytes in peek_buf */
+	int		peek_pos;       /* current read offset in peek_buf */
+	char		peek_buf[9];    /* probe buffer (at most 9 bytes) */
+	char		in[LZO_BUFFER_SIZE];
+	char		out[LZO_BUFFER_SIZE];
+};
+
+/* lzop file magic: \x89 L Z O \x00 \x0d \x0a \x1a \x0a */
+static const unsigned char lzop_magic[9] = {
+	0x89, 0x4c, 0x5a, 0x4f, 0x00, 0x0d, 0x0a, 0x1a, 0x0a
+};
+
+/* lzop header flag bits (from lzop-1.03/src/conf.h) */
+#define LZOP_F_ADLER32_D    0x00000001   /* adler32 checksum of decompressed data */
+#define LZOP_F_ADLER32_C    0x00000002   /* adler32 checksum of compressed data */
+#define LZOP_F_CRC32_D      0x00000100   /* crc32 checksum of decompressed data */
+#define LZOP_F_CRC32_C      0x00000200   /* crc32 checksum of compressed data */
+
+/*
+ * Helper: read exactly n bytes from the underlying file descriptor.
+ * Only local files are supported here, so this just wraps read_and_retry
+ * (same as the reads inside gz_file_read / bz_file_read).  A short read
+ * means the file was truncated and is reported to the caller.
+ */
+static ssize_t
+read_block_bytes(gfile_t *fd, void *buf, size_t n)
+{
+	size_t total = 0;
+	char *p = (char *) buf;
+
+	while (total < n)
+	{
+		ssize_t r = read_and_retry(fd, p + total, n - total);
+
+		if (r == 0)
+			break;          /* EOF, return what we have */
+		if (r < 0)
+			return -1;      /* read error */
+		total += r;
+	}
+	return (ssize_t) total;
+}
+
+/*
+ * Helper: read one big-endian uint32 from the file.
+ * All multi-byte integers in the lzop format are big endian.
+ * Returns 0 on success, -1 on error (read failure or truncation).
+ */
+static int
+read_block_uint32(gfile_t *fd, uint32_t *val)
+{
+	unsigned char b[4];
+
+	if (read_block_bytes(fd, b, 4) < 4)
+		return -1;
+	*val = ((uint32_t) b[0] << 24) | ((uint32_t) b[1] << 16) |
+	       ((uint32_t) b[2] <<  8) | ((uint32_t) b[3]);
+	return 0;
+}
+
+/*
+ * peek helper: read from peek_buf first, then fall back to the file.
+ *
+ * During format probing, the first bytes of the file may already have been
+ * consumed.  For the standard lzop path peek_buf is always empty, so these
+ * helpers degenerate to plain file reads.  For the Raw LZO path, the probe
+ * bytes belong to the first data block and are consumed gradually here.
+ */
+static ssize_t
+lzo_read_peek(gfile_t *fd, void *buf, size_t n)
+{
+	struct lzo_stuff *z = fd->u.lzo;
+	size_t total = 0;
+	char *p = (char *) buf;
+
+	/* consume the probe bytes first */
+	if (z->peek_pos < z->peek_size)
+	{
+		size_t avail = (size_t)(z->peek_size - z->peek_pos);
+
+		if (avail > n)
+			avail = n;
+		memcpy(p, z->peek_buf + z->peek_pos, avail);
+		z->peek_pos += (int) avail;
+		p += avail;
+		total += avail;
+		n -= avail;
+	}
+
+	/* peek_buf exhausted, read the rest from the file */
+	if (n > 0)
+	{
+		ssize_t r = read_block_bytes(fd, p, n);
+
+		if (r < 0)
+			return -1;
+		total += (size_t) r;
+	}
+
+	return (ssize_t) total;
+}
+
+/* peek helper: read one big-endian uint32 through the peek mechanism */
+static int
+lzo_read_uint32_peek(gfile_t *fd, uint32_t *val)
+{
+	unsigned char b[4];
+
+	if (lzo_read_peek(fd, b, 4) < 4)
+		return -1;
+	*val = ((uint32_t) b[0] << 24) | ((uint32_t) b[1] << 16) |
+	       ((uint32_t) b[2] <<  8) | ((uint32_t) b[3]);
+	return 0;
+}
+
+/*
+ * LZO block decompression main loop - lzo_file_read()
+ *
+ * Processing flow:
+ *   1. if there is still decompressed data in out[], return it to the caller
+ *   2. read the next block header (uncomp_len + comp_len)
+ *   3. [standard lzop only] read the block checksum fields (driven by flags)
+ *   4. read comp_len bytes of LZO data into in[]
+ *   5. decompress with lzo1x_decompress_safe() into out[], verify size
+ *   6. [standard lzop only] verify checksums of the decompressed data
+ *   7. return the out[] data to the caller
+ *
+ * Protection:
+ *   - block size sanity checks (LZO_BUFFER_SIZE cap, compression bomb guard)
+ *   - comp_len > uncomp_len rejected (compressed data larger than the
+ *     original is impossible; equal means incompressible data stored raw)
+ *   - lzo1x_decompress_safe (bounds-checked) instead of the unsafe variant
+ *   - decompressed size cross-checked against the header's uncomp_len
+ *   - [standard lzop only] adler32/crc32 checksum verification
+ */
+static ssize_t
+lzo_file_read(gfile_t *fd, void *ptr, size_t len)
+{
+	if (fd == NULL || ptr == NULL || fd->u.lzo == NULL)
+	{
+		return -1;
+	}
+
+	struct lzo_stuff *z = fd->u.lzo;
+
+	if (!z)
+		return -1;      /* defensive: uninitialized call */
+
+	for (;;)
+	{
+		/*
+		 * Step 1: if there is leftover decompressed data in out[],
+		 * return it.  Same pattern as gz_file_read / bz_file_read.
+		 */
+		if (z->out_pos < z->out_size || z->eof)
+		{
+			size_t avail = z->out_size - z->out_pos;
+
+			if (avail > 0)
+			{
+				if (avail > len)
+					avail = len;
+				memcpy(ptr, z->out + z->out_pos, avail);
+				z->out_pos += (int) avail;
+				return (ssize_t) avail;
+			}
+			if (z->eof)
+				return 0;   /* end of file, no more data */
+		}
+
+		/* output buffer exhausted, prepare to read the next block */
+		z->out_size = 0;
+		z->out_pos  = 0;
+
+		/*
+		 * Step 2: read the block header - uncompressed and compressed
+		 * sizes (4 bytes each, big endian).  Use the peek variants so
+		 * that the Raw LZO probe bytes are consumed in order.
+		 */
+		uint32_t uncomp_len, comp_len;
+
+		if (lzo_read_uint32_peek(fd, &uncomp_len) < 0)
+		{
+			gfile_printf_then_putc_newline("lzo: failed to read uncomp_len - file may be truncated");
+ 			return -1;      /* read error or truncation */
+		}
+
+		if (uncomp_len == 0)
+		{
+			z->eof = 1;
+			return 0;       /* EOF marker block - normal end of file */
+		}
+		if (lzo_read_uint32_peek(fd, &comp_len) < 0)
+		{
+			gfile_printf_then_putc_newline("lzo: failed to read comp_len - file may be truncated");
+			return -1;
+		}	
+
+		/* sanity checks on the block sizes */
+		if (comp_len > (uint32_t) LZO_BUFFER_SIZE)
+		{
+			gfile_printf_then_putc_newline("lzo: compressed block too large (%u bytes, max %d)", comp_len, LZO_BUFFER_SIZE);
+			return -1;
+		}
+		if (comp_len == 0 && uncomp_len > 0)
+		{
+			/* comp_len 0 with non-zero uncomp_len - corrupted header */
+			gfile_printf_then_putc_newline("lzo: corrupted block - zero compressed size but %u uncompressed",
+				uncomp_len);
+			return -1;
+		}
+		if (comp_len > uncomp_len)
+		{
+			/* compressed data larger than the original - not LZO data */
+			gfile_printf_then_putc_newline("lzo block comp > uncomp");
+			return -1;
+		}
+		if (uncomp_len > (uint32_t) LZO_BUFFER_SIZE)
+		{
+			gfile_printf_then_putc_newline("lzo uncompressed size too large: %u",
+				uncomp_len);
+			return -1;
+		}
+
+		/*
+		 * Step 3: read and record the block checksums [standard lzop only].
+		 * Raw LZO: flags=0, all conditions are false, so this is skipped.
+		 */
+		uint32_t expected_c_adler32 = 0, expected_c_crc32 = 0;
+		uint32_t expected_d_adler32 = 0, expected_d_crc32 = 0;
+
+		if (z->flags & LZOP_F_ADLER32_D)
+		{
+			if (lzo_read_uint32_peek(fd, &expected_d_adler32) < 0)
+				return -1;
+		}
+		if (z->flags & LZOP_F_CRC32_D)
+		{
+			if (lzo_read_uint32_peek(fd, &expected_d_crc32) < 0)
+				return -1;
+		}
+		if (z->flags & LZOP_F_ADLER32_C)
+		{
+			if (lzo_read_uint32_peek(fd, &expected_c_adler32) < 0)
+				return -1;
+		}
+		if (z->flags & LZOP_F_CRC32_C)
+		{
+			if (lzo_read_uint32_peek(fd, &expected_c_crc32) < 0)
+				return -1;
+		}
+
+		/*
+		 * C-checksums (expected_c_adler32 / expected_c_crc32) are consumed
+		 * from the stream to keep the pointer aligned but not verified:
+		 * the D-checksum already catches any error the C-checksum would
+		 * catch (a corrupt compressed block must produce corrupt output),
+		 * and verifying only D-checksums is faster.
+		 */
+		(void) expected_c_adler32;
+		(void) expected_c_crc32;
+
+		/*
+		 * Step 4: read the compressed data block (comp_len bytes).
+		 * The file pointer has skipped all checksum fields by now.
+		 * A short read means the block was truncated.
+		 */
+		if (lzo_read_peek(fd, z->in, comp_len) < (ssize_t) comp_len)
+		{
+			gfile_printf_then_putc_newline("lzo: truncated block - expected %u bytes, got less", comp_len);
+			return -1;
+		}
+
+		/*
+		 * Step 5: decompress.
+		 * comp_len < uncomp_len  -> data was LZO-compressed
+		 * comp_len == uncomp_len -> incompressible data stored raw
+		 */
+		if (comp_len < uncomp_len)
+		{
+			lzo_uint d = uncomp_len;
+			int r = lzo1x_decompress_safe((const lzo_bytep) z->in, comp_len,
+			                              (lzo_bytep) z->out, &d, NULL);
+
+			if (r != LZO_E_OK)
+			{
+				/*
+				 * Decompression failure detailed error report
+				 * Common error codes:
+				 *   LZO_E_INPUT_OVERRUN   (-7): Input data truncated or corrupted
+				 *   LZO_E_OUTPUT_OVERRUN  (-6): Output buffer too small
+				 *   LZO_E_NOT_COMPRESSED  (-5): Data is not in LZO format
+				*/
+				/* decompression failure - corrupt data or not LZO */
+				gfile_printf_then_putc_newline(
+					"lzo: decompression failed (error=%d) - block: uncomp=%u comp=%u, possible causes: truncated file, corrupt data, or not LZO",
+					r, uncomp_len, comp_len);
+				return -1;
+			}
+			/* decompressed size must match the block header */
+			if (d != uncomp_len)
+			{
+				gfile_printf_then_putc_newline(
+					"lzo decompression size mismatch: %lu vs %u",
+					(unsigned long) d, uncomp_len);
+				return -1;
+			}
+		}
+		else
+		{
+			/* incompressible data stored raw - copy as is */
+			memcpy(z->out, z->in, comp_len);
+			uncomp_len = comp_len;
+		}
+
+		/*
+		 * Step 6: verify the checksums [standard lzop only].
+		 * Even a "successful" decompression (no error, matching size)
+		 * can silently corrupt data; the checksums catch that.
+		 */
+		if (z->flags & LZOP_F_ADLER32_D)
+		{
+			uint32_t computed = lzo_adler32(1, (const lzo_bytep) z->out,
+			                                uncomp_len);
+
+			if (computed != expected_d_adler32)
+			{
+				gfile_printf_then_putc_newline(
+					"lzo adler32 checksum mismatch "
+					"(expected 0x%08x, computed 0x%08x)",
+					expected_d_adler32, computed);
+				return -1;
+			}
+		}
+		if (z->flags & LZOP_F_CRC32_D)
+		{
+			uint32_t computed = lzo_crc32(0, (const lzo_bytep) z->out,
+			                              uncomp_len);
+
+			if (computed != expected_d_crc32)
+			{
+				gfile_printf_then_putc_newline("lzo crc32 checksum mismatch");
+				return -1;
+			}
+		}
+
+		/* decompression succeeded, hand out[] to the caller */
+		z->out_size = uncomp_len;
+	}
+}
+
+/* LZO file close: free the lzo_stuff heap buffers */
+static int
+lzo_file_close(gfile_t *fd)
+{
+	if (fd != NULL && fd->u.lzo != NULL)
+	{
+		gfile_free(fd->u.lzo);
+		fd->u.lzo = NULL;
+	}
+	return 0;
+}
+
+/*
+ * lzop header parser - lzo_skip_header()
+ *
+ * Parses the standard lzop header, skipping all fields to reach the first
+ * data block, and saves flags (checksum types etc.) for later use.
+ *
+ * magic_already_verified: if the caller has already read and verified the
+ * magic via probing, pass true to skip the magic; otherwise this function
+ * reads and verifies it itself.
+ *
+ * Protection:
+ *   - every read checks its return value (truncated files)
+ *   - name_len is 1 byte (max 255), path_len capped at 4096 (malicious
+ *     header guard), path is read in 64-byte chunks into the 1024-byte
+ *     stack buffer so it cannot overflow
+ */
+static int
+lzo_skip_header(gfile_t *fd, bool magic_already_verified)
+{
+	unsigned char hdr_buf[1024];
+	unsigned char *buf = hdr_buf;
+	uint32_t flags;
+	int name_len;
+
+	if (!magic_already_verified)
+	{
+		/* verify the magic: read 9 bytes and compare, reject non-lzop */
+		if (read_block_bytes(fd, buf, 9) < 9)
+			return -1;
+		if (memcmp(buf, lzop_magic, 9) != 0)
+		{
+			gfile_printf_then_putc_newline("not a valid lzop file");
+			return -1;
+		}
+	}
+	/* magic_already_verified=true: probe already consumed the magic */
+
+	/*
+	 * skip version info: version(2) + lib_version(2) + ver_needed(2)
+	 *                    + method(1) + level(1) = 8 bytes
+	 * These fields do not affect decompression.
+	 */
+	if (read_block_bytes(fd, buf, 8) < 8)
+		return -1;
+
+	/* read flags (4 bytes big endian) and save for block checksum logic */
+	if (read_block_uint32(fd, &flags) < 0)
+		return -1;
+	fd->u.lzo->flags = flags;
+
+	/* skip mode(4) + mtime_low(4) + mtime_high(4) = 12 bytes */
+	if (read_block_bytes(fd, buf, 12) < 12)
+		return -1;
+
+	/* if F_H_EXTRA_FIELD(0x40) set: skip 1-byte extra version */
+	if (flags & 0x00000040)
+	{
+		if (read_block_bytes(fd, buf, 1) < 1)
+			return -1;
+	}
+
+	/* if F_H_FILTER(0x800) set: skip 4-byte filter ID */
+	if (flags & 0x00000800)
+	{
+		if (read_block_bytes(fd, buf, 4) < 4)
+			return -1;
+	}
+
+	/* read the original file name length (1 byte) and skip the name */
+	if (read_block_bytes(fd, buf, 1) < 1)
+		return -1;
+	name_len = buf[0];
+	if (name_len > 0)
+	{
+		if (read_block_bytes(fd, buf, name_len) < name_len)
+			return -1;
+	}
+
+	/* if F_H_PATH(0x2000) set: skip the file path (chunked reads) */
+	if (flags & 0x00002000)
+	{
+		uint32_t path_len;
+
+		if (read_block_uint32(fd, &path_len) < 0)
+			return -1;
+		if (path_len > 4096)
+		{
+			gfile_printf_then_putc_newline("lzop path too long: %u", path_len);
+			return -1;
+		}
+		while (path_len > 0)
+		{
+			uint32_t chunk = (path_len > 64) ? 64 : path_len;
+
+			if (read_block_bytes(fd, buf, chunk) < (ssize_t) chunk)
+				return -1;
+			path_len -= chunk;
+		}
+	}
+
+	/* skip the header checksum (4 bytes) - skipped, not verified */
+	if (read_block_bytes(fd, buf, 4) < 4)
+		return -1;
+
+	/* header parsed, the file pointer now points at the first data block */
+	return 0;
+}
+
+/*
+ * LZO file open - lzo_file_open()
+ *
+ * Initializes the LZO library, allocates lzo_stuff (heap, 2xLZO_BUFFER_SIZE
+ * plus the probe buffer), auto-detects the file format and wires up
+ * fd->read / fd->close.
+ *
+ * Format auto-detection (probe the first 9 bytes):
+ *   a) magic matches  -> standard lzop, lzo_skip_header parses the rest
+ *   b) >= 8 bytes     -> Raw LZO, probe bytes cached in peek_buf and
+ *                        consumed later (first 8 = uncomp_len + comp_len,
+ *                        9th = first byte of compressed data)
+ *   c) < 8 bytes      -> file too short to be valid LZO data
+ *
+ * Same calling pattern and error return convention as gz_file_open /
+ * bz_file_open.
+ */
+static int
+lzo_file_open(gfile_t *fd)
+{
+	/* initialize the LZO library (version check, idempotent) */
+	if (lzo_init() != LZO_E_OK)
+	{
+		gfile_printf_then_putc_newline("lzo_init() failed");
+		return 1;
+	}
+
+	/* allocate the decompression state structure (heap) */
+	if (!(fd->u.lzo = gfile_malloc(sizeof *fd->u.lzo)))
+	{
+		gfile_printf_then_putc_newline("Out of memory");
+		return 1;
+	}
+	memset(fd->u.lzo, 0, sizeof *fd->u.lzo);
+
+	/* format auto-detection: probe the first 9 bytes, compare magic */
+	{
+		unsigned char probe[9];
+		ssize_t n = read_block_bytes(fd, probe, 9);
+
+		if (n >= 9 && memcmp(probe, lzop_magic, 9) == 0)
+		{
+			/* path A: standard lzop container format (magic verified) */
+			fd->u.lzo->has_lzop_header = TRUE;
+
+			/* parse the remaining header (skip the magic) */
+			if (lzo_skip_header(fd, TRUE) != 0)
+			{
+				gfile_free(fd->u.lzo);
+				fd->u.lzo = NULL;
+				return 1;
+			}
+		}
+		else if (n >= 8)
+		{
+			/*
+			 * path B: Raw LZO format - no magic, header or checksums.
+			 * The n probe bytes belong to the first data block; cache
+			 * them in peek_buf for lzo_read_*_peek to consume later.
+			 * flags stays 0 (memset), so all checksum logic is skipped.
+			 */
+			fd->u.lzo->has_lzop_header = FALSE;
+			fd->u.lzo->flags          = 0;
+			fd->u.lzo->peek_size      = (int) n;
+			fd->u.lzo->peek_pos       = 0;
+			memcpy(fd->u.lzo->peek_buf, probe, (size_t) n);
+		}
+		else
+		{
+			/* file too short (less than 8 bytes) to be valid LZO data */
+			gfile_printf_then_putc_newline("lzo file too short (%ld bytes)", (long) n);
+			gfile_free(fd->u.lzo);
+			fd->u.lzo = NULL;
+			return 1;
+		}
+	}
+
+	/* register callbacks: gfile_read/gfile_close will use our functions */
+	fd->read  = lzo_file_read;
+	fd->close = lzo_file_close;
 	return 0;
 }
 #endif
@@ -1298,6 +1919,22 @@ int gfile_open(gfile_t* fd, const char* fpath, int flags, int* response_code, co
 		return zstd_file_open(fd);
 #endif
 	}
+	else if (s && strcasecmp(s, ".lzo") == 0)
+	{
+#ifndef USE_LZO
+		gfile_printf_then_putc_newline(".lzo not supported");
+#else
+		if (flags != GFILE_OPEN_FOR_READ)
+		{
+			gfile_printf_then_putc_newline(".lzo not yet supported for writable tables");
+			*response_code = 415;
+			*response_string = "Unsupported File Type";
+			return 1;
+		}
+		fd->compression = LZO_COMPRESSION;
+		return lzo_file_open(fd);
+#endif
+	}
 	else if (s && strcasecmp(s,".z") == 0)
 		gfile_printf_then_putc_newline("gfile compression .z file is not supported");
 	else if (s && strcasecmp(s,".zip") == 0)
@@ -1330,7 +1967,8 @@ gfile_close(gfile_t*fd)
 			* for the compressed data implementation we need to call the "close" callback. Other implementations
 			* didn't use to call this callback here and it will remain so.
 			*/
-			if (fd->compression == GZ_COMPRESSION || fd->compression == ZSTD_COMPRESSION)
+			if (fd->compression == GZ_COMPRESSION || fd->compression == ZSTD_COMPRESSION ||
+				fd->compression == LZO_COMPRESSION)
 			{
 				fd->close(fd);
 			}

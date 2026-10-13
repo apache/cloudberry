@@ -11,6 +11,9 @@
 #ifdef USE_ZSTD
 #include <zstd.h>
 #endif
+#ifdef USE_LZO
+#include <lzo/lzo1x.h>
+#endif
 
 #ifdef WIN32
 #include <windows.h>
@@ -45,8 +48,10 @@ typedef enum Compression_type
 	NO_COMPRESSION = 0,
 	GZ_COMPRESSION,
 	BZ_COMPRESSION,
-	ZSTD_COMPRESSION
+	ZSTD_COMPRESSION,
+	LZO_COMPRESSION
 } compression_type;
+
 
 /* The struct gfile_t is private.  Please do not use any of its fields. */
 typedef struct gfile_t
@@ -77,6 +82,9 @@ typedef struct gfile_t
 #endif
 #ifdef USE_ZSTD
 		struct zstdlib_stuff*zstd;
+#endif
+#ifdef USE_LZO
+		struct lzo_stuff*lzo;
 #endif
 	}u;
 	bool_t is_write;
