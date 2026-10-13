@@ -137,6 +137,7 @@ extern void AtAbort_EndpointExecState(void);
 extern void allocEndpointExecState(void);
 extern bool gp_check_parallel_retrieve_cursor_error(void);
 extern void enable_parallel_retrieve_cursor_check_timeout(void);
+extern void disable_parallel_retrieve_cursor_check_timeout(void);
 
 /*
  * Below functions should run on Endpoints(QE/Entry DB).
