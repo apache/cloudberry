@@ -256,6 +256,10 @@ public:
 	BOOL FCheckReqdProps(CExpressionHandle &exprhdl, CReqdPropPlan *prpp,
 						 ULONG ulOptReq);
 
+	// check whether a join's non-DPE propagation request is redundant
+	BOOL FRedundantPartPropagationRequest(CExpressionHandle &exprhdl,
+										  CReqdPropPlan *prpp, ULONG ulOptReq);
+
 	// check enforceable properties;
 	// return false if it's impossible for the operator to satisfy one or more
 	BOOL FCheckEnfdProps(CMemoryPool *mp, CGroupExpression *pgexpr,
