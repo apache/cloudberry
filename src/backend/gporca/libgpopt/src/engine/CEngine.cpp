@@ -25,6 +25,7 @@
 #include "gpopt/base/CEnfdPartitionPropagation.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/base/COptimizationContext.h"
+#include "gpopt/base/CPartInfo.h"
 #include "gpopt/base/CQueryContext.h"
 #include "gpopt/base/CReqdPropPlan.h"
 #include "gpopt/base/CReqdPropRelational.h"
@@ -2248,6 +2249,31 @@ CEngine::FProhibited(CEnfdProp::EPropEnforcingType epetOrder,
 }
 
 
+BOOL
+CEngine::FRedundantPartPropagationRequest(CExpressionHandle &exprhdl,
+										  CReqdPropPlan *prpp, ULONG ulOptReq)
+{
+	CPhysical *popPhysical = CPhysical::PopConvert(exprhdl.Pop());
+
+	// Hash and nested-loop joins can enumerate DPE and non-DPE requests.
+	// Without partition consumers or incoming propagation requirements,
+	// both produce empty specs for every child. The other property request
+	// numbers are unchanged, so keep only the DPE request for each tuple.
+	if (2 != popPhysical->UlPartPropagateRequests() ||
+		!CUtils::FPhysicalJoin(popPhysical) ||
+		!prpp->Pepp()->PppsRequired()->IsEmpty())
+	{
+		return false;
+	}
+
+	ULONG order_req, distribution_req, rewind_req, partition_req;
+	popPhysical->LookupRequest(ulOptReq, &order_req, &distribution_req,
+							   &rewind_req, &partition_req);
+	return 1 == partition_req &&
+		   0 == exprhdl.DerivePartitionInfo()->UlConsumers();
+}
+
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CEngine::FCheckReqdProps
@@ -2289,6 +2315,10 @@ CEngine::FCheckReqdProps(CExpressionHandle &exprhdl, CReqdPropPlan *prpp,
 
 	CPhysical *popPhysical = CPhysical::PopConvert(exprhdl.Pop());
 	COperator::EOperatorId op_id = popPhysical->Eopid();
+	if (FRedundantPartPropagationRequest(exprhdl, prpp, ulOptReq))
+	{
+		return false;
+	}
 
 	// check if sort operator is passed an empty order spec;
 	// this check is required to avoid self-deadlocks, i.e.

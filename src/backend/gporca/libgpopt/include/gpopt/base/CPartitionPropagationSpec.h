@@ -177,6 +177,13 @@ public:
 
 	BOOL ContainsAnyConsumers() const;
 
+	// does this spec carry no partition propagation requests?
+	BOOL
+	IsEmpty() const
+	{
+		return 0 == m_part_prop_spec_infos->Size();
+	}
+
 	// equality check to determine compatibility of derived & required properties
 	BOOL Equals(const CPartitionPropagationSpec *ppps) const;
 
