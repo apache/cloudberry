@@ -495,6 +495,21 @@ The Greenplum Database software includes:
 ----------------------------
    Apache License - Version 2.0
 
+      PXF foreign data wrapper client code derived from Apache HAWQ,
+      copyright The Apache Software Foundation:
+      gpcontrib/pxf_fdw/libchurl.c
+      gpcontrib/pxf_fdw/libchurl.h
+      gpcontrib/pxf_fdw/pxf_filter.c
+      gpcontrib/pxf_fdw/pxf_filter.h
+      gpcontrib/pxf_fdw/pxf_fragment.h
+      gpcontrib/pxf_fdw/pxf_header.c
+      (see the Apache License above, and NOTICE)
+      Greenplum Database took this code from HAWQ's PXF external table
+      client (src/backend/access/external and src/include/access in
+      Apache HAWQ) and later reworked it into a foreign data wrapper.
+      pxf_bridge.c, pxf_bridge.h and pxf_header.h in the same directory
+      carry the same Apache License header but share no code with HAWQ.
+
       cmockery unit testing framework, copyright 2008 Google Inc.:
       src/test/unit/cmockery
       (see the Apache License above; also shipped in-tree as
