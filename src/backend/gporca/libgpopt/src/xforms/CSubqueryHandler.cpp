@@ -971,6 +971,153 @@ PexprScalarAggApply(CMemoryPool *mp, CExpression *pexprOuter,
 
 //---------------------------------------------------------------------------
 //	@function:
+//		PexprReplaceScalarSubqueryWithNull
+//
+//	@doc:
+//		Return a copy with the selected scalar subquery replaced by a NULL
+//		of its type, leaving all other subqueries unknown
+//
+//---------------------------------------------------------------------------
+static CExpression *
+PexprReplaceScalarSubqueryWithNull(CMemoryPool *mp, CExpression *pexpr,
+								   CExpression *pexprSubquery)
+{
+	GPOS_CHECK_STACK_SIZE;
+
+	COperator *pop = pexpr->Pop();
+	if (pexpr == pexprSubquery)
+	{
+		CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
+		CScalarSubquery *popSubquery = CScalarSubquery::PopConvert(pop);
+		return CUtils::PexprScalarConstNull(
+			mp, md_accessor->RetrieveType(popSubquery->MdidType()),
+			popSubquery->Pcr()->TypeModifier());
+	}
+
+	const ULONG arity = pexpr->Arity();
+	if (0 == arity)
+	{
+		pexpr->AddRef();
+		return pexpr;
+	}
+
+	CExpressionArray *pdrgpexprChildren = GPOS_NEW(mp) CExpressionArray(mp);
+	for (ULONG ul = 0; ul < arity; ul++)
+	{
+		CExpression *pexprChild = (*pexpr)[ul];
+		if (pexprChild->Pop()->FScalar())
+		{
+			pdrgpexprChildren->Append(
+				PexprReplaceScalarSubqueryWithNull(mp, pexprChild,
+												  pexprSubquery));
+		}
+		else
+		{
+			pexprChild->AddRef();
+			pdrgpexprChildren->Append(pexprChild);
+		}
+	}
+	pop->AddRef();
+	return GPOS_NEW(mp) CExpression(mp, pop, pdrgpexprChildren);
+}
+
+
+// Reject NULL from each subquery individually.  Replacing all subqueries
+// at once is insufficient: COALESCE(sq1, sq2) can be non-NULL when either
+// one is NULL, even though it is NULL when both are NULL. A subquery known
+// to be nonempty needs no NULL-rejection check: an inner apply cannot drop
+// an outer row for it.
+static BOOL
+FNullRejectingOnEachSubquery(CMemoryPool *mp, CExpression *pexprScalar,
+							   CExpression *pexpr)
+{
+	GPOS_CHECK_STACK_SIZE;
+
+	if (COperator::EopScalarSubquery == pexpr->Pop()->Eopid())
+	{
+		// A constant table with one row, e.g. (SELECT 1), cannot lose an
+		// outer row through an empty result. Keep its existing context;
+		// changing it to Value would unnecessarily introduce an outer join.
+		CExpression *pexprInner = (*pexpr)[0];
+		while (COperator::EopLogicalProject == pexprInner->Pop()->Eopid() &&
+			   !(*pexprInner)[1]->DeriveHasNonScalarFunction())
+		{
+			pexprInner = (*pexprInner)[0];
+		}
+		if (COperator::EopLogicalConstTableGet == pexprInner->Pop()->Eopid() &&
+			1 == CLogicalConstTableGet::PopConvert(pexprInner->Pop())
+					 ->Pdrgpdrgpdatum()->Size())
+		{
+			return true;
+		}
+
+		CExpression *pexprNull =
+			PexprReplaceScalarSubqueryWithNull(mp, pexprScalar, pexpr);
+		CScalar::EBoolEvalResult eber = CScalar::EberEvaluate(mp, pexprNull);
+		pexprNull->Release();
+		return CScalar::EberNull == eber || CScalar::EberFalse == eber ||
+			   CScalar::EberNotTrue == eber;
+	}
+
+	for (ULONG ul = 0; ul < pexpr->Arity(); ul++)
+	{
+		if ((*pexpr)[ul]->Pop()->FScalar() &&
+			!FNullRejectingOnEachSubquery(mp, pexprScalar, (*pexpr)[ul]))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		FNullRejectingOnSubqueries
+//
+//	@doc:
+//		Return true if the boolean scalar expression cannot be true when any
+//		one of its scalar subqueries returns NULL, e.g. "a > (SELECT ...)", but not
+//		"(SELECT ...) IS NULL" or "coalesce((SELECT ...), 0) = 0". Subqueries
+//		known to be nonempty are also safe to retain in the filter context.
+//
+//---------------------------------------------------------------------------
+static BOOL
+FNullRejectingOnSubqueries(CMemoryPool *mp, CExpression *pexprScalar)
+{
+	COperator::EOperatorId eopid = pexprScalar->Pop()->Eopid();
+	if (COperator::EopScalarProjectList == eopid ||
+		COperator::EopScalarProjectElement == eopid ||
+		COperator::EopScalarNAryJoinPredList == eopid)
+	{
+		return false;
+	}
+
+	// These nodes group operands and have no result type of their own.
+	// Their enclosing predicate has already been checked; do not call
+	// MdidType(), which asserts for both operators.
+	if (COperator::EopScalarArrayRefIndexList == eopid ||
+		COperator::EopScalarSwitchCase == eopid)
+	{
+		return true;
+	}
+
+	// only a boolean expression can be the predicate, its operands are
+	// covered by the check on the predicate itself
+	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
+	IMDId *mdid_type = CScalar::PopConvert(pexprScalar->Pop())->MdidType();
+	if (nullptr == mdid_type ||
+		!mdid_type->Equals(md_accessor->PtMDType<IMDTypeBool>()->MDId()))
+	{
+		return true;
+	}
+
+	return FNullRejectingOnEachSubquery(mp, pexprScalar, pexprScalar);
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CSubqueryHandler::SSubqueryDesc::SetCorrelatedExecution
 //
 //	@doc:
@@ -2855,6 +3002,17 @@ CSubqueryHandler::FRecursiveHandler(CExpression *pexprOuter,
 		COperator::EopScalarProjectElement == popScalar->Eopid())
 	{
 		// set subquery context to Value
+		esqctxt = EsqctxtValue;
+	}
+
+	// In a filter a scalar subquery is unnested into an inner apply, which
+	// drops the outer rows the subquery returns no row for. That is right
+	// only if the predicate cannot be true when the subquery is NULL, like
+	// "a > (SELECT ...)"; for "(SELECT ...) IS NULL" or
+	// "coalesce((SELECT ...), 0) = 0" those rows must be kept.
+	if (EsqctxtFilter == esqctxt && !CPredicateUtils::FAnd(pexprScalar) &&
+		!FNullRejectingOnSubqueries(mp, pexprScalar))
+	{
 		esqctxt = EsqctxtValue;
 	}
 
