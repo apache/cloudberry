@@ -60,6 +60,12 @@ private:
 	// is aggregate replicate slice safe for execution
 	BOOL m_is_repsafe;
 
+	// is aggregate known to return NULL on empty input
+	BOOL m_is_empty_input_null;
+
+	// can empty input be evaluated speculatively?
+	BOOL m_is_empty_input_safe;
+
 	// process the start of an element
 	void StartElement(
 		const XMLCh *const element_uri,			// URI of element's namespace

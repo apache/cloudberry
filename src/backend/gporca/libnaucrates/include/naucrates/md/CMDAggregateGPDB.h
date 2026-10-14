@@ -66,6 +66,12 @@ class CMDAggregateGPDB : public IMDAggregate
 	// is aggregate replication slice safe for execution
 	BOOL m_is_repsafe;
 
+	// is aggregate known to return NULL on empty input
+	BOOL m_is_empty_input_null;
+
+	// can empty input be evaluated speculatively?
+	BOOL m_is_empty_input_safe;
+
 public:
 	CMDAggregateGPDB(const CMDAggregateGPDB &) = delete;
 
@@ -74,7 +80,8 @@ public:
 					 IMDId *result_type_mdid,
 					 IMDId *intermediate_result_type_mdid, BOOL is_ordered_agg,
 					 BOOL is_splittable, BOOL is_hash_agg_capable,
-					 BOOL is_repsafe);
+					 BOOL is_repsafe, BOOL is_empty_input_null,
+					 BOOL is_empty_input_safe);
 
 	//dtor
 	~CMDAggregateGPDB() override;
@@ -123,6 +130,19 @@ public:
 	IsAggRepSafe() const override
 	{
 		return m_is_repsafe;
+	}
+
+	// is aggregate known to return NULL on empty input
+	BOOL
+	IsAggEmptyInputNull() const override
+	{
+		return m_is_empty_input_null;
+	}
+
+	BOOL
+	IsAggEmptyInputSafe() const override
+	{
+		return m_is_empty_input_safe;
 	}
 
 #ifdef GPOS_DEBUG

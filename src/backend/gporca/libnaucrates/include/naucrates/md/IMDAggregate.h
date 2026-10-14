@@ -61,6 +61,12 @@ public:
 
 	// is aggregate replicate slice execution safe
 	virtual BOOL IsAggRepSafe() const = 0;
+
+	// is aggregate known to return NULL on empty input, unlike count()
+	virtual BOOL IsAggEmptyInputNull() const = 0;
+
+	// can empty input be evaluated before knowing whether it is needed?
+	virtual BOOL IsAggEmptyInputSafe() const = 0;
 };
 }  // namespace gpmd
 

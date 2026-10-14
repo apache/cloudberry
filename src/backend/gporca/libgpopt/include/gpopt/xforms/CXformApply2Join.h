@@ -80,7 +80,9 @@ private:
 		TApply *popApply = TApply::PopConvert(pexprApply->Pop());
 		CColRefArray *colref_array = popApply->PdrgPcrInner();
 		GPOS_ASSERT(nullptr != colref_array);
-		GPOS_ASSERT(1 == colref_array->Size());
+		// Pulling scalar projections above the apply can expose several
+		// aggregate columns and a match flag to correlated execution.
+		GPOS_ASSERT(0 < colref_array->Size());
 
 		colref_array->AddRef();
 		COperator::EOperatorId eopidSubq = popApply->EopidOriginSubq();
