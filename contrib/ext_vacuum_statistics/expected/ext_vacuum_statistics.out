@@ -1,0 +1,52 @@
+-- ext_vacuum_statistics regression test
+
+-- Create extension
+CREATE EXTENSION ext_vacuum_statistics;
+
+-- Verify schema and views exist
+SELECT nspname FROM pg_namespace WHERE nspname = 'ext_vacuum_statistics';
+     nspname      
+------------------
+ ext_vacuum_statistics
+(1 row)
+
+-- Views should be queryable (may return empty if no vacuum has run)
+SELECT COUNT(*) >= 0 FROM ext_vacuum_statistics.pg_stats_vacuum_tables;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT COUNT(*) >= 0 FROM ext_vacuum_statistics.pg_stats_vacuum_indexes;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT COUNT(*) >= 0 FROM ext_vacuum_statistics.pg_stats_vacuum_database;
+ ?column? 
+----------
+ t
+(1 row)
+
+-- Verify views have expected columns
+SELECT COUNT(*) AS tables_cols FROM information_schema.columns
+WHERE table_schema = 'ext_vacuum_statistics' AND table_name = 'tables';
+ tables_cols 
+-------------
+          28
+(1 row)
+
+SELECT COUNT(*) AS indexes_cols FROM information_schema.columns
+WHERE table_schema = 'ext_vacuum_statistics' AND table_name = 'indexes';
+ indexes_cols 
+--------------
+            20
+(1 row)
+
+SELECT COUNT(*) AS database_cols FROM information_schema.columns
+WHERE table_schema = 'ext_vacuum_statistics' AND table_name = 'database';
+ database_cols 
+---------------
+             15
+(1 row)

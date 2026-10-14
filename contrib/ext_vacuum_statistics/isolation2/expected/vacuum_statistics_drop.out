@@ -1,0 +1,103 @@
+-- Requires ext_vacuum_statistics in shared_preload_libraries on all nodes.
+CREATE EXTENSION IF NOT EXISTS ext_vacuum_statistics;
+CREATE
+CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
+CREATE
+CREATE TABLE gpvs_2pc_row (id int) WITH (appendonly = true) DISTRIBUTED BY (id);
+CREATE
+CREATE TABLE gpvs_2pc_col (id int) WITH (appendonly = true, orientation = column) DISTRIBUTED BY (id);
+CREATE
+CREATE INDEX gpvs_2pc_row_idx ON gpvs_2pc_row (id);
+CREATE
+CREATE INDEX gpvs_2pc_col_idx ON gpvs_2pc_col (id);
+CREATE
+INSERT INTO gpvs_2pc_row SELECT generate_series(1, 3000);
+INSERT 3000
+INSERT INTO gpvs_2pc_col SELECT generate_series(1, 3000);
+INSERT 3000
+DELETE FROM gpvs_2pc_row;
+DELETE 3000
+DELETE FROM gpvs_2pc_col;
+DELETE 3000
+VACUUM gpvs_2pc_row, gpvs_2pc_col;
+VACUUM
+
+-- Store literal OIDs in a view so reads remain local even after DROP.
+DO $$ DECLARE object_rows text; /* in func */ BEGIN WITH relations AS ( SELECT oid FROM pg_class WHERE relname IN ('gpvs_2pc_row', 'gpvs_2pc_col') UNION ALL SELECT aux.oid FROM pg_appendonly a, LATERAL unnest(ARRAY[a.segrelid, a.blkdirrelid, a.visimaprelid]) aux(oid) WHERE a.relid IN ('gpvs_2pc_row'::regclass, 'gpvs_2pc_col'::regclass) AND aux.oid <> 0 ), objects AS ( SELECT oid FROM relations UNION ALL SELECT i.indexrelid FROM relations r JOIN pg_index i ON i.indrelid = r.oid ) SELECT string_agg(format('(%s::oid,%L::"char")', o.oid, c.relkind), ',') INTO object_rows FROM objects o JOIN pg_class c ON c.oid = o.oid; /* in func */ EXECUTE 'CREATE VIEW gpvs_2pc_oids AS SELECT * FROM (VALUES ' || object_rows || ') AS objects(oid, relkind)'; /* in func */ END; /* in func */ $$;
+DO
+CREATE VIEW gpvs_2pc_entries AS SELECT o.oid FROM gp_id CROSS JOIN gpvs_2pc_oids o CROSS JOIN pg_database db LEFT JOIN LATERAL ext_vacuum_statistics.pg_stats_get_vacuum_tables(db.oid, o.oid) t ON true LEFT JOIN LATERAL ext_vacuum_statistics.pg_stats_get_vacuum_indexes(db.oid, o.oid) i ON true WHERE db.datname = current_database() AND coalesce(t.relid, i.relid) IS NOT NULL;
+CREATE
+
+-- Another connection must still see entries while DROP is uncommitted.
+1: BEGIN;
+BEGIN
+1: DROP TABLE gpvs_2pc_row, gpvs_2pc_col;
+DROP
+0U: SELECT count(*) = (SELECT count(*) FROM gpvs_2pc_oids) AS drop_retains_entries FROM gpvs_2pc_entries;
+ drop_retains_entries 
+----------------------
+ t                    
+(1 row)
+1: ROLLBACK;
+ROLLBACK
+0U: SELECT count(*) = (SELECT count(*) FROM gpvs_2pc_oids) AS rollback_retains_entries FROM gpvs_2pc_entries;
+ rollback_retains_entries 
+--------------------------
+ t                        
+(1 row)
+
+-- Stop a QE at COMMIT PREPARED to verify that preparing the distributed
+-- DROP does not prematurely remove the parent's, auxiliary or index entries.
+SELECT gp_inject_fault('qe_start_commit_prepared', 'suspend', dbid) FROM gp_segment_configuration WHERE content = 0 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: BEGIN;
+BEGIN
+1: DROP TABLE gpvs_2pc_row, gpvs_2pc_col;
+DROP
+1&: COMMIT;  <waiting ...>
+SELECT gp_wait_until_triggered_fault('qe_start_commit_prepared', 1, dbid) FROM gp_segment_configuration WHERE content = 0 AND role = 'p';
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+0U: SELECT count(*) > 0 AS transaction_prepared FROM pg_prepared_xacts;
+ transaction_prepared 
+----------------------
+ t                    
+(1 row)
+0U: SELECT count(*) = (SELECT count(*) FROM gpvs_2pc_oids) AS prepared_retains_entries FROM gpvs_2pc_entries;
+ prepared_retains_entries 
+--------------------------
+ t                        
+(1 row)
+SELECT gp_inject_fault('qe_start_commit_prepared', 'reset', dbid) FROM gp_segment_configuration WHERE content = 0 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1<:  <... completed>
+COMMIT
+0U: SELECT count(*) = 0 AS commit_removes_entries FROM gpvs_2pc_entries;
+ commit_removes_entries 
+------------------------
+ t                      
+(1 row)
+SELECT count(*) = 0 AS all_segments_removed_entries FROM gp_dist_random('gpvs_2pc_entries');
+ all_segments_removed_entries 
+------------------------------
+ t                            
+(1 row)
+SELECT count(*) = 0 AS coordinator_removed_entries FROM gpvs_2pc_entries;
+ coordinator_removed_entries 
+-----------------------------
+ t                           
+(1 row)
+1q: ... <quitting>
+0Uq: ... <quitting>
+DROP VIEW gpvs_2pc_entries;
+DROP
+DROP VIEW gpvs_2pc_oids;
+DROP

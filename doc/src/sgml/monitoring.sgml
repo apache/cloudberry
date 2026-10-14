@@ -460,6 +460,19 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
      </row>
 
      <row>
+      <entry><structname>pg_stat_vacuum</structname></entry>
+      <entry>One row per database, plus one for shared objects, showing cumulative
+       vacuum statistics. See <xref linkend="monitoring-pg-stat-vacuum-view"/>.</entry>
+     </row>
+
+     <row>
+      <entry><structname>pg_stat_vacuum_tables</structname>,
+       <structname>pg_stat_vacuum_indexes</structname></entry>
+      <entry>One row per table or index, showing vacuum work counters.
+       See <xref linkend="monitoring-pg-stat-vacuum-work"/>.</entry>
+     </row>
+
+     <row>
       <entry><structname>pg_stat_database_conflicts</structname><indexterm><primary>pg_stat_database_conflicts</primary></indexterm></entry>
       <entry>
        One row per database, showing database-wide statistics about
@@ -4697,6 +4710,254 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
 
  </sect2>
 
+ <sect2 id="monitoring-pg-stat-vacuum-view">
+  <title><structname>pg_stat_vacuum</structname></title>
+  <indexterm><primary>pg_stat_vacuum</primary></indexterm>
+  <para>
+   The <structname>pg_stat_vacuum</structname> view contains one row for each
+   database, plus one for shared objects, showing cumulative vacuum statistics
+   on the current instance. The current database's counters are reset
+   together with its other statistics by <function>pg_stat_reset()</function>.
+  </para>
+  <para>
+   In Cloudberry, <structname>gp_stat_vacuum</structname> shows these columns
+   for every instance, with <structfield>gp_segment_id</structfield> identifying
+   the instance. <structname>gp_stat_vacuum_summary</structname> sums the times
+   across instances and takes the maximum failsafe and interrupt counts and
+   the latest reset time for each database.
+  </para>
+  <table id="pg-stat-vacuum-view" xreflabel="pg_stat_vacuum">
+   <title><structname>pg_stat_vacuum</structname> View</title>
+   <tgroup cols="1">
+    <thead>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       Column Type
+      </para>
+      <para>
+       Description
+      </para></entry>
+     </row>
+    </thead>
+    <tbody>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>datid</structfield> <type>oid</type>
+      </para>
+      <para>
+       OID of this database, or 0 for objects belonging to a shared
+       relation
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>datname</structfield> <type>name</type>
+      </para>
+      <para>
+       Name of this database, or <literal>NULL</literal> for shared
+       objects.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_vacuum_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time manually invoked vacuums spent processing tables of this
+       database, in milliseconds (index processing is included in the owning
+       table's run)
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_autovacuum_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time the autovacuum daemon spent processing tables of this
+       database, in milliseconds
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_vacuum_delay_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time manually invoked vacuums of this database spent sleeping in
+       cost-based delay points, in milliseconds (counted only when
+       <xref linkend="guc-track-cost-delay-timing"/> is enabled)
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_autovacuum_delay_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time autovacuums of this database spent sleeping in cost-based
+       delay points, in milliseconds (counted only when
+       <xref linkend="guc-track-cost-delay-timing"/> is enabled)
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>vacuum_failsafe_count</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of vacuums in this database that entered the wraparound
+       failsafe mode (see <xref linkend="guc-vacuum-failsafe-age"/>)
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>vacuum_interrupt_count</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of times a vacuum in this database was interrupted by an error,
+       the vacuum of an append-optimized table included.  In a Cloudberry
+       cluster the count is kept by the instance on which the vacuum failed:
+       a vacuum dispatched to the segments that fails there is counted by
+       those segments, not by the coordinator.  A segment reports the count
+       once its part of the failed distributed transaction has ended, which
+       may be as late as the next command of the session.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>stats_reset</structfield> <type>timestamp with time zone</type>
+      </para>
+      <para>
+       Time at which these statistics were last reset
+      </para></entry>
+     </row>
+    </tbody>
+   </tgroup>
+  </table>
+ </sect2>
+
+ <sect2 id="monitoring-pg-stat-vacuum-work">
+  <title>VACUUM Work Statistics</title>
+  <indexterm><primary>pg_stat_vacuum_tables</primary></indexterm>
+  <indexterm><primary>pg_stat_vacuum_indexes</primary></indexterm>
+  <para>
+   <structname>pg_stat_vacuum_tables</structname> and
+   <structname>pg_stat_vacuum_indexes</structname> report work performed by
+   <command>VACUUM</command>, including autovacuum. Collection uses
+   the built-in cumulative statistics system and
+   <xref linkend="guc-track-counts"/>; no extension or preload library is
+   required. Heap <command>VACUUM FULL</command> rewrites the relation and does
+   not update these work counters; AO <command>VACUUM FULL</command> uses the
+   AO compaction phases and reports their work.
+   Each view identifies the relation by <structfield>relid</structfield> or
+   <structfield>indexrelid</structfield>, its <structfield>schema</structfield>,
+   <structfield>relname</structfield> or <structfield>indexrelname</structfield>,
+   and <structfield>dbname</structfield>. Table statistics include materialized
+   views and TOAST relations. Relations without statistics have zero counters.
+  </para>
+  <table id="pg-stat-vacuum-work-counters">
+   <title>VACUUM Work Counters</title>
+   <tgroup cols="2"><thead><row><entry>Columns</entry><entry>Meaning</entry></row></thead>
+    <tbody>
+     <row><entry><structfield>tuples_deleted</structfield></entry><entry>
+      Cumulative tuples removed from a table, or entries removed from an index.
+      Index reports add only the work of each bulkdelete or cleanup call.
+     </entry></row>
+     <row><entry><structfield>dead_tuples</structfield></entry><entry>
+      Table dead tuples observed after the latest completed vacuum, including
+      missed removable tuples for heap and hidden rows for AO. This is a
+      snapshot; skipped pages may limit the heap observation.
+     </entry></row>
+     <row><entry><structfield>recently_dead_tuples</structfield>,
+      <structfield>missed_dead_tuples</structfield></entry><entry>
+      Cumulative observations of heap tuples not yet removable, and removable
+      tuples missed because a cleanup lock could not be obtained. For AO,
+      recently dead tuples accumulate hidden rows left after each vacuum;
+      missed tuples remain zero. Repeated observations count again.
+     </entry></row>
+     <row><entry><structfield>dead_pages</structfield>,
+      <structfield>missed_dead_pages</structfield></entry><entry>
+      Cumulative observations of heap pages with not-yet-removable tuples,
+      and pages with missed removable tuples. For indexes, dead pages are
+      deleted pages not yet reusable, observed once after final cleanup.
+      AO tables have no heap dead-page counters.
+     </entry></row>
+     <row><entry><structfield>pages_scanned</structfield>,
+      <structfield>pages_removed</structfield>,
+      <structfield>pages_deleted</structfield></entry><entry>
+      Cumulative table pages scanned and removed by vacuum; AO uses
+      heap-equivalent pages, rounded up per scanned segment or per completed
+      vacuum's released space. The index-only pages_deleted counter counts
+      newly deleted pages, excluding already empty or deleted pages.
+     </entry></row>
+     <row><entry><structfield>tuples_frozen</structfield>,
+      <structfield>pages_frozen</structfield>,
+      <structfield>pages_all_visible</structfield></entry><entry>
+      Cumulative heap tuples frozen, pages on which tuples were frozen, and
+      pages whose all-visible VM bit was newly set. Rescanning unchanged
+      pages adds no work. These counters are zero for AO.
+     </entry></row>
+     <row><entry><structfield>freeze_age_vacuum_count</structfield></entry><entry>
+      Heap vacuums made aggressive by the XID or MultiXact freeze table age,
+      including <command>VACUUM FREEZE</command>. Forcing an aggressive scan
+      with <literal>DISABLE_PAGE_SKIPPING</literal> alone does not count.
+      This is separate from the wraparound-failsafe counter.
+     </entry></row>
+     <row><entry><structfield>total_file_segs</structfield>,
+      <structfield>compacted_segments</structfield>,
+      <structfield>tuples_moved</structfield></entry><entry>
+      AO segment metadata entries at the last vacuum, cumulative segments
+      actually compacted, and cumulative live tuples moved. Skipped candidates
+      add no compaction work. Heap tables report zero for these columns.
+     </entry></row>
+    </tbody>
+   </tgroup>
+  </table>
+  <para>
+   All work columns have type <type>bigint</type>. The relation and database
+   getters are <function>pg_stat_get_vacuum_stats(oid)</function> and
+   <function>pg_stat_get_vacuum_database_stats(oid)</function>.
+   <structname>pg_stat_vacuum</structname> additionally exposes cumulative table
+   work per database. It excludes index reports to avoid counting table work
+   twice, and excludes the <structfield>dead_tuples</structfield> and
+   <structfield>total_file_segs</structfield> snapshots. Shared relations use
+   the database entry with OID zero.
+  </para>
+  <para>
+   The <structname>gp_stat_vacuum_tables</structname> and
+   <structname>gp_stat_vacuum_indexes</structname> views expose individual
+   instances. Their <literal>_summary</literal> views sum distributed table
+   work and normalize replicated table work by the segment count. System
+   relations use coordinator statistics. <structname>gp_stat_vacuum_summary</structname>
+   sums database work across instances.
+  </para>
+  <para>
+   Core counters survive clean shutdown and restart, use the ordinary
+   statistics snapshot rules, and are removed when their relation or database
+   is dropped. <function>pg_stat_reset_single_table_counters(oid)</function>
+   resets a relation's counters; <function>pg_stat_reset()</function> resets
+   the current database statistics. The table and index views of
+   <filename>ext_vacuum_statistics</filename> read these same work counters.
+   A native relation reset leaves extension resource counters intact;
+   <function>pg_stat_reset()</function> resets both for the current database.
+   Extension reset functions clear only extension metrics and never modify
+   native work or other core statistics.
+  </para>
+  <para>
+   <function>pg_stat_reset_vacuum_stats()</function> resets just native work
+   counters, preserving other cumulative statistics. Supply a relation OID
+   to reset one table or index, or omit it to reset the current database and
+   its non-shared relations. On Cloudberry, the corresponding
+   <function>gp_stat_reset_vacuum_stats()</function> wrapper applies the same
+   reset on the coordinator and every primary segment.
+  </para>
+ </sect2>
+
  <sect2 id="monitoring-pg-stat-database-conflicts-view">
   <title><structname>pg_stat_database_conflicts</structname></title>
 
@@ -4928,6 +5189,62 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
 
      <row>
       <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_vacuum_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time this index has been processed by manually invoked vacuums,
+       in milliseconds. (This includes the time spent sleeping due to
+       cost-based delays.)
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_autovacuum_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time this index has been processed by the autovacuum daemon,
+       in milliseconds. (This includes the time spent sleeping due to
+       cost-based delays.)
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_vacuum_delay_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time manually invoked vacuums spent sleeping in cost-based delay
+       points while processing this index, in milliseconds (counted only when
+       <xref linkend="guc-track-cost-delay-timing"/> is enabled)
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_autovacuum_delay_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time the autovacuum daemon spent sleeping in cost-based delay
+       points while processing this index, in milliseconds (counted only when
+       <xref linkend="guc-track-cost-delay-timing"/> is enabled)
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>vacuum_failsafe_count</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of vacuums of this table that entered the wraparound failsafe
+       mode (see <xref linkend="guc-vacuum-failsafe-age"/>).  Always zero for
+       append-optimized tables, which have no tuple transaction IDs to
+       freeze.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
        <structfield>n_tup_ins</structfield> <type>bigint</type>
       </para>
       <para>
@@ -5017,6 +5334,42 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
       </para></entry>
      </row>
 
+
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>visible_page_marks_cleared</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of times the all-visible mark in the
+       <link linkend="storage-vm">visibility map</link> was cleared for
+       pages of this table.  The all-visible mark of a heap page is
+       cleared whenever a backend process modifies a page that was
+       previously marked all-visible by vacuum activity (whether manual
+       <command>VACUUM</command> or autovacuum).  The page must then be
+       processed again by vacuum on a subsequent run.  A high rate of
+       change in this counter means that vacuum has to repeatedly
+       re-process pages of this table.  Always zero for append-optimized
+       tables, which have no visibility map.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>frozen_page_marks_cleared</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of times the all-frozen mark in the
+       <link linkend="storage-vm">visibility map</link> was cleared for
+       pages of this table.  The all-frozen mark of a heap page is cleared
+       whenever a backend process modifies a page that was previously
+       marked all-frozen by vacuum activity (manual <command>VACUUM</command>
+       or autovacuum).  The page must then be processed again by vacuum on
+       the next freeze run for this table.  Always zero for append-optimized
+       tables.
+      </para></entry>
+     </row>
+
      <row>
       <entry role="catalog_table_entry"><para role="column_definition">
        <structfield>last_vacuum</structfield> <type>timestamp with time zone</type>
@@ -5092,6 +5445,66 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
       <para>
        Number of times this table has been analyzed by the autovacuum
        daemon
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_vacuum_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time this table has been manually vacuumed, in milliseconds
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_autovacuum_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time this table has been vacuumed by the autovacuum daemon,
+       in milliseconds
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_analyze_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time this table has been manually analyzed, in milliseconds
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_autoanalyze_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time this table has been analyzed by the autovacuum daemon,
+       in milliseconds
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_vacuum_delay_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time this table's vacuums spent sleeping in cost-based delay
+       points, in milliseconds (counted only when
+       <xref linkend="guc-track-cost-delay-timing"/> is enabled)
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>total_autovacuum_delay_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time autovacuums of this table spent sleeping in cost-based
+       delay points, in milliseconds (counted only when
+       <xref linkend="guc-track-cost-delay-timing"/> is enabled)
       </para></entry>
      </row>
     </tbody>
@@ -5949,6 +6362,36 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
 
       <row>
        <entry role="func_table_entry"><para role="func_signature">
+        <indexterm><primary>pg_stat_reset_vacuum_stats</primary></indexterm>
+        <function>pg_stat_reset_vacuum_stats</function> (
+        <parameter>relid</parameter> <type>oid</type> <literal>DEFAULT NULL</literal> )
+        <returnvalue>void</returnvalue>
+       </para>
+       <para>
+        Resets only native VACUUM work counters for one table or index, including
+        a shared catalog. With no argument, or <literal>NULL</literal>, resets
+        those counters for the current database and all its non-shared relations.
+        A relation reset leaves its database aggregate and indexes unchanged.
+        Missing relation entries are not created. OID zero is a no-op.
+       </para>
+       <para>
+        Timing, last-vacuum timestamps, vacuum and analyze invocation counts,
+        other native counters, and extension resource statistics are preserved.
+        Cached snapshots follow the ordinary statistics reset rules; concurrently
+        running backends can subsequently publish pending work.
+       </para>
+       <para>
+        The function acts only on the connected instance. From a Cloudberry
+        coordinator, use <function>gp_stat_reset_vacuum_stats</function> with
+        the same argument to reset the coordinator and every primary segment.
+        Both functions require superuser privileges by default; access can be
+        delegated with <command>GRANT EXECUTE</command>. A delegated cluster
+        wrapper also requires access to its local function.
+       </para></entry>
+      </row>
+
+      <row>
+       <entry role="func_table_entry"><para role="func_signature">
         <indexterm>
          <primary>pg_stat_reset_single_table_counters</primary>
         </indexterm>
@@ -6494,6 +6937,18 @@ FROM pg_stat_get_backend_idset() AS backendid;
        OID of the child table currently being scanned. This field is
        only valid when the phase is
        <literal>acquiring inherited sample rows</literal>.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>delay_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time spent sleeping due to cost-based delay (see
+       <xref linkend="runtime-config-resource-vacuum-cost"/>, in milliseconds
+       (if <xref linkend="guc-track-cost-delay-timing"/> is enabled, otherwise
+       zero).
       </para></entry>
      </row>
     </tbody>
@@ -7375,6 +7830,18 @@ FROM pg_stat_get_backend_idset() AS backendid;
       </para>
       <para>
        Number of dead tuples collected since the last index vacuum cycle.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>delay_time</structfield> <type>double precision</type>
+      </para>
+      <para>
+       Total time spent sleeping due to cost-based delay (see
+       <xref linkend="runtime-config-resource-vacuum-cost"/>), in milliseconds
+       (if <xref linkend="guc-track-cost-delay-timing"/> is enabled, otherwise
+       zero).
       </para></entry>
      </row>
     </tbody>
