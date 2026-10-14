@@ -371,6 +371,8 @@ extern int	vacuum_multixact_failsafe_age;
 extern pg_atomic_uint32 *VacuumSharedCostBalance;
 extern pg_atomic_uint32 *VacuumActiveNWorkers;
 extern int	VacuumCostBalanceLocal;
+extern PGDLLIMPORT int64 VacuumDelayTime;
+extern PGDLLIMPORT bool track_cost_delay_timing;
 
 
 /* in commands/vacuum.c */
@@ -409,7 +411,7 @@ extern void vacuum_set_xid_limits(Relation rel,
 extern bool vacuum_xid_failsafe_check(TransactionId relfrozenxid,
 									  MultiXactId relminmxid);
 extern void vac_update_datfrozenxid(void);
-extern void vacuum_delay_point(void);
+extern void vacuum_delay_point(bool is_analyze);
 extern bool vacuum_is_relation_owner(Oid relid, Form_pg_class reltuple,
 									 bits32 options);
 extern Relation vacuum_open_relation(Oid relid, RangeVar *relation,
