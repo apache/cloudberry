@@ -276,7 +276,22 @@ CPhysicalFullMergeJoin::PdsDerive(CMemoryPool *mp,
 		}
 	}
 
-	// ... or both sides to be singleton/universal
+	// otherwise, one side is not hashed.
+	if (CDistributionSpec::EdtUniversal == pdsOuter->Edt())
+	{
+		// Outer is a derived-constant/empty distribution that carries no real
+		// placement information (e.g. from a statically-provable-empty scan). The
+		// combined join's true distribution must come from the inner side instead,
+		// otherwise a real Motion embedded in the inner child (e.g. a Gather
+		// producing a Singleton) would be silently mislabeled as Universal and
+		// could be illegally nested under a parent requiring per-segment execution.
+		// Mirrors CPhysicalFullHashJoin::PdsDerive's handling of the analogous
+		// Universal/Replicated-outer case.
+		pdsInner->AddRef();
+		return pdsInner;
+	}
+
+	// otherwise, both sides are expected to be singleton
 	GPOS_ASSERT(CDistributionSpec::EdtSingleton == pdsOuter->Edt() ||
 				CDistributionSpec::EdtStrictSingleton == pdsOuter->Edt() ||
 				CDistributionSpec::EdtUniversal == pdsOuter->Edt());

@@ -329,3 +329,64 @@ select count(*) from part full join rep on part.c1 = rep.c1 and part.c2 = rep.c1
 explain (costs off, timing off, summary off) select * from dist full join dist2 on dist.c1 = dist2.c1;
 select enable_xform('CXformFullJoinCommutativity');
 explain (costs off, timing off, summary off) select * from dist full join dist2 on dist.c1 = dist2.c1;
+
+------------------------------------------------------------------
+-- full merge join: distribution spec regression (gang-size bug)
+------------------------------------------------------------------
+
+-- CPhysicalFullMergeJoin::PdsDerive used to unconditionally return the
+-- outer child's distribution spec whenever it was Universal, ignoring the
+-- inner child's real distribution. When the inner child was actually
+-- Singleton (because the merge join gathered it to combine with a
+-- Universal/empty outer side), the join's combined output was mislabeled
+-- Universal. Universal trivially satisfies a Replicated requirement, so an
+-- enclosing per-segment join (e.g. a comma/cross join with a third
+-- relation) skipped inserting the corrective motion this Singleton child
+-- actually needed, nesting a real cross-segment Gather Motion inside a
+-- per-segment execution context. The executor's sanity check
+-- (ExecInitMotion, nodeMotion.c) caught the resulting inconsistent slice
+-- and raised "unexpected gang size: N". Fix mirrors the already-correct
+-- sibling implementations (CPhysicalFullHashJoin::PdsDerive,
+-- CPhysicalHashJoin::PdsDeriveForOuterJoin): when the outer child is
+-- Universal, propagate the inner child's real distribution instead of
+-- blindly returning the outer's.
+--
+-- The merge join implementation is forced via disable_xform, since the
+-- choice between hash join and merge join for a FULL JOIN is cost-based
+-- and sensitive to row-count estimates. optimizer is pinned explicitly
+-- throughout, so this section's expected output is identical regardless
+-- of the ambient default.
+
+select enable_xform('CXformImplementFullOuterMergeJoin');
+select disable_xform('CXformFullOuterJoin2HashJoin');
+
+set optimizer = on;
+create table mj_empty (c1 int) distributed by (c1);
+create table mj_real (c1 int) distributed by (c1);
+create table mj_cross (c1 int) distributed by (c1);
+insert into mj_real select i from generate_series(1,2) i;
+insert into mj_cross select i from generate_series(1,3) i;
+analyze mj_empty;
+analyze mj_real;
+analyze mj_cross;
+
+-- Show the plan: comma-join + full join against a provably-empty side. This
+-- is the originally-crashing shape; the fix must produce a legal plan
+-- (previously: "ERROR: unexpected gang size: N").
+explain (costs off, timing off, summary off) select * from mj_cross, mj_real full join (select c1 from mj_empty where false) e on mj_real.c1 = e.c1;
+
+-- Correctness: cross-check the ORCA result against the Postgres planner.
+select count(*) as orca_count from mj_cross, mj_real full join (select c1 from mj_empty where false) e on mj_real.c1 = e.c1;
+set optimizer = off;
+select count(*) as planner_count from mj_cross, mj_real full join (select c1 from mj_empty where false) e on mj_real.c1 = e.c1;
+set optimizer = on;
+
+-- Same defect, independently triggered: a partitioned table with zero leaf
+-- partitions is another way to make ORCA derive Universal for the "empty"
+-- side (this is the original bug report's shape).
+create table mj_part (c1 int) partition by range (c1) distributed by (c1);
+explain (costs off, timing off, summary off) select * from mj_cross, mj_real full join mj_part on mj_real.c1 = mj_part.c1;
+select count(*) as part_count from mj_cross, mj_real full join mj_part on mj_real.c1 = mj_part.c1;
+
+select enable_xform('CXformFullOuterJoin2HashJoin');
+select disable_xform('CXformImplementFullOuterMergeJoin');
