@@ -4075,7 +4075,7 @@ struct config_int ConfigureNamesInt_gp[] =
 			gettext_noop("Used by the fts-probe process."),
 		},
 		&gp_fts_probe_retries,
-		5, 0, 100,
+		60, 0, 100,
 		NULL, NULL, NULL
 	},
 
@@ -4086,7 +4086,7 @@ struct config_int ConfigureNamesInt_gp[] =
 			GUC_UNIT_S
 		},
 		&gp_fts_probe_timeout,
-		20, 0, 3600,
+		40, 0, 3600,
 		NULL, NULL, NULL
 	},
 

@@ -787,6 +787,7 @@ CFLAGS_SL_MODULE
 CFLAGS_VECTORIZE
 CFLAGS_UNROLL_LOOPS
 PERMIT_DECLARATION_AFTER_STATEMENT
+with_copy_program
 LLVM_BINPATH
 LLVM_CXXFLAGS
 LLVM_CFLAGS
@@ -796,7 +797,6 @@ CLANG
 LLVM_CONFIG
 AWK
 with_llvm
-with_copy_program
 SUN_STUDIO_CC
 ac_ct_CXX
 CXXFLAGS
@@ -5383,31 +5383,6 @@ else
 fi
 
 
-# Check whether --with-copy-program was given.
-if test "${with_copy_program+set}" = set; then :
-  withval=$with_copy_program;
-  case $withval in
-    yes)
-
-$as_echo "#define USE_COPY_PROGRAM 1" >>confdefs.h
-
-      ;;
-    no)
-      :
-      ;;
-    *)
-      as_fn_error $? "no argument expected for --with-copy-program option" "$LINENO" 5
-      ;;
-  esac
-
-else
-  with_copy_program=yes
-
-$as_echo "#define USE_COPY_PROGRAM 1" >>confdefs.h
-
-fi
-
-
 
 for ac_prog in gawk mawk nawk awk
 do
@@ -5653,6 +5628,41 @@ fi
 
 
 fi # fi
+
+#
+# --without-copy-program disables COPY TO/FROM PROGRAM
+#
+
+
+
+# Check whether --with-copy-program was given.
+if test "${with_copy_program+set}" = set; then :
+  withval=$with_copy_program;
+  case $withval in
+    yes)
+
+$as_echo "#define USE_COPY_PROGRAM 1" >>confdefs.h
+
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --with-copy-program option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  with_copy_program=yes
+
+$as_echo "#define USE_COPY_PROGRAM 1" >>confdefs.h
+
+fi
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build with COPY PROGRAM... $with_copy_program" >&5
+$as_echo "checking whether to build with COPY PROGRAM... $with_copy_program" >&6; }
+
 
 
 unset CFLAGS

@@ -199,9 +199,9 @@ typedef struct Query
 	/* is a RETURN statement */
 	bool		isReturn pg_node_attr(query_jumble_ignore);
 
-	bool        hasDynamicFunctions; /* has functions with unstable return types */
-	bool		hasFuncsWithExecRestrictions; /* has functions with EXECUTE ON MASTER or ALL SEGMENTS */
-	bool        canOptSelectLockingClause; /* Whether can do some optimization on select with locking clause */
+	bool        hasDynamicFunctions pg_node_attr(query_jumble_ignore); /* has functions with unstable return types */
+	bool		hasFuncsWithExecRestrictions pg_node_attr(query_jumble_ignore); /* has functions with EXECUTE ON MASTER or ALL SEGMENTS */
+	bool        canOptSelectLockingClause pg_node_attr(query_jumble_ignore); /* Whether can do some optimization on select with locking clause */
 
 
 	List	   *cteList;		/* WITH list (of CommonTableExpr's) */
@@ -242,8 +242,8 @@ typedef struct Query
 
 	List	   *sortClause;		/* a list of SortGroupClause's */
 
-	List	   *scatterClause;	/* a list of tle's */
-	bool		isTableValueSelect; /* GPDB: Is this a TABLE (...) subquery argument? */
+	List	   *scatterClause pg_node_attr(query_jumble_ignore);	/* a list of tle's */
+	bool		isTableValueSelect pg_node_attr(query_jumble_ignore); /* GPDB: Is this a TABLE (...) subquery argument? */
 
 	Node	   *limitOffset;	/* # of result tuples to skip (int8 expr) */
 	Node	   *limitCount;		/* # of result tuples to return (int8 expr) */
@@ -267,13 +267,13 @@ typedef struct Query
 	 * MPP: Used only on QD. Don't serialize. Holds the result distribution
 	 * policy for SELECT ... INTO and set operations.
 	 */
-	struct GpPolicy *intoPolicy;
+	struct GpPolicy *intoPolicy pg_node_attr(query_jumble_ignore);
 
 	/*
 	 * GPDB: Used to indicate this query is part of CTAS or COPY so that its plan
 	 * would always be dispatched in parallel.
 	 */
-	uint8 	parentStmtType;
+	uint8 	parentStmtType pg_node_attr(query_jumble_ignore);
 
 	/*
 	 * The following two fields identify the portion of the source text string
@@ -2866,8 +2866,8 @@ typedef struct CreateStmt
 	bool		buildAoBlkdir; /* whether to build the block directory for an AO table */
 	List	   *attr_encodings; /* attribute storage directives */
 	bool		isCtas;			/* CDB: is create table as */
-	Node       *intoQuery;      /* CDB: only set for matview with no data */
-	GpPolicy   *intoPolicy;     /* CDB: only set for matview with no data */
+	Node       *intoQuery pg_node_attr(query_jumble_ignore);      /* CDB: only set for matview with no data */
+	GpPolicy   *intoPolicy pg_node_attr(query_jumble_ignore);     /* CDB: only set for matview with no data */
 
 	/* names chosen for partition indexes */
 	List	   *part_idx_oids;

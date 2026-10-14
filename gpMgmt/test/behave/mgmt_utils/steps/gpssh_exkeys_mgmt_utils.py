@@ -6,7 +6,7 @@ import subprocess
 import sys
 import tempfile
 
-import pipes
+import shlex
 
 from behave import given, when, then
 from test.behave_utils.utils import *
@@ -57,26 +57,25 @@ def run_exkeys(hosts, capture=False):
     # Capture stdout/err for later use, while routing it through tee(1) so that
     # developers can still see the live stream output.
     #
-    # XXX This is a very heavy-weight solution, using pipes.Template() for the
-    # creation of shell pipeline processes. It's also platform-specific as it
-    # relies on the functionality of /dev/stdout and /dev/stderr.
-    #
-    # The overview: we open up two shell processes running tee(1), using
-    # pipes.Template(), and connect their standard output to the stdout/err of
-    # the current Python process using Template.open(). We then connect the
-    # stdout/stderr streams of subprocess.call() to the stdin of those tee
-    # pipelines. tee(1) will duplicate all output to temporary files, which we
-    # read after the subprocess call completes. NamedTemporaryFile() then cleans
-    # up those files when we return.
-    with tempfile.NamedTemporaryFile() as temp_out, tempfile.NamedTemporaryFile() as temp_err:
-        pipe_out = pipes.Template()
-        pipe_out.append('tee %s' % pipes.quote(temp_out.name), '--')
+    # The overview: we start two tee(1) processes whose standard output goes to
+    # the /dev/stdout and /dev/stderr of the current Python process, and connect
+    # the stdout/stderr streams of subprocess.call() to their stdin. tee(1)
+    # duplicates all output to temporary files, which we read after the
+    # subprocess call completes. NamedTemporaryFile() then cleans up those files
+    # when we return. This relies on /dev/stdout and /dev/stderr, so it is
+    # platform-specific.
+    with tempfile.NamedTemporaryFile() as temp_out, tempfile.NamedTemporaryFile() as temp_err, \
+            open('/dev/stdout', 'w') as live_out, open('/dev/stderr', 'w') as live_err:
+        tee_out = subprocess.Popen(['tee', temp_out.name], stdin=subprocess.PIPE, stdout=live_out)
+        tee_err = subprocess.Popen(['tee', temp_err.name], stdin=subprocess.PIPE, stdout=live_err)
 
-        pipe_err = pipes.Template()
-        pipe_err.append('tee %s' % pipes.quote(temp_err.name), '--')
-
-        with pipe_out.open('/dev/stdout', 'w') as out, pipe_err.open('/dev/stderr', 'w') as err:
-            ret = subprocess.call(args, stdout=out, stderr=err)
+        try:
+            ret = subprocess.call(args, stdout=tee_out.stdin, stderr=tee_err.stdin)
+        finally:
+            tee_out.stdin.close()
+            tee_err.stdin.close()
+            tee_out.wait()
+            tee_err.wait()
 
         stored_out = temp_out.read().decode()
         stored_err = temp_err.read().decode()
@@ -310,11 +309,11 @@ def impl(context, ssh_type):
         host_opts.extend(['-h', host])
 
     # ssh'ing to localhost need not be set up yet
-    subprocess.check_call([ 'bash', '-c', '! sort %s | uniq -d | grep .' % path.join('~/.ssh',pipes.quote(ssh_type))])
+    subprocess.check_call([ 'bash', '-c', '! sort %s | uniq -d | grep .' % path.join('~/.ssh',shlex.quote(ssh_type))])
 
     subprocess.check_call([
         'gpssh',
         '-e',
         ] + host_opts + [
-        '! sort %s | uniq -d | grep .' % path.join('~/.ssh',pipes.quote(ssh_type))
+        '! sort %s | uniq -d | grep .' % path.join('~/.ssh',shlex.quote(ssh_type))
     ])
