@@ -137,7 +137,7 @@ typedef struct AnserPayloadOps
  * unregistered one is a real case, and defaulting it silently would turn a
  * forgotten table row into a mystery rather than a log line.
  */
-extern const AnserPayloadOps *AnserPayloadLookup(char code);
+extern PGDLLEXPORT const AnserPayloadOps *AnserPayloadLookup(char code);
 
 /*
  * Whether a type's body is covered by the message checksum.  Takes a code
@@ -145,6 +145,6 @@ extern const AnserPayloadOps *AnserPayloadLookup(char code);
  * before it has resolved anything; an unregistered code answers false, which
  * is why this one needs no error handling.
  */
-extern bool AnserPayloadChecksumsBody(char code);
+extern PGDLLEXPORT bool AnserPayloadChecksumsBody(char code);
 
 #endif							/* ANSERPAYLOAD_H */
