@@ -73,7 +73,8 @@
 #define LANCE_NEAREST_VECTOR	5
 #define LANCE_NEAREST_NPROBES	6
 #define LANCE_NEAREST_REFINE	7
-#define LANCE_NEAREST_NFIELDS	8
+#define LANCE_NEAREST_IDS		8	/* " " for a single search */
+#define LANCE_NEAREST_NFIELDS	9
 
 /* One float4 as hex: its 32 bits, eight characters. */
 #define LANCE_HEX_PER_ELEMENT	8
@@ -195,7 +196,7 @@ void
 lance_dispatch_publish_nearest(ForeignScan *fsplan, const char *uri,
 							   uint64 version, int nsegments, int target,
 							   const float4 *vector, int dim, int nprobes,
-							   int refine_factor)
+							   int refine_factor, const uint64 *ids, int nids)
 {
 	MemoryContext plancxt = GetMemoryChunkContext(fsplan);
 	MemoryContext oldcxt = MemoryContextSwitchTo(plancxt);
@@ -203,8 +204,20 @@ lance_dispatch_publish_nearest(ForeignScan *fsplan, const char *uri,
 	StringInfoData hex;
 	int			i;
 
-	Assert(dim > 0 && target >= 0 && target < nsegments);
+	char	   *ids_text;
+
+	Assert(dim > 0 && target < nsegments &&
+		   (target >= 0 || target == LANCE_SEARCH_DISTRIBUTED));
 	Assert(nprobes >= 0 && refine_factor >= 0);
+
+	/* " " for none, for the reason lance_dispatch_make_units gives. */
+	ids_text = target == LANCE_SEARCH_DISTRIBUTED
+		? lance_dispatch_ids_string(ids, nids) : pstrdup("");
+	if (ids_text[0] == '\0')
+	{
+		pfree(ids_text);
+		ids_text = pstrdup(" ");
+	}
 
 	initStringInfo(&hex);
 	for (i = 0; i < dim; i++)
@@ -223,6 +236,7 @@ lance_dispatch_publish_nearest(ForeignScan *fsplan, const char *uri,
 	unit = lappend(unit, makeString(hex.data));
 	unit = lappend(unit, makeString(psprintf("%d", nprobes)));
 	unit = lappend(unit, makeString(psprintf("%d", refine_factor)));
+	unit = lappend(unit, makeString(ids_text));
 
 	lance_dispatch_install(fsplan, unit);
 
@@ -442,7 +456,8 @@ lance_dispatch_read_units(const ForeignScan *fsplan, LanceScanUnits *out)
 		out->nsegments = lance_dispatch_parse_int(lance_dispatch_field(unit, LANCE_NEAREST_SEGMENTS),
 												  "segment count", 1, PG_INT32_MAX);
 		out->target = lance_dispatch_parse_int(lance_dispatch_field(unit, LANCE_NEAREST_TARGET),
-											   "search segment", 0,
+											   "search segment",
+											   LANCE_SEARCH_DISTRIBUTED,
 											   out->nsegments - 1);
 		lance_dispatch_parse_vector(lance_dispatch_field(unit, LANCE_NEAREST_VECTOR),
 									&out->vector, &out->dim);
@@ -450,6 +465,11 @@ lance_dispatch_read_units(const ForeignScan *fsplan, LanceScanUnits *out)
 												"nprobes", 0, PG_INT32_MAX);
 		out->refine_factor = lance_dispatch_parse_int(lance_dispatch_field(unit, LANCE_NEAREST_REFINE),
 													  "refine_factor", 0, PG_INT32_MAX);
+		lance_dispatch_parse_ids(lance_dispatch_field(unit, LANCE_NEAREST_IDS),
+								 &out->ids, &out->nids);
+		/* A single search reads the whole dataset; it carries no fragments. */
+		if (out->target != LANCE_SEARCH_DISTRIBUTED && out->nids != 0)
+			lance_dispatch_bad_unit("fragment list", lance_dispatch_field(unit, LANCE_NEAREST_IDS));
 		return true;
 	}
 
@@ -508,4 +528,26 @@ lance_dispatch_take_share(uint64 *ids, int nids, int nsegments)
 	}
 
 	return kept;
+}
+
+int
+lance_dispatch_take_range(uint64 *ids, int nids, int nsegments)
+{
+	int			mysegment = GpIdentity.segindex;
+	int64		lo;
+	int64		hi;
+
+	/* The same two guards as take_share, for the same reasons. */
+	if (nsegments <= 0 || mysegment < 0)
+		return nids;
+	if (mysegment >= nsegments)
+		return 0;
+
+	/* int64: nids * nsegments may not fit in an int. */
+	lo = (int64) nids * mysegment / nsegments;
+	hi = (int64) nids * (mysegment + 1) / nsegments;
+	if (lo > 0 && hi > lo)
+		memmove(ids, ids + lo, sizeof(uint64) * (hi - lo));
+
+	return (int) (hi - lo);
 }

@@ -709,6 +709,36 @@
         {"name": "cat", "arrow_type": "int32", "arrow_format": "i", "nullable": true, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
         {"name": "emb", "arrow_type": "fixed_size_list<item: float>[4]", "arrow_format": "+w:4", "nullable": true, "tier": "A", "pg_type": "real[]", "metadata": null, "expected_encoding": "array"}
       ]
+    },
+    "vectors_seg": {
+      "name": "vectors_seg",
+      "purpose": "The rows of vectors.lance with an IVF_PQ index built the distributed way: one segment for each of fragments 0, 1, 2, and fragment 3 in no segment at all.  A search split by fragment has to use each segment and read fragment 3 exhaustively.",
+      "path": "data/vectors_seg.lance",
+      "version": 2,
+      "rows": 960,
+      "fragments": 4,
+      "fragment_ids": [0, 1, 2, 3],
+      "fragment_rows": [240, 240, 240, 240],
+      "fragment_physical_rows": [240, 240, 240, 240],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1, 1, 1, 1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 960},
+        {"version": 2, "rows": 960}
+      ],
+      "expected": null,
+      "expected_rows": null,
+      "notes": [
+        "same rows as vectors.lance, so no expected file of its own",
+        "IVF/PQ training is not byte-reproducible; the suites assert recall bounds and which fragments the segments cover, never which approximate rows come back"
+      ],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": null},
+        {"name": "cat", "arrow_type": "int32", "arrow_format": "i", "nullable": true, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": null},
+        {"name": "emb", "arrow_type": "fixed_size_list<item: float>[8]", "arrow_format": "+w:8", "nullable": true, "tier": "A", "pg_type": "real[]", "metadata": null, "expected_encoding": null}
+      ]
     }
   }
 }

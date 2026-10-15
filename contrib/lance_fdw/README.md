@@ -243,9 +243,39 @@ own; `EXPLAIN` looks like the plain scan's plan with one more line on the scan:
 Lance Vector Search: embedding <-> (L2), k=10
 ```
 
-One segment searches the whole dataset — which one is chosen per session — and
-the others read nothing; spreading one search over several segments is not
-done yet.
+**Which segments search.** On a table with `mpp_execute 'all segments'` the
+coordinator decides when the statement starts, by the index on the column:
+
+| The column has | Who searches |
+|---|---|
+| no index | every segment, each over a contiguous range of the fragments |
+| an index of several segments | every segment, each over a contiguous range of the fragments |
+| an index of one segment | one segment, over the whole dataset — which one is chosen per session |
+
+Lance searches a fragment through the index segment that covers it, and a
+fragment no segment covers — one appended after the index was built — row by
+row, so splitting the search by fragment neither misses rows nor returns one
+twice. It only pays when the work splits too. Without an index every row is
+read anyway, so the segments share it. An index built the distributed way
+(pylance's `create_index_uncommitted` per range of fragments, then
+`commit_existing_index_segments`) has one segment per range, and each segment
+of the cluster probes only the ones covering its fragments. An ordinary
+`create_index` builds one segment, which every segment of the cluster would
+probe in full, so that index is searched by one segment as before. Each
+searching segment returns its own `k` rows and PostgreSQL keeps the best `k`,
+by the exact distance it computes itself.
+
+`lance_fdw.vector_search_mode` overrides the choice: `single`, `'distributed'`
+(quoted — `DISTRIBUTED` is a keyword in Cloudberry), or `auto`, the default.
+`EXPLAIN ANALYZE` shows what was chosen and why:
+
+```
+Lance Search Segment: all
+Lance Search Mode: distributed, the index has 3 segments
+```
+
+A segment whose range is empty — a dataset with fewer fragments than the cluster
+has segments — searches nothing.
 
 **What has to hold for the search to be used.** Cutting the rows to `k` before
 PostgreSQL has seen all of them is only correct when nothing between the scan
@@ -355,8 +385,9 @@ DDL when `log_statement` is `ddl` or `all`. No wrapper can prevent that.
 | `lance_fdw.vector_pushdown_max_k` | 10000 | Largest `k` that is sent to Lance. Lance's search state for `k` neighbours is not charged to Cloudberry's memory accounting, so a larger `LIMIT` takes the exact path. |
 | `lance_fdw.nprobes` | 0 | Minimum number of vector index partitions a search probes; 0 leaves it to Lance. A floor, not a cap. |
 | `lance_fdw.refine_factor` | 0 | Re-rank `refine_factor * k` candidates by their exact distance; 0 leaves it to Lance. |
+| `lance_fdw.vector_search_mode` | `auto` | Which segments run a vector search on a table on all segments: `single`, `'distributed'` or `auto`. See [Vector search](#vector-search). |
 
-Every one of these but the four pushdown and vector settings is `SUSET`, and they differ only
+Every one of these but the five pushdown and vector settings is `SUSET`, and they differ only
 in when they are read. The thread counts and cache sizes are read once per
 backend, before its first call into lance-c, so changing them mid-session has no
 effect on that session. The memory bounds and `track_memory` are read later,
@@ -367,10 +398,10 @@ once per scan as it opens, so a `SET` reaches the next scan in the same backend.
 the plan cache so that cached plans stop pushing down at once. It therefore only
 ever matters on the coordinator; the value a segment has is irrelevant.
 `enable_vector_pushdown` and `vector_pushdown_max_k` behave the same way.
-`nprobes` and `refine_factor` are `USERSET` too, but are read by the
-coordinator when a statement starts and sent with the search: a segment never
-reads them, because an extension setting changed with `SET LOCAL` does not
-reach the segments in Cloudberry.
+`nprobes`, `refine_factor` and `vector_search_mode` are `USERSET` too, but are
+read by the coordinator when a statement starts and sent with the search: a
+segment never reads them, because an extension setting changed with `SET LOCAL`
+does not reach the segments in Cloudberry.
 
 ### Bounding memory
 
@@ -593,7 +624,7 @@ The suites, in the order they run:
 | `explain` | what `EXPLAIN` and `EXPLAIN ANALYZE` say, and that a plain `EXPLAIN` needs no working credentials |
 | `pushdown` | every qualifier shape that goes down and every one that does not, each against the same query with `enable_filter_pushdown` off; the collation and encoding conditions on `text`; that `timestamptz` is refused; and that a cached generic plan stops pushing down the moment the GUC is set |
 | `pushdown_errors` | a qualifier naming a column the dataset does not have, a B-tier column reached only through a qualifier, and `column_name` mapping inside a filter |
-| `vector` | the three distance operators and their errors; vector Top-K for each operator, with a constant and with a parameter under a generic plan, equal to the exact path on a dataset without an index; that the filter is applied before the search; that one segment searches and it is the one the session selects; recall on an indexed dataset; the fallbacks at execution; and every query shape that must not be pushed down |
+| `vector` | the three distance operators and their errors; vector Top-K for each operator, with a constant and with a parameter under a generic plan, equal to the exact path on a dataset without an index; that the filter is applied before the search; that one segment searches and it is the one the session selects; which way each kind of index is searched, the fragment no index segment covers, no row twice and fewer fragments than segments; recall on an indexed dataset; the fallbacks at execution; and every query shape that must not be pushed down |
 | `creds` | none of the three user mapping credentials is in a plan |
 | `errors_scan` | storage failures during a scan, and every shape of type mismatch |
 | `types` | all 31 columns of `types_all` against the pylance reference output, twice over at two batch sizes, plus the MiB-sized text and binary values |
@@ -665,8 +696,22 @@ The suites, in the order they run:
   evaluated here would run after the search. A prepared statement under the
   default `plan_cache_mode` keeps using custom plans, where the parameters are
   constants, so it is usually unaffected; `force_generic_plan` is not.
-- One segment searches the whole dataset, so a vector search does not scale
-  with the cluster.
+- A dataset indexed with an ordinary `create_index` has one index segment, and
+  its vector searches stay on one segment of the cluster: they do not scale
+  with it. Spreading them needs the index built the distributed way.
+- The ranges are contiguous runs of fragment ids, because an index built the
+  distributed way usually gives each of its segments such a run. lance-c does
+  not say which fragments a segment covers, so a range that cuts across an
+  index segment cannot be avoided: the result is the same, but every segment of
+  the cluster with a fragment of that index segment probes all of it.
+- Splitting by fragment rests on how the pinned lance-c behaves rather than on
+  anything it documents: given a fragment list, a search uses the index segments
+  covering it and reads the rest row by row. The trace check above asserts it,
+  and it has to be measured again when lance-c moves.
+- A query distance the index was not trained with makes Lance search every row,
+  which would divide well; but lance-c does not say which distance an index was
+  trained with, so on a one-segment index such a search still runs on one
+  segment.
 - A cancel or `statement_timeout` reaches a search while it runs: the wrapper
   polls lance-c and sleeps on its latch in between, and closing the scanner
   stops the search. On a million 64-d vectors read from S3 it took a median of

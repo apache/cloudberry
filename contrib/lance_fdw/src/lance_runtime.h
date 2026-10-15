@@ -65,6 +65,20 @@ extern int	lance_vector_nprobes;
 extern int	lance_vector_refine_factor;
 
 /*
+ * Who searches, for a table on all segments (distributed Top-K).  Read by the
+ * QD when the statement starts, like nprobes; the plan is the same for every
+ * value, so changing it needs no replan.
+ */
+typedef enum LanceVectorSearchMode
+{
+	LANCE_VECTOR_SEARCH_AUTO,	/* by how many segments the index has */
+	LANCE_VECTOR_SEARCH_SINGLE, /* one segment searches the whole dataset */
+	LANCE_VECTOR_SEARCH_DISTRIBUTED /* every segment searches its fragments */
+} LanceVectorSearchMode;
+
+extern int	lance_vector_search_mode;
+
+/*
  * Arrow batches are allocated by lance on the Rust side, so palloc, the
  * resource group and gp_vmem_protect_limit all see a backend that looks nearly
  * idle while it holds them.  These put the bytes on the same ledger as the

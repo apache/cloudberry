@@ -60,8 +60,11 @@
 typedef enum LanceUnitKind
 {
 	LANCE_UNIT_FRAGMENT,		/* every QE reads its share of the fragments */
-	LANCE_UNIT_NEAREST			/* one QE searches the whole dataset */
+	LANCE_UNIT_NEAREST			/* a vector search: one QE, or every QE */
 } LanceUnitKind;
+
+/* LanceScanUnits.target of a search that every QE runs on its fragments. */
+#define LANCE_SEARCH_DISTRIBUTED	(-1)
 
 /*
  * One unit of work, as it travels inside the plan.  Every field is a String
@@ -76,12 +79,13 @@ typedef struct LanceScanUnits
 	uint64		version;		/* the exact version the QD pinned */
 	int			nsegments;		/* the width the planner built the locus for */
 
-	/* LANCE_UNIT_FRAGMENT */
+	/* LANCE_UNIT_FRAGMENT, and LANCE_UNIT_NEAREST when distributed */
 	uint64	   *ids;
 	int			nids;
 
 	/* LANCE_UNIT_NEAREST */
-	int			target;			/* the one segindex that searches */
+	int			target;			/* the one segindex that searches, or
+								 * LANCE_SEARCH_DISTRIBUTED */
 	float4	   *vector;			/* the query vector, bit for bit */
 	int			dim;
 	int			nprobes;		/* 0: leave it to Lance */
@@ -101,9 +105,11 @@ extern void lance_dispatch_publish(ForeignScan *fsplan,
 								   int nids);
 
 /*
- * Hand a vector Top-K search to one QE.  The query
- * vector travels as the bit patterns of its float4 elements, so the segment
- * searches with exactly the value the QD evaluated.
+ * Hand a vector Top-K search to one QE, or with
+ * target LANCE_SEARCH_DISTRIBUTED to every QE, each searching its range of
+ * `ids` (lance_dispatch_take_range).  The query vector travels as the bit
+ * patterns of its float4 elements, so the segments search with exactly the
+ * value the QD evaluated.  `ids` is ignored for a single search.
  */
 extern void lance_dispatch_publish_nearest(ForeignScan *fsplan,
 										   const char *uri,
@@ -113,7 +119,9 @@ extern void lance_dispatch_publish_nearest(ForeignScan *fsplan,
 										   const float4 *vector,
 										   int dim,
 										   int nprobes,
-										   int refine_factor);
+										   int refine_factor,
+										   const uint64 *ids,
+										   int nids);
 
 /*
  * The segment that searches: the session id, normalised into [0, nsegments)
@@ -133,6 +141,17 @@ extern bool lance_dispatch_read_units(const ForeignScan *fsplan,
  * and complete without anyone coordinating.
  */
 extern int	lance_dispatch_take_share(uint64 *ids, int nids, int nsegments);
+
+/*
+ * Keep this segment's contiguous range of `ids`, which the QD sorted: segment
+ * i of n takes [i * nids / n, (i + 1) * nids / n).  A distributed search uses
+ * ranges rather than the round robin above because an index built the
+ * distributed way covers a run of fragments with each segment, and a search
+ * that is handed part of a segment's fragments still probes the whole segment.
+ * Same rules as take_share otherwise: no QE of a dispatched statement keeps
+ * all of them, and one outside the planned width keeps none.
+ */
+extern int	lance_dispatch_take_range(uint64 *ids, int nids, int nsegments);
 
 /* Fragment ids as a readable list, for DEBUG1 and error detail. */
 extern char *lance_dispatch_ids_string(const uint64 *ids, int nids);

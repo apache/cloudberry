@@ -62,6 +62,8 @@
 #include "miscadmin.h"
 #include "storage/latch.h"
 #include "utils/array.h"
+#include "utils/fmgrprotos.h"
+#include "utils/jsonb.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/wait_event.h"
@@ -125,6 +127,14 @@ typedef struct LanceScanState
 	int			refine_factor;
 	int			search_segment; /* -1: this process, under 'coordinator' */
 	const char *fallback;		/* why the QD did not search, or NULL */
+
+	/*
+	 * Distributed Top-K: every segment searches a range of the fragments
+	 * instead of one segment searching them all.  On the QD, search_mode says
+	 * which of the two it chose and why, for EXPLAIN ANALYZE.
+	 */
+	bool		distributed;
+	const char *search_mode;
 
 	/*
 	 * Written by the statistics callback, which may run on a lance thread and
@@ -568,7 +578,24 @@ lance_scan_make_scanner(LanceScanState *state)
 
 	/* Every one of these has to be set before a stream is taken. */
 	if (state->searching)
+	{
 		lance_scan_set_nearest(state);
+
+		/*
+		 * A distributed search covers this segment's fragments and no others.
+		 * An empty share never gets here - it skips the scan - and it must
+		 * not: a search without a fragment list searches the whole dataset,
+		 * and every segment would return the same rows.
+		 */
+		if (state->distributed)
+		{
+			if (state->nids <= 0)
+				elog(ERROR, "lance_fdw: a distributed vector search with no fragments to search");
+			LANCE_MASKED(rc = lance_scanner_set_fragment_ids(state->scanner, state->ids,
+															 (size_t) state->nids));
+			LANCE_CHECK(rc == 0, state->uri);
+		}
+	}
 	else
 	{
 		LANCE_MASKED(rc = lance_scanner_set_fragment_ids(state->scanner, state->ids,
@@ -996,6 +1023,147 @@ lance_scan_prepare_topk(ForeignScanState *node, LanceScanState *state)
 	return true;
 }
 
+/* Is `cols` the JSON array ["column"], and nothing more? */
+static bool
+lance_scan_json_is_column(JsonbValue *cols, const char *column)
+{
+	JsonbIterator *it;
+	JsonbValue	v;
+	JsonbIteratorToken tok;
+	int			n = 0;
+	bool		match = false;
+
+	if (cols == NULL || cols->type != jbvBinary)
+		return false;
+
+	it = JsonbIteratorInit(cols->val.binary.data);
+	while ((tok = JsonbIteratorNext(&it, &v, true)) != WJB_DONE)
+	{
+		if (tok != WJB_ELEM)
+			continue;
+		n++;
+		match = v.type == jbvString &&
+			v.val.string.len == (int) strlen(column) &&
+			memcmp(v.val.string.val, column, v.val.string.len) == 0;
+	}
+
+	return n == 1 && match;
+}
+
+/*
+ * How many segments the index on the searched column has: 0 when there is no
+ * index on it, -1 when two differently named ones are, because which of them
+ * Lance would search is not something to guess.  lance-c lists one entry per
+ * segment, so counting the entries is counting the segments.
+ */
+static int
+lance_scan_index_segments(LanceScanState *state)
+{
+	const char *raw;
+	char	   *json;
+	Jsonb	   *jb;
+	JsonbIterator *it;
+	JsonbValue	v;
+	JsonbIteratorToken tok;
+	char	   *name = NULL;
+	int			count = 0;
+
+	LANCE_MASKED(raw = lance_dataset_index_list_json(state->dataset));
+	LANCE_CHECK(raw != NULL, state->uri);
+	json = pstrdup(raw);
+	LANCE_MASKED(lance_free_string(raw));
+
+	jb = DatumGetJsonbP(DirectFunctionCall1(jsonb_in, CStringGetDatum(json)));
+	if (!JB_ROOT_IS_ARRAY(jb))
+		ereport(ERROR,
+				(errcode(ERRCODE_FDW_ERROR),
+				 errmsg("lance_fdw: Lance listed the indexes of \"%s\" as something other than an array",
+						state->uri)));
+
+	it = JsonbIteratorInit(&jb->root);
+	while ((tok = JsonbIteratorNext(&it, &v, true)) != WJB_DONE)
+	{
+		JsonbValue *jname;
+
+		if (tok != WJB_ELEM || v.type != jbvBinary)
+			continue;
+		if (!lance_scan_json_is_column(getKeyJsonValueFromContainer(v.val.binary.data,
+																	 "columns", 7, NULL),
+									   state->topk_column))
+			continue;
+
+		jname = getKeyJsonValueFromContainer(v.val.binary.data, "name", 4, NULL);
+		if (jname == NULL || jname->type != jbvString)
+			continue;
+		if (name == NULL)
+			name = pnstrdup(jname->val.string.val, jname->val.string.len);
+		else if ((int) strlen(name) != jname->val.string.len ||
+				 memcmp(name, jname->val.string.val, jname->val.string.len) != 0)
+			return -1;
+		count++;
+	}
+
+	return count;
+}
+
+/*
+ * Single or distributed (distributed Top-K).  A search split by fragment is
+ * only cheaper when the work splits with it: Lance searches a fragment through
+ * the index segment that covers it, so an index of several segments - or no
+ * index, where every row is read anyway - divides among the segments, while
+ * an index of one segment would be probed in full by every one of them.
+ */
+static void
+lance_scan_choose_search(LanceScanState *state)
+{
+	int			segments;
+
+	switch (lance_vector_search_mode)
+	{
+		case LANCE_VECTOR_SEARCH_SINGLE:
+			state->distributed = false;
+			state->search_mode = "single, set by lance_fdw.vector_search_mode";
+			return;
+		case LANCE_VECTOR_SEARCH_DISTRIBUTED:
+			state->distributed = true;
+			state->search_mode = "distributed, set by lance_fdw.vector_search_mode";
+			return;
+		default:
+			break;
+	}
+
+	segments = lance_scan_index_segments(state);
+	if (segments == 0)
+	{
+		state->distributed = true;
+		state->search_mode = psprintf("distributed, no index on %s", state->topk_column);
+	}
+	else if (segments == 1)
+	{
+		state->distributed = false;
+		state->search_mode = "single, the index has one segment";
+	}
+	else if (segments < 0)
+	{
+		state->distributed = false;
+		state->search_mode = psprintf("single, more than one index on %s", state->topk_column);
+	}
+	else
+	{
+		state->distributed = true;
+		state->search_mode = psprintf("distributed, the index has %d segments", segments);
+	}
+}
+
+static int
+lance_scan_cmp_ids(const void *a, const void *b)
+{
+	uint64		x = *(const uint64 *) a;
+	uint64		y = *(const uint64 *) b;
+
+	return x < y ? -1 : (x > y ? 1 : 0);
+}
+
 static void
 lance_scan_log_share(const LanceScanState *state, const char *what)
 {
@@ -1100,14 +1268,43 @@ lance_scan_begin_internal(ForeignScanState *node, LanceScanState *state,
 		 */
 		if (state->is_topk && lance_scan_prepare_topk(node, state))
 		{
-			state->search_segment = lance_dispatch_search_target(nsegments);
-			lance_dispatch_publish_nearest(fsplan, state->uri, state->version,
-										   nsegments, state->search_segment,
-										   state->vector, state->dim,
-										   state->nprobes, state->refine_factor);
-			elog(DEBUG1,
-				 "lance_fdw: dispatching a vector search of \"%s\" at version " UINT64_FORMAT " to segment %d",
-				 state->uri, state->version, state->search_segment);
+			lance_scan_choose_search(state);
+			if (state->distributed)
+			{
+				/*
+				 * Sorted, so that each QE's range is a run of neighbouring
+				 * fragments - the shape an index built the distributed way
+				 * gives each of its segments.
+				 */
+				lance_scan_list_fragments(state);
+				if (state->nids > 1)
+					qsort(state->ids, state->nids, sizeof(uint64), lance_scan_cmp_ids);
+				state->search_segment = LANCE_SEARCH_DISTRIBUTED;
+				lance_dispatch_publish_nearest(fsplan, state->uri, state->version,
+											   nsegments, LANCE_SEARCH_DISTRIBUTED,
+											   state->vector, state->dim,
+											   state->nprobes, state->refine_factor,
+											   state->ids, state->nids);
+				elog(DEBUG1,
+					 "lance_fdw: dispatching a vector search of \"%s\" at version " UINT64_FORMAT
+					 " to every segment, over %d fragment(s) (%s)",
+					 state->uri, state->version, state->nids, state->search_mode);
+				state->nids = 0;
+			}
+			else
+			{
+				state->search_segment = lance_dispatch_search_target(nsegments);
+				lance_dispatch_publish_nearest(fsplan, state->uri, state->version,
+											   nsegments, state->search_segment,
+											   state->vector, state->dim,
+											   state->nprobes, state->refine_factor,
+											   NULL, 0);
+				elog(DEBUG1,
+					 "lance_fdw: dispatching a vector search of \"%s\" at version " UINT64_FORMAT
+					 " to segment %d (%s)",
+					 state->uri, state->version, state->search_segment,
+					 state->search_mode);
+			}
 			lance_scan_close_dataset(state);
 			return;
 		}
@@ -1138,7 +1335,27 @@ lance_scan_begin_internal(ForeignScanState *node, LanceScanState *state,
 						(errcode(ERRCODE_INTERNAL_ERROR),
 						 errmsg("lance_fdw: the plan carries a vector search unit but no vector Top-K")));
 
-			if (GpIdentity.segindex != units.target)
+			if (units.target == LANCE_SEARCH_DISTRIBUTED)
+			{
+				/*
+				 * Every QE searches its own range.  One with nothing in its
+				 * range leaves without searching: a search without a fragment
+				 * list would cover the whole dataset.
+				 */
+				state->ids = units.ids;
+				state->nids = lance_dispatch_take_range(units.ids, units.nids,
+														units.nsegments);
+				if (state->nids == 0)
+				{
+					elog(DEBUG1,
+						 "lance_fdw: no fragments to search, skipping \"%s\" on segment %d",
+						 state->uri, GpIdentity.segindex);
+					return;
+				}
+				state->distributed = true;
+				lance_scan_log_share(state, "searching");
+			}
+			else if (GpIdentity.segindex != units.target)
 			{
 				elog(DEBUG1,
 					 "lance_fdw: not the search segment, skipping \"%s\" on segment %d",
@@ -1677,11 +1894,17 @@ lance_scan_explain(ForeignScanState *node, ExplainState *es)
 		}
 
 		if (es->analyze && state->fallback == NULL)
+		{
 			ExplainPropertyText("Lance Search Segment",
-								state->search_segment >= 0
+								state->distributed ? "all"
+								: state->search_segment >= 0
 								? psprintf("%d", state->search_segment)
 								: "coordinator",
 								es);
+			/* Only a table on all segments has a choice to report. */
+			if (state->search_mode != NULL)
+				ExplainPropertyText("Lance Search Mode", state->search_mode, es);
+		}
 	}
 
 	/* Only known when this process actually opened the dataset. */

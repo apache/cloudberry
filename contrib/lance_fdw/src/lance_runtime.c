@@ -82,6 +82,14 @@ bool		lance_enable_vector_pushdown = true;
 int			lance_vector_max_k = 10000;
 int			lance_vector_nprobes = 0;
 int			lance_vector_refine_factor = 0;
+int			lance_vector_search_mode = LANCE_VECTOR_SEARCH_AUTO;
+
+static const struct config_enum_entry lance_vector_search_mode_options[] = {
+	{"auto", LANCE_VECTOR_SEARCH_AUTO, false},
+	{"single", LANCE_VECTOR_SEARCH_SINGLE, false},
+	{"distributed", LANCE_VECTOR_SEARCH_DISTRIBUTED, false},
+	{NULL, 0, false}
+};
 
 /*
  * The same reasoning as for filter pushdown: a
@@ -216,6 +224,22 @@ lance_rt_define_gucs(void)
 							PGC_USERSET,
 							0,
 							NULL, NULL, NULL);
+
+	DefineCustomEnumVariable("lance_fdw.vector_search_mode",
+							 "Which segments run a vector search of a table on "
+							 "all segments: auto, single or distributed.",
+							 "single: one segment searches the whole dataset. "
+							 "distributed: every segment searches a contiguous "
+							 "range of the fragments. auto: single when the "
+							 "column's index has one segment, distributed when it "
+							 "has several or there is no index. Read by the "
+							 "coordinator when the statement starts.",
+							 &lance_vector_search_mode,
+							 LANCE_VECTOR_SEARCH_AUTO,
+							 lance_vector_search_mode_options,
+							 PGC_USERSET,
+							 0,
+							 NULL, NULL, NULL);
 
 	DefineCustomIntVariable("lance_fdw.cpu_threads",
 							"Number of CPU worker threads lance-c may use.",

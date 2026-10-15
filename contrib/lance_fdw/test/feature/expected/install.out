@@ -50,7 +50,8 @@ lance_fdw.nprobes|0
 lance_fdw.refine_factor|0
 lance_fdw.track_memory|on
 lance_fdw.vector_pushdown_max_k|10000
-(12 rows)
+lance_fdw.vector_search_mode|auto
+(13 rows)
 -- The database's collation is part of the environment these suites assume.
 -- Several compare text by ordering, and their expected counts are those of a
 -- C.UTF-8 database, which orders by code point; under a linguistic locale the

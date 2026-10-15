@@ -955,6 +955,45 @@ def build_vectors_idx() -> Built:
                "never which approximate rows come back"])
 
 
+#: Fragments of vectors_seg.lance that are indexed, one segment each; the last
+#: of its four fragments is left out of the index on purpose.
+VECTOR_SEG_INDEXED = (0, 1, 2)
+
+
+def build_vectors_seg() -> Built:
+    def post(ds, uri):
+        from lance.indices import IndicesBuilder
+        # One model for every segment, trained on the indexed fragments: 240
+        # rows apiece is too few to train a PQ codebook segment by segment.
+        # The trainers' default sample rate wants 256 rows per partition or
+        # codeword; 720 rows only cover a rate of 32.
+        builder = IndicesBuilder(ds, "emb")
+        ivf = builder.train_ivf(VECTOR_CLUSTERS, distance_type="l2", sample_rate=32,
+                                fragment_ids=list(VECTOR_SEG_INDEXED))
+        pq = builder.train_pq(ivf, VECTOR_PQ_SUB_VECTORS, sample_rate=2,
+                              fragment_ids=list(VECTOR_SEG_INDEXED))
+        segments = [ds.create_index_uncommitted(
+                        "emb", index_type="IVF_PQ", name="emb_idx", metric="L2",
+                        num_partitions=VECTOR_CLUSTERS,
+                        num_sub_vectors=VECTOR_PQ_SUB_VECTORS,
+                        ivf_centroids=ivf.centroids, pq_codebook=pq.codebook,
+                        fragment_ids=[f])
+                    for f in VECTOR_SEG_INDEXED]
+        ds.commit_existing_index_segments("emb_idx", "emb", segments)
+    return Built(
+        purpose="The rows of vectors.lance with an IVF_PQ index built the "
+                "distributed way: one segment for each of fragments %s, and "
+                "fragment 3 in no segment at all.  A search split by fragment "
+                "has to use each segment and read fragment 3 exhaustively."
+                % ", ".join(str(f) for f in VECTOR_SEG_INDEXED),
+        table=_vector_table(), max_rows_per_file=240, post=post,
+        has_expected=False,
+        notes=["same rows as vectors.lance, so no expected file of its own",
+               "IVF/PQ training is not byte-reproducible; the suites assert "
+               "recall bounds and which fragments the segments cover, never "
+               "which approximate rows come back"])
+
+
 def build_vectors_nulls() -> Built:
     emb = [[1, 0, 0, 0], [2, 0, 0, 0], None, [3, 0, 0, 0], None,
            [0, 0, 0, 0], [0, 1, 0, 0], [0, 2, 0, 0], None, [0, 0, 1, 0]]
@@ -1060,6 +1099,8 @@ BUILDERS: dict[str, Callable[[], Built]] = {
     "vectors": build_vectors,
     "vectors_idx": build_vectors_idx,
     "vectors_nulls": build_vectors_nulls,
+    # Distributed vector Top-K, appended for the same reason.
+    "vectors_seg": build_vectors_seg,
 }
 
 BIG = "big"

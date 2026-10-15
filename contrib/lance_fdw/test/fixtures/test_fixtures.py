@@ -44,7 +44,7 @@ FROZEN_NAMES = [
     # A1: struct / map / blob v2, for A2 to read against.
     "nested", "nested_btier", "maps", "blobv2",
     # Vector Top-K.
-    "vectors", "vectors_idx", "vectors_nulls",
+    "vectors", "vectors_idx", "vectors_nulls", "vectors_seg",
 ]
 
 #: Every A-tier Arrow type has to appear in types_all.  Losing a
@@ -73,7 +73,7 @@ def entry(manifest, name):
 
 
 #: Datasets that hold another dataset's rows and so share its reference.
-SHARED_EXPECTED = {"vectors_idx": "vectors"}
+SHARED_EXPECTED = {"vectors_idx": "vectors", "vectors_seg": "vectors"}
 
 
 def expected_lines(fixtures_root, name):
@@ -452,6 +452,17 @@ def test_vectors_idx_is_vectors_with_an_l2_ivf_pq_index(opened):
     [index] = indexed.list_indices()
     assert index["fields"] == ["emb"]
     assert index["type"] == "IVF_PQ"
+
+
+def test_vectors_seg_is_vectors_with_one_segment_per_indexed_fragment(opened):
+    """Three segments of one logical index, and a fragment none of them covers."""
+    plain, segmented = opened("vectors"), opened("vectors_seg")
+    assert segmented.to_table() == plain.to_table()
+    assert [f.fragment_id for f in segmented.get_fragments()] == [0, 1, 2, 3]
+    segments = segmented.list_indices()
+    assert {s["name"] for s in segments} == {"emb_idx"}
+    assert all(s["fields"] == ["emb"] and s["type"] == "IVF_PQ" for s in segments)
+    assert sorted(sorted(s["fragment_ids"]) for s in segments) == [[0], [1], [2]]
 
 
 def test_vectors_nulls_has_null_and_zero_vectors(opened):
