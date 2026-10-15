@@ -47,33 +47,33 @@ typedef struct AnserBloomFilterConsumeState AnserBloomFilterConsumeState;
  * libpq connection (parallel-retrieve-cursor model); NULL means connect
  * without it and rely on pg_hba.  Ignored on the coordinator-local path.
  */
-extern AnserBloomFilterProduceState *ExecInitAnserBloomFilterProduce(
+extern PGDLLEXPORT AnserBloomFilterProduceState *ExecInitAnserBloomFilterProduce(
 										const AnserChannelKey *channel_key,
 										int64 total_elems,
 										Size max_payload_bytes,
 										uint32 part_index,
 										uint32 total_parts);
-extern void ExecAnserBloomFilterProduceAddDatum(AnserBloomFilterProduceState *state,
+extern PGDLLEXPORT void ExecAnserBloomFilterProduceAddDatum(AnserBloomFilterProduceState *state,
 										 Datum value, bool isnull);
-extern bool ExecAnserBloomFilterProduceHasFilter(AnserBloomFilterProduceState *state);
-extern bool ExecAnserBloomFilterProducePublish(AnserBloomFilterProduceState *state);
-extern bool ExecAnserBloomFilterProduceCancel(AnserBloomFilterProduceState *state);
-extern void ExecEndAnserBloomFilterProduce(AnserBloomFilterProduceState *state);
+extern PGDLLEXPORT bool ExecAnserBloomFilterProduceHasFilter(AnserBloomFilterProduceState *state);
+extern PGDLLEXPORT bool ExecAnserBloomFilterProducePublish(AnserBloomFilterProduceState *state);
+extern PGDLLEXPORT bool ExecAnserBloomFilterProduceCancel(AnserBloomFilterProduceState *state);
+extern PGDLLEXPORT void ExecEndAnserBloomFilterProduce(AnserBloomFilterProduceState *state);
 
 /* Consumer side: gather all parts of a channel into one Bloom filter. */
-extern AnserBloomFilterConsumeState *ExecInitAnserBloomFilterConsume(
+extern PGDLLEXPORT AnserBloomFilterConsumeState *ExecInitAnserBloomFilterConsume(
 										const AnserChannelKey *channel_key,
 										int64 total_elems,
 										Size max_payload_bytes,
 										uint32 expected_parts);
-extern bool ExecAnserBloomFilterConsume(AnserBloomFilterConsumeState *state,
+extern PGDLLEXPORT bool ExecAnserBloomFilterConsume(AnserBloomFilterConsumeState *state,
 									long registration_timeout_ms);
-extern bloom_filter *ExecAnserBloomFilterConsumerGetFilter(
+extern PGDLLEXPORT bloom_filter *ExecAnserBloomFilterConsumerGetFilter(
 									AnserBloomFilterConsumeState *state);
-extern uint32 ExecAnserBloomFilterConsumerReceivedParts(
+extern PGDLLEXPORT uint32 ExecAnserBloomFilterConsumerReceivedParts(
 									AnserBloomFilterConsumeState *state);
-extern bool ExecAnserBloomFilterConsumerWasCancelled(
+extern PGDLLEXPORT bool ExecAnserBloomFilterConsumerWasCancelled(
 								  AnserBloomFilterConsumeState *state);
-extern void ExecEndAnserBloomFilterConsume(AnserBloomFilterConsumeState *state);
+extern PGDLLEXPORT void ExecEndAnserBloomFilterConsume(AnserBloomFilterConsumeState *state);
 
 #endif							/* ANSERBLOOM_H */

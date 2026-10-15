@@ -165,12 +165,12 @@ typedef struct AnserWireMsg
 	uint32		crc;			/* of the header, key and decoded body */
 } AnserWireMsg;
 
-extern char *AnserWireFormat(const AnserChannelKey *channel_key, char kind,
+extern PGDLLEXPORT char *AnserWireFormat(const AnserChannelKey *channel_key, char kind,
 							 char payload_type, uint32 part_index,
 							 uint32 total_parts, int flags,
 							 const void *payload, Size payload_len);
-extern bool AnserWireParse(const char *msg, AnserWireMsg *out);
-extern bool AnserWireCheckCrc(const AnserWireMsg *msg, const void *body,
+extern PGDLLEXPORT bool AnserWireParse(const char *msg, AnserWireMsg *out);
+extern PGDLLEXPORT bool AnserWireCheckCrc(const AnserWireMsg *msg, const void *body,
 							  Size body_len);
 
 /*
@@ -185,7 +185,7 @@ extern bool AnserWireCheckCrc(const AnserWireMsg *msg, const void *body,
  * this one function so the two cannot drift apart.  It is implemented in
  * ansersideband.c, beside the reader that verifies it.
  */
-extern pg_crc32c AnserWirePushCrc(char payload_type, uint32 condition_id,
+extern PGDLLEXPORT pg_crc32c AnserWirePushCrc(char payload_type, uint32 condition_id,
 								  uint32 flags, const char *key, int keylen,
 								  const void *body, int bodylen);
 
@@ -204,12 +204,12 @@ extern pg_crc32c AnserWirePushCrc(char payload_type, uint32 condition_id,
  * is not of 'payload_type', which would mean two different kinds of information
  * had collided on one channel.
  */
-extern bool AnserSidebandPublish(const AnserChannelKey *channel_key,
+extern PGDLLEXPORT bool AnserSidebandPublish(const AnserChannelKey *channel_key,
 								 char payload_type,
 								 uint32 part_index, uint32 total_parts,
 								 const void *payload, Size payload_len,
 								 bool cancelled);
-extern bool AnserSidebandConsumeWait(const AnserChannelKey *channel_key,
+extern PGDLLEXPORT bool AnserSidebandConsumeWait(const AnserChannelKey *channel_key,
 									 char payload_type,
 									 void **payload, Size *payload_len,
 									 bool *cancelled, long timeout_ms);
@@ -225,14 +225,14 @@ extern bool AnserSidebandConsumeWait(const AnserChannelKey *channel_key,
  * same reasons, so that a coordinator-local producer and a segment producer are
  * interchangeable on one channel.
  */
-extern bool AnserDispatchNotifyHandler(struct CdbDispatchResult *dispatchResult,
+extern PGDLLEXPORT bool AnserDispatchNotifyHandler(struct CdbDispatchResult *dispatchResult,
 									   struct pgNotify *notify);
-extern bool AnserDispatchLocalPublish(const AnserChannelKey *channel_key,
+extern PGDLLEXPORT bool AnserDispatchLocalPublish(const AnserChannelKey *channel_key,
 									  char payload_type,
 									  uint32 part_index, uint32 total_parts,
 									  const void *payload, Size payload_len,
 									  bool cancelled);
-extern bool AnserDispatchLocalConsume(const AnserChannelKey *channel_key,
+extern PGDLLEXPORT bool AnserDispatchLocalConsume(const AnserChannelKey *channel_key,
 									  char payload_type,
 									  void **payload, Size *payload_len,
 									  bool *cancelled);
@@ -242,8 +242,8 @@ extern bool AnserDispatchLocalConsume(const AnserChannelKey *channel_key,
  * the executor/transaction-end callbacks call; the halves are exposed because
  * each lives with the state it owns.
  */
-extern void AnserDispatchReset(void);
-extern void AnserSidebandResetInbox(void);
-extern void AnserSidebandResetAll(void);
+extern PGDLLEXPORT void AnserDispatchReset(void);
+extern PGDLLEXPORT void AnserSidebandResetInbox(void);
+extern PGDLLEXPORT void AnserSidebandResetAll(void);
 
 #endif							/* ANSERSIDEBAND_H */

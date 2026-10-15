@@ -55,7 +55,7 @@
 /* Per-statement state for the injection pass. */
 typedef struct AnserInjectCtx
 {
-	PlannedStmt *stmt;			/* for slices[]: see anser_slice_producers */
+	PlannedStmt *stmt;			/* for slices[]: see AnserSliceProducers */
 	int			slice_index;	/* slice the subtree being walked runs in */
 	uint32		next_condition_id;
 	int			next_plan_node_id;
@@ -65,13 +65,8 @@ typedef struct AnserInjectCtx
 } AnserInjectCtx;
 
 static int	anser_max_plan_node_id(Plan *plan);
-static int	anser_slice_producers(AnserInjectCtx *ctx, int slice_index);
 static bool anser_hashjoin_keys(HashJoin *hj, AttrNumber *inner_attno,
 								AttrNumber *outer_attno);
-static bool anser_resolve_key_scan(Plan *top, AttrNumber key_attno,
-								   int slice_index, Plan **parent_out,
-								   Plan **scan_out, AttrNumber *attno_out,
-								   int *slice_out);
 static void anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx);
 static void anser_inject_walk(Plan *plan, AnserInjectCtx *ctx);
 
@@ -127,13 +122,23 @@ AnserApplyRuntimeFilters(PlannedStmt *stmt)
 }
 
 /*
- * Largest plan_node_id in a plan subtree.  Recurses the spine plus CustomScan
- * children; sufficient for the supported (simple) plan shape.
+ * Largest plan_node_id in a plan subtree.
+ *
+ * This has to see every node in the subtree, because the result is the
+ * high-water mark injected nodes are numbered from: an id it misses is an id we
+ * hand out a second time.  So unlike anser_inject_walk, which deliberately only
+ * follows the shapes it injects into, this descends every child list there is.
+ * Getting that wrong corrupts a plan the pass would otherwise have left alone --
+ * an Append (a partitioned table, a UNION) is enough to trigger it.
+ *
+ * InitPlans need no arm here: a SubPlan only references stmt->subplans by index,
+ * and AnserApplyRuntimeFilters walks that list separately.
  */
 static int
 anser_max_plan_node_id(Plan *plan)
 {
 	int			m;
+	ListCell   *lc;
 
 	if (plan == NULL)
 		return 0;
@@ -141,12 +146,38 @@ anser_max_plan_node_id(Plan *plan)
 	m = plan->plan_node_id;
 	m = Max(m, anser_max_plan_node_id(outerPlan(plan)));
 	m = Max(m, anser_max_plan_node_id(innerPlan(plan)));
-	if (IsA(plan, CustomScan))
-	{
-		ListCell   *lc;
 
-		foreach(lc, ((CustomScan *) plan)->custom_plans)
-			m = Max(m, anser_max_plan_node_id((Plan *) lfirst(lc)));
+	switch (nodeTag(plan))
+	{
+		case T_Append:
+			foreach(lc, ((Append *) plan)->appendplans)
+				m = Max(m, anser_max_plan_node_id((Plan *) lfirst(lc)));
+			break;
+		case T_MergeAppend:
+			foreach(lc, ((MergeAppend *) plan)->mergeplans)
+				m = Max(m, anser_max_plan_node_id((Plan *) lfirst(lc)));
+			break;
+		case T_Sequence:
+			foreach(lc, ((Sequence *) plan)->subplans)
+				m = Max(m, anser_max_plan_node_id((Plan *) lfirst(lc)));
+			break;
+		case T_BitmapAnd:
+			foreach(lc, ((BitmapAnd *) plan)->bitmapplans)
+				m = Max(m, anser_max_plan_node_id((Plan *) lfirst(lc)));
+			break;
+		case T_BitmapOr:
+			foreach(lc, ((BitmapOr *) plan)->bitmapplans)
+				m = Max(m, anser_max_plan_node_id((Plan *) lfirst(lc)));
+			break;
+		case T_SubqueryScan:
+			m = Max(m, anser_max_plan_node_id(((SubqueryScan *) plan)->subplan));
+			break;
+		case T_CustomScan:
+			foreach(lc, ((CustomScan *) plan)->custom_plans)
+				m = Max(m, anser_max_plan_node_id((Plan *) lfirst(lc)));
+			break;
+		default:
+			break;
 	}
 
 	return m;
@@ -317,10 +348,10 @@ anser_hashjoin_keys(HashJoin *hj, AttrNumber *inner_attno, AttrNumber *outer_att
  * everything else in the outer link.  A SeqScan is only accepted through one of
  * those two: the inner child of a HashJoin is always a Hash.
  */
-static bool
-anser_resolve_key_scan(Plan *top, AttrNumber key_attno, int slice_index,
-					   Plan **parent_out, Plan **scan_out,
-					   AttrNumber *attno_out, int *slice_out)
+bool
+AnserResolveKeyScan(Plan *top, AttrNumber key_attno, int slice_index,
+					Plan **parent_out, Plan **scan_out,
+					AttrNumber *attno_out, int *slice_out)
 {
 	Plan	   *node = top;
 	AttrNumber	attno = key_attno;
@@ -453,9 +484,9 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 
 	if (!anser_hashjoin_keys(hj, &inner_attno, &outer_attno))
 		return;
-	if (!anser_resolve_key_scan(hash, inner_attno, ctx->slice_index,
-								&build_parent, &build_scan, &build_attno,
-								&build_slice))
+	if (!AnserResolveKeyScan(hash, inner_attno, ctx->slice_index,
+							 &build_parent, &build_scan, &build_attno,
+							 &build_slice))
 		return;
 
 	/*
@@ -477,9 +508,9 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 		probe_scan = probe;
 		probe_attno = outer_attno;
 	}
-	else if (!anser_resolve_key_scan(probe, outer_attno, ctx->slice_index,
-									 &probe_parent, &probe_scan, &probe_attno,
-									 &probe_slice))
+	else if (!AnserResolveKeyScan(probe, outer_attno, ctx->slice_index,
+								  &probe_parent, &probe_scan, &probe_attno,
+								  &probe_slice))
 		return;
 
 	/*
@@ -495,7 +526,7 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 	 * is too low makes the coordinator complete the channel early and ship a
 	 * filter missing keys, which drops joinable rows.
 	 */
-	n_producers = anser_slice_producers(ctx, build_slice);
+	n_producers = AnserSliceProducers(ctx->stmt, build_slice);
 	if (n_producers <= 0)
 		return;
 	/*
@@ -612,17 +643,17 @@ anser_inject_walk(Plan *plan, AnserInjectCtx *ctx)
  * Motion 16:16 over a Parallel Seq Scan, so 16).  Reading it from the slice
  * means neither case needs special handling.
  */
-static int
-anser_slice_producers(AnserInjectCtx *ctx, int slice_index)
+int
+AnserSliceProducers(PlannedStmt *stmt, int slice_index)
 {
 	PlanSlice  *slice;
 	int			factor;
 
-	if (ctx->stmt->slices == NULL ||
-		slice_index < 0 || slice_index >= ctx->stmt->numSlices)
+	if (stmt == NULL || stmt->slices == NULL ||
+		slice_index < 0 || slice_index >= stmt->numSlices)
 		return 0;				/* unknown: caller declines to inject */
 
-	slice = &ctx->stmt->slices[slice_index];
+	slice = &stmt->slices[slice_index];
 
 	/* The coordinator's own slice is one process and has no gang. */
 	if (slice->gangType == GANGTYPE_UNALLOCATED ||
