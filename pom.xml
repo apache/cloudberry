@@ -1264,6 +1264,11 @@ code or new licensing patterns.
             <exclude>contrib/cube/**/*.out</exclude>
             <exclude>contrib/datalake_fdw/test/**/*.sql</exclude>
             <exclude>contrib/datalake_fdw/test/**/*.out</exclude>
+            <exclude>contrib/lance_fdw/test/**/*.sql</exclude>
+            <exclude>contrib/lance_fdw/test/**/*.out</exclude>
+            <exclude>contrib/lance_fdw/test/fixtures/expected/*.jsonl</exclude>
+            <exclude>contrib/lance_fdw/test/fixtures/manifest.json</exclude>
+            <exclude>contrib/lance_fdw/third_party/nanoarrow/NOTICE.txt</exclude>
             <exclude>contrib/dblink/**/*.sql</exclude>
             <exclude>contrib/dblink/**/*.out</exclude>
             <exclude>contrib/dict_int/**/*.sql</exclude>

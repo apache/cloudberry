@@ -1,0 +1,227 @@
+-- types_errors: the strictness half of the type bridge.
+--
+-- Every case here is a foreign table whose declaration would cost information
+-- to honour, and every one of them has to fail in BeginForeignScan rather than
+-- return a truncated, wrapped or NULL value.  The four rules are: no narrowing,
+-- no loss of precision, no crossing between timestamp and timestamptz, and
+-- nothing at all out of a B-tier column.
+--
+-- The messages are the point, so the statements go through message(), which
+-- returns the wording without the segment suffix a QE error arrives with.  Each
+-- one names the column, the Arrow format string and the PostgreSQL type: the
+-- three things it takes to fix the table definition.
+\pset format unaligned
+DO $$
+BEGIN
+  EXECUTE format('CREATE SERVER tyerr_files FOREIGN DATA WRAPPER lance_fdw OPTIONS (base_uri %L)',
+                 current_setting('regress.fixture_dir'));
+END
+$$;
+-- Narrowing an integer or a float: the value would wrap or round.
+CREATE FOREIGN TABLE lance_feature.tyerr_int64 (c_int64 integer)
+  SERVER tyerr_files OPTIONS (uri 'types_all.lance');
+SELECT lance_feature.message($$SELECT * FROM lance_feature.tyerr_int64$$) AS int64_into_integer;
+int64_into_integer
+lance_fdw: column "c_int64": Lance type "l" (int64) cannot be read as integer
+(1 row)
+CREATE FOREIGN TABLE lance_feature.tyerr_uint32 (c_uint32 integer)
+  SERVER tyerr_files OPTIONS (uri 'types_all.lance');
+SELECT lance_feature.message($$SELECT * FROM lance_feature.tyerr_uint32$$) AS uint32_into_integer;
+uint32_into_integer
+lance_fdw: column "c_uint32": Lance type "I" (uint32) cannot be read as integer
+(1 row)
+CREATE FOREIGN TABLE lance_feature.tyerr_f16_int (c_float16 smallint)
+  SERVER tyerr_files OPTIONS (uri 'types_all.lance');
+SELECT lance_feature.message($$SELECT * FROM lance_feature.tyerr_f16_int$$) AS float16_into_smallint;
+float16_into_smallint
+lance_fdw: column "c_float16": Lance type "e" (half_float) cannot be read as smallint
+(1 row)
+-- A numeric has to hold both halves of the decimal: the scale, and the digits
+-- in front of the point.  numeric(5,2) has neither, numeric(30,10) has the
+-- scale but not the 28 integer digits of decimal128(38,10).
+CREATE FOREIGN TABLE lance_feature.tyerr_dec_small (c_dec128_38_10 numeric(5,2))
+  SERVER tyerr_files OPTIONS (uri 'types_all.lance');
+SELECT lance_feature.message($$SELECT * FROM lance_feature.tyerr_dec_small$$) AS dec38_into_numeric_5_2;
+dec38_into_numeric_5_2
+lance_fdw: column "c_dec128_38_10": Lance type "d:38,10" (decimal128) cannot be read as numeric(5,2)
+(1 row)
+CREATE FOREIGN TABLE lance_feature.tyerr_dec_short (c_dec128_38_10 numeric(30,10))
+  SERVER tyerr_files OPTIONS (uri 'types_all.lance');
+SELECT lance_feature.message($$SELECT * FROM lance_feature.tyerr_dec_short$$) AS dec38_into_numeric_30_10;
+dec38_into_numeric_30_10
+lance_fdw: column "c_dec128_38_10": Lance type "d:38,10" (decimal128) cannot be read as numeric(30,10)
+(1 row)
+-- A declared precision below six microseconds would truncate every value.
+CREATE FOREIGN TABLE lance_feature.tyerr_ts3 (c_ts_us timestamp(3))
+  SERVER tyerr_files OPTIONS (uri 'types_all.lance');
+SELECT lance_feature.message($$SELECT * FROM lance_feature.tyerr_ts3$$) AS ts_us_into_timestamp3;
+ts_us_into_timestamp3
+lance_fdw: column "c_ts_us": Lance type "tsu:" (timestamp) cannot be read as timestamp(3) without time zone
+(1 row)
+-- A zone or its absence decides which of the two PostgreSQL types the column
+-- is; reading either as the other would reinterpret the instant, so both
+-- crossings are refused.
+CREATE FOREIGN TABLE lance_feature.tyerr_tz_into_ts (c_ts_us_tz timestamp)
+  SERVER tyerr_files OPTIONS (uri 'types_all.lance');
+SELECT lance_feature.message($$SELECT * FROM lance_feature.tyerr_tz_into_ts$$) AS zoned_into_timestamp;
+zoned_into_timestamp
+lance_fdw: column "c_ts_us_tz": Lance type "tsu:Asia/Shanghai" (timestamp) cannot be read as timestamp without time zone
+(1 row)
+CREATE FOREIGN TABLE lance_feature.tyerr_ts_into_tz (c_ts_us timestamptz)
+  SERVER tyerr_files OPTIONS (uri 'types_all.lance');
+SELECT lance_feature.message($$SELECT * FROM lance_feature.tyerr_ts_into_tz$$) AS unzoned_into_timestamptz;
+unzoned_into_timestamptz
+lance_fdw: column "c_ts_us": Lance type "tsu:" (timestamp) cannot be read as timestamp with time zone
+(1 row)
+-- A date is not a timestamp, however close the two look.
+CREATE FOREIGN TABLE lance_feature.tyerr_date_ts (c_date32 timestamp)
+  SERVER tyerr_files OPTIONS (uri 'types_all.lance');
+SELECT lance_feature.message($$SELECT * FROM lance_feature.tyerr_date_ts$$) AS date32_into_timestamp;
+date32_into_timestamp
+lance_fdw: column "c_date32": Lance type "tdD" (date32) cannot be read as timestamp without time zone
+(1 row)
+-- A list is read as an array of its element type, and the element gets exactly
+-- the rules a column of that type would: float64 does not fit real, int64 does
+-- not fit integer, and a length-limited element type would truncate.
+CREATE FOREIGN TABLE lance_feature.tyerr_fsl_narrow (c_fsl_f64_4 real[])
+  SERVER tyerr_files OPTIONS (uri 'types_all.lance');
+SELECT lance_feature.message($$SELECT * FROM lance_feature.tyerr_fsl_narrow$$) AS fsl_f64_into_real_array;
+fsl_f64_into_real_array
+lance_fdw: column "c_fsl_f64_4": Lance type "+w:4" (fixed_size_list) cannot be read as real[]
+(1 row)
+CREATE FOREIGN TABLE lance_feature.tyerr_list_narrow (c_list_i64 integer[])
+  SERVER tyerr_files OPTIONS (uri 'types_all.lance');
+SELECT lance_feature.message($$SELECT * FROM lance_feature.tyerr_list_narrow$$) AS list_i64_into_integer_array;
+list_i64_into_integer_array
+lance_fdw: column "c_list_i64": Lance type "+l" (list) cannot be read as integer[]
+(1 row)
+CREATE FOREIGN TABLE lance_feature.tyerr_list_varchar (c_list_utf8 varchar(4)[])
+  SERVER tyerr_files OPTIONS (uri 'types_all.lance');
+SELECT lance_feature.message($$SELECT * FROM lance_feature.tyerr_list_varchar$$) AS list_utf8_into_varchar_array;
+list_utf8_into_varchar_array
+lance_fdw: column "c_list_utf8": Lance type "+l" (list) cannot be read as character varying(4)[]
+(1 row)
+-- A list read as something that is not an array at all.
+CREATE FOREIGN TABLE lance_feature.tyerr_fsl_text (c_fsl_f32_4 text)
+  SERVER tyerr_files OPTIONS (uri 'types_all.lance');
+SELECT lance_feature.message($$SELECT * FROM lance_feature.tyerr_fsl_text$$) AS fsl_into_text;
+fsl_into_text
+lance_fdw: column "c_fsl_f32_4": Lance type "+w:4" (fixed_size_list) cannot be read as text
+(1 row)
+CREATE FOREIGN TABLE lance_feature.tyerr_list_scalar (c_list_i64 bigint)
+  SERVER tyerr_files OPTIONS (uri 'types_all.lance');
+SELECT lance_feature.message($$SELECT * FROM lance_feature.tyerr_list_scalar$$) AS list_into_bigint;
+list_into_bigint
+lance_fdw: column "c_list_i64": Lance type "+l" (list) cannot be read as bigint
+(1 row)
+-- A Lance blob column is B-tier, so no
+-- declaration makes it readable.  The dataset schema calls it
+-- large_binary while the scanner hands back a struct{position,size} descriptor
+-- instead of the bytes, so which of the two the message names depends on the
+-- schema the stream reports; that it is refused rather than read does not.
+CREATE FOREIGN TABLE lance_feature.tyerr_blob (id integer, plain_lb bytea, blob bytea)
+  SERVER tyerr_files OPTIONS (uri 'blob.lance');
+SELECT lance_feature.message($$SELECT blob FROM lance_feature.tyerr_blob$$)
+       LIKE 'lance_fdw: column "blob": %is not supported%' AS blob_refused;
+blob_refused
+t
+(1 row)
+-- The B-tier column only has to be refused when it is read: the plain
+-- large_binary column next to it in the same table still comes back.
+SELECT id, octet_length(plain_lb) AS bytes FROM lance_feature.tyerr_blob ORDER BY id;
+id|bytes
+0|524288
+1|0
+2|
+3|1048576
+(4 rows)
+-- Nothing above rejects a declaration that costs nothing: an unconstrained
+-- numeric, an exact one, a timestamp without a stated precision, a timestamptz
+-- over the zoned column, and both float widenings.
+CREATE FOREIGN TABLE lance_feature.tyerr_ok (
+  id integer,
+  c_ts_s timestamp,
+  c_ts_s_tz timestamptz,
+  c_dec128_10_2 numeric,
+  c_dec128_38_10 numeric(38,10),
+  c_fsl_f32_4 double precision[],
+  c_float16 double precision
+) SERVER tyerr_files OPTIONS (uri 'types_all.lance');
+SELECT count(c_ts_s) AS ts, count(c_ts_s_tz) AS ts_tz, count(c_dec128_10_2) AS dec_any,
+       count(c_dec128_38_10) AS dec_exact, count(c_fsl_f32_4) AS fsl_wide,
+       count(c_float16) AS f16_wide
+  FROM lance_feature.tyerr_ok;
+ts|ts_tz|dec_any|dec_exact|fsl_wide|f16_wide
+21|20|21|20|21|20
+(1 row)
+-- Widening keeps the value the narrow type held, digit for digit.
+SELECT id, c_float16, c_fsl_f32_4 FROM lance_feature.tyerr_ok
+  WHERE id IN (2, 4) ORDER BY id;
+id|c_float16|c_fsl_f32_4
+2|-2.25|{-1,-2,-3,-4}
+4|6.103515625e-05|{9.999999680285692e+37,-9.999999680285692e+37,0,1}
+(2 rows)
+-- After all of that the same backend still reads a real dataset.
+SELECT count(*) AS rows FROM lance_feature.tyerr_ok;
+rows
+24
+(1 row)
+-- A declared precision only has to hold the digits the Arrow unit has: a
+-- timestamp[s] cannot lose anything to timestamp(0), nor a timestamp[ms] to
+-- timestamp(3).  Both are refused for microseconds, which is the case above.
+-- Narrowing must also change no value, which is what the EXCEPT says.
+CREATE FOREIGN TABLE lance_feature.tyerr_ts_narrow (
+  id integer, c_ts_s timestamp(0), c_ts_ms timestamp(3), c_ts_s_tz timestamptz(0)
+) SERVER tyerr_files OPTIONS (uri 'types_all.lance');
+CREATE FOREIGN TABLE lance_feature.tyerr_ts_wide (
+  id integer, c_ts_s timestamp, c_ts_ms timestamp(6), c_ts_s_tz timestamptz
+) SERVER tyerr_files OPTIONS (uri 'types_all.lance');
+SELECT count(c_ts_s) AS ts_s, count(c_ts_ms) AS ts_ms, count(c_ts_s_tz) AS ts_s_tz
+  FROM lance_feature.tyerr_ts_narrow;
+ts_s|ts_ms|ts_s_tz
+21|21|20
+(1 row)
+SELECT count(*) AS narrowing_changed_a_value FROM (
+  SELECT * FROM lance_feature.tyerr_ts_narrow
+  EXCEPT SELECT * FROM lance_feature.tyerr_ts_wide) d;
+narrowing_changed_a_value
+0
+(1 row)
+-- Values PostgreSQL cannot represent are refused per value, not rounded and
+-- not truncated.  strict.lance holds a nanosecond timestamp that is not a
+-- whole microsecond and a string with a zero byte in it, each next to an
+-- ordinary value of the same type that has to keep working.
+CREATE FOREIGN TABLE lance_feature.tyerr_strict (
+  id integer,
+  ts_ns_aligned timestamp,
+  ts_ns_odd timestamp,
+  s_plain text,
+  s_nul text
+) SERVER tyerr_files OPTIONS (uri 'strict.lance');
+SELECT lance_feature.message($$SELECT ts_ns_odd FROM lance_feature.tyerr_strict$$) AS ns_not_whole_microseconds;
+ns_not_whole_microseconds
+lance_fdw: column "ts_ns_odd": nanosecond timestamp 1234567 is not a whole number of microseconds
+(1 row)
+SELECT lance_feature.message($$SELECT s_nul FROM lance_feature.tyerr_strict$$) AS text_with_a_zero_byte;
+text_with_a_zero_byte
+invalid byte sequence for encoding "UTF8": 0x00
+(1 row)
+-- Same as the types suite: pg_regress runs psql with PGDATESTYLE=Postgres,MDY
+-- and PGTZ=PST8PDT, and a timestamp is easier to check against the fixture in
+-- the form the reference file uses.
+SET DateStyle = 'ISO, YMD';
+SET timezone = 'UTC';
+SELECT id, ts_ns_aligned, to_json(s_plain) AS s_plain
+  FROM lance_feature.tyerr_strict ORDER BY id;
+id|ts_ns_aligned|s_plain
+0|1970-01-01 00:00:01|"plain"
+1|2023-11-14 22:13:20.123456|"ünicode"
+2||
+(3 rows)
+RESET timezone;
+RESET DateStyle;
+SELECT count(*) AS rows, count(ts_ns_aligned) AS aligned, count(s_plain) AS plain
+  FROM lance_feature.tyerr_strict;
+rows|aligned|plain
+3|2|2
+(1 row)

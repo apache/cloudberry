@@ -1,0 +1,362 @@
+-- types: every A-tier type read through the wrapper, value by value against
+-- what pylance read out of the same fixtures (test/fixtures/expected/
+-- types_all.jsonl, large_text.jsonl and blob.jsonl).
+--
+-- The table is imported rather than written by hand, so the column types are
+-- the ones IMPORT FOREIGN SCHEMA generates and the two halves of the type
+-- bridge - what it declares and what it reads - are checked against each other.
+--
+-- pg_regress runs psql with PGDATESTYLE=Postgres,MDY and PGTZ=PST8PDT, while
+-- the reference values are ISO and UTC.  UTC is also what an Arrow timestamp
+-- means, zone name or not, so the suite sets both rather than depending on the
+-- harness.  Text columns go through to_json() because two fixture values carry
+-- a tab and a newline; binary columns print as bytea's hex.
+\pset format unaligned
+SET DateStyle = 'ISO, YMD';
+SET timezone = 'UTC';
+DO $$
+BEGIN
+  EXECUTE format('CREATE SERVER types_files FOREIGN DATA WRAPPER lance_fdw OPTIONS (base_uri %L)',
+                 current_setting('regress.fixture_dir'));
+END
+$$;
+IMPORT FOREIGN SCHEMA fixtures LIMIT TO ("types_all.lance")
+  FROM SERVER types_files INTO lance_feature;
+ALTER FOREIGN TABLE lance_feature."types_all.lance" RENAME TO ty_all;
+SELECT id, c_bool, c_int8, c_int16, c_int32, c_int64, c_uint8, c_uint16, c_uint32
+  FROM lance_feature.ty_all ORDER BY id;
+id|c_bool|c_int8|c_int16|c_int32|c_int64|c_uint8|c_uint16|c_uint32
+0|t|0|0|0|0|0||0
+1|f||-1|-1|-1|255|65535|4294967295
+2|t|127|32767||9223372036854775807|1|1|1
+3|f|-128|-32768|-2147483648|-9223372036854775808||32768|2147483648
+4||42|4242|424242|2147483648|7|7|
+5|t|0||0|-2147483649|0|0|0
+6|f|-1|-1|-1||255|65535|4294967295
+7|t|127|32767|2147483647|-1|1||1
+8|f||-32768|-2147483648|9223372036854775807|128|32768|2147483648
+9|f|42|4242||-9223372036854775808|7|7|7
+10|t|0|0|0|2147483648||0|0
+11||-1|-1|-1|-2147483649|255|65535|
+12|t|127||2147483647|0|1|1|1
+13|f|-128|-32768|-2147483648||128|32768|2147483648
+14|f|42|4242|424242|9223372036854775807|7||7
+15|t||0|0|-9223372036854775808|0|0|0
+16|f|-1|-1||2147483648|255|65535|4294967295
+17|t|127|32767|2147483647|-2147483649||1|1
+18||-128|-32768|-2147483648|0|128|32768|
+19|f|42||424242|-1|7|7|7
+20|t|0|0|0||0|0|0
+21|f|-1|-1|-1|-9223372036854775808|255||4294967295
+22|t||32767|2147483647|2147483648|1|1|1
+23|f|-128|-32768||-2147483649|128|32768|2147483648
+(24 rows)
+-- float16 is decoded to the value its 16 bits denote; 6.1035156e-05 is 2^-14
+-- and 65504 is the largest half float.
+SELECT id, c_float16, c_float32, c_float64 FROM lance_feature.ty_all ORDER BY id;
+id|c_float16|c_float32|c_float64
+0|0|0|0
+1||-0|1.7976931348623157e+308
+2|-2.25|3.4028235e+38|
+3|65504|NaN|-Infinity
+4|6.1035156e-05|Infinity|0.1
+5|0||0
+6|1.5|0|1.7976931348623157e+308
+7|-2.25|-0|2.2250738585072014e-308
+8||3.4028235e+38|-Infinity
+9|6.1035156e-05|NaN|
+10|0|Infinity|0
+11|1.5|-1.5|1.7976931348623157e+308
+12|-2.25||2.2250738585072014e-308
+13|65504|-0|-Infinity
+14|6.1035156e-05|3.4028235e+38|0.1
+15||NaN|0
+16|1.5|Infinity|
+17|-2.25|-1.5|2.2250738585072014e-308
+18|65504|0|-Infinity
+19|6.1035156e-05||0.1
+20|0|3.4028235e+38|0
+21|1.5|NaN|1.7976931348623157e+308
+22||Infinity|2.2250738585072014e-308
+23|65504|-1.5|
+(24 rows)
+SELECT id, to_json(c_utf8) AS utf8, to_json(c_large_utf8) AS large_utf8
+  FROM lance_feature.ty_all ORDER BY id;
+id|utf8|large_utf8
+0|""|""
+1|"ascii"|"LARGE"
+2|"quote\"back\\slash"|"日本語"
+3|"tab\tnl\n"|
+4|"ünicøde"|"😀"
+5|""|""
+6||"LARGE"
+7|"quote\"back\\slash"|"日本語"
+8|"tab\tnl\n"|"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+9|"ünicøde"|"😀"
+10|""|
+11|"ascii"|"LARGE"
+12|"quote\"back\\slash"|"日本語"
+13||"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+14|"ünicøde"|"😀"
+15|""|""
+16|"ascii"|"LARGE"
+17|"quote\"back\\slash"|
+18|"tab\tnl\n"|"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+19|"ünicøde"|"😀"
+20||""
+21|"ascii"|"LARGE"
+22|"quote\"back\\slash"|"日本語"
+23|"tab\tnl\n"|"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+(24 rows)
+SELECT id, c_binary, c_large_binary FROM lance_feature.ty_all ORDER BY id;
+id|c_binary|c_large_binary
+0||\x
+1|\x000102|\x00
+2|\xfffe|\xdeadbeef
+3|\x6173636969|\x4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c
+4|\x000102030405060708090a0b0c0d0e0f|
+5|\x|\x
+6|\x000102|\x00
+7||\xdeadbeef
+8|\x6173636969|\x4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c
+9|\x000102030405060708090a0b0c0d0e0f|\x0001020304050607
+10|\x|\x
+11|\x000102|
+12|\xfffe|\xdeadbeef
+13|\x6173636969|\x4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c
+14||\x0001020304050607
+15|\x|\x
+16|\x000102|\x00
+17|\xfffe|\xdeadbeef
+18|\x6173636969|
+19|\x000102030405060708090a0b0c0d0e0f|\x0001020304050607
+20|\x|\x
+21||\x00
+22|\xfffe|\xdeadbeef
+23|\x6173636969|\x4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c
+(24 rows)
+-- date32 counts days from 1970-01-01 and PostgreSQL from 2000-01-01; the
+-- fixture reaches both ends of the year range on purpose.
+SELECT id, c_date32 FROM lance_feature.ty_all ORDER BY id;
+id|c_date32
+0|1970-01-01
+1|
+2|0001-01-01
+3|9999-12-31
+4|2000-02-29
+5|1970-01-01
+6|2026-09-03
+7|0001-01-01
+8|
+9|2000-02-29
+10|1970-01-01
+11|2026-09-03
+12|0001-01-01
+13|9999-12-31
+14|2000-02-29
+15|
+16|2026-09-03
+17|0001-01-01
+18|9999-12-31
+19|2000-02-29
+20|1970-01-01
+21|2026-09-03
+22|
+23|9999-12-31
+(24 rows)
+-- All four Arrow units land in the same microseconds.  The seconds and
+-- milliseconds columns hold the same instants as the microsecond one, so a
+-- unit that was scaled wrongly would show up as a shifted instant here.
+SELECT id, c_ts_s, c_ts_ms, c_ts_us, c_ts_ns FROM lance_feature.ty_all ORDER BY id;
+id|c_ts_s|c_ts_ms|c_ts_us|c_ts_ns
+0|1970-01-01 00:00:00|1970-01-01 00:00:00||1970-01-01 00:00:00
+1|2026-09-03 12:34:56|2026-09-03 12:34:56.123|2026-09-03 12:34:56.123456|
+2|1969-07-20 20:17:40|1969-07-20 20:17:40|1969-07-20 20:17:40|1969-07-20 20:17:40
+3|2262-04-11 23:47:16|2262-04-11 23:47:16|2262-04-11 23:47:16|2262-04-11 23:47:16
+4|2000-01-01 00:00:00|2000-01-01 00:00:00|2000-01-01 00:00:00|2000-01-01 00:00:00
+5||1970-01-01 00:00:00|1970-01-01 00:00:00|1970-01-01 00:00:00
+6|2026-09-03 12:34:56||2026-09-03 12:34:56.123456|2026-09-03 12:34:56.123456
+7|1969-07-20 20:17:40|1969-07-20 20:17:40||1969-07-20 20:17:40
+8|2262-04-11 23:47:16|2262-04-11 23:47:16|2262-04-11 23:47:16|
+9|2000-01-01 00:00:00|2000-01-01 00:00:00|2000-01-01 00:00:00|2000-01-01 00:00:00
+10|1970-01-01 00:00:00|1970-01-01 00:00:00|1970-01-01 00:00:00|1970-01-01 00:00:00
+11|2026-09-03 12:34:56|2026-09-03 12:34:56.123|2026-09-03 12:34:56.123456|2026-09-03 12:34:56.123456
+12||1969-07-20 20:17:40|1969-07-20 20:17:40|1969-07-20 20:17:40
+13|2262-04-11 23:47:16||2262-04-11 23:47:16|2262-04-11 23:47:16
+14|2000-01-01 00:00:00|2000-01-01 00:00:00||2000-01-01 00:00:00
+15|1970-01-01 00:00:00|1970-01-01 00:00:00|1970-01-01 00:00:00|
+16|2026-09-03 12:34:56|2026-09-03 12:34:56.123|2026-09-03 12:34:56.123456|2026-09-03 12:34:56.123456
+17|1969-07-20 20:17:40|1969-07-20 20:17:40|1969-07-20 20:17:40|1969-07-20 20:17:40
+18|2262-04-11 23:47:16|2262-04-11 23:47:16|2262-04-11 23:47:16|2262-04-11 23:47:16
+19||2000-01-01 00:00:00|2000-01-01 00:00:00|2000-01-01 00:00:00
+20|1970-01-01 00:00:00||1970-01-01 00:00:00|1970-01-01 00:00:00
+21|2026-09-03 12:34:56|2026-09-03 12:34:56.123||2026-09-03 12:34:56.123456
+22|1969-07-20 20:17:40|1969-07-20 20:17:40|1969-07-20 20:17:40|
+23|2262-04-11 23:47:16|2262-04-11 23:47:16|2262-04-11 23:47:16|2262-04-11 23:47:16
+(24 rows)
+-- The zoned columns carry UTC, UTC and Asia/Shanghai zone names; the value is
+-- a UTC epoch in all three cases and the name is dropped, so all
+-- of them read as the same instants as the unzoned columns above.
+SELECT id, c_ts_s_tz, c_ts_ms_tz, c_ts_us_tz, c_ts_ns_tz
+  FROM lance_feature.ty_all ORDER BY id;
+id|c_ts_s_tz|c_ts_ms_tz|c_ts_us_tz|c_ts_ns_tz
+0|1970-01-01 00:00:00+00|1970-01-01 00:00:00+00|1970-01-01 00:00:00+00|1970-01-01 00:00:00+00
+1|2026-09-03 12:34:56+00|2026-09-03 12:34:56.123+00|2026-09-03 12:34:56.123456+00|2026-09-03 12:34:56.123456+00
+2||1969-07-20 20:17:40+00|1969-07-20 20:17:40+00|1969-07-20 20:17:40+00
+3|2262-04-11 23:47:16+00||2262-04-11 23:47:16+00|2262-04-11 23:47:16+00
+4|2000-01-01 00:00:00+00|2000-01-01 00:00:00+00||2000-01-01 00:00:00+00
+5|1970-01-01 00:00:00+00|1970-01-01 00:00:00+00|1970-01-01 00:00:00+00|
+6|2026-09-03 12:34:56+00|2026-09-03 12:34:56.123+00|2026-09-03 12:34:56.123456+00|2026-09-03 12:34:56.123456+00
+7|1969-07-20 20:17:40+00|1969-07-20 20:17:40+00|1969-07-20 20:17:40+00|1969-07-20 20:17:40+00
+8|2262-04-11 23:47:16+00|2262-04-11 23:47:16+00|2262-04-11 23:47:16+00|2262-04-11 23:47:16+00
+9||2000-01-01 00:00:00+00|2000-01-01 00:00:00+00|2000-01-01 00:00:00+00
+10|1970-01-01 00:00:00+00||1970-01-01 00:00:00+00|1970-01-01 00:00:00+00
+11|2026-09-03 12:34:56+00|2026-09-03 12:34:56.123+00||2026-09-03 12:34:56.123456+00
+12|1969-07-20 20:17:40+00|1969-07-20 20:17:40+00|1969-07-20 20:17:40+00|
+13|2262-04-11 23:47:16+00|2262-04-11 23:47:16+00|2262-04-11 23:47:16+00|2262-04-11 23:47:16+00
+14|2000-01-01 00:00:00+00|2000-01-01 00:00:00+00|2000-01-01 00:00:00+00|2000-01-01 00:00:00+00
+15|1970-01-01 00:00:00+00|1970-01-01 00:00:00+00|1970-01-01 00:00:00+00|1970-01-01 00:00:00+00
+16||2026-09-03 12:34:56.123+00|2026-09-03 12:34:56.123456+00|2026-09-03 12:34:56.123456+00
+17|1969-07-20 20:17:40+00||1969-07-20 20:17:40+00|1969-07-20 20:17:40+00
+18|2262-04-11 23:47:16+00|2262-04-11 23:47:16+00||2262-04-11 23:47:16+00
+19|2000-01-01 00:00:00+00|2000-01-01 00:00:00+00|2000-01-01 00:00:00+00|
+20|1970-01-01 00:00:00+00|1970-01-01 00:00:00+00|1970-01-01 00:00:00+00|1970-01-01 00:00:00+00
+21|2026-09-03 12:34:56+00|2026-09-03 12:34:56.123+00|2026-09-03 12:34:56.123456+00|2026-09-03 12:34:56.123456+00
+22|1969-07-20 20:17:40+00|1969-07-20 20:17:40+00|1969-07-20 20:17:40+00|1969-07-20 20:17:40+00
+23||2262-04-11 23:47:16+00|2262-04-11 23:47:16+00|2262-04-11 23:47:16+00
+(24 rows)
+-- The scale Lance stored survives: 0.0000000000 keeps its ten digits, and the
+-- 28-digit integer part of decimal128(38,10) is not a double on the way.
+SELECT id, c_dec128_38_10, c_dec128_10_2 FROM lance_feature.ty_all ORDER BY id;
+id|c_dec128_38_10|c_dec128_10_2
+0|0.0000000000|0.00
+1|1.0000000001|1.05
+2||-99999999.99
+3|9999999999999999999999999999.9999999999|99999999.99
+4|3.1415926536|12.30
+5|0.0000000000|0.00
+6|1.0000000001|
+7|-1.0000000001|-99999999.99
+8|9999999999999999999999999999.9999999999|99999999.99
+9||12.30
+10|0.0000000000|0.00
+11|1.0000000001|1.05
+12|-1.0000000001|-99999999.99
+13|9999999999999999999999999999.9999999999|
+14|3.1415926536|12.30
+15|0.0000000000|0.00
+16||1.05
+17|-1.0000000001|-99999999.99
+18|9999999999999999999999999999.9999999999|99999999.99
+19|3.1415926536|12.30
+20|0.0000000000|
+21|1.0000000001|1.05
+22|-1.0000000001|-99999999.99
+23||99999999.99
+(24 rows)
+SELECT id, c_fsl_f32_4, c_fsl_f64_4 FROM lance_feature.ty_all ORDER BY id;
+id|c_fsl_f32_4|c_fsl_f64_4
+0|{0,1.5,-2.5,3.25}|
+1|{1,2,3,4}|{1,2,3,4}
+2|{-1,-2,-3,-4}|{-1,-2,-3,-4}
+3||{0.1,0.2,0.3,0.4}
+4|{1e+38,-1e+38,0,1}|{1e+308,-1e+308,0,1}
+5|{0,1.5,-2.5,3.25}|{0,1.5,-2.5,3.25}
+6|{1,2,3,4}|{1,2,3,4}
+7|{-1,-2,-3,-4}|
+8|{0.1,0.2,0.3,0.4}|{0.1,0.2,0.3,0.4}
+9|{1e+38,-1e+38,0,1}|{1e+308,-1e+308,0,1}
+10||{0,1.5,-2.5,3.25}
+11|{1,2,3,4}|{1,2,3,4}
+12|{-1,-2,-3,-4}|{-1,-2,-3,-4}
+13|{0.1,0.2,0.3,0.4}|{0.1,0.2,0.3,0.4}
+14|{1e+38,-1e+38,0,1}|
+15|{0,1.5,-2.5,3.25}|{0,1.5,-2.5,3.25}
+16|{1,2,3,4}|{1,2,3,4}
+17||{-1,-2,-3,-4}
+18|{0.1,0.2,0.3,0.4}|{0.1,0.2,0.3,0.4}
+19|{1e+38,-1e+38,0,1}|{1e+308,-1e+308,0,1}
+20|{0,1.5,-2.5,3.25}|{0,1.5,-2.5,3.25}
+21|{1,2,3,4}|
+22|{-1,-2,-3,-4}|{-1,-2,-3,-4}
+23|{0.1,0.2,0.3,0.4}|{0.1,0.2,0.3,0.4}
+(24 rows)
+-- Lists keep their length, including the empty one, and a NULL element stays
+-- NULL rather than becoming a NULL array.
+SELECT id, c_list_i64, c_list_utf8 FROM lance_feature.ty_all ORDER BY id;
+id|c_list_i64|c_list_utf8
+0|{}|{}
+1|{1}|
+2|{1,2,3}|{a,bb,ccc}
+3|{NULL,5}|{NULL,d}
+4||{ü,""}
+5|{}|{}
+6|{1}|{a}
+7|{1,2,3}|{a,bb,ccc}
+8|{NULL,5}|
+9|{9223372036854775807,-9223372036854775808}|{ü,""}
+10|{}|{}
+11||{a}
+12|{1,2,3}|{a,bb,ccc}
+13|{NULL,5}|{NULL,d}
+14|{9223372036854775807,-9223372036854775808}|{ü,""}
+15|{}|
+16|{1}|{a}
+17|{1,2,3}|{a,bb,ccc}
+18||{NULL,d}
+19|{9223372036854775807,-9223372036854775808}|{ü,""}
+20|{}|{}
+21|{1}|{a}
+22|{1,2,3}|
+23|{NULL,5}|{NULL,d}
+(24 rows)
+-- The same rows read in batches of three, which straddles both the batch and
+-- the fragment boundary: every type has to survive a batch that starts at a
+-- non-zero offset, which is where a list's offsets buffer is easiest to get
+-- wrong.  Compared in both directions over all 31 columns.
+IMPORT FOREIGN SCHEMA fixtures LIMIT TO ("types_all.lance")
+  FROM SERVER types_files INTO lance_feature;
+ALTER FOREIGN TABLE lance_feature."types_all.lance" RENAME TO ty_all_b3;
+ALTER FOREIGN TABLE lance_feature.ty_all_b3 OPTIONS (ADD batch_size '3');
+SELECT count(*) AS batch3_only FROM (
+  SELECT * FROM lance_feature.ty_all_b3
+  EXCEPT SELECT * FROM lance_feature.ty_all) d;
+batch3_only
+0
+(1 row)
+SELECT count(*) AS default_only FROM (
+  SELECT * FROM lance_feature.ty_all
+  EXCEPT SELECT * FROM lance_feature.ty_all_b3) d;
+default_only
+0
+(1 row)
+-- large_utf8 up to a MiB.  Values over the fixture's digest threshold are
+-- recorded as {chars, bytes, md5}, so that is what is compared; row 6 is
+-- multi-byte, where the character count and the byte count differ.
+CREATE FOREIGN TABLE lance_feature.ty_large_text (id integer, small text, txt text)
+  SERVER types_files OPTIONS (uri 'large_text.lance');
+SELECT id, small, length(txt) AS chars, octet_length(txt) AS bytes, md5(txt) AS md5
+  FROM lance_feature.ty_large_text ORDER BY id;
+id|small|chars|bytes|md5
+0|s0|0|0|d41d8cd98f00b204e9800998ecf8427e
+1|s1|1|1|0cc175b9c0f1b6a831c399e269772661
+2|s2|4096|4096|add393b0c444e104a2d1dbf082ca8de6
+3|s3|65536|65536|5ffbfab2940035c7af087e83e1672bdf
+4|s4|1048576|1048576|b0b0f223932ffc0bda1ea21ab89d2f6f
+5|s5|||
+6|s6|4000|12000|806ac04f7b9a5adef2f76fb2d13a620b
+7|s7|10|10|167a299539880e2f347a417e0f15c1e2
+(8 rows)
+-- A MiB-sized large_binary column.  The blob-encoded column next to it is
+-- B-tier and is left out of the table; test/feature/sql/types_errors.sql is
+-- where referencing it belongs.
+CREATE FOREIGN TABLE lance_feature.ty_blob (id integer, note text, plain_lb bytea)
+  SERVER types_files OPTIONS (uri 'blob.lance');
+SELECT id, note, octet_length(plain_lb) AS bytes, md5(plain_lb) AS md5
+  FROM lance_feature.ty_blob ORDER BY id;
+id|note|bytes|md5
+0|1MiB|524288|a33c402bb72411890e8c5835be72744d
+1|empty|0|d41d8cd98f00b204e9800998ecf8427e
+2|null||
+3|2MiB|1048576|b5758185b0d609bd495b33fdccf09936
+(4 rows)
