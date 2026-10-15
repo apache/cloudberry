@@ -377,6 +377,72 @@ public:
 					  CCostContext *pccChild, ULONG child_index,
 					  CCost *pcostLowerBound);
 
+	// events of the child optimization memo
+	enum EChildOptMemoEvent
+	{
+		EcomeLookup,			// a request looked for child contexts to reuse
+		EcomeHit,				// a request reused child contexts
+		EcomePrunedHit,			// a request reusing child contexts was pruned
+		EcomeDistMismatch,		// an entry failed the distribution check
+		EcomeShadowed,			// a child context is shadowed by an equal one
+		EcomeInsert,			// a request stored the child contexts it reached
+		EcomeVerifyMismatch,	// verify: the children reached other contexts
+		EcomeVerifyPruneDiff,	// verify: pruning after a child differed
+		EcomeVerifyIncomplete,	// verify: child optimization failed otherwise
+
+		EcomeSentinel
+	};
+
+private:
+	// counters of child optimization memo events
+	ULONG m_rgulChildOptMemoEvents[EcomeSentinel]{};
+
+public:
+	// count an event of the child optimization memo
+	void
+	CountChildOptMemoEvent(EChildOptMemoEvent ecome)
+	{
+		m_rgulChildOptMemoEvents[ecome]++;
+	}
+
+	// check if a request of the given group expression can reuse and store
+	// child contexts
+	BOOL FChildOptMemoApplicable(CGroupExpression *pgexpr,
+								 BOOL fOptimizeCTESequence) const;
+
+	// find child contexts that the same request reached under another
+	// context and would reach under the given context as well
+	COptimizationContextArray *PdrgpocChildOptMemo(CMemoryPool *mp,
+												   CGroupExpression *pgexpr,
+												   COptimizationContext *poc,
+												   ULONG ulOptReq);
+
+	// check if a request reusing child contexts is pruned after one of them,
+	// as it would be when optimizing its children
+	BOOL FSafeToPruneWithChildOptMemo(CGroupExpression *pgexpr,
+									  COptimizationContext *poc,
+									  COptimizationContextArray *pdrgpoc,
+									  CCost *pcostLowerBound);
+
+	// store the child contexts reached by a request
+	void AddChildOptMemo(CMemoryPool *mp, CGroupExpression *pgexpr,
+						 COptimizationContext *poc, ULONG ulOptReq,
+						 COptimizationContextArray *pdrgpoc);
+
+	// compare the child contexts reached by a request with the ones the
+	// memo offered, in verify mode
+	void VerifyChildOptMemo(CGroupExpression *pgexpr, COptimizationContext *poc,
+							ULONG ulOptReq,
+							COptimizationContextArray *pdrgpocMemo,
+							COptimizationContextArray *pdrgpoc,
+							BOOL fMemoPredictsPrune);
+
+	// count and report a difference found in verify mode
+	void ReportChildOptMemoDifference(EChildOptMemoEvent ecome,
+									  CGroupExpression *pgexpr,
+									  COptimizationContext *poc,
+									  ULONG ulOptReq);
+
 	// print
 	IOstream &OsPrint(IOstream &) const;
 

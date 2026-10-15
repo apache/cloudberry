@@ -20,6 +20,7 @@
 #include "gpos/task/CAutoTaskProxy.h"
 #include "gpos/task/CAutoTraceFlag.h"
 
+#include "gpopt/base/CCTEReq.h"
 #include "gpopt/base/CCostContext.h"
 #include "gpopt/base/CDrvdPropCtxtPlan.h"
 #include "gpopt/base/CEnfdPartitionPropagation.h"
@@ -1381,6 +1382,451 @@ CEngine::DbgPrintExpr(int group_no, int context_no)
 
 //---------------------------------------------------------------------------
 //	@function:
+//		FEqualExceptDistribution
+//
+//	@doc:
+//		Check if two required plan properties are equal apart from the
+//		required distribution
+//
+//---------------------------------------------------------------------------
+static BOOL
+FEqualExceptDistribution(CReqdPropPlan *prppFst, CReqdPropPlan *prppSnd)
+{
+	if (!prppFst->PcrsRequired()->Equals(prppSnd->PcrsRequired()) ||
+		!prppFst->Pcter()->Equals(prppSnd->Pcter()) ||
+		!prppFst->Peo()->Matches(prppSnd->Peo()) ||
+		!prppFst->Per()->Matches(prppSnd->Per()))
+	{
+		return false;
+	}
+
+	if (nullptr == prppFst->Pepp() || nullptr == prppSnd->Pepp())
+	{
+		return nullptr == prppFst->Pepp() && nullptr == prppSnd->Pepp();
+	}
+
+	return prppFst->Pepp()->Matches(prppSnd->Pepp());
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		UlNonScalarChildPos
+//
+//	@doc:
+//		Position of a child in an array of child contexts, which holds one
+//		context per non-scalar child
+//
+//---------------------------------------------------------------------------
+static ULONG
+UlNonScalarChildPos(CGroupExpression *pgexpr, ULONG child_index)
+{
+	ULONG ulPos = 0;
+	for (ULONG ul = 0; ul < child_index; ul++)
+	{
+		if (!(*pgexpr)[ul]->FScalar())
+		{
+			ulPos++;
+		}
+	}
+
+	return ulPos;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		FSameChildContexts
+//
+//	@doc:
+//		Check if two arrays hold the same child contexts
+//
+//---------------------------------------------------------------------------
+static BOOL
+FSameChildContexts(COptimizationContextArray *pdrgpocFst,
+				   COptimizationContextArray *pdrgpocSnd)
+{
+	const ULONG size = pdrgpocFst->Size();
+	if (size != pdrgpocSnd->Size())
+	{
+		return false;
+	}
+
+	for (ULONG ul = 0; ul < size; ul++)
+	{
+		if ((*pdrgpocFst)[ul] != (*pdrgpocSnd)[ul])
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		FChildDistributionsMatch
+//
+//	@doc:
+//		Check if a request made under the given context requires from each
+//		child the distribution that the child's context in pdrgpoc was
+//		created for.
+//
+//		The caller has checked that the context's other requirements equal
+//		the ones the child contexts were reached under. The other child
+//		requirements only depend on those, on the request, and on the plans
+//		of the children optimized before, which are the best plans of the
+//		same child contexts. So the distribution is the only child
+//		requirement that can differ.
+//
+//		The plan properties of earlier children are derived again, as
+//		optimizing the children does in DerivePrevChildProps(), rather than
+//		taken from the child's cost context: some PdsRequired()
+//		implementations change the derived distribution of the first child
+//		in place, and the properties cached on the cost context are shared.
+//
+//---------------------------------------------------------------------------
+static BOOL
+FChildDistributionsMatch(CMemoryPool *mp, CGroupExpression *pgexpr,
+						 COptimizationContext *poc, ULONG ulOptReq,
+						 COptimizationContextArray *pdrgpoc,
+						 BOOL *pfShadowed)
+{
+	*pfShadowed = false;
+
+	CPhysical *popPhysical = CPhysical::PopConvert(pgexpr->Pop());
+	ULONG ulOrderReq = 0;
+	ULONG ulDistrReq = 0;
+	ULONG ulRewindReq = 0;
+	ULONG ulPartPropagateReq = 0;
+	popPhysical->LookupRequest(ulOptReq, &ulOrderReq, &ulDistrReq,
+							   &ulRewindReq, &ulPartPropagateReq);
+
+	CExpressionHandle exprhdl(mp);
+	exprhdl.Attach(pgexpr);
+	exprhdl.DeriveProps(nullptr /*pdpctxt*/);
+	exprhdl.InitReqdProps(poc->Prpp());
+
+	CDrvdPropArray *pdrgpdp = GPOS_NEW(mp) CDrvdPropArray(mp);
+	BOOL fMatch = true;
+	ULONG ulPrevChildIndex = gpos::ulong_max;
+	ULONG child_index = exprhdl.UlFirstOptimizedChildIndex();
+	do
+	{
+		CGroup *pgroupChild = (*pgexpr)[child_index];
+		if (pgroupChild->FScalar())
+		{
+			ulPrevChildIndex = child_index;
+			continue;
+		}
+
+		COptimizationContext *pocChild =
+			(*pdrgpoc)[UlNonScalarChildPos(pgexpr, child_index)];
+		CCostContext *pccChild = pocChild->PccBest();
+		if (nullptr == pccChild ||
+			(pgroupChild == pgexpr->Pgroup() && pocChild->Matches(poc)))
+		{
+			// the child has no plan, or it would be the context itself
+			fMatch = false;
+			break;
+		}
+
+		// as DerivePrevChildProps(): the plan of the previous child, if that
+		// one is not scalar
+		if (gpos::ulong_max != ulPrevChildIndex &&
+			!(*pgexpr)[ulPrevChildIndex]->FScalar())
+		{
+			CCostContext *pccPrev =
+				(*pdrgpoc)[UlNonScalarChildPos(pgexpr, ulPrevChildIndex)]
+					->PccBest();
+			CExpressionHandle exprhdlPrev(mp);
+			exprhdlPrev.Attach(pccPrev);
+			exprhdlPrev.DerivePlanPropsForCostContext();
+			exprhdlPrev.Pdp()->AddRef();
+			pdrgpdp->Append(exprhdlPrev.Pdp());
+		}
+
+		CEnfdDistribution *ped = popPhysical->Ped(
+			mp, exprhdl, poc->Prpp(), child_index, pdrgpdp, ulDistrReq);
+		fMatch = ped->Matches(pocChild->Prpp()->Ped());
+		ped->Release();
+		if (!fMatch)
+		{
+			break;
+		}
+
+		// the request reaches the child context that a lookup of its
+		// requirements finds, which is another one if the group holds
+		// several contexts with equal requirements
+		if (!pgroupChild->FLookupFinds(pocChild))
+		{
+			*pfShadowed = true;
+			fMatch = false;
+			break;
+		}
+
+		// later children see the requirements of this child as they would
+		// after optimizing it
+		pocChild->Prpp()->AddRef();
+		exprhdl.CopyChildReqdProps(child_index, pocChild->Prpp());
+		ulPrevChildIndex = child_index;
+	} while (exprhdl.FNextChildIndex(&child_index));
+
+	pdrgpdp->Release();
+
+	return fMatch;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CEngine::FChildOptMemoApplicable
+//
+//	@doc:
+//		Check if a request of the given group expression can reuse and store
+//		child contexts
+//
+//---------------------------------------------------------------------------
+BOOL
+CEngine::FChildOptMemoApplicable(CGroupExpression *pgexpr,
+								 BOOL fOptimizeCTESequence) const
+{
+	if (!GPOS_FTRACE(EopttraceChildOptMemo) &&
+		!GPOS_FTRACE(EopttraceVerifyChildOptMemo))
+	{
+		return false;
+	}
+
+	// a CTE sequence may optimize its producer under requirements derived
+	// from the consumers, and with several search stages the children of a
+	// request use the best context of any stage
+	if (fOptimizeCTESequence || 1 < UlSearchStages())
+	{
+		return false;
+	}
+
+	const ULONG arity = pgexpr->Arity();
+	for (ULONG ul = 0; ul < arity; ul++)
+	{
+		if (!(*pgexpr)[ul]->FScalar())
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CEngine::PdrgpocChildOptMemo
+//
+//	@doc:
+//		Find child contexts that the same request of the group expression
+//		reached under another context, and that it would reach under the
+//		given context as well. The other context must have the same required
+//		plan properties apart from distribution; the required distribution
+//		of each child is then computed again and compared.
+//
+//---------------------------------------------------------------------------
+COptimizationContextArray *
+CEngine::PdrgpocChildOptMemo(CMemoryPool *mp, CGroupExpression *pgexpr,
+							 COptimizationContext *poc, ULONG ulOptReq)
+{
+	CountChildOptMemoEvent(EcomeLookup);
+
+	ChildOptMemoArray *pdrgpcome = pgexpr->PdrgpcomeChildOptMemo();
+	if (nullptr == pdrgpcome)
+	{
+		return nullptr;
+	}
+
+	CReqdPropPlan *prpp = poc->Prpp();
+	const ULONG size = pdrgpcome->Size();
+	for (ULONG ul = 0; ul < size; ul++)
+	{
+		CChildOptMemoEntry *pcome = (*pdrgpcome)[ul];
+		if (pcome->m_ulOptReq != ulOptReq ||
+			pcome->m_ulSearchStage != poc->UlSearchStageIndex() ||
+			!FEqualExceptDistribution(pcome->m_prpp, prpp))
+		{
+			continue;
+		}
+
+		BOOL fShadowed = false;
+		if (FChildDistributionsMatch(mp, pgexpr, poc, ulOptReq,
+									 pcome->m_pdrgpoc, &fShadowed))
+		{
+			pcome->m_pdrgpoc->AddRef();
+			return pcome->m_pdrgpoc;
+		}
+
+		CountChildOptMemoEvent(fShadowed ? EcomeShadowed : EcomeDistMismatch);
+	}
+
+	return nullptr;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CEngine::FSafeToPruneWithChildOptMemo
+//
+//	@doc:
+//		Check if a request reusing child contexts is pruned after one of its
+//		children. Optimizing the children checks cost bounds after each
+//		non-scalar child that is followed by another non-scalar child in
+//		optimization order; make the same checks with the reused contexts.
+//
+//---------------------------------------------------------------------------
+BOOL
+CEngine::FSafeToPruneWithChildOptMemo(CGroupExpression *pgexpr,
+									  COptimizationContext *poc,
+									  COptimizationContextArray *pdrgpoc,
+									  CCost *pcostLowerBound)
+{
+	CExpressionHandle exprhdl(m_mp);
+	exprhdl.Attach(pgexpr);
+
+	ULONG ulPrevChildIndex = gpos::ulong_max;
+	ULONG child_index = exprhdl.UlFirstOptimizedChildIndex();
+	do
+	{
+		if (gpos::ulong_max != ulPrevChildIndex &&
+			!(*pgexpr)[ulPrevChildIndex]->FScalar() &&
+			!(*pgexpr)[child_index]->FScalar())
+		{
+			CCostContext *pccPrev =
+				(*pdrgpoc)[UlNonScalarChildPos(pgexpr, ulPrevChildIndex)]
+					->PccBest();
+			if (FSafeToPrune(pgexpr, poc->Prpp(), pccPrev, ulPrevChildIndex,
+							 pcostLowerBound))
+			{
+				return true;
+			}
+		}
+		ulPrevChildIndex = child_index;
+	} while (exprhdl.FNextChildIndex(&child_index));
+
+	return false;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CEngine::AddChildOptMemo
+//
+//	@doc:
+//		Store the child contexts reached by a request, unless a child has no
+//		plan or the same entry exists
+//
+//---------------------------------------------------------------------------
+void
+CEngine::AddChildOptMemo(CMemoryPool *mp, CGroupExpression *pgexpr,
+						 COptimizationContext *poc, ULONG ulOptReq,
+						 COptimizationContextArray *pdrgpoc)
+{
+	const ULONG ulChildren = pdrgpoc->Size();
+	for (ULONG ul = 0; ul < ulChildren; ul++)
+	{
+		if (nullptr == (*pdrgpoc)[ul]->PccBest())
+		{
+			return;
+		}
+	}
+
+	ChildOptMemoArray *pdrgpcome = pgexpr->PdrgpcomeChildOptMemo();
+	if (nullptr != pdrgpcome)
+	{
+		const ULONG size = pdrgpcome->Size();
+		for (ULONG ul = 0; ul < size; ul++)
+		{
+			CChildOptMemoEntry *pcome = (*pdrgpcome)[ul];
+			if (pcome->m_ulOptReq == ulOptReq &&
+				pcome->m_ulSearchStage == poc->UlSearchStageIndex() &&
+				FSameChildContexts(pcome->m_pdrgpoc, pdrgpoc) &&
+				FEqualExceptDistribution(pcome->m_prpp, poc->Prpp()))
+			{
+				return;
+			}
+		}
+	}
+
+	pgexpr->AddChildOptMemo(mp, ulOptReq, poc->UlSearchStageIndex(),
+							poc->Prpp(), pdrgpoc);
+	CountChildOptMemoEvent(EcomeInsert);
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CEngine::VerifyChildOptMemo
+//
+//	@doc:
+//		Compare the child contexts reached by optimizing the children of a
+//		request with the ones the memo offered, and report a difference
+//
+//---------------------------------------------------------------------------
+void
+CEngine::VerifyChildOptMemo(CGroupExpression *pgexpr,
+							COptimizationContext *poc, ULONG ulOptReq,
+							COptimizationContextArray *pdrgpocMemo,
+							COptimizationContextArray *pdrgpoc,
+							BOOL fMemoPredictsPrune)
+{
+	if (!FSameChildContexts(pdrgpocMemo, pdrgpoc))
+	{
+		ReportChildOptMemoDifference(EcomeVerifyMismatch, pgexpr, poc,
+									 ulOptReq);
+	}
+	else if (fMemoPredictsPrune)
+	{
+		ReportChildOptMemoDifference(EcomeVerifyPruneDiff, pgexpr, poc,
+									 ulOptReq);
+	}
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CEngine::ReportChildOptMemoDifference
+//
+//	@doc:
+//		Count and report a difference between reusing child contexts and
+//		optimizing the children, found in verify mode
+//
+//---------------------------------------------------------------------------
+void
+CEngine::ReportChildOptMemoDifference(EChildOptMemoEvent ecome,
+									  CGroupExpression *pgexpr,
+									  COptimizationContext *poc,
+									  ULONG ulOptReq)
+{
+	CountChildOptMemoEvent(ecome);
+
+	const CHAR *szWhat = "other child contexts";
+	if (EcomeVerifyPruneDiff == ecome)
+	{
+		szWhat = "other pruning";
+	}
+	else if (EcomeVerifyIncomplete == ecome)
+	{
+		szWhat = "child optimization failed";
+	}
+
+	CAutoTrace at(m_mp);
+	at.Os() << "[OPT]: child optimization memo difference (" << szWhat
+			<< "): " << pgexpr->Pop()->SzId() << " (group "
+			<< pgexpr->Pgroup()->Id() << ", expression " << pgexpr->Id()
+			<< ", request " << ulOptReq << ") under ";
+	poc->Prpp()->OsPrint(at.Os());
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CEngine::PdrgpocChildren
 //
 //	@doc:
@@ -1571,6 +2017,21 @@ CEngine::PrintActivatedXforms(IOstream &os) const
 		}
 		os << "[OPT]: <End Xforms - stage " << m_ulCurrSearchStage << ">"
 		   << std::endl;
+
+		os << "[OPT]: child optimization memo: "
+		   << m_rgulChildOptMemoEvents[EcomeLookup] << " lookups, "
+		   << m_rgulChildOptMemoEvents[EcomeHit] << " hits, "
+		   << m_rgulChildOptMemoEvents[EcomePrunedHit] << " pruned hits, "
+		   << m_rgulChildOptMemoEvents[EcomeDistMismatch]
+		   << " distribution mismatches, "
+		   << m_rgulChildOptMemoEvents[EcomeShadowed] << " shadowed, "
+		   << m_rgulChildOptMemoEvents[EcomeInsert] << " entries, "
+		   << m_rgulChildOptMemoEvents[EcomeVerifyMismatch]
+		   << " verify mismatches, "
+		   << m_rgulChildOptMemoEvents[EcomeVerifyPruneDiff]
+		   << " verify pruning differences, "
+		   << m_rgulChildOptMemoEvents[EcomeVerifyIncomplete]
+		   << " verify incomplete" << std::endl;
 	}
 }
 

@@ -261,6 +261,14 @@ enum EOptTraceFlag
 	// so that they don't need to sort it themselves on the coordinator
 	EopttraceDisablePresortedAgg = 103055,
 
+	// reuse the child contexts that the same request of a group expression
+	// reached under another context, instead of optimizing the children again
+	EopttraceChildOptMemo = 103070,
+
+	// optimize the children of requests that could reuse child contexts, and
+	// report when the child contexts differ from the reused ones
+	EopttraceVerifyChildOptMemo = 103071,
+
 	///////////////////////////////////////////////////////
 	///////////////////// statistics flags ////////////////
 	//////////////////////////////////////////////////////
