@@ -66,7 +66,10 @@ static PlannedStmt *anser_planner(Query *parse, const char *query_string,
 
 static planner_hook_type prev_planner_hook = NULL;
 static ExecutorEnd_hook_type prev_ExecutorEnd_hook = NULL;
+static cdbdisp_notify_hook_type prev_cdbdisp_notify_hook = NULL;
 
+static bool anser_notify_hook(struct CdbDispatchResult *dispatchResult,
+							  struct pgNotify *notify);
 static void anser_executor_end(QueryDesc *queryDesc);
 static void anser_xact_callback(XactEvent event, void *arg);
 
@@ -100,7 +103,8 @@ _PG_init(void)
 	 * Installed unconditionally: it is inert until a segment sends one, and a
 	 * QE that never dispatches never calls it.
 	 */
-	cdbdisp_notify_hook = AnserDispatchNotifyHandler;
+	prev_cdbdisp_notify_hook = cdbdisp_notify_hook;
+	cdbdisp_notify_hook = anser_notify_hook;
 
 	/*
 	 * The producer and consumer nodes travel to the segments inside dispatched
@@ -196,6 +200,29 @@ anser_planner(Query *parse, const char *query_string, int cursorOptions,
 	AnserApplyRuntimeFilters(result);
 
 	return result;
+}
+
+/*
+ * Dispatch a QE notify to Anser, then to whoever held the hook before us.
+ *
+ * cdbdisp_notify_hook is a single pointer, so an extension that overwrites it
+ * silently swallows every notify the other one was waiting for.  Anser's
+ * handler already declines anything that is not addressed to it -- it returns
+ * false for any channel other than "anser_rf" -- so all that is missing is the
+ * fallthrough.  Returning false from here means nobody claimed the notify and
+ * the dispatcher should handle it itself.
+ */
+static bool
+anser_notify_hook(struct CdbDispatchResult *dispatchResult,
+				  struct pgNotify *notify)
+{
+	if (AnserDispatchNotifyHandler(dispatchResult, notify))
+		return true;
+
+	if (prev_cdbdisp_notify_hook)
+		return prev_cdbdisp_notify_hook(dispatchResult, notify);
+
+	return false;
 }
 
 /*

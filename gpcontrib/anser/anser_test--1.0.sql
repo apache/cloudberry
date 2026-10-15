@@ -97,3 +97,35 @@ CREATE FUNCTION anser_test_push_crc(
 RETURNS int8
 AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT;
+
+-- The runtime-filter pushdown decision, over a synthetic scan.  `tlist`
+-- describes the scan's output targetlist, one element per entry: a positive
+-- value is a plain Var on that table attno, and the rest are the shapes that
+-- must be refused -- 0 a whole-row Var, -1 a system column, -2 a computed
+-- column, -3 a Var of another relation, -4 a cast wrapping a Var.
+--
+-- sk_attno is the attribute number the scan key would carry, and is NULL when
+-- the shape is refused.
+CREATE FUNCTION anser_test_pushdown_accepts(
+    tlist int4[],
+    attno int4,
+    filter_in_seqscan bool,
+    as_seqscan bool,
+    OUT accepts bool,
+    OUT sk_attno int4)
+RETURNS record
+AS 'MODULE_PATHNAME'
+LANGUAGE C STRICT;
+
+-- The same scan put through AnserPushdownTarget, which must agree and name the
+-- node itself when there is nothing to descend through.
+CREATE FUNCTION anser_test_pushdown_target(
+    tlist int4[],
+    attno int4,
+    filter_in_seqscan bool,
+    as_seqscan bool,
+    OUT found_self bool,
+    OUT sk_attno int4)
+RETURNS record
+AS 'MODULE_PATHNAME'
+LANGUAGE C STRICT;

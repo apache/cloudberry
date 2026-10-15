@@ -94,34 +94,34 @@ typedef struct AnserBloomPartHeader
  * anything useful.  Works on the wire form, so the coordinator can ask this of
  * a merged payload without rebuilding a filter.
  */
-extern bool AnserBloomPartWorthSending(const void *payload, Size payload_len);
+extern PGDLLEXPORT bool AnserBloomPartWorthSending(const void *payload, Size payload_len);
 
-extern uint64 AnserBloomSeed(const char *condition_key);
+extern PGDLLEXPORT uint64 AnserBloomSeed(const char *condition_key);
 
 /*
  * Build an empty filter, or return NULL when AnserBloomShapeFor says it is not
  * worth building.  A NULL return is not an error: the producer turns it into an
  * immediate cancel, so consumers stop waiting instead of timing out.
  */
-extern bloom_filter *AnserBloomCreate(int64 total_elems,
+extern PGDLLEXPORT bloom_filter *AnserBloomCreate(int64 total_elems,
 								  Size max_payload_bytes,
 								  uint64 seed);
-extern Size AnserBloomSerializedSize(const bloom_filter *filter);
-extern bool AnserBloomSerializePart(const bloom_filter *filter,
+extern PGDLLEXPORT Size AnserBloomSerializedSize(const bloom_filter *filter);
+extern PGDLLEXPORT bool AnserBloomSerializePart(const bloom_filter *filter,
 									uint32 part_index,
 									uint32 total_parts,
 									void *buffer,
 									Size buffer_size,
 									Size *payload_len);
-extern bloom_filter *AnserBloomDeserializePart(const void *payload,
+extern PGDLLEXPORT bloom_filter *AnserBloomDeserializePart(const void *payload,
 										  Size payload_len,
 										  int64 total_elems,
 										  Size max_payload_bytes,
 										  uint64 seed,
 										  uint32 *part_index,
 										  uint32 *total_parts);
-extern bool AnserBloomLooksLikePart(const void *payload, Size payload_len);
-extern bool AnserBloomFoldPartInPlace(void *acc, Size acc_len,
+extern PGDLLEXPORT bool AnserBloomLooksLikePart(const void *payload, Size payload_len);
+extern PGDLLEXPORT bool AnserBloomFoldPartInPlace(void *acc, Size acc_len,
 									  const void *part, Size part_len);
 
 #endif							/* ANSERFILTER_H */
