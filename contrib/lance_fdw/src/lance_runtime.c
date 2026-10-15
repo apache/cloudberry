@@ -78,6 +78,32 @@ lance_assign_enable_filter_pushdown(bool newval, void *extra)
 		ResetPlanCache();
 }
 
+bool		lance_enable_vector_pushdown = true;
+int			lance_vector_max_k = 10000;
+int			lance_vector_nprobes = 0;
+int			lance_vector_refine_factor = 0;
+
+/*
+ * The same reasoning as for filter pushdown: a
+ * cached plan has the Top-K decision and k frozen into it, so turning the
+ * pushdown off, or lowering the bound on k, has to throw cached plans away.
+ * PostgreSQL calls assign hooks for SET, SET LOCAL and the restore at the end
+ * of a transaction alike, so all three replan.
+ */
+static void
+lance_assign_enable_vector_pushdown(bool newval, void *extra)
+{
+	if (newval != lance_enable_vector_pushdown)
+		ResetPlanCache();
+}
+
+static void
+lance_assign_vector_max_k(int newval, void *extra)
+{
+	if (newval != lance_vector_max_k)
+		ResetPlanCache();
+}
+
 typedef enum LanceHandleKind
 {
 	LANCE_HANDLE_DATASET,
@@ -136,6 +162,60 @@ lance_rt_define_gucs(void)
 							 PGC_USERSET,
 							 0,
 							 NULL, lance_assign_enable_filter_pushdown, NULL);
+
+	DefineCustomBoolVariable("lance_fdw.enable_vector_pushdown",
+							 "Send ORDER BY distance LIMIT k queries to Lance's "
+							 "nearest-neighbour search.",
+							 "On a vector index the result is approximate, as "
+							 "with any vector index; off restores the exact "
+							 "scan-and-sort.  Read at planning time; changing "
+							 "it resets the plan cache.  Only the coordinator's "
+							 "value matters.",
+							 &lance_enable_vector_pushdown,
+							 true,
+							 PGC_USERSET,
+							 0,
+							 NULL, lance_assign_enable_vector_pushdown, NULL);
+
+	DefineCustomIntVariable("lance_fdw.vector_pushdown_max_k",
+							"Largest LIMIT a vector Top-K search is pushed "
+							"down for.",
+							"Lance's search state for k neighbours lives outside "
+							"Cloudberry's memory accounting; a larger LIMIT "
+							"takes the exact path instead.  Read at planning "
+							"time; changing it resets the plan cache.",
+							&lance_vector_max_k,
+							10000,
+							1, PG_INT32_MAX,
+							PGC_USERSET,
+							0,
+							NULL, lance_assign_vector_max_k, NULL);
+
+	DefineCustomIntVariable("lance_fdw.nprobes",
+							"Minimum number of vector index partitions a Top-K "
+							"search probes; 0 leaves it to Lance.",
+							"A floor, not a cap: a filtered search may probe "
+							"more partitions to find k rows.  Read by the "
+							"coordinator when the statement starts and sent "
+							"to the segment that searches.",
+							&lance_vector_nprobes,
+							0,
+							0, PG_INT32_MAX,
+							PGC_USERSET,
+							0,
+							NULL, NULL, NULL);
+
+	DefineCustomIntVariable("lance_fdw.refine_factor",
+							"Re-rank refine_factor * k candidates by their exact "
+							"distance; 0 leaves it to Lance.",
+							"Read by the coordinator when the statement starts "
+							"and sent to the segment that searches.",
+							&lance_vector_refine_factor,
+							0,
+							0, PG_INT32_MAX,
+							PGC_USERSET,
+							0,
+							NULL, NULL, NULL);
 
 	DefineCustomIntVariable("lance_fdw.cpu_threads",
 							"Number of CPU worker threads lance-c may use.",

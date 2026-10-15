@@ -53,6 +53,18 @@ extern bool lance_track_memory;
 extern bool lance_enable_filter_pushdown;
 
 /*
+ * Vector Top-K.  enable_vector_pushdown and
+ * vector_pushdown_max_k are read at planning time and reset the plan cache
+ * when they change.  nprobes and refine_factor are read by the QD when the
+ * statement starts and travel in the scan unit: a QE never reads them, because
+ * an extension GUC set with SET LOCAL never reaches the segments.
+ */
+extern bool lance_enable_vector_pushdown;
+extern int	lance_vector_max_k;
+extern int	lance_vector_nprobes;
+extern int	lance_vector_refine_factor;
+
+/*
  * Arrow batches are allocated by lance on the Rust side, so palloc, the
  * resource group and gp_vmem_protect_limit all see a backend that looks nearly
  * idle while it holds them.  These put the bytes on the same ledger as the

@@ -66,6 +66,49 @@ COMMENT ON FUNCTION lance_fdw_cache_stats() IS
   'hit and miss counters for this backend''s lance index and metadata caches';
 
 /*
+ * Vector distances on real[], the type a fixed_size_list<float32, N> embedding
+ * column reads as.  The names and meanings follow pgvector - <-> is the
+ * Euclidean distance, <=> the cosine distance 1 - cos, <#> the negative inner
+ * product, so that ascending order is nearest first for all three - but they
+ * are defined on real[], so the two extensions can be installed side by side.
+ *
+ * They are ordinary operators and work on any real[].  On a foreign table,
+ * ORDER BY one of them LIMIT k is sent to Lance's nearest-neighbour search when
+ * lance_fdw.enable_vector_pushdown allows it; PostgreSQL still sorts the k rows
+ * that come back by these functions, so the order is always theirs.
+ */
+CREATE FUNCTION lance_l2_distance(real[], real[])
+RETURNS double precision
+AS 'MODULE_PATHNAME', 'lance_vector_l2_distance'
+LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION lance_cosine_distance(real[], real[])
+RETURNS double precision
+AS 'MODULE_PATHNAME', 'lance_vector_cosine_distance'
+LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION lance_negative_inner_product(real[], real[])
+RETURNS double precision
+AS 'MODULE_PATHNAME', 'lance_vector_negative_inner_product'
+LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OPERATOR <-> (
+  LEFTARG = real[], RIGHTARG = real[],
+  FUNCTION = lance_l2_distance, COMMUTATOR = '<->');
+
+CREATE OPERATOR <=> (
+  LEFTARG = real[], RIGHTARG = real[],
+  FUNCTION = lance_cosine_distance, COMMUTATOR = '<=>');
+
+CREATE OPERATOR <#> (
+  LEFTARG = real[], RIGHTARG = real[],
+  FUNCTION = lance_negative_inner_product, COMMUTATOR = '<#>');
+
+COMMENT ON OPERATOR <->(real[], real[]) IS 'Euclidean distance';
+COMMENT ON OPERATOR <=>(real[], real[]) IS 'cosine distance, 1 - cos';
+COMMENT ON OPERATOR <#>(real[], real[]) IS 'negative inner product';
+
+/*
  * mpp_execute defaults to 'all segments' so that the planner puts the
  * ForeignScan on every segment and gives it a Strewn locus.  A
  * server or a table may still override it with 'coordinator' or 'any', in

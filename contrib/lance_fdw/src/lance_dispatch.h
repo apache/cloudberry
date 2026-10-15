@@ -44,21 +44,48 @@
 #define LANCE_FDW_PRIVATE_FILTER	2	/* String: Lance filter, "" if none */
 #define LANCE_FDW_PRIVATE_FILTER_ATTRS	3	/* List of Integer: attnums the filter reads */
 #define LANCE_FDW_PRIVATE_FILTER_COLUMNS 4	/* List of String: their Lance names */
-#define LANCE_FDW_PRIVATE_UNITS		5	/* List: the scan units below */
+#define LANCE_FDW_PRIVATE_TOPK		5	/* NIL, or the vector Top-K below */
+#define LANCE_FDW_PRIVATE_UNITS		6	/* List: the scan units below */
 
 /*
- * One unit of work, as it travels inside the plan.  Version and fragment ids
- * are decimal strings because a PostgreSQL Integer node is 32 bits while both
- * of these are 64.
+ * The TOPK slot: NIL for every scan that is not a
+ * Top-K, otherwise these three, written by GetForeignPlan.  The query vector
+ * itself is in fdw_exprs, because it may be a parameter.
+ */
+#define LANCE_TOPK_COLUMN			0	/* String: Lance column name */
+#define LANCE_TOPK_METRIC			1	/* Integer: LanceVectorMetric */
+#define LANCE_TOPK_K				2	/* String: k, decimal int64 */
+#define LANCE_TOPK_NFIELDS			3
+
+typedef enum LanceUnitKind
+{
+	LANCE_UNIT_FRAGMENT,		/* every QE reads its share of the fragments */
+	LANCE_UNIT_NEAREST			/* one QE searches the whole dataset */
+} LanceUnitKind;
+
+/*
+ * One unit of work, as it travels inside the plan.  Every field is a String
+ * node - version and fragment ids because a PostgreSQL Integer node is 32
+ * bits while both of these are 64, and the rest so that freeing a
+ * cached plan's units only ever has one node type to free.
  */
 typedef struct LanceScanUnits
 {
-	char	   *kind;			/* "fragment" in this block */
+	LanceUnitKind kind;
 	char	   *uri;
 	uint64		version;		/* the exact version the QD pinned */
 	int			nsegments;		/* the width the planner built the locus for */
+
+	/* LANCE_UNIT_FRAGMENT */
 	uint64	   *ids;
 	int			nids;
+
+	/* LANCE_UNIT_NEAREST */
+	int			target;			/* the one segindex that searches */
+	float4	   *vector;			/* the query vector, bit for bit */
+	int			dim;
+	int			nprobes;		/* 0: leave it to Lance */
+	int			refine_factor;	/* 0: leave it to Lance */
 } LanceScanUnits;
 
 /*
@@ -72,6 +99,28 @@ extern void lance_dispatch_publish(ForeignScan *fsplan,
 								   int nsegments,
 								   const uint64 *ids,
 								   int nids);
+
+/*
+ * Hand a vector Top-K search to one QE.  The query
+ * vector travels as the bit patterns of its float4 elements, so the segment
+ * searches with exactly the value the QD evaluated.
+ */
+extern void lance_dispatch_publish_nearest(ForeignScan *fsplan,
+										   const char *uri,
+										   uint64 version,
+										   int nsegments,
+										   int target,
+										   const float4 *vector,
+										   int dim,
+										   int nprobes,
+										   int refine_factor);
+
+/*
+ * The segment that searches: the session id, normalised into [0, nsegments)
+ * the way the fragment split does, because C's % keeps the sign of its left
+ * operand.
+ */
+extern int	lance_dispatch_search_target(int nsegments);
 
 /* Did the QD publish units, and if so, what are they? */
 extern bool lance_dispatch_read_units(const ForeignScan *fsplan,

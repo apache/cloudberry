@@ -626,31 +626,88 @@
         {"name": "c_blob_v2", "arrow_type": "extension<lance.blob.v2<BlobType>>", "arrow_format": "+s", "nullable": true, "tier": "B", "pg_type": null, "metadata": {"lance-encoding:blob-inline-size-threshold": "65536"}, "expected_encoding": "json"}
       ]
     },
-    "big": {
-      "name": "big",
-      "purpose": "AC5 wall-time comparison only: 3 fragments of 512 rows x 1048576 bytes. Random payloads, no expected output.",
-      "path": "data/big.lance",
+    "vectors": {
+      "name": "vectors",
+      "purpose": "Vector Top-K without an index: 960 clustered 8-dimensional float32 embeddings over 4 fragments, cat = id % 5.  Lance searches it exhaustively, so the pushed-down result has to be the exact one.",
+      "path": "data/vectors.lance",
       "version": 1,
-      "rows": 1536,
-      "fragments": 3,
-      "fragment_ids": [0, 1, 2],
-      "fragment_rows": [512, 512, 512],
-      "fragment_physical_rows": [512, 512, 512],
+      "rows": 960,
+      "fragments": 4,
+      "fragment_ids": [0, 1, 2, 3],
+      "fragment_rows": [240, 240, 240, 240],
+      "fragment_physical_rows": [240, 240, 240, 240],
       "fragments_with_deletion_file": [],
-      "data_files_per_fragment": [1, 1, 1],
+      "data_files_per_fragment": [1, 1, 1, 1],
       "data_storage_version": "2.1",
       "file_format_versions": ["2.1"],
       "history": [
-        {"version": 1, "rows": 1536}
+        {"version": 1, "rows": 960}
+      ],
+      "expected": "expected/vectors.jsonl",
+      "expected_rows": 960,
+      "notes": [],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "cat", "arrow_type": "int32", "arrow_format": "i", "nullable": true, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "emb", "arrow_type": "fixed_size_list<item: float>[8]", "arrow_format": "+w:8", "nullable": true, "tier": "A", "pg_type": "real[]", "metadata": null, "expected_encoding": "array"}
+      ]
+    },
+    "vectors_idx": {
+      "name": "vectors_idx",
+      "purpose": "The rows of vectors.lance with an IVF_PQ index on emb, trained with the L2 metric: approximate search, recall, index use and the metric-mismatch fallback to an exhaustive search.",
+      "path": "data/vectors_idx.lance",
+      "version": 2,
+      "rows": 960,
+      "fragments": 4,
+      "fragment_ids": [0, 1, 2, 3],
+      "fragment_rows": [240, 240, 240, 240],
+      "fragment_physical_rows": [240, 240, 240, 240],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1, 1, 1, 1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 960},
+        {"version": 2, "rows": 960}
       ],
       "expected": null,
       "expected_rows": null,
       "notes": [
-        "random payload: this dataset is exempt from the byte-identical regeneration requirement"
+        "same rows as vectors.lance, so no expected file of its own",
+        "IVF k-means training is not byte-reproducible; only the data and the manifest entry are, and the suites assert recall bounds, never which approximate rows come back"
       ],
       "schema": [
-        {"name": "id", "arrow_type": "int64", "arrow_format": "l", "nullable": false, "tier": "A", "pg_type": "bigint", "metadata": null, "expected_encoding": null},
-        {"name": "payload", "arrow_type": "large_binary", "arrow_format": "Z", "nullable": true, "tier": "A", "pg_type": "bytea", "metadata": null, "expected_encoding": null}
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": null},
+        {"name": "cat", "arrow_type": "int32", "arrow_format": "i", "nullable": true, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": null},
+        {"name": "emb", "arrow_type": "fixed_size_list<item: float>[8]", "arrow_format": "+w:8", "nullable": true, "tier": "A", "pg_type": "real[]", "metadata": null, "expected_encoding": null}
+      ]
+    },
+    "vectors_nulls": {
+      "name": "vectors_nulls",
+      "purpose": "NULL and zero vectors: the NULL tail the exact path returns and a nearest-neighbour search does not, and a zero row that has no cosine distance.",
+      "path": "data/vectors_nulls.lance",
+      "version": 1,
+      "rows": 10,
+      "fragments": 2,
+      "fragment_ids": [0, 1],
+      "fragment_rows": [5, 5],
+      "fragment_physical_rows": [5, 5],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1, 1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 10}
+      ],
+      "expected": "expected/vectors_nulls.jsonl",
+      "expected_rows": 10,
+      "notes": [
+        "ids 2, 4 and 8 have a NULL vector; id 5 is the zero vector"
+      ],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "cat", "arrow_type": "int32", "arrow_format": "i", "nullable": true, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "emb", "arrow_type": "fixed_size_list<item: float>[4]", "arrow_format": "+w:4", "nullable": true, "tier": "A", "pg_type": "real[]", "metadata": null, "expected_encoding": "array"}
       ]
     }
   }

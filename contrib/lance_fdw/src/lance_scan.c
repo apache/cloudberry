@@ -41,20 +41,30 @@
  */
 #include "postgres.h"
 
+#include <errno.h>
+#include <fcntl.h>
+#include <math.h>
+#include <unistd.h>
+
 #include "lance_fdw.h"
 #include "lance_arrow.h"
 #include "lance_dispatch.h"
 #include "lance_option.h"
 #include "lance_runtime.h"
 #include "lance_scan.h"
+#include "lance_vector.h"
 
 #include "access/table.h"
+#include "catalog/pg_type_d.h"
 #include "cdb/cdbvars.h"
 #include "executor/executor.h"
 #include "foreign/foreign.h"
 #include "miscadmin.h"
+#include "storage/latch.h"
+#include "utils/array.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/wait_event.h"
 
 typedef struct LanceScanState
 {
@@ -97,11 +107,126 @@ typedef struct LanceScanState
 
 	LanceConverter *converters; /* ncolumns entries */
 
+	/*
+	 * Vector Top-K.  is_topk says the planner
+	 * chose it; searching says this process runs the nearest-neighbour
+	 * search, which is true on the one QE the QD picked, or on the QD itself
+	 * under 'coordinator'.  A QD that found the query vector unusable falls
+	 * back to the plain fragment scan and says why in fallback.
+	 */
+	bool		is_topk;
+	char	   *topk_column;
+	LanceVectorMetric topk_metric;
+	int64		topk_k;
+	bool		searching;
+	float4	   *vector;
+	int			dim;
+	int			nprobes;
+	int			refine_factor;
+	int			search_segment; /* -1: this process, under 'coordinator' */
+	const char *fallback;		/* why the QD did not search, or NULL */
+
+	/*
+	 * Written by the statistics callback, which may run on a lance thread and
+	 * so only copies three numbers; reported once the stream is done.
+	 */
+	struct
+	{
+		bool		seen;
+		uint64		indices_loaded;
+		uint64		index_partitions_loaded;
+		uint64		index_comparisons;
+	}			stats;
+
+	/*
+	 * A search is read with lance_scanner_poll_next rather than through an
+	 * Arrow stream, so that a cancel does not wait for the whole search
+	 * Its schema only arrives with the first batch, which
+	 * is when the converters are built, against this descriptor.
+	 */
+	TupleDesc	tupdesc;
+
 	MemoryContext scan_cxt;		/* everything above lives here */
 	MemoryContext batch_cxt;	/* values of the current batch, reset per batch */
 } LanceScanState;
 
 static void lance_scan_stream_error(LanceScanState *state) pg_attribute_noreturn();
+
+/* The projection, plus the _distance a nearest-neighbour search appends. */
+static inline int
+lance_scan_stream_columns(const LanceScanState *state)
+{
+	return state->ncolumns + (state->searching ? 1 : 0);
+}
+
+/*
+ * The pipe a search's waker writes to.  lance-c calls the waker on one of its
+ * own threads when lance_scanner_poll_next has more to give, and the backend
+ * sleeps on the read end next to its latch, so it wakes for either.
+ *
+ * One pipe per backend, made on the first search and never closed.  A waker
+ * may run until lance_scanner_close() returns, and that close can come from
+ * the resource owner callback on an error path, in any order relative to
+ * other cleanup: a per-scan pipe closed first would leave a waker writing to a
+ * descriptor number the backend may already have reused.  Both ends are
+ * non-blocking, so the waker never blocks and a full pipe only means a wake is
+ * already pending.
+ */
+static int	lance_waker_fds[2] = {-1, -1};
+
+static void
+lance_scan_waker(void *ctx)
+{
+	char		c = 0;
+
+	/* On a lance thread: no palloc, no elog, nothing but the write. */
+	(void) ctx;
+	(void) !write(lance_waker_fds[1], &c, 1);
+}
+
+static void
+lance_scan_open_waker(void)
+{
+	int			fds[2];
+	int			i;
+
+	if (lance_waker_fds[0] >= 0)
+		return;
+
+	if (pipe(fds) != 0)
+		ereport(ERROR,
+				(errcode_for_file_access(),
+				 errmsg("lance_fdw: could not create the vector search wakeup pipe: %m")));
+
+	for (i = 0; i < 2; i++)
+	{
+		if (fcntl(fds[i], F_SETFL, O_NONBLOCK) != 0 ||
+			fcntl(fds[i], F_SETFD, FD_CLOEXEC) != 0)
+		{
+			int			save_errno = errno;
+
+			close(fds[0]);
+			close(fds[1]);
+			errno = save_errno;
+			ereport(ERROR,
+					(errcode_for_file_access(),
+					 errmsg("lance_fdw: could not set up the vector search wakeup pipe: %m")));
+		}
+	}
+
+	lance_waker_fds[0] = fds[0];
+	lance_waker_fds[1] = fds[1];
+}
+
+/* Throw away wakes that are already accounted for, before the next poll. */
+static void
+lance_scan_drain_waker(void)
+{
+	char		buf[64];
+
+	while (read(lance_waker_fds[0], buf, sizeof(buf)) > 0)
+		;
+}
 
 /*
  * Release what the Arrow C data interface handed us.  Registered as a reset
@@ -220,6 +345,44 @@ lance_scan_read_projection(LanceScanState *state, ForeignScan *fsplan)
 				state->filter_columns[k++] = strVal(lfirst(lc));
 		}
 	}
+
+	/* Vector Top-K: NIL unless the planner chose a Top-K. */
+	{
+		List	   *topk = (List *) list_nth(fsplan->fdw_private,
+											 LANCE_FDW_PRIVATE_TOPK);
+		Node	   *metric;
+		char	   *endptr;
+
+		if (topk == NIL)
+			return;
+
+		if (list_length(topk) != LANCE_TOPK_NFIELDS ||
+			list_length(fsplan->fdw_exprs) != 1)
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("lance_fdw: the plan carries a malformed vector Top-K"),
+					 errdetail("%d fields and %d expressions.",
+							   list_length(topk),
+							   list_length(fsplan->fdw_exprs))));
+
+		metric = (Node *) list_nth(topk, LANCE_TOPK_METRIC);
+		if (!IsA(metric, Integer) || intVal(metric) < 0 ||
+			intVal(metric) >= LANCE_VECTOR_NMETRICS)
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("lance_fdw: the plan carries an unknown vector metric")));
+
+		state->is_topk = true;
+		state->topk_column = strVal(list_nth(topk, LANCE_TOPK_COLUMN));
+		state->topk_metric = (LanceVectorMetric) intVal(metric);
+		state->topk_k = strtoi64(strVal(list_nth(topk, LANCE_TOPK_K)), &endptr, 10);
+		if (*endptr != '\0' || state->topk_k < 1 || state->topk_k > PG_INT32_MAX)
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("lance_fdw: the plan carries an invalid vector Top-K limit \"%s\"",
+							strVal(list_nth(topk, LANCE_TOPK_K)))));
+		state->search_segment = -1;
+	}
 }
 
 /*
@@ -241,6 +404,14 @@ lance_scan_open_dataset(LanceScanState *state, uint64 version)
 
 	/* Brings the runtime up, and may ereport: outside the masked call. */
 	session = lance_rt_session();
+
+	/*
+	 * Every open, on every process, says so - which is what lets a test show
+	 * that a segment that was not picked for a vector search never touched the
+	 * object store.  DEBUG2, so that no existing output changes.
+	 */
+	elog(DEBUG2, "lance_fdw: open dataset \"%s\" on segment %d",
+		 state->uri, GpIdentity.segindex);
 
 	LANCE_MASKED(state->dataset = lance_dataset_open_with_session(state->uri,
 																  (const char *const *) storage_opts,
@@ -311,6 +482,79 @@ lance_scan_list_fragments(LanceScanState *state)
 	}
 }
 
+/*
+ * Lance hands over a scan's statistics once the stream has reached its end,
+ * possibly on one of its own threads and before get_next() has returned
+ * (lance.h, LanceScanStatisticsCallback).  So this copies three numbers into
+ * memory the scan already owns and does nothing else: no palloc, no elog, no
+ * lance-c call.  They are reported from the backend's own thread once
+ * get_next() is back.
+ */
+static void
+lance_scan_on_statistics(void *ctx, const LanceScanStatistics *statistics)
+{
+	LanceScanState *state = (LanceScanState *) ctx;
+
+	state->stats.indices_loaded = statistics->indices_loaded;
+	state->stats.index_partitions_loaded = statistics->index_partitions_loaded;
+	state->stats.index_comparisons = statistics->index_comparisons;
+	state->stats.seen = true;
+}
+
+/*
+ * The nearest-neighbour settings of a vector Top-K search.  No fragment
+ * list: the search covers the whole dataset, which is what lets Lance use
+ * its index.
+ */
+static void
+lance_scan_set_nearest(LanceScanState *state)
+{
+	int32		rc;
+
+	LANCE_MASKED(rc = lance_scanner_nearest(state->scanner, state->topk_column,
+											state->vector, (size_t) state->dim,
+											LANCE_DTYPE_FLOAT32,
+											(uint32) state->topk_k));
+	LANCE_CHECK(rc == 0, state->uri);
+
+	LANCE_MASKED(rc = lance_scanner_set_metric(state->scanner,
+											   (LanceMetricType) state->topk_metric));
+	LANCE_CHECK(rc == 0, state->uri);
+
+	/*
+	 * Filter first, then search among what is left: every row that comes back
+	 * satisfies the WHERE clause, and a filter that leaves few rows still gets
+	 * k of them rather than whatever survives of k candidates.
+	 */
+	LANCE_MASKED(rc = lance_scanner_set_prefilter(state->scanner, true));
+	LANCE_CHECK(rc == 0, state->uri);
+
+	/*
+	 * A floor only.  lance_scanner_set_nprobes() would pin the maximum to the
+	 * same value and stop a filtered search from probing further partitions to
+	 * find k rows (scanner.rs NprobesRange::exact).
+	 */
+	if (state->nprobes > 0)
+	{
+		LANCE_MASKED(rc = lance_scanner_set_minimum_nprobes(state->scanner,
+															(uint32) state->nprobes));
+		LANCE_CHECK(rc == 0, state->uri);
+	}
+
+	if (state->refine_factor > 0)
+	{
+		LANCE_MASKED(rc = lance_scanner_set_refine_factor(state->scanner,
+														  (uint32) state->refine_factor));
+		LANCE_CHECK(rc == 0, state->uri);
+	}
+
+	memset(&state->stats, 0, sizeof(state->stats));
+	LANCE_MASKED(rc = lance_scanner_set_statistics_callback(state->scanner,
+															lance_scan_on_statistics,
+															state));
+	LANCE_CHECK(rc == 0, state->uri);
+}
+
 static void
 lance_scan_make_scanner(LanceScanState *state)
 {
@@ -323,9 +567,14 @@ lance_scan_make_scanner(LanceScanState *state)
 	state->sc_handle = lance_rt_track_scanner(state->scanner);
 
 	/* Every one of these has to be set before a stream is taken. */
-	LANCE_MASKED(rc = lance_scanner_set_fragment_ids(state->scanner, state->ids,
-													 (size_t) state->nids));
-	LANCE_CHECK(rc == 0, state->uri);
+	if (state->searching)
+		lance_scan_set_nearest(state);
+	else
+	{
+		LANCE_MASKED(rc = lance_scanner_set_fragment_ids(state->scanner, state->ids,
+														 (size_t) state->nids));
+		LANCE_CHECK(rc == 0, state->uri);
+	}
 
 	if (state->opts.batch_size > 0)
 	{
@@ -368,11 +617,19 @@ lance_scan_open_stream(LanceScanState *state)
 {
 	int32		rc;
 
+	state->stream_done = false;
+
+	/* A search is polled straight off the scanner (lance_scan_poll_batch). */
+	if (state->searching)
+	{
+		lance_scan_open_waker();
+		return;
+	}
+
 	state->stream = lance_rt_track_new_stream(&state->stream_handle);
 	LANCE_MASKED(rc = lance_scanner_to_arrow_stream(state->scanner,
 													state->stream));
 	LANCE_CHECK(rc == 0, state->uri);
-	state->stream_done = false;
 }
 
 /*
@@ -381,22 +638,34 @@ lance_scan_open_stream(LanceScanState *state)
  * what the batches will contain, in the order the projection asked for.
  */
 static void
-lance_scan_build_converters(LanceScanState *state, Relation rel)
+lance_scan_resolve_converters(LanceScanState *state)
 {
-	TupleDesc	tupdesc = RelationGetDescr(rel);
+	TupleDesc	tupdesc = state->tupdesc;
 	int			i;
-	int			rc;
 
-	memset(&state->schema, 0, sizeof(state->schema));
-	LANCE_MASKED(rc = state->stream->get_schema(state->stream, &state->schema));
-	if (rc != 0)
-		lance_scan_stream_error(state);
-
-	if (state->schema.n_children != (int64) state->ncolumns)
+	if (state->schema.n_children != (int64) lance_scan_stream_columns(state))
 		ereport(ERROR,
 				(errcode(ERRCODE_FDW_INVALID_COLUMN_NUMBER),
 				 errmsg("lance_fdw: Lance returned " INT64_FORMAT " columns, expected %d",
-						state->schema.n_children, state->ncolumns)));
+						state->schema.n_children, lance_scan_stream_columns(state))));
+
+	/*
+	 * A nearest-neighbour search appends its own distance after the projected
+	 * columns.  PostgreSQL computes its own distance and sorts
+	 * by that, so this one is never read - but it has to be the column that is
+	 * expected, or the positions the converters read would be wrong.
+	 */
+	if (state->searching)
+	{
+		struct ArrowSchema *extra = state->schema.children[state->ncolumns];
+
+		if (extra == NULL || extra->name == NULL ||
+			strcmp(extra->name, "_distance") != 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_FDW_INVALID_COLUMN_NUMBER),
+					 errmsg("lance_fdw: a vector search returned \"%s\" where \"_distance\" was expected",
+							extra != NULL && extra->name != NULL ? extra->name : "")));
+	}
 
 	state->converters = (LanceConverter *)
 		palloc0(sizeof(LanceConverter) * Max(state->ncolumns, 1));
@@ -409,6 +678,25 @@ lance_scan_build_converters(LanceScanState *state, Relation rel)
 									  att->atttypid, att->atttypmod,
 									  &state->converters[i]);
 	}
+}
+
+static void
+lance_scan_build_converters(LanceScanState *state, Relation rel)
+{
+	int			rc;
+
+	state->tupdesc = RelationGetDescr(rel);
+
+	/* A search's schema comes with its first batch (lance_scan_poll_batch). */
+	if (state->searching)
+		return;
+
+	memset(&state->schema, 0, sizeof(state->schema));
+	LANCE_MASKED(rc = state->stream->get_schema(state->stream, &state->schema));
+	if (rc != 0)
+		lance_scan_stream_error(state);
+
+	lance_scan_resolve_converters(state);
 }
 
 /*
@@ -558,6 +846,156 @@ lance_scan_validate_projection(LanceScanState *state, Relation rel)
 	PG_END_TRY();
 }
 
+/*
+ * The dimension of the Top-K column in the open dataset, or 0 if it is not a
+ * fixed_size_list<float32, N> - the only shape lance_scanner_nearest() is
+ * asked to search here.  Reads the schema the open already loaded.
+ */
+static int
+lance_scan_vector_column_dim(LanceScanState *state)
+{
+	struct ArrowSchema schema;
+	int32		rc;
+	int			dim = 0;
+	int64		c;
+
+	memset(&schema, 0, sizeof(schema));
+	LANCE_MASKED(rc = lance_dataset_schema(state->dataset, &schema));
+	LANCE_CHECK(rc == 0, state->uri);
+
+	for (c = 0; c < schema.n_children; c++)
+	{
+		struct ArrowSchema *child = schema.children[c];
+
+		if (child == NULL || child->name == NULL ||
+			strcmp(child->name, state->topk_column) != 0)
+			continue;
+
+		if (child->format != NULL && strncmp(child->format, "+w:", 3) == 0 &&
+			child->n_children == 1 && child->children[0] != NULL &&
+			child->children[0]->format != NULL &&
+			strcmp(child->children[0]->format, "f") == 0)
+		{
+			long		n = strtol(child->format + 3, NULL, 10);
+
+			if (n > 0 && n <= PG_INT32_MAX)
+				dim = (int) n;
+		}
+		break;
+	}
+
+	if (schema.release != NULL)
+		LANCE_MASKED(schema.release(&schema));
+
+	return dim;
+}
+
+/*
+ * On the searching QE: the dataset is the version the QD pinned and checked,
+ * so a column that no longer matches the vector it sent is a broken plan.
+ */
+static void
+lance_scan_check_vector_column(LanceScanState *state, bool strict)
+{
+	int			dim = lance_scan_vector_column_dim(state);
+
+	if (strict && dim != state->dim)
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("lance_fdw: column \"%s\" has %d dimensions here, but the coordinator sent a %d-dimensional query vector",
+						state->topk_column, dim, state->dim),
+				 errdetail("While reading uri %s.", state->uri)));
+}
+
+/*
+ * The QD's half of vector Top-K: evaluate the query vector - a
+ * parameter has its value only now - and decide whether this execution can
+ * search.  Anything that would make the search differ from the exact path is
+ * not an error here but a reason to scan the plain way, recorded in
+ * state->fallback: the operator then meets the value where the exact path
+ * would have met it, and raises its error at the same row, or never if no row
+ * reaches it.
+ */
+static bool
+lance_scan_prepare_topk(ForeignScanState *node, LanceScanState *state)
+{
+	ForeignScan *fsplan = (ForeignScan *) node->ss.ps.plan;
+	ExprContext *econtext = node->ss.ps.ps_ExprContext;
+	ExprState  *exprstate;
+	Datum		value;
+	bool		isnull;
+	ArrayType  *array;
+	const float4 *elements;
+	int			column_dim;
+	int			n;
+	int			i;
+	bool		all_zero = true;
+
+	exprstate = ExecInitExpr((Expr *) linitial(fsplan->fdw_exprs),
+							 (PlanState *) node);
+	value = ExecEvalExprSwitchContext(exprstate, econtext, &isnull);
+
+	if (isnull)
+	{
+		state->fallback = "the query vector is NULL";
+		return false;
+	}
+
+	array = DatumGetArrayTypeP(value);
+	if (ARR_NDIM(array) != 1)
+	{
+		state->fallback = "the query vector is not a one-dimensional array";
+		return false;
+	}
+	if (ARR_HASNULL(array) && array_contains_nulls(array))
+	{
+		state->fallback = "the query vector has NULL elements";
+		return false;
+	}
+
+	column_dim = lance_scan_vector_column_dim(state);
+	if (column_dim == 0)
+	{
+		state->fallback = "the Lance column is not a fixed_size_list of float32";
+		return false;
+	}
+
+	n = ARR_DIMS(array)[0];
+	if (n != column_dim)
+	{
+		state->fallback = psprintf("the query vector has %d elements and the column %d",
+								   n, column_dim);
+		return false;
+	}
+
+	elements = (const float4 *) ARR_DATA_PTR(array);
+	for (i = 0; i < n; i++)
+	{
+		if (isnan(elements[i]) || isinf(elements[i]))
+		{
+			state->fallback = "the query vector has a NaN or infinite element";
+			return false;
+		}
+		if (elements[i] != 0.0f)
+			all_zero = false;
+	}
+
+	/* A zero vector has no direction, so no cosine distance to search by. */
+	if (all_zero && state->topk_metric == LANCE_VECTOR_COSINE)
+	{
+		state->fallback = "the query vector is zero";
+		return false;
+	}
+
+	/* The value lives in per-tuple memory; keep a copy in the scan's own. */
+	state->dim = n;
+	state->vector = (float4 *) palloc(sizeof(float4) * n);
+	memcpy(state->vector, elements, sizeof(float4) * n);
+	ResetExprContext(econtext);
+
+	return true;
+}
+
 static void
 lance_scan_log_share(const LanceScanState *state, const char *what)
 {
@@ -602,6 +1040,17 @@ lance_scan_begin_internal(ForeignScanState *node, LanceScanState *state,
 	 * which is what lets EXPLAIN work against a server whose credentials are
 	 * wrong.
 	 */
+	/*
+	 * The values a vector search would use, read by the QD when the statement
+	 * starts.  A QE takes them from the scan unit
+	 * instead and never reads these GUCs.
+	 */
+	if (state->is_topk)
+	{
+		state->nprobes = lance_vector_nprobes;
+		state->refine_factor = lance_vector_refine_factor;
+	}
+
 	if (eflags & EXEC_FLAG_EXPLAIN_ONLY)
 		return;
 
@@ -641,6 +1090,28 @@ lance_scan_begin_internal(ForeignScanState *node, LanceScanState *state,
 
 		lance_scan_open_dataset(state, state->opts.version);
 		lance_scan_validate_projection(state, rel);
+
+		/*
+		 * Vector Top-K: one segment searches the whole dataset,
+		 * the others do nothing.  If the query vector turns out to be unusable
+		 * the QD publishes the plain fragment units instead - the plan above
+		 * this scan is the same either way, so the statement simply runs as if
+		 * the pushdown had been off.
+		 */
+		if (state->is_topk && lance_scan_prepare_topk(node, state))
+		{
+			state->search_segment = lance_dispatch_search_target(nsegments);
+			lance_dispatch_publish_nearest(fsplan, state->uri, state->version,
+										   nsegments, state->search_segment,
+										   state->vector, state->dim,
+										   state->nprobes, state->refine_factor);
+			elog(DEBUG1,
+				 "lance_fdw: dispatching a vector search of \"%s\" at version " UINT64_FORMAT " to segment %d",
+				 state->uri, state->version, state->search_segment);
+			lance_scan_close_dataset(state);
+			return;
+		}
+
 		lance_scan_list_fragments(state);
 		lance_dispatch_publish(fsplan, state->uri, state->version, nsegments,
 							   state->ids, state->nids);
@@ -652,19 +1123,52 @@ lance_scan_begin_internal(ForeignScanState *node, LanceScanState *state,
 
 	if (all_segments && lance_dispatch_read_units(fsplan, &units))
 	{
-		/* A QE: take this segment's share of what the QD published. */
 		state->uri = units.uri;
 		state->version = units.version;
-		state->ids = units.ids;
-		state->nids = lance_dispatch_take_share(units.ids, units.nids,
-												units.nsegments);
-		lance_scan_log_share(state, "reading");
 
-		/* An empty share is not an error, and it is not I/O either. */
-		if (state->nids == 0)
-			return;
+		if (units.kind == LANCE_UNIT_NEAREST)
+		{
+			/*
+			 * Only the QD's chosen segment searches.  The others leave without
+			 * opening anything, which is the point: the search covers the whole
+			 * dataset, and a second one would return its rows twice.
+			 */
+			if (!state->is_topk)
+				ereport(ERROR,
+						(errcode(ERRCODE_INTERNAL_ERROR),
+						 errmsg("lance_fdw: the plan carries a vector search unit but no vector Top-K")));
 
-		lance_scan_open_dataset(state, units.version);
+			if (GpIdentity.segindex != units.target)
+			{
+				elog(DEBUG1,
+					 "lance_fdw: not the search segment, skipping \"%s\" on segment %d",
+					 state->uri, GpIdentity.segindex);
+				return;
+			}
+
+			state->searching = true;
+			state->search_segment = units.target;
+			state->vector = units.vector;
+			state->dim = units.dim;
+			state->nprobes = units.nprobes;
+			state->refine_factor = units.refine_factor;
+			lance_scan_open_dataset(state, units.version);
+			lance_scan_check_vector_column(state, true);
+		}
+		else
+		{
+			/* A QE: take this segment's share of what the QD published. */
+			state->ids = units.ids;
+			state->nids = lance_dispatch_take_share(units.ids, units.nids,
+													units.nsegments);
+			lance_scan_log_share(state, "reading");
+
+			/* An empty share is not an error, and it is not I/O either. */
+			if (state->nids == 0)
+				return;
+
+			lance_scan_open_dataset(state, units.version);
+		}
 	}
 	else
 	{
@@ -685,21 +1189,39 @@ lance_scan_begin_internal(ForeignScanState *node, LanceScanState *state,
 
 		/*
 		 * mpp_execute 'coordinator' or 'any', or a utility-mode backend with
-		 * nobody to dispatch to: this process reads every fragment itself.
+		 * nobody to dispatch to: this process reads every fragment itself -
+		 * or, for a vector Top-K, searches them all itself.
 		 */
 		lance_scan_open_dataset(state, state->opts.version);
-		lance_scan_list_fragments(state);
-		lance_scan_log_share(state, "reading all");
 
-		if (state->nids == 0)
+		if (state->is_topk)
 		{
-			/*
-			 * Nothing to read still has a projection to check, and this
-			 * process is the only one that will ever see the schema.
-			 */
 			lance_scan_validate_projection(state, rel);
-			lance_scan_close_dataset(state);
-			return;
+			if (lance_scan_prepare_topk(node, state))
+			{
+				state->searching = true;
+				state->search_segment = -1;
+				elog(DEBUG1,
+					 "lance_fdw: searching \"%s\" at version " UINT64_FORMAT " in this process",
+					 state->uri, state->version);
+			}
+		}
+
+		if (!state->searching)
+		{
+			lance_scan_list_fragments(state);
+			lance_scan_log_share(state, "reading all");
+
+			if (state->nids == 0)
+			{
+				/*
+				 * Nothing to read still has a projection to check, and this
+				 * process is the only one that will ever see the schema.
+				 */
+				lance_scan_validate_projection(state, rel);
+				lance_scan_close_dataset(state);
+				return;
+			}
 		}
 	}
 
@@ -776,6 +1298,93 @@ lance_scan_release_batch(LanceScanState *state)
 }
 
 /*
+ * One lance_scanner_poll_next, and on a batch its export into state->batch.
+ * Called masked, so nothing here may ereport: the result goes back through
+ * *status and the return value.  The first batch's schema is kept for the
+ * converters; later ones describe the same columns and are let go.
+ */
+static int32
+lance_scan_poll_once(LanceScanState *state, LancePollStatus *status)
+{
+	LanceBatch *lbatch = NULL;
+	struct ArrowSchema schema;
+	int32		rc;
+
+	*status = lance_scanner_poll_next(state->scanner, lance_scan_waker, NULL,
+									  &lbatch);
+	if (*status != LANCE_POLL_READY)
+		return 0;
+
+	memset(&schema, 0, sizeof(schema));
+	rc = lance_batch_to_arrow(lbatch, &state->batch, &schema);
+	/* The export holds its own references; freeing keeps the error intact. */
+	lance_batch_free(lbatch);
+	if (rc != 0)
+		return rc;
+
+	if (state->schema.release == NULL)
+		state->schema = schema;
+	else if (schema.release != NULL)
+		schema.release(&schema);
+	return 0;
+}
+
+/*
+ * Wait for the search's next batch, or its end, without leaving the backend
+ * deaf to a cancel for the length of the search.  A poll
+ * that is not ready returns at once and lance-c goes on computing on its own
+ * threads; the backend sleeps on its latch and the waker pipe, and acts on any
+ * interrupt each time it wakes.  An ERROR from there closes the scanner
+ * through the resource owner, and closing is what stops the search.
+ *
+ * Leaves state->batch released at the end of the search.
+ */
+static void
+lance_scan_poll_batch(LanceScanState *state)
+{
+	for (;;)
+	{
+		LancePollStatus status;
+		int32		rc;
+
+		lance_scan_drain_waker();
+		LANCE_MASKED(rc = lance_scan_poll_once(state, &status));
+		LANCE_CHECK(rc == 0, state->uri);
+
+		switch (status)
+		{
+			case LANCE_POLL_READY:
+				if (state->converters == NULL)
+					lance_scan_resolve_converters(state);
+				return;
+
+			case LANCE_POLL_FINISHED:
+				return;
+
+			case LANCE_POLL_ERROR:
+				/* Rebuilt by a ReScan, as after a failed stream. */
+				state->stream_failed = true;
+				lance_rt_error(state->uri);
+
+			case LANCE_POLL_PENDING:
+
+				/*
+				 * The waker fires at most once per pending poll.  The timeout
+				 * is only a safety net: polling again early costs nothing.
+				 */
+				(void) WaitLatchOrSocket(MyLatch,
+										 WL_LATCH_SET | WL_SOCKET_READABLE |
+										 WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
+										 lance_waker_fds[0], 1000L,
+										 PG_WAIT_EXTENSION);
+				ResetLatch(MyLatch);
+				CHECK_FOR_INTERRUPTS();
+				break;
+		}
+	}
+}
+
+/*
  * Pull the next batch.  Returns false at end of stream; a zero-length batch is
  * possible and is not the end, so the caller loops.
  */
@@ -793,37 +1402,58 @@ lance_scan_next_batch(LanceScanState *state)
 	if (state->stream_done)
 		return false;
 
-	LANCE_MASKED(rc = state->stream->get_next(state->stream, &state->batch));
-
-	/*
-	 * Signals were blocked for the whole read, so anything that arrived during
-	 * it was delivered on the restore just now and is acted on here rather
-	 * than one batch later.  The batch, if there is one, is freed by the
-	 * scan context's reset callback on the way out.
-	 */
-	CHECK_FOR_INTERRUPTS();
-
-	if (rc != 0)
+	if (state->searching)
+		lance_scan_poll_batch(state);
+	else
 	{
+		LANCE_MASKED(rc = state->stream->get_next(state->stream, &state->batch));
+
 		/*
-		 * lance-c poisons the scanner behind a stream that failed, so remember
-		 * it: a ReScan after this has to build a new one.
+		 * Signals were blocked for the whole read, so anything that arrived
+		 * during it was delivered on the restore just now and is acted on here
+		 * rather than one batch later.  The batch, if there is one, is
+		 * freed by the scan context's reset callback on the way out.
 		 */
-		state->stream_failed = true;
-		lance_scan_stream_error(state);
+		CHECK_FOR_INTERRUPTS();
+
+		if (rc != 0)
+		{
+			/*
+			 * lance-c poisons the scanner behind a stream that failed, so
+			 * remember it: a ReScan after this has to build a new one.
+			 */
+			state->stream_failed = true;
+			lance_scan_stream_error(state);
+		}
 	}
 
 	if (state->batch.release == NULL)
 	{
 		state->stream_done = true;
+
+		/*
+		 * Back on the backend's own thread, so the numbers the statistics
+		 * callback copied can be reported now.  index_comparisons is the one
+		 * that says whether an index was used: the other two count loads from
+		 * storage and are zero once the index is cached.
+		 */
+		if (state->searching)
+			elog(DEBUG1,
+				 "lance_fdw: vector search of \"%s\" on segment %d: %s, "
+				 "index_comparisons " UINT64_FORMAT ", indices_loaded " UINT64_FORMAT
+				 ", index_partitions_loaded " UINT64_FORMAT,
+				 state->uri, GpIdentity.segindex,
+				 state->stats.seen ? "statistics" : "no statistics",
+				 state->stats.index_comparisons, state->stats.indices_loaded,
+				 state->stats.index_partitions_loaded);
 		return false;
 	}
 
-	if (state->batch.n_children != (int64) state->ncolumns)
+	if (state->batch.n_children != (int64) lance_scan_stream_columns(state))
 		ereport(ERROR,
 				(errcode(ERRCODE_FDW_INVALID_COLUMN_NUMBER),
 				 errmsg("lance_fdw: Lance returned a batch of " INT64_FORMAT " columns, expected %d",
-						state->batch.n_children, state->ncolumns)));
+						state->batch.n_children, lance_scan_stream_columns(state))));
 
 	for (i = 0; i < state->ncolumns; i++)
 		lance_arrow_converter_set_array(&state->converters[i],
@@ -896,8 +1526,11 @@ lance_scan_next(ForeignScanState *node)
 	 */
 	ExecClearTuple(slot);
 
-	/* The QD, and a QE with an empty share, have nothing open and no rows. */
-	if (state == NULL || state->stream == NULL)
+	/*
+	 * The QD, and a QE with an empty share or not chosen to search, have
+	 * nothing open and no rows.  A search has a scanner but no stream.
+	 */
+	if (state == NULL || state->scanner == NULL)
 		return slot;
 
 	while (state->batch_row >= state->batch_len)
@@ -926,11 +1559,13 @@ lance_scan_rescan(ForeignScanState *node)
 	state->stream = NULL;
 	state->stream_done = false;
 
-	if (state->stream_failed)
+	if (state->stream_failed || state->searching)
 	{
 		/*
 		 * The scanner behind a failed stream is poisoned, so rewinding means
 		 * building a new one from the same dataset.
+		 * A search is polled off the scanner itself, which does not start
+		 * over either.
 		 */
 		lance_rt_release(state->sc_handle);
 		state->sc_handle = NULL;
@@ -1010,6 +1645,44 @@ lance_scan_explain(ForeignScanState *node, ExplainState *es)
 
 	if (state->filter != NULL)
 		ExplainPropertyText("Lance Filter", state->filter, es);
+
+	/*
+	 * Vector Top-K.  The plan above this node looks the same with
+	 * and without the pushdown, so this line is the way to tell them apart -
+	 * and, under ANALYZE, whether this execution actually searched or fell back
+	 * to the plain scan, and which segment searched.
+	 */
+	if (state->is_topk)
+	{
+		if (state->fallback != NULL)
+			ExplainPropertyText("Lance Vector Search",
+								psprintf("fell back (%s)", state->fallback), es);
+		else
+			ExplainPropertyText("Lance Vector Search",
+								psprintf("%s %s (%s), k=" INT64_FORMAT,
+										 state->topk_column,
+										 lance_vector_metric_operator(state->topk_metric),
+										 lance_vector_metric_name(state->topk_metric),
+										 state->topk_k),
+								es);
+
+		if (es->verbose)
+		{
+			ExplainPropertyText("Lance nprobes",
+								state->nprobes > 0 ? psprintf("%d", state->nprobes) : "default",
+								es);
+			ExplainPropertyText("Lance refine_factor",
+								state->refine_factor > 0 ? psprintf("%d", state->refine_factor) : "default",
+								es);
+		}
+
+		if (es->analyze && state->fallback == NULL)
+			ExplainPropertyText("Lance Search Segment",
+								state->search_segment >= 0
+								? psprintf("%d", state->search_segment)
+								: "coordinator",
+								es);
+	}
 
 	/* Only known when this process actually opened the dataset. */
 	if (state->total_fragments >= 0)

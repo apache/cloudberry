@@ -41,6 +41,7 @@
 #include "lance_option.h"
 #include "lance_runtime.h"
 #include "lance_scan.h"
+#include "lance_vector.h"
 
 #include "access/htup_details.h"
 #include "access/reloptions.h"
@@ -114,6 +115,16 @@ lance_fdw_validator(PG_FUNCTION_ARGS)
 }
 
 /*
+ * What the planner callbacks pass each other in baserel->fdw_private.
+ */
+typedef struct LanceRelInfo
+{
+	LanceTableOptions opts;
+	bool		is_topk;		/* GetForeignPaths matched a vector Top-K */
+	LanceTopK	topk;
+} LanceRelInfo;
+
+/*
  * Planning does no I/O, so the row count is the rows_hint option or a
  * constant.  Nothing here reaches the object store, which is what keeps
  * EXPLAIN working against a server whose credentials are wrong.
@@ -122,27 +133,39 @@ static void
 lanceGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel,
 					   Oid foreigntableid)
 {
-	LanceTableOptions *opts;
+	LanceRelInfo *info;
 
-	opts = (LanceTableOptions *) palloc0(sizeof(LanceTableOptions));
-	lance_get_table_options(foreigntableid, opts);
+	info = (LanceRelInfo *) palloc0(sizeof(LanceRelInfo));
+	lance_get_table_options(foreigntableid, &info->opts);
 
-	baserel->fdw_private = (void *) opts;
-	baserel->rows = opts->rows_hint > 0.0 ? opts->rows_hint
+	baserel->fdw_private = (void *) info;
+	baserel->rows = info->opts.rows_hint > 0.0 ? info->opts.rows_hint
 		: LANCE_FDW_DEFAULT_ROWS;
 }
 
 /*
- * One path.  There is no filter or ordering pushdown in this block, so there
- * is nothing to choose between; the locus that makes the scan run on every
- * segment comes from mpp_execute and is added by create_foreignscan_path().
+ * One path, as before: a vector Top-K is not a second path competing with the
+ * plain scan but the same scan told to return k rows.
+ * It claims no ordering - PostgreSQL still sorts what comes back by its own
+ * distance - so the plan above it is the plain scan's plan, Sort and Limit
+ * included, and only the row estimate changes.  The locus that makes the scan
+ * run on every segment comes from mpp_execute and is added by
+ * create_foreignscan_path().
  */
 static void
 lanceGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel,
 					 Oid foreigntableid)
 {
+	LanceRelInfo *info = (LanceRelInfo *) baserel->fdw_private;
 	Cost		startup_cost = 10.0;
-	Cost		total_cost = startup_cost + baserel->rows * 0.01;
+	Cost		total_cost;
+
+	info->is_topk = lance_vector_match(root, baserel, foreigntableid,
+									   &info->topk);
+	if (info->is_topk)
+		baserel->rows = Min(baserel->rows, (double) info->topk.k);
+
+	total_cost = startup_cost + baserel->rows * 0.01;
 
 	add_path(baserel, (Path *)
 			 create_foreignscan_path(root,
@@ -239,6 +262,9 @@ lanceGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 	List	   *local_quals = NIL;
 	List	   *filter_attrs = NIL;
 	List	   *filter_columns = NIL;
+	List	   *topk = NIL;
+	List	   *fdw_exprs = NIL;
+	LanceRelInfo *info = (LanceRelInfo *) baserel->fdw_private;
 	StringInfoData filter;
 	ListCell   *lc;
 
@@ -260,9 +286,8 @@ lanceGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 		Expr	   *clause = (Expr *) lfirst(lc);
 		LanceDeparsed deparsed;
 
-		if (!lance_enable_filter_pushdown ||
-			!lance_deparse_qual(clause, foreigntableid, baserel->relid,
-								&deparsed))
+		if (!lance_deparse_pushdown(clause, foreigntableid, baserel->relid,
+									&deparsed))
 		{
 			local_quals = lappend(local_quals, clause);
 			continue;
@@ -273,6 +298,16 @@ lanceGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 		appendStringInfoString(&filter, deparsed.sql);
 		filter_attrs = list_concat_unique_int(filter_attrs, deparsed.attnums);
 	}
+
+	/*
+	 * The matcher only accepted a Top-K because every qual goes to Lance, and
+	 * it asked the very question this loop just asked.  A qual left here now
+	 * would run after Lance had cut the rows to k - silently short results -
+	 * so a disagreement is a bug to stop on, not a case to handle.
+	 */
+	if (info->is_topk && local_quals != NIL)
+		elog(ERROR, "lance_fdw: vector Top-K planned with %d qualifier(s) left to evaluate locally",
+			 list_length(local_quals));
 
 	lance_plan_projection(baserel, foreigntableid, local_quals,
 						  &retrieved_attrs, &columns);
@@ -301,20 +336,35 @@ lanceGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 	}
 
 	/*
+	 * Vector Top-K: the column, the distance and k go in a slot of
+	 * their own; the query vector goes in fdw_exprs, because it may be a $n
+	 * that only has a value once the statement executes.  A scan that is not
+	 * a Top-K carries NIL there and no expressions at all.
+	 */
+	if (info->is_topk)
+	{
+		topk = list_make3(makeString(pstrdup(info->topk.column)),
+						  makeInteger((int) info->topk.metric),
+						  makeString(psprintf(INT64_FORMAT, info->topk.k)));
+		fdw_exprs = list_make1(info->topk.query);
+	}
+
+	/*
 	 * Slot 0 is the attribute list, slot 1 the Lance column names
 	 * that go with it one for one, slot 2 the pushed-down filter (empty string
-	 * when there is none), slots 3 and 4 the filter's columns.  The QD appends
-	 * the scan units last, and a QE tells whether it heard from the QD by the
-	 * length of this list.
+	 * when there is none), slots 3 and 4 the filter's columns, slot 5 the
+	 * vector Top-K.  The QD appends the scan units last, and a QE tells
+	 * whether it heard from the QD by the length of this list.
 	 */
 	fdw_private = list_make5(retrieved_attrs, columns,
 							 makeString(filter.data),
 							 filter_attrs, filter_columns);
+	fdw_private = lappend(fdw_private, topk);
 
 	return make_foreignscan(tlist,
 							local_quals,
 							baserel->relid,
-							NIL,	/* no expressions to evaluate */
+							fdw_exprs,
 							fdw_private,
 							NIL,	/* no custom tlist */
 							NIL,	/* no recheck quals */

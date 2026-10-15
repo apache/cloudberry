@@ -884,6 +884,98 @@ def build_blobv2() -> Built:
                "size, so the expected file records offsets rather than data"])
 
 
+#: Vector Top-K fixtures.  Twelve clusters of
+#: eighty points in eight dimensions: real embeddings cluster, and an IVF index
+#: on structureless noise says nothing about recall.
+VECTOR_DIM = 8
+VECTOR_CLUSTERS = 12
+VECTOR_PER_CLUSTER = 80
+VECTOR_PQ_SUB_VECTORS = 4
+
+
+def det_unit(seed: str) -> float:
+    """A deterministic float in [-1, 1), from a hash rather than an RNG."""
+    word = int.from_bytes(hashlib.sha256(seed.encode("utf-8")).digest()[:4], "big")
+    return word / 2.0 ** 31 - 1.0
+
+
+def vector_points() -> tuple[list[int], list[list[float]]]:
+    """Category and float32-exact coordinates of every row of ``vectors``."""
+    centres = [[det_unit("centre/%d/%d" % (c, d)) * 10.0 for d in range(VECTOR_DIM)]
+               for c in range(VECTOR_CLUSTERS)]
+    cats, points = [], []
+    for i in range(VECTOR_CLUSTERS * VECTOR_PER_CLUSTER):
+        c = i % VECTOR_CLUSTERS
+        p = [centres[c][d] + det_unit("point/%d/%d" % (i, d)) * 0.8
+             for d in range(VECTOR_DIM)]
+        cats.append(i % 5)
+        points.append([float(v) for v in np.array(p, dtype=np.float32)])
+    return cats, points
+
+
+def _vector_table() -> pa.Table:
+    cats, points = vector_points()
+    n = len(points)
+    flat = pa.array([v for p in points for v in p], pa.float32())
+    schema = pa.schema([
+        pa.field("id", pa.int32(), nullable=False),
+        pa.field("cat", pa.int32()),
+        pa.field("emb", pa.list_(pa.float32(), VECTOR_DIM)),
+    ])
+    return pa.table({
+        "id": pa.array(range(n), pa.int32()),
+        "cat": pa.array(cats, pa.int32()),
+        "emb": pa.FixedSizeListArray.from_arrays(flat, VECTOR_DIM),
+    }, schema=schema)
+
+
+def build_vectors() -> Built:
+    return Built(
+        purpose="Vector Top-K without an index: %d clustered %d-dimensional "
+                "float32 embeddings over 4 fragments, cat = id %% 5.  Lance "
+                "searches it exhaustively, so the pushed-down result has to be "
+                "the exact one." % (VECTOR_CLUSTERS * VECTOR_PER_CLUSTER, VECTOR_DIM),
+        table=_vector_table(), max_rows_per_file=240)
+
+
+def build_vectors_idx() -> Built:
+    def post(ds, uri):
+        ds.create_index("emb", index_type="IVF_PQ", metric="L2",
+                        num_partitions=VECTOR_CLUSTERS,
+                        num_sub_vectors=VECTOR_PQ_SUB_VECTORS)
+    return Built(
+        purpose="The rows of vectors.lance with an IVF_PQ index on emb, trained "
+                "with the L2 metric: approximate search, recall, index use and "
+                "the metric-mismatch fallback to an exhaustive search.",
+        table=_vector_table(), max_rows_per_file=240, post=post,
+        has_expected=False,
+        notes=["same rows as vectors.lance, so no expected file of its own",
+               "IVF k-means training is not byte-reproducible; only the data and "
+               "the manifest entry are, and the suites assert recall bounds, "
+               "never which approximate rows come back"])
+
+
+def build_vectors_nulls() -> Built:
+    emb = [[1, 0, 0, 0], [2, 0, 0, 0], None, [3, 0, 0, 0], None,
+           [0, 0, 0, 0], [0, 1, 0, 0], [0, 2, 0, 0], None, [0, 0, 1, 0]]
+    n = len(emb)
+    return Built(
+        purpose="NULL and zero vectors: the NULL tail the exact path returns and "
+                "a nearest-neighbour search does not, and a zero row that has no "
+                "cosine distance.",
+        table=pa.table({
+            "id": pa.array(range(n), pa.int32()),
+            "cat": pa.array([i % 2 for i in range(n)], pa.int32()),
+            "emb": pa.array(emb, pa.list_(pa.float32(), 4)),
+        }, schema=pa.schema([
+            pa.field("id", pa.int32(), nullable=False),
+            pa.field("cat", pa.int32()),
+            pa.field("emb", pa.list_(pa.float32(), 4)),
+        ])),
+        max_rows_per_file=5,
+        notes=["ids 2, 4 and 8 have a NULL vector; id 5 is the zero vector"])
+
+
 def build_big(fragments: int, rows_per_fragment: int, blob_bytes: int) -> Callable[[], Built]:
     """Timing fixture: not deterministic, not byte-compared, opt-in."""
     def build() -> Built:
@@ -912,6 +1004,34 @@ def build_big(fragments: int, rows_per_fragment: int, blob_bytes: int) -> Callab
     return build
 
 
+def build_vectors_big(rows: int, dim: int = 64) -> Callable[[], Built]:
+    """cancel_loop --scan topk fixture: not deterministic, not byte-compared, opt-in."""
+    def build() -> Built:
+        schema = pa.schema([pa.field("id", pa.int32(), nullable=False),
+                            pa.field("emb", pa.list_(pa.float32(), dim))])
+        rng = np.random.default_rng(20261008)
+        rows_per_batch = 250_000
+
+        def batches() -> Iterator[pa.RecordBatch]:
+            for start in range(0, rows, rows_per_batch):
+                count = min(rows_per_batch, rows - start)
+                emb = rng.standard_normal((count, dim)).astype(np.float32)
+                yield pa.record_batch(
+                    {"id": pa.array(range(start, start + count), pa.int32()),
+                     "emb": pa.FixedSizeListArray.from_arrays(
+                         pa.array(emb.reshape(-1)), dim)}, schema=schema)
+
+        reader = pa.RecordBatchReader.from_batches(schema, batches())
+        return Built(
+            purpose="A vector search long enough to interrupt: %d random %d-d "
+                    "vectors and no index, so every search reads them all. "
+                    "No expected output." % (rows, dim),
+            reader=reader, max_rows_per_file=max(1, rows // 4), has_expected=False,
+            notes=["random vectors: this dataset is exempt from the "
+                   "byte-identical regeneration requirement"])
+    return build
+
+
 #: The dataset names, in a fixed order.
 BUILDERS: dict[str, Callable[[], Built]] = {
     "types_all": build_types_all,
@@ -936,9 +1056,14 @@ BUILDERS: dict[str, Callable[[], Built]] = {
     "nested_btier": build_nested_btier,
     "maps": build_maps,
     "blobv2": build_blobv2,
+    # Vector Top-K, appended for the same reason.
+    "vectors": build_vectors,
+    "vectors_idx": build_vectors_idx,
+    "vectors_nulls": build_vectors_nulls,
 }
 
 BIG = "big"
+VECTORS_BIG = "vectors_big"
 
 
 # --------------------------------------------------------------------------
@@ -1075,11 +1200,13 @@ def _write_dataset(path: str, built: Built, storage_version: Optional[str]):
 
 def generate(root: str, names: Optional[Iterable[str]] = None, with_big: bool = False,
              storage_version: Optional[str] = None, big_shape: tuple = (3, 512, 1 << 20),
+             vectors_big_rows: int = 1_000_000,
              log: Callable[[str], None] = lambda msg: None) -> dict:
     """Generate datasets under ``root`` and return the manifest dict it wrote."""
     builders = dict(BUILDERS)
     if with_big:
         builders[BIG] = build_big(*big_shape)
+        builders[VECTORS_BIG] = build_vectors_big(vectors_big_rows)
     if names is not None:
         unknown = [n for n in names if n not in builders]
         if unknown:
@@ -1144,7 +1271,7 @@ def generate(root: str, names: Optional[Iterable[str]] = None, with_big: bool = 
             % (name, entry["rows"], entry["fragments"],
                ",".join(entry["file_format_versions"].value)))
 
-    ordered = [n for n in list(BUILDERS) + [BIG] if n in manifest["datasets"]]
+    ordered = [n for n in list(BUILDERS) + [BIG, VECTORS_BIG] if n in manifest["datasets"]]
     manifest["datasets"] = {n: manifest["datasets"][n] for n in ordered}
     with open(manifest_path, "w") as fh:
         fh.write(dumps_manifest(manifest))
@@ -1160,10 +1287,12 @@ def main(argv=None) -> int:
                     help="comma-separated subset to regenerate (manifest entries "
                          "for the other datasets are kept)")
     ap.add_argument("--with-big", action="store_true",
-                    help="also generate the multi-hundred-MB 'big' dataset (timing runs)")
+                    help="also generate the multi-hundred-MB 'big' and 'vectors_big' "
+                         "datasets (timing and cancellation runs)")
     ap.add_argument("--big-fragments", type=int, default=3)
     ap.add_argument("--big-rows-per-fragment", type=int, default=512)
     ap.add_argument("--big-blob-bytes", type=int, default=1 << 20)
+    ap.add_argument("--vectors-big-rows", type=int, default=1_000_000)
     ap.add_argument("--data-storage-version", default=None,
                     help="Lance file format to write, e.g. 2.0 (default: pylance's)")
     ap.add_argument("-q", "--quiet", action="store_true")
@@ -1174,6 +1303,7 @@ def main(argv=None) -> int:
              storage_version=args.data_storage_version,
              big_shape=(args.big_fragments, args.big_rows_per_fragment,
                         args.big_blob_bytes),
+             vectors_big_rows=args.vectors_big_rows,
              log=(lambda msg: None) if args.quiet else (lambda msg: print(msg)))
     return 0
 

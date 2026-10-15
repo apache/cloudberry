@@ -63,6 +63,17 @@ extern bool lance_deparse_qual(Expr *expr, Oid foreigntableid,
 							   Index varno, LanceDeparsed *out);
 
 /*
+ * Does this qual go to Lance?  lance_deparse_qual() with the
+ * lance_fdw.enable_filter_pushdown escape hatch applied on top.  This is the
+ * one judgement GetForeignPlan and the vector Top-K matcher share: the matcher
+ * may only push a LIMIT down when every qual goes to Lance, and asking a second,
+ * slightly different question would let the two disagree about a clause that
+ * then gets evaluated after Lance has already cut the rows to k.
+ */
+extern bool lance_deparse_pushdown(Expr *expr, Oid foreigntableid,
+								   Index varno, LanceDeparsed *out);
+
+/*
  * Quote a Lance column name for the filter dialect.  Returns NULL when the
  * name cannot be expressed - which today means it contains a backtick, the
  * one character the dialect gives no way to escape.

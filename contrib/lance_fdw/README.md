@@ -17,7 +17,10 @@ binary families, `date32`, `timestamp` in all four units with and without a
 zone, `decimal128`, `fixed_size_list<float>` embeddings, one-dimensional
 `list`s, `struct`s as composite types that the import creates, and
 `map<utf8, ...>` as `jsonb`. Everything else is refused by name rather than
-guessed at; see [Types](#types).
+guessed at; see [Types](#types). Qualifiers go down to Lance where the two
+systems agree exactly ([Filter pushdown](#filter-pushdown)), and
+`ORDER BY embedding <-> $1 LIMIT k` goes to Lance's nearest-neighbour search
+([Vector search](#vector-search)).
 
 ## Building
 
@@ -199,6 +202,92 @@ were already cached too. Without that reset a pooled connection or a `PREPARE`d
 statement would go on pushing down after the setting changed, which would make a
 poor escape hatch. Only the coordinator's value matters.
 
+### Vector search
+
+`fixed_size_list<float32, N>` columns read as `real[]`, and the extension
+defines three distance operators on `real[]`, with pgvector's names and
+meanings:
+
+| Operator | Distance |
+|---|---|
+| `<->` | Euclidean, `sqrt(sum((a - b)^2))` |
+| `<=>` | cosine, `1 - cos(a, b)`; `NaN` when either side is a zero vector |
+| `<#>` | negative inner product, `-sum(a * b)` |
+
+They are ordinary operators on any `real[]`, computed in `double precision`;
+two arrays of different length, a multi-dimensional array or a `NULL` element
+is an error. Because they are defined on `real[]` and not on pgvector's
+`vector`, the two extensions can be installed side by side.
+
+On a foreign table, a query of this shape is sent to Lance:
+
+```sql
+SELECT id, title FROM docs
+ WHERE category = 'x'
+ ORDER BY embedding <-> $1
+ LIMIT 10;
+```
+
+Lance filters first and then searches what is left (a *prefiltered* search), so
+every row that comes back satisfies the `WHERE` clause and a selective filter
+still yields `k` rows. If the dataset has a vector index trained with the same
+distance, Lance uses it, and the result is **approximate** — exactly as with an
+index in pgvector. Without an index, or with an index trained for a different
+distance, Lance searches every row and the result is exact.
+
+Lance only decides *which* `k` rows come back. PostgreSQL still computes the
+distance with the operator above and sorts by it, so the order is always its
+own; `EXPLAIN` looks like the plain scan's plan with one more line on the scan:
+
+```
+Lance Vector Search: embedding <-> (L2), k=10
+```
+
+One segment searches the whole dataset — which one is chosen per session — and
+the others read nothing; spreading one search over several segments is not
+done yet.
+
+**What has to hold for the search to be used.** Cutting the rows to `k` before
+PostgreSQL has seen all of them is only correct when nothing between the scan
+and the `LIMIT` could remove or reorder rows, so the query must be exactly:
+
+- one foreign table, at the top level of a `SELECT` — not in a join, subquery
+  or CTE, and without `FOR UPDATE`;
+- no `GROUP BY`, aggregates, `DISTINCT`, window functions, set operations or
+  set-returning functions in the select list;
+- `LIMIT k` with a constant `k` no larger than `lance_fdw.vector_pushdown_max_k`,
+  no `OFFSET`, not `WITH TIES`;
+- `ORDER BY` a single distance, ascending with `NULLS LAST` (the default),
+  between a `real[]` column of the table and a constant or a `$n` parameter;
+- every `WHERE` qualifier pushed down to Lance (see
+  [Filter pushdown](#filter-pushdown)) — one evaluated here would run after the
+  cut, and the query would come back short;
+- the PostgreSQL planner, and `mpp_execute` `'all segments'` or
+  `'coordinator'`.
+
+Anything else runs as before, with the exact result. `SET client_min_messages
+= debug1` makes the planner say which condition stopped it.
+
+**At execution** the coordinator looks at the query vector before sending it:
+a `NULL` vector, one with `NaN` or infinite elements, a zero vector under `<=>`,
+or a vector whose length differs from the column's, is not searched for — the
+statement runs as the plain scan and gives the exact path's result, or its
+error. `EXPLAIN ANALYZE` then shows `Lance Vector Search: fell back (...)` with
+the reason.
+
+**Rows without a distance.** A row whose vector is `NULL` — or, under `<=>`, a
+zero vector — has no distance to search by, and the search never returns it.
+The exact path sorts such rows last and returns them only when fewer than `k`
+rows have a distance. The answers therefore differ only in that tail, which is
+also how an index scan in pgvector behaves.
+
+**Tuning.** `lance_fdw.refine_factor` re-ranks `refine_factor * k` candidates
+by their exact distance, which is what recovers recall on an approximate index;
+`lance_fdw.nprobes` sets the minimum number of index partitions searched. Both
+are read by the coordinator and sent with the search, so `SET LOCAL` works as
+well as `SET`. `lance_fdw.enable_vector_pushdown = off` turns the whole thing
+off, cached plans included.
+
 ### Options
 
 **Foreign data wrapper**
@@ -262,8 +351,12 @@ DDL when `log_statement` is `ddl` or `all`. No wrapper can prevent that.
 | `lance_fdw.batch_readahead` | 0 | Batches decoded concurrently by one scan; 0 leaves lance-c at its own default. Multiplies whatever one batch costs. |
 | `lance_fdw.track_memory` | `on` | Charge Arrow batches to Cloudberry's memory accounting, so the resource group and `gp_vmem_protect_limit` can see them. See [Bounding memory](#bounding-memory). |
 | `lance_fdw.enable_filter_pushdown` | `on` | Push qualifiers down to Lance where the two systems are known to agree exactly. See [Filter pushdown](#filter-pushdown). |
+| `lance_fdw.enable_vector_pushdown` | `on` | Send `ORDER BY distance LIMIT k` to Lance's nearest-neighbour search. See [Vector search](#vector-search). |
+| `lance_fdw.vector_pushdown_max_k` | 10000 | Largest `k` that is sent to Lance. Lance's search state for `k` neighbours is not charged to Cloudberry's memory accounting, so a larger `LIMIT` takes the exact path. |
+| `lance_fdw.nprobes` | 0 | Minimum number of vector index partitions a search probes; 0 leaves it to Lance. A floor, not a cap. |
+| `lance_fdw.refine_factor` | 0 | Re-rank `refine_factor * k` candidates by their exact distance; 0 leaves it to Lance. |
 
-Every one of these but `enable_filter_pushdown` is `SUSET`, and they differ only
+Every one of these but the four pushdown and vector settings is `SUSET`, and they differ only
 in when they are read. The thread counts and cache sizes are read once per
 backend, before its first call into lance-c, so changing them mid-session has no
 effect on that session. The memory bounds and `track_memory` are read later,
@@ -273,6 +366,11 @@ once per scan as it opens, so a `SET` reaches the next scan in the same backend.
 `USERSET`, it is read at **planning** time on every plan, and changing it resets
 the plan cache so that cached plans stop pushing down at once. It therefore only
 ever matters on the coordinator; the value a segment has is irrelevant.
+`enable_vector_pushdown` and `vector_pushdown_max_k` behave the same way.
+`nprobes` and `refine_factor` are `USERSET` too, but are read by the
+coordinator when a statement starts and sent with the search: a segment never
+reads them, because an extension setting changed with `SET LOCAL` does not
+reach the segments in Cloudberry.
 
 ### Bounding memory
 
@@ -495,6 +593,7 @@ The suites, in the order they run:
 | `explain` | what `EXPLAIN` and `EXPLAIN ANALYZE` say, and that a plain `EXPLAIN` needs no working credentials |
 | `pushdown` | every qualifier shape that goes down and every one that does not, each against the same query with `enable_filter_pushdown` off; the collation and encoding conditions on `text`; that `timestamptz` is refused; and that a cached generic plan stops pushing down the moment the GUC is set |
 | `pushdown_errors` | a qualifier naming a column the dataset does not have, a B-tier column reached only through a qualifier, and `column_name` mapping inside a filter |
+| `vector` | the three distance operators and their errors; vector Top-K for each operator, with a constant and with a parameter under a generic plan, equal to the exact path on a dataset without an index; that the filter is applied before the search; that one segment searches and it is the one the session selects; recall on an indexed dataset; the fallbacks at execution; and every query shape that must not be pushed down |
 | `creds` | none of the three user mapping credentials is in a plan |
 | `errors_scan` | storage failures during a scan, and every shape of type mismatch |
 | `types` | all 31 columns of `types_all` against the pylance reference output, twice over at two batch sizes, plus the MiB-sized text and binary values |
@@ -543,9 +642,44 @@ The suites, in the order they run:
 - Snapshots are statement-level, not transaction-level: two statements in one
   transaction can read two versions of a dataset that is being appended to,
   unless the table names a `version`.
-- No limit or vector-search pushdown. Filters are pushed down where the two
-  systems are known to agree exactly; everything else is evaluated by
+- No `LIMIT` pushdown outside a vector search. Filters are pushed down where
+  the two systems are known to agree exactly; everything else is evaluated by
   PostgreSQL. [Filter pushdown](#filter-pushdown) says which is which.
+- A vector search on an index is approximate, like any vector index. On the
+  fixture used by the tests, recall@10 with Lance's defaults was between 0.9
+  and 0.97 depending on the filter and on the index build (training it is not
+  reproducible), and `refine_factor = 5` brought it to 1.0; on data without
+  cluster structure it measured far lower. What a good
+  `refine_factor` is for real embeddings has not been measured.
+- `lance_fdw.nprobes` only raises the number of partitions searched; there is
+  no setting for an upper bound, on purpose. On a 256-partition index Lance's
+  default already probed a single partition, so a cap could not make a search
+  cheaper, and capping the extra probing Lance does for a filtered search made
+  one return fewer than `k` rows (none at all, for a filter matching one row).
+  Probing more partitions did not raise recall there either - the index's
+  quantisation error was the limit, which is what `refine_factor` addresses.
+  (The 12-partition test fixture is probed in full whatever the settings, which
+  says more about its size than about Lance.)
+- A vector search is not used for a query whose `WHERE` clause holds a
+  parameter: such a qualifier is not pushed down (see below), and a qualifier
+  evaluated here would run after the search. A prepared statement under the
+  default `plan_cache_mode` keeps using custom plans, where the parameters are
+  constants, so it is usually unaffected; `force_generic_plan` is not.
+- One segment searches the whole dataset, so a vector search does not scale
+  with the cluster.
+- A cancel or `statement_timeout` reaches a search while it runs: the wrapper
+  polls lance-c and sleeps on its latch in between, and closing the scanner
+  stops the search. On a million 64-d vectors read from S3 it took a median of
+  16 ms; one poll can still hold it for some milliseconds, more on a larger
+  dataset (up to 50 ms measured on four million). With `mpp_execute 'all
+  segments'` the client waits longer, because Cloudberry's own cancel round
+  trip to the segments comes first: about 380 ms on the three-segment demo
+  cluster, the same for a `pg_sleep()` on the segments as for a search.
+- What happens when the query's distance differs from the one an index was
+  trained with — Lance searches exhaustively and the result is exact — was
+  measured on the pinned lance-c and has to be measured again when it moves.
+  So does the `_distance` column a search appends: Lance has announced that it
+  will stop adding it, and the wrapper expects it today.
 - `timestamptz` is never pushed down, and the reason is worth knowing: a
   timestamp column whose Arrow timezone is not UTC compares differently in the
   two systems — measured at three rows short on equality and five rows long on
@@ -568,7 +702,7 @@ The suites, in the order they run:
 - The suites run with `optimizer=off`, so the plans they check are the
   PostgreSQL planner's. ORCA is built into the CI cluster; `pushdown` checks
   that a scan under it returns the same rows with filter pushdown on and off,
-  but not what it pushes down.
+  and `vector` that it never pushes a vector search down.
 - lance-c is built with `panic = "unwind"`, which the revision CI builds
   requires. A panic it catches at its API boundary comes back as
   `LANCE_ERR_PANIC` and becomes a `lance:` error like any other; a double panic,

@@ -39,6 +39,7 @@
 
 #include "lance_deparse.h"
 #include "lance_option.h"
+#include "lance_runtime.h"
 
 #include "access/table.h"
 #include "access/transam.h"
@@ -845,4 +846,14 @@ lance_deparse_qual(Expr *expr, Oid foreigntableid, Index varno,
 	out->sql = buf.data;
 	out->attnums = ctx.attnums;
 	return true;
+}
+
+bool
+lance_deparse_pushdown(Expr *expr, Oid foreigntableid, Index varno,
+					   LanceDeparsed *out)
+{
+	if (!lance_enable_filter_pushdown)
+		return false;
+
+	return lance_deparse_qual(expr, foreigntableid, varno, out);
 }

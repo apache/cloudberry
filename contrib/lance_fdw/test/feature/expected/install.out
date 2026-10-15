@@ -21,11 +21,17 @@ SELECT pg_describe_object(d.classid, d.objid, 0) AS object
   ORDER BY 1;
 object
 foreign-data wrapper lance_fdw
+function lance_cosine_distance(real[],real[])
 function lance_fdw_cache_stats()
 function lance_fdw_handler()
 function lance_fdw_memory()
 function lance_fdw_validator(text[],oid)
-(5 rows)
+function lance_l2_distance(real[],real[])
+function lance_negative_inner_product(real[],real[])
+operator <#>(real[],real[])
+operator <->(real[],real[])
+operator <=>(real[],real[])
+(11 rows)
 SELECT fdwname, fdwoptions FROM pg_foreign_data_wrapper WHERE fdwname = 'lance_fdw';
 fdwname|fdwoptions
 lance_fdw|{"mpp_execute=all segments"}
@@ -35,12 +41,16 @@ name|setting
 lance_fdw.batch_readahead|0
 lance_fdw.cpu_threads|0
 lance_fdw.enable_filter_pushdown|on
+lance_fdw.enable_vector_pushdown|on
 lance_fdw.index_cache_size_mb|64
 lance_fdw.io_buffer_size_mb|0
 lance_fdw.io_threads|0
 lance_fdw.metadata_cache_size_mb|32
+lance_fdw.nprobes|0
+lance_fdw.refine_factor|0
 lance_fdw.track_memory|on
-(8 rows)
+lance_fdw.vector_pushdown_max_k|10000
+(12 rows)
 -- The database's collation is part of the environment these suites assume.
 -- Several compare text by ordering, and their expected counts are those of a
 -- C.UTF-8 database, which orders by code point; under a linguistic locale the
