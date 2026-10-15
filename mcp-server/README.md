@@ -26,6 +26,7 @@ A Model Communication Protocol (MCP) server for Apache Cloudberry database inter
 - **Database Metadata Resources**: Access schemas, tables, views, indexes, and column information
 - **Retrieval Tools**: Vector, full-text, and hybrid search for agent and RAG workloads
 - **Lance Datasets**: Read and vector-search Lance datasets exposed through `lance_fdw` foreign tables
+- **Result Write-Back**: Write extraction results into whitelisted tables, off unless enabled
 - **Safe Query Tools**: Execute parameterized SQL queries with security validation
 - **Administrative Tools**: Table statistics, large table analysis, and query optimization
 - **Context-Aware Prompts**: Predefined prompts for common database tasks
@@ -90,6 +91,13 @@ MCP_MAX_RESULT_BYTES=1000000
 
 # Seconds a statement may run before it is cancelled
 MCP_QUERY_TIMEOUT=60
+
+# Result write-back (see "Writing Results Back"); off unless enabled
+MCP_ENABLE_WRITE=false
+# MCP_WRITE_TABLES=results.*
+# MCP_WRITE_MAX_ROWS=1000
+# MCP_WRITE_MAX_BYTES=4194304
+# MCP_WRITE_LOCK_TIMEOUT=10
 ```
 
 ## Usage
@@ -162,6 +170,15 @@ python -m cbmcp.client
 - `list_triggers(schema, table)` - List triggers for a table
 - `list_materialized_views(schema)` - List materialized views in a schema
 - `list_active_connections()` - List active database connections
+
+#### Result Write-Back Tools
+Registered only when `MCP_ENABLE_WRITE` is `true`; see "Writing Results Back".
+- `describe_result_table(schema, table)` - Whether a whitelisted table can take results in each mode, and why not; its upsert keys, columns, provenance columns, triggers and distribution key
+- `write_results(schema, table, source_id_column, fields, rows, mode, field_mapping, model)` - Write a batch of results by upsert on `source_id_column` or by append; bad rows come back in `failed` and the rest are written
+
+Every tool that runs only fixed SQL carries the MCP `readOnlyHint` annotation.
+`execute_query` and `explain_query` do not, because the statement they are
+given can call a function that writes.
 
 ### Prompts
 
@@ -427,6 +444,147 @@ length list of scores reads as `real[]` too, and is reported and searchable
 like a vector. A `real[]` column outside a `lance_fdw` table is an ordinary
 array, not an embedding.
 
+## Writing Results Back
+
+An agent that reads source records, extracts fields with a model outside the
+database, and needs to store the answers can write them back with
+`write_results`. The database never calls a model, and nothing is written to a
+Lance dataset: the target is an ordinary Cloudberry table that you create
+beforehand, one column per extracted field.
+
+Writing is off by default. With `MCP_ENABLE_WRITE` unset or `false`, the two
+write tools are not registered and the server behaves as if they did not
+exist.
+
+### Settings
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `MCP_ENABLE_WRITE` | `false` | `true` or `false`; any other value stops the server |
+| `MCP_WRITE_TABLES` | none | Comma-separated `schema.table` or `schema.*`. Required when writing is on. Names follow the SQL identifier rules: unquoted names fold to lower case, `"Quoted"` names keep their case |
+| `MCP_WRITE_MAX_ROWS` | `1000` | Rows per call |
+| `MCP_WRITE_MAX_BYTES` | `4194304` | Bytes per call, counting `rows`, `fields`, `field_mapping` and `model` as JSON |
+| `MCP_WRITE_LOCK_TIMEOUT` | `10` | Seconds a write waits for a lock; must be less than `MCP_QUERY_TIMEOUT` |
+
+With writing on, an invalid value in any of them stops the server and names
+the setting. The `schema` and `table` arguments of both tools are matched
+exactly against the catalog: case-sensitive, without quotes, and regardless of
+`search_path`. A table outside the whitelist is neither described, written nor
+locked.
+
+### The target table
+
+```sql
+CREATE TABLE results.contracts (
+    doc_id       text PRIMARY KEY,
+    party        text,
+    amount       numeric(14,2),
+    signed_on    date,
+    risks        text[],
+    model        text,
+    extracted_at timestamptz
+) DISTRIBUTED BY (doc_id);
+```
+
+- **A heap table.** Append-optimized tables, foreign tables and views are
+  refused. A partitioned table is accepted when every partition is heap.
+- **A key for upsert.** `source_id_column` must have a single-column unique
+  index or primary key that is not deferrable, partial or on an expression,
+  with the column's default operator class and collation. Cloudberry requires a
+  unique index to contain the distribution key, so distribute the table by the
+  source id. `describe_result_table` lists the usable keys in `upsert_keys` and
+  explains every unique index that does not qualify.
+- **No deferrable constraints.** A table, or any partition of it, with a
+  deferrable constraint or constraint trigger is refused: such a constraint
+  fails only at commit, after the rows were reported written.
+- **No INSERT or UPDATE triggers.** A table, or any partition of it, with an
+  enabled trigger on INSERT or UPDATE is refused, whether it fires BEFORE or
+  AFTER, for each row or for each statement: a BEFORE row trigger can change
+  any column of a row, or return NULL and drop it without an error, and with
+  `allow_segment_DML` or `gp_enable_statement_trigger` on, both of which any
+  user can set, an AFTER or statement trigger can delete or change the rows
+  just written. Either way the table would not hold what the tool reports.
+  Common `updated_at` and audit triggers are among these; fill such a column
+  another way, or disable the trigger while writing. Disabled triggers,
+  triggers that fire only on DELETE or TRUNCATE, and the database's own
+  internal triggers are allowed.
+- **No INSERT or UPDATE rules.** A table, or any partition of it, with a rule
+  `ON INSERT` or `ON UPDATE` is refused: a rule such as `DO INSTEAD NOTHING`
+  makes the insert report zero rows and drop them without an error.
+- **Provenance columns, if wanted.** A column named exactly `model` (text,
+  varchar, or a domain over one) receives the `model` argument, which is then
+  required; a column named exactly `extracted_at` (timestamptz, timestamp or
+  date) receives the time of the write. Both are overwritten on every write.
+- **Privileges.** The tool locks the table before it checks it, and `LOCK
+  TABLE` looks at table-level privileges only. Upsert needs table-level
+  `UPDATE`; append needs table-level `INSERT` on a plain table, and `UPDATE`,
+  `DELETE` or `TRUNCATE` on a partitioned table, where `INSERT` alone is not
+  enough. Beyond that, the role needs `INSERT` on the columns written, `UPDATE`
+  on the columns an upsert changes, and `SELECT` on the source id column for
+  an upsert. A role with column-level grants only cannot use the tool.
+
+### Writing
+
+```json
+{
+  "schema": "results", "table": "contracts", "source_id_column": "doc_id",
+  "fields": ["doc_id", "party", "amount"],
+  "rows": [
+    {"doc_id": "c-17", "party": "Acme", "amount": "1250.00"},
+    {"doc_id": "c-18", "party": "Initech", "amount": "n/a"}
+  ],
+  "mode": "upsert", "model": "extractor-v3"
+}
+```
+
+```json
+{"written": 1, "failed_count": 1, "failed_truncated": false,
+ "failed": [{"index": 1, "source_id": "c-18",
+             "error": "column amount: invalid input syntax for type numeric: \"n/a\""}]}
+```
+
+- **upsert** inserts a row per source id or updates the existing one, and
+  changes only the columns in this batch plus the provenance columns, so
+  fields extracted in separate rounds do not overwrite each other. An explicit
+  `null` writes NULL. Writing the same batch twice leaves every column but
+  `extracted_at` as it was.
+- **append** only inserts. When the source id column is itself a key, repeated
+  and existing ids fail; otherwise repeated ids are inserted.
+- `fields` lists the keys every row carries; `field_mapping` maps a field to a
+  column of another name. Every field must reach a writable column.
+- Values are converted by the database, as text, to each column's type.
+  `numeric` values that must stay exact, integers beyond 2^53, and `NaN` or
+  `Infinity` should be sent as strings, since JSON numbers lose precision and
+  JSON has no NaN. An array column takes a one-dimensional JSON array; a json
+  or jsonb column takes any JSON value.
+- `written` counts the input rows that were written, including upserts that
+  changed nothing, so `written + failed_count` is the number of rows sent.
+
+### Failures
+
+A row fails, and the rest of the batch is still written, when a value does not
+fit its column type, a NOT NULL, CHECK or unique constraint rejects it, its
+source id is null or repeats within the batch (every copy fails, since which
+one was meant cannot be known), or its keys differ from `fields`. `failed`
+itemises the first 100, each with its index, source id and the server's
+message, and `failed_count` counts them all.
+
+Anything that concerns the whole call - a table that is not allowed or not
+writable, an unknown field, missing privileges, a lock wait beyond
+`MCP_WRITE_LOCK_TIMEOUT`, a statement timeout - writes nothing and raises an
+error.
+
+### Caveats
+
+- **Concurrent writes queue.** With the global deadlock detector off, which is
+  Cloudberry's default, an upsert locks the whole table, so upserts to one
+  table run one after another and an upsert also holds up appends. An append
+  to a partitioned table blocks other appends to it through this tool, and
+  `ATTACH PARTITION`, but not other sessions' inserts.
+- **Defaults.** When a batch has a bad row it is written again row by row, so
+  volatile defaults can run twice for the good rows: the first values are
+  rolled back, but sequence values are spent.
+
 ## Security Features
 
 - **SQL Injection Prevention**: Comprehensive query validation
@@ -434,7 +592,8 @@ array, not an embedding.
 - **Parameterized Queries**: Safe parameter handling
 - **Connection Pooling**: Secure connection management
 - **Sensitive Table Protection**: Blocks access to system tables
-- **Catalog-Checked Identifiers**: Retrieval tools resolve every schema, table and column name against the catalog before it reaches a statement, and quote it afterwards
+- **Catalog-Checked Identifiers**: Retrieval and write-back tools resolve every schema, table and column name against the catalog before it reaches a statement, and quote it afterwards
+- **Opt-In Writes**: `write_results` exists only with `MCP_ENABLE_WRITE=true`, writes only to tables in `MCP_WRITE_TABLES`, and never exceeds the database role's own privileges
 
 
 ## Quick Start with Cloudberry Demo Cluster
@@ -654,6 +813,7 @@ All configurations support the following environment variables:
 - `MCP_HOST`: Server host for HTTP mode (default: localhost)
 - `MCP_PORT`: Server port for HTTP mode (default: 8000)
 - `MCP_DEBUG`: Enable debug logging (default: false)
+- `MCP_ENABLE_WRITE`, `MCP_WRITE_TABLES`, `MCP_WRITE_MAX_ROWS`, `MCP_WRITE_MAX_BYTES`, `MCP_WRITE_LOCK_TIMEOUT`: Result write-back (see "Writing Results Back")
 
 ### Troubleshooting
 

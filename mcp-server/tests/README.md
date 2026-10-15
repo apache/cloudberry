@@ -29,12 +29,32 @@ This project uses the `pytest` framework for testing, supporting both asynchrono
 - `test_search_tools.py` - Retrieval tools; needs the `pgvector` extension, and skips without it
 - `test_result_values.py` - How query results carry values with no JSON form, the row, value and byte limits, the read-only transaction, and declared types in `list_columns` and `get_table_ddl`
 - `test_lance_tools.py` - Reading and vector-searching `lance_fdw` foreign tables; see below
+- `test_write_results.py` - The write-back settings and whitelist, `describe_result_table` and `write_results`; see below
 
 `test_result_values.py` and `test_lance_tools.py` set the result limits they
 assume, so a `.env` with other values does not affect them, and suffix their
 schema and server names so that two runs can share a database. When the Lance
 tests created `lance_fdw` themselves they drop it afterwards, without
 `CASCADE`, so the drop is skipped while another run still has a server on it.
+
+### Write-Back Tests
+`test_write_results.py` builds its own schema with a random suffix and drops
+it afterwards. It also creates login roles, named after that schema, to check
+privileges, and drops them too, so:
+
+- the account in `DB_USER` must be able to create roles;
+- `pg_hba.conf` must let those roles connect from `DB_HOST` without a
+  password. On a demo cluster use `DB_HOST=127.0.0.1` rather than `localhost`
+  if only `gpadmin` may connect over `::1`.
+
+Each test starts its own server in process with writing switched on, and one
+test starts an HTTP server of its own on a free port, so neither a `.env` nor
+the server on port 8000 affects them. Unlike the other modules these tests
+fail rather than skip when no cluster is reachable.
+
+```bash
+DB_HOST=127.0.0.1 pytest tests/test_write_results.py
+```
 
 ### Lance Tests
 `test_lance_tools.py` writes its own Lance datasets with pylance and reads them
