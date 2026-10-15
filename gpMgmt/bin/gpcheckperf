@@ -434,7 +434,7 @@ def parseMultiDDResult(out):
         if o.find('multidd total bytes ') >= 0:
             h = line[1:i]
             o = o.split()
-            m = re.search("(^\d+)", o[-1])
+            m = re.search("(^\\d+)", o[-1])
             if m is None:
                 sys.exit('[Error] expected %s to be a number' % o[-1])
             bytes = int(m.group(1))
@@ -444,7 +444,7 @@ def parseMultiDDResult(out):
             h = line[1:i]
             o = o.split()
             o[1] = o[1].replace(',', '.')
-            m = re.search("(^\d+.\d+)", o[1])
+            m = re.search("(^\\d+.\\d+)", o[1])
             if m is None:
                 sys.exit('[Error] expected %s to be a floating point number' % o[1])
             time = float(m.group(1))
