@@ -28,6 +28,7 @@
 #include "postgres.h"
 
 #include "access/htup_details.h"
+#include "catalog/pg_type.h"
 #include "anser.h"
 #include "anserbloom.h"
 #include "anserfilter.h"
@@ -39,7 +40,9 @@
 #include "fmgr.h"
 #include "funcapi.h"
 #include "lib/bloomfilter.h"
+#include "nodes/makefuncs.h"
 #include "miscadmin.h"
+#include "utils/array.h"
 #include "utils/builtins.h"
 #include "varatt.h"
 
@@ -762,4 +765,201 @@ anser_test_push_crc(PG_FUNCTION_ARGS)
 									 (int) strlen(condition_key),
 									 VARDATA_ANY(body),
 									 (int) VARSIZE_ANY_EXHDR(body)));
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Runtime-filter pushdown: the decision, on its own
+ * ---------------------------------------------------------------------------
+ */
+
+PG_FUNCTION_INFO_V1(anser_test_pushdown_accepts);
+PG_FUNCTION_INFO_V1(anser_test_pushdown_target);
+
+/* The relation the synthetic scan below claims to be scanning. */
+#define ANSER_TEST_SCANRELID	1
+
+/*
+ * Targetlist entry kinds, as the SQL-visible spec encodes them.  A positive
+ * value is the table attno of a plain Var; the rest are the shapes that must
+ * be refused.
+ */
+#define ANSER_TEST_TL_WHOLEROW	0	/* Var, varattno 0 */
+#define ANSER_TEST_TL_SYSCOL	(-1)	/* Var, negative varattno */
+#define ANSER_TEST_TL_EXPR		(-2)	/* not a Var at all */
+#define ANSER_TEST_TL_OTHERREL	(-3)	/* Var of a different RTE */
+#define ANSER_TEST_TL_RELABEL	(-4)	/* a cast wrapping a Var */
+
+/*
+ * Build the targetlist `spec` describes.  Each element becomes one entry, in
+ * order, so the array index doubles as the output position the decision is
+ * asked about.
+ */
+static List *
+anser_test_make_tlist(ArrayType *spec)
+{
+	Datum	   *elems;
+	bool	   *nulls;
+	int			nelems;
+	List	   *tlist = NIL;
+	int			i;
+
+	if (ARR_NDIM(spec) > 1)
+		elog(ERROR, "anser_test: targetlist spec must be one-dimensional");
+
+	deconstruct_array(spec, INT4OID, sizeof(int32), true, TYPALIGN_INT,
+					  &elems, &nulls, &nelems);
+
+	for (i = 0; i < nelems; i++)
+	{
+		int32		kind;
+		Expr	   *expr;
+
+		if (nulls[i])
+			elog(ERROR, "anser_test: targetlist spec may not contain NULLs");
+		kind = DatumGetInt32(elems[i]);
+
+		switch (kind)
+		{
+			case ANSER_TEST_TL_EXPR:
+
+				/*
+				 * The decision only asks whether the entry is a Var, so any
+				 * non-Var exercises the same branch.  An OpExpr is what a
+				 * computed column really looks like; nothing evaluates it.
+				 */
+				expr = (Expr *) makeNode(OpExpr);
+				break;
+			case ANSER_TEST_TL_OTHERREL:
+				expr = (Expr *) makeVar(ANSER_TEST_SCANRELID + 1, 1, INT4OID,
+										-1, InvalidOid, 0);
+				break;
+			case ANSER_TEST_TL_RELABEL:
+				{
+					RelabelType *rt = makeNode(RelabelType);
+
+					rt->arg = (Expr *) makeVar(ANSER_TEST_SCANRELID, 1,
+											   INT4OID, -1, InvalidOid, 0);
+					rt->resulttype = OIDOID;
+					rt->relabelformat = COERCE_IMPLICIT_CAST;
+					expr = (Expr *) rt;
+				}
+				break;
+			default:
+				/* whole-row (0), system column (negative), or a real column */
+				expr = (Expr *) makeVar(ANSER_TEST_SCANRELID,
+										(AttrNumber) kind, INT4OID, -1,
+										InvalidOid, 0);
+				break;
+		}
+
+		tlist = lappend(tlist, makeTargetEntry(expr, (AttrNumber) (i + 1),
+											   NULL, false));
+	}
+
+	return tlist;
+}
+
+/*
+ * A SeqScanState over that targetlist.  Nothing is executed, so only the
+ * fields the decision reads are set: the node tag, filter_in_seqscan, and the
+ * plan's targetlist and scanrelid.  Passing as_seqscan = false substitutes a
+ * node of another type, which must be refused whatever its targetlist says.
+ */
+static PlanState *
+anser_test_make_scanstate(ArrayType *spec, bool filter_in_seqscan,
+						  bool as_seqscan)
+{
+	SeqScan    *scan = makeNode(SeqScan);
+
+	scan->scan.scanrelid = ANSER_TEST_SCANRELID;
+	scan->scan.plan.targetlist = anser_test_make_tlist(spec);
+
+	if (!as_seqscan)
+	{
+		MaterialState *ms = makeNode(MaterialState);
+
+		ms->ss.ps.plan = (Plan *) scan;
+		return (PlanState *) ms;
+	}
+
+	{
+		SeqScanState *sss = makeNode(SeqScanState);
+
+		sss->ss.ps.plan = (Plan *) scan;
+		sss->filter_in_seqscan = filter_in_seqscan;
+		return (PlanState *) sss;
+	}
+}
+
+/*
+ * AnserPushdownAccepts on a synthetic scan.  Returns the scan key's attribute
+ * number, or NULL when the shape is refused -- so the expected output records
+ * the mapping itself and not merely a verdict on it.
+ */
+Datum
+anser_test_pushdown_accepts(PG_FUNCTION_ARGS)
+{
+	ArrayType  *spec = PG_GETARG_ARRAYTYPE_P(0);
+	AttrNumber	attno = (AttrNumber) PG_GETARG_INT32(1);
+	bool		filter_in_seqscan = PG_GETARG_BOOL(2);
+	bool		as_seqscan = PG_GETARG_BOOL(3);
+	PlanState  *ps;
+	AttrNumber	sk_attno = InvalidAttrNumber;
+	bool		accepts;
+	Datum		values[2] = {0, 0};
+	bool		nulls[2] = {false, false};
+	TupleDesc	tupdesc;
+
+	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+		elog(ERROR, "anser_test_pushdown_accepts: expected a composite return type");
+	tupdesc = BlessTupleDesc(tupdesc);
+
+	ps = anser_test_make_scanstate(spec, filter_in_seqscan, as_seqscan);
+	accepts = AnserPushdownAccepts(ps, attno, &sk_attno);
+
+	values[0] = BoolGetDatum(accepts);
+	values[1] = Int32GetDatum((int32) sk_attno);
+	nulls[1] = !accepts;
+
+	PG_RETURN_DATUM(HeapTupleGetDatum(heap_form_tuple(tupdesc, values, nulls)));
+}
+
+/*
+ * AnserPushdownTarget over the same synthetic scan, with no stacking: it must
+ * agree with AnserPushdownAccepts and report the node itself as the target.
+ *
+ * The descent through stacked nodes cannot be built here -- that needs real
+ * CustomScanStates, which need a live EState -- so it is covered end to end by
+ * the multi-join case in anser_runtime_filter instead.  What this pins down is
+ * the part that is easy to get wrong without noticing: that a found target
+ * carries the mapped attno through, and that nothing is reported when the
+ * bottom node refuses.
+ */
+Datum
+anser_test_pushdown_target(PG_FUNCTION_ARGS)
+{
+	ArrayType  *spec = PG_GETARG_ARRAYTYPE_P(0);
+	AttrNumber	attno = (AttrNumber) PG_GETARG_INT32(1);
+	bool		filter_in_seqscan = PG_GETARG_BOOL(2);
+	bool		as_seqscan = PG_GETARG_BOOL(3);
+	PlanState  *ps;
+	PlanState  *target;
+	AttrNumber	sk_attno = InvalidAttrNumber;
+	Datum		values[2] = {0, 0};
+	bool		nulls[2] = {false, false};
+	TupleDesc	tupdesc;
+
+	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+		elog(ERROR, "anser_test_pushdown_target: expected a composite return type");
+	tupdesc = BlessTupleDesc(tupdesc);
+
+	ps = anser_test_make_scanstate(spec, filter_in_seqscan, as_seqscan);
+	target = AnserPushdownTarget(ps, attno, &sk_attno);
+
+	values[0] = BoolGetDatum(target == ps);
+	values[1] = Int32GetDatum((int32) sk_attno);
+	nulls[1] = (target == NULL);
+
+	PG_RETURN_DATUM(HeapTupleGetDatum(heap_form_tuple(tupdesc, values, nulls)));
 }

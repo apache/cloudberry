@@ -283,4 +283,70 @@ SELECT
  t                 | t             | t           | t                  | t                 | t
 (1 row)
 
+-- 5. The runtime-filter pushdown decision.  A scan key is numbered by the
+-- table's attributes, while the consumer is numbered by the scan's output
+-- targetlist -- the slot it probes has already been projected.  So the whole
+-- job of the decision is that mapping, plus refusing every shape where there
+-- is no mapping to make.  sk_attno is what the key would carry; NULL means
+-- refused, and the consumer then probes the slot itself (always correct, just
+-- slower).  In the tlist spec a positive value is a plain Var on that table
+-- attno; 0 is a whole-row Var, -1 a system column, -2 a computed column, -3 a
+-- Var of another relation, -4 a cast wrapping a Var.
+SELECT t.what, t.tlist, t.attno, s.accepts, s.sk_attno
+FROM (VALUES
+        ('all columns in order',         '{1,2,3}'::int4[],  2, true,  true),
+        ('projecting scan, one column',  '{2}',              1, true,  true),
+        ('reordered, first of two',      '{3,1}',            1, true,  true),
+        ('reordered, second of two',     '{3,1}',            2, true,  true),
+        ('position past the targetlist', '{2}',              2, true,  true),
+        ('position zero',                '{2}',              0, true,  true),
+        ('negative position',            '{2}',             -1, true,  true),
+        ('computed column',              '{-2}',             1, true,  true),
+        ('cast wrapping a column',       '{-4}',             1, true,  true),
+        ('whole-row reference',          '{0}',              1, true,  true),
+        ('system column',                '{-1}',             1, true,  true),
+        ('column of another relation',   '{-3}',             1, true,  true),
+        ('filter_in_seqscan off',        '{2}',              1, false, true),
+        ('not a SeqScan',                '{2}',              1, true,  false)
+      ) AS t(what, tlist, attno, filter_in_seqscan, as_seqscan),
+     LATERAL anser_test_pushdown_accepts(t.tlist, t.attno, t.filter_in_seqscan,
+                                         t.as_seqscan) AS s;
+             what             |  tlist  | attno | accepts | sk_attno 
+------------------------------+---------+-------+---------+----------
+ all columns in order         | {1,2,3} |     2 | t       |        2
+ projecting scan, one column  | {2}     |     1 | t       |        2
+ reordered, first of two      | {3,1}   |     1 | t       |        3
+ reordered, second of two     | {3,1}   |     2 | t       |        1
+ position past the targetlist | {2}     |     2 | f       |         
+ position zero                | {2}     |     0 | f       |         
+ negative position            | {2}     |    -1 | f       |         
+ computed column              | {-2}    |     1 | f       |         
+ cast wrapping a column       | {-4}    |     1 | f       |         
+ whole-row reference          | {0}     |     1 | f       |         
+ system column                | {-1}    |     1 | f       |         
+ column of another relation   | {-3}    |     1 | f       |         
+ filter_in_seqscan off        | {2}     |     1 | f       |         
+ not a SeqScan                | {2}     |     1 | f       |         
+(14 rows)
+
+-- 6. The walk that finds where to push.  With nothing to descend through it
+-- must agree with the decision and name the node itself; a node that refuses
+-- yields no target at all rather than a target with a meaningless attno.  The
+-- descent through stacked nodes needs live CustomScanStates, so it is covered
+-- end to end by anser_runtime_filter instead.
+SELECT t.what, s.found_self, s.sk_attno
+FROM (VALUES
+        ('accepting scan is its own target', '{2}'::int4[], 1, true),
+        ('refused scan has no target',       '{-2}',        1, true),
+        ('non-scan has no target',           '{2}',         1, false)
+      ) AS t(what, tlist, attno, as_seqscan),
+     LATERAL anser_test_pushdown_target(t.tlist, t.attno, true,
+                                        t.as_seqscan) AS s;
+               what               | found_self | sk_attno 
+----------------------------------+------------+----------
+ accepting scan is its own target | t          |        2
+ refused scan has no target       | f          |         
+ non-scan has no target           | f          |         
+(3 rows)
+
 DROP EXTENSION anser_test;
