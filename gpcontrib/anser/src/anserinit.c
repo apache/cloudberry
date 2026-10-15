@@ -26,6 +26,7 @@
  *	 planner_hook               runtime-filter injection
  *	 RegisterCustomScanMethods  the injected plan nodes
  *	 cdbdisp_notify_hook        parts arriving from segments
+ *	 ExecutorRun/Finish_hook    knowing whether a query is still executing
  *	 ExecutorEnd_hook           dropping a query's channels
  *
  * It must be preloaded, because a segment backend deserializing a dispatched
@@ -65,11 +66,33 @@ static PlannedStmt *anser_planner(Query *parse, const char *query_string,
 								  OptimizerOptions *optimizer_options);
 
 static planner_hook_type prev_planner_hook = NULL;
+static ExecutorRun_hook_type prev_ExecutorRun_hook = NULL;
+static ExecutorFinish_hook_type prev_ExecutorFinish_hook = NULL;
 static ExecutorEnd_hook_type prev_ExecutorEnd_hook = NULL;
 static cdbdisp_notify_hook_type prev_cdbdisp_notify_hook = NULL;
 
+/*
+ * How many queries are executing right now.  A query's channels may only be
+ * dropped when nothing is left running, and the count has to be taken over
+ * execution rather than over ExecutorEnd: a statement run through SPI from a
+ * function body goes through its whole Start/Run/End inside the *outer*
+ * query's Run, so by the time the inner ExecutorEnd fires the outer one has
+ * not entered its own End yet.  Counting ends alone makes that inner End look
+ * outermost, and dropping channels there takes the running query's filters
+ * with it -- the exchange still happens, but every consumer then fails open.
+ *
+ * Nested execution is nested inside Run (and inside Finish, where AFTER
+ * triggers run), which is why those are the two that count.  ExecutorEnd only
+ * reads the result: a query's own End always runs after its own Run returned,
+ * so an outermost query still sees zero.
+ */
+static int	anser_exec_nesting = 0;
+
 static bool anser_notify_hook(struct CdbDispatchResult *dispatchResult,
 							  struct pgNotify *notify);
+static void anser_executor_run(QueryDesc *queryDesc, ScanDirection direction,
+							   uint64 count, bool execute_once);
+static void anser_executor_finish(QueryDesc *queryDesc);
 static void anser_executor_end(QueryDesc *queryDesc);
 static void anser_xact_callback(XactEvent event, void *arg);
 
@@ -94,6 +117,10 @@ _PG_init(void)
 	 * dropped.  ExecutorEnd covers the normal path; the transaction callback
 	 * catches queries that end by erroring.
 	 */
+	prev_ExecutorRun_hook = ExecutorRun_hook;
+	ExecutorRun_hook = anser_executor_run;
+	prev_ExecutorFinish_hook = ExecutorFinish_hook;
+	ExecutorFinish_hook = anser_executor_finish;
 	prev_ExecutorEnd_hook = ExecutorEnd_hook;
 	ExecutorEnd_hook = anser_executor_end;
 	RegisterXactCallback(anser_xact_callback, NULL);
@@ -225,38 +252,77 @@ anser_notify_hook(struct CdbDispatchResult *dispatchResult,
 	return false;
 }
 
+/* Count a query as executing for as long as it is running. */
+static void
+anser_executor_run(QueryDesc *queryDesc, ScanDirection direction,
+				   uint64 count, bool execute_once)
+{
+	anser_exec_nesting++;
+	PG_TRY();
+	{
+		if (prev_ExecutorRun_hook)
+			prev_ExecutorRun_hook(queryDesc, direction, count, execute_once);
+		else
+			standard_ExecutorRun(queryDesc, direction, count, execute_once);
+	}
+	PG_FINALLY();
+	{
+		anser_exec_nesting--;
+	}
+	PG_END_TRY();
+}
+
+/* The same, for the phase that runs AFTER triggers. */
+static void
+anser_executor_finish(QueryDesc *queryDesc)
+{
+	anser_exec_nesting++;
+	PG_TRY();
+	{
+		if (prev_ExecutorFinish_hook)
+			prev_ExecutorFinish_hook(queryDesc);
+		else
+			standard_ExecutorFinish(queryDesc);
+	}
+	PG_FINALLY();
+	{
+		anser_exec_nesting--;
+	}
+	PG_END_TRY();
+}
+
 /*
- * Drop the transport's per-query state.
+ * Drop the transport's per-query state, once nothing is executing.
  *
- * Nested executor runs (a function body, say) must not clear state the outer
- * query is still using, so only the outermost end resets.
+ * See anser_exec_nesting: a query ending while another is still running is an
+ * inner statement of that query, and its channels are not the ones to drop.
  */
 static void
 anser_executor_end(QueryDesc *queryDesc)
 {
-	static int	nesting_level = 0;
+	if (prev_ExecutorEnd_hook)
+		prev_ExecutorEnd_hook(queryDesc);
+	else
+		standard_ExecutorEnd(queryDesc);
 
-	nesting_level++;
-	PG_TRY();
-	{
-		if (prev_ExecutorEnd_hook)
-			prev_ExecutorEnd_hook(queryDesc);
-		else
-			standard_ExecutorEnd(queryDesc);
-	}
-	PG_FINALLY();
-	{
-		nesting_level--;
-	}
-	PG_END_TRY();
-
-	if (nesting_level == 0)
+	if (anser_exec_nesting == 0)
 		AnserSidebandResetAll();
 }
 
 static void
 anser_xact_callback(XactEvent event, void *arg)
 {
+	/*
+	 * Deliberately does not touch anser_exec_nesting.  PG_FINALLY unwinds it
+	 * on the error path, and XACT_EVENT_ABORT is only reached from
+	 * AbortTransaction() at a statement boundary, by which point every
+	 * executor frame is gone -- so there is nothing here to correct.  Forcing
+	 * it to zero would instead risk driving it negative if a frame ever did
+	 * outlive the callback, and a negative count never compares equal to zero
+	 * again: the resets below would stop happening for the rest of the
+	 * session.  auto_explain and pg_stat_statements keep their counters the
+	 * same way, on PG_FINALLY alone.
+	 */
 	if (event == XACT_EVENT_ABORT || event == XACT_EVENT_PARALLEL_ABORT)
 		AnserSidebandResetAll();
 }
