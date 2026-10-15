@@ -28,6 +28,53 @@ using namespace gpos;
 
 //---------------------------------------------------------------------------
 //	@class:
+//		CChildOptMemoEntry
+//
+//	@doc:
+//		Child contexts that a request of a group expression reached, with the
+//		required plan properties of the context the request was made under
+//
+//---------------------------------------------------------------------------
+class CChildOptMemoEntry
+{
+public:
+	// optimization request number
+	ULONG m_ulOptReq;
+
+	// search stage of the context the request was made under
+	ULONG m_ulSearchStage;
+
+	// required plan properties of that context
+	CReqdPropPlan *m_prpp;
+
+	// child contexts the request reached, one per non-scalar child
+	COptimizationContextArray *m_pdrgpoc;
+
+	CChildOptMemoEntry(ULONG ulOptReq, ULONG ulSearchStage, CReqdPropPlan *prpp,
+					   COptimizationContextArray *pdrgpoc)
+		: m_ulOptReq(ulOptReq),
+		  m_ulSearchStage(ulSearchStage),
+		  m_prpp(prpp),
+		  m_pdrgpoc(pdrgpoc)
+	{
+	}
+
+	CChildOptMemoEntry(const CChildOptMemoEntry &) = delete;
+
+	CChildOptMemoEntry &operator=(const CChildOptMemoEntry &) = delete;
+
+	~CChildOptMemoEntry()
+	{
+		m_prpp->Release();
+		m_pdrgpoc->Release();
+	}
+};
+
+using ChildOptMemoArray =
+	CDynamicPtrArray<CChildOptMemoEntry, CleanupDelete<CChildOptMemoEntry>>;
+
+//---------------------------------------------------------------------------
+//	@class:
 //		CGroupExpression
 //
 //	@doc:
@@ -130,6 +177,9 @@ private:
 	// hashtable of cost contexts
 	ShtCC m_sht;
 
+	// child contexts reached by requests of this group expression
+	ChildOptMemoArray *m_pdrgpcome{nullptr};
+
 	// set group back pointer
 	void SetGroup(CGroup *pgroup);
 
@@ -200,6 +250,18 @@ public:
 
 	// cleanup cost contexts
 	void CleanupContexts();
+
+	// child contexts reached by requests of this group expression
+	ChildOptMemoArray *
+	PdrgpcomeChildOptMemo() const
+	{
+		return m_pdrgpcome;
+	}
+
+	// store the child contexts reached by a request
+	void AddChildOptMemo(CMemoryPool *mp, ULONG ulOptReq, ULONG ulSearchStage,
+						 CReqdPropPlan *prpp,
+						 COptimizationContextArray *pdrgpoc);
 
 	// check if cost context already exists in group expression hash table
 	BOOL FCostContextExists(COptimizationContext *poc,
