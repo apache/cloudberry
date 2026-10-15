@@ -1,0 +1,399 @@
+-- Anser runtime bloom filter: plan-tree integration (PR4).
+--
+-- Requires the cluster to run with anser.enable=on so the gather/send
+-- services are live.  On a multi-segment cluster the build side redistributes,
+-- exercising the Motion-directly-under-CustomScan case; on a single segment it
+-- degrades to the leaf case.  Either way the feature must (a) inject the
+-- producer/consumer nodes and (b) never change query results.
+-- Deterministic plan shape: force a hash join.
+SET enable_nestloop = off;
+SET enable_mergejoin = off;
+-- A regress test must not inherit the production deadline.  anser.timeout_ms
+-- defaults to 100 s because delivery is serial and a wide slice needs that
+-- long to be served; a test that waits it out has turned a delivery failure
+-- into a slow pass.  Pinned short here, so a filter that never arrives fails
+-- the run instead of hiding in the clock.
+SET anser.timeout_ms = 5000;
+-- build is the smaller (hashed / preserved) side, distributed so the join key
+-- must be redistributed; probe is the larger side distributed by the join key.
+CREATE TABLE anser_rf_build (id int, name text) DISTRIBUTED BY (name);
+CREATE TABLE anser_rf_probe (id int, payload text) DISTRIBUTED BY (id);
+INSERT INTO anser_rf_build SELECT g, 'b' || g FROM generate_series(1, 200) g;
+INSERT INTO anser_rf_probe SELECT g, 'p' || g FROM generate_series(1, 2000) g;
+ANALYZE anser_rf_build;
+ANALYZE anser_rf_probe;
+-- Use the Postgres planner for a deterministic plan shape.
+SET optimizer = off;
+-- With the filter on the plan carries an "Anser Bloom Producer" under the Hash
+-- and an "Anser Bloom Consumer" above the probe scan (with the planned bloom
+-- size); with it off neither node appears.  (COSTS OFF keeps the output stable.)
+SET anser.runtime_filter = on;
+EXPLAIN (COSTS OFF)
+SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Right Join
+         Hash Cond: (p.id = b.id)
+         ->  Custom Scan (Anser Bloom Consumer)
+               Bloom Filter Size: 1048576 bytes
+               ->  Seq Scan on anser_rf_probe p
+         ->  Hash
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: b.id
+                     ->  Custom Scan (Anser Bloom Producer)
+                           Bloom Filter Size: 1048576 bytes
+                           Bloom Filter Stats: memory=1024kB
+                           ->  Seq Scan on anser_rf_build b
+ Optimizer: Postgres query optimizer
+(14 rows)
+
+SET anser.runtime_filter = off;
+EXPLAIN (COSTS OFF)
+SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Right Join
+         Hash Cond: (p.id = b.id)
+         ->  Seq Scan on anser_rf_probe p
+         ->  Hash
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: b.id
+                     ->  Seq Scan on anser_rf_build b
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+-- Correctness: identical results with the filter on vs off (Postgres planner).
+SET anser.runtime_filter = on;
+CREATE TEMP TABLE anser_rf_r_on AS
+    SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id
+    DISTRIBUTED BY (name);
+SET anser.runtime_filter = off;
+CREATE TEMP TABLE anser_rf_r_off AS
+    SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id
+    DISTRIBUTED BY (name);
+SELECT count(*) AS rows_on FROM anser_rf_r_on;
+ rows_on 
+---------
+     200
+(1 row)
+
+SELECT count(*) AS rows_off FROM anser_rf_r_off;
+ rows_off 
+----------
+      200
+(1 row)
+
+SELECT count(*) AS only_on
+    FROM (SELECT * FROM anser_rf_r_on EXCEPT ALL SELECT * FROM anser_rf_r_off) d;
+ only_on 
+---------
+       0
+(1 row)
+
+SELECT count(*) AS only_off
+    FROM (SELECT * FROM anser_rf_r_off EXCEPT ALL SELECT * FROM anser_rf_r_on) d;
+ only_off 
+----------
+        0
+(1 row)
+
+-- Correctness must also hold under ORCA (whether or not it injects the nodes).
+SET optimizer = on;
+SET anser.runtime_filter = on;
+CREATE TEMP TABLE anser_rf_r_orca AS
+    SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id
+    DISTRIBUTED BY (name);
+SELECT count(*) AS only_orca
+    FROM (SELECT * FROM anser_rf_r_orca EXCEPT ALL SELECT * FROM anser_rf_r_off) d;
+ only_orca 
+-----------
+         0
+(1 row)
+
+SELECT count(*) AS only_off_orca
+    FROM (SELECT * FROM anser_rf_r_off EXCEPT ALL SELECT * FROM anser_rf_r_orca) d;
+ only_off_orca 
+---------------
+             0
+(1 row)
+
+-- Pushdown mix: with gp_enable_runtime_filter_pushdown on, the consumer hands
+-- the unioned filter to the probe SeqScan as an SK_BLOOM_FILTER scan key and
+-- the scan (or the table AM) does the pruning.  Results must still match the
+-- filter-off run.
+SET optimizer = off;
+SET gp_enable_runtime_filter_pushdown = on;
+SET anser.runtime_filter = on;
+CREATE TEMP TABLE anser_rf_r_push AS
+    SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id
+    DISTRIBUTED BY (name);
+SELECT count(*) AS only_push
+    FROM (SELECT * FROM anser_rf_r_push EXCEPT ALL SELECT * FROM anser_rf_r_off) d;
+ only_push 
+-----------
+         0
+(1 row)
+
+SELECT count(*) AS only_off_push
+    FROM (SELECT * FROM anser_rf_r_off EXCEPT ALL SELECT * FROM anser_rf_r_push) d;
+ only_off_push 
+---------------
+             0
+(1 row)
+
+RESET gp_enable_runtime_filter_pushdown;
+-- Everything above checks that the nodes were injected and that the results did
+-- not change.  Both of those also hold when the filter never arrives and every
+-- consumer fails open -- which is how a broken exchange passes a green test.
+-- This is the assertion that the filter was used: the probe side holds 2000
+-- rows of which 200 join, so a filter that arrived removes the rest.  Only the
+-- Postgres planner is asserted, because its plan shape here is fixed; ORCA
+-- chooses and the count would not be a stable thing to require.
+CREATE FUNCTION anser_rf_pruned(q text) RETURNS bigint
+LANGUAGE plpgsql AS $$
+DECLARE
+    line    text;
+    removed bigint := 0;
+BEGIN
+    FOR line IN EXECUTE 'EXPLAIN (ANALYZE, TIMING OFF, COSTS OFF) ' || q LOOP
+        IF line ~ 'Rows Removed by (Bloom Filter|Pushdown Runtime Filter): ' THEN
+            removed := removed + coalesce(substring(line from ': *([0-9]+)')::bigint, 0);
+        END IF;
+    END LOOP;
+    RETURN removed;
+END;
+$$;
+SET optimizer = off;
+SET anser.runtime_filter = on;
+SELECT 'the filter pruned nothing: it never arrived, or it arrived empty' AS problem
+ WHERE anser_rf_pruned('SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id') = 0;
+ problem 
+---------
+(0 rows)
+
+DROP FUNCTION anser_rf_pruned(text);
+DROP TABLE anser_rf_r_push;
+DROP TABLE anser_rf_r_on, anser_rf_r_off, anser_rf_r_orca;
+DROP TABLE anser_rf_build, anser_rf_probe;
+-- Datatype guard: producer and consumer hash the raw Datum bytes, so injection
+-- is restricted to keys where SQL equality is bitwise Datum equality.  A
+-- cross-type join (float4 vs float8 Datums for equal values differ) must not
+-- be injected; results must match the filter-off run either way.
+CREATE TABLE anser_rf_build_f (id float8, name text) DISTRIBUTED BY (name);
+CREATE TABLE anser_rf_probe_f (id float4, payload text) DISTRIBUTED BY (id);
+INSERT INTO anser_rf_build_f SELECT g, 'b' || g FROM generate_series(1, 200) g;
+INSERT INTO anser_rf_probe_f SELECT g, 'p' || g FROM generate_series(1, 2000) g;
+ANALYZE anser_rf_build_f;
+ANALYZE anser_rf_probe_f;
+SET anser.runtime_filter = on;
+CREATE TEMP TABLE anser_rf_f_on AS
+    SELECT b.name, p.payload FROM anser_rf_build_f b JOIN anser_rf_probe_f p ON b.id = p.id
+    DISTRIBUTED BY (name);
+SET anser.runtime_filter = off;
+CREATE TEMP TABLE anser_rf_f_off AS
+    SELECT b.name, p.payload FROM anser_rf_build_f b JOIN anser_rf_probe_f p ON b.id = p.id
+    DISTRIBUTED BY (name);
+SELECT count(*) AS rows_on FROM anser_rf_f_on;
+ rows_on 
+---------
+     200
+(1 row)
+
+SELECT count(*) AS only_on
+    FROM (SELECT * FROM anser_rf_f_on EXCEPT ALL SELECT * FROM anser_rf_f_off) d;
+ only_on 
+---------
+       0
+(1 row)
+
+SELECT count(*) AS only_off
+    FROM (SELECT * FROM anser_rf_f_off EXCEPT ALL SELECT * FROM anser_rf_f_on) d;
+ only_off 
+----------
+        0
+(1 row)
+
+DROP TABLE anser_rf_f_on, anser_rf_f_off, anser_rf_build_f, anser_rf_probe_f;
+-- Same-typed float keys are also excluded: -0.0 and 0.0 compare equal in SQL
+-- but are not bitwise equal, so hashing raw Datums could prune a joinable row.
+CREATE TABLE anser_rf_build_z (id float8, name text) DISTRIBUTED BY (name);
+CREATE TABLE anser_rf_probe_z (id float8, payload text) DISTRIBUTED BY (id);
+INSERT INTO anser_rf_build_z VALUES (1, 'b1'), (-0.0, 'bz');
+INSERT INTO anser_rf_probe_z VALUES (1, 'p1'), (0.0, 'pz'), (2, 'p2');
+ANALYZE anser_rf_build_z;
+ANALYZE anser_rf_probe_z;
+SET anser.runtime_filter = on;
+CREATE TEMP TABLE anser_rf_z_on AS
+    SELECT b.name, p.payload FROM anser_rf_build_z b JOIN anser_rf_probe_z p ON b.id = p.id
+    DISTRIBUTED BY (name);
+SET anser.runtime_filter = off;
+CREATE TEMP TABLE anser_rf_z_off AS
+    SELECT b.name, p.payload FROM anser_rf_build_z b JOIN anser_rf_probe_z p ON b.id = p.id
+    DISTRIBUTED BY (name);
+SELECT count(*) AS rows_on FROM anser_rf_z_on;
+ rows_on 
+---------
+       2
+(1 row)
+
+SELECT count(*) AS only_on
+    FROM (SELECT * FROM anser_rf_z_on EXCEPT ALL SELECT * FROM anser_rf_z_off) d;
+ only_on 
+---------
+       0
+(1 row)
+
+SELECT count(*) AS only_off
+    FROM (SELECT * FROM anser_rf_z_off EXCEPT ALL SELECT * FROM anser_rf_z_on) d;
+ only_off 
+----------
+        0
+(1 row)
+
+DROP TABLE anser_rf_z_on, anser_rf_z_off, anser_rf_build_z, anser_rf_probe_z;
+-- ---------------------------------------------------------------------------
+-- Parallel execution.
+--
+-- A parallel slice runs numsegments * parallel_workers processes and every one
+-- of them publishes its own part, so the coordinator must wait for that many
+-- parts rather than for one per segment.  Undercounting completes the channel
+-- early and delivers a filter missing build keys; a bloom filter short of keys
+-- gives false negatives, which silently drops joinable rows.  So the assertion
+-- that matters is not the plan shape but that results are *identical* with the
+-- filter on and off -- at more than one worker count, and under both planners,
+-- which disagree here: for one query the Postgres planner may give a serial
+-- build slice where GPORCA gives a parallel one.
+--
+-- The join key is the distribution key on both sides, so no Motion is needed
+-- to co-locate the join.  That is the only shape either planner parallelises:
+-- a redistributed or broadcast build side is fine for GPORCA but the Postgres
+-- planner marks Motion paths parallel-unsafe.
+-- ---------------------------------------------------------------------------
+CREATE TABLE anser_rf_par_build (id int, v text) DISTRIBUTED BY (id);
+CREATE TABLE anser_rf_par_probe (id int, pad text) DISTRIBUTED BY (id);
+INSERT INTO anser_rf_par_build SELECT g, 'b' || g FROM generate_series(1, 500) g;
+INSERT INTO anser_rf_par_probe SELECT g, 'p' || g FROM generate_series(1, 20000) g;
+ANALYZE anser_rf_par_build;
+ANALYZE anser_rf_par_probe;
+-- Force a parallel plan on tables this small, the way PostgreSQL's own tests
+-- do; without this the scans are far too cheap to be worth splitting.
+SET enable_parallel = on;
+SET min_parallel_table_scan_size = 0;
+SET parallel_setup_cost = 0;
+SET parallel_tuple_cost = 0;
+-- Postgres planner, serial baseline
+SET optimizer = off;
+SET max_parallel_workers_per_gather = 0;
+SET anser.runtime_filter = on;
+CREATE TEMP TABLE anser_rf_par_on AS
+    SELECT b.v, p.pad FROM anser_rf_par_probe p
+        JOIN anser_rf_par_build b ON p.id = b.id
+    DISTRIBUTED BY (v);
+SET anser.runtime_filter = off;
+CREATE TEMP TABLE anser_rf_par_off AS
+    SELECT b.v, p.pad FROM anser_rf_par_probe p
+        JOIN anser_rf_par_build b ON p.id = b.id
+    DISTRIBUTED BY (v);
+SELECT (SELECT count(*) FROM anser_rf_par_on) AS rows_on,
+       (SELECT count(*) FROM (SELECT * FROM anser_rf_par_on
+                              EXCEPT ALL
+                              SELECT * FROM anser_rf_par_off) d) AS only_on,
+       (SELECT count(*) FROM (SELECT * FROM anser_rf_par_off
+                              EXCEPT ALL
+                              SELECT * FROM anser_rf_par_on) d) AS only_off;
+ rows_on | only_on | only_off 
+---------+---------+----------
+     500 |       0 |        0
+(1 row)
+
+DROP TABLE anser_rf_par_on, anser_rf_par_off;
+-- Postgres planner, parallel
+SET optimizer = off;
+SET max_parallel_workers_per_gather = 4;
+SET anser.runtime_filter = on;
+CREATE TEMP TABLE anser_rf_par_on AS
+    SELECT b.v, p.pad FROM anser_rf_par_probe p
+        JOIN anser_rf_par_build b ON p.id = b.id
+    DISTRIBUTED BY (v);
+SET anser.runtime_filter = off;
+CREATE TEMP TABLE anser_rf_par_off AS
+    SELECT b.v, p.pad FROM anser_rf_par_probe p
+        JOIN anser_rf_par_build b ON p.id = b.id
+    DISTRIBUTED BY (v);
+SELECT (SELECT count(*) FROM anser_rf_par_on) AS rows_on,
+       (SELECT count(*) FROM (SELECT * FROM anser_rf_par_on
+                              EXCEPT ALL
+                              SELECT * FROM anser_rf_par_off) d) AS only_on,
+       (SELECT count(*) FROM (SELECT * FROM anser_rf_par_off
+                              EXCEPT ALL
+                              SELECT * FROM anser_rf_par_on) d) AS only_off;
+ rows_on | only_on | only_off 
+---------+---------+----------
+     500 |       0 |        0
+(1 row)
+
+DROP TABLE anser_rf_par_on, anser_rf_par_off;
+-- GPORCA, serial baseline
+SET optimizer = on;
+SET max_parallel_workers_per_gather = 0;
+SET anser.runtime_filter = on;
+CREATE TEMP TABLE anser_rf_par_on AS
+    SELECT b.v, p.pad FROM anser_rf_par_probe p
+        JOIN anser_rf_par_build b ON p.id = b.id
+    DISTRIBUTED BY (v);
+SET anser.runtime_filter = off;
+CREATE TEMP TABLE anser_rf_par_off AS
+    SELECT b.v, p.pad FROM anser_rf_par_probe p
+        JOIN anser_rf_par_build b ON p.id = b.id
+    DISTRIBUTED BY (v);
+SELECT (SELECT count(*) FROM anser_rf_par_on) AS rows_on,
+       (SELECT count(*) FROM (SELECT * FROM anser_rf_par_on
+                              EXCEPT ALL
+                              SELECT * FROM anser_rf_par_off) d) AS only_on,
+       (SELECT count(*) FROM (SELECT * FROM anser_rf_par_off
+                              EXCEPT ALL
+                              SELECT * FROM anser_rf_par_on) d) AS only_off;
+ rows_on | only_on | only_off 
+---------+---------+----------
+     500 |       0 |        0
+(1 row)
+
+DROP TABLE anser_rf_par_on, anser_rf_par_off;
+-- GPORCA, parallel
+SET optimizer = on;
+SET max_parallel_workers_per_gather = 4;
+SET anser.runtime_filter = on;
+CREATE TEMP TABLE anser_rf_par_on AS
+    SELECT b.v, p.pad FROM anser_rf_par_probe p
+        JOIN anser_rf_par_build b ON p.id = b.id
+    DISTRIBUTED BY (v);
+SET anser.runtime_filter = off;
+CREATE TEMP TABLE anser_rf_par_off AS
+    SELECT b.v, p.pad FROM anser_rf_par_probe p
+        JOIN anser_rf_par_build b ON p.id = b.id
+    DISTRIBUTED BY (v);
+SELECT (SELECT count(*) FROM anser_rf_par_on) AS rows_on,
+       (SELECT count(*) FROM (SELECT * FROM anser_rf_par_on
+                              EXCEPT ALL
+                              SELECT * FROM anser_rf_par_off) d) AS only_on,
+       (SELECT count(*) FROM (SELECT * FROM anser_rf_par_off
+                              EXCEPT ALL
+                              SELECT * FROM anser_rf_par_on) d) AS only_off;
+ rows_on | only_on | only_off 
+---------+---------+----------
+     500 |       0 |        0
+(1 row)
+
+DROP TABLE anser_rf_par_on, anser_rf_par_off;
+DROP TABLE anser_rf_par_build, anser_rf_par_probe;
+RESET enable_parallel;
+RESET min_parallel_table_scan_size;
+RESET parallel_setup_cost;
+RESET parallel_tuple_cost;
+RESET max_parallel_workers_per_gather;
+RESET anser.runtime_filter;
+RESET optimizer;
+RESET enable_nestloop;
+RESET enable_mergejoin;
