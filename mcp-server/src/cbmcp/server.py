@@ -24,14 +24,15 @@ A Model Communication Protocol server for Apache Cloudberry database interaction
 providing resources, tools, and prompts for database management.
 """
 
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
 import logging
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from pydantic import Field, StrictInt
 
-from .config import DatabaseConfig, ServerConfig
+from .config import DatabaseConfig, ServerConfig, WriteConfig
 from .database import DatabaseManager
+from .writeback import ResultWriter, WriteError, public_error
 from .search import SearchFilter, SearchMetric, TextMatchMode, TextQueryMode
 from .prompt import (
     ANALYZE_QUERY_PERFORMANCE_PROMPT,
@@ -50,14 +51,27 @@ READ_ONLY = {"readOnlyHint": True}
 class CloudberryMCPServer:
     """Apache Cloudberry MCP Server implementation"""
     
-    def __init__(self, server_config: ServerConfig, db_config: DatabaseConfig):
+    def __init__(
+        self,
+        server_config: ServerConfig,
+        db_config: DatabaseConfig,
+        write_config: Optional[WriteConfig] = None,
+    ):
         self.server_config = server_config
         self.db_config = db_config
+        # Read here rather than by every caller, so that an invalid write
+        # setting stops the server whichever way it is started.
+        self.write_config = (
+            write_config if write_config is not None
+            else WriteConfig.from_env(db_config.query_timeout)
+        )
         self.mcp = FastMCP("Apache Cloudberry MCP Server")
         self.db_manager = DatabaseManager(db_config)
         
         self._setup_resources()
         self._setup_tools()
+        if self.write_config.enabled:
+            self._setup_write_tools()
         self._setup_prompts()
 
     
@@ -572,6 +586,91 @@ class CloudberryMCPServer:
                 )
             except Exception as e:
                 return {"error": f"Error running hybrid search: {self.db_manager.describe_error(e)}"}
+
+    def _setup_write_tools(self):
+        """Register the write-back tools; only called with MCP_ENABLE_WRITE on.
+
+        Without the switch the tools do not exist at all, so an agent never
+        sees them and cannot try them.
+        """
+        writer = ResultWriter(self.db_manager, self.write_config)
+
+        @self.mcp.tool(annotations=READ_ONLY)
+        async def describe_result_table(
+            schema: Annotated[str, Field(description="The schema name, exactly as stored in the catalog")],
+            table: Annotated[str, Field(description="The table name, exactly as stored in the catalog")],
+        ) -> Dict[str, Any]:
+            """Describe a table that write_results can write extraction results to.
+
+            Reports, per mode, whether the table can be written and why not;
+            which columns can serve as source_id for an upsert; every column
+            with its type, nullability, default and privileges; whether the
+            model and extracted_at provenance columns exist; the user triggers
+            on the table and its partitions; and the distribution key. Only
+            tables listed in MCP_WRITE_TABLES can be described.
+            """
+            logger.info(f"Describing result table {schema}.{table}")
+            try:
+                return await writer.describe(schema, table)
+            except WriteError as e:
+                raise ToolError(str(e)) from e
+            except Exception as e:
+                raise ToolError(
+                    f"Error describing result table: "
+                    f"{public_error(e, self.db_manager.describe_error)}"
+                ) from e
+
+        @self.mcp.tool(annotations={
+            "readOnlyHint": False,
+            # upsert overwrites values already in the table.
+            "destructiveHint": True,
+            # Repeating an append inserts the rows again.
+            "idempotentHint": False,
+        })
+        async def write_results(
+            schema: Annotated[str, Field(description="The schema name, exactly as stored in the catalog")],
+            table: Annotated[str, Field(description="The table name, exactly as stored in the catalog")],
+            source_id_column: Annotated[str, Field(description="The table column that identifies the source record; for upsert it must be one of upsert_keys from describe_result_table")],
+            fields: Annotated[List[str], Field(description="The field names every row carries, e.g. [\"doc_id\", \"summary\"]")],
+            rows: Annotated[List[Any], Field(description="The results: one object per source record, with exactly the keys in fields")],
+            mode: Annotated[Literal["upsert", "append"], Field(description="upsert inserts or updates by source_id and changes only the given columns; append only inserts")] = "upsert",
+            field_mapping: Annotated[Optional[Dict[str, str]], Field(description="Field name to column name, for fields whose name differs from the column; the rest map to the column of the same name")] = None,
+            model: Annotated[Optional[str], Field(description="The model that produced this batch; required when the table has a model column")] = None,
+        ) -> Dict[str, Any]:
+            """Write a batch of extraction results to a whitelisted table.
+
+            Values are converted to each column's type by the database. A
+            row with a value of the wrong type, a violated constraint, a null
+            or repeated source_id, or fields other than those in fields is
+            reported in failed, with its index and the reason, and the other
+            rows are still written. Anything that concerns the whole call -
+            the table, the mapping, privileges, a lock wait - writes nothing
+            and raises. When the table has model and extracted_at columns
+            they are filled on every write. Exact numerics, integers
+            beyond 2^53, and NaN or Infinity (which JSON cannot hold) should
+            be passed as strings. A table with an enabled trigger (of any
+            timing or level) or a rule on INSERT or UPDATE is refused, since
+            either can change or silently drop the rows written.
+            """
+            logger.info(f"Writing {len(rows) if isinstance(rows, list) else '?'} results to {schema}.{table} ({mode})")
+            try:
+                return await writer.write(
+                    schema=schema,
+                    table=table,
+                    source_id_column=source_id_column,
+                    fields=fields,
+                    rows=rows,
+                    mode=mode,
+                    field_mapping=field_mapping,
+                    model=model,
+                )
+            except WriteError as e:
+                raise ToolError(str(e)) from e
+            except Exception as e:
+                raise ToolError(
+                    f"Error writing results, nothing was written: "
+                    f"{public_error(e, self.db_manager.describe_error)}"
+                ) from e
 
     def _setup_prompts(self):
         """Setup MCP prompts for common database tasks"""
