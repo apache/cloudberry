@@ -424,9 +424,6 @@ GetForeignTableOnSegment(Oid relid)
 	SysScanDesc	ftscan;
 	HeapTuple	fttuple;
 	int 		i;
-	int 		segNumber;
-
-	segNumber = GetForeignTableSegNumbers(relid);
 
 	foreignTableRel = table_open(ForeignTableRelationSegId, AccessShareLock);
 
