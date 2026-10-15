@@ -32,6 +32,7 @@
 #   - IC Proxy Support
 #   - Oracle Compatibility (orafce)
 #   - ORCA Query Optimizer
+#   - Anser Runtime Filters
 #   - PAX Access Method
 #   - Test Automation Support (tap-tests)
 #
@@ -158,6 +159,7 @@ execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
             --enable-pax \
             --enable-tap-tests \
             ${CONFIGURE_DEBUG_OPTS} \
+            --with-anser \
             --with-diskquota \
             --with-gp-stats-collector \
             --with-gssapi \
