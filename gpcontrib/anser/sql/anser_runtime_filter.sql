@@ -170,6 +170,27 @@ SET optimizer = off;
 SET anser.runtime_filter = on;
 SELECT 'the filter pruned nothing: it never arrived, or it arrived empty' AS problem
  WHERE anser_rf_pruned('SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id') = 0;
+-- Nested statement guard: a statement run through SPI from a function body
+-- goes through its whole Start/Run/End inside the *outer* query's Run, so the
+-- inner ExecutorEnd fires while the outer query is still executing.  Dropping
+-- channels there takes the running query's filters with it, and every consumer
+-- that has not read yet fails open -- the exchange still happens, the filter is
+-- just never used.
+--
+-- This needs an inner join, not the left join above: the consumer defers its
+-- first tuple only for INNER (see defer_first), which is what lets the join
+-- emit a row -- and so evaluate the function -- before the consumer reads.
+CREATE FUNCTION anser_rf_nested(x int) RETURNS int
+LANGUAGE plpgsql VOLATILE AS $$
+BEGIN
+    PERFORM 1;
+    RETURN x;
+END;
+$$;
+SELECT 'an inner statement dropped the running query''s filter' AS problem
+ WHERE anser_rf_pruned('SELECT anser_rf_nested(p.id) FROM anser_rf_build b
+                          JOIN anser_rf_probe p ON b.id = p.id') = 0;
+DROP FUNCTION anser_rf_nested(int);
 DROP FUNCTION anser_rf_pruned(text);
 
 DROP TABLE anser_rf_r_push;
@@ -229,6 +250,106 @@ SELECT count(*) AS only_off
     FROM (SELECT * FROM anser_rf_z_off EXCEPT ALL SELECT * FROM anser_rf_z_on) d;
 
 DROP TABLE anser_rf_z_on, anser_rf_z_off, anser_rf_build_z, anser_rf_probe_z;
+
+-- Parameterized rescan guard: a build side whose rows depend on a parameter an
+-- enclosing nested loop reassigns yields a different key set per outer tuple,
+-- and neither node rebuilds on rescan -- the producer stays published, the
+-- consumer keeps the filter it already has.  The second iteration would be
+-- probed against the first iteration's keys, dropping every row that joins.
+-- So the plan pass must refuse the join outright.
+--
+-- OFFSET 0 keeps the subquery from being pulled up, so it stays a nested loop
+-- with a correlated inner side.  Each group's ids are disjoint, which is what
+-- makes a stale filter visible: with the first group's filter still in place
+-- the second group matches nothing.
+CREATE TABLE anser_rf_nl_outer (g int) DISTRIBUTED REPLICATED;
+CREATE TABLE anser_rf_nl_build (g int, id int) DISTRIBUTED BY (id);
+CREATE TABLE anser_rf_nl_probe (id int) DISTRIBUTED BY (id);
+INSERT INTO anser_rf_nl_outer VALUES (1), (2);
+INSERT INTO anser_rf_nl_build SELECT 1, g FROM generate_series(1, 100) g;
+INSERT INTO anser_rf_nl_build SELECT 2, g FROM generate_series(101, 200) g;
+INSERT INTO anser_rf_nl_probe SELECT g FROM generate_series(1, 20000) g;
+ANALYZE anser_rf_nl_outer;
+ANALYZE anser_rf_nl_build;
+ANALYZE anser_rf_nl_probe;
+
+CREATE FUNCTION anser_rf_nodes(q text) RETURNS bigint
+LANGUAGE plpgsql AS $$
+DECLARE
+    line  text;
+    nodes bigint := 0;
+BEGIN
+    FOR line IN EXECUTE 'EXPLAIN (COSTS OFF) ' || q LOOP
+        IF line ~ 'Anser Bloom' THEN
+            nodes := nodes + 1;
+        END IF;
+    END LOOP;
+    RETURN nodes;
+END;
+$$;
+
+-- Both groups must report 100, with the filter on and off alike, and the plan
+-- must carry no Anser node at all.
+SET anser.runtime_filter = off;
+SELECT o.g, s.n AS nl_off
+FROM anser_rf_nl_outer o
+CROSS JOIN LATERAL (SELECT count(*) n FROM anser_rf_nl_probe p
+                      JOIN anser_rf_nl_build b ON p.id = b.id
+                     WHERE b.g = o.g OFFSET 0) s
+ORDER BY o.g;
+SET anser.runtime_filter = on;
+SELECT o.g, s.n AS nl_on
+FROM anser_rf_nl_outer o
+CROSS JOIN LATERAL (SELECT count(*) n FROM anser_rf_nl_probe p
+                      JOIN anser_rf_nl_build b ON p.id = b.id
+                     WHERE b.g = o.g OFFSET 0) s
+ORDER BY o.g;
+SELECT anser_rf_nodes('SELECT o.g, s.n FROM anser_rf_nl_outer o
+CROSS JOIN LATERAL (SELECT count(*) n FROM anser_rf_nl_probe p
+                      JOIN anser_rf_nl_build b ON p.id = b.id
+                     WHERE b.g = o.g OFFSET 0) s') AS nodes_in_parameterized_plan;
+
+-- The same two tables joined without the correlation are still injected into:
+-- the guard must refuse a parameterized build side, not every build side.
+SELECT anser_rf_nodes('SELECT count(*) FROM anser_rf_nl_probe p
+                         JOIN anser_rf_nl_build b ON p.id = b.id
+                        WHERE b.g = 1') AS nodes_when_not_parameterized;
+
+DROP FUNCTION anser_rf_nodes(text);
+DROP TABLE anser_rf_nl_outer, anser_rf_nl_build, anser_rf_nl_probe;
+
+-- nextval guard: the QD sends two kinds of message down a QE's dispatch
+-- connection -- the nextval reply and a sideband message -- and each has its
+-- own reader.  A reader that meets the other's message has to skip it whole:
+-- taking the type byte and erroring leaves the body in the stream, and the
+-- session then dies somewhere else with "protocol synchronization was lost".
+--
+-- In the field this needs an Anser consumer to give up on a filter the
+-- coordinator goes on to deliver anyway, which is a race and cannot be asked
+-- for from SQL.  The fault puts a sideband message in front of one nextval
+-- reply instead, so the ordering is certain rather than likely; the
+-- three-argument form is occurrence 1..1, so it fires once.
+--
+-- Nothing here is Anser's -- the fault supplies the message and the fix is in
+-- cdb_sequence_nextval_qe -- but Anser is why a second message type exists on
+-- that connection at all, so the test lives with it.
+--
+-- The extension may or may not already be there, and saying so is not part of
+-- what is being tested; it is never dropped, for the same reason -- it can
+-- predate this test, and other tests in the same database rely on it.
+-- start_ignore
+CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
+-- end_ignore
+CREATE SEQUENCE anser_rf_seq;
+CREATE TABLE anser_rf_seq_t (id int) DISTRIBUTED BY (id);
+INSERT INTO anser_rf_seq_t SELECT g FROM generate_series(1, 10) g;
+SELECT gp_inject_fault('nextval_sideband_before_response', 'skip', dbid)
+    FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT count(nextval('anser_rf_seq')) AS seq_rows FROM anser_rf_seq_t;
+SELECT gp_inject_fault('nextval_sideband_before_response', 'reset', dbid)
+    FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+DROP SEQUENCE anser_rf_seq;
+DROP TABLE anser_rf_seq_t;
 
 -- ---------------------------------------------------------------------------
 -- Parallel execution.
