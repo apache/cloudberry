@@ -300,6 +300,8 @@ extern bool enable_parallel_semi_join;
 extern bool enable_parallel_dedup_semi_join;
 extern bool enable_parallel_dedup_semi_reverse_join;
 extern bool	parallel_query_use_streaming_hashagg;
+extern bool optimizer_enable_child_opt_memo;
+extern bool optimizer_verify_child_opt_memo;
 extern bool gp_use_streaming_hashagg;
 extern bool optimizer_use_streaming_hashagg;
 extern int  gp_appendonly_insert_files;
