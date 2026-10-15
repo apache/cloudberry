@@ -43,6 +43,7 @@
 #include "miscadmin.h"
 #include "commands/sequence.h"
 #include "access/xact.h"
+#include "utils/faultinjector.h"
 #include "utils/timestamp.h"
 #define DISPATCH_WAIT_TIMEOUT_MSEC 2000
 
@@ -565,6 +566,34 @@ checkDispatchResult(CdbDispatcherState *ds, int timeout_sec)
 			}
 
 			/*
+			 * Take any notifications off this connection before deciding
+			 * whether to wait on it.
+			 *
+			 * The buffered[] check below cannot see them.  PQisBusy() parses
+			 * whatever is already in the buffer, and libpq's parser handles a
+			 * NOTIFY by queueing it on the connection and carrying on
+			 * (pqParseInput3's 'A' arm calls getNotify(), then breaks); it
+			 * never touches asyncStatus.  So a notification can be complete
+			 * and ready while PQisBusy() still answers true for the command
+			 * that has not finished, leaving buffered[] false.
+			 *
+			 * That would only be survivable while the socket stayed readable,
+			 * and it need not be: the flush just above can have absorbed those
+			 * very bytes, because a write that cannot complete in one go reads
+			 * the peer's pending output to avoid deadlocking against it.  The
+			 * notification is then in our own memory with nothing left in the
+			 * socket, and poll() sleeps until the QE happens to send something
+			 * else -- which, for a sender that does not wait for a reply, is
+			 * not until its command completes, since tuples travel over the
+			 * interconnect rather than over this connection.
+			 *
+			 * Draining here costs a pointer check when nothing is queued.
+			 * PQnotifies() runs the parser itself, so this also does the
+			 * parsing PQisBusy() would have done a few lines below.
+			 */
+			processNotifies(dispatchResult);
+
+			/*
 			 * Add socket to fd_set if still connected.
 			 */
 			sock = PQsocket(conn);
@@ -1039,6 +1068,31 @@ checkSegmentAlive(CdbDispatchCmdAsync *pParms)
 	}
 }
 
+/*
+ * Write a sideband message nobody asked for, to order the stream a particular
+ * way under the nextval_sideband_before_response fault.
+ *
+ * Only the framing matters, so the body is a marker rather than anything a
+ * subscriber could use: every reader of this connection has to get past a
+ * message that is not its own, and what is inside it never comes into that.
+ * A QE that happens to be waiting for a real filter logs that it could not
+ * read one and carries on unfiltered, which is the same fail-open path as a
+ * truncated delivery.
+ */
+static inline void
+send_fake_sideband_message(PGconn *conn)
+{
+	static const char marker[] = "fault";
+
+	if (pqPutMsgStart(GP_SIDEBAND_MESSAGE, conn) < 0)
+		elog(ERROR, "Failed to send sideband message: %s", PQerrorMessage(conn));
+	pqPutnchar(marker, sizeof(marker), conn);
+	if (pqPutMsgEnd(conn) < 0)
+		elog(ERROR, "Failed to send sideband message: %s", PQerrorMessage(conn));
+	if (pqFlush(conn) < 0)
+		elog(ERROR, "Failed to send sideband message: %s", PQerrorMessage(conn));
+}
+
 static inline void
 send_sequence_response(PGconn *conn, Oid oid, int64 last, int64 cached, int64 increment, bool overflow, bool error)
 {
@@ -1117,6 +1171,20 @@ processNotifies(CdbDispatchResult *dispatchResult)
 				PG_RE_THROW();
 			}
 			PG_END_TRY();
+
+			/*
+			 * Put a sideband message in front of the reply, so the QE meets
+			 * one while it is reading for something else.  That ordering is a
+			 * race in the field -- it needs a consumer to have given up on a
+			 * filter the coordinator then delivers anyway -- and this makes it
+			 * certain instead.  The QE must skip the message and go on waiting
+			 * for its reply; taking the type byte and erroring would leave the
+			 * body in the stream and desynchronise the connection.
+			 */
+			if (SIMPLE_FAULT_INJECTOR("nextval_sideband_before_response") ==
+				FaultInjectorTypeSkip)
+				send_fake_sideband_message(segdbDesc->conn);
+
 			/* respond back on this libpq connection with the next value */
 			send_sequence_response(segdbDesc->conn, seq_oid, last, cached, increment, overflow, false /* error */);
 		}

@@ -511,6 +511,21 @@ anser_produce_end(CustomScanState *node)
 		ExecEndNode((PlanState *) linitial(node->custom_ps));
 }
 
+/*
+ * Rescan the child and keep every piece of filter state: the producer stays
+ * published, the consumer keeps the filter it received, and no second exchange
+ * happens.
+ *
+ * That is only correct because the build side cannot produce different keys on
+ * a second pass, which the injection pass guarantees by refusing any join whose
+ * build subtree depends on a parameter an enclosing nested loop reassigns (see
+ * the extParam test in anser_try_inject).  Given that, every iteration wants
+ * the same filter, so rebuilding it would be pure cost -- and a channel is
+ * keyed per statement, so a second exchange could not be told apart from the
+ * first anyway.
+ *
+ * If that gate is ever loosened, this is the code that has to change with it.
+ */
 static void
 anser_produce_rescan(CustomScanState *node)
 {
@@ -934,6 +949,7 @@ anser_consume_end(CustomScanState *node)
 	st->filter = NULL;
 }
 
+/* Keeps the received filter; see anser_produce_rescan for why that is sound. */
 static void
 anser_consume_rescan(CustomScanState *node)
 {
