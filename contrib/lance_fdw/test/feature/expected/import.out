@@ -1,0 +1,158 @@
+-- import: IMPORT FOREIGN SCHEMA against the fixtures, over file:// and
+-- s3://.  The fixture directory and the bucket differ per environment, so the
+-- servers are built from the regress.* settings run.sh injects and no path
+-- or credential is ever printed.
+--
+-- The dataset directories are named <name>.lance, so that is what LIMIT TO
+-- names and what the imported table is called; they are renamed afterwards to
+-- keep the rest of the suite readable.
+\pset format unaligned
+DO $$
+BEGIN
+  EXECUTE format('CREATE SERVER lance_files FOREIGN DATA WRAPPER lance_fdw OPTIONS (base_uri %L)',
+                 current_setting('regress.fixture_dir'));
+END
+$$;
+IMPORT FOREIGN SCHEMA fixtures LIMIT TO ("types_all.lance")
+  FROM SERVER lance_files INTO lance_feature;
+ALTER FOREIGN TABLE lance_feature."types_all.lance" RENAME TO types_all;
+-- Every A-tier Arrow type, mapped as the type table in README.md says.
+SELECT format('%s %s', a.attname, format_type(a.atttypid, a.atttypmod)) AS definition
+  FROM pg_attribute a
+  WHERE a.attrelid = 'lance_feature.types_all'::regclass
+    AND a.attnum > 0 AND NOT a.attisdropped
+  ORDER BY a.attnum;
+definition
+id integer
+c_bool boolean
+c_int8 smallint
+c_int16 smallint
+c_int32 integer
+c_int64 bigint
+c_uint8 smallint
+c_uint16 integer
+c_uint32 bigint
+c_float16 real
+c_float32 real
+c_float64 double precision
+c_utf8 text
+c_large_utf8 text
+c_binary bytea
+c_large_binary bytea
+c_date32 date
+c_ts_s timestamp(6) without time zone
+c_ts_s_tz timestamp(6) with time zone
+c_ts_ms timestamp(6) without time zone
+c_ts_ms_tz timestamp(6) with time zone
+c_ts_us timestamp(6) without time zone
+c_ts_us_tz timestamp(6) with time zone
+c_ts_ns timestamp(6) without time zone
+c_ts_ns_tz timestamp(6) with time zone
+c_dec128_38_10 numeric(38,10)
+c_dec128_10_2 numeric(10,2)
+c_fsl_f32_4 real[]
+c_fsl_f64_4 double precision[]
+c_list_i64 bigint[]
+c_list_utf8 text[]
+(31 rows)
+-- The generated table keeps the name it was imported under, relative to the
+-- server's base_uri.
+SELECT o.opt AS table_option
+  FROM pg_foreign_table t, unnest(t.ftoptions) AS o(opt)
+  WHERE t.ftrelid = 'lance_feature.types_all'::regclass ORDER BY 1;
+table_option
+uri=types_all.lance
+(1 row)
+-- B-tier columns are skipped, loudly, and what is left is still imported.
+IMPORT FOREIGN SCHEMA fixtures LIMIT TO ("types_b.lance")
+  FROM SERVER lance_files INTO lance_feature;
+NOTICE:  skipping column "c_uint64" of "types_b.lance": Arrow type "L" (uint64) is not supported
+NOTICE:  skipping column "c_dict" of "types_b.lance": Arrow type "i" (dictionary) is not supported
+NOTICE:  skipping column "c_list_list" of "types_b.lance": Arrow type "+l" (list) is not supported
+NOTICE:  skipping column "c_duration" of "types_b.lance": Arrow type "tDu" (duration) is not supported
+ALTER FOREIGN TABLE lance_feature."types_b.lance" RENAME TO types_b;
+SELECT format('%s %s', a.attname, format_type(a.atttypid, a.atttypmod)) AS definition
+  FROM pg_attribute a
+  WHERE a.attrelid = 'lance_feature.types_b'::regclass
+    AND a.attnum > 0 AND NOT a.attisdropped
+  ORDER BY a.attnum;
+definition
+id integer
+keep_utf8 text
+c_struct lance_feature.lance_types_b_lance_c_struct
+c_list_struct lance_feature.lance_types_b_lance_c_list_struct[]
+(4 rows)
+-- A blob-encoded column is B-tier even though its Arrow type is large_binary,
+-- because the scanner hands out a descriptor for it; the plain
+-- large_binary column next to it imports as bytea.
+IMPORT FOREIGN SCHEMA fixtures LIMIT TO ("blob.lance")
+  FROM SERVER lance_files INTO lance_feature;
+NOTICE:  skipping column "blob" of "blob.lance": Lance blob encoding is not supported
+ALTER FOREIGN TABLE lance_feature."blob.lance" RENAME TO blobs;
+SELECT format('%s %s', a.attname, format_type(a.atttypid, a.atttypmod)) AS definition
+  FROM pg_attribute a
+  WHERE a.attrelid = 'lance_feature.blobs'::regclass
+    AND a.attnum > 0 AND NOT a.attisdropped
+  ORDER BY a.attnum;
+definition
+id integer
+note text
+plain_lb bytea
+(3 rows)
+-- Two datasets in one statement.
+IMPORT FOREIGN SCHEMA fixtures LIMIT TO ("frag_1.lance", "frag_2.lance")
+  FROM SERVER lance_files INTO lance_feature;
+SELECT c.relname AS imported
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'lance_feature' AND c.relkind = 'f' AND c.relname LIKE 'frag%'
+  ORDER BY 1;
+imported
+frag_1.lance
+frag_2.lance
+(2 rows)
+-- Without LIMIT TO there is nothing to enumerate, and saying so is the whole
+-- point.
+IMPORT FOREIGN SCHEMA fixtures FROM SERVER lance_files INTO lance_feature;
+ERROR:  IMPORT FOREIGN SCHEMA for lance_fdw requires LIMIT TO
+DETAIL:  Lance has no catalog that lists the datasets under a uri.
+HINT:  Name the datasets, for example LIMIT TO ("sales.lance").
+IMPORT FOREIGN SCHEMA fixtures EXCEPT ("types_all.lance")
+  FROM SERVER lance_files INTO lance_feature;
+ERROR:  IMPORT FOREIGN SCHEMA for lance_fdw requires LIMIT TO
+DETAIL:  Lance has no catalog that lists the datasets under a uri.
+HINT:  Name the datasets, for example LIMIT TO ("sales.lance").
+-- A relative name needs a base_uri to be relative to.
+CREATE SERVER lance_nobase FOREIGN DATA WRAPPER lance_fdw;
+IMPORT FOREIGN SCHEMA fixtures LIMIT TO (relative_name)
+  FROM SERVER lance_nobase INTO lance_feature;
+ERROR:  lance_fdw: relative uri "relative_name" needs the server option "base_uri"
+HINT:  Either set base_uri on the server or use an absolute uri such as file:///path/to/dataset.lance.
+-- The same import over s3://, with the credentials coming from the user
+-- mapping and never from the statement text.
+DO $$
+BEGIN
+  EXECUTE format('CREATE SERVER lance_s3 FOREIGN DATA WRAPPER lance_fdw '
+                 'OPTIONS (base_uri %L, aws_endpoint %L, aws_region %L, allow_http %L)',
+                 's3://' || current_setting('regress.s3_bucket') || '/fixtures',
+                 current_setting('regress.s3_endpoint'),
+                 current_setting('regress.s3_region'),
+                 'true');
+  EXECUTE format('CREATE USER MAPPING FOR PUBLIC SERVER lance_s3 '
+                 'OPTIONS (aws_access_key_id %L, aws_secret_access_key %L)',
+                 current_setting('regress.s3_key'),
+                 current_setting('regress.s3_secret'));
+END
+$$;
+IMPORT FOREIGN SCHEMA fixtures LIMIT TO ("frag_3.lance")
+  FROM SERVER lance_s3 INTO lance_feature;
+ALTER FOREIGN TABLE lance_feature."frag_3.lance" RENAME TO frag_3_s3;
+SELECT format('%s %s', a.attname, format_type(a.atttypid, a.atttypmod)) AS definition
+  FROM pg_attribute a
+  WHERE a.attrelid = 'lance_feature.frag_3_s3'::regclass
+    AND a.attnum > 0 AND NOT a.attisdropped
+  ORDER BY a.attnum;
+definition
+id integer
+v text
+n bigint
+(3 rows)
