@@ -111,8 +111,9 @@ Pinning the version is what makes one statement see one snapshot even while the
 dataset is being appended to. Two statements are two snapshots: this is
 statement-level, not transaction-level, unless the table names a `version`.
 
-Only the columns a query refers to are read, including the ones a `WHERE`
-clause reads: every qualifier is evaluated here.
+Only the columns a query refers to are read. A column that appears only in a
+`WHERE` clause is read when the qualifier is evaluated here and **not read at
+all** when the qualifier goes to Lance — see [Filter pushdown](#filter-pushdown).
 A `count(*)` refers to no column and reads none; it counts the rows Lance
 reports per batch.
 
@@ -125,11 +126,78 @@ ANALYZE` adds the fragment count, since by then the coordinator has looked:
          Filter: (lower(name) = 'a'::text)
          Lance URI: s3://my-bucket/datasets/events.lance
          Lance Version: latest
+         Lance Columns: id, ts
+         Lance Filter: (`tag` = 'x')
          Lance Fragments: 12
 ```
 
+`Lance Columns` is what the scan asks Lance for, and `Lance Filter` the
+qualifier it pushed down; PostgreSQL's own `Filter:` line is what was left
+here. In the plan above `tag` is filtered on but never read, while `name` is
+read because the qualifier over it stayed local.
+
 A plain `EXPLAIN` opens nothing, so it costs no round trip to the object store
 and works even against a server whose credentials are wrong.
+
+### Filter pushdown
+
+A qualifier that PostgreSQL and Lance are known to answer **identically** is
+handed to Lance, which then returns fewer rows and — the part that usually
+matters more — never sends the column the qualifier reads. A qualifier that is
+not on that list stays here and its column still travels. `EXPLAIN` shows which
+happened.
+
+The list is short on purpose. Pushing a qualifier down means trusting that two
+independent implementations agree on every value, and where they do not, the
+symptom is not an error: it is a query that quietly returns the wrong rows. So
+every entry below was measured against a real cluster rather than argued from
+documentation, and anything not measured is simply not pushed.
+
+**What goes down**
+
+| | |
+|---|---|
+| Types | `boolean`; `smallint`, `integer`, `bigint`; `real`, `double precision`; `text` and unlimited `varchar`; `date`; `timestamp` without a time zone |
+| Operators | `=` `<>` `<` `<=` `>` `>=`, resolved through the type's default btree operator family rather than by name |
+| Structure | `AND`, `OR`, `NOT`, `IS NULL`, `IS NOT NULL`, `IN (...)` |
+| Shapes | column-to-constant in either order, including a constant of a narrower type (`bigint_col > 4` works; the 4 is carried into `bigint` because that is what PostgreSQL's own `int84gt` does) |
+
+**What stays here, and why**
+
+| | |
+|---|---|
+| `timestamptz` | Equivalent only when the Arrow column's time zone is UTC, and planning cannot see the time zone. See [Known limits](#known-limits). |
+| `numeric` | PostgreSQL's arbitrary precision has no exact counterpart in Lance's `decimal128(p,s)`, and a constant may not be representable at all. |
+| `bytea`, arrays, composite types, `jsonb` | Not argued for; the literal syntax is wide and the gain small. |
+| A qualifier holding a parameter | Its value does not exist while planning. |
+| A user-defined operator | Only operators belonging to a built-in operator family are recognised, so a `=` of your own is never mistaken for the built-in one. |
+| Column against column | Two columns of the same row is a separate argument nobody has made yet. |
+| A wider constant that does not fit | `smallint_col = 1` goes down; `smallint_col = 100000` does not, because carrying the constant into `smallint` would change it. |
+| `text` under the wrong collation | See below. |
+| A column whose Lance name contains a backtick | The dialect gives no way to escape one. Such a dataset cannot be scanned with any filter at all, which is Lance's doing, not a choice made here. |
+| `infinity` / `-infinity` dates and timestamps | Lance has no such value. |
+
+**`text` carries two conditions.** Equality needs a *deterministic* collation,
+because there "equal" means byte equality on both sides. Ordering needs more:
+PostgreSQL compares the bytes of the **database encoding** while Lance compares
+UTF-8 bytes, so `<` `<=` `>` `>=` go down only under a `C` or `POSIX` collation
+in a UTF-8 database. Note that a `C.UTF-8` database does not qualify — PostgreSQL
+recognises only the literal `C` and `POSIX` locales as sorting in C order — so
+`WHERE t > 'z'` stays local there while `WHERE t > 'z' COLLATE "C"` goes down.
+
+**`float` needs no special handling, and that is worth saying** because the
+obvious worry is wrong. PostgreSQL defines `NaN = NaN` as true and `NaN` as
+greater than everything, so that btree has a total order; IEEE 754 says the
+opposite. Measured, Lance agrees with PostgreSQL rather than with IEEE — `f <> f`
+returns no rows for a NaN on both sides — so float comparisons are rendered
+plainly, with no rewriting.
+
+**Turning it off.** `lance_fdw.enable_filter_pushdown` (default `on`) stops the
+wrapper pushing anything down. It is read while planning, so it takes effect on
+the next plan — and because setting it also resets the plan cache, on plans that
+were already cached too. Without that reset a pooled connection or a `PREPARE`d
+statement would go on pushing down after the setting changed, which would make a
+poor escape hatch. Only the coordinator's value matters.
 
 ### Options
 
@@ -193,12 +261,18 @@ DDL when `log_statement` is `ddl` or `all`. No wrapper can prevent that.
 | `lance_fdw.io_buffer_size_mb` | 0 | Bound on the I/O one scan buffers from storage; 0 leaves lance-c at its own default. Bounds buffered reads, not everything a scan allocates. |
 | `lance_fdw.batch_readahead` | 0 | Batches decoded concurrently by one scan; 0 leaves lance-c at its own default. Multiplies whatever one batch costs. |
 | `lance_fdw.track_memory` | `on` | Charge Arrow batches to Cloudberry's memory accounting, so the resource group and `gp_vmem_protect_limit` can see them. See [Bounding memory](#bounding-memory). |
+| `lance_fdw.enable_filter_pushdown` | `on` | Push qualifiers down to Lance where the two systems are known to agree exactly. See [Filter pushdown](#filter-pushdown). |
 
-Every one of these is `SUSET`, and they differ only
+Every one of these but `enable_filter_pushdown` is `SUSET`, and they differ only
 in when they are read. The thread counts and cache sizes are read once per
 backend, before its first call into lance-c, so changing them mid-session has no
 effect on that session. The memory bounds and `track_memory` are read later,
 once per scan as it opens, so a `SET` reaches the next scan in the same backend.
+
+`enable_filter_pushdown` is different in every one of those respects: it is
+`USERSET`, it is read at **planning** time on every plan, and changing it resets
+the plan cache so that cached plans stop pushing down at once. It therefore only
+ever matters on the coordinator; the value a segment has is irrelevant.
 
 ### Bounding memory
 
@@ -403,7 +477,8 @@ make installcheck
 ```
 
 The suites create their own database with the `C.UTF-8` locale, whatever the
-cluster's: they compare text the way such a database does. They expect
+cluster's: they compare text the way such a database does, and that is the only
+collation under which a text comparison is pushed down to Lance. They expect
 `optimizer=off`.
 
 The suites, in the order they run:
@@ -418,6 +493,8 @@ The suites, in the order they run:
 | `parallel` | the split is complete and disjoint for 1, 2, 3, 7 and 100 fragments; `coordinator` and `any` agree with `all segments` |
 | `snapshot` | version pinning, in both the rows and the fragment count, including a version whose successor deleted rows from existing fragments — the case an append-only history cannot tell apart on the segments |
 | `explain` | what `EXPLAIN` and `EXPLAIN ANALYZE` say, and that a plain `EXPLAIN` needs no working credentials |
+| `pushdown` | every qualifier shape that goes down and every one that does not, each against the same query with `enable_filter_pushdown` off; the collation and encoding conditions on `text`; that `timestamptz` is refused; and that a cached generic plan stops pushing down the moment the GUC is set |
+| `pushdown_errors` | a qualifier naming a column the dataset does not have, a B-tier column reached only through a qualifier, and `column_name` mapping inside a filter |
 | `creds` | none of the three user mapping credentials is in a plan |
 | `errors_scan` | storage failures during a scan, and every shape of type mismatch |
 | `types` | all 31 columns of `types_all` against the pylance reference output, twice over at two batch sizes, plus the MiB-sized text and binary values |
@@ -466,8 +543,19 @@ The suites, in the order they run:
 - Snapshots are statement-level, not transaction-level: two statements in one
   transaction can read two versions of a dataset that is being appended to,
   unless the table names a `version`.
-- Nothing is pushed down to Lance but the projection: every qualifier, limit
-  and sort is evaluated by PostgreSQL.
+- No limit or vector-search pushdown. Filters are pushed down where the two
+  systems are known to agree exactly; everything else is evaluated by
+  PostgreSQL. [Filter pushdown](#filter-pushdown) says which is which.
+- `timestamptz` is never pushed down, and the reason is worth knowing: a
+  timestamp column whose Arrow timezone is not UTC compares differently in the
+  two systems — measured at three rows short on equality and five rows long on
+  `>` against an `Asia/Shanghai` column, with no error either way. Planning does
+  no I/O, so the wrapper cannot tell a UTC column from a non-UTC one and refuses
+  both.
+- A qualifier containing a parameter (`$1` from a prepared statement, or an
+  outer reference from a correlated subquery) is never pushed down: the value is
+  not known while planning, and this build renders the filter once, on the
+  coordinator, into the plan.
 - Rows are decoded one at a time into `Datum`s. Arrow batches are not handed to
   the executor as they are, so a scan is correct rather than fast.
 - Fragments are handed to segments round-robin. lance-c exposes no per-fragment
@@ -478,8 +566,9 @@ The suites, in the order they run:
   connection with backoff, so an endpoint nothing listens on takes about ten
   seconds to fail rather than failing at once.
 - The suites run with `optimizer=off`, so the plans they check are the
-  PostgreSQL planner's. ORCA is built into the CI cluster, but no suite in this
-  change scans a Lance table under it.
+  PostgreSQL planner's. ORCA is built into the CI cluster; `pushdown` checks
+  that a scan under it returns the same rows with filter pushdown on and off,
+  but not what it pushes down.
 - lance-c is built with `panic = "unwind"`, which the revision CI builds
   requires. A panic it catches at its API boundary comes back as
   `LANCE_ERR_PANIC` and becomes a `lance:` error like any other; a double panic,

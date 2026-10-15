@@ -34,12 +34,13 @@ SELECT name, setting FROM pg_settings WHERE name LIKE 'lance\_fdw.%' ORDER BY na
 name|setting
 lance_fdw.batch_readahead|0
 lance_fdw.cpu_threads|0
+lance_fdw.enable_filter_pushdown|on
 lance_fdw.index_cache_size_mb|64
 lance_fdw.io_buffer_size_mb|0
 lance_fdw.io_threads|0
 lance_fdw.metadata_cache_size_mb|32
 lance_fdw.track_memory|on
-(7 rows)
+(8 rows)
 -- The database's collation is part of the environment these suites assume.
 -- Several compare text by ordering, and their expected counts are those of a
 -- C.UTF-8 database, which orders by code point; under a linguistic locale the
@@ -76,6 +77,33 @@ BEGIN
   RETURN 'no error';
 EXCEPTION WHEN OTHERS THEN
   RETURN regexp_replace(SQLERRM, '\s*\(seg\d+ [^)]*\)$', '');
+END;
+$$;
+-- An error whose detail names the uri being read.  For those the detail and the
+-- hint are part of what is being checked - which path refused, and what to do
+-- about it - but the uri is a path or a bucket and differs per environment.
+-- This returns all three parts the way psql would print them, with the uri
+-- redacted as explain_lance() redacts it in a plan.
+CREATE FUNCTION lance_feature.report(stmt text) RETURNS SETOF text
+LANGUAGE plpgsql AS $$
+DECLARE
+  msg text;
+  detail text;
+  hint text;
+BEGIN
+  EXECUTE stmt;
+  RETURN NEXT 'no error';
+EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS msg = MESSAGE_TEXT,
+                          detail = PG_EXCEPTION_DETAIL,
+                          hint = PG_EXCEPTION_HINT;
+  RETURN NEXT 'ERROR:  ' || regexp_replace(msg, '\s*\(seg\d+ [^)]*\)$', '');
+  IF detail <> '' THEN
+    RETURN NEXT 'DETAIL:  ' || regexp_replace(detail, 'uri [^ ]*[^ .]', 'uri <redacted>');
+  END IF;
+  IF hint <> '' THEN
+    RETURN NEXT 'HINT:  ' || hint;
+  END IF;
 END;
 $$;
 -- A plan names the resolved uri, which is a path or a bucket and so differs

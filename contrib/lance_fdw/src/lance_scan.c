@@ -60,6 +60,10 @@ typedef struct LanceScanState
 {
 	/* Projection, straight out of the plan */
 	int			ncolumns;
+	char	   *filter;			/* pushed-down Lance filter, NULL if none */
+	int			nfilter_cols;	/* columns the filter reads, not projected */
+	AttrNumber *filter_attnums;
+	const char **filter_columns;
 	AttrNumber *attnums;		/* ncolumns entries, 1-based */
 	const char **columns;		/* ncolumns + 1 entries, NULL terminated */
 
@@ -178,6 +182,44 @@ lance_scan_read_projection(LanceScanState *state, ForeignScan *fsplan)
 	 * reading a single column.
 	 */
 	state->columns[state->ncolumns] = NULL;
+
+	/*
+	 * The pushed-down filter and the columns it reads.  An empty
+	 * string means the planner pushed nothing down, which is the normal case
+	 * for a query with no WHERE clause and for every clause off the whitelist.
+	 */
+	{
+		char	   *f = strVal(list_nth(fsplan->fdw_private,
+										LANCE_FDW_PRIVATE_FILTER));
+		List	   *fattrs = (List *) list_nth(fsplan->fdw_private,
+											   LANCE_FDW_PRIVATE_FILTER_ATTRS);
+		List	   *fnames = (List *) list_nth(fsplan->fdw_private,
+											   LANCE_FDW_PRIVATE_FILTER_COLUMNS);
+
+		state->filter = (f != NULL && f[0] != '\0') ? f : NULL;
+
+		if (list_length(fattrs) != list_length(fnames))
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("lance_fdw: the plan carries %d filter columns for %d attributes",
+							list_length(fnames), list_length(fattrs))));
+
+		state->nfilter_cols = list_length(fattrs);
+		if (state->nfilter_cols > 0)
+		{
+			int			k = 0;
+
+			state->filter_attnums = (AttrNumber *)
+				palloc(sizeof(AttrNumber) * state->nfilter_cols);
+			state->filter_columns = (const char **)
+				palloc(sizeof(char *) * state->nfilter_cols);
+			foreach(lc, fattrs)
+				state->filter_attnums[k++] = (AttrNumber) lfirst_int(lc);
+			k = 0;
+			foreach(lc, fnames)
+				state->filter_columns[k++] = strVal(lfirst(lc));
+		}
+	}
 }
 
 /*
@@ -276,7 +318,7 @@ lance_scan_make_scanner(LanceScanState *state)
 
 	LANCE_MASKED(state->scanner = lance_scanner_new(state->dataset,
 													(const char *const *) state->columns,
-													NULL));
+													state->filter));
 	LANCE_CHECK(state->scanner != NULL, state->uri);
 	state->sc_handle = lance_rt_track_scanner(state->scanner);
 
@@ -386,6 +428,57 @@ lance_scan_build_converters(LanceScanState *state, Relation rel)
  * and putting them there means the reset callback frees their nanoarrow views
  * even when resolving one of them raises the error this exists to raise.
  */
+/*
+ * Resolve, and immediately discard, a converter for every column the pushed
+ * filter reads.  Same schema, same lookup, same
+ * lance_arrow_resolve_converter() as the projection: the point is that the
+ * check is identical, so a declaration Lance would refuse in the projection is
+ * refused here too even though the value never travels.
+ */
+static void
+lance_scan_validate_filter_columns(LanceScanState *state, Relation rel,
+								   struct ArrowSchema *schema)
+{
+	TupleDesc	tupdesc = RelationGetDescr(rel);
+	int			i;
+
+	for (i = 0; i < state->nfilter_cols; i++)
+	{
+		Form_pg_attribute att = TupleDescAttr(tupdesc,
+											  state->filter_attnums[i] - 1);
+		struct ArrowSchema *field = NULL;
+		LanceConverter conv;
+		int64		c;
+
+		for (c = 0; c < schema->n_children; c++)
+		{
+			struct ArrowSchema *child = schema->children[c];
+
+			if (child != NULL && child->name != NULL &&
+				strcmp(child->name, state->filter_columns[i]) == 0)
+			{
+				field = child;
+				break;
+			}
+		}
+
+		if (field == NULL)
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_COLUMN),
+					 errmsg("lance_fdw: column \"%s\": the dataset has no such column",
+							state->filter_columns[i]),
+					 errdetail("It is referenced by a qualifier pushed down to Lance, while reading uri %s.",
+							   state->uri),
+					 errhint("Use IMPORT FOREIGN SCHEMA, or the column_name "
+							 "option where the two names differ.")));
+
+		memset(&conv, 0, sizeof(conv));
+		lance_arrow_resolve_converter(field, att->atttypid, att->atttypmod,
+									  &conv);
+		lance_arrow_converter_reset(&conv);
+	}
+}
+
 static void
 lance_scan_validate_projection(LanceScanState *state, Relation rel)
 {
@@ -394,8 +487,13 @@ lance_scan_validate_projection(LanceScanState *state, Relation rel)
 	int32		rc;
 	int			i;
 
-	if (state->ncolumns == 0)
-		return;					/* count(*) asks Lance for no column at all */
+	/*
+	 * count(*) asks Lance for no column - but a pushed-down qual may still
+	 * name one, and that one has to be checked.  Only when there is neither is
+	 * there nothing to open the schema for.
+	 */
+	if (state->ncolumns == 0 && state->nfilter_cols == 0)
+		return;
 
 	memset(&schema, 0, sizeof(schema));
 	LANCE_MASKED(rc = lance_dataset_schema(state->dataset, &schema));
@@ -405,6 +503,17 @@ lance_scan_validate_projection(LanceScanState *state, Relation rel)
 	{
 		state->converters = (LanceConverter *)
 			palloc0(sizeof(LanceConverter) * state->ncolumns);
+
+		/*
+		 * A column that only a pushed-down qual reads is not in
+		 * the projection, so without this it would meet no check at all: a
+		 * B-tier column declared as something readable would slip past the
+		 * refusal that "B-tier is loud, never silent" rests on, and Lance
+		 * would interpret it by its physical type instead.  Checking it here
+		 * means running the same resolution the projection gets - not a
+		 * weaker "does the name exist" - and throwing the converter away.
+		 */
+		lance_scan_validate_filter_columns(state, rel, &schema);
 
 		for (i = 0; i < state->ncolumns; i++)
 		{
@@ -881,6 +990,26 @@ lance_scan_explain(ForeignScanState *node, ExplainState *es)
 							psprintf(UINT64_FORMAT, state->opts.version), es);
 	else
 		ExplainPropertyText("Lance Version", "latest", es);
+
+	/*
+	 * What the scan actually asks Lance for.  This block has pushed the
+	 * projection down since its first commit but there has never been a way to
+	 * see it from SQL; printing it is what makes the narrowing that filter
+	 * pushdown buys an observable behaviour rather than a claim.
+	 */
+	{
+		StringInfoData cols;
+		int			i;
+
+		initStringInfo(&cols);
+		for (i = 0; i < state->ncolumns; i++)
+			appendStringInfo(&cols, "%s%s", i ? ", " : "", state->columns[i]);
+		ExplainPropertyText("Lance Columns",
+							state->ncolumns > 0 ? cols.data : "(none)", es);
+	}
+
+	if (state->filter != NULL)
+		ExplainPropertyText("Lance Filter", state->filter, es);
 
 	/* Only known when this process actually opened the dataset. */
 	if (state->total_fragments >= 0)

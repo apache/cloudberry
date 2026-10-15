@@ -43,6 +43,16 @@ extern int	lance_batch_readahead;
 extern bool lance_track_memory;
 
 /*
+ * Filter pushdown, on by default.  Alone among the GUCs here it is
+ * PGC_USERSET, and it is read at *planning* time, on every plan - so it only
+ * ever matters on the QD, and the value a segment has is irrelevant.  Its
+ * assign hook resets the plan cache, because a cached generic plan has already
+ * dropped the local quals and frozen the filter: without that reset a SET
+ * would silently fail to take effect on a pooled or prepared statement.
+ */
+extern bool lance_enable_filter_pushdown;
+
+/*
  * Arrow batches are allocated by lance on the Rust side, so palloc, the
  * resource group and gp_vmem_protect_limit all see a backend that looks nearly
  * idle while it holds them.  These put the bytes on the same ledger as the

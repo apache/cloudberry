@@ -53,6 +53,33 @@ EXCEPTION WHEN OTHERS THEN
   RETURN regexp_replace(SQLERRM, '\s*\(seg\d+ [^)]*\)$', '');
 END;
 $$;
+-- An error whose detail names the uri being read.  For those the detail and the
+-- hint are part of what is being checked - which path refused, and what to do
+-- about it - but the uri is a path or a bucket and differs per environment.
+-- This returns all three parts the way psql would print them, with the uri
+-- redacted as explain_lance() redacts it in a plan.
+CREATE FUNCTION lance_feature.report(stmt text) RETURNS SETOF text
+LANGUAGE plpgsql AS $$
+DECLARE
+  msg text;
+  detail text;
+  hint text;
+BEGIN
+  EXECUTE stmt;
+  RETURN NEXT 'no error';
+EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS msg = MESSAGE_TEXT,
+                          detail = PG_EXCEPTION_DETAIL,
+                          hint = PG_EXCEPTION_HINT;
+  RETURN NEXT 'ERROR:  ' || regexp_replace(msg, '\s*\(seg\d+ [^)]*\)$', '');
+  IF detail <> '' THEN
+    RETURN NEXT 'DETAIL:  ' || regexp_replace(detail, 'uri [^ ]*[^ .]', 'uri <redacted>');
+  END IF;
+  IF hint <> '' THEN
+    RETURN NEXT 'HINT:  ' || hint;
+  END IF;
+END;
+$$;
 -- A plan names the resolved uri, which is a path or a bucket and so differs
 -- per environment.  Suites that check a plan go through these two instead of
 -- printing it: explain_lance() keeps the wrapper's own plan lines with the uri

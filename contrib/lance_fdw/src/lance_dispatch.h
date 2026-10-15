@@ -33,14 +33,18 @@
 #include "nodes/plannodes.h"
 
 /*
- * Fixed positions in the ForeignScan's fdw_private list.  The
- * first two are written by GetForeignPlan and always present; the third is
+ * Fixed positions in the ForeignScan's fdw_private list.  All
+ * but the last are written by GetForeignPlan and always present; the units are
  * appended by the QD in BeginForeignScan, so a QE tells "the QD spoke" from
- * "nobody did" by the list length alone.
+ * "nobody did" by the list length alone.  That is why UNITS stays last and new
+ * slots are inserted before it: both length tests read this one constant.
  */
 #define LANCE_FDW_PRIVATE_ATTRS		0	/* List of Integer: PostgreSQL attnums */
 #define LANCE_FDW_PRIVATE_COLUMNS	1	/* List of String: Lance column names */
-#define LANCE_FDW_PRIVATE_UNITS		2	/* List: the scan units below */
+#define LANCE_FDW_PRIVATE_FILTER	2	/* String: Lance filter, "" if none */
+#define LANCE_FDW_PRIVATE_FILTER_ATTRS	3	/* List of Integer: attnums the filter reads */
+#define LANCE_FDW_PRIVATE_FILTER_COLUMNS 4	/* List of String: their Lance names */
+#define LANCE_FDW_PRIVATE_UNITS		5	/* List: the scan units below */
 
 /*
  * One unit of work, as it travels inside the plan.  Version and fragment ids

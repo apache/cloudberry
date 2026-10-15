@@ -38,6 +38,7 @@ OBJS = \
 	src/lance_option.o \
 	src/lance_runtime.o \
 	src/lance_arrow.o \
+	src/lance_deparse.o \
 	src/lance_dispatch.o \
 	src/lance_scan.o \
 	src/lance_import.o \
@@ -54,8 +55,8 @@ endif
 # "install" first: it creates the extension and the lance_feature schema every
 # other suite builds on.
 REGRESS = install ddl import errors_ddl scan_core parallel snapshot explain \
-	creds errors_scan types types_errors types_nested types_nested_errors \
-	sigmask
+	pushdown pushdown_errors creds errors_scan types types_errors types_nested \
+	types_nested_errors sigmask
 REGRESS_OPTS = --inputdir=$(srcdir)/test/feature --outputdir=$(srcdir)/test/feature \
 	--use-existing
 

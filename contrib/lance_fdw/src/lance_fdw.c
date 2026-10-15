@@ -35,6 +35,7 @@
 #include "fmgr.h"
 
 #include "lance_fdw.h"
+#include "lance_deparse.h"
 #include "lance_dispatch.h"
 #include "lance_import.h"
 #include "lance_option.h"
@@ -52,6 +53,7 @@
 #include "optimizer/pathnode.h"
 #include "optimizer/planmain.h"
 #include "optimizer/restrictinfo.h"
+#include "utils/lsyscache.h"
 #include "utils/rel.h"
 
 PG_MODULE_MAGIC;
@@ -160,8 +162,8 @@ lanceGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel,
  * Which columns does the scan have to read?
  *
  * Everything the query references, whether it is selected or only used in a
- * qual - this block pushes no filter down, so a WHERE clause is evaluated here
- * and its columns still have to arrive.  A whole-row reference or a system
+ * qual that stayed local.  A qual pushed to Lance is evaluated there and its
+ * columns are not read at all.  A whole-row reference or a system
  * column (gp_segment_id, say) needs the whole tuple, so it widens to every
  * user column.  Nothing referenced at all - count(*) - leaves both lists
  * empty, and lance-c still reports the length of every batch, so the rows are
@@ -169,6 +171,7 @@ lanceGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel,
  */
 static void
 lance_plan_projection(RelOptInfo *baserel, Oid foreigntableid,
+					  List *local_quals,
 					  List **retrieved_attrs, List **columns)
 {
 	Bitmapset  *attrs_used = NULL;
@@ -184,12 +187,14 @@ lance_plan_projection(RelOptInfo *baserel, Oid foreigntableid,
 
 	pull_varattnos((Node *) baserel->reltarget->exprs, baserel->relid,
 				   &attrs_used);
-	foreach(lc, baserel->baserestrictinfo)
-	{
-		RestrictInfo *rinfo = lfirst_node(RestrictInfo, lc);
 
-		pull_varattnos((Node *) rinfo->clause, baserel->relid, &attrs_used);
-	}
+	/*
+	 * Only the quals that stay here.  A qual that went to Lance is evaluated
+	 * there, so the columns it reads no longer have to travel - which is where
+	 * the whole benefit of this block comes from.
+	 */
+	foreach(lc, local_quals)
+		pull_varattnos((Node *) lfirst(lc), baserel->relid, &attrs_used);
 
 	while ((member = bms_next_member(attrs_used, member)) >= 0)
 	{
@@ -231,22 +236,83 @@ lanceGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 	List	   *retrieved_attrs;
 	List	   *columns;
 	List	   *fdw_private;
+	List	   *local_quals = NIL;
+	List	   *filter_attrs = NIL;
+	List	   *filter_columns = NIL;
+	StringInfoData filter;
+	ListCell   *lc;
 
-	/* No filter pushdown yet: every clause stays with the ForeignScan. */
 	scan_clauses = extract_actual_clauses(scan_clauses, false);
 
-	lance_plan_projection(baserel, foreigntableid, &retrieved_attrs, &columns);
+	/*
+	 * Split the quals.  Judging and rendering happen together, per
+	 * clause, right here: a clause that judges pushable but cannot be rendered
+	 * has to be able to fall back, and by a later stage it would already be
+	 * gone from scan_clauses.
+	 *
+	 * The GUC is read at planning time, so a SET takes effect on the next plan
+	 * - and, because the assign hook resets the plan cache, on cached ones
+	 * too.
+	 */
+	initStringInfo(&filter);
+	foreach(lc, scan_clauses)
+	{
+		Expr	   *clause = (Expr *) lfirst(lc);
+		LanceDeparsed deparsed;
+
+		if (!lance_enable_filter_pushdown ||
+			!lance_deparse_qual(clause, foreigntableid, baserel->relid,
+								&deparsed))
+		{
+			local_quals = lappend(local_quals, clause);
+			continue;
+		}
+
+		if (filter.len > 0)
+			appendStringInfoString(&filter, " AND ");
+		appendStringInfoString(&filter, deparsed.sql);
+		filter_attrs = list_concat_unique_int(filter_attrs, deparsed.attnums);
+	}
+
+	lance_plan_projection(baserel, foreigntableid, local_quals,
+						  &retrieved_attrs, &columns);
+
+	/*
+	 * The columns the filter reads travel separately from the projection: they
+	 * are not read, but the QD still checks them against the dataset schema
+	 * with the very same converter resolution the projection gets.
+	 */
+	if (filter_attrs != NIL)
+	{
+		Relation	rel = table_open(foreigntableid, NoLock);
+		TupleDesc	tupdesc = RelationGetDescr(rel);
+
+		foreach(lc, filter_attrs)
+		{
+			AttrNumber	attnum = (AttrNumber) lfirst_int(lc);
+			Form_pg_attribute att = TupleDescAttr(tupdesc, attnum - 1);
+
+			filter_columns = lappend(filter_columns,
+									 makeString(lance_get_column_name(foreigntableid,
+																	  attnum,
+																	  NameStr(att->attname))));
+		}
+		table_close(rel, NoLock);
+	}
 
 	/*
 	 * Slot 0 is the attribute list, slot 1 the Lance column names
-	 * that go with it one for one.  The QD appends the scan units at slot 2 in
-	 * BeginForeignScan, and a QE tells whether it heard from the QD by the
+	 * that go with it one for one, slot 2 the pushed-down filter (empty string
+	 * when there is none), slots 3 and 4 the filter's columns.  The QD appends
+	 * the scan units last, and a QE tells whether it heard from the QD by the
 	 * length of this list.
 	 */
-	fdw_private = list_make2(retrieved_attrs, columns);
+	fdw_private = list_make5(retrieved_attrs, columns,
+							 makeString(filter.data),
+							 filter_attrs, filter_columns);
 
 	return make_foreignscan(tlist,
-							scan_clauses,
+							local_quals,
 							baserel->relid,
 							NIL,	/* no expressions to evaluate */
 							fdw_private,

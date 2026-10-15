@@ -55,7 +55,7 @@ SELECT count(*) AS plan_lines
   FROM lance_feature.explain_lance('SELECT * FROM lance_feature.creds_t',
                                    'VERBOSE, COSTS OFF') l;
 plan_lines
-2
+3
 (1 row)
 SELECT lance_feature.capture($$SELECT count(*) FROM lance_feature.creds_t$$) AS scan_with_canary;
 scan_with_canary

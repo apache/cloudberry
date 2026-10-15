@@ -17,20 +17,24 @@ SELECT * FROM lance_feature.explain_lance('SELECT * FROM lance_feature.expl_frag
 explain_lance
 Lance URI: <redacted>
 Lance Version: latest
-(2 rows)
+Lance Columns: id, v, n
+(3 rows)
 SELECT * FROM lance_feature.explain_lance('SELECT id FROM lance_feature.expl_frag3 WHERE n > 4',
                                           'VERBOSE, COSTS OFF');
 explain_lance
 Lance URI: <redacted>
 Lance Version: latest
-(2 rows)
+Lance Columns: id
+Lance Filter: (`n` > 4)
+(4 rows)
 SELECT * FROM lance_feature.explain_lance('SELECT * FROM lance_feature.expl_frag3',
                                           'ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF');
 explain_lance
 Lance URI: <redacted>
 Lance Version: latest
+Lance Columns: id, v, n
 Lance Fragments: 3
-(3 rows)
+(4 rows)
 -- The scan still runs on every segment, which is what puts a Gather Motion
 -- above it.
 SELECT lance_feature.plan_mentions('SELECT * FROM lance_feature.expl_frag3',
@@ -62,7 +66,8 @@ SELECT * FROM lance_feature.explain_lance('SELECT * FROM lance_feature.expl_badc
 explain_lance
 Lance URI: <redacted>
 Lance Version: 7
-(2 rows)
+Lance Columns: id, v, n
+(3 rows)
 -- A uri that does not exist is equally uninteresting to a plain EXPLAIN.
 CREATE FOREIGN TABLE lance_feature.expl_missing (id integer)
   SERVER expl_files OPTIONS (uri 'no_such_dataset.lance');
@@ -70,4 +75,5 @@ SELECT * FROM lance_feature.explain_lance('SELECT * FROM lance_feature.expl_miss
 explain_lance
 Lance URI: <redacted>
 Lance Version: latest
-(2 rows)
+Lance Columns: id
+(3 rows)
