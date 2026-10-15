@@ -880,6 +880,9 @@
    (--enable-link-postgres-with-shared) */
 #undef USE_LINK_POSTGRES_WITH_SHARED
 
+/* Define to 1 to build with COPY TO/FROM PROGRAM support. (--with-copy-program) */
+#undef USE_COPY_PROGRAM
+
 /* Define to 1 to build with LLVM based JIT support. (--with-llvm) */
 #undef USE_LLVM
 

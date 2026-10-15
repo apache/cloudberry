@@ -23,12 +23,12 @@ import os, glob
 
 from general import source_filenames
 
-p_any = '(?:\S| |\t|\n+\t|\n+ |\n+#|\n+/|\n+\$)+?'
-p_anys = '(?:\S| |\t|\n+\t|\n+ |\n+#|\n+/|\n+\$)*?'
-p_spaces = '\s*'
-p_space = '\s+'
+p_any = '(?:\\S| |\t|\n+\t|\n+ |\n+#|\n+/|\n+\\$)+?'
+p_anys = '(?:\\S| |\t|\n+\t|\n+ |\n+#|\n+/|\n+\\$)*?'
+p_spaces = '\\s*'
+p_space = '\\s+'
 
-ereturn_pattern = 'ereturn\(' + p_any + '\);'
+ereturn_pattern = 'ereturn\\(' + p_any + '\\);'
 
 ereturns = {}
 
@@ -46,7 +46,7 @@ for root, subdirs, files in os.walk('../..'):
                 for m in matches:
 
                     def get_field(field, m):
-                        errfield = re.search(f'{field}\("('+ p_anys + '"' + p_anys + ')[\)\n]', m)
+                        errfield = re.search(f'{field}\\("('+ p_anys + '"' + p_anys + ')[\\)\n]', m)
                         if errfield is not None:
                             errfield = errfield[1]
 

@@ -422,6 +422,7 @@ class SQLIsolationExecutor(object):
                     elif (("the database system is starting up" in str(e) or
                          "the database system is resetting" in str(e) or
                          "the database system is in recovery mode" in str(e) or
+                         "the database system is not yet accepting connections" in str(e) or
                          "the database system is not accepting connections" in str(e)) and
                         retry > 1):
                         retry -= 1
