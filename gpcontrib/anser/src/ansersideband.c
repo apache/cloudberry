@@ -174,6 +174,26 @@ AnserSidebandConsumeWait(const AnserChannelKey *channel_key, char payload_type,
 		return payload != NULL && *payload != NULL;
 
 	/*
+	 * With no deadline to wait out there is nothing to subscribe for: we would
+	 * give up on the next line anyway, and the only lasting effect would be the
+	 * coordinator later pushing a message to a process that has stopped reading
+	 * for it.  Such a delivery is not free -- it arrives while this QE is
+	 * somewhere else in the plan, and whatever reads the connection then has to
+	 * recognise and skip it.  So do not ask in the first place.
+	 *
+	 * This only narrows the window.  Any deadline can expire with the
+	 * subscription already registered, and there is no unsubscribe, so every
+	 * reader of this connection still has to tolerate a message that is not its
+	 * own (see cdb_sequence_nextval_qe).
+	 */
+	if (timeout_ms == 0)
+	{
+		ANSER_DEBUG("anser: seg%d not subscribing to cond=%u: no deadline to wait out",
+					GpIdentity.segindex, channel_key->condition_id);
+		return false;
+	}
+
+	/*
 	 * A subscription carries nothing, so its payload type is NONE -- what this
 	 * consumer expects to receive is checked on delivery, not announced here.
 	 */
@@ -277,11 +297,18 @@ anser_sideband_read_one(long timeout_ms)
 	if (qtype != GP_SIDEBAND_MESSAGE)
 	{
 		/*
-		 * Nothing else should reach us here, and if it does there is no way
-		 * back: pq_getbyte_if_available() has already taken the byte and the
-		 * backend has no means of pushing one in front of the stream, so this
-		 * message can neither be handed to the command loop nor skipped
-		 * safely.  The connection is one byte short from here on.
+		 * The one type that can legitimately turn up is '?', the nextval
+		 * response: the QD sends it and cancels the QEs when it fails to get a
+		 * value, so it can arrive with nobody waiting for it.  We do not skip
+		 * it, because that would consume a reply a later nextval might be
+		 * about to wait for, and we are not the owner of that exchange.  Other
+		 * types should not reach us at all.
+		 *
+		 * Either way there is no way back by the time we are here:
+		 * pq_getbyte_if_available() has already taken the byte, and the
+		 * backend cannot push one in front of the stream, so the message can
+		 * neither be handed to the command loop nor left for its owner.  The
+		 * connection is one byte short from here on.
 		 *
 		 * Terminating is therefore the only honest outcome.  Returning and
 		 * running unfiltered -- the instinct everywhere else in this code --
@@ -292,9 +319,9 @@ anser_sideband_read_one(long timeout_ms)
 		 * connection cannot be reused: an ERROR would return this QE to the
 		 * gang pool with a desynchronised stream, poisoning a later query.
 		 *
-		 * cdb_sequence_nextval_qe() reaches the same conclusion at
-		 * sequence.c:438, one level milder, because it runs where the gang is
-		 * about to be torn down anyway.
+		 * The mirror case -- a sideband message reaching the nextval reader --
+		 * is the common one, and that reader skips it rather than dying: it
+		 * knows our message is unowned by then, which we cannot say of its.
 		 */
 		pq_endmsgread();
 		ereport(FATAL,
