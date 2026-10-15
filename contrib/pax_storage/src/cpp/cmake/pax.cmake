@@ -278,6 +278,16 @@ if (BUILD_GTEST)
 
   add_executable(test_main ${pax_target_src} ${test_case_sources})
   target_compile_definitions(test_main PRIVATE RUN_GTEST)
+  # cpp-stub replaces function entry points, so unit tests need out-of-line
+  # calls even when the production library is built with optimization.
+  target_compile_options(test_main PRIVATE -O0 -fno-inline -fno-stack-protector)
+  if (NOT APPLE)
+    target_compile_options(test_main PRIVATE
+      $<$<COMPILE_LANGUAGE:CXX>:-fno-access-control>
+      $<$<COMPILE_LANGUAGE:CXX>:-Wno-pmf-conversions>)
+    set_property(TARGET test_main APPEND_STRING PROPERTY LINK_FLAGS
+                 " -no-pie -Wl,--allow-multiple-definition")
+  endif()
   add_dependencies(test_main ${pax_target_dependencies} gtest gmock)
   target_include_directories(test_main PUBLIC ${pax_target_include} ${CMAKE_CURRENT_SOURCE_DIR} ${gtest_SOURCE_DIR}/include contrib/cpp-stub/src/ contrib/cpp-stub/src_linux/)
 

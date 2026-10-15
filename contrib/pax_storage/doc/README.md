@@ -65,11 +65,49 @@ implementation, which is off by default, and CMake fetches it from its
 upstream release during configuration when you build with
 `USE_MANIFEST_API=ON USE_PAX_CATALOG=OFF`.
 
-### Build debug version
+### Build configuration and optimization
 
-When using the configure script in the Cloudberry, add `--enable-cassert`.
+PAX defaults to the optimized CMake `Release` configuration. Server
+`--enable-cassert` enables PAX assertions and enables `BUILD_GTEST` by default;
+it does not disable compiler optimization. An explicit `BUILD_GTEST=ON` or
+`BUILD_GTEST=OFF` overrides that default.
 
-`--enable-cassert` will cause PAX to be compiled in **DEBUG** mode. And the `GTEST` in PAX will be built.
+With the default GCC/Clang flags, `Release` uses `-O3`. To choose a different
+optimization level, override the standard CMake flags for that configuration.
+For example, to build both C and C++ sources with `-O0`:
+
+```sh
+cmake -S contrib/pax_storage -B contrib/pax_storage/build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_FLAGS_RELEASE="-O0 -g" \
+  -DCMAKE_CXX_FLAGS_RELEASE="-O0 -g"
+cmake --build contrib/pax_storage/build -j8
+```
+
+Replace `-O0` with `-O1`, `-O2`, `-O3`, or `-Og`, and add any other compiler
+flags to these values as needed. These settings replace the configuration's
+default flags and are retained in the CMake cache; rerun CMake to change them
+in an existing build directory. PAX does not overwrite them. Set both variables
+to change both languages, or only `CMAKE_CXX_FLAGS_RELEASE` to change C++.
+Setting only the environment variable `CXXFLAGS=-O0` is insufficient for a
+Release build: CMake appends the configuration-specific flags after it.
+
+To select an unoptimized build, configure PAX explicitly (also when updating an
+existing build directory):
+
+```sh
+cmake -S contrib/pax_storage -B contrib/pax_storage/build -DCMAKE_BUILD_TYPE=Debug
+cmake --build contrib/pax_storage/build -j8
+```
+
+Use `-DCMAKE_BUILD_TYPE=Release` for performance measurements, or
+`-DCMAKE_BUILD_TYPE=RelWithDebInfo` for CMake's optimized debug configuration.
+These choices preserve server assertions when built against assertion-enabled
+server headers. Multi-config generators select the configuration at build time
+with `--config`. Check the generated `compile_commands.json` for effective flags.
+
+The `test_main` target disables optimization and inlining for its function
+stubs, independently of the production library configuration.
 
 Run GTEST:
 

@@ -273,8 +273,9 @@ void PaxColumns::VerifyAllExternalToasts(
 
     // exist external toast
     if (got_first_external_toast) {
-      uint64 last_offset;
-      uint64 last_size;
+      uint64 last_offset = 0;
+      uint64 last_size = 0;
+      bool got_last_external_toast = false;
       for (int64 i = data_indexes->GetSize() - 1; i >= 0; i--) {
         std::tie(buffer, buff_len) = column->GetBuffer(
             column->GetRangeNonNullRows(0, (*data_indexes)[i]));
@@ -282,10 +283,12 @@ void PaxColumns::VerifyAllExternalToasts(
           auto ext_toast = PaxExtGetDatum(buffer);
           last_offset = ext_toast->va_extoffs;
           last_size = ext_toast->va_extsize;
+          got_last_external_toast = true;
           break;
         }
       }
       // check the range is match the len
+      Assert(got_last_external_toast);
       Assert(last_offset + last_size - first_offset == ext_toast_lens[i]);
     }
   }

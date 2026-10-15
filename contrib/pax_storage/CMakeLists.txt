@@ -39,7 +39,6 @@ option(USE_MANIFEST_API "Use manifest API" OFF)
 option(USE_PAX_CATALOG "Use manifest API, by pax impl" ON)
 
 # Build gtest options
-option(BUILD_GTEST "Build with google test" ON)
 option(BUILD_GBENCH "Build with google benchmark" OFF)
 
 # Build pax tools
@@ -66,16 +65,18 @@ CHECK_SYMBOL_EXISTS(USE_ASSERT_CHECKING "${PG_CONFIG_HEADER_FILE}" PAX_USE_DEBUG
 CHECK_SYMBOL_EXISTS(USE_LZ4 "${PG_CONFIG_HEADER_FILE}" PAX_USE_LZ4)
 if (PAX_USE_DEBUG)
   ADD_DEFINITIONS(-DENABLE_DEBUG)
-  # Use to build compile_commands.json
-  SET(CMAKE_BUILD_TYPE "Debug")
-  SET(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -ggdb")
-  SET(INSTALL_GTEST OFF) # disable gtest install() target
-else()
-  SET(CMAKE_BUILD_TYPE "Release")
-  SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3")
-  # no need build gtest in release mode
-  SET(BUILD_GTEST OFF)
 endif()
+# Assertions follow the server headers; optimization is an independent choice.
+# Respect explicit build types and the configurations of multi-config generators.
+# Override CMAKE_C_FLAGS_<CONFIG> / CMAKE_CXX_FLAGS_<CONFIG> for custom levels
+# (for example, CMAKE_CXX_FLAGS_RELEASE="-O0 -g"); keep those cache values intact.
+if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  SET(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build" FORCE)
+endif()
+# Keep assertion-enabled builds testable without forcing tests on callers that
+# explicitly disable them. CMake initializes compiler flags from CXXFLAGS.
+option(BUILD_GTEST "Build with google test" ${PAX_USE_DEBUG})
+SET(INSTALL_GTEST OFF) # disable gtest install() target
 message(STATUS "PAX BUILD TYPE: ${CMAKE_BUILD_TYPE}")
 
 if(BUILD_GBENCH)
