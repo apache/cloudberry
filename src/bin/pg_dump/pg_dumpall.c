@@ -1397,14 +1397,14 @@ dumpRoles(PGconn *conn)
 		{
 			if (!PQgetisnull(res, i, i_rolqueuename))
 				appendPQExpBuffer(buf, " RESOURCE QUEUE %s",
-								  PQgetvalue(res, i, i_rolqueuename));
+								  fmtId(PQgetvalue(res, i, i_rolqueuename)));
 		}
 
 		if (resource_groups)
 		{
 			if (!PQgetisnull(res, i, i_rolgroupname))
 				appendPQExpBuffer(buf, " RESOURCE GROUP %s",
-								  PQgetvalue(res, i, i_rolgroupname));
+								  fmtId(PQgetvalue(res, i, i_rolgroupname)));
 		}
 
 		if (exttab_auth)
