@@ -40,7 +40,9 @@ CParseHandlerMDGPDBAgg::CParseHandlerMDGPDBAgg(
 	  m_is_ordered(false),
 	  m_is_splittable(true),
 	  m_hash_agg_capable(true),
-	  m_is_repsafe(false)
+	  m_is_repsafe(false),
+	  m_is_empty_input_null(true),
+	  m_is_empty_input_safe(true)
 {
 }
 
@@ -97,6 +99,30 @@ CParseHandlerMDGPDBAgg::StartElement(const XMLCh *const,  // element_uri,
 			m_is_repsafe = CDXLOperatorFactory::ConvertAttrValueToBool(
 				m_parse_handler_mgr->GetDXLMemoryManager(), xml_str_repsafe_agg,
 				EdxltokenGPDBIsAggRepSafe, EdxltokenGPDBAgg);
+		}
+
+		// parse empty input result info
+		const XMLCh *xml_str_empty_input_null = attrs.getValue(
+			CDXLTokens::XmlstrToken(EdxltokenGPDBIsAggEmptyInputNull));
+		if (nullptr != xml_str_empty_input_null)
+		{
+			m_is_empty_input_null =
+				CDXLOperatorFactory::ConvertAttrValueToBool(
+					m_parse_handler_mgr->GetDXLMemoryManager(),
+					xml_str_empty_input_null,
+					EdxltokenGPDBIsAggEmptyInputNull, EdxltokenGPDBAgg);
+		}
+
+		// parse empty input evaluation safety
+		const XMLCh *xml_str_empty_input_safe = attrs.getValue(
+			CDXLTokens::XmlstrToken(EdxltokenGPDBIsAggEmptyInputSafe));
+		if (nullptr != xml_str_empty_input_safe)
+		{
+			m_is_empty_input_safe =
+				CDXLOperatorFactory::ConvertAttrValueToBool(
+					m_parse_handler_mgr->GetDXLMemoryManager(),
+					xml_str_empty_input_safe,
+					EdxltokenGPDBIsAggEmptyInputSafe, EdxltokenGPDBAgg);
 		}
 
 		// parse splittable aggregate info
@@ -177,7 +203,8 @@ CParseHandlerMDGPDBAgg::EndElement(const XMLCh *const,	// element_uri,
 		m_imd_obj = GPOS_NEW(m_mp)
 			CMDAggregateGPDB(m_mp, m_mdid, m_mdname, m_mdid_type_result,
 							 m_mdid_type_intermediate, m_is_ordered,
-							 m_is_splittable, m_hash_agg_capable, m_is_repsafe);
+							 m_is_splittable, m_hash_agg_capable, m_is_repsafe,
+							 m_is_empty_input_null, m_is_empty_input_safe);
 
 		// deactivate handler
 		m_parse_handler_mgr->DeactivateHandler();

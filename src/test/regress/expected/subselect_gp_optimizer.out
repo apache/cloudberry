@@ -884,24 +884,22 @@ select * from csq_pullup t0 where 1= (select count(*) from csq_pullup t1 where t
 
 -- subquery contains a HAVING clause
 explain select * from csq_pullup t0 where 1= (select count(*) from csq_pullup t1 where t0.t=t1.t HAVING count(*) < 10);
-                                                    QUERY PLAN                                                     
--------------------------------------------------------------------------------------------------------------------
+                                                                                      QUERY PLAN                                                                                      
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=17)
    ->  Result  (cost=0.00..862.00 rows=1 width=17)
-         Filter: (1 = COALESCE((count(*)), '0'::bigint))
-         ->  Hash Left Join  (cost=0.00..862.00 rows=1 width=25)
+         Filter: (1 = CASE WHEN CASE WHEN (true) THEN ((count(*)) < 10) ELSE ('0'::bigint < 10) END THEN CASE WHEN (true) THEN (count(*)) ELSE '0'::bigint END ELSE NULL::bigint END)
+         ->  Hash Left Join  (cost=0.00..862.00 rows=1 width=34)
                Hash Cond: (t0.t = t1.t)
                ->  Seq Scan on csq_pullup t0  (cost=0.00..431.00 rows=1 width=17)
-               ->  Hash  (cost=431.00..431.00 rows=1 width=12)
-                     ->  Result  (cost=0.00..431.00 rows=1 width=12)
-                           Filter: ((count(*)) < 10)
-                           ->  GroupAggregate  (cost=0.00..431.00 rows=1 width=20)
-                                 Group Key: t1.t
-                                 ->  Sort  (cost=0.00..431.00 rows=1 width=4)
-                                       Sort Key: t1.t
-                                       ->  Seq Scan on csq_pullup t1  (cost=0.00..431.00 rows=1 width=4)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
-(15 rows)
+               ->  Hash  (cost=431.00..431.00 rows=1 width=21)
+                     ->  GroupAggregate  (cost=0.00..431.00 rows=1 width=20)
+                           Group Key: t1.t
+                           ->  Sort  (cost=0.00..431.00 rows=1 width=4)
+                                 Sort Key: t1.t
+                                 ->  Seq Scan on csq_pullup t1  (cost=0.00..431.00 rows=1 width=4)
+ Optimizer: GPORCA
+(13 rows)
 
 select * from csq_pullup t0 where 1= (select count(*) from csq_pullup t1 where t0.t=t1.t HAVING count(*) < 10);
   t  | n | i |  v  

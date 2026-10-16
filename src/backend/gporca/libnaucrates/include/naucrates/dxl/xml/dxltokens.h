@@ -663,6 +663,8 @@ enum Edxltoken
 	EdxltokenGPDBAgg,
 	EdxltokenGPDBIsAggOrdered,
 	EdxltokenGPDBIsAggRepSafe,
+	EdxltokenGPDBIsAggEmptyInputNull,
+	EdxltokenGPDBIsAggEmptyInputSafe,
 	EdxltokenGPDBAggResultTypeId,
 	EdxltokenGPDBAggIntermediateResultTypeId,
 	EdxltokenGPDBAggSplittable,

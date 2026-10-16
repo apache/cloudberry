@@ -16,7 +16,10 @@
 
 #include "access/htup_details.h"
 #include "access/skey.h"
+#include "access/transam.h"
+#include "catalog/pg_aggregate.h"
 #include "catalog/pg_operator.h"
+#include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/clauses.h"
@@ -29,6 +32,8 @@
 #include "parser/parse_relation.h"	/* addRangeTableEntryForSubquery() */
 #include "parser/parsetree.h"	/* rt_fetch() */
 #include "rewrite/rewriteManip.h"
+#include "utils/builtins.h"		/* TextDatumGetCString() */
+#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"	/* get_op_btree_interpretation() */
 #include "utils/syscache.h"
 #include "cdb/cdbsubselect.h"	/* me */
@@ -669,6 +674,232 @@ convert_EXPR_to_join(PlannerInfo *root, OpExpr *opexp)
 	}
 
 	return NULL;
+}
+
+/*
+ * Build a Const of the given type from an aggregate's initial value text,
+ * as GetAggInitVal() does for the executor.
+ */
+static Const *
+make_init_value_const(Oid type, Oid collation, Datum textInitVal)
+{
+	Oid			typinput;
+	Oid			typioparam;
+	int16		typlen;
+	bool		typbyval;
+	char	   *strInitVal;
+	Datum		value;
+
+	getTypeInputInfo(type, &typinput, &typioparam);
+	get_typlenbyval(type, &typlen, &typbyval);
+	strInitVal = TextDatumGetCString(textInitVal);
+	value = OidInputFunctionCall(typinput, strInitVal, typioparam, -1);
+	pfree(strInitVal);
+
+	return makeConst(type, -1, collation, typlen, value, false, typbyval);
+}
+
+/*
+ * get_agg_empty_input_const
+ *
+ * If the value the aggregate returns over empty input follows from its
+ * pg_aggregate entry or a known built-in final function, store it in *result
+ * and return true.  aggtype is the aggregate's result type and argtypes the
+ * types of its aggregated arguments, as resolved for the call.  Direct
+ * arguments must be constants: the executor evaluates them even over empty
+ * input, so replacing the aggregate must not suppress their evaluation.
+ *
+ * Over empty input the result is the initial transition value, passed
+ * through the final function if there is one (see finalize_aggregate()).
+ * Without a final function that is the initial value itself, like 0 for
+ * count(); with a strict one and no initial value it is NULL, like for
+ * sum() and min().  Otherwise it is the final function applied to the
+ * initial value, e.g. NULL for avg() and its initial state {0,0}: a call of
+ * an immutable function on constants, which constant folding evaluates like
+ * any other.  Only built-in aggregates are folded this way: a user-defined
+ * final function can fail on empty input even when the actual input is never
+ * empty, or require an aggregate execution context.
+ * A final function over an internal state expects to run inside
+ * an aggregate, and one of an ordered-set aggregate also takes the direct
+ * arguments; those are not called here.
+ */
+bool
+get_agg_empty_input_const(Oid aggfnoid, Oid aggtype, Oid aggcollid,
+						  Oid inputcollid, List *argtypes, List *directargs,
+						  Const **result)
+{
+	HeapTuple	aggTuple;
+	Form_pg_aggregate aggform;
+	Datum		textInitVal;
+	bool		initValueIsNull;
+	bool		derived = false;
+	ListCell   *lc;
+
+	foreach(lc, directargs)
+	{
+		if (!IsA(lfirst(lc), Const))
+			return false;
+	}
+
+	aggTuple = SearchSysCache1(AGGFNOID, ObjectIdGetDatum(aggfnoid));
+	if (!HeapTupleIsValid(aggTuple))
+		elog(ERROR, "cache lookup failed for aggregate %u", aggfnoid);
+	aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
+
+	textInitVal = SysCacheGetAttr(AGGFNOID, aggTuple,
+								  Anum_pg_aggregate_agginitval,
+								  &initValueIsNull);
+
+	if (initValueIsNull &&
+		(!OidIsValid(aggform->aggfinalfn) || func_strict(aggform->aggfinalfn)))
+	{
+		*result = makeNullConst(aggtype, -1, aggcollid);
+		derived = true;
+	}
+	else if (initValueIsNull && aggfnoid < FirstNormalObjectId &&
+			 aggform->aggtranstype == INTERNALOID &&
+			 (aggform->aggfinalfn == F_NUMERIC_AVG ||
+			  aggform->aggfinalfn == F_NUMERIC_SUM ||
+			  aggform->aggfinalfn == F_NUMERIC_POLY_AVG ||
+			  aggform->aggfinalfn == F_NUMERIC_POLY_SUM))
+	{
+		/*
+		 * AVG and SUM over numeric and int8 return NULL for a NULL internal
+		 * state. Their final functions are not marked strict, so the catalog
+		 * check above cannot establish this. Use the known result without
+		 * calling an internal-state final function during planning.
+		 */
+		*result = makeNullConst(aggtype, -1, aggcollid);
+		derived = true;
+	}
+	else if (initValueIsNull && aggfnoid == F_RANK_ANY)
+	{
+		/* A hypothetical row has rank 1 when there are no input rows. */
+		*result = makeConst(INT8OID, -1, InvalidOid, sizeof(int64),
+							Int64GetDatum(1), false, FLOAT8PASSBYVAL);
+		derived = true;
+	}
+	else if (IsPolymorphicType(aggtype))
+	{
+		/* cannot build a value of an unresolved type */
+	}
+	else if (!OidIsValid(aggform->aggfinalfn))
+	{
+		/* The transition type is the result type then. */
+		*result = make_init_value_const(aggtype, aggcollid, textInitVal);
+		derived = true;
+	}
+	else if (aggfnoid < FirstNormalObjectId &&
+			 aggform->aggkind == AGGKIND_NORMAL &&
+			 aggform->aggtranstype != INTERNALOID &&
+			 !IsPolymorphicType(aggform->aggtranstype))
+	{
+		List	   *args;
+		bool		argsResolved = true;
+		Node	   *folded;
+
+		if (initValueIsNull)
+			args = list_make1(makeNullConst(aggform->aggtranstype, -1,
+											InvalidOid));
+		else
+			args = list_make1(make_init_value_const(aggform->aggtranstype,
+													InvalidOid, textInitVal));
+
+		/* the extra arguments of the final function are NULLs */
+		if (aggform->aggfinalextra)
+		{
+			foreach(lc, argtypes)
+			{
+				Oid			argtype = lfirst_oid(lc);
+
+				if (IsPolymorphicType(argtype) || argtype == ANYOID)
+					argsResolved = false;
+				args = lappend(args, makeNullConst(argtype, -1, InvalidOid));
+			}
+		}
+
+		if (argsResolved)
+		{
+			folded = eval_const_expressions(NULL, (Node *)
+											makeFuncExpr(aggform->aggfinalfn,
+														 aggtype, args,
+														 aggcollid,
+														 inputcollid,
+														 COERCE_EXPLICIT_CALL));
+			if (IsA(folded, Const))
+			{
+				*result = (Const *) folded;
+				derived = true;
+			}
+		}
+	}
+
+	ReleaseSysCache(aggTuple);
+
+	return derived;
+}
+
+/*
+ * agg_empty_input_is_null
+ *		Is the aggregate known to return NULL over empty input, whatever
+ *		the types it is called with?
+ */
+bool
+agg_empty_input_is_null(Oid aggfnoid)
+{
+	HeapTuple	procTuple;
+	Form_pg_proc procform;
+	List	   *argtypes = NIL;
+	Const	   *emptyConst;
+	int			i;
+
+	procTuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(aggfnoid));
+	if (!HeapTupleIsValid(procTuple))
+		elog(ERROR, "cache lookup failed for function %u", aggfnoid);
+	procform = (Form_pg_proc) GETSTRUCT(procTuple);
+
+	for (i = 0; i < procform->pronargs; i++)
+		argtypes = lappend_oid(argtypes, procform->proargtypes.values[i]);
+
+	/* The empty-input value does not depend on the collation. */
+	if (!get_agg_empty_input_const(aggfnoid, procform->prorettype,
+								   InvalidOid, InvalidOid, argtypes, NIL,
+								   &emptyConst))
+		emptyConst = NULL;
+
+	ReleaseSysCache(procTuple);
+
+	return emptyConst != NULL && emptyConst->constisnull;
+}
+
+/*
+ * Is it safe to evaluate the aggregate over empty input speculatively?
+ * Built-in aggregates support this.  For user-defined aggregates, a final
+ * function may throw on the initial state or have observable side effects;
+ * allow a final function only when strictness guarantees it will not be
+ * called.  An aggregate without a final function returns its initial state.
+ */
+bool
+agg_empty_input_is_safe(Oid aggfnoid)
+{
+	HeapTuple	aggTuple;
+	Form_pg_aggregate aggform;
+	bool		initValueIsNull;
+	bool		safe;
+
+	if (aggfnoid < FirstNormalObjectId)
+		return true;
+
+	aggTuple = SearchSysCache1(AGGFNOID, ObjectIdGetDatum(aggfnoid));
+	if (!HeapTupleIsValid(aggTuple))
+		elog(ERROR, "cache lookup failed for aggregate %u", aggfnoid);
+	aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
+	(void) SysCacheGetAttr(AGGFNOID, aggTuple,
+						  Anum_pg_aggregate_agginitval, &initValueIsNull);
+	safe = !OidIsValid(aggform->aggfinalfn) ||
+		(initValueIsNull && func_strict(aggform->aggfinalfn));
+	ReleaseSysCache(aggTuple);
+	return safe;
 }
 
 /* NOTIN subquery transformation -start */
