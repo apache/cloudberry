@@ -1,0 +1,88 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 400" width="100%" style="max-width:940px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace">
+ <defs>
+  <marker id="m174ask" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#8a6d1a"/></marker>
+  <marker id="m174ans" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#4a7c59"/></marker>
+  <marker id="m174inv" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#b04a4a"/></marker>
+ </defs>
+
+ <path d="M100,126 L100,48 L529,48 L529,126" fill="none" stroke="#b04a4a" stroke-width="1.4" stroke-dasharray="3 3" marker-end="url(#m174inv)"/>
+ <text x="315" y="40" font-size="9" fill="#b04a4a" text-anchor="middle">a catcache or relcache invalidation bumps a counter, MDCacheNeedsReset() sees it, CMDCache::Reset() throws the whole cache away</text>
+
+ <rect x="12" y="126" width="176" height="118" rx="6" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+ <text x="100" y="146" font-size="10.5" font-weight="bold" fill="#333" text-anchor="middle">PostgreSQL catalog</text>
+ <text x="100" y="164" font-size="9" fill="#555" text-anchor="middle">relcache + syscache</text>
+ <text x="100" y="186" font-size="9" fill="#333" text-anchor="middle">pg_class &#183; pg_attribute</text>
+ <text x="100" y="202" font-size="9" fill="#333" text-anchor="middle">pg_statistic (+ _ext)</text>
+ <text x="100" y="218" font-size="9" fill="#333" text-anchor="middle">gp_distribution_policy</text>
+ <text x="100" y="234" font-size="9" fill="#333" text-anchor="middle">pg_type &#183; pg_operator &#8230;</text>
+
+ <rect x="232" y="126" width="186" height="118" rx="6" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.5"/>
+ <text x="325" y="146" font-size="10.5" font-weight="bold" fill="#333" text-anchor="middle">CMDProviderRelcache</text>
+ <text x="325" y="164" font-size="9" fill="#555" text-anchor="middle">delegates straight to</text>
+ <text x="325" y="186" font-size="9" fill="#333" text-anchor="middle">CTranslatorRelcacheToDXL</text>
+ <text x="325" y="202" font-size="9" fill="#333" text-anchor="middle">::RetrieveObject(mdid)</text>
+ <text x="325" y="224" font-size="9" fill="#555" text-anchor="middle">the ONLY code here that</text>
+ <text x="325" y="238" font-size="9" fill="#555" text-anchor="middle">opens a Relation</text>
+
+ <rect x="458" y="126" width="142" height="118" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+ <text x="529" y="146" font-size="10.5" font-weight="bold" fill="#333" text-anchor="middle">CMDCache</text>
+ <text x="529" y="164" font-size="9" fill="#555" text-anchor="middle">one per backend</text>
+ <text x="529" y="186" font-size="9" fill="#333" text-anchor="middle">survives across</text>
+ <text x="529" y="202" font-size="9" fill="#333" text-anchor="middle">queries</text>
+ <text x="529" y="228" font-size="9" fill="#555" text-anchor="middle">quota 16384 kB</text>
+
+ <rect x="640" y="126" width="142" height="118" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+ <text x="711" y="146" font-size="10.5" font-weight="bold" fill="#333" text-anchor="middle">CMDAccessor</text>
+ <text x="711" y="164" font-size="9" fill="#555" text-anchor="middle">local hashtable</text>
+ <text x="711" y="186" font-size="9" fill="#333" text-anchor="middle">one per</text>
+ <text x="711" y="202" font-size="9" fill="#333" text-anchor="middle">optimization</text>
+ <text x="711" y="228" font-size="9" fill="#555" text-anchor="middle">+ deletion locks</text>
+
+ <rect x="822" y="126" width="106" height="118" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+ <text x="875" y="146" font-size="10.5" font-weight="bold" fill="#333" text-anchor="middle">ORCA</text>
+ <text x="875" y="164" font-size="9" fill="#555" text-anchor="middle">libgpopt</text>
+ <text x="875" y="190" font-size="9" fill="#333" text-anchor="middle">sees only</text>
+ <text x="875" y="206" font-size="9" fill="#333" text-anchor="middle">IMD*</text>
+ <text x="875" y="222" font-size="9" fill="#333" text-anchor="middle">interfaces</text>
+
+ <line x1="822" y1="106" x2="788" y2="106" stroke="#8a6d1a" stroke-width="1.6" marker-end="url(#m174ask)"/>
+ <line x1="640" y1="106" x2="606" y2="106" stroke="#8a6d1a" stroke-width="1.6" marker-end="url(#m174ask)"/>
+ <line x1="458" y1="106" x2="424" y2="106" stroke="#8a6d1a" stroke-width="1.6" marker-end="url(#m174ask)"/>
+ <line x1="232" y1="106" x2="194" y2="106" stroke="#8a6d1a" stroke-width="1.6" marker-end="url(#m174ask)"/>
+ <text x="802" y="94" font-size="9" fill="#8a6d1a" text-anchor="middle">1 ask by mdid</text>
+ <text x="620" y="94" font-size="9" fill="#8a6d1a" text-anchor="middle">2 miss in local HT</text>
+ <text x="438" y="94" font-size="9" fill="#8a6d1a" text-anchor="middle">3 miss in MD cache</text>
+ <text x="210" y="94" font-size="9" fill="#8a6d1a" text-anchor="middle">4 provider fetch</text>
+
+ <line x1="192" y1="266" x2="228" y2="266" stroke="#4a7c59" stroke-width="1.6" marker-end="url(#m174ans)"/>
+ <line x1="422" y1="266" x2="454" y2="266" stroke="#4a7c59" stroke-width="1.6" marker-end="url(#m174ans)"/>
+ <line x1="604" y1="266" x2="636" y2="266" stroke="#4a7c59" stroke-width="1.6" marker-end="url(#m174ans)"/>
+ <line x1="786" y1="266" x2="818" y2="266" stroke="#4a7c59" stroke-width="1.6" marker-end="url(#m174ans)"/>
+ <text x="210" y="284" font-size="9" fill="#4a7c59" text-anchor="middle">5 catalog rows</text>
+ <text x="438" y="284" font-size="9" fill="#4a7c59" text-anchor="middle">6 a DXL MD object</text>
+ <text x="620" y="284" font-size="9" fill="#4a7c59" text-anchor="middle">7 insert + pin</text>
+ <text x="802" y="284" font-size="9" fill="#4a7c59" text-anchor="middle">8 const pointer</text>
+
+ <line x1="438" y1="306" x2="438" y2="274" stroke="#cdb4db" stroke-width="1.2" stroke-dasharray="3 3"/>
+ <rect x="232" y="306" width="368" height="52" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+ <text x="416" y="324" font-size="9" fill="#333" text-anchor="middle">&#10214; IMDRelation &#183; IMDIndex &#183; IMDColStats &#183; IMDRelStats &#183; IMDExtStats</text>
+ <text x="416" y="342" font-size="9" fill="#333" text-anchor="middle">IMDType &#183; IMDScalarOp &#183; IMDAggregate &#183; IMDFunction &#183; IMDCast &#183; IMDScCmp &#10215;</text>
+</svg>

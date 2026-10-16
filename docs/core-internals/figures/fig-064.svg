@@ -1,0 +1,104 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 425" width="100%" style="min-width:640px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace" role="img" aria-label="CGroupOpsRoutine vtable dispatch">
+  <defs>
+    <marker id="rgah" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L9,3.5 L0,7 z" fill="#6b5b8a"/></marker>
+    <marker id="rgahd" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L9,3.5 L0,7 z" fill="#999"/></marker>
+  </defs>
+
+  <text x="10" y="22" font-size="11.5" fill="#8a6d1a">gp_resource_manager  (PGC_POSTMASTER, guc_gp.c:4939)</text>
+
+  <rect x="10" y="34" width="248" height="38" rx="5" fill="#eafaf0" stroke="#7fae94" stroke-width="1.2"/>
+  <text x="22" y="50" font-size="12" fill="#20402e">'queue'</text>
+  <text x="22" y="64" font-size="9.5" fill="#4a6b57">this cluster</text>
+
+  <rect x="10" y="80" width="248" height="38" rx="5" fill="#f5edff" stroke="#cdb4db" stroke-width="1.2"/>
+  <text x="22" y="96" font-size="12" fill="#3a2b4a">'group'</text>
+  <text x="22" y="110" font-size="9.5" fill="#6b5b8a">Linux cgroup v1</text>
+
+  <rect x="10" y="126" width="248" height="38" rx="5" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.6"/>
+  <text x="22" y="142" font-size="12" fill="#5c4708">⟦'group-v2'⟧</text>
+  <text x="22" y="156" font-size="9.5" fill="#8a6d1a">Linux cgroup v2</text>
+
+  <rect x="10" y="172" width="248" height="38" rx="5" fill="#f2f2f2" stroke="#bbb" stroke-width="1.2"/>
+  <text x="22" y="188" font-size="12" fill="#555">non-Linux build</text>
+  <text x="22" y="202" font-size="9.5" fill="#777">the #else branch</text>
+
+  <line x1="258" y1="53" x2="316" y2="53" stroke="#999" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#rgahd)"/>
+  <line x1="258" y1="99" x2="316" y2="99" stroke="#6b5b8a" stroke-width="1.4" marker-end="url(#rgah)"/>
+  <line x1="258" y1="145" x2="316" y2="145" stroke="#6b5b8a" stroke-width="1.8" marker-end="url(#rgah)"/>
+  <line x1="258" y1="191" x2="316" y2="191" stroke="#6b5b8a" stroke-width="1.4" marker-end="url(#rgah)"/>
+
+  <rect x="318" y="34" width="252" height="38" rx="5" fill="#fafafa" stroke="#bbb" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="328" y="50" font-size="11" fill="#666">initCgroup never called</text>
+  <text x="328" y="64" font-size="9.5" fill="#888">postmaster.c:1671 gate is false</text>
+
+  <rect x="318" y="80" width="252" height="38" rx="5" fill="#f5edff" stroke="#cdb4db" stroke-width="1.2"/>
+  <text x="328" y="96" font-size="11" fill="#3a2b4a">get_group_routine_v1</text>
+  <text x="328" y="110" font-size="9.5" fill="#6b5b8a">cgroup-ops-linux-v1.c:1203  →  :1170</text>
+
+  <rect x="318" y="126" width="252" height="38" rx="5" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.6"/>
+  <text x="328" y="142" font-size="11" fill="#5c4708">get_group_routine_v2</text>
+  <text x="328" y="156" font-size="9.5" fill="#8a6d1a">cgroup-ops-linux-v2.c:954  →  :921</text>
+
+  <rect x="318" y="172" width="252" height="38" rx="5" fill="#f2f2f2" stroke="#bbb" stroke-width="1.2"/>
+  <text x="328" y="188" font-size="11" fill="#555">get_cgroup_routine_dummy</text>
+  <text x="328" y="202" font-size="9.5" fill="#777">cgroup-ops-dummy.c:294  →  :261</text>
+
+  <line x1="570" y1="99" x2="626" y2="120" stroke="#6b5b8a" stroke-width="1.4" marker-end="url(#rgah)"/>
+  <line x1="570" y1="145" x2="626" y2="132" stroke="#6b5b8a" stroke-width="1.8" marker-end="url(#rgah)"/>
+  <line x1="570" y1="191" x2="626" y2="144" stroke="#6b5b8a" stroke-width="1.4" marker-end="url(#rgah)"/>
+  <line x1="570" y1="53" x2="626" y2="112" stroke="#999" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#rgahd)"/>
+
+  <rect x="628" y="98" width="262" height="52" rx="6" fill="#f5edff" stroke="#8a6d1a" stroke-width="1.8"/>
+  <text x="640" y="118" font-size="12" fill="#3a2b4a">⟦cgroupOpsRoutine⟧</text>
+  <text x="640" y="134" font-size="9.5" fill="#6b5b8a">resgroup.c:188 — one global pointer,</text>
+  <text x="640" y="145" font-size="9.5" fill="#6b5b8a">NULL when the manager is 'queue'</text>
+
+  <line x1="759" y1="150" x2="759" y2="216" stroke="#6b5b8a" stroke-width="1.6" marker-end="url(#rgah)"/>
+
+  <rect x="318" y="218" width="572" height="46" rx="6" fill="#eafaf0" stroke="#7fae94" stroke-width="1.4"/>
+  <text x="330" y="237" font-size="11.5" fill="#20402e">cgroupOpsRoutine-&gt;attachcgroup(self-&gt;groupId, MyProcPid, ...)</text>
+  <text x="330" y="253" font-size="9.5" fill="#4a6b57">resgroup.c:1604 on the QD  ·  resgroup.c:1777 on every QE, on every host</text>
+
+  <line x1="412" y1="264" x2="412" y2="292" stroke="#6b5b8a" stroke-width="1.3" marker-end="url(#rgah)"/>
+  <line x1="604" y1="264" x2="604" y2="292" stroke="#6b5b8a" stroke-width="1.3" marker-end="url(#rgah)"/>
+  <line x1="796" y1="264" x2="796" y2="292" stroke="#6b5b8a" stroke-width="1.3" marker-end="url(#rgah)"/>
+
+  <rect x="318" y="294" width="188" height="62" rx="5" fill="#f5edff" stroke="#cdb4db" stroke-width="1.2"/>
+  <text x="328" y="311" font-size="10.5" fill="#3a2b4a">v1 writes the pid to</text>
+  <text x="328" y="326" font-size="9" fill="#6b5b8a">/sys/fs/cgroup/cpu/gpdb/</text>
+  <text x="328" y="338" font-size="9" fill="#6b5b8a">&lt;groupOid&gt;/tasks</text>
+  <text x="328" y="351" font-size="8.5" fill="#8a6d1a">one path per controller</text>
+
+  <rect x="510" y="294" width="188" height="62" rx="5" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.4"/>
+  <text x="520" y="311" font-size="10.5" fill="#5c4708">v2 writes the pid to</text>
+  <text x="520" y="326" font-size="9" fill="#8a6d1a">/sys/fs/cgroup/gpdb.service/</text>
+  <text x="520" y="338" font-size="9" fill="#8a6d1a">&lt;groupOid&gt;/cgroup.procs</text>
+  <text x="520" y="351" font-size="8.5" fill="#8a6d1a">one unified path</text>
+
+  <rect x="702" y="294" width="188" height="62" rx="5" fill="#f2f2f2" stroke="#bbb" stroke-width="1.2"/>
+  <text x="712" y="311" font-size="10.5" fill="#555">dummy emits</text>
+  <text x="712" y="326" font-size="9" fill="#777">WARNING: resource group is</text>
+  <text x="712" y="338" font-size="9" fill="#777">not supported on this system</text>
+
+  <text x="10" y="382" font-size="10.5" fill="#8a6d1a">The generation is not detected at run time. It is declared by the administrator through gp_resource_manager,</text>
+  <text x="10" y="397" font-size="10.5" fill="#8a6d1a">and the server merely verifies the declaration — probecgroup() plus the mount-type test in cgroup.c:602 / :620.</text>
+  <text x="10" y="415" font-size="10" fill="#666">The v1 base directory is hardcoded as /gpdb under each controller (cgroup.c:150); only v2 honours gp_resource_group_cgroup_parent.</text>
+</svg>

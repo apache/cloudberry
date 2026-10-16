@@ -1,0 +1,44 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 250" width="100%" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5">
+  <defs>
+    <marker id="s142m2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8a6d1a"/></marker>
+  </defs>
+
+  <rect x="12" y="40" width="300" height="170" rx="10" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <text x="162" y="30" text-anchor="middle" font-weight="bold" fill="#6b4fa0">pg_statistic_ext  (definition)</text>
+  <text x="30" y="70" fill="#3a3350">stxname   = s142_dep</text>
+  <text x="30" y="98" fill="#3a3350">stxrelid  = s142_t</text>
+  <text x="30" y="126" fill="#3a3350">stxkeys   = ⟦2 3⟧</text>
+  <text x="30" y="154" fill="#3a3350">stxkind   = {f}</text>
+  <text x="30" y="188" fill="#8a6d1a" font-size="11">written by CREATE STATISTICS</text>
+
+  <rect x="448" y="40" width="300" height="170" rx="10" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <text x="598" y="30" text-anchor="middle" font-weight="bold" fill="#2e8b57">pg_statistic_ext_data  (computed)</text>
+  <text x="466" y="70" fill="#3a3350">stxoid    = s142_dep</text>
+  <text x="466" y="98" fill="#3a3350">stxdinherit = f</text>
+  <text x="466" y="130" fill="#8a6d1a" font-weight="bold">stxddependencies:</text>
+  <text x="480" y="154" fill="#2e8b57">"2 =&gt; 3": 1.0</text>
+  <text x="480" y="174" fill="#2e8b57">"3 =&gt; 2": 1.0</text>
+  <text x="466" y="200" fill="#2e8b57" font-size="11">written by ANALYZE</text>
+
+  <line x1="316" y1="125" x2="444" y2="125" stroke="#8a6d1a" stroke-width="2" marker-end="url(#s142m2)"/>
+  <text x="380" y="115" text-anchor="middle" fill="#8a6d1a" font-size="11">ANALYZE</text>
+  <text x="380" y="148" text-anchor="middle" fill="#8a6d1a" font-size="11">builds</text>
+</svg>

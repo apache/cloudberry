@@ -1,0 +1,45 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 190" width="100%" style="height:auto;display:block;min-width:600px" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11">
+      <defs>
+      <marker id="ax" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8a7aa8"/></marker>
+      </defs>
+      <rect x="40" y="55" width="220" height="34" fill="#eafaf0" stroke="#cfead9"/>
+      <rect x="260" y="55" width="300" height="34" fill="#faf6ff" stroke="#cdb4db"/>
+      <rect x="560" y="55" width="120" height="34" fill="#f4f5f6" stroke="#eef0f2"/>
+      <rect x="330" y="55" width="26" height="34" fill="#fff4d6" stroke="#e0b365"/>
+      <rect x="452" y="55" width="26" height="34" fill="#fff4d6" stroke="#e0b365"/>
+      <text x="150" y="76" text-anchor="middle" fill="#6b8a76">settled (finished)</text>
+      <text x="410" y="46" text-anchor="middle" fill="#6b5b95">visible window  [xmin, xmax)</text>
+      <text x="620" y="76" text-anchor="middle" fill="#8a939c">future</text>
+      <text x="343" y="105" text-anchor="middle" fill="#8a6d1a">xip</text>
+      <text x="465" y="105" text-anchor="middle" fill="#8a6d1a">xip</text>
+      <text x="343" y="118" text-anchor="middle" fill="#8a6d1a">running</text>
+      <text x="465" y="118" text-anchor="middle" fill="#8a6d1a">running</text>
+      <line x1="30" y1="72" x2="700" y2="72" stroke="#8a7aa8" stroke-width="1.2" marker-end="url(#ax)"/>
+      <text x="700" y="60" text-anchor="end" fill="#8a7aa8">xid axis →</text>
+      <line x1="260" y1="50" x2="260" y2="140" stroke="#8a7aa8" stroke-dasharray="3 3"/>
+      <line x1="560" y1="50" x2="560" y2="140" stroke="#8a7aa8" stroke-dasharray="3 3"/>
+      <text x="260" y="155" text-anchor="middle" fill="#1f2328">xmin</text>
+      <text x="560" y="155" text-anchor="middle" fill="#1f2328">xmax</text>
+      <text x="260" y="170" text-anchor="middle" fill="#8a7aa8">visible below</text>
+      <text x="560" y="170" text-anchor="middle" fill="#8a7aa8">invisible at/above</text>
+      <text x="150" y="24" text-anchor="middle" fill="#1f2328">visibility by CLOG only</text>
+      <text x="410" y="132" text-anchor="middle" fill="#6b5b95">visible unless listed in xip[]</text>
+      </svg>

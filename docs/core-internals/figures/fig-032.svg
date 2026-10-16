@@ -1,0 +1,61 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 540" style="width:100%;max-width:820px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px">
+  <defs><marker id="p151ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#6b5b8a"/></marker></defs>
+  <!-- Query box -->
+  <rect x="16" y="16" width="360" height="360" rx="9" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <text x="30" y="40" font-weight="700" fill="#4b3a6b">Query   ⟦parsenodes.h:153⟧</text>
+  <!-- rtable -->
+  <text x="30" y="70" fill="#4b3a6b">rtable  (List of RangeTblEntry)</text>
+  <rect x="34" y="80" width="322" height="46" rx="6" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <text x="46" y="100" fill="#2f6b47">[0] RTE  p151_t   rtekind=RELATION</text>
+  <text x="46" y="118" fill="#7a8c82">relid=18060  rt_index 1</text>
+  <!-- jointree -->
+  <text x="30" y="152" fill="#4b3a6b">jointree  (FromExpr)</text>
+  <rect x="34" y="162" width="322" height="86" rx="6" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.5"/>
+  <text x="46" y="184" fill="#6b5310" font-weight="700">FromExpr</text>
+  <text x="46" y="204" fill="#6b5310">fromlist: [ RangeTblRef 1 ]</text>
+  <text x="46" y="226" fill="#6b5310">quals:    category = 3     &#8592; WHERE</text>
+  <!-- targetList -->
+  <text x="30" y="278" fill="#4b3a6b">targetList  (List of TargetEntry)</text>
+  <rect x="34" y="288" width="322" height="46" rx="6" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <text x="46" y="308" fill="#2f6b47">[0] resno 1  id      [1] resno 2  amount</text>
+  <text x="46" y="326" fill="#7a8c82">the SELECT projection / output columns</text>
+  <text x="30" y="360" fill="#7a8c82">+ sortClause, groupClause, havingQual, ...</text>
+  <!-- PlannerInfo box -->
+  <rect x="470" y="16" width="330" height="128" rx="9" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.5"/>
+  <text x="484" y="40" font-weight="700" fill="#6b5310">PlannerInfo *root   ⟦pathnodes.h:271⟧</text>
+  <text x="484" y="66" fill="#6b5310">parse            &#8594; the Query</text>
+  <text x="484" y="88" fill="#6b5310">simple_rte_array &#8594; rtable</text>
+  <text x="484" y="110" fill="#6b5310">simple_rel_array[ ]  &#8595;</text>
+  <text x="484" y="132" fill="#6b5310">eq_classes, ...  (the clipboard)</text>
+  <!-- RelOptInfo array -->
+  <rect x="470" y="200" width="330" height="176" rx="9" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <text x="484" y="224" font-weight="700" fill="#2f6b47">simple_rel_array   ⟦pathnodes.h:1034⟧</text>
+  <rect x="484" y="238" width="300" height="58" rx="6" fill="#ffffff" stroke="#cfead9" stroke-width="1.5"/>
+  <text x="496" y="258" fill="#2f6b47">[1] RelOptInfo  (baserel, relid 1)</text>
+  <text x="496" y="278" fill="#7a8c82">rows=200  width=10   reltarget</text>
+  <rect x="484" y="306" width="300" height="56" rx="6" fill="#ffffff" stroke="#cfead9" stroke-width="1.5"/>
+  <text x="496" y="328" fill="#2f6b47">pathlist &#8594; [ &#9633; &#9633; &#9633; ]</text>
+  <text x="496" y="348" fill="#7a8c82">candidate access paths (empty until §15.3)</text>
+  <!-- arrows -->
+  <path d="M470,72 L392,72" stroke="#6b5b8a" stroke-width="1.5" fill="none" marker-end="url(#p151ar)"/>
+  <text x="398" y="66" fill="#6b5b8a">parse</text>
+  <path d="M635,144 L635,200" stroke="#6b5b8a" stroke-width="1.5" fill="none" marker-end="url(#p151ar)"/>
+</svg>

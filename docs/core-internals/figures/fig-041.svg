@@ -1,0 +1,51 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,monospace" font-size="12">
+  <defs><marker id="m164a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8a6d1a"/></marker></defs>
+  <text x="20" y="20" font-weight="bold" fill="#5b4b8a">seg0</text>
+  <text x="260" y="20" font-weight="bold" fill="#5b4b8a">seg1</text>
+  <text x="500" y="20" font-weight="bold" fill="#5b4b8a">seg2</text>
+  <!-- raw rows -->
+  <rect x="15" y="30" width="120" height="42" rx="6" fill="#f5edff" stroke="#cdb4db"/><text x="24" y="48">Seq Scan</text><text x="24" y="64">~33 333 rows</text>
+  <rect x="255" y="30" width="120" height="42" rx="6" fill="#f5edff" stroke="#cdb4db"/><text x="264" y="48">Seq Scan</text><text x="264" y="64">~33 333 rows</text>
+  <rect x="495" y="30" width="120" height="42" rx="6" fill="#f5edff" stroke="#cdb4db"/><text x="504" y="48">Seq Scan</text><text x="504" y="64">~33 333 rows</text>
+  <!-- partial agg -->
+  <line x1="75" y1="72" x2="75" y2="96" stroke="#8a6d1a" stroke-width="1.5" marker-end="url(#m164a)"/>
+  <line x1="315" y1="72" x2="315" y2="96" stroke="#8a6d1a" stroke-width="1.5" marker-end="url(#m164a)"/>
+  <line x1="555" y1="72" x2="555" y2="96" stroke="#8a6d1a" stroke-width="1.5" marker-end="url(#m164a)"/>
+  <rect x="15" y="98" width="120" height="46" rx="6" fill="#fff4d6" stroke="#8a6d1a"/><text x="24" y="116">Partial Agg</text><text x="24" y="134">⟦≤50 rows⟧</text>
+  <rect x="255" y="98" width="120" height="46" rx="6" fill="#fff4d6" stroke="#8a6d1a"/><text x="264" y="116">Partial Agg</text><text x="264" y="134">⟦≤50 rows⟧</text>
+  <rect x="495" y="98" width="120" height="46" rx="6" fill="#fff4d6" stroke="#8a6d1a"/><text x="504" y="116">Partial Agg</text><text x="504" y="134">⟦≤50 rows⟧</text>
+  <!-- redistribute -->
+  <line x1="75" y1="144" x2="150" y2="196" stroke="#8a6d1a" stroke-width="1.5" marker-end="url(#m164a)"/>
+  <line x1="315" y1="144" x2="330" y2="196" stroke="#8a6d1a" stroke-width="1.5" marker-end="url(#m164a)"/>
+  <line x1="555" y1="144" x2="500" y2="196" stroke="#8a6d1a" stroke-width="1.5" marker-end="url(#m164a)"/>
+  <line x1="315" y1="144" x2="150" y2="196" stroke="#8a6d1a" stroke-width="0.8" stroke-dasharray="3 3"/>
+  <line x1="555" y1="144" x2="330" y2="196" stroke="#8a6d1a" stroke-width="0.8" stroke-dasharray="3 3"/>
+  <text x="250" y="180" fill="#8a6d1a">Redistribute Motion 3:3  (Hash Key: cat)</text>
+  <!-- finalize -->
+  <rect x="15" y="198" width="185" height="46" rx="6" fill="#eafaf0" stroke="#cfead9"/><text x="24" y="216">Finalize Agg</text><text x="24" y="234">groups A..Q</text>
+  <rect x="255" y="198" width="185" height="46" rx="6" fill="#eafaf0" stroke="#cfead9"/><text x="264" y="216">Finalize Agg</text><text x="264" y="234">groups R..Z</text>
+  <rect x="495" y="198" width="120" height="46" rx="6" fill="#eafaf0" stroke="#cfead9"/><text x="504" y="216">Finalize Agg</text><text x="504" y="234">...</text>
+  <!-- gather -->
+  <line x1="107" y1="244" x2="300" y2="298" stroke="#8a6d1a" stroke-width="1.5" marker-end="url(#m164a)"/>
+  <line x1="347" y1="244" x2="330" y2="298" stroke="#8a6d1a" stroke-width="1.5" marker-end="url(#m164a)"/>
+  <line x1="555" y1="244" x2="360" y2="298" stroke="#8a6d1a" stroke-width="1.5" marker-end="url(#m164a)"/>
+  <rect x="230" y="300" width="200" height="42" rx="6" fill="#f5edff" stroke="#cdb4db"/><text x="240" y="318" font-weight="bold" fill="#5b4b8a">Gather Motion 3:1  →  QD</text><text x="240" y="336">50 final rows</text>
+ </svg>
