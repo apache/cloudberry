@@ -804,6 +804,12 @@ typedef struct EState
 	 */
 	List	   *es_insert_pending_result_relations;
 	List	   *es_insert_pending_modifytables;
+
+	/*
+	 * Longest accumulated consumer wait in this query/process, in seconds.
+	 * Available to executor hooks even when instrumentation is disabled.
+	 */
+	double		es_cross_slice_wait;
 } EState;
 
 struct PlanState;
@@ -2716,6 +2722,9 @@ typedef struct ShareInputScanState
 	struct shareinput_Xslice_reference *ref;
 
 	bool		isready;
+
+	/* Consumer wait for the producer's shared tuplestore, across rescans. */
+	instr_time	waitready_time;
 } ShareInputScanState;
 
 /* XXX Should move into buf file */
