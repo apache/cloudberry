@@ -963,3 +963,96 @@ anser_test_pushdown_target(PG_FUNCTION_ARGS)
 
 	PG_RETURN_DATUM(HeapTupleGetDatum(heap_form_tuple(tupdesc, values, nulls)));
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * How many producers a slice runs
+ * ---------------------------------------------------------------------------
+ */
+
+PG_FUNCTION_INFO_V1(anser_test_slice_producers);
+
+/*
+ * AnserSliceProducers() over a hand-built PlanSlice.
+ *
+ * The count is the channel's completion criterion, and FillSliceGangInfo gives
+ * a different answer per gang type -- so the cases below are the four formulas
+ * it uses, plus the boundaries where the slice cannot be identified at all.
+ * Nothing is executed: the function reads the slice array and nothing else.
+ *
+ * `gang` names the gang type; `direct` is the direct-dispatch content list,
+ * or NULL for no direct dispatch.  `slice_index` is what to ask about, so a
+ * caller can also probe outside the array.
+ */
+Datum
+anser_test_slice_producers(PG_FUNCTION_ARGS)
+{
+	char	   *gang = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	int32		numsegments = PG_GETARG_INT32(1);
+	int32		parallel_workers = PG_GETARG_INT32(2);
+	int32		slice_index = PG_GETARG_INT32(4);
+	PlannedStmt *stmt = makeNode(PlannedStmt);
+	PlanSlice	slice;
+
+	MemSet(&slice, 0, sizeof(slice));
+
+	if (strcmp(gang, "unallocated") == 0)
+		slice.gangType = GANGTYPE_UNALLOCATED;
+	else if (strcmp(gang, "entrydb") == 0)
+		slice.gangType = GANGTYPE_ENTRYDB_READER;
+	else if (strcmp(gang, "singleton") == 0)
+		slice.gangType = GANGTYPE_SINGLETON_READER;
+	else if (strcmp(gang, "reader") == 0)
+		slice.gangType = GANGTYPE_PRIMARY_READER;
+	else if (strcmp(gang, "writer") == 0)
+		slice.gangType = GANGTYPE_PRIMARY_WRITER;
+	else
+		elog(ERROR, "anser_test: unknown gang type \"%s\"", gang);
+
+	slice.numsegments = numsegments;
+	slice.parallel_workers = parallel_workers;
+
+	if (!PG_ARGISNULL(3))
+	{
+		ArrayType  *direct = PG_GETARG_ARRAYTYPE_P(3);
+		Datum	   *elems;
+		bool	   *nulls;
+		int			nelems;
+		int			i;
+
+		deconstruct_array(direct, INT4OID, sizeof(int32), true, TYPALIGN_INT,
+						  &elems, &nulls, &nelems);
+
+		slice.directDispatch.isDirectDispatch = true;
+		for (i = 0; i < nelems; i++)
+		{
+			if (nulls[i])
+				elog(ERROR, "anser_test: direct dispatch list may not contain NULLs");
+			slice.directDispatch.contentIds =
+				lappend_int(slice.directDispatch.contentIds,
+							DatumGetInt32(elems[i]));
+		}
+	}
+
+	stmt->numSlices = 1;
+	stmt->slices = &slice;
+
+	PG_RETURN_INT32(AnserSliceProducers(stmt, slice_index));
+}
+
+PG_FUNCTION_INFO_V1(anser_test_unsubscribes);
+
+/*
+ * Withdrawals the coordinator has honoured in this backend.
+ *
+ * A consumer that runs out of time says so, and the coordinator drops it from
+ * the channel rather than delivering 1-64 MB to a process that has moved on.
+ * Nothing else in the system records that it happened: the channel is gone by
+ * the time the query returns, and a filter that simply arrived late looks the
+ * same from SQL.  A test reads the difference across a query.
+ */
+Datum
+anser_test_unsubscribes(PG_FUNCTION_ARGS)
+{
+	PG_RETURN_INT64(AnserDispatchUnsubscribeCount());
+}

@@ -129,3 +129,25 @@ CREATE FUNCTION anser_test_pushdown_target(
 RETURNS record
 AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT;
+
+-- How many producers a slice runs, which is what a channel waits for.
+-- FillSliceGangInfo() has one formula per gang type, so `gang` selects it:
+-- 'unallocated', 'entrydb', 'singleton', 'reader' or 'writer'.  `direct` is
+-- the direct-dispatch content list, or NULL for none.  `slice_index` lets a
+-- caller ask about a slice outside the array.
+CREATE FUNCTION anser_test_slice_producers(
+    gang text,
+    numsegments int4,
+    parallel_workers int4,
+    direct int4[],
+    slice_index int4)
+RETURNS int4
+AS 'MODULE_PATHNAME'
+LANGUAGE C CALLED ON NULL INPUT;
+
+-- Withdrawals the coordinator has honoured in this backend, so a test can see
+-- that a consumer which ran out of time actually said so.
+CREATE FUNCTION anser_test_unsubscribes()
+RETURNS int8
+AS 'MODULE_PATHNAME'
+LANGUAGE C STRICT;

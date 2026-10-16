@@ -66,6 +66,7 @@
 #include "cdb/cdbdisp.h"
 #include "cdb/cdbdispatchresult.h"
 #include "cdb/cdbvars.h"
+#include "utils/faultinjector.h"
 #include "common/base64.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
@@ -90,6 +91,15 @@ typedef struct AnserDispChannel
 } AnserDispChannel;
 
 static HTAB *AnserDispChannels = NULL;
+
+/*
+ * Withdrawals honoured since the backend started.  Only a test reads it: an
+ * unsubscribe leaves no other trace, because the channel it touches is gone
+ * by the time the query returns.  Counting them is how we tell "the consumer
+ * withdrew and the coordinator acted on it" from "the filter happened to
+ * arrive in time", which look identical from SQL.
+ */
+static int64 AnserDispUnsubscribes = 0;
 static MemoryContext AnserDispContext = NULL;
 
 static AnserDispChannel *anser_disp_lookup(const AnserChannelKey *key, bool create);
@@ -118,6 +128,15 @@ anser_conn_error(const PGconn *conn)
 	if (PQExpBufferBroken(&conn->errorMessage))
 		return "out of memory";
 	return conn->errorMessage.data;
+}
+
+/*
+ * How many withdrawals this backend has honoured.  For tests; see the counter.
+ */
+int64
+AnserDispatchUnsubscribeCount(void)
+{
+	return AnserDispUnsubscribes;
 }
 
 /*
@@ -273,6 +292,27 @@ AnserDispatchNotifyHandler(struct CdbDispatchResult *dispatchResult,
 			(void) anser_disp_push(conn, chan);
 		else
 			chan->subscribers = lappend(chan->subscribers, conn);
+	}
+	else if (msg.kind == ANSER_WIRE_KIND_UNSUBSCRIBE)
+	{
+		PGconn	   *conn = dr->segdbDesc->conn;
+
+		/*
+		 * The consumer ran out of time and is no longer reading for us.
+		 * Delivering anyway would put 1-64 MB on a connection whose other end
+		 * is busy elsewhere, and the message would then have to be recognised
+		 * and skipped by whatever reads it next.
+		 *
+		 * This narrows the window rather than closing it: the withdrawal can
+		 * arrive while delivery is already under way, which is why the push
+		 * never blocks and why every reader of this connection still has to
+		 * tolerate a message that is not its own.
+		 */
+		ANSER_DEBUG("anser: QD unsubscribe cond=%u from seg%d (%d subscriber(s) before)",
+					msg.key.condition_id, sender,
+					list_length(chan->subscribers));
+		chan->subscribers = list_delete_ptr(chan->subscribers, conn);
+		AnserDispUnsubscribes++;
 	}
 	else if (msg.kind == ANSER_WIRE_KIND_PART)
 	{
@@ -445,6 +485,15 @@ anser_disp_deliver(AnserDispChannel *chan)
 {
 	ListCell   *lc;
 
+	/*
+	 * Hold the delivery back, so a test can let every consumer reach its
+	 * deadline first and then be delivered to anyway.  That ordering is what
+	 * puts a filter on a connection nobody is reading, and it cannot be
+	 * arranged with data: the channel completes when the last part lands,
+	 * which is normally while the consumers are still waiting for it.
+	 */
+	SIMPLE_FAULT_INJECTOR("anser_before_deliver");
+
 	ANSER_DEBUG("anser: QD delivering cond=%u to %d subscriber(s)",
 				chan->key.condition_id, list_length(chan->subscribers));
 	foreach(lc, chan->subscribers)
@@ -497,9 +546,31 @@ anser_disp_push(PGconn *conn, AnserDispChannel *chan)
 		pqPutInt(keylen, 4, conn) < 0 ||
 		pqPutnchar(chan->key.condition_key, keylen, conn) < 0 ||
 		pqPutInt(paylen, 4, conn) < 0 ||
-		(paylen > 0 && pqPutnchar(chan->payload, paylen, conn) < 0) ||
-		pqPutMsgEnd(conn) < 0 ||
-		pqFlush(conn) < 0)
+		(paylen > 0 && pqPutnchar(chan->payload, paylen, conn) < 0))
+	{
+		elog(LOG, "anser: could not deliver filter for condition %u: %s",
+			 chan->key.condition_id, anser_conn_error(conn));
+		return false;
+	}
+
+	/*
+	 * Nothing above this point can block -- those calls only grow the output
+	 * buffer.  The two that can are avoided deliberately, because this runs
+	 * inside the dispatcher loop and a merged filter is 1-64 MB headed for a
+	 * peer that may have stopped reading: a consumer that gave up on its
+	 * deadline stays subscribed until it can say otherwise.
+	 *
+	 * pqPutMsgEnd() flushes by itself once the buffer passes 8 kB, and a
+	 * blocking pqFlush() then waits in pqWait() with no deadline and no
+	 * CHECK_FOR_INTERRUPTS.  Either one strands the coordinator: it stops
+	 * serving every other segment, and the query cannot even be cancelled.
+	 *
+	 * So queue the bytes and let the dispatcher's own poll() place them when
+	 * the peer makes room.  A positive return says part of the message is
+	 * still queued, which is an outcome and not a failure.
+	 */
+	pqPutMsgEndNoAutoFlush(conn);
+	if (pqFlushNonBlocking(conn) < 0)
 	{
 		elog(LOG, "anser: could not deliver filter for condition %u: %s",
 			 chan->key.condition_id, anser_conn_error(conn));
@@ -555,7 +626,9 @@ AnserWireParse(const char *msg, AnserWireMsg *out)
 			   &keylen, &bodylen, &crc) != 11)
 		return false;
 
-	if (kind != ANSER_WIRE_KIND_PART && kind != ANSER_WIRE_KIND_SUBSCRIBE)
+	if (kind != ANSER_WIRE_KIND_PART &&
+		kind != ANSER_WIRE_KIND_SUBSCRIBE &&
+		kind != ANSER_WIRE_KIND_UNSUBSCRIBE)
 		return false;
 	if (keylen >= ANSER_CONDITION_KEY_SIZE)
 		return false;

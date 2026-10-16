@@ -153,9 +153,9 @@ RESET gp_enable_runtime_filter_pushdown;
 -- built on `id` -- and since no payload is ever a build key, every row is
 -- discarded.  Both counts must be 200.
 SET optimizer = on;
-CREATE TABLE anser_rf_proj_build (id int) DISTRIBUTED BY (id);
+CREATE TABLE anser_rf_proj_build (id int, pad text) DISTRIBUTED BY (pad);
 CREATE TABLE anser_rf_proj_probe (payload int, id int) DISTRIBUTED BY (id);
-INSERT INTO anser_rf_proj_build SELECT g FROM generate_series(1, 200) g;
+INSERT INTO anser_rf_proj_build SELECT g, 'b' || g FROM generate_series(1, 200) g;
 INSERT INTO anser_rf_proj_probe SELECT -g, g FROM generate_series(1, 2000) g;
 ANALYZE anser_rf_proj_build;
 ANALYZE anser_rf_proj_probe;
@@ -376,7 +376,7 @@ DROP TABLE anser_rf_z_on, anser_rf_z_off, anser_rf_build_z, anser_rf_probe_z;
 -- makes a stale filter visible: with the first group's filter still in place
 -- the second group matches nothing.
 CREATE TABLE anser_rf_nl_outer (g int) DISTRIBUTED REPLICATED;
-CREATE TABLE anser_rf_nl_build (g int, id int) DISTRIBUTED BY (id);
+CREATE TABLE anser_rf_nl_build (g int, id int) DISTRIBUTED BY (g);
 CREATE TABLE anser_rf_nl_probe (id int) DISTRIBUTED BY (id);
 INSERT INTO anser_rf_nl_outer VALUES (1), (2);
 INSERT INTO anser_rf_nl_build SELECT 1, g FROM generate_series(1, 100) g;
@@ -496,6 +496,109 @@ SELECT gp_inject_fault('nextval_sideband_before_response', 'reset', dbid)
 
 DROP SEQUENCE anser_rf_seq;
 DROP TABLE anser_rf_seq_t;
+-- Delivery to a consumer that stopped reading must not block the coordinator.
+--
+-- A merged filter is 1-64 MB and the dispatch connections are blocking, so
+-- pushing to a QE that is no longer reading used to wait in pqWait() with no
+-- deadline and no CHECK_FOR_INTERRUPTS -- inside the dispatcher loop, which
+-- then served nobody.  Neither cancel nor statement_timeout could end it.
+--
+-- The ordering cannot be arranged with data: the channel completes when the
+-- last part lands, which is normally while the consumers are still waiting.
+-- Holding the delivery back is what lets every consumer reach its deadline
+-- and move on to its probe side -- and it is while they are busy there that
+-- the coordinator finally writes to all of them.
+--
+-- Note this one hangs rather than fails if the fix is reverted, for the same
+-- reason the bug was unkillable.  It is here because the alternative is a
+-- regression nobody notices until a cluster wedges.
+-- start_ignore
+CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
+NOTICE:  extension "gp_inject_fault" already exists, skipping
+-- end_ignore
+SET anser.timeout_ms = 1;
+CREATE TABLE anser_rf_push_build (id int, pad text) DISTRIBUTED BY (pad);
+CREATE TABLE anser_rf_push_probe (id int) DISTRIBUTED BY (id);
+INSERT INTO anser_rf_push_build SELECT g, 'b' || g FROM generate_series(1, 1000) g;
+INSERT INTO anser_rf_push_probe SELECT g % 1000 + 1 FROM generate_series(1, 1000000) g;
+ANALYZE anser_rf_push_build;
+ANALYZE anser_rf_push_probe;
+-- One segment publishes a second late; every other consumer gives up at 1 ms.
+SELECT gp_inject_fault('anser_before_deliver', 'sleep', '', '', '', 1, 1, 1, dbid)
+    FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SET anser.runtime_filter = on;
+SELECT count(*) AS push_rows
+    FROM anser_rf_push_probe p JOIN anser_rf_push_build b ON p.id = b.id;
+ push_rows 
+-----------
+   1000000
+(1 row)
+
+SELECT gp_inject_fault('anser_before_deliver', 'reset', dbid)
+    FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+DROP TABLE anser_rf_push_build, anser_rf_push_probe;
+-- A consumer that runs out of time withdraws, so the coordinator stops
+-- counting it as a subscriber.  Without that it would keep delivering to a
+-- process that has moved on -- which is what the push above has to survive,
+-- and what this keeps from quietly regressing into.
+--
+-- The withdrawal leaves no trace a query can see: the channel is gone by the
+-- time the query returns, and a filter that merely arrived late looks the
+-- same.  So the coordinator counts them, and this reads the difference.
+CREATE TABLE anser_rf_unsub_build (id int, pad text) DISTRIBUTED BY (pad);
+CREATE TABLE anser_rf_unsub_probe (id int) DISTRIBUTED BY (id);
+INSERT INTO anser_rf_unsub_build SELECT g, 'b' || g FROM generate_series(1, 1000) g;
+INSERT INTO anser_rf_unsub_probe SELECT g % 1000 + 1 FROM generate_series(1, 200000) g;
+ANALYZE anser_rf_unsub_build;
+ANALYZE anser_rf_unsub_probe;
+-- start_ignore
+CREATE EXTENSION IF NOT EXISTS anser_test;
+NOTICE:  extension "anser_test" already exists, skipping
+-- end_ignore
+SELECT anser_test_unsubscribes() AS unsub_before \gset
+SELECT gp_inject_fault('anser_before_deliver', 'sleep', '', '', '', 1, 1, 1, dbid)
+    FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT count(*) AS unsub_rows
+    FROM anser_rf_unsub_probe p JOIN anser_rf_unsub_build b ON p.id = b.id;
+ unsub_rows 
+------------
+     200000
+(1 row)
+
+SELECT gp_inject_fault('anser_before_deliver', 'reset', dbid)
+    FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT anser_test_unsubscribes() > :unsub_before AS consumers_withdrew;
+ consumers_withdrew 
+--------------------
+ t
+(1 row)
+
+DROP EXTENSION anser_test;
+DROP TABLE anser_rf_unsub_build, anser_rf_unsub_probe;
+-- Both blocks above ran on a 1 ms deadline so the consumers would time out.
+-- Restore the file's deadline: at 1 ms no filter ever arrives, which would
+-- make every assertion below pass without exercising anything.
+SET anser.timeout_ms = 5000;
 -- ---------------------------------------------------------------------------
 -- Parallel execution.
 --
@@ -509,12 +612,15 @@ DROP TABLE anser_rf_seq_t;
 -- which disagree here: for one query the Postgres planner may give a serial
 -- build slice where GPORCA gives a parallel one.
 --
--- The join key is the distribution key on both sides, so no Motion is needed
--- to co-locate the join.  That is the only shape either planner parallelises:
--- a redistributed or broadcast build side is fine for GPORCA but the Postgres
--- planner marks Motion paths parallel-unsafe.
+-- The build side is distributed by v and joined on id, so it is redistributed:
+-- Anser only injects across a Motion, and a co-located join -- which is what
+-- this used to use -- is now skipped outright, making the whole section
+-- vacuous.  The cost is that only GPORCA still parallelises it; the Postgres
+-- planner marks Motion paths parallel-unsafe, so its two blocks below are
+-- reduced to a filter-on/filter-off equivalence check on a serial slice.
+-- They are kept because that equivalence is worth asserting on its own.
 -- ---------------------------------------------------------------------------
-CREATE TABLE anser_rf_par_build (id int, v text) DISTRIBUTED BY (id);
+CREATE TABLE anser_rf_par_build (id int, v text) DISTRIBUTED BY (v);
 CREATE TABLE anser_rf_par_probe (id int, pad text) DISTRIBUTED BY (id);
 INSERT INTO anser_rf_par_build SELECT g, 'b' || g FROM generate_series(1, 500) g;
 INSERT INTO anser_rf_par_probe SELECT g, 'p' || g FROM generate_series(1, 20000) g;

@@ -87,6 +87,8 @@ typedef struct AnserBloomProduceScanState
 	AttrNumber	key_attno;
 	int64		planned_bytes;
 	bool		started;		/* this process actually executed the node */
+	bool		my_slice;		/* ... and was always going to: the node's
+								 * slice is the one this process runs */
 	bool		published;
 } AnserBloomProduceScanState;
 
@@ -402,6 +404,16 @@ anser_produce_begin(CustomScanState *node, EState *estate, int eflags)
 	st->started = false;
 	st->published = false;
 
+	/*
+	 * Whether this process is the one that runs the node's slice -- which is
+	 * not the same question as whether the node ends up executing, and has to
+	 * be asked here rather than at end time.  During initialization
+	 * currentSliceId names the slice being initialized, alien or not; once
+	 * execution starts it always names the local one, so the distinction is
+	 * gone by then.
+	 */
+	st->my_slice = (estate->currentSliceId == LocallyExecutingSliceIndex(estate));
+
 	anser_rf_build_key(cscan, &key);
 	anser_rf_part_info(cscan, &part_index, &total_parts);
 
@@ -460,6 +472,7 @@ anser_produce_next(CustomScanState *node)
 		{
 			ANSER_DEBUG("anser: producer child exhausted, publishing (state=%s)",
 						st->produce != NULL ? "ok" : "NULL");
+
 			(void) ExecAnserBloomFilterProducePublish(st->produce);
 			st->published = true;
 		}
@@ -491,14 +504,23 @@ anser_produce_end(CustomScanState *node)
 	AnserBloomProduceScanState *st = (AnserBloomProduceScanState *) node;
 
 	/*
-	 * A producer that ran but never published was abandoned mid-scan (squelch,
-	 * or an error upstream), and consumers must be told so rather than left
-	 * waiting for a part that will never come.  A producer that never ran at
-	 * all belongs to another slice: cancelling here would destroy a channel
-	 * this process has no part in -- which is exactly what the coordinator
-	 * used to do to every runtime filter.
+	 * Consumers must be told, one way or another, by every process the
+	 * channel is counting on.  Two cases reach here without having published:
+	 *
+	 * The producer ran and was abandoned mid-scan (squelch, or an error
+	 * upstream), so the part it promised will never come.
+	 *
+	 * Or it never ran at all although this process owns its slice -- which
+	 * happens in a co-located join, where ExecHashJoin skips building the
+	 * hash table on a segment whose outer side turned out to be empty.  The
+	 * node is initialized, never executed, and used to leave silently; the
+	 * channel then sat one part short of complete and every consumer waited
+	 * out the whole of anser.timeout_ms for it.
+	 *
+	 * What must still stay silent is a node belonging to another slice.
+	 * Cancelling there would destroy a channel this process has no part in.
 	 */
-	if (st->started && !st->published && st->produce != NULL)
+	if (!st->published && st->produce != NULL && (st->started || st->my_slice))
 	{
 		(void) ExecAnserBloomFilterProduceCancel(st->produce);
 		st->published = true;

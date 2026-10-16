@@ -94,6 +94,27 @@ yet reading — and that producer only publishes once its subtree is drained,
 which it cannot be. That is a deadlock, not a slow path, and it is why the
 intermediate result cannot filter the table it is being joined to.
 
+### Only across a Motion
+
+A join is injected into only when its build and probe scans run in **different
+slices**. Slices are divided by Motions and nothing else, so this says: filter
+only where the rows already travel over the network.
+
+It is a safety rule first. An exchange is a synchronisation point — the
+consumer stops until the coordinator has heard from every producer — and
+within one slice producer and consumer are the same process, run one after the
+other. A consumer placed under an intervening hash join then waits for a
+producer in that join's inner side, which cannot start until the outer side
+yields the very tuple the consumer is holding. `defer_first` covers exactly
+one tuple of that, and no more. Across a Motion they are separate processes
+and the question does not arise.
+
+It is also what makes the exchange worth its cost. Where a Motion already
+carries the rows, the barrier is paid for by work the query was doing anyway.
+In a co-located join it is new cost against a join that was already local, and
+whether it pays for itself is a measurement nobody has made — so until someone
+does, those joins are left alone.
+
 ### Giving up early
 
 A bloom filter that is too small for its key count matches almost everything: it

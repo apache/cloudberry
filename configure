@@ -819,8 +819,8 @@ GCOV
 enable_debug
 enable_orafce
 enable_faultinjector
-enable_debug_extensions
 with_anser
+enable_debug_extensions
 enable_pxf
 enable_gpfdist
 enable_strong_random
@@ -892,8 +892,8 @@ enable_atomics
 enable_strong_random
 enable_gpfdist
 enable_pxf
-with_anser
 enable_debug_extensions
+with_anser
 enable_faultinjector
 enable_orafce
 enable_debug
@@ -1658,7 +1658,6 @@ Optional Features:
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
-  --without-anser         do not build the Anser runtime-filter extension
   --with-extra-version=STRING
                           append STRING to version
   --with-template=NAME    override operating system template
@@ -1666,6 +1665,7 @@ Optional Packages:
   --with-libraries=DIRS   look for additional libraries in DIRS
   --with-libs=DIRS        alternative spelling of --with-libraries
   --with-pgport=PORTNUM   set default port number [5432]
+  --with-anser            build the Anser runtime-filter extension
   --with-blocksize=BLOCKSIZE
                           set table block size in kB [8]
   --with-segsize=SEGSIZE  set table segment size in GB [1]
@@ -3634,10 +3634,10 @@ fi
 
 
 
-
 #
 # Anser adaptive information sharing (runtime filters)
 #
+
 
 
 # Check whether --with-anser was given.

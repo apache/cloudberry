@@ -217,6 +217,21 @@ AnserSidebandConsumeWait(const AnserChannelKey *channel_key, char payload_type,
 	{
 		CHECK_FOR_INTERRUPTS();
 
+		/*
+		 * The coordinator has what it needs and told us to wrap up -- a LIMIT
+		 * that filled, typically.  CHECK_FOR_INTERRUPTS does not cover this:
+		 * it is a flag the executor is expected to notice, which is why
+		 * nodeHashjoin.c tests it beside the same call.  Without that, a
+		 * finished query is held open by a consumer still waiting on a filter
+		 * nobody will use, for up to anser.timeout_ms.
+		 */
+		if (QueryFinishPending)
+		{
+			ANSER_DEBUG("anser: seg%d abandoning cond=%u: the query is finishing",
+						GpIdentity.segindex, channel_key->condition_id);
+			return false;
+		}
+
 		if (anser_inbox_take(channel_key, payload_type, payload, payload_len,
 							 cancelled))
 			return payload != NULL && *payload != NULL;
@@ -224,6 +239,25 @@ AnserSidebandConsumeWait(const AnserChannelKey *channel_key, char payload_type,
 		if (timeout_ms >= 0 &&
 			TimestampDifferenceExceeds(start, GetCurrentTimestamp(), timeout_ms))
 		{
+			/*
+			 * Withdraw the subscription on the way out.  From here on this
+			 * process is somewhere else in the plan and no longer reading for
+			 * a filter, so a delivery would put 1-64 MB on a connection whose
+			 * reader has moved on -- and whatever reads it next has to
+			 * recognise and skip it.
+			 *
+			 * Best effort, and a narrowing rather than a guarantee: the
+			 * coordinator may already be inside its delivery when this
+			 * arrives.  That is why the push never blocks and why every
+			 * reader still tolerates a message that is not its own.
+			 */
+			msg = AnserWireFormat(channel_key, ANSER_WIRE_KIND_UNSUBSCRIBE,
+								  ANSER_PAYLOAD_NONE, 0, 0, 0, NULL, 0);
+			if (!anser_sideband_send(msg))
+				ANSER_DEBUG("anser: seg%d could not unsubscribe from cond=%u",
+							GpIdentity.segindex, channel_key->condition_id);
+			pfree(msg);
+
 			/*
 			 * Report what we saw, not just that we waited: "nothing arrived"
 			 * and "something arrived for another channel" are different bugs.

@@ -349,4 +349,66 @@ FROM (VALUES
  non-scan has no target           | f          |         
 (3 rows)
 
+-- 7. How many producers a slice runs.  This number is the channel's
+-- completion criterion, so over-counting costs every consumer the full
+-- anser.timeout_ms -- the channel never reaches the count it waits for and
+-- nobody is told -- while under-counting completes it early and hands out a
+-- filter missing a segment's keys, which drops rows that join.  So each of
+-- FillSliceGangInfo's four formulas is pinned here, not inferred from one.
+--
+-- numsegments is only meaningful for a reader or writer gang; the columns are
+-- still filled for the other types to show they are ignored.
+SELECT t.what, t.gang, t.nseg, t.workers, t.direct,
+       anser_test_slice_producers(t.gang, t.nseg, t.workers, t.direct, 0)
+         AS producers
+FROM (VALUES
+        ('coordinator slice',            'unallocated', 3, 0, NULL::int4[]),
+        ('coordinator slice, parallel',  'unallocated', 3, 4, NULL),
+        ('entry db reader',              'entrydb',     3, 0, NULL),
+        ('singleton reader',             'singleton',   3, 0, NULL),
+        ('singleton reader, parallel',   'singleton',   3, 4, NULL),
+        ('reader, serial',               'reader',      3, 0, NULL),
+        ('reader, parallel',             'reader',      3, 4, NULL),
+        ('writer, serial',               'writer',      3, 0, NULL),
+        ('direct dispatch, one segment', 'reader',      3, 0, '{1}'),
+        ('direct dispatch, two, serial', 'reader',      3, 0, '{0,2}'),
+        ('direct dispatch, two, par 4',  'reader',      3, 4, '{0,2}'),
+        ('direct dispatch, nowhere',     'reader',      3, 4, '{}'),
+        ('no segments',                  'reader',      0, 4, NULL),
+        ('negative segments',            'reader',     -1, 4, NULL)
+      ) AS t(what, gang, nseg, workers, direct);
+             what             |    gang     | nseg | workers | direct | producers 
+------------------------------+-------------+------+---------+--------+-----------
+ coordinator slice            | unallocated |    3 |       0 |        |         1
+ coordinator slice, parallel  | unallocated |    3 |       4 |        |         1
+ entry db reader              | entrydb     |    3 |       0 |        |         1
+ singleton reader             | singleton   |    3 |       0 |        |         1
+ singleton reader, parallel   | singleton   |    3 |       4 |        |         4
+ reader, serial               | reader      |    3 |       0 |        |         3
+ reader, parallel             | reader      |    3 |       4 |        |        12
+ writer, serial               | writer      |    3 |       0 |        |         3
+ direct dispatch, one segment | reader      |    3 |       0 | {1}    |         1
+ direct dispatch, two, serial | reader      |    3 |       0 | {0,2}  |         2
+ direct dispatch, two, par 4  | reader      |    3 |       4 | {0,2}  |         8
+ direct dispatch, nowhere     | reader      |    3 |       4 | {}     |         0
+ no segments                  | reader      |    0 |       4 |        |         0
+ negative segments            | reader      |   -1 |       4 |        |         0
+(14 rows)
+
+-- The slice has to be identifiable at all; anything else is zero, which the
+-- injection pass reads as "unknown" and declines on.
+SELECT t.what, anser_test_slice_producers('reader', 3, 4, NULL, t.idx)
+         AS producers
+FROM (VALUES
+        ('slice 0 of 1 exists',  0),
+        ('slice 1 of 1 does not', 1),
+        ('negative slice index', -1)
+      ) AS t(what, idx);
+         what          | producers 
+-----------------------+-----------
+ slice 0 of 1 exists   |        12
+ slice 1 of 1 does not |         0
+ negative slice index  |         0
+(3 rows)
+
 DROP EXTENSION anser_test;

@@ -76,6 +76,7 @@ struct pgNotify;				/* #include "libpq-fe.h" */
  */
 #define ANSER_WIRE_KIND_PART		'P'		/* a producer's serialized part */
 #define ANSER_WIRE_KIND_SUBSCRIBE	'S'		/* a consumer registering interest */
+#define ANSER_WIRE_KIND_UNSUBSCRIBE	'U'		/* ... and withdrawing it again */
 
 /* Flag bits, shared by both directions. */
 #define ANSER_WIRE_F_CANCELLED	0x0001
@@ -242,6 +243,7 @@ extern PGDLLEXPORT bool AnserDispatchLocalConsume(const AnserChannelKey *channel
  * the executor/transaction-end callbacks call; the halves are exposed because
  * each lives with the state it owns.
  */
+extern PGDLLEXPORT int64 AnserDispatchUnsubscribeCount(void);
 extern PGDLLEXPORT void AnserDispatchReset(void);
 extern PGDLLEXPORT void AnserSidebandResetInbox(void);
 extern PGDLLEXPORT void AnserSidebandResetAll(void);
