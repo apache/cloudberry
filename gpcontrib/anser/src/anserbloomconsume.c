@@ -39,9 +39,9 @@
 
 /*
  * State for one Bloom filter consumer.  Consumes the merged payload for a
- * channel exactly once (consumed), either from the coordinator's shared
- * coordinator.  cancelled records that the producer side aborted instead of
- * delivering the payload.
+ * channel exactly once (consumed), either from the coordinator's channel table
+ * (local path) or from the dispatch sideband connection.  cancelled records
+ * that the producer side aborted instead of delivering the payload.
  */
 struct AnserBloomFilterConsumeState
 {
@@ -50,8 +50,8 @@ struct AnserBloomFilterConsumeState
 	int64		total_elems;	/* filter sizing, shared with the producer */
 	Size		max_payload_bytes;
 	uint64		seed;
-	uint32		expected_parts;
-	uint32		received_parts;
+	uint32		expected_parts;	/* producers the plan says to wait for */
+	uint32		received_parts;	/* the same count, as the payload declares it */
 	bool		consumed;
 	bool		cancelled;
 };
@@ -149,22 +149,26 @@ ExecAnserBloomFilterConsumeSideband(AnserBloomFilterConsumeState *state,
  * Turn a merged payload into this consumer's filter.
  *
  * The coordinator unions every segment's part into one before delivery, so a
- * single chunk is deserialized rather than N; the merged header's total_parts
- * records how many were folded, which we surface as the received count.
+ * single chunk is deserialized rather than N.  The header's total_parts is how
+ * many producers the channel was waiting for -- every part carries the same
+ * number and folding leaves it alone -- so it is the payload's own account of
+ * the count this consumer was planned with, not a tally of what arrived.  How
+ * many parts were folded is known only to the coordinator, which does not
+ * deliver until it has them all.
  */
 static bool
 ExecAnserBloomFilterConsumeFinish(AnserBloomFilterConsumeState *state,
 								  void *payload, Size payload_len)
 {
 	uint32		part_index = 0;
-	uint32		folded = 0;
+	uint32		declared_parts = 0;
 
 	state->filter = AnserBloomDeserializePart(payload, payload_len,
 											  state->total_elems,
 											  state->max_payload_bytes,
 											  state->seed,
-											  &part_index, &folded);
-	state->received_parts = (state->filter != NULL) ? folded : 0;
+											  &part_index, &declared_parts);
+	state->received_parts = (state->filter != NULL) ? declared_parts : 0;
 
 	if (payload != NULL)
 		pfree(payload);

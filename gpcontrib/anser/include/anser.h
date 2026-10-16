@@ -45,17 +45,38 @@
 #define ANSER_CONDITION_KEY_SIZE	64
 
 /*
+ * What a sideband delivery costs on the wire besides the payload: the fixed
+ * header fields plus the condition key, rounded up.  Not to be confused with
+ * the room a serialized bloom part keeps for its own header -- that one is
+ * about the payload's contents, this one about the frame around it.
+ *
+ * anser.max_info_size caps the payload, so payload + this is the largest
+ * message a consumer can be asked to read, and the reason that GUC cannot be
+ * set as high as an int goes.
+ */
+#define ANSER_SIDEBAND_FRAME_ROOM	(ANSER_CONDITION_KEY_SIZE + 64)
+
+/*
  * Identifies one channel: a single condition within one running command.
  *
  * condition_key is an opaque symbol naming the condition -- the
  * optimizer-generated equivalence-class symbol described in the Anser paper.
  * Channels are only ever compared for equality, never ordered.
+ *
+ * Zero the whole struct before filling it in.  The coordinator keeps channels
+ * in a HASH_BLOBS table keyed by sizeof(AnserChannelKey), so every byte of it
+ * is hashed and compared, the bytes past the key's terminating NUL included --
+ * and neither strlcpy() nor a memcpy() of a shorter key clears those.  Two
+ * sides naming the same condition would then land on different channels, and
+ * what that looks like from the outside is consumers timing out for no
+ * visible reason.
  */
 typedef struct AnserChannelKey
 {
 	int			gp_session_id;
 	int			gp_command_count;
 	uint32		condition_id;
+	/* NUL-terminated, and zero-padded to the end -- see above. */
 	char		condition_key[ANSER_CONDITION_KEY_SIZE];
 } AnserChannelKey;
 
@@ -65,6 +86,7 @@ extern PGDLLEXPORT bool gp_anser_runtime_filter;
 extern PGDLLEXPORT bool gp_anser_debug;
 extern PGDLLEXPORT int	gp_anser_max_info_size;
 extern PGDLLEXPORT int	gp_anser_timeout_ms;
+extern PGDLLEXPORT int	gp_anser_debug_min_filter_bytes;
 
 /*
  * Trace the handoff between producers, the coordinator and consumers.

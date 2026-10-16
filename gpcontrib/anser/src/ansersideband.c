@@ -124,6 +124,30 @@ AnserSidebandPublish(const AnserChannelKey *channel_key, char payload_type,
 }
 
 /*
+ * Withdraw a subscription: best effort, so a send failure is only logged.
+ * Called on every path out of AnserSidebandConsumeWait that leaves a
+ * subscription behind (deadline expiry, query finishing early): from here on
+ * this process is somewhere else in the plan and no longer reading for a
+ * filter, so a delivery would put up to 64 MB on a connection whose reader
+ * has moved on -- and whatever reads it next has to recognise and skip it.
+ *
+ * A narrowing rather than a guarantee: the coordinator may already be inside
+ * its delivery when this arrives.  That is why the push never blocks and why
+ * every reader still tolerates a message that is not its own.
+ */
+static void
+anser_sideband_unsubscribe(const AnserChannelKey *channel_key)
+{
+	char	   *msg = AnserWireFormat(channel_key, ANSER_WIRE_KIND_UNSUBSCRIBE,
+									ANSER_PAYLOAD_NONE, 0, 0, 0, NULL, 0);
+
+	if (!anser_sideband_send(msg))
+		ANSER_DEBUG("anser: seg%d could not unsubscribe from cond=%u",
+					GpIdentity.segindex, channel_key->condition_id);
+	pfree(msg);
+}
+
+/*
  * Subscribe, then wait for the merged payload.
  *
  * Returns true with *payload set, or false for "run unfiltered" -- including
@@ -182,9 +206,10 @@ AnserSidebandConsumeWait(const AnserChannelKey *channel_key, char payload_type,
 	 * recognise and skip it.  So do not ask in the first place.
 	 *
 	 * This only narrows the window.  Any deadline can expire with the
-	 * subscription already registered, and there is no unsubscribe, so every
-	 * reader of this connection still has to tolerate a message that is not its
-	 * own (see cdb_sequence_nextval_qe).
+	 * subscription already registered, so even though we unsubscribe on the way
+	 * out (anser_sideband_unsubscribe), every reader of this connection still
+	 * has to tolerate a message that is not its own (see
+	 * cdb_sequence_nextval_qe).
 	 */
 	if (timeout_ms == 0)
 	{
@@ -217,6 +242,28 @@ AnserSidebandConsumeWait(const AnserChannelKey *channel_key, char payload_type,
 	{
 		CHECK_FOR_INTERRUPTS();
 
+		/*
+		 * The coordinator has what it needs and told us to wrap up -- a LIMIT
+		 * that filled, typically.  CHECK_FOR_INTERRUPTS does not cover this:
+		 * it is a flag the executor is expected to notice, which is why
+		 * nodeHashjoin.c tests it beside the same call.  Without that, a
+		 * finished query is held open by a consumer still waiting on a filter
+		 * nobody will use, for up to anser.timeout_ms.
+		 */
+		if (QueryFinishPending)
+		{
+			ANSER_DEBUG("anser: seg%d abandoning cond=%u: the query is finishing",
+						GpIdentity.segindex, channel_key->condition_id);
+
+			/*
+			 * Same reason the deadline path withdraws: the query is wrapping
+			 * up, so nobody here will read the filter the coordinator is
+			 * about to push.
+			 */
+			anser_sideband_unsubscribe(channel_key);
+			return false;
+		}
+
 		if (anser_inbox_take(channel_key, payload_type, payload, payload_len,
 							 cancelled))
 			return payload != NULL && *payload != NULL;
@@ -224,6 +271,15 @@ AnserSidebandConsumeWait(const AnserChannelKey *channel_key, char payload_type,
 		if (timeout_ms >= 0 &&
 			TimestampDifferenceExceeds(start, GetCurrentTimestamp(), timeout_ms))
 		{
+			/*
+			 * Withdraw the subscription on the way out.  From here on this
+			 * process is somewhere else in the plan and no longer reading for
+			 * a filter, so a delivery would put 1-64 MB on a connection whose
+			 * reader has moved on -- and whatever reads it next has to
+			 * recognise and skip it.
+			 */
+			anser_sideband_unsubscribe(channel_key);
+
 			/*
 			 * Report what we saw, not just that we waited: "nothing arrived"
 			 * and "something arrived for another channel" are different bugs.
@@ -258,12 +314,15 @@ anser_sideband_read_one(long timeout_ms)
 {
 	unsigned char qtype;
 	int			retval;
+	int64		maxlen;
 	StringInfoData buf;
 	AnserInboxEntry *entry;
 	MemoryContext oldcxt;
 	char		paytype;
 	uint32		crc;
 	int			condid;
+	uint32		session_id;
+	uint32		command_count;
 	int			flags;
 	int			keylen;
 	int			paylen;
@@ -331,23 +390,49 @@ anser_sideband_read_one(long timeout_ms)
 				 errdetail("The message boundary was lost; this connection cannot be used further.")));
 	}
 
+	/*
+	 * In int64 and clamped, though anser.max_info_size is bounded so that it
+	 * cannot overflow this on its own.  The bound lives in another file; this
+	 * costs nothing and does not depend on the two staying in step.
+	 */
+	maxlen = (int64) gp_anser_max_info_size + ANSER_SIDEBAND_FRAME_ROOM;
+	if (maxlen > (int64) PQ_LARGE_MESSAGE_LIMIT)
+		maxlen = (int64) PQ_LARGE_MESSAGE_LIMIT;
+
 	initStringInfo(&buf);
-	if (pq_getmessage(&buf, gp_anser_max_info_size + ANSER_CONDITION_KEY_SIZE + 64) != 0)
+	if (pq_getmessage(&buf, (int) maxlen) != 0)
 	{
 		/*
-		 * pq_getmessage clears the reading-message flag when it succeeds, but
-		 * not on its EOF paths; clear it by hand so we do not trip the
-		 * assertion in a later pq_startmsgread.
+		 * Same reasoning as the message type above, and the same outcome.
+		 * Every path on which pq_getmessage returns EOF leaves us unable to go
+		 * on: either the peer is gone, or -- when the length word exceeds the
+		 * cap -- it has taken those four bytes and left the body in the stream
+		 * (pqcomm.c discards the body only on the paths where it already read
+		 * it).  Running unfiltered from here would hand the gang pool a
+		 * connection whose next read lands mid-message.
+		 *
+		 * The cap can be exceeded for real: gp_anser_max_info_size is USERSET,
+		 * and a gang busy with a named portal does not receive a dispatched
+		 * SET -- see cdbdisp_markNamedPortalGangsDestroyed().  So this is a
+		 * reachable disagreement, not a corrupt-stream-only case.
+		 *
+		 * pq_getmessage clears the reading-message flag when it succeeds but
+		 * not on its EOF paths; clear it by hand so the error path does not
+		 * also trip the assertion in a later pq_startmsgread.
 		 */
 		pq_endmsgread();
 		pfree(buf.data);
-		elog(LOG, "anser: could not read filter message");
-		return false;
+		ereport(FATAL,
+				(errcode(ERRCODE_PROTOCOL_VIOLATION),
+				 errmsg("anser: could not read the filter message"),
+				 errdetail("The message boundary was lost; this connection cannot be used further.")));
 	}
 
 	paytype = (char) pq_getmsgint(&buf, 4);
 	crc = (uint32) pq_getmsgint(&buf, 4);
 	condid = pq_getmsgint(&buf, 4);
+	session_id = (uint32) pq_getmsgint(&buf, 4);
+	command_count = (uint32) pq_getmsgint(&buf, 4);
 	flags = pq_getmsgint(&buf, 4);
 	keylen = pq_getmsgint(&buf, 4);
 	if (keylen < 0 || keylen >= ANSER_CONDITION_KEY_SIZE)
@@ -367,8 +452,9 @@ anser_sideband_read_one(long timeout_ms)
 	payptr = paylen > 0 ? pq_getmsgbytes(&buf, paylen) : NULL;
 
 	if (crc != (uint32) AnserWirePushCrc(paytype, (uint32) condid,
-											 (uint32) flags, keyptr, keylen,
-											 payptr, paylen))
+										 session_id, command_count,
+										 (uint32) flags, keyptr, keylen,
+										 payptr, paylen))
 	{
 		/*
 		 * Drop it and keep waiting: the deadline will expire and this consumer
@@ -387,8 +473,14 @@ anser_sideband_read_one(long timeout_ms)
 	 */
 	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 	entry = palloc0(sizeof(AnserInboxEntry));
-	entry->key.gp_session_id = gp_session_id;
-	entry->key.gp_command_count = gp_command_count;
+
+	/*
+	 * The identity comes from the wire, never from our own globals: a message
+	 * parked from an earlier command keeps that command's ids, so a later
+	 * statement can never claim it by matching its own.
+	 */
+	entry->key.gp_session_id = session_id;
+	entry->key.gp_command_count = command_count;
 	entry->key.condition_id = (uint32) condid;
 	memcpy(entry->key.condition_key, keyptr, keylen);
 	entry->key.condition_key[keylen] = '\0';
@@ -421,7 +513,19 @@ anser_inbox_take(const AnserChannelKey *key, char payload_type, void **payload,
 	{
 		AnserInboxEntry *entry = (AnserInboxEntry *) lfirst(lc);
 
+		/*
+		 * The condition key alone does not identify a delivery: it is built
+		 * from plan-shape names and repeats across statements, so a filter
+		 * parked by a late delivery of statement A would otherwise be
+		 * claimed by statement B.  The coordinator stamps every push with
+		 * its session id and command count, and we demand an exact match
+		 * on both integers (no hashing -- collisions are unaffordable).
+		 * gp_session_id is unique per postmaster lifetime, so an entry from
+		 * an older session can never match either.
+		 */
 		if (entry->key.condition_id != key->condition_id ||
+			entry->key.gp_session_id != key->gp_session_id ||
+			entry->key.gp_command_count != key->gp_command_count ||
 			strncmp(entry->key.condition_key, key->condition_key,
 					ANSER_CONDITION_KEY_SIZE) != 0)
 			continue;
@@ -610,17 +714,20 @@ AnserWireFormat(const AnserChannelKey *channel_key, char kind,
  * value does not depend on the host.
  */
 pg_crc32c
-AnserWirePushCrc(char payload_type, uint32 condition_id, uint32 flags,
-				 const char *key, int keylen, const void *body, int bodylen)
+AnserWirePushCrc(char payload_type, uint32 condition_id, uint32 session_id,
+				 uint32 command_count, uint32 flags, const char *key,
+				 int keylen, const void *body, int bodylen)
 {
 	pg_crc32c	crc;
-	uint32		fields[4];
+	uint32		fields[6];
 	uint32		belen;
 
 	fields[0] = pg_hton32((uint32) (unsigned char) payload_type);
 	fields[1] = pg_hton32(condition_id);
-	fields[2] = pg_hton32(flags);
-	fields[3] = pg_hton32((uint32) keylen);
+	fields[2] = pg_hton32(session_id);
+	fields[3] = pg_hton32(command_count);
+	fields[4] = pg_hton32(flags);
+	fields[5] = pg_hton32((uint32) keylen);
 
 	INIT_CRC32C(crc);
 	COMP_CRC32C(crc, fields, sizeof(fields));
