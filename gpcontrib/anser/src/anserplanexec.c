@@ -87,6 +87,8 @@ typedef struct AnserBloomProduceScanState
 	AttrNumber	key_attno;
 	int64		planned_bytes;
 	bool		started;		/* this process actually executed the node */
+	bool		my_slice;		/* ... and was always going to: the node's
+								 * slice is the one this process runs */
 	bool		published;
 } AnserBloomProduceScanState;
 
@@ -335,6 +337,12 @@ anser_rf_build_key(CustomScan *cscan, AnserChannelKey *key)
  * part_index is diagnostics only: completion is by count, and the serialized
  * part carries its own (0, 1).  Under parallel execution the workers of one
  * segment therefore share an index, which is why the trace prints the pid too.
+ * Because it is only diagnostic it must never be allowed to reject a real
+ * producer: a slice narrower than the cluster (direct dispatch to one
+ * segment, a singleton reader, or the entry-DB where segindex is -1) would
+ * otherwise put segindex >= total_parts and refuse the only producer there
+ * is, leaving the channel a part short and every consumer waiting out
+ * anser.timeout_ms.  Clamp it instead.
  */
 static void
 anser_rf_part_info(CustomScan *cscan, uint32 *part_index, uint32 *total_parts)
@@ -344,8 +352,12 @@ anser_rf_part_info(CustomScan *cscan, uint32 *part_index, uint32 *total_parts)
 
 	if (Gp_role == GP_ROLE_EXECUTE)
 	{
-		*part_index = (uint32) GpIdentity.segindex;
 		*total_parts = (uint32) Max(n_producers, 1);
+		if (GpIdentity.segindex < 0)
+			*part_index = 0;	/* entry-DB: single local producer */
+		else
+			*part_index = Min((uint32) GpIdentity.segindex,
+							  *total_parts - 1);
 	}
 	else
 	{
@@ -402,11 +414,35 @@ anser_produce_begin(CustomScanState *node, EState *estate, int eflags)
 	st->started = false;
 	st->published = false;
 
+	/*
+	 * Whether this process is the one that runs the node's slice -- which is
+	 * not the same question as whether the node ends up executing, and has to
+	 * be asked here rather than at end time.  During initialization
+	 * currentSliceId names the slice being initialized, alien or not; once
+	 * execution starts it always names the local one, so the distinction is
+	 * gone by then.
+	 */
+	st->my_slice = (estate->currentSliceId == LocallyExecutingSliceIndex(estate));
+
 	anser_rf_build_key(cscan, &key);
 	anser_rf_part_info(cscan, &part_index, &total_parts);
 
-	st->produce = ExecInitAnserBloomFilterProduce(&key, total_elems, max_payload,
-												  part_index, total_parts);
+	/*
+	 * Build the filter only in the process that will execute this node, and
+	 * never for EXPLAIN alone.  ExecutorStart runs even then
+	 * (EXEC_FLAG_EXPLAIN_ONLY), and on the coordinator it runs over every
+	 * slice (eliminateAliens is false there), so without the gate a plain
+	 * EXPLAIN allocates a full bitset per producer on the coordinator --
+	 * memory no work_mem/statement_mem accounting ever sees.  A NULL produce
+	 * is a first-class state downstream: the node passes tuples through, and
+	 * publish/cancel are NULL-safe.
+	 */
+	if (st->my_slice && (eflags & EXEC_FLAG_EXPLAIN_ONLY) == 0)
+		st->produce = ExecInitAnserBloomFilterProduce(&key, total_elems,
+													  max_payload, part_index,
+													  total_parts);
+	else
+		st->produce = NULL;
 	ANSER_DEBUG("anser: producer init cond=%u part=%u/%u elems=" INT64_FORMAT " payload=%zu state=%s",
 				key.condition_id, part_index, total_parts, total_elems,
 				max_payload, st->produce != NULL ? "ok" : "NULL");
@@ -460,6 +496,7 @@ anser_produce_next(CustomScanState *node)
 		{
 			ANSER_DEBUG("anser: producer child exhausted, publishing (state=%s)",
 						st->produce != NULL ? "ok" : "NULL");
+
 			(void) ExecAnserBloomFilterProducePublish(st->produce);
 			st->published = true;
 		}
@@ -491,14 +528,23 @@ anser_produce_end(CustomScanState *node)
 	AnserBloomProduceScanState *st = (AnserBloomProduceScanState *) node;
 
 	/*
-	 * A producer that ran but never published was abandoned mid-scan (squelch,
-	 * or an error upstream), and consumers must be told so rather than left
-	 * waiting for a part that will never come.  A producer that never ran at
-	 * all belongs to another slice: cancelling here would destroy a channel
-	 * this process has no part in -- which is exactly what the coordinator
-	 * used to do to every runtime filter.
+	 * Consumers must be told, one way or another, by every process the
+	 * channel is counting on.  Two cases reach here without having published:
+	 *
+	 * The producer ran and was abandoned mid-scan (squelch, or an error
+	 * upstream), so the part it promised will never come.
+	 *
+	 * Or it never ran at all although this process owns its slice -- which
+	 * happens in a co-located join, where ExecHashJoin skips building the
+	 * hash table on a segment whose outer side turned out to be empty.  The
+	 * node is initialized, never executed, and used to leave silently; the
+	 * channel then sat one part short of complete and every consumer waited
+	 * out the whole of anser.timeout_ms for it.
+	 *
+	 * What must still stay silent is a node belonging to another slice.
+	 * Cancelling there would destroy a channel this process has no part in.
 	 */
-	if (st->started && !st->published && st->produce != NULL)
+	if (!st->published && st->produce != NULL && (st->started || st->my_slice))
 	{
 		(void) ExecAnserBloomFilterProduceCancel(st->produce);
 		st->published = true;
@@ -544,7 +590,7 @@ anser_produce_explain(CustomScanState *node, List *ancestors, ExplainState *es)
 	/*
 	 * The realized filter size is planned_bytes by construction: producer and
 	 * consumer build identical filters from the same plan parameters (see
-	 * anser_rf_size in anserplan.c), so no execution stats are needed.
+	 * AnserRuntimeFilterSize in anserplan.c), so no execution stats are needed.
 	 */
 	snprintf(buf, sizeof(buf), "memory=" INT64_FORMAT "kB",
 			 st->planned_bytes / 1024);
@@ -647,12 +693,15 @@ anser_consume_receive(AnserBloomConsumeScanState *st)
 
 	/*
 	 * Diagnostic: a NULL filter means we fail open (no pruning).  Log why --
-	 * cancelled delivery vs. too few bloom parts unioned -- so runtime-filter
-	 * misbehavior is visible in the server log.
+	 * cancelled delivery vs. nothing arriving at all -- so runtime-filter
+	 * misbehavior is visible in the server log.  The count below is what the
+	 * payload declared the channel's producer count to be, not a tally of
+	 * arrivals: the coordinator never delivers a channel short of its parts,
+	 * so there is no such tally to report here.
 	 */
 	if (st->filter == NULL)
 		elog(LOG,
-			 "anser bloom consumer: no filter, failing open (cancelled=%d, received_parts=%u)",
+			 "anser bloom consumer: no filter, failing open (cancelled=%d, declared_parts=%u)",
 			 ExecAnserBloomFilterConsumerWasCancelled(st->consume),
 			 ExecAnserBloomFilterConsumerReceivedParts(st->consume));
 }
@@ -977,7 +1026,7 @@ anser_consume_explain(CustomScanState *node, List *ancestors, ExplainState *es)
 		 * instrument.  As with all per-node EXPLAIN ANALYZE stats in MPP,
 		 * these are the winning segment's values (max ntuples/nloops), not a
 		 * cluster-wide sum.  memory is planned_bytes: the unioned filter's
-		 * size is identical on every segment by construction (anser_rf_size).
+		 * size is identical on every segment by construction (AnserRuntimeFilterSize).
 		 * When the filter was pushed into the child scan, pruning happens
 		 * there instead (its "Rows Removed by Pushdown Runtime Filter" line),
 		 * so our counters stay zero.

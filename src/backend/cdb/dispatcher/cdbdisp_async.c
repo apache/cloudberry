@@ -557,10 +557,20 @@ checkDispatchResult(CdbDispatcherState *ds, int timeout_sec)
 			if (conn->outCount > 0)
 			{
 				/*
+				 * Non-blocking, and the POLLOUT below is what finishes the
+				 * job.  A blocking flush here waits in pqWait() with no
+				 * deadline and no CHECK_FOR_INTERRUPTS, so a peer that has
+				 * stopped reading its end takes the whole dispatcher with it
+				 * -- including this function's other role, which is to notice
+				 * a cancel for the caller (cdbdisp_checkForCancel_async
+				 * arrives here with timeout_sec = 0 precisely so as not to
+				 * wait).  cdbdisp_waitDispatchFinish_async already drains its
+				 * output this way, so this is the same shape, not a new one.
+				 *
 				 * Don't error out here, let following poll() routine to
 				 * handle it.
 				 */
-				if (pqFlush(conn) < 0)
+				if (pqFlushNonBlocking(conn) < 0)
 					elog(LOG, "Failed flushing outbound data to %s:%s",
 						 segdbDesc->whoami, PQerrorMessage(conn));
 			}
@@ -600,6 +610,17 @@ checkDispatchResult(CdbDispatcherState *ds, int timeout_sec)
 			Assert(sock >= 0);
 			fds[nfds].fd = sock;
 			fds[nfds].events = POLLIN;
+
+			/*
+			 * Anything the flush above could not place goes out when the peer
+			 * makes room, which is what this asks to be woken for.  Only the
+			 * events mask grows: the array keeps one entry per connection in
+			 * the same order, so handlePollSuccess() -- which walks it with
+			 * its own counter and asserts the socket matches -- is unaffected,
+			 * and it tests POLLIN alone.
+			 */
+			if (conn->outCount > 0)
+				fds[nfds].events |= POLLOUT;
 
 			/*
 			 * poll() reports what is in the socket, which is only the same
@@ -1086,7 +1107,8 @@ send_fake_sideband_message(PGconn *conn)
 
 	if (pqPutMsgStart(GP_SIDEBAND_MESSAGE, conn) < 0)
 		elog(ERROR, "Failed to send sideband message: %s", PQerrorMessage(conn));
-	pqPutnchar(marker, sizeof(marker), conn);
+	if (pqPutnchar(marker, sizeof(marker), conn) < 0)
+		elog(ERROR, "Failed to send sideband message: %s", PQerrorMessage(conn));
 	if (pqPutMsgEnd(conn) < 0)
 		elog(ERROR, "Failed to send sideband message: %s", PQerrorMessage(conn));
 	if (pqFlush(conn) < 0)
@@ -1147,10 +1169,10 @@ processNotifies(CdbDispatchResult *dispatchResult)
 
 			CHECK_FOR_INTERRUPTS();
 
-			int64 last;
-			int64 cached;
-			int64 increment;
-			bool overflow;
+			int64 last = 0;
+			int64 cached = 0;
+			int64 increment = 0;
+			bool overflow = false;
 			Oid dbid;
 			Oid seq_oid;
 

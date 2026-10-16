@@ -35,9 +35,12 @@ to be registered before that happens.
 Then turn the filter on where you want it — `anser.runtime_filter` is
 `PGC_USERSET`, so per session, per role, or cluster-wide.
 
-`anser_test` is a separate control file over the same library, exposing the
-internal C API to the regression tests. It is test-only; do not create it in
-production databases.
+`anser_test` is a separate extension, built from `anser_test/` as a library of
+its own, that exposes the internal C API to the regression tests. It resolves
+that API at load time against the preloaded `anser.so`, which is what the
+`PGDLLEXPORT` markers on the public headers are for. `make install` does not
+build or install it — `make installcheck` does — so a cluster never carries it
+unless someone puts it there deliberately.
 
 ## Architecture
 
@@ -94,6 +97,27 @@ yet reading — and that producer only publishes once its subtree is drained,
 which it cannot be. That is a deadlock, not a slow path, and it is why the
 intermediate result cannot filter the table it is being joined to.
 
+### Only across a Motion
+
+A join is injected into only when its build and probe scans run in **different
+slices**. Slices are divided by Motions and nothing else, so this says: filter
+only where the rows already travel over the network.
+
+It is a safety rule first. An exchange is a synchronisation point — the
+consumer stops until the coordinator has heard from every producer — and
+within one slice producer and consumer are the same process, run one after the
+other. A consumer placed under an intervening hash join then waits for a
+producer in that join's inner side, which cannot start until the outer side
+yields the very tuple the consumer is holding. `defer_first` covers exactly
+one tuple of that, and no more. Across a Motion they are separate processes
+and the question does not arise.
+
+It is also what makes the exchange worth its cost. Where a Motion already
+carries the rows, the barrier is paid for by work the query was doing anyway.
+In a co-located join it is new cost against a join that was already local, and
+whether it pays for itself is a measurement nobody has made — so until someone
+does, those joins are left alone.
+
 ### Giving up early
 
 A bloom filter that is too small for its key count matches almost everything: it
@@ -140,9 +164,16 @@ injected into.
 
 Fan-in is parallel and fan-out is not. Every producer uploads its part at the
 same time while the coordinator reads as it goes, but `anser_disp_deliver()`
-then walks its subscribers and writes the merged filter to each in turn,
-blocking until that peer has taken it. Delivery latency is therefore the *sum*
-of the writes, not the slowest one, and it grows with the width of the slice.
+then walks its subscribers and writes the merged filter to each in turn.
+Delivery latency is therefore the *sum* of the writes, not the slowest one, and
+it grows with the width of the slice.
+
+That is only the tail of what a consumer waits for, and which part dominates
+depends on the plan. Where the probe side is local to the join, `prefetch_inner`
+has already drained the build side before the consumer runs — every producer has
+published, and only the fold and the fan-out are left. Where the probe side
+travels through its own Motion, the consumer sits in that scan's slice and runs
+alongside the build, so it waits the build side out as well.
 
 Measured on 4 segments, 5000 build rows, a 1 MB filter (`bloom_create` floors
 every bitset at 1 MB, whatever the cardinality):
@@ -152,11 +183,20 @@ every bitset at 1 MB, whatever the cardinality):
 | 4 | 4 | ~40 ms | ~520 ms | 549 ms |
 | 16 | 16 | ~100 ms | ~1140 ms | 1005 ms, then gave up |
 
-The second row is why the default deadline is 100 s rather than 1 s: at 16
-subscribers the fan-out outlived a 1 s deadline, so every consumer ran
-unfiltered. Raising it makes the filter arrive, but the wait is not free — the
-first subscriber is served in under a millisecond and the last over a second
-later, and none of them can tell where in the queue they are.
+These numbers predate the switch to non-blocking delivery. Each write above
+blocked until that peer had taken the filter, which is what made a wide slice so
+expensive — and what could strand the dispatcher outright when nobody was
+reading. Delivery now queues and flushes without blocking, so the fan-out should
+be well under this; it has not been re-measured.
+
+The second row is still what sets the floor for the deadline: at 16 subscribers
+the fan-out outlived a 1 s deadline, so every consumer ran unfiltered. The 10 s
+default clears even that worst measured case by most of an order of magnitude,
+while keeping a filter that never arrives from dominating the query. It is a
+budget for an exchange that has gone wrong, not a measurement of a healthy one.
+The wait is not free either — the first subscriber is served in under a
+millisecond and the last much later, and none of them can tell where in the
+queue they are.
 
 **A filter can cost more than it saves.** In the 16-wide plan the consumer waits
 160 ms to skip a probe scan that takes 40 ms. Anser is worth enabling when the
@@ -328,9 +368,37 @@ by up to that long.
 | --- | --- | --- | --- |
 | `anser.enable` | `off` | SIGHUP | Master switch. With it off the plan pass never injects anything and no filters are exchanged. |
 | `anser.runtime_filter` | `off` | USERSET | Enables the post-planning pass that injects bloom-filter producer/consumer nodes into a matching plan. Requires `anser.enable`. |
-| `anser.max_info_size` | `65 MB` | POSTMASTER | Maximum serialized payload (merged bloom filter + part header) a channel may hold; caps the effective bloom-filter size. The default is `64 MB + 1 MB` so a full 64 MB power-of-two bitset fits with its header; `bloom_create` also floors every bitset at 1 MB. |
-| `anser.timeout_ms` | `100 s` | USERSET | How long a consumer waits for its filter before running unfiltered. The deadline matters because a producer that gets squelched never publishes at all: `ExecSquelchNode` only marks a `CustomScanState`, it does not call the node back. The default is generous because delivery is serial — see [Delivery cost](#delivery-cost). |
+| `anser.max_info_size` | `65 MB` | USERSET | Maximum serialized payload (merged bloom filter + part header) a channel may hold; caps the effective bloom-filter size. The default is `64 MB + 1 MB` so a full 64 MB power-of-two bitset fits with its header; `bloom_create` also floors every bitset at 1 MB. The ceiling is a little under 1 GB: the payload has to arrive as a single protocol message, and `pq_getmessage()` will not read one past `PQ_LARGE_MESSAGE_LIMIT`. Both ends read it — see [Changing max_info_size](#changing-max_info_size) before touching it on a live session. |
+| `anser.timeout_ms` | `10 s` | USERSET | How long a consumer waits for its filter before running unfiltered. What the wait covers depends on the plan — see [Delivery cost](#delivery-cost). The deadline matters because a producer that gets squelched never publishes at all: `ExecSquelchNode` only marks a `CustomScanState`, it does not call the node back. |
 | `anser.debug` | `off` | USERSET | Traces the exchange — publish, merge, delivery, receive — in the log of the process each step happens in. See below. |
+
+### Changing max_info_size
+
+`anser.max_info_size` is the one GUC both ends of the exchange read, and they
+read it for different things. The coordinator sizes the filter against it when
+it plans, and bounds the parts it will accept; a segment bounds what it
+publishes, and passes it to `pq_getmessage()` as the cap on the sideband message
+it is about to read. A coordinator and a segment that disagree therefore do not
+merely compute different sizes — they frame the wire differently.
+
+It is `USERSET` rather than `POSTMASTER` because that is how the rest of Anser's
+knobs behave, and because being able to try a different filter size without a
+cluster restart is worth something. That is a trade-off, not a free choice:
+**do not change it on a live session.** `GUC_GPDB_NEED_SYNC` gets the new value
+to the segments — synchronously for every idle one, and in the connection
+options of every gang created afterwards — but a gang that is busy with an open
+cursor is not reached. Core does not update such a gang; it marks it as not
+reusable and moves on (`cdbdisp_markNamedPortalGangsDestroyed()`), so its
+segments keep the old value until the cursor is closed.
+
+While that lasts, the two failure directions differ. A part sized by the old
+ceiling and rejected by the new one simply never completes its channel, and the
+consumers run unfiltered after `anser.timeout_ms` — the usual fail-open. But a
+delivery that overruns a segment's `pq_getmessage()` cap takes the length word
+and leaves the body in the stream, and there is no recovering a message boundary
+from there: the consumer terminates the connection rather than return it to the
+gang pool poisoned. Set it in `postgresql.conf`, or set it before the session
+does any work.
 
 ### Tracing an exchange
 

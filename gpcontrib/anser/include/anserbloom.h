@@ -42,11 +42,6 @@ typedef struct AnserBloomFilterProduceState AnserBloomFilterProduceState;
 typedef struct AnserBloomFilterConsumeState AnserBloomFilterConsumeState;
 
 /* Producer side: build one Bloom filter part and publish it to the channel. */
-
-/*
- * libpq connection (parallel-retrieve-cursor model); NULL means connect
- * without it and rely on pg_hba.  Ignored on the coordinator-local path.
- */
 extern PGDLLEXPORT AnserBloomFilterProduceState *ExecInitAnserBloomFilterProduce(
 										const AnserChannelKey *channel_key,
 										int64 total_elems,
@@ -70,6 +65,13 @@ extern PGDLLEXPORT bool ExecAnserBloomFilterConsume(AnserBloomFilterConsumeState
 									long registration_timeout_ms);
 extern PGDLLEXPORT bloom_filter *ExecAnserBloomFilterConsumerGetFilter(
 									AnserBloomFilterConsumeState *state);
+/*
+ * The producer count the delivered payload declares, or 0 if no filter was
+ * built.  Every part of a channel carries that count and folding does not
+ * change it, so this is a cross-check on the payload, not a tally of arrivals:
+ * the coordinator delivers only once it holds every part, so a filter that
+ * reaches a consumer at all is a complete one.
+ */
 extern PGDLLEXPORT uint32 ExecAnserBloomFilterConsumerReceivedParts(
 									AnserBloomFilterConsumeState *state);
 extern PGDLLEXPORT bool ExecAnserBloomFilterConsumerWasCancelled(

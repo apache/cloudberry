@@ -28,10 +28,10 @@ SET enable_nestloop = off;
 SET enable_mergejoin = off;
 
 -- A regress test must not inherit the production deadline.  anser.timeout_ms
--- defaults to 100 s because delivery is serial and a wide slice needs that
--- long to be served; a test that waits it out has turned a delivery failure
--- into a slow pass.  Pinned short here, so a filter that never arrives fails
--- the run instead of hiding in the clock.
+-- defaults to 10 s, which is a budget for an exchange that has gone wrong; a
+-- test that waits it out has turned a delivery failure into a slow pass.
+-- Pinned shorter here, so a filter that never arrives fails the run instead of
+-- hiding in the clock.
 SET anser.timeout_ms = 5000;
 
 -- own is what the previous table joins to, nxt is what this table joins to the
@@ -84,6 +84,15 @@ ANALYZE anser_mj_t9;
 ANALYZE anser_mj_t10;
 ANALYZE anser_mj_t11;
 
+-- The same shape, minus every tenth key.  The outer-join case below needs a
+-- right side that does not cover its left, and none of the tables above can be
+-- it: they are joined 1:1 on purpose, and thinning one would break the "1000
+-- rows summing to 500500 whatever the join count" invariant the chains rest on.
+CREATE TABLE anser_mj_gap (own int, nxt int, payload text) DISTRIBUTED BY (own);
+INSERT INTO anser_mj_gap SELECT g, g, 'gap_' || g
+    FROM generate_series(1, 3000) g WHERE g % 10 <> 0;
+ANALYZE anser_mj_gap;
+
 -- Runs one chain twice, with the filter on and off, and reports whether the two
 -- agree.  The checksum is what makes the comparison mean something: equal row
 -- counts would also come out of two different sets of rows, and a filter that
@@ -130,23 +139,42 @@ SELECT joins, nrows, own_sum, agrees
 SET optimizer = off;
 
 -- A chain whose middle join is an outer join, and whose next join reads the
--- nullable side's key.  The joined result there holds NULLs the base relation
--- does not, and a NULL must not be taken for a key the filter is missing.
+-- nullable side's key -- so the joined result carries NULLs the base relation
+-- does not.
+--
+-- Two things make that true of the plan and not just of the text.  The right
+-- side has to leave keys unmatched, which is what anser_mj_gap is for.  And the
+-- outer join has to survive planning: the join above it is strict in c.nxt, so
+-- reduce_outer_joins() would otherwise turn this LEFT JOIN into an inner one
+-- before any path is considered.  OFFSET 0 keeps the subquery from being pulled
+-- up, which keeps that qual a level away.
+--
+-- No filter is injected here, and none can be.  The price of keeping the outer
+-- join is a SubqueryScan, and AnserResolveKeyScan descends through Hash, Motion
+-- and HashJoin only.  Nor is there a way around it: a NULL-keyed row reaches
+-- the output only under an outer join, an outer join survives only behind a
+-- subquery boundary, and Anser does not inject across one.  So a filter meeting
+-- a NULL key is not something this suite can arrange -- what is checked here is
+-- that such a plan returns the same rows either way.
 SET anser.runtime_filter = on;
 CREATE TEMP TABLE anser_mj_lj_on AS
-  SELECT a.own AS aown, c.own AS cown, d.own AS down
-    FROM anser_mj_t1 a
-    JOIN anser_mj_t2 b ON a.nxt = b.own
-    LEFT JOIN anser_mj_t3 c ON b.nxt = c.own
-    JOIN anser_mj_t4 d ON c.nxt = d.own
+  SELECT s.aown, s.cown, d.own AS down
+    FROM (SELECT a.own AS aown, c.own AS cown, c.nxt AS cnxt
+            FROM anser_mj_t1 a
+            JOIN anser_mj_t2 b ON a.nxt = b.own
+            LEFT JOIN anser_mj_gap c ON b.nxt = c.own
+          OFFSET 0) s
+    JOIN anser_mj_t4 d ON s.cnxt = d.own
   DISTRIBUTED BY (aown);
 SET anser.runtime_filter = off;
 CREATE TEMP TABLE anser_mj_lj_off AS
-  SELECT a.own AS aown, c.own AS cown, d.own AS down
-    FROM anser_mj_t1 a
-    JOIN anser_mj_t2 b ON a.nxt = b.own
-    LEFT JOIN anser_mj_t3 c ON b.nxt = c.own
-    JOIN anser_mj_t4 d ON c.nxt = d.own
+  SELECT s.aown, s.cown, d.own AS down
+    FROM (SELECT a.own AS aown, c.own AS cown, c.nxt AS cnxt
+            FROM anser_mj_t1 a
+            JOIN anser_mj_t2 b ON a.nxt = b.own
+            LEFT JOIN anser_mj_gap c ON b.nxt = c.own
+          OFFSET 0) s
+    JOIN anser_mj_t4 d ON s.cnxt = d.own
   DISTRIBUTED BY (aown);
 
 SELECT count(*) AS lj_rows FROM anser_mj_lj_on;
@@ -215,14 +243,16 @@ $$;
 SET anser.runtime_filter = on;
 SELECT 'the chain pruned nothing: no filter arrived, or none was injected' AS problem
  WHERE anser_mj_pruned('SELECT count(*) FROM anser_mj_t1 a JOIN anser_mj_t2 b ON a.nxt = b.own JOIN anser_mj_t3 c ON b.nxt = c.own') = 0;
+
 DROP FUNCTION anser_mj_pruned(text);
 
 DROP FUNCTION anser_mj_check(int);
 DROP TABLE anser_mj_t1, anser_mj_t2, anser_mj_t3, anser_mj_t4, anser_mj_t5,
            anser_mj_t6, anser_mj_t7, anser_mj_t8, anser_mj_t9, anser_mj_t10,
-           anser_mj_t11;
+           anser_mj_t11, anser_mj_gap;
 
 RESET anser.runtime_filter;
+RESET anser.timeout_ms;
 RESET optimizer;
 RESET enable_nestloop;
 RESET enable_mergejoin;

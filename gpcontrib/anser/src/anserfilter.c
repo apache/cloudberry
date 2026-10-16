@@ -201,9 +201,15 @@ AnserBloomLooksLikePart(const void *payload, Size payload_len)
  *
  * When a merged part and the incoming part are the same serialized size (they
  * share bitset params derived from the condition key), the union is a pure
- * bitwise OR of the two bitsets plus a bump of the merged header's fold count --
- * no reallocation.  This mutates `acc` directly, so the caller must hold whatever
- * lock guards the buffer (AnserChannelLock, for the channel payload).
+ * bitwise OR of the two bitsets -- no reallocation.  This mutates `acc`
+ * directly, so the buffer must be one the caller owns; the coordinator's is
+ * the channel payload, which lives in its own backend-private memory and is
+ * only ever touched from the dispatcher loop.
+ *
+ * The header is left alone, total_parts included.  It names how many producers
+ * the channel is waiting for, which every part on the channel agrees on and
+ * folding does not change; the count of parts already folded is the
+ * coordinator's business and it keeps that in the channel, not in the payload.
  *
  * Returns true only when the in-place union applied.  It returns false -- and
  * leaves `acc` untouched (all checks run before any write) -- when the union
@@ -217,7 +223,6 @@ bool
 AnserBloomFoldPartInPlace(void *acc, Size acc_len,
 						  const void *part, Size part_len)
 {
-	AnserBloomPartHeader *ah;
 	unsigned char *abits;
 	const unsigned char *pbits;
 	Size		bitset_bytes;
@@ -228,8 +233,6 @@ AnserBloomFoldPartInPlace(void *acc, Size acc_len,
 		!AnserBloomLooksLikePart(acc, acc_len) ||
 		!AnserBloomLooksLikePart(part, part_len))
 		return false;
-
-	ah = (AnserBloomPartHeader *) acc;
 
 	/*
 	 * Equal serialized size is sufficient: every part on a channel is built by
@@ -243,9 +246,6 @@ AnserBloomFoldPartInPlace(void *acc, Size acc_len,
 
 	for (i = 0; i < bitset_bytes; i++)
 		abits[i] |= pbits[i];
-
-	/* One more segment part folded into the running merged part. */
-	ah->total_parts += 1;
 
 	return true;
 }

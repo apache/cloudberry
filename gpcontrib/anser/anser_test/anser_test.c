@@ -21,7 +21,7 @@
  *	  SQL-callable test helpers for the Anser subsystem.
  *
  * IDENTIFICATION
- *	  gpcontrib/anser/src/anser_test.c
+ *	  gpcontrib/anser/anser_test/anser_test.c
  *
  *-------------------------------------------------------------------------
  */
@@ -45,6 +45,12 @@
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "varatt.h"
+
+/*
+ * Its own library, so its own magic block: this used to be compiled into
+ * anser.so and covered by the one in anserinit.c.
+ */
+PG_MODULE_MAGIC;
 
 /*
  * Bloom sizing used by the test helpers.  bloom_create floors every filter at
@@ -96,8 +102,8 @@ anser_test_bloom_roundtrip(PG_FUNCTION_ARGS)
 		PG_RETURN_BOOL(false);
 
 	roundtrip = AnserBloomDeserializePart(payload, payload_len,
-									   32, 1024 * 1024, seed,
-									   &part_index, &total_parts);
+									   ANSER_TEST_ELEMS, ANSER_TEST_MAX_PAYLOAD,
+									   seed, &part_index, &total_parts);
 	if (roundtrip == NULL)
 		PG_RETURN_BOOL(false);
 
@@ -110,10 +116,12 @@ anser_test_bloom_roundtrip(PG_FUNCTION_ARGS)
 
 /*
  * In-place fold: folding an equally-sized part into a merged part is a bitwise
- * OR of the bitset plus a fold-count bump, mutating the buffer without realloc.
- * This is the coordinator's only combine path: the first part is stored
- * verbatim, every later part folds in here.  A differently-sized part is
- * rejected and leaves the accumulator untouched.
+ * OR of the bitset, mutating the buffer without realloc.  This is the
+ * coordinator's only combine path: the first part is stored verbatim, every
+ * later part folds in here.  The header is not touched -- total_parts names the
+ * channel's producer count, which every part agrees on and folding does not
+ * change.  A differently-sized part is rejected and leaves the accumulator
+ * untouched.
  */
 Datum
 anser_test_bloom_fold_inplace(PG_FUNCTION_ARGS)
@@ -164,13 +172,14 @@ anser_test_bloom_fold_inplace(PG_FUNCTION_ARGS)
 
 	same_ok = AnserBloomFoldPartInPlace(acc, acc_len, part, part_len);
 	merged = same_ok ?
-		AnserBloomDeserializePart(acc, acc_len, 32, 1024 * 1024, seed,
+		AnserBloomDeserializePart(acc, acc_len, ANSER_TEST_ELEMS,
+								  ANSER_TEST_MAX_PAYLOAD, seed,
 								  &part_index, &total_parts) : NULL;
 	same_ok = same_ok &&
 		acc_len == acc_size &&			/* size unchanged, folded in place */
 		merged != NULL &&
 		part_index == 0 &&
-		total_parts == 2 &&				/* one more part folded */
+		total_parts == 1 &&				/* the fold leaves the header alone */
 		!bloom_lacks_element(merged, (unsigned char *) &left_value,
 							 sizeof(Datum)) &&
 		!bloom_lacks_element(merged, (unsigned char *) &right_value,
@@ -755,12 +764,15 @@ anser_test_push_crc(PG_FUNCTION_ARGS)
 {
 	char		payload_type = PG_GETARG_CHAR(0);
 	int32		condition_id = PG_GETARG_INT32(1);
-	int32		flags = PG_GETARG_INT32(2);
-	char	   *condition_key = text_to_cstring(PG_GETARG_TEXT_PP(3));
-	bytea	   *body = PG_GETARG_BYTEA_PP(4);
+	int32		session_id = PG_GETARG_INT32(2);
+	int32		command_count = PG_GETARG_INT32(3);
+	int32		flags = PG_GETARG_INT32(4);
+	char	   *condition_key = text_to_cstring(PG_GETARG_TEXT_PP(5));
+	bytea	   *body = PG_GETARG_BYTEA_PP(6);
 
 	PG_RETURN_INT64((int64) (uint32)
 					AnserWirePushCrc(payload_type, (uint32) condition_id,
+									 (uint32) session_id, (uint32) command_count,
 									 (uint32) flags, condition_key,
 									 (int) strlen(condition_key),
 									 VARDATA_ANY(body),
@@ -962,4 +974,97 @@ anser_test_pushdown_target(PG_FUNCTION_ARGS)
 	nulls[1] = (target == NULL);
 
 	PG_RETURN_DATUM(HeapTupleGetDatum(heap_form_tuple(tupdesc, values, nulls)));
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * How many producers a slice runs
+ * ---------------------------------------------------------------------------
+ */
+
+PG_FUNCTION_INFO_V1(anser_test_slice_producers);
+
+/*
+ * AnserSliceProducers() over a hand-built PlanSlice.
+ *
+ * The count is the channel's completion criterion, and FillSliceGangInfo gives
+ * a different answer per gang type -- so the cases below are the four formulas
+ * it uses, plus the boundaries where the slice cannot be identified at all.
+ * Nothing is executed: the function reads the slice array and nothing else.
+ *
+ * `gang` names the gang type; `direct` is the direct-dispatch content list,
+ * or NULL for no direct dispatch.  `slice_index` is what to ask about, so a
+ * caller can also probe outside the array.
+ */
+Datum
+anser_test_slice_producers(PG_FUNCTION_ARGS)
+{
+	char	   *gang = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	int32		numsegments = PG_GETARG_INT32(1);
+	int32		parallel_workers = PG_GETARG_INT32(2);
+	int32		slice_index = PG_GETARG_INT32(4);
+	PlannedStmt *stmt = makeNode(PlannedStmt);
+	PlanSlice	slice;
+
+	MemSet(&slice, 0, sizeof(slice));
+
+	if (strcmp(gang, "unallocated") == 0)
+		slice.gangType = GANGTYPE_UNALLOCATED;
+	else if (strcmp(gang, "entrydb") == 0)
+		slice.gangType = GANGTYPE_ENTRYDB_READER;
+	else if (strcmp(gang, "singleton") == 0)
+		slice.gangType = GANGTYPE_SINGLETON_READER;
+	else if (strcmp(gang, "reader") == 0)
+		slice.gangType = GANGTYPE_PRIMARY_READER;
+	else if (strcmp(gang, "writer") == 0)
+		slice.gangType = GANGTYPE_PRIMARY_WRITER;
+	else
+		elog(ERROR, "anser_test: unknown gang type \"%s\"", gang);
+
+	slice.numsegments = numsegments;
+	slice.parallel_workers = parallel_workers;
+
+	if (!PG_ARGISNULL(3))
+	{
+		ArrayType  *direct = PG_GETARG_ARRAYTYPE_P(3);
+		Datum	   *elems;
+		bool	   *nulls;
+		int			nelems;
+		int			i;
+
+		deconstruct_array(direct, INT4OID, sizeof(int32), true, TYPALIGN_INT,
+						  &elems, &nulls, &nelems);
+
+		slice.directDispatch.isDirectDispatch = true;
+		for (i = 0; i < nelems; i++)
+		{
+			if (nulls[i])
+				elog(ERROR, "anser_test: direct dispatch list may not contain NULLs");
+			slice.directDispatch.contentIds =
+				lappend_int(slice.directDispatch.contentIds,
+							DatumGetInt32(elems[i]));
+		}
+	}
+
+	stmt->numSlices = 1;
+	stmt->slices = &slice;
+
+	PG_RETURN_INT32(AnserSliceProducers(stmt, slice_index));
+}
+
+PG_FUNCTION_INFO_V1(anser_test_unsubscribes);
+
+/*
+ * Withdrawals the coordinator has honoured in this backend.
+ *
+ * A consumer that runs out of time says so, and the coordinator drops it from
+ * the channel rather than delivering 1-64 MB to a process that has moved on.
+ * Nothing else in the system records that it happened: the channel is gone by
+ * the time the query returns, and a filter that simply arrived late looks the
+ * same from SQL.  A test reads the difference across a query.
+ */
+Datum
+anser_test_unsubscribes(PG_FUNCTION_ARGS)
+{
+	PG_RETURN_INT64(AnserDispatchUnsubscribeCount());
 }
