@@ -36,6 +36,7 @@
 #   - PAX Access Method
 #   - PXF External Table Access
 #   - Test Automation Support (tap-tests)
+#   - Yezzey Extension (yezzey)
 #
 # System Integration:
 #   - GSSAPI Authentication
@@ -67,6 +68,12 @@
 #
 #                 When true, add option:
 #                   --with-mdblocales
+#
+#   ENABLE_YEZZEY - Enable Yezzey extension (true/false, defaults to
+#                   false)
+#
+#                 When true, add option:
+#                   --with-yezzey
 #
 # Prerequisites:
 #   - System dependencies must be installed:
@@ -149,6 +156,11 @@ if [ "${ENABLE_MDBLOCALES:-false}" = "true" ]; then
     CONFIGURE_MDBLOCALES_OPTS="--with-mdblocales"
 fi
 
+CONFIGURE_YEZZEY_OPTS=""
+if [ "${ENABLE_YEZZEY:-false}" = "true" ]; then
+    CONFIGURE_YEZZEY_OPTS="--with-yezzey"
+fi
+
 # Configure build
 log_section "Configure"
 execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
@@ -179,6 +191,8 @@ execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
             --with-openssl \
             --with-uuid=e2fs \
             ${CONFIGURE_MDBLOCALES_OPTS} \
+            ${CONFIGURE_YEZZEY_OPTS} \
+     ${CONFIGURE_EXTRA_OPTS:-} \
             --with-includes=/usr/local/xerces-c/include \
             --with-libraries=${BUILD_DESTINATION}/lib || exit 4
 log_section_end "Configure"

@@ -1508,6 +1508,18 @@ if test "$with_zstd" = yes; then
 fi
 
 #
+# yezzey
+#
+PGAC_ARG_BOOL(with, yezzey, no,
+              [build with Yezzey extension])
+AC_SUBST(with_yezzey)
+
+AS_IF([test "$with_yezzey" = yes],
+[ # then
+  AX_CXX_COMPILE_STDCXX([11], [noext], [mandatory])
+]) # fi
+
+#
 # Realtime library
 #
 PGAC_ARG_BOOL(with, rt, yes,
@@ -1849,6 +1861,10 @@ if test "$with_ssl" = openssl ; then
   AC_DEFINE([USE_OPENSSL], 1, [Define to 1 to build with OpenSSL support. (--with-ssl=openssl)])
 elif test "$with_ssl" != no ; then
   AC_MSG_ERROR([--with-ssl must specify openssl])
+fi
+
+if test "$with_yezzey" = yes && test "$with_ssl" != openssl ; then
+  AC_MSG_ERROR([OpenSSL is required for Yezzey; specify --with-ssl=openssl when using --with-yezzey])
 fi
 AC_SUBST(with_ssl)
 

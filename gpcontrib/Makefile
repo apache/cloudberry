@@ -44,6 +44,9 @@ ifeq "$(with_diskquota)" "yes"
 	recurse_targets += diskquota
 endif
 
+ifeq "$(with_yezzey)" "yes"
+	recurse_targets += yezzey
+endif
 ifeq "$(with_zstd)" "yes"
 	recurse_targets += zstd
 endif
