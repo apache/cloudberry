@@ -27,8 +27,8 @@ filter.
 Most are integration tests. They write their own Lance datasets with pylance
 into the directory named by CBMCP_LANCE_TEST_DIR, which every segment of the
 cluster must be able to read at the same path. Without that variable, pylance,
-or lance_fdw 0.2 or later (the version that defines the distance operators),
-they skip. The tests of what happens on lance_fdw older than 0.2 need none of
+or a lance_fdw that defines the distance operators, they skip. The tests of
+what happens on a lance_fdw without the distance operators need none of
 that: they run against a stand-in connection.
 """
 
@@ -187,7 +187,7 @@ async def fixture_tables(result_limits):
             "SELECT EXISTS (SELECT 1 FROM pg_operator WHERE oprname = '<->' "
             "AND oprleft = 'real[]'::regtype AND oprright = 'real[]'::regtype)"
         ):
-            pytest.skip("Skipping Lance tests - lance_fdw is older than 0.2")
+            pytest.skip("Skipping Lance tests - lance_fdw has no distance operators")
 
         directory = tempfile.mkdtemp(prefix="cbmcp_lance_", dir=base)
         write_datasets(directory)
@@ -492,7 +492,7 @@ class TestVectorSearch:
 
 
 class StandInConnection:
-    """Answers the catalog queries of a database whose lance_fdw is older than 0.2."""
+    """Answers the catalog queries of a database whose lance_fdw has no distance operators."""
 
     def __init__(self, records):
         self.records = records
@@ -516,12 +516,12 @@ class StandInManager(DatabaseManager):
 
 
 @pytest.mark.asyncio
-class TestLanceOlderThanTheOperators:
-    """lance_fdw 0.1 has the foreign tables but no distance operators."""
+class TestLanceWithoutTheOperators:
+    """A lance_fdw without vector search has the foreign tables but no distance operators."""
 
-    async def test_vector_search_says_to_update_the_extension(self):
+    async def test_vector_search_says_lance_fdw_lacks_it(self):
         column = {"column_name": "emb"}
-        with pytest.raises(ValueError, match="ALTER EXTENSION lance_fdw UPDATE"):
+        with pytest.raises(ValueError, match="lance_fdw does not support vector search"):
             await DatabaseManager._check_lance_search(
                 StandInConnection([]), column, "l2", "<->", None, None
             )

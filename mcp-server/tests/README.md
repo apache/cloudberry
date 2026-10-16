@@ -40,19 +40,21 @@ tests created `lance_fdw` themselves they drop it afterwards, without
 `test_lance_tools.py` writes its own Lance datasets with pylance and reads them
 back through `lance_fdw`, so it needs:
 
-- `lance_fdw` 0.2 or later available to the cluster. If the database does not
-  have the extension yet, the tests create it and, unless another run is still
-  using it, drop it again afterwards;
+- `lance_fdw` with vector search (the distance operators on `real[]`) available
+  to the cluster. If the database does not have the extension yet, the tests
+  create it and, unless another run is still using it, drop it again afterwards;
 - `pip install pylance pyarrow numpy` in the test environment. These are not
   in the `dev` extras, since only this module needs them;
 - `CBMCP_LANCE_TEST_DIR`, a directory the tests can write to and every segment
   can read at the same path - any local directory on a single-host demo
   cluster.
 
-Without one of these the integration tests skip; two tests of how an older
-`lance_fdw` is handled run anyway, against a stand-in connection. A directory
-that some segment hosts cannot read is not detected up front: the tests fail
-rather than skip.
+Without one of these the integration tests skip; two tests of how a
+`lance_fdw` without vector search is handled run anyway, against a stand-in
+connection. A directory that some segment hosts cannot read is not detected up
+front: the tests fail rather than skip. Like the `lance_fdw` suites, they also
+expect `optimizer = off`; under GPORCA the test of the plan of a search handed
+to Lance fails.
 
 ```bash
 CBMCP_LANCE_TEST_DIR=/home/gpadmin/lance_test pytest tests/test_lance_tools.py

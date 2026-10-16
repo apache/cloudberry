@@ -67,9 +67,9 @@ from .security import SQLValidator
 
 logger = logging.getLogger(__name__)
 
-# Whether lance_fdw itself defines a distance operator on real[].  It does from
-# extension version 0.2; asking pg_depend rather than only pg_operator keeps an
-# operator of the same name from some other extension from passing for it.
+# Whether lance_fdw itself defines a distance operator on real[], which it does
+# once it supports vector search; asking pg_depend rather than only pg_operator
+# keeps an operator of the same name from some other extension from passing for it.
 LANCE_OPERATOR_SQL = (
     "SELECT EXISTS (SELECT 1 FROM pg_operator o "
     "JOIN pg_depend d ON d.classid = 'pg_operator'::regclass "
@@ -1124,14 +1124,13 @@ class DatabaseManager:
                 f"metric '{value}' is not available on the Lance column '{name}'; "
                 f"{LANCE_FDW} supports: {supported}"
             )
-        # An extension still at 0.1 has the foreign tables but nothing to rank
-        # them with.
+        # A lance_fdw without vector search has the foreign tables but nothing
+        # to rank them with.
         defined = await conn.fetchval(LANCE_OPERATOR_SQL, operator)
         if not defined:
             raise ValueError(
-                f"this database has no {operator} operator on real[], which "
-                f"{LANCE_FDW} defines from extension version 0.2; run "
-                f"ALTER EXTENSION {LANCE_FDW} UPDATE"
+                f"this database has no {operator} operator on real[] from "
+                f"{LANCE_FDW}; the installed {LANCE_FDW} does not support vector search"
             )
 
     # Cloudberry dispatches a SET to the segments only when a query executor

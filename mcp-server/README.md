@@ -381,10 +381,11 @@ search too, which stops within a fraction of a second.
 
 ## Lance Datasets
 
-`lance_fdw` is a separately installed foreign data wrapper, not part of Apache
-Cloudberry, that exposes a Lance dataset as a foreign table. The tools read it
+`lance_fdw` is the foreign data wrapper in `contrib/lance_fdw`, built with
+`configure --with-lance`, that exposes a Lance dataset as a foreign table. The tools read it
 like any other table, and `lance_fdw` hands filters, projections and vector
-searches to Lance. Vector search needs `lance_fdw` 0.2 or later.
+searches to Lance. Vector search needs a `lance_fdw` that defines the distance operators on
+`real[]`.
 
 - **Finding the tables.** `list_tables` lists foreign tables beside ordinary
   ones, and `table_type: "foreign"` lists only them. `get_table_ddl` shows the
