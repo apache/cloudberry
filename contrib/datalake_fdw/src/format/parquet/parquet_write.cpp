@@ -459,7 +459,7 @@ parquet_open_writer(DatalakeFileSystem fs, const char *path, void *tupdesc_arg,
 		/*
 		 * Arrow 11 deprecated the form that returns its writer through an out
 		 * parameter.  Both spellings have to be here because the versions this
-		 * builds against range from 9 to 17 depending on the distribution, and
+		 * builds against range from 9 to 26 depending on the distribution, and
 		 * the older one warns on the newer Arrow rather than failing -- which is
 		 * the kind of warning that stops being read.
 		 */

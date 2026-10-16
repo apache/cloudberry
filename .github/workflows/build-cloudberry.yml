@@ -1534,28 +1534,23 @@ jobs:
               # EPEL 8 has them, but its libarrow-devel needs a utf8proc-devel
               # that modular filtering keeps out of PowerTools, so it cannot be
               # installed.  The Arrow project's own repository can.  Pinned to
-              # the version EPEL 10 carries, both because that is one version
-              # fewer to have working and because the newest wants C++20, which
-              # Rocky 8's gcc 8 does not have.
+              # 22.0.0, the last release whose headers are C++17: from 23 on
+              # they need C++20, which Rocky 8's gcc 8 does not have.
               # EPEL as well, and not only for Arrow itself: arrow-devel needs
               # re2-devel and parquet-devel needs thrift-devel, and on EL8 both
               # of those live in EPEL.
               dnf install -y \
                 https://apache.jfrog.io/artifactory/arrow/almalinux/8/apache-arrow-release-latest.rpm
               dnf install -y --enablerepo=epel --enablerepo=powertools \
-                arrow-devel-17.0.0-1.el8 parquet-devel-17.0.0-1.el8
+                arrow-devel-22.0.0-1.el8 parquet-devel-22.0.0-1.el8
             else
               # Apache's own repository rather than EPEL, and pinned.  EPEL's
               # Arrow moves when EPEL moves, so a version change there would
               # arrive in this job with no commit of ours behind it -- and
-              # Arrow is the library this extension's ABI is shared with.  The
-              # two versions differ on purpose: between them and the Arrow 9
-              # the maintainers test locally, the three legs cover the range
-              # contrib/datalake_fdw claims to build against.
-              arrow_version=17.0.0-1.el9
-              if [[ "${VERSION_ID%%.*}" == "10" ]]; then
-                arrow_version=21.0.0-1.el10
-              fi
+              # Arrow is the library this extension's ABI is shared with.
+              # 26.0.0 here and 22.0.0 on Rocky 8 means the C++20 build and
+              # the C++17 one are both tested.
+              arrow_version=26.0.0-1.el${VERSION_ID%%.*}
               dnf install -y \
                 https://apache.jfrog.io/artifactory/arrow/almalinux/${VERSION_ID%%.*}/apache-arrow-release-latest.rpm
               dnf install -y --enablerepo=epel --enablerepo=crb \

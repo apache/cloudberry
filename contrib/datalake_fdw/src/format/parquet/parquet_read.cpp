@@ -405,13 +405,22 @@ parquet_open_reader(const Fragment *fragment, const ProjectionSet *projection,
 		}
 
 		/*
-		 * Arrow 21 deprecates this in favour of a Result-returning one that
-		 * Arrow 9 does not have, so whoever raises the floor past 21 gets a
-		 * warning here and a version guard to write -- the one around
-		 * FileWriter::Open in parquet_write.cpp is the shape of it.
+		 * Arrow 19 added the form that returns its reader as a Result, 21
+		 * deprecated the one that returns it through an out parameter, and 26
+		 * removed that one.  Arrow 9 has only the out parameter, so both
+		 * spellings stay, as around FileWriter::Open in parquet_write.cpp.
 		 */
+#if ARROW_VERSION_MAJOR >= 19
+		arrow::Result<std::unique_ptr<arrow::RecordBatchReader>> batches =
+			impl->reader->GetRecordBatchReader(row_groups, columns);
+
+		status = batches.status();
+		if (status.ok())
+			impl->batches = std::move(*batches);
+#else
 		status = impl->reader->GetRecordBatchReader(row_groups, columns,
 													&impl->batches);
+#endif
 		if (!status.ok())
 			return DlArrowStatus(status, "open a Parquet batch reader");
 
