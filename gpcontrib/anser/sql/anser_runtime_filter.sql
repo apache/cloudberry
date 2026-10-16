@@ -12,10 +12,10 @@ SET enable_nestloop = off;
 SET enable_mergejoin = off;
 
 -- A regress test must not inherit the production deadline.  anser.timeout_ms
--- defaults to 100 s because delivery is serial and a wide slice needs that
--- long to be served; a test that waits it out has turned a delivery failure
--- into a slow pass.  Pinned short here, so a filter that never arrives fails
--- the run instead of hiding in the clock.
+-- defaults to 10 s, which is a budget for an exchange that has gone wrong; a
+-- test that waits it out has turned a delivery failure into a slow pass.
+-- Pinned shorter here, so a filter that never arrives fails the run instead of
+-- hiding in the clock.
 SET anser.timeout_ms = 5000;
 
 -- build is the smaller (hashed / preserved) side, distributed so the join key
@@ -85,6 +85,25 @@ SELECT count(*) AS only_off_push
     FROM (SELECT * FROM anser_rf_r_off EXCEPT ALL SELECT * FROM anser_rf_r_push) d;
 RESET gp_enable_runtime_filter_pushdown;
 
+-- Counts the Anser nodes a plan carries.  Comparing a filtered count with an
+-- unfiltered one says nothing when no filter was injected: both runs then do
+-- the same thing and agree.  Several blocks below ask this as well, which is
+-- why it is defined here rather than beside its first caller.
+CREATE FUNCTION anser_rf_nodes(q text) RETURNS bigint
+LANGUAGE plpgsql AS $$
+DECLARE
+    line  text;
+    nodes bigint := 0;
+BEGIN
+    FOR line IN EXECUTE 'EXPLAIN (COSTS OFF) ' || q LOOP
+        IF line ~ 'Anser Bloom' THEN
+            nodes := nodes + 1;
+        END IF;
+    END LOOP;
+    RETURN nodes;
+END;
+$$;
+
 -- Pushdown where the key's table attribute number and its position in the
 -- scan's output targetlist disagree.  The case above cannot see the
 -- difference: anser_rf_probe's key is its first column and also the first
@@ -94,9 +113,9 @@ RESET gp_enable_runtime_filter_pushdown;
 -- built on `id` -- and since no payload is ever a build key, every row is
 -- discarded.  Both counts must be 200.
 SET optimizer = on;
-CREATE TABLE anser_rf_proj_build (id int) DISTRIBUTED BY (id);
+CREATE TABLE anser_rf_proj_build (id int, pad text) DISTRIBUTED BY (pad);
 CREATE TABLE anser_rf_proj_probe (payload int, id int) DISTRIBUTED BY (id);
-INSERT INTO anser_rf_proj_build SELECT g FROM generate_series(1, 200) g;
+INSERT INTO anser_rf_proj_build SELECT g, 'b' || g FROM generate_series(1, 200) g;
 INSERT INTO anser_rf_proj_probe SELECT -g, g FROM generate_series(1, 2000) g;
 ANALYZE anser_rf_proj_build;
 ANALYZE anser_rf_proj_probe;
@@ -107,6 +126,8 @@ SELECT count(p.id) AS proj_push_off
 SET anser.runtime_filter = on;
 SELECT count(p.id) AS proj_push_on
     FROM anser_rf_proj_build b LEFT JOIN anser_rf_proj_probe p ON b.id = p.id;
+SELECT anser_rf_nodes('SELECT count(p.id)
+    FROM anser_rf_proj_build b LEFT JOIN anser_rf_proj_probe p ON b.id = p.id') > 0 AS proj_injected;
 
 -- The alias is not the column.  This subquery renames `payload` to the name
 -- `id` and the real `id` to `id2`, and joins on id2 -- so resolving the key by
@@ -124,14 +145,24 @@ SELECT count(p.id2) AS rename_push_on
     FROM anser_rf_proj_build b
     LEFT JOIN (SELECT payload AS id, id AS id2 FROM anser_rf_proj_probe) p
            ON b.id = p.id2;
+SELECT anser_rf_nodes('SELECT count(p.id2)
+    FROM anser_rf_proj_build b
+    LEFT JOIN (SELECT payload AS id, id AS id2 FROM anser_rf_proj_probe) p
+           ON b.id = p.id2') > 0 AS rename_injected;
 
--- A computed key has no table attribute number to push down: the scan would
--- have to evaluate `id * 2`, which PassByBloomFilter cannot do.  Note the join
--- clause itself still looks like a plain Var to the planner (it references the
--- scan's output position), so the key resolves and the nodes are injected --
--- it is the scan's own targetlist entry that is an expression.  The consumer
--- must decline the pushdown and probe the projected slot itself.  Only the
--- 100 even build ids match, so both counts must be 100.
+-- A computed key, which Anser declines outright.  The subquery has no ORDER BY,
+-- LIMIT or OFFSET, so is_simple_subquery() pulls it up and the hash clause
+-- becomes `b.id = p.id * 2`; anser_hashjoin_keys takes two plain Vars and
+-- nothing else, so no nodes are injected at all.
+--
+-- The comment here used to claim the opposite -- that the clause still reads as
+-- a Var into the scan's output and only the pushdown is declined.  That would
+-- need the subquery to survive as a scan of its own, which asking for it
+-- (OFFSET 0) does not buy either: AnserResolveKeyScan does not descend through
+-- a SubqueryScan.  The decision for a computed column is covered directly by
+-- anser_test_pushdown_accepts; what is left to check here is that declining is
+-- clean, so expr_injected is f and both counts are 100 -- only the 100 even
+-- build ids match.
 SET anser.runtime_filter = off;
 SELECT count(p.k) AS expr_push_off
     FROM anser_rf_proj_build b
@@ -140,6 +171,9 @@ SET anser.runtime_filter = on;
 SELECT count(p.k) AS expr_push_on
     FROM anser_rf_proj_build b
     LEFT JOIN (SELECT id * 2 AS k FROM anser_rf_proj_probe) p ON b.id = p.k;
+SELECT anser_rf_nodes('SELECT count(p.k)
+    FROM anser_rf_proj_build b
+    LEFT JOIN (SELECT id * 2 AS k FROM anser_rf_proj_probe) p ON b.id = p.k') > 0 AS expr_injected;
 RESET gp_enable_runtime_filter_pushdown;
 DROP TABLE anser_rf_proj_build, anser_rf_proj_probe;
 SET optimizer = off;
@@ -190,8 +224,114 @@ $$;
 SELECT 'an inner statement dropped the running query''s filter' AS problem
  WHERE anser_rf_pruned('SELECT anser_rf_nested(p.id) FROM anser_rf_build b
                           JOIN anser_rf_probe p ON b.id = p.id') = 0;
+
+-- Narrow build slices must still publish.  part_index is only diagnostic, so
+-- a slice narrower than the cluster must not reject the only producer there
+-- is: direct dispatch to a non-zero segment (segindex >= total_parts) or the
+-- entry-DB (segindex = -1) both used to leave the channel a part short and
+-- every consumer waiting out anser.timeout_ms.  The block also asserts the
+-- count, but the load-bearing assertion is that rows were pruned at all.
+SET anser.timeout_ms = 100;
+CREATE TABLE anser_rf_dd_build (id int, dk text, pad text) DISTRIBUTED BY (dk);
+CREATE TABLE anser_rf_dd_probe (id int) DISTRIBUTED BY (id);
+INSERT INTO anser_rf_dd_build SELECT g, 'k' || (g % 6), 'b' || g FROM generate_series(1, 1000) g;
+INSERT INTO anser_rf_dd_probe SELECT g % 1000 + 1 FROM generate_series(1, 100000) g;
+ANALYZE anser_rf_dd_build;
+ANALYZE anser_rf_dd_probe;
+
+-- Check every distribution key, not a chosen one: on any cluster with more
+-- than one segment at least one of them lands with segindex >= 1, which is
+-- the shape that used to stall -- the direct-dispatched producer was refused
+-- (segindex >= total_parts) and every consumer waited out anser.timeout_ms.
+-- The discriminating observable is that rows were pruned at all; result
+-- counts are identical either way, since a broken exchange fails open.
+SET anser.runtime_filter = on;
+SELECT anser_rf_pruned('SELECT count(*) FROM anser_rf_dd_probe p JOIN anser_rf_dd_build b ON p.id = b.id WHERE b.dk = ''k0''') > 0 AS k0_pruned;
+SELECT anser_rf_pruned('SELECT count(*) FROM anser_rf_dd_probe p JOIN anser_rf_dd_build b ON p.id = b.id WHERE b.dk = ''k1''') > 0 AS k1_pruned;
+SELECT anser_rf_pruned('SELECT count(*) FROM anser_rf_dd_probe p JOIN anser_rf_dd_build b ON p.id = b.id WHERE b.dk = ''k2''') > 0 AS k2_pruned;
+SELECT anser_rf_pruned('SELECT count(*) FROM anser_rf_dd_probe p JOIN anser_rf_dd_build b ON p.id = b.id WHERE b.dk = ''k3''') > 0 AS k3_pruned;
+SELECT anser_rf_pruned('SELECT count(*) FROM anser_rf_dd_probe p JOIN anser_rf_dd_build b ON p.id = b.id WHERE b.dk = ''k4''') > 0 AS k4_pruned;
+SELECT anser_rf_pruned('SELECT count(*) FROM anser_rf_dd_probe p JOIN anser_rf_dd_build b ON p.id = b.id WHERE b.dk = ''k5''') > 0 AS k5_pruned;
+
+-- Entry-DB build side: a catalog scan runs on the entry-DB QE, whose
+-- segindex is -1 -- 0xFFFFFFFF as a part index, the same rejection.
+CREATE TABLE anser_rf_eb_probe (o oid) DISTRIBUTED BY (o);
+INSERT INTO anser_rf_eb_probe
+    SELECT 'anser_rf_eb_probe'::regclass::oid FROM generate_series(1, 10) g
+    UNION ALL
+    SELECT 4000000000 + g FROM generate_series(1, 100000) g;
+ANALYZE anser_rf_eb_probe;
+-- The count uses only the matching rows, so it is exact: the table's own oid
+-- exists in pg_class, ten times.
+SELECT count(*) AS eb_rows
+    FROM (SELECT 'anser_rf_eb_probe'::regclass::oid AS o FROM generate_series(1, 10) g) p
+    JOIN pg_class c ON p.o = c.oid;
+SELECT 'entry-DB producer did not publish (consumer failed open)' AS problem
+ WHERE anser_rf_pruned('SELECT count(*) FROM anser_rf_eb_probe p JOIN pg_class c ON p.o = c.oid') = 0;
+DROP TABLE anser_rf_dd_build, anser_rf_dd_probe, anser_rf_eb_probe;
+RESET anser.timeout_ms;
+
 DROP FUNCTION anser_rf_nested(int);
 DROP FUNCTION anser_rf_pruned(text);
+
+-- Filter sizing follows the estimate, so exercising a production-size payload
+-- with test-size data goes through a debug knob instead: force a 64 MB bitset
+-- for a 200-row build side, and the full-size filter has to actually exchange
+-- (the serialized part rides the wire to every consumer).
+SET anser.debug_min_filter_bytes = 67108864;
+SET anser.runtime_filter = on;
+EXPLAIN (COSTS OFF)
+SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id;
+
+-- A plain EXPLAIN must not allocate the filter: the coordinator initializes
+-- every slice with EXEC_FLAG_EXPLAIN_ONLY, so the producer must skip building
+-- the bitset (state=NULL) while the plan still shows the planned size.  The
+-- debug log makes the decision observable.
+SET anser.debug = on;
+SET client_min_messages = log;
+EXPLAIN (COSTS OFF)
+SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id;
+RESET client_min_messages;
+RESET anser.debug;
+
+-- And the filter must still be correct: 200 build rows, each matching one
+-- probe row.
+SELECT count(*) AS rows_joined
+    FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id;
+
+-- The floor must change the real filter, not just the plan: sizing raises the
+-- declared element count to match the forced bitset size, so producer and
+-- consumer really build a 64 MB filter instead of displaying one.
+CREATE EXTENSION IF NOT EXISTS anser_test;
+SELECT injected, total_elems, planned_bytes FROM anser_test_rf_size(200);
+DROP EXTENSION anser_test;
+
+-- A LIMIT can finish the query while a consumer is still waiting for its
+-- filter: the producer is squelched before it publishes, the consumer must
+-- bail out via QueryFinishPending and withdraw its subscription, and the
+-- result must match the unfiltered run.
+SELECT count(*) AS limited_rows FROM (
+    SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id
+    LIMIT 10) q;
+
+-- An open cursor must be undisturbed by statements between its FETCHes: the
+-- filter exchange completes inside the FETCH's ExecutorRun window, so a
+-- sibling statement's ExecutorEnd sweep has nothing of the cursor's to wipe.
+-- The sibling runs the same filtered join, so it really does create and sweep
+-- its own channels while the cursor's gang sits suspended.  (A wiped exchange
+-- would fail open with the same rows, so this guards the behavior, not the
+-- timing: that path is a wait, not a wrong answer.)
+SET optimizer = off;
+SET anser.runtime_filter = on;
+BEGIN;
+DECLARE anser_rf_cur CURSOR FOR
+    SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id
+    WHERE b.id <= 3 ORDER BY b.name;
+FETCH 1 anser_rf_cur;
+-- The ExecutorEnd of this statement must leave the open cursor's state alone.
+SELECT count(*) AS sibling_stmt FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id;
+FETCH ALL anser_rf_cur;
+COMMIT;
 
 DROP TABLE anser_rf_r_push;
 DROP TABLE anser_rf_r_on, anser_rf_r_off, anser_rf_r_orca;
@@ -251,6 +391,38 @@ SELECT count(*) AS only_off
 
 DROP TABLE anser_rf_z_on, anser_rf_z_off, anser_rf_build_z, anser_rf_probe_z;
 
+-- The exclusion has to hold through a domain.  A domain inherits typlen and
+-- typbyval from its base type, so it looks by-value, and its OID is not one of
+-- the float OIDs the exclusion names -- a check on the declared type alone lets
+-- it straight through and -0.0 would stop matching 0.0.  Both sides are
+-- distributed on their text column so the join needs a Motion and is a
+-- candidate for injection; the key type is what has to refuse it.
+CREATE DOMAIN anser_rf_f8 AS float8;
+CREATE TABLE anser_rf_build_d (id anser_rf_f8, name text) DISTRIBUTED BY (name);
+CREATE TABLE anser_rf_probe_d (id anser_rf_f8, payload text) DISTRIBUTED BY (payload);
+INSERT INTO anser_rf_build_d VALUES (1, 'b1'), (-0.0, 'bz');
+INSERT INTO anser_rf_probe_d VALUES (1, 'p1'), (0.0, 'pz'), (2, 'p2');
+ANALYZE anser_rf_build_d;
+ANALYZE anser_rf_probe_d;
+
+SET anser.runtime_filter = on;
+CREATE TEMP TABLE anser_rf_d_on AS
+    SELECT b.name, p.payload FROM anser_rf_build_d b JOIN anser_rf_probe_d p ON b.id = p.id
+    DISTRIBUTED BY (name);
+SET anser.runtime_filter = off;
+CREATE TEMP TABLE anser_rf_d_off AS
+    SELECT b.name, p.payload FROM anser_rf_build_d b JOIN anser_rf_probe_d p ON b.id = p.id
+    DISTRIBUTED BY (name);
+
+SELECT count(*) AS rows_on FROM anser_rf_d_on;
+SELECT count(*) AS only_on
+    FROM (SELECT * FROM anser_rf_d_on EXCEPT ALL SELECT * FROM anser_rf_d_off) d;
+SELECT count(*) AS only_off
+    FROM (SELECT * FROM anser_rf_d_off EXCEPT ALL SELECT * FROM anser_rf_d_on) d;
+
+DROP TABLE anser_rf_d_on, anser_rf_d_off, anser_rf_build_d, anser_rf_probe_d;
+DROP DOMAIN anser_rf_f8;
+
 -- Parameterized rescan guard: a build side whose rows depend on a parameter an
 -- enclosing nested loop reassigns yields a different key set per outer tuple,
 -- and neither node rebuilds on rescan -- the producer stays published, the
@@ -263,7 +435,7 @@ DROP TABLE anser_rf_z_on, anser_rf_z_off, anser_rf_build_z, anser_rf_probe_z;
 -- makes a stale filter visible: with the first group's filter still in place
 -- the second group matches nothing.
 CREATE TABLE anser_rf_nl_outer (g int) DISTRIBUTED REPLICATED;
-CREATE TABLE anser_rf_nl_build (g int, id int) DISTRIBUTED BY (id);
+CREATE TABLE anser_rf_nl_build (g int, id int) DISTRIBUTED BY (g);
 CREATE TABLE anser_rf_nl_probe (id int) DISTRIBUTED BY (id);
 INSERT INTO anser_rf_nl_outer VALUES (1), (2);
 INSERT INTO anser_rf_nl_build SELECT 1, g FROM generate_series(1, 100) g;
@@ -272,21 +444,6 @@ INSERT INTO anser_rf_nl_probe SELECT g FROM generate_series(1, 20000) g;
 ANALYZE anser_rf_nl_outer;
 ANALYZE anser_rf_nl_build;
 ANALYZE anser_rf_nl_probe;
-
-CREATE FUNCTION anser_rf_nodes(q text) RETURNS bigint
-LANGUAGE plpgsql AS $$
-DECLARE
-    line  text;
-    nodes bigint := 0;
-BEGIN
-    FOR line IN EXECUTE 'EXPLAIN (COSTS OFF) ' || q LOOP
-        IF line ~ 'Anser Bloom' THEN
-            nodes := nodes + 1;
-        END IF;
-    END LOOP;
-    RETURN nodes;
-END;
-$$;
 
 -- Both groups must report 100, with the filter on and off alike, and the plan
 -- must carry no Anser node at all.
@@ -318,38 +475,7 @@ SELECT anser_rf_nodes('SELECT count(*) FROM anser_rf_nl_probe p
 DROP FUNCTION anser_rf_nodes(text);
 DROP TABLE anser_rf_nl_outer, anser_rf_nl_build, anser_rf_nl_probe;
 
--- nextval guard: the QD sends two kinds of message down a QE's dispatch
--- connection -- the nextval reply and a sideband message -- and each has its
--- own reader.  A reader that meets the other's message has to skip it whole:
--- taking the type byte and erroring leaves the body in the stream, and the
--- session then dies somewhere else with "protocol synchronization was lost".
---
--- In the field this needs an Anser consumer to give up on a filter the
--- coordinator goes on to deliver anyway, which is a race and cannot be asked
--- for from SQL.  The fault puts a sideband message in front of one nextval
--- reply instead, so the ordering is certain rather than likely; the
--- three-argument form is occurrence 1..1, so it fires once.
---
--- Nothing here is Anser's -- the fault supplies the message and the fix is in
--- cdb_sequence_nextval_qe -- but Anser is why a second message type exists on
--- that connection at all, so the test lives with it.
---
--- The extension may or may not already be there, and saying so is not part of
--- what is being tested; it is never dropped, for the same reason -- it can
--- predate this test, and other tests in the same database rely on it.
--- start_ignore
-CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
--- end_ignore
-CREATE SEQUENCE anser_rf_seq;
-CREATE TABLE anser_rf_seq_t (id int) DISTRIBUTED BY (id);
-INSERT INTO anser_rf_seq_t SELECT g FROM generate_series(1, 10) g;
-SELECT gp_inject_fault('nextval_sideband_before_response', 'skip', dbid)
-    FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-SELECT count(nextval('anser_rf_seq')) AS seq_rows FROM anser_rf_seq_t;
-SELECT gp_inject_fault('nextval_sideband_before_response', 'reset', dbid)
-    FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-DROP SEQUENCE anser_rf_seq;
-DROP TABLE anser_rf_seq_t;
+
 
 -- ---------------------------------------------------------------------------
 -- Parallel execution.
@@ -364,12 +490,15 @@ DROP TABLE anser_rf_seq_t;
 -- which disagree here: for one query the Postgres planner may give a serial
 -- build slice where GPORCA gives a parallel one.
 --
--- The join key is the distribution key on both sides, so no Motion is needed
--- to co-locate the join.  That is the only shape either planner parallelises:
--- a redistributed or broadcast build side is fine for GPORCA but the Postgres
--- planner marks Motion paths parallel-unsafe.
+-- The build side is distributed by v and joined on id, so it is redistributed:
+-- Anser only injects across a Motion, and a co-located join -- which is what
+-- this used to use -- is now skipped outright, making the whole section
+-- vacuous.  The cost is that only GPORCA still parallelises it; the Postgres
+-- planner marks Motion paths parallel-unsafe, so its two blocks below are
+-- reduced to a filter-on/filter-off equivalence check on a serial slice.
+-- They are kept because that equivalence is worth asserting on its own.
 -- ---------------------------------------------------------------------------
-CREATE TABLE anser_rf_par_build (id int, v text) DISTRIBUTED BY (id);
+CREATE TABLE anser_rf_par_build (id int, v text) DISTRIBUTED BY (v);
 CREATE TABLE anser_rf_par_probe (id int, pad text) DISTRIBUTED BY (id);
 INSERT INTO anser_rf_par_build SELECT g, 'b' || g FROM generate_series(1, 500) g;
 INSERT INTO anser_rf_par_probe SELECT g, 'p' || g FROM generate_series(1, 20000) g;
@@ -478,7 +607,96 @@ RESET parallel_setup_cost;
 RESET parallel_tuple_cost;
 RESET max_parallel_workers_per_gather;
 
+-- A probe side under a WindowAgg must not be filtered: the window is computed
+-- over the whole input, so a consumer on the base scan below it would change
+-- the result.  The resolver must refuse the descent (the node whitelist
+-- applies to the probe-side top too) and inject nothing.
+SET optimizer = off;
+SET anser.runtime_filter = on;
+CREATE TABLE anser_rf_win (k int8, pad int) DISTRIBUTED BY (pad);
+INSERT INTO anser_rf_win SELECT i % 1000, i FROM generate_series(1, 100000) i;
+ANALYZE anser_rf_win;
+-- A temp table is scanned on the coordinator, so the build side runs in the
+-- coordinator's slice while the probe side runs on the segments: the slices
+-- differ and the join would inject if the WindowAgg did not refuse it.  k=5
+-- exists in the table (k = i % 1000, a hundred times), so the row matches and
+-- the window total must be the full 100000 -- the windowed side returns every
+-- row with the total attached, hence the max().
+CREATE TEMP TABLE anser_rf_dim (k int8) DISTRIBUTED BY (k);
+INSERT INTO anser_rf_dim VALUES (5);
+SELECT max(s.total) AS window_total
+FROM anser_rf_dim d
+LEFT JOIN (SELECT k, count(*) OVER () AS total FROM anser_rf_win) s
+    ON s.k = d.k;
+DROP TABLE anser_rf_dim;
+DROP TABLE anser_rf_win;
+
+-- IS NOT DISTINCT FROM below an outer join: ORCA puts a plain `=` in
+-- hashclauses and the null-safety test in hashqualclauses, so the join passes
+-- the equality gate, and the consumer used to land on the nullable side of
+-- the lower LEFT JOIN.  Every row it dropped came back NULL-extended and then
+-- matched the build side's NULL under INDF -- 99997 rows instead of 0.  The
+-- resolver must now refuse the descent into the nullable side, so no filter
+-- is injected and the count stays 0.
+SET optimizer = on;
+SET gp_enable_runtime_filter = off;
+SET anser.runtime_filter = on;
+CREATE TABLE anser_rf_s (x int, y int) DISTRIBUTED BY (x);
+CREATE TABLE anser_rf_r (x int, k int) DISTRIBUTED BY (x);
+CREATE TABLE anser_rf_b (k int) DISTRIBUTED RANDOMLY;
+INSERT INTO anser_rf_s SELECT g, g FROM generate_series(1, 100000) g;
+INSERT INTO anser_rf_r SELECT g, g + 1000000 FROM generate_series(1, 100000) g;
+INSERT INTO anser_rf_b VALUES (NULL);
+INSERT INTO anser_rf_b SELECT g FROM generate_series(1, 10) g;
+ANALYZE anser_rf_s;
+ANALYZE anser_rf_r;
+ANALYZE anser_rf_b;
+SELECT count(*) AS indf_rows FROM (anser_rf_s s LEFT JOIN anser_rf_r r ON s.x = r.x)
+    JOIN anser_rf_b b ON r.k IS NOT DISTINCT FROM b.k;
+
+-- Plain two-table INDF remains sound to filter: the bloom holds the build
+-- side's non-NULL keys and NULL probe keys pass through, so matches and the
+-- NULL row must all survive -- 1 and 2 are in b (1..10), NULL matches b's.
+CREATE TABLE anser_rf_m (k int) DISTRIBUTED RANDOMLY;
+INSERT INTO anser_rf_m VALUES (1), (2), (NULL);
+SELECT count(*) AS indf_simple_rows FROM anser_rf_m m
+    JOIN anser_rf_b b ON m.k IS NOT DISTINCT FROM b.k;
+DROP TABLE anser_rf_m, anser_rf_s, anser_rf_r, anser_rf_b;
+
+-- A computed probe key must refuse the filter: ORCA evaluates the cast in
+-- the scan's projection (Output: (big)::oid), so the consumer would hash the
+-- zero-extended computed oid while the producer hashes the sign-extended
+-- stored oid -- every oid >= 2^31 mismatches, and only false positives pass
+-- (3 rows instead of 50).  The SeqScan shortcut must apply the same
+-- plain-Var check as the resolver, so no consumer is injected.
+CREATE TABLE anser_rf_p (id int, big int8) DISTRIBUTED BY (id);
+CREATE TABLE anser_rf_o (o oid) DISTRIBUTED RANDOMLY;
+INSERT INTO anser_rf_p SELECT g, 3000000000 + g FROM generate_series(1, 100000) g;
+INSERT INTO anser_rf_o SELECT (3000000000 + g)::oid FROM generate_series(1, 50) g;
+ANALYZE anser_rf_p;
+ANALYZE anser_rf_o;
+SELECT count(*) AS cast_rows
+    FROM (SELECT id, big::oid AS o FROM anser_rf_p) p
+    JOIN anser_rf_o b ON b.o = p.o;
+DROP TABLE anser_rf_p, anser_rf_o;
+RESET gp_enable_runtime_filter;
+-- Resource and log knobs are superuser-only: an unprivileged role must not
+-- force 64 MB filters on every segment or fill the server log.  runtime_filter
+-- and timeout_ms only shape the caller's own queries, so they stay
+-- user-settable.
+CREATE ROLE anser_nopriv LOGIN;
+SET ROLE anser_nopriv;
+SET anser.debug_min_filter_bytes = 67108864;
+SET anser.max_info_size = 100000000;
+SET anser.debug = on;
+SET anser.runtime_filter = on;
+SET anser.timeout_ms = 100;
+RESET ROLE;
+DROP ROLE anser_nopriv;
+
 RESET anser.runtime_filter;
+RESET anser.debug_min_filter_bytes;
+RESET anser.timeout_ms;
 RESET optimizer;
 RESET enable_nestloop;
 RESET enable_mergejoin;

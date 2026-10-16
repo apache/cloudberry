@@ -34,10 +34,9 @@
  */
 #include "postgres_fe.h"
 
-#include <arpa/inet.h>
-
 #include "libpq-fe.h"
 #include "libpq-int.h"
+#include "port/pg_bswap.h"
 
 /* A NOTIFY as it appears on the wire, minus the leading message type byte. */
 static const char notify_channel[] = "anser";
@@ -87,10 +86,10 @@ main(void)
 	conn->inStart = conn->inCursor = 0;
 
 	conn->inBuffer[pos++] = 'A';
-	netlen = htonl(msglen);
+	netlen = pg_hton32(msglen);
 	memcpy(conn->inBuffer + pos, &netlen, 4);
 	pos += 4;
-	netpid = htonl(123);
+	netpid = pg_hton32(123);
 	memcpy(conn->inBuffer + pos, &netpid, 4);
 	pos += 4;
 	memcpy(conn->inBuffer + pos, notify_channel, sizeof(notify_channel));

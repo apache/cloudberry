@@ -46,6 +46,7 @@
 #include "utils/acl.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+#include "utils/typcache.h"
 
 /* Runtime-filter bloom size bounds (realized bitset bytes). */
 #define ANSER_RF_MIN_BYTES		(1024 * 1024)		/* bloom_create's 1 MB floor */
@@ -245,6 +246,35 @@ AnserRuntimeFilterSize(double est_rows, int64 *total_elems, int64 *max_payload,
 		realized <<= 1;
 
 	/*
+	 * Debug/test knob: force a filter of at least this size regardless of the
+	 * estimate.  0 (the default) means the estimate rules.  A bigger filter
+	 * built from the same rows stays a superset of the key set, so this can
+	 * only cost memory and wire time, never correctness.  Still capped by the
+	 * payload budget: a floor above it cannot ship.
+	 */
+	if (gp_anser_debug_min_filter_bytes > 0 &&
+		realized < (int64) gp_anser_debug_min_filter_bytes)
+	{
+		while (realized < (int64) gp_anser_debug_min_filter_bytes &&
+			   (realized << 1) <= cap_bytes)
+			realized <<= 1;
+	}
+
+	/*
+	 * The filter is built from total_elems (bloom_create sizes from the
+	 * element count, not from planned_bytes), so a floor on realized alone
+	 * only inflates the EXPLAIN number: a 200-row build still produces a 1 MB
+	 * filter whatever the knob says.  Raise the element count to match the
+	 * forced size, so producer and consumer really build it.  The extra hash
+	 * functions cost only probe time, and the larger bitset only lowers the
+	 * false-positive rate -- a 64 MB filter over 200 keys is overkill, never
+	 * wrong.  realized is a power of two, so elems = realized / 2 sizes the
+	 * bitset to exactly realized.
+	 */
+	if (realized > elems * 2)
+		elems = realized / 2;
+
+	/*
 	 * Refuse a join whose build side cannot be usefully summarized within the
 	 * payload cap.
 	 *
@@ -264,6 +294,43 @@ AnserRuntimeFilterSize(double est_rows, int64 *total_elems, int64 *max_payload,
 }
 
 /*
+ * The key types we may filter on: by-value types for which SQL equality is
+ * provably bitwise equality of the stored bytes, so that hashing the raw
+ * Datum on both sides agrees with the equality operator.  Producer and
+ * consumer hash raw bytes, so a type with a non-canonical representation
+ * would hash two different ways under one equality operator -- a false
+ * negative that drops a joinable row.  Floats are the canonical
+ * counterexample (-0.0 and 0.0 compare equal but are not bitwise equal);
+ * everything else that does not make this guarantee is refused by omission.
+ * Domains resolve through getBaseType() before landing here.
+ */
+static bool
+anser_rf_key_type_supported(Oid keytype)
+{
+	switch (keytype)
+	{
+		case BOOLOID:
+		case CHAROID:
+		case INT2OID:
+		case INT4OID:
+		case INT8OID:
+		case OIDOID:
+		case XIDOID:
+		case CIDOID:
+		case DATEOID:
+		case TIMEOID:
+		case TIMESTAMPOID:
+		case TIMESTAMPTZOID:
+		case MONEYOID:
+		case PG_LSNOID:
+		case XID8OID:
+			return true;
+		default:
+			return false;
+	}
+}
+
+/*
  * Match a single-column equijoin over plain (by-value) Vars and return the
  * inner (build) and outer (probe) key attnos.  After set_plan_references the
  * operands are INNER_VAR / OUTER_VAR references into the join's child tlists.
@@ -276,6 +343,8 @@ anser_hashjoin_keys(HashJoin *hj, AttrNumber *inner_attno, AttrNumber *outer_att
 	Node	   *r;
 	Var		   *outer_var;
 	Var		   *inner_var;
+	Oid			keytype;
+	TypeCacheEntry *tce;
 
 	if (list_length(hj->hashclauses) != 1)
 		return false;
@@ -308,22 +377,103 @@ anser_hashjoin_keys(HashJoin *hj, AttrNumber *inner_attno, AttrNumber *outer_att
 	/*
 	 * Producer and consumer hash the raw Datum bytes, which is only correct
 	 * when SQL equality coincides with bitwise Datum equality of the key.
-	 * That requires the SAME by-value type on both sides: cross-type equijoins
-	 * (e.g. float4 = float8, date = timestamp) hash different bit patterns for
-	 * equal values, and floats are excluded even same-typed because -0.0 and
-	 * 0.0 compare equal but are not bitwise equal.  Anything looser could
-	 * prune rows that actually join.
+	 * That requires the same type on both sides -- cross-type equijoins (e.g.
+	 * float4 = float8, date = timestamp) hash different bit patterns for equal
+	 * values -- and the type on the whitelist (see
+	 * anser_rf_key_type_supported), which is where the bitwise-equality claim
+	 * is made.  Anything looser could prune rows that actually join -- a wrong
+	 * answer, not a slow one.
 	 */
 	if (inner_var->vartype != outer_var->vartype)
 		return false;
-	if (!get_typbyval(inner_var->vartype))
+
+	keytype = getBaseType(inner_var->vartype);
+	if (!anser_rf_key_type_supported(keytype))
 		return false;
-	if (inner_var->vartype == FLOAT4OID || inner_var->vartype == FLOAT8OID)
+
+	/*
+	 * Finally, the clause has to be the type's own equality rather than just
+	 * some hashable operator spelled "=".  This does not prove bitwise
+	 * equality -- float8's default equality is float8eq, which is why floats
+	 * need the exclusion above -- but it keeps an operator with semantics of
+	 * its own from being read as if it were the canonical one.
+	 */
+	tce = lookup_type_cache(keytype, TYPECACHE_EQ_OPR);
+	if (!OidIsValid(tce->eq_opr) || op->opno != tce->eq_opr)
 		return false;
 
 	*inner_attno = inner_var->varattno;
 	*outer_attno = outer_var->varattno;
 	return true;
+}
+
+/*
+ * Node types the descent may pass through: the single-child passthroughs
+ * (Hash, Motion), the joins whose sides carry the column up (HashJoin), and
+ * our own filter nodes.  Anything else -- WindowAgg, Limit, Agg, Result, an
+ * Append or SetOp whose column comes from several relations at once -- ends
+ * the descent: the superset argument for landing the filter on the base scan
+ * (anser_try_inject) only holds for joins and passthroughs; an operator whose
+ * output depends on the whole input (a window over it, an aggregate of it,
+ * its first N rows) would be computed over the filtered rows instead.
+ */
+static bool
+anser_rf_passthrough_node(const Plan *plan)
+{
+	return IsA(plan, Hash) || IsA(plan, Motion) || IsA(plan, HashJoin) ||
+		AnserIsRuntimeFilterScan(plan);
+}
+
+/*
+ * Is this side of the join the nullable one?  On that side an outer join
+ * extends non-matching rows with NULLs, so a pruned row comes back as a
+ * NULL-extended row rather than disappearing -- and a downstream condition
+ * can tell the difference (IS NOT DISTINCT FROM matches NULL to NULL, so
+ * what was a no-match becomes a match).  The preserved side is safe to
+ * filter: its rows survive identically either way.
+ */
+static bool
+anser_rf_nullable_side(JoinType jointype, bool inner_side)
+{
+	switch (jointype)
+	{
+		case JOIN_INNER:
+			return false;
+		case JOIN_LEFT:
+			return inner_side;
+		case JOIN_RIGHT:
+			return !inner_side;
+		default:
+			/* FULL, ANTI, LASJ variants and anything future: block both. */
+			return true;
+	}
+}
+
+/*
+ * Require the scan's own targetlist entry for the column to be a plain Var
+ * of the scanned relation, never a computed expression (ORCA emits those in
+ * a Seq Scan's Output).  Producer and consumer hash the raw Datum, and a
+ * tuple-fetched value and an expression-computed one need not agree in the
+ * upper bytes for 4-byte types: fetch_att sign-extends (Int32GetDatum,
+ * tupmacs.h) while e.g. ObjectIdGetDatum zero-extends, so an oid >= 2^31
+ * would hash two different ways under one equality operator -- a false
+ * negative that drops a joinable row.  A plain Var guarantees both sides
+ * read the column through fetch_att, where the representation is fixed.
+ */
+static bool
+anser_rf_scan_column_is_var(Plan *scan, AttrNumber attno)
+{
+	TargetEntry *tle;
+	Var		   *var;
+
+	if (scan == NULL || !IsA(scan, SeqScan) ||
+		attno < 1 || attno > list_length(scan->targetlist))
+		return false;
+	tle = (TargetEntry *) list_nth(scan->targetlist, attno - 1);
+	if (tle == NULL || !IsA(tle->expr, Var))
+		return false;
+	var = (Var *) tle->expr;
+	return var->varno == ((Scan *) scan)->scanrelid;
 }
 
 /*
@@ -361,11 +511,21 @@ anser_hashjoin_keys(HashJoin *hj, AttrNumber *inner_attno, AttrNumber *outer_att
  */
 bool
 AnserResolveKeyScan(Plan *top, AttrNumber key_attno, int slice_index,
+					bool for_consumer,
 					Plan **parent_out, Plan **scan_out,
 					AttrNumber *attno_out, int *slice_out)
 {
 	Plan	   *node = top;
 	AttrNumber	attno = key_attno;
+
+	/*
+	 * top itself must be descendable: the loop below checks only child, and
+	 * on the first iteration node IS top, which without this a WindowAgg,
+	 * Limit, Agg or Result above the probe scan would be walked straight
+	 * past.
+	 */
+	if (top == NULL || !anser_rf_passthrough_node(top))
+		return false;
 
 	for (;;)
 	{
@@ -415,16 +575,36 @@ AnserResolveKeyScan(Plan *top, AttrNumber key_attno, int slice_index,
 		if (child == NULL)
 			return false;
 
+		/*
+		 * The consumer must never land below an outer join's nullable side:
+		 * pruning there does not just remove the row, it NULL-extends it, and
+		 * a downstream condition can tell that from "no row" (IS NOT DISTINCT
+		 * FROM matches NULL to NULL, so a no-match becomes a match).  The
+		 * producer may descend there: a bloom built over the whole base
+		 * column is a superset of what the outer join emits, and a superset
+		 * is all it needs to be.
+		 */
+		if (for_consumer && IsA(node, HashJoin) &&
+			anser_rf_nullable_side(((HashJoin *) node)->join.jointype,
+								   !via_outer))
+			return false;
+
 		if (via_outer && IsA(child, SeqScan))
 		{
+			/*
+			 * The scan's own entry for the column must be a plain Var, never
+			 * a computed expression (see anser_rf_scan_column_is_var).
+			 */
+			if (!anser_rf_scan_column_is_var(child, var->varattno))
+				return false;
+
 			*parent_out = node;
 			*scan_out = child;
 			*attno_out = var->varattno;
 			*slice_out = slice_index;
 			return true;
 		}
-		if (!IsA(child, Hash) && !IsA(child, Motion) && !IsA(child, HashJoin) &&
-			!AnserIsRuntimeFilterScan(child))
+		if (!anser_rf_passthrough_node(child))
 			return false;
 
 		/*
@@ -524,6 +704,7 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 	if (!anser_hashjoin_keys(hj, &inner_attno, &outer_attno))
 		return;
 	if (!AnserResolveKeyScan(hash, inner_attno, ctx->slice_index,
+							 false /* for_consumer */ ,
 							 &build_parent, &build_scan, &build_attno,
 							 &build_slice))
 		return;
@@ -535,19 +716,21 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 	 * consumer lands on the base scan the probe key comes from.
 	 *
 	 * Filtering that scan is right for the same reason filtering the probe
-	 * side is: every row the probe subtree produces carries that relation's
-	 * key column unchanged, so a row of it whose key the build side does not
-	 * have cannot reach the join's output through any path.  A row dropped
-	 * under an outer join inside the subtree comes back NULL-extended instead,
-	 * and a NULL key joins nothing either.
+	 * side is: the descent never crosses an outer join's nullable side (see
+	 * AnserResolveKeyScan), so every row the probe subtree produces carries
+	 * that relation's key column unchanged, and a row whose key the build side
+	 * does not have cannot reach the join's output through any path.
 	 */
-	if (IsA(probe, SeqScan))
+	if (IsA(probe, SeqScan) &&
+		anser_rf_scan_column_is_var(probe, outer_attno))
 	{
 		probe_parent = (Plan *) hj;
 		probe_scan = probe;
 		probe_attno = outer_attno;
+		probe_slice = ctx->slice_index;		/* nothing descended through */
 	}
 	else if (!AnserResolveKeyScan(probe, outer_attno, ctx->slice_index,
+								  true /* for_consumer */ ,
 								  &probe_parent, &probe_scan, &probe_attno,
 								  &probe_slice))
 		return;
@@ -557,6 +740,30 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 	 * producer would have to finish before the consumer under it could start.
 	 */
 	if (probe_scan == build_scan)
+		return;
+
+	/*
+	 * Only filter across a Motion.  Slices are divided by Motions and nothing
+	 * else, so two scans in one slice are a co-located join, and that is a
+	 * different proposition in both directions.
+	 *
+	 * It is what makes the exchange safe.  An Anser exchange is a
+	 * synchronisation point: the consumer stops until the coordinator has
+	 * heard from every producer.  Within one slice those are the same process,
+	 * run one after another, so the wait can be on something that has not been
+	 * reached yet -- a consumer placed under an intervening HashJoin waits for
+	 * a producer sitting in that join's inner side, which cannot start until
+	 * the outer side yields the tuple the consumer is holding.  defer_first
+	 * covers exactly one tuple of that.  Across a Motion the two are separate
+	 * processes and the question does not arise.
+	 *
+	 * And it is what makes it worth doing.  Where a Motion already carries the
+	 * rows, the barrier is paid for by work the query was doing anyway; in a
+	 * co-located join it is new cost against a join that was already local,
+	 * and whether it pays for itself is a measurement nobody has made.  Until
+	 * someone does, decline.
+	 */
+	if (build_slice == probe_slice)
 		return;
 
 	/*
@@ -698,9 +905,17 @@ anser_inject_walk(Plan *plan, AnserInjectCtx *ctx)
  * How many processes execute a slice -- which is how many producers will
  * publish a part, and therefore how many the coordinator must wait for.
  *
- * This mirrors FillSliceGangInfo (execUtils.c): a slice runs
- * numsegments * parallel_workers processes, with parallel_workers == 0 meaning
- * one.  Both optimizers are covered, and they do differ: for the same query the
+ * This mirrors FillSliceGangInfo (execUtils.c), which has a different answer
+ * per gang type: numsegments * parallel_workers for a plain reader or writer,
+ * but one process for the coordinator's own slice, parallel_workers for a
+ * singleton reader, and one set per targeted segment under direct dispatch.
+ * parallel_workers == 0 means one.  Each is handled below, because over-
+ * counting costs every consumer the full anser.timeout_ms: the channel never
+ * reaches the part count it is waiting for, so it never completes and nobody
+ * is ever told.  Under-counting would be worse -- a filter short of one
+ * segment's keys rejects rows that join -- which is why none of these guesses.
+ *
+ * Both optimizers are covered, and they do differ: for the same query the
  * Postgres planner may give a serial build slice (Broadcast Motion 2:8 over a
  * plain Seq Scan, so 2 producers) where GPORCA gives a parallel one (Broadcast
  * Motion 16:16 over a Parallel Seq Scan, so 16).  Reading it from the slice
@@ -724,6 +939,30 @@ AnserSliceProducers(PlannedStmt *stmt, int slice_index)
 		return 1;
 
 	factor = slice->parallel_workers > 0 ? slice->parallel_workers : 1;
+
+	/*
+	 * A singleton reader runs on one segment, whatever the cluster's width:
+	 * FillSliceGangInfo gives it planNumSegments = 1 * factor and fills its
+	 * segment list with factor copies of one segindex.  numsegments is not
+	 * even meaningful here -- plannodes.h scopes that field to the
+	 * PRIMARY_READER/WRITER cases.
+	 */
+	if (slice->gangType == GANGTYPE_SINGLETON_READER)
+		return factor;
+
+	/*
+	 * Direct dispatch narrows a reader gang to the segments it actually
+	 * needs, and FillSliceGangInfo builds the segment list from contentIds --
+	 * factor processes for each.  planNumSegments keeps saying
+	 * numsegments * factor, so the segment list is what to count.
+	 *
+	 * An empty list yields zero, which the caller reads as "unknown" and
+	 * declines on, and that is the right answer: a slice dispatched nowhere
+	 * publishes nothing.
+	 */
+	if (slice->directDispatch.isDirectDispatch)
+		return list_length(slice->directDispatch.contentIds) * factor;
+
 	if (slice->numsegments <= 0)
 		return 0;
 

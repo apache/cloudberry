@@ -99,7 +99,7 @@ extern PGDLLEXPORT bool AnserBloomPartWorthSending(const void *payload, Size pay
 extern PGDLLEXPORT uint64 AnserBloomSeed(const char *condition_key);
 
 /*
- * Build an empty filter, or return NULL when AnserBloomShapeFor says it is not
+ * Build an empty filter, or return NULL when the sizing rules say it is not
  * worth building.  A NULL return is not an error: the producer turns it into an
  * immediate cancel, so consumers stop waiting instead of timing out.
  */
