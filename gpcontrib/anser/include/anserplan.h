@@ -119,12 +119,21 @@ extern PGDLLEXPORT bool AnserRuntimeFilterSize(double est_rows,
  * return is therefore a correctness gate, not a missed optimization: callers
  * must decline rather than guess.
  *
+ * `for_consumer` is true when resolving the consumer's (probe) key and false
+ * for the producer's (build) key: a consumer removes rows, so the descent
+ * refuses an outer join's nullable side, where pruning rewrites a dropped row
+ * into a NULL-extended one that a downstream condition can distinguish from
+ * "no row" (IS NOT DISTINCT FROM matches NULL to NULL).  A producer only
+ * summarizes the column, and a superset of the outer join's emitted keys is
+ * all it needs, so it may descend anywhere.
+ *
  * Only meaningful after set_plan_references, which is also what makes the
  * descent necessary: before it the Vars still name their base relations.
  */
 extern PGDLLEXPORT bool AnserResolveKeyScan(Plan *top,
 											AttrNumber key_attno,
 											int slice_index,
+											bool for_consumer,
 											Plan **parent_out,
 											Plan **scan_out,
 											AttrNumber *attno_out,

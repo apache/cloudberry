@@ -30,7 +30,9 @@ SET anser.max_info_size = 68157440;
 -- 1. The planner's gate -- the only one that costs nothing, since nothing is
 -- injected and no consumer is left waiting.  A 64 MB bitset is 536870912 bits,
 -- so 134217728 estimated keys is exactly 4 bits/key and one more key is not.
--- A zero or negative estimate is treated as one key, not as "no filter".
+-- A zero or negative estimate is treated as one key, not as "no filter"; the
+-- 1 MB bitset floor then raises the declared count to match, so every estimate
+-- the floor covers shows the same 524288 elements.
 SELECT t.est_rows, s.injected, s.total_elems, s.planned_bytes
 FROM (VALUES (0), (-5), (1), (1000), (1000000), (10000000),
              (134217728), (134217729), (150000000), (1000000000))
@@ -165,21 +167,25 @@ FROM (VALUES
 
 -- The QD -> QE checksum.  The value itself does not matter; which inputs
 -- change it does.  Every routing field and the key are always covered, and the
--- body only for a payload type that asks for it -- the fifth column is that
--- deliberate exemption, not an oversight.
+-- body only for a payload type that asks for it -- the other_body_exempt column
+-- is that deliberate exemption, not an oversight.
 SELECT
-  anser_test_push_crc('B'::"char", 1, 0, 'k', '\x01')
-    <> anser_test_push_crc('B'::"char", 2, 0, 'k', '\x01') AS condition_covered,
-  anser_test_push_crc('B'::"char", 1, 0, 'k', '\x01')
-    <> anser_test_push_crc('B'::"char", 1, 1, 'k', '\x01') AS flags_covered,
-  anser_test_push_crc('B'::"char", 1, 0, 'k', '\x01')
-    <> anser_test_push_crc('B'::"char", 1, 0, 'j', '\x01') AS key_covered,
-  anser_test_push_crc('B'::"char", 1, 0, 'k', '\x01')
-    <> anser_test_push_crc('B'::"char", 1, 0, 'k', '\x02') AS bloom_body_covered,
-  anser_test_push_crc('-'::"char", 1, 0, 'k', '\x01')
-     = anser_test_push_crc('-'::"char", 1, 0, 'k', '\x02') AS other_body_exempt,
-  anser_test_push_crc('B'::"char", 1, 0, 'k', '\x01')
-    <> anser_test_push_crc('-'::"char", 1, 0, 'k', '\x01') AS type_covered;
+  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 'k', '\x01')
+    <> anser_test_push_crc('B'::"char", 2, 7, 3, 0, 'k', '\x01') AS condition_covered,
+  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 'k', '\x01')
+    <> anser_test_push_crc('B'::"char", 1, 8, 3, 0, 'k', '\x01') AS session_covered,
+  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 'k', '\x01')
+    <> anser_test_push_crc('B'::"char", 1, 7, 4, 0, 'k', '\x01') AS command_covered,
+  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 'k', '\x01')
+    <> anser_test_push_crc('B'::"char", 1, 7, 3, 1, 'k', '\x01') AS flags_covered,
+  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 'k', '\x01')
+    <> anser_test_push_crc('B'::"char", 1, 7, 3, 0, 'j', '\x01') AS key_covered,
+  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 'k', '\x01')
+    <> anser_test_push_crc('B'::"char", 1, 7, 3, 0, 'k', '\x02') AS bloom_body_covered,
+  anser_test_push_crc('-'::"char", 1, 7, 3, 0, 'k', '\x01')
+     = anser_test_push_crc('-'::"char", 1, 7, 3, 0, 'k', '\x02') AS other_body_exempt,
+  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 'k', '\x01')
+    <> anser_test_push_crc('-'::"char", 1, 7, 3, 0, 'k', '\x01') AS type_covered;
 
 -- 5. The runtime-filter pushdown decision.  A scan key is numbered by the
 -- table's attributes, while the consumer is numbered by the scan's output
@@ -224,4 +230,44 @@ FROM (VALUES
      LATERAL anser_test_pushdown_target(t.tlist, t.attno, true,
                                         t.as_seqscan) AS s;
 
+-- 7. How many producers a slice runs.  This number is the channel's
+-- completion criterion, so over-counting costs every consumer the full
+-- anser.timeout_ms -- the channel never reaches the count it waits for and
+-- nobody is told -- while under-counting completes it early and hands out a
+-- filter missing a segment's keys, which drops rows that join.  So each of
+-- FillSliceGangInfo's four formulas is pinned here, not inferred from one.
+--
+-- numsegments is only meaningful for a reader or writer gang; the columns are
+-- still filled for the other types to show they are ignored.
+SELECT t.what, t.gang, t.nseg, t.workers, t.direct,
+       anser_test_slice_producers(t.gang, t.nseg, t.workers, t.direct, 0)
+         AS producers
+FROM (VALUES
+        ('coordinator slice',            'unallocated', 3, 0, NULL::int4[]),
+        ('coordinator slice, parallel',  'unallocated', 3, 4, NULL),
+        ('entry db reader',              'entrydb',     3, 0, NULL),
+        ('singleton reader',             'singleton',   3, 0, NULL),
+        ('singleton reader, parallel',   'singleton',   3, 4, NULL),
+        ('reader, serial',               'reader',      3, 0, NULL),
+        ('reader, parallel',             'reader',      3, 4, NULL),
+        ('writer, serial',               'writer',      3, 0, NULL),
+        ('direct dispatch, one segment', 'reader',      3, 0, '{1}'),
+        ('direct dispatch, two, serial', 'reader',      3, 0, '{0,2}'),
+        ('direct dispatch, two, par 4',  'reader',      3, 4, '{0,2}'),
+        ('direct dispatch, nowhere',     'reader',      3, 4, '{}'),
+        ('no segments',                  'reader',      0, 4, NULL),
+        ('negative segments',            'reader',     -1, 4, NULL)
+      ) AS t(what, gang, nseg, workers, direct);
+
+-- The slice has to be identifiable at all; anything else is zero, which the
+-- injection pass reads as "unknown" and declines on.
+SELECT t.what, anser_test_slice_producers('reader', 3, 4, NULL, t.idx)
+         AS producers
+FROM (VALUES
+        ('slice 0 of 1 exists',  0),
+        ('slice 1 of 1 does not', 1),
+        ('negative slice index', -1)
+      ) AS t(what, idx);
+
+RESET anser.max_info_size;
 DROP EXTENSION anser_test;

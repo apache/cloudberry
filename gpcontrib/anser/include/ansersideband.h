@@ -76,6 +76,7 @@ struct pgNotify;				/* #include "libpq-fe.h" */
  */
 #define ANSER_WIRE_KIND_PART		'P'		/* a producer's serialized part */
 #define ANSER_WIRE_KIND_SUBSCRIBE	'S'		/* a consumer registering interest */
+#define ANSER_WIRE_KIND_UNSUBSCRIBE	'U'		/* ... and withdrawing it again */
 
 /* Flag bits, shared by both directions. */
 #define ANSER_WIRE_F_CANCELLED	0x0001
@@ -176,7 +177,13 @@ extern PGDLLEXPORT bool AnserWireCheckCrc(const AnserWireMsg *msg, const void *b
 /*
  * QD -> QE push: raw binary, written with pqPutInt/pqPutnchar.
  *
- *   payload_type | crc32c | condition_id | flags | keylen | key | bodylen | body
+ *   payload_type | crc32c | condition_id | session_id | command_count |
+ *   flags | keylen | key | bodylen | body
+ *
+ * The session and command ids are what lets a parked delivery be told apart
+ * from the current command's: condition_key restarts at the same value for
+ * every statement, so the consumer must match the whole identity, not the key
+ * alone.
  *
  * with each field a 4-byte integer except the key and body.  The CRC covers all
  * of the other fields in that order, the integers in network byte order, so it
@@ -186,6 +193,7 @@ extern PGDLLEXPORT bool AnserWireCheckCrc(const AnserWireMsg *msg, const void *b
  * ansersideband.c, beside the reader that verifies it.
  */
 extern PGDLLEXPORT pg_crc32c AnserWirePushCrc(char payload_type, uint32 condition_id,
+								  uint32 session_id, uint32 command_count,
 								  uint32 flags, const char *key, int keylen,
 								  const void *body, int bodylen);
 
@@ -242,7 +250,10 @@ extern PGDLLEXPORT bool AnserDispatchLocalConsume(const AnserChannelKey *channel
  * the executor/transaction-end callbacks call; the halves are exposed because
  * each lives with the state it owns.
  */
+extern PGDLLEXPORT int64 AnserDispatchUnsubscribeCount(void);
+extern PGDLLEXPORT void AnserDispatchFlushPending(long timeout_ms);
 extern PGDLLEXPORT void AnserDispatchReset(void);
+extern PGDLLEXPORT void AnserDispatchResetCommand(int command_count);
 extern PGDLLEXPORT void AnserSidebandResetInbox(void);
 extern PGDLLEXPORT void AnserSidebandResetAll(void);
 
