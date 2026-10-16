@@ -375,7 +375,16 @@ CFilterStatsProcessor::MakeHistHashMapConjFilter(
 		if (CStatsPred::EsptDisj != child_pred_stats->GetPredStatsType())
 		{
 			GPOS_ASSERT(gpos::ulong_max != colid);
-			hist_before = result_histograms->Find(&colid)->CopyHistogram();
+			const CHistogram *base_histogram = result_histograms->Find(&colid);
+			if (nullptr == base_histogram)
+			{
+				// no histogram for the filter column; estimate the clause
+				// with the default selectivity instead of dereferencing null
+				scale_factors->Append(GPOS_NEW(mp) CDouble(
+					1 / CHistogram::DefaultSelectivity.Get()));
+				continue;
+			}
+			hist_before = base_histogram->CopyHistogram();
 			GPOS_ASSERT(nullptr != hist_before);
 
 			CHistogram *result_histogram = nullptr;
@@ -438,9 +447,15 @@ CFilterStatsProcessor::MakeHistHashMapConjFilter(
 			{
 				CHistogram *result_histogram =
 					disjunctive_histograms_after->Find(&colid);
-				CStatisticsUtils::AddHistogram(mp, colid, result_histogram,
-											   result_histograms,
-											   true /* fReplaceOld */);
+				// the column may have no histogram at all (see
+				// MakeHistHashMapDisjFilter()); then there is nothing to
+				// replace and the scale factor alone carries the estimate
+				if (nullptr != result_histogram)
+				{
+					CStatisticsUtils::AddHistogram(mp, colid, result_histogram,
+												   result_histograms,
+												   true /* fReplaceOld */);
+				}
 				disjunctive_histograms_after->Release();
 
 				last_scale_factor =
@@ -522,6 +537,22 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 			continue;
 		}
 
+		BOOL is_pred_simple =
+			!CStatsPredUtils::IsConjOrDisjPred(child_pred_stats);
+		CHistogram *histogram = input_histograms->Find(&colid);
+		if (is_pred_simple && nullptr == histogram)
+		{
+			// no histogram for the filter column; estimate the clause with
+			// the default selectivity instead of dereferencing null. Do this
+			// before the per-column bookkeeping below, like the unsupported
+			// predicate case, so the previous column's intermediate result
+			// is not flushed twice.
+			scale_factors->Append(GPOS_NEW(mp) CDouble(
+				1 / CHistogram::DefaultSelectivity.Get()));
+
+			continue;
+		}
+
 		if (IsNewStatsColumn(colid, previous_colid))
 		{
 			scale_factors->Append(GPOS_NEW(mp)
@@ -533,11 +564,8 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 			previous_histogram = nullptr;
 		}
 
-		CHistogram *histogram = input_histograms->Find(&colid);
 		CHistogram *disjunctive_child_col_histogram = nullptr;
 
-		BOOL is_pred_simple =
-			!CStatsPredUtils::IsConjOrDisjPred(child_pred_stats);
 		BOOL is_colid_present = (gpos::ulong_max != colid);
 		UlongToHistogramMap *child_histograms = nullptr;
 		CDouble child_scale_factor(1.0);
@@ -571,8 +599,20 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 			if (is_colid_present)
 			{
 				// conjunction or disjunction uses only a single column
-				disjunctive_child_col_histogram =
-					child_histograms->Find(&colid)->CopyHistogram();
+				const CHistogram *child_col_histogram =
+					child_histograms->Find(&colid);
+				if (nullptr != child_col_histogram)
+				{
+					disjunctive_child_col_histogram =
+						child_col_histogram->CopyHistogram();
+				}
+				else
+				{
+					// the column has no histogram, so the child left none
+					// behind; treat the child like a multi-column predicate
+					// and only merge its histogram map and scale factor
+					is_colid_present = false;
+				}
 			}
 		}
 
