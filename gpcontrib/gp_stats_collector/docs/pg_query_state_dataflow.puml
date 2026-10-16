@@ -1,0 +1,113 @@
+' Licensed to the Apache Software Foundation (ASF) under one
+' or more contributor license agreements.  See the NOTICE file
+' distributed with this work for additional information
+' regarding copyright ownership.  The ASF licenses this file
+' to you under the Apache License, Version 2.0 (the
+' "License"); you may not use this file except in compliance
+' with the License.  You may obtain a copy of the License at
+'
+'     http://www.apache.org/licenses/LICENSE-2.0
+'
+' Unless required by applicable law or agreed to in writing, software
+' distributed under the License is distributed on an "AS IS" BASIS,
+' WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+' See the License for the specific language governing permissions and
+' limitations under the License.
+'
+' pg_query_state runtime per-node stats -- data flow.
+' Render:  plantuml docs/pg_query_state_dataflow.puml   (produces a PNG/SVG)
+'
+' Key point of this diagram: the SQL functions run on their OWN (requestor)
+' backends; the query being observed lives in SEPARATE (target) backends on the
+' same host, reached only by ProcSignal.
+
+@startuml pg_query_state_dataflow
+title pg_query_state — on-demand runtime per-node stats (keyed by trace_id)
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam sequence {
+    ArrowThickness 1.4
+    LifeLineBorderColor #9AA5B1
+    LifeLineBackgroundColor #F5F7FA
+    ParticipantBorderColor #52606D
+    ParticipantBackgroundColor #E4E7EB
+    ParticipantFontStyle bold
+    BoxBorderColor #B8C1CC
+    NoteBackgroundColor #FFF9E6
+    NoteBorderColor #E0C879
+}
+
+' Arrow colour convention (see legend):
+'   blue   = SQL / MPP dispatch (libpq)
+'   red    = ProcSignal (custom signal), same host
+'   gray   = shared-memory queue (shm_mq) reply
+'   green  = protobuf over Unix domain socket (UDS)
+
+actor       UI  as "UI"
+participant M   as "yagpcc\n(master)"
+
+box "Coordinator host" #F0F4F8
+    participant RQD as "Requestor QD\nruns pg_query_state()"
+    participant TQD as "Target QD\n(observed query)"
+end box
+
+box "Segment hosts" #F0F4F8
+    collections RQE as "Requestor QEs\nrun cbdb_mpp_query_state()"
+    collections TQE as "Target QEs\n(observed query)"
+end box
+
+participant Y   as "Local yagpcc\n(per-host UDS sink)"
+
+autonumber
+
+UI  -[#2F80ED]>  M   : POST /api/per-node-stats?pid
+hnote over M #EAF2FF : mint **trace_id**\n(16 raw bytes, UUID)
+
+== Expected backend set (completeness barrier) ==
+M   -[#2F80ED]>  RQD : gpsc.pg_query_state_backends(pid)
+RQD -[#EB5757]>  TQD : BackendInfoPollReason (signal)
+TQD -[#828282]-> RQD : active QE set via shm_mq\n(SendCdbComponents runs in TQD)
+RQD --[#2F80ED]> M   : expected backend set (segid, pid)
+
+== Fan out the poll ==
+M   -[#2F80ED]>  RQD : gpsc.pg_query_state(pid, **trace_id**)
+note over RQD
+  validate **trace_id** (exactly 16 B)
+  permission gate:
+  superuser() || GetUserId() == proc->roleId
+  resolve target QEs (same BackendInfoPollReason round-trip)
+end note
+
+note over RQD, TQD : RQD stamps qs_trace_slots[**TQD** backendId] = **trace_id**
+RQD -[#EB5757]>  TQD : SendProcSignal(QueryStatePollReason)
+
+RQD -[#2F80ED]>  RQE : CdbDispatchCommand:\ncbdb_mpp_query_state(seg_pid[], **trace_id**)\n(a separate requestor backend per segment host)
+note over RQE, TQE : each RQE stamps qs_trace_slots[**TQE** backendId] = **trace_id**
+RQE -[#EB5757]>  TQE : SendProcSignal(QueryStatePollReason)
+
+== Collect (in the target backends' signal handler) ==
+note over TQD, TQE
+  SendQueryState(): walk the LIVE plan tree,
+  one GpscNodeSample per plan node
+end note
+TQD -[#27AE60]>  Y   : SetPerNodeBatchReq (**trace_id**)
+TQE -[#27AE60]>  Y   : SetPerNodeBatchReq (**trace_id**)
+TQD -[#27AE60]>  Y   : SetQueryPlanReq (QD only, rate-limited)
+
+== Pull and pivot ==
+M   -[#2F80ED]>  Y   : pull batches for **trace_id**\n(every segment, concurrent)
+Y   --[#27AE60]> M   : per-node batches
+hnote over M #EAF2FF : fold QD copy,\npivot flat samples\ninto a per-slice tree
+M   --[#2F80ED]> UI  : slices[] tree (JSON)\n(+ plan-doc via /api/per-node-plan)
+
+legend right
+  |= arrow |= transport |
+  | <color:#2F80ED>——</color> | SQL / MPP dispatch (libpq) |
+  | <color:#EB5757>——</color> | ProcSignal (same host) |
+  | <color:#828282>——</color> | shm_mq reply |
+  | <color:#27AE60>——</color> | protobuf over UDS |
+endlegend
+
+@enduml
