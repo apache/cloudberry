@@ -4142,9 +4142,13 @@ CTranslatorQueryToDXL::TranslateJoinExprInFromToDXL(JoinExpr *join_expr)
 		{
 			continue;
 		}
-		GPOS_ASSERT(IsA(join_alias_node, Var) ||
-					IsA(join_alias_node, FuncExpr) ||
-					IsA(join_alias_node, CoalesceExpr));
+		// A merged USING column is a plain Var when both inputs have the same
+		// type, a CoalesceExpr for a FULL JOIN, or the left input coerced to
+		// the common type otherwise (FuncExpr, RelabelType, ...). References
+		// to join alias columns have already been flattened by
+		// CQueryMutators::NormalizeQuery, so any expression the scalar
+		// translator understands is acceptable here; unsupported nodes raise
+		// a regular "unsupported feature" exception from TranslateExprToDXL.
 		CHAR *col_name_char_array = strVal(lfirst(lc_col_name));
 
 		// create the DXL node holding the target list entry and add it to proj list
