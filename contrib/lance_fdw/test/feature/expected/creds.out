@@ -1,0 +1,70 @@
+-- creds: the secret in a user mapping must not turn up anywhere else.
+--
+-- The value below is deliberately recognisable and deliberately wrong, which is
+-- enough: what is checked here is EXPLAIN, and EXPLAIN opens nothing.  The
+-- other half of the check is in test/run/run.sh, which greps the coordinator
+-- and segment logs for the same literal once the suites have run - the only
+-- line allowed to contain it is the CREATE USER MAPPING statement itself, which
+-- the server logs verbatim like any other DDL.
+\pset format unaligned
+DO $$
+BEGIN
+  EXECUTE format('CREATE SERVER creds_srv FOREIGN DATA WRAPPER lance_fdw '
+                 'OPTIONS (base_uri %L, aws_endpoint %L, aws_region %L, allow_http %L)',
+                 's3://' || current_setting('regress.s3_bucket') || '/fixtures',
+                 current_setting('regress.s3_endpoint'),
+                 current_setting('regress.s3_region'), 'true');
+END
+$$;
+-- Deliberately on one line: the server logs DDL verbatim, and run.sh's grep
+-- forgives a log line only when the words CREATE USER MAPPING are on it.
+CREATE USER MAPPING FOR PUBLIC SERVER creds_srv OPTIONS (aws_access_key_id 'LANCE_CANARY_KEY_9f3a', aws_secret_access_key 'LANCE_CANARY_SECRET_9f3a', aws_session_token 'LANCE_CANARY_TOKEN_9f3a');
+CREATE FOREIGN TABLE lance_feature.creds_t (id integer, v text, n bigint)
+  SERVER creds_srv OPTIONS (uri 'frag_3.lance');
+-- The needles are spelled as two halves so that these statements do not
+-- themselves put the literal into the log run.sh is about to grep.
+SELECT lance_feature.plan_mentions('SELECT * FROM lance_feature.creds_t',
+                                   'VERBOSE, COSTS OFF',
+                                   'LANCE_CANARY' || '_SECRET_9f3a') AS secret_in_plan;
+secret_in_plan
+f
+(1 row)
+SELECT lance_feature.plan_mentions('SELECT * FROM lance_feature.creds_t',
+                                   'VERBOSE, COSTS OFF',
+                                   'LANCE_CANARY' || '_KEY_9f3a') AS key_in_plan;
+key_in_plan
+f
+(1 row)
+SELECT lance_feature.plan_mentions('SELECT * FROM lance_feature.creds_t',
+                                   'VERBOSE, COSTS OFF',
+                                   'LANCE_CANARY' || '_TOKEN_9f3a') AS token_in_plan;
+token_in_plan
+f
+(1 row)
+SELECT lance_feature.plan_mentions('SELECT count(*) FROM lance_feature.creds_t',
+                                   'VERBOSE, COSTS OFF',
+                                   'aws_secret_access_key') AS option_name_in_plan;
+option_name_in_plan
+f
+(1 row)
+-- With the planner writing whole plans to the log, run both an EXPLAIN and a
+-- scan that really does hand the credentials to lance-c.  Whatever those two
+-- put in the log is what run.sh greps.
+SET debug_print_plan = on;
+SELECT count(*) AS plan_lines
+  FROM lance_feature.explain_lance('SELECT * FROM lance_feature.creds_t',
+                                   'VERBOSE, COSTS OFF') l;
+plan_lines
+3
+(1 row)
+SELECT lance_feature.capture($$SELECT count(*) FROM lance_feature.creds_t$$) AS scan_with_canary;
+scan_with_canary
+lance error
+(1 row)
+RESET debug_print_plan;
+-- The table is still usable afterwards, for whatever a correct mapping would
+-- have made of it.
+SELECT lance_feature.capture($$SELECT id FROM lance_feature.creds_t$$) AS scan_again;
+scan_again
+lance error
+(1 row)
