@@ -1,0 +1,71 @@
+-- Storage facade behavior shared by the built-in file backend and a backend
+-- registered through the public plugin contract.
+SET client_min_messages = warning;
+CREATE EXTENSION IF NOT EXISTS datalake_fdw;
+CREATE EXTENSION IF NOT EXISTS datalake_fdw_test;
+RESET client_min_messages;
+
+COPY (SELECT 1) TO PROGRAM
+	'rm -rf /tmp/datalake_fdw_storage_local && mkdir -p /tmp/datalake_fdw_storage_local/file /tmp/datalake_fdw_storage_local/dltest';
+
+SELECT datalake_storage_write_text(
+	'file:///tmp/datalake_fdw_storage_local/file/a.txt', 'file-data');
+SELECT datalake_storage_read_text(
+	'file:///tmp/datalake_fdw_storage_local/file/a.txt');
+SELECT * FROM datalake_storage_list(
+	'file:///tmp/datalake_fdw_storage_local/file');
+
+\set VERBOSITY sqlstate
+SELECT datalake_storage_write_text(
+	'file:///tmp/datalake_fdw_storage_local/file/a.txt', 'replacement');
+SELECT datalake_storage_read_text(
+	'file:///tmp/datalake_fdw_storage_local/file/missing.txt');
+SELECT datalake_storage_read_text('file://host/tmp/a.txt');
+SELECT datalake_storage_read_text('/tmp/a.txt');
+-- A path may not climb out of the volume it was resolved against.
+SELECT datalake_storage_read_text('file:///tmp/datalake_fdw_storage_local/..');
+\set VERBOSITY default
+SELECT datalake_storage_read_text(
+	'file:///tmp/datalake_fdw_storage_local/file/a.txt');
+
+SELECT datalake_storage_write_text(
+	'dltest:///tmp/datalake_fdw_storage_local/dltest/a.txt', 'dltest-data');
+SELECT datalake_storage_read_text(
+	'dltest:///tmp/datalake_fdw_storage_local/dltest/a.txt');
+SELECT * FROM datalake_storage_list(
+	'dltest:///tmp/datalake_fdw_storage_local/dltest');
+\set VERBOSITY sqlstate
+SELECT datalake_storage_write_text(
+	'dltest:///tmp/datalake_fdw_storage_local/dltest/a.txt', 'replacement');
+SELECT datalake_storage_read_text(
+	'dltest:///tmp/datalake_fdw_storage_local/dltest/missing.txt');
+\set VERBOSITY default
+SELECT datalake_storage_read_text(
+	'dltest:///tmp/datalake_fdw_storage_local/dltest/a.txt');
+
+-- A write that is refused leaves the file it refused to replace untouched,
+-- and leaves nothing else behind either.
+SELECT * FROM datalake_storage_list(
+	'file:///tmp/datalake_fdw_storage_local/file');
+
+SELECT datalake_storage_probe('s3');
+
+-- Each malformed registration must be rejected by the check it breaks, not by
+-- some later one: every pattern names the field and the value it reports, so
+-- a check that stopped working could not fall through to another and still
+-- match.
+SELECT kind,
+	   datalake_storage_register_bad(kind) LIKE pattern AS rejected_by_its_check
+FROM (VALUES
+	('abi_version', '%ABI version mismatch: expected 1, got 2%'),
+	('struct_size', '%struct size mismatch: expected at least %, got 0%'),
+	('arrow_version', '%Arrow version mismatch: expected "%", got "0.0.0-test"%'),
+	('abi_fingerprint',
+	 '%ABI fingerprint mismatch: expected "%", got "gcc0;cxx11abi=9;arrow=0.0.0-test"%'),
+	('duplicate', '%scheme expected to be unique, got duplicate "dltest"%')
+) AS t(kind, pattern)
+ORDER BY kind;
+
+COPY (SELECT 1) TO PROGRAM 'rm -rf /tmp/datalake_fdw_storage_local';
+
+-- End of storage_local.

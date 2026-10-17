@@ -33,6 +33,9 @@
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_user_mapping.h"
+#include "commands/dbcommands.h"
+#include "miscadmin.h"
+#include "utils/acl.h"
 #include "commands/defrem.h"
 #include "common/dl_option_util.h"
 #include "fmgr.h"
@@ -148,8 +151,94 @@ iceberg_volume_fdw_validator(PG_FUNCTION_ARGS)
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("invalid iceberg volume %s \"%s\"",
 						DATALAKE_ICEBERG_VOLUME_BASE_PATH,
-						volume_options.base_path),
+						pg_iceberg_redacted_location_uri(volume_options.base_path)),
 				 errdetail("%s", parse_detail)));
 
 	PG_RETURN_VOID();
+}
+
+/*
+ * Everything the storage layer needs to reach one volume: where it is, and
+ * under what credentials.
+ *
+ * The options are read the way the validator reads them, so a volume that was
+ * accepted at CREATE SERVER resolves here too.  A user mapping is optional --
+ * without one the backend falls back to whatever credentials the host already
+ * has, which is how an instance profile or a ticket cache is meant to be used
+ * -- so this returns an empty credential set rather than refusing.
+ */
+void
+iceberg_volume_resolve(const char *server_name, Oid userid,
+					   DatalakeLocation *location_out,
+					   DlKeyValue **kv_out, int *nkv_out)
+{
+	ForeignServer *server;
+	IcebergVolumeOptions *options;
+	MetaKv	   *credentials;
+	DlKeyValue *kv;
+	char	   *parse_detail = NULL;
+	AclResult	aclresult;
+	DlErrCode	rc;
+	int			ncredentials = 0;
+	int			nkv = 0;
+
+	Assert(location_out != NULL && kv_out != NULL && nkv_out != NULL);
+
+	server = GetForeignServerByName(server_name, false);
+
+	aclresult = object_aclcheck(ForeignServerRelationId, server->serverid,
+								userid, ACL_USAGE);
+	if (aclresult != ACLCHECK_OK)
+		aclcheck_error(aclresult, OBJECT_FOREIGN_SERVER, server->servername);
+
+	options = get_iceberg_volume_options(server);
+	if (options->foreign_volume.base_path == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("iceberg volume server option \"%s\" is required",
+						DATALAKE_ICEBERG_VOLUME_BASE_PATH)));
+
+	rc = pg_iceberg_parse_location(options->foreign_volume.base_path,
+								   options->volume_server.endpoint,
+								   options->volume_server.region,
+								   location_out, &parse_detail);
+	if (rc != DL_OK)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("invalid iceberg volume %s",
+						DATALAKE_ICEBERG_VOLUME_BASE_PATH),
+				 errdetail("%s", parse_detail)));
+
+	/*
+	 * The settings the server carries, then the current user's credentials.
+	 * Backends read these by the names they were written under in DDL, so
+	 * nothing in between has to know what any particular protocol wants.
+	 */
+	credentials = pg_iceberg_resolve_credentials(server->serverid, userid,
+												 &ncredentials);
+	kv = (DlKeyValue *) palloc0((3 + ncredentials) * sizeof(DlKeyValue));
+
+	if (options->volume_server.endpoint != NULL)
+	{
+		kv[nkv].key = DATALAKE_ICEBERG_VOLUME_ENDPOINT;
+		kv[nkv].value = options->volume_server.endpoint;
+		nkv++;
+	}
+	if (options->volume_server.region != NULL)
+	{
+		kv[nkv].key = DATALAKE_ICEBERG_VOLUME_REGION;
+		kv[nkv].value = options->volume_server.region;
+		nkv++;
+	}
+	if (options->volume_server.path_style_access_set)
+	{
+		kv[nkv].key = DATALAKE_ICEBERG_VOLUME_PATH_STYLE_ACCESS;
+		kv[nkv].value = options->volume_server.path_style_access ? "true" : "false";
+		nkv++;
+	}
+	for (int i = 0; i < ncredentials; i++)
+		kv[nkv++] = credentials[i];
+
+	*kv_out = kv;
+	*nkv_out = nkv;
 }

@@ -417,7 +417,7 @@ CREATE SERVER dlskel_bad_scheme
   FOREIGN DATA WRAPPER iceberg_volume_fdw
   OPTIONS (base_path 'ftp://x/y');
 ERROR:  invalid iceberg volume base_path "ftp://x/y"
-DETAIL:  location URI "ftp://x/y" has unsupported scheme; expected s3 or hdfs
+DETAIL:  location URI "ftp://x/y" names storage "ftp", which no backend is registered for
 CREATE SERVER dlskel_bad_authority
   FOREIGN DATA WRAPPER iceberg_volume_fdw
   OPTIONS (base_path 's3://');
@@ -426,13 +426,13 @@ DETAIL:  location URI "s3://" has an empty authority
 CREATE SERVER dlskel_bad_query
   FOREIGN DATA WRAPPER iceberg_volume_fdw
   OPTIONS (base_path 's3://b/p?versionId=3');
-ERROR:  invalid iceberg volume base_path "s3://b/p?versionId=3"
-DETAIL:  location URI "s3://b/p?versionId=3" must not contain a query
+ERROR:  invalid iceberg volume base_path "s3://b/p?***"
+DETAIL:  location URI must not contain a query
 CREATE SERVER dlskel_bad_userinfo
   FOREIGN DATA WRAPPER iceberg_volume_fdw
   OPTIONS (base_path 's3://user@b/p');
-ERROR:  invalid iceberg volume base_path "s3://user@b/p"
-DETAIL:  location URI "s3://user@b/p" must not contain userinfo
+ERROR:  invalid iceberg volume base_path "s3://***@b/p"
+DETAIL:  location URI must not contain userinfo
 CREATE SERVER dlskel_bad_bucket
   FOREIGN DATA WRAPPER iceberg_volume_fdw
   OPTIONS (base_path 's3://UPPER_case/p');

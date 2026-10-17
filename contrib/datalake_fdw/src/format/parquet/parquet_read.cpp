@@ -39,6 +39,7 @@
 #include <parquet/arrow/reader.h>
 #include <parquet/properties.h>
 
+#include "common/storage_arrow.h"
 #include "format/arrow_support.h"
 
 #include "am_iceberg/pg_iceberg_guc.h"
@@ -297,7 +298,7 @@ parquet_open_reader(const Fragment *fragment, const ProjectionSet *projection,
 		return DL_ARG_ERROR("open_reader");
 	*out = NULL;
 
-	if (fragment == NULL || fragment->path == NULL)
+	if (fragment == NULL || fragment->path == NULL || fragment->fs == NULL)
 		return DL_ARG_ERROR("open_reader");
 
 	/*
@@ -325,8 +326,8 @@ parquet_open_reader(const Fragment *fragment, const ProjectionSet *projection,
 		parquet::arrow::FileReaderBuilder builder;
 		parquet::ArrowReaderProperties properties;
 
-		arrow::Result<std::shared_ptr<arrow::io::ReadableFile>> file =
-			arrow::io::ReadableFile::Open(fragment->path, pool);
+		arrow::Result<std::shared_ptr<arrow::io::RandomAccessFile>> file =
+			dl_storage_open_input(fragment->fs, fragment->path);
 
 		if (!file.ok())
 			return DlArrowStatus(file.status(), "open a Parquet file");
@@ -404,13 +405,22 @@ parquet_open_reader(const Fragment *fragment, const ProjectionSet *projection,
 		}
 
 		/*
-		 * Arrow 21 deprecates this in favour of a Result-returning one that
-		 * Arrow 9 does not have, so whoever raises the floor past 21 gets a
-		 * warning here and a version guard to write -- the one around
-		 * FileWriter::Open in parquet_write.cpp is the shape of it.
+		 * Arrow 19 added the form that returns its reader as a Result, 21
+		 * deprecated the one that returns it through an out parameter, and 26
+		 * removed that one.  Arrow 9 has only the out parameter, so both
+		 * spellings stay, as around FileWriter::Open in parquet_write.cpp.
 		 */
+#if ARROW_VERSION_MAJOR >= 19
+		arrow::Result<std::unique_ptr<arrow::RecordBatchReader>> batches =
+			impl->reader->GetRecordBatchReader(row_groups, columns);
+
+		status = batches.status();
+		if (status.ok())
+			impl->batches = std::move(*batches);
+#else
 		status = impl->reader->GetRecordBatchReader(row_groups, columns,
 													&impl->batches);
+#endif
 		if (!status.ok())
 			return DlArrowStatus(status, "open a Parquet batch reader");
 
