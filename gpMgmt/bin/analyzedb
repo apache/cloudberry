@@ -167,12 +167,24 @@ SELECT schemaname, tablename FROM
 ORDER BY tableoid DESC;
 """
 
+def quote_literal(value):
+    """
+    Quote a name for use inside a SQL string literal.
+
+    Not pg.escape_string(): PyGreSQL's C implementation encodes its argument as
+    ASCII and raises UnicodeEncodeError on a schema, table or column name that
+    contains non-ASCII characters. With standard_conforming_strings on -- the
+    default -- doubling single quotes is the whole of the escaping needed.
+    """
+    return value.replace("'", "''")
+
+
 def validate_schema_exists(pg_port, dbname, schema):
     conn = None
     try:
         dburl = dbconn.DbURL(port=pg_port, dbname=dbname)
         conn = dbconn.connect(dburl)
-        count = dbconn.querySingleton(conn, "select count(*) from pg_namespace where nspname='%s';" % pg.escape_string(schema))
+        count = dbconn.querySingleton(conn, "select count(*) from pg_namespace where nspname='%s';" % quote_literal(schema))
         if count == 0:
             raise ExceptionNoStackTraceNeeded("Schema %s does not exist in database %s." % (schema, dbname))
     finally:
@@ -982,7 +994,7 @@ def get_oid_str(table_list):
 def regclass_schema_tbl(schema, tbl):
     schema_tbl = "%s.%s" % (escape_identifier(schema), escape_identifier(tbl))
 
-    return "to_regclass('%s')" % (pg.escape_string(schema_tbl))
+    return "to_regclass('%s')" % quote_literal(schema_tbl)
 
 
 # Escape double-quotes in a string, so that the resulting string is suitable for
@@ -1250,7 +1262,7 @@ def validate_tables(conn, tablenames):
     while curr_batch < nbatches:
         batch = tablenames[curr_batch * batch_size:(curr_batch + 1) * batch_size]
 
-        oid_str = ','.join(map((lambda x: "('%s')" % pg.escape_string(x)), batch))
+        oid_str = ','.join(map((lambda x: "('%s')" % quote_literal(x)), batch))
         if not oid_str:
             break
 
@@ -1266,7 +1278,7 @@ def get_include_cols_from_exclude(conn, schema, table, exclude_cols):
     """
     Given a list of excluded columns of a table, get the list of included columns
     """
-    quoted_exclude_cols = ','.join(["'%s'" % pg.escape_string(x) for x in exclude_cols])
+    quoted_exclude_cols = ','.join(["'%s'" % quote_literal(x) for x in exclude_cols])
 
     oid_str = regclass_schema_tbl(schema, table)
     cols = run_sql(conn, GET_INCLUDED_COLUMNS_FROM_EXCLUDE_SQL % (oid_str, quoted_exclude_cols))
@@ -1282,7 +1294,7 @@ def validate_columns(conn, schema, table, column_list):
         return
 
     sql = VALIDATE_COLUMN_NAMES_SQL % (regclass_schema_tbl(schema, table),
-                                       ','.join(["'%s'" % pg.escape_string(x) for x in column_list]))
+                                       ','.join(["'%s'" % quote_literal(x) for x in column_list]))
     valid_col_count = dbconn.querySingleton(conn, sql)
 
     if int(valid_col_count) != len(column_list):

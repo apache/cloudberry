@@ -1,5 +1,6 @@
 import sys
 import signal
+from contextlib import closing
 from gppylib.gparray import GpArray
 from gppylib.db import dbconn
 from gppylib.commands.gp import GpSegStopCmd
@@ -9,6 +10,43 @@ from gppylib import gplog
 from gppylib.operations.segment_reconfigurer import SegmentReconfigurer
 
 MIRROR_PROMOTION_TIMEOUT=600
+
+logger = gplog.get_default_logger()
+
+
+# cherry-pick from Greenplum Database
+# greenplum-db/gpdb-archive @ 482967c1b4,
+# gpMgmt/bin/gppylib/operations/rebalanceSegments.py
+def replay_lag(primary_db):
+    """
+    This function returns replay lag (diff of flush_lsn and replay_lsn) on mirror segment. Goal being if there is a
+    lot to catchup on mirror the user should be warned about that and rebalance opertion should be aborted.
+    params: primary segment info
+    return value: replay lag in bytes
+    replay lag in bytes: diff of flush_lsn and replay_lsn on mirror
+    """
+    port = primary_db.getSegmentPort()
+    host = primary_db.getSegmentHostName()
+    logger.debug('Get replay lag on mirror of primary segment with host:{}, port:{}'.format(host, port))
+    sql = "select pg_wal_lsn_diff(flush_lsn, replay_lsn) from pg_stat_replication;"
+
+    try:
+        dburl = dbconn.DbURL(hostname=host, port=port)
+        with closing(dbconn.connect(dburl, utility=True, encoding='UTF8')) as conn:
+            replay_lag = dbconn.querySingleton(conn, sql)
+    except Exception as ex:
+        raise Exception("Failed to query pg_stat_replication for host:{}, port:{}, error: {}".
+                        format(host, port, str(ex)))
+
+    # flush_lsn and replay_lsn are nullable -- a walsender that has connected
+    # but not yet reported leaves pg_wal_lsn_diff() NULL. Upstream hands that
+    # straight to float(), which dies with a bare TypeError in the middle of a
+    # rebalance; say what actually happened instead.
+    if replay_lag is None:
+        raise Exception("Could not read the replay lag on the mirror of the segment with host:{}, port:{}: "
+                        "the walsender has not reported a flush or replay position yet".format(host, port))
+
+    return replay_lag
 
 
 class ReconfigDetectionSQLQueryCommand(base.SQLCommand):
@@ -26,11 +64,13 @@ class ReconfigDetectionSQLQueryCommand(base.SQLCommand):
 
 
 class GpSegmentRebalanceOperation:
-    def __init__(self, gpEnv, gpArray, batch_size, segment_batch_size):
+    def __init__(self, gpEnv, gpArray, batch_size, segment_batch_size, disable_replay_lag, replay_lag):
         self.gpEnv = gpEnv
         self.gpArray = gpArray
         self.batch_size = batch_size
         self.segment_batch_size = segment_batch_size
+        self.disable_replay_lag = disable_replay_lag
+        self.replay_lag = replay_lag
         self.logger = gplog.get_default_logger()
 
     def rebalance(self):
@@ -45,6 +85,17 @@ class GpSegmentRebalanceOperation:
                 continue
 
             if segmentPair.up() and segmentPair.reachable() and segmentPair.synchronized():
+
+                if not self.disable_replay_lag:
+                    self.logger.info("Allowed replay lag during rebalance is {} GB".format(self.replay_lag))
+                    replay_lag_in_bytes = replay_lag(segmentPair.primaryDB)
+                    if float(replay_lag_in_bytes) >= (self.replay_lag * 1024 * 1024 * 1024):
+                        raise Exception("{} bytes of wal is still to be replayed on mirror with dbid {}, let "
+                                        "mirror catchup on replay then trigger rebalance. Use --replay-lag to "
+                                        "configure the allowed replay lag limit or --disable-replay-lag to disable"
+                                        " the check completely if you wish to continue with rebalance anyway"
+                                        .format(replay_lag_in_bytes, segmentPair.primaryDB.getSegmentDbId()))
+
                 unbalanced_primary_segs.append(segmentPair.primaryDB)
             else:
                 self.logger.warning(

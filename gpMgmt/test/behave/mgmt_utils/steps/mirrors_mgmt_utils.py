@@ -108,6 +108,12 @@ def add_mirrors(context, options):
     context.mirror_config = _generate_input_config()
     cmd = Command('gpaddmirrors ', 'gpaddmirrors -a -i %s %s' % (context.mirror_config, options))
     cmd.run(validateAfter=True)
+    # Without these the scenarios that go on to assert on what gpaddmirrors
+    # printed fail in the step itself -- "'Context' object has no attribute
+    # 'stdout_message'" -- rather than on what the utility did.
+    context.ret_code = cmd.get_results().rc
+    context.stdout_message = cmd.get_results().stdout
+    context.error_message = cmd.get_results().stderr
 
 
 def make_data_directory_called(data_directory_name):
@@ -385,13 +391,15 @@ def impl(context, content_ids, mode):
                 break
 
 
-@given("edit the input file to add mirror with content {content_ids} to a new directory with mode {mode}")
-def impl(context, content_ids, mode):
+@given("edit the input file to add mirror with content {content_ids} to a new {directory} with mode {mode}")
+def impl(context, content_ids, directory, mode):
     if content_ids == "None":
         return
     for content in [int(c) for c in content_ids.split(',')]:
         make_temp_dir(context, context.mirror_context.working_directory[0], mode)
         new_datadir = context.temp_base_dir
+        if directory == "non-empty directory":
+            make_temp_dir(context, new_datadir, mode)
         segments = GpArray.initFromCatalog(dbconn.DbURL()).getSegmentList()
 
         for seg in segments:
@@ -479,7 +487,7 @@ def make_temp_dir_on_remote(context, hostname, tmp_base_dir_remote, mode='700'):
         raise Exception("tmp_base_dir cannot be empty")
 
     tempfile_cmd = Command(name="Create temp directory on remote host",
-                           cmdStr=""" python -c "import tempfile; t=tempfile.mkdtemp(dir='{}');print(t)" """
+                           cmdStr=""" python3 -c "import tempfile; t=tempfile.mkdtemp(dir='{}');print(t)" """
                            .format(tmp_base_dir_remote),
                            remoteHost=hostname, ctxt=REMOTE)
     tempfile_cmd.run(validateAfter=True)
@@ -517,6 +525,47 @@ def impl(context, content):
                                              mirror.getSegmentDataDirectory())
             with open(context.mirror_context.input_file_path(), 'a') as fd:
                 fd.write('{} {}\n'.format(valid_config, valid_config))
+            break
+
+
+@given("edit the hostsname input file to recover segment with content {content} full inplace")
+def impl(context, content):
+    content = int(content)
+    segments = GpArray.initFromCatalog(dbconn.DbURL()).getSegmentList()
+    for seg in segments:
+        if seg.mirrorDB.getSegmentContentId() == content:
+            mirror = seg.mirrorDB
+            valid_config = '{}|{}|{}|{} localhost|{}|{}|{}'.format(mirror.getSegmentHostName(),
+                                                                   mirror.getSegmentAddress(),
+                                                                   mirror.getSegmentPort(),
+                                                                   mirror.getSegmentDataDirectory(),
+                                                                   mirror.getSegmentAddress(),
+                                                                   mirror.getSegmentPort(),
+                                                                   mirror.getSegmentDataDirectory())
+            context.hostname = mirror.getSegmentHostName()
+
+            with open(context.mirror_context.input_file_path(), 'a') as fd:
+                fd.write('{}'.format(valid_config))
+            break
+
+
+@given("edit the hostsname input file to recover segment with content {content} with invalid hostname")
+def impl(context, content):
+    content = int(content)
+    segments = GpArray.initFromCatalog(dbconn.DbURL()).getSegmentList()
+    for seg in segments:
+        if seg.mirrorDB.getSegmentContentId() == content:
+            mirror = seg.mirrorDB
+            valid_config = '{}|{}|{}|{} invalid_host|{}|{}|{}'.format(mirror.getSegmentHostName(),
+                                                                      mirror.getSegmentAddress(),
+                                                                      mirror.getSegmentPort(),
+                                                                      mirror.getSegmentDataDirectory(),
+                                                                      mirror.getSegmentAddress(),
+                                                                      mirror.getSegmentPort(),
+                                                                      mirror.getSegmentDataDirectory())
+
+            with open(context.mirror_context.input_file_path(), 'a') as fd:
+                fd.write('{}'.format(valid_config))
             break
 
 
@@ -669,7 +718,9 @@ def impl(context, utility, extra_args=''):
     run_gpcommand(context, cmd)
 
 
+@given('the user asynchronously runs {utility} with input file and additional args "{extra_args}" and the process is saved')
 @when('the user asynchronously runs {utility} with input file and additional args "{extra_args}" and the process is saved')
+@then('the user asynchronously runs {utility} with input file and additional args "{extra_args}" and the process is saved')
 def impl(context, utility, extra_args=''):
     cmd = "%s -i %s %s" % (utility, context.mirror_context.input_file_path(), extra_args)
     run_gpcommand_async(context, cmd)

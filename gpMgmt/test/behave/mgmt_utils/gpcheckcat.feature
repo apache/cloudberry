@@ -9,6 +9,9 @@ Feature: gpcheckcat tests
         Given database "all_good" is dropped and recreated
         Then the user runs "gpcheckcat -A"
         Then gpcheckcat should return a return code of 0
+        When the user runs "gpcheckcat -C pg_class"
+        Then gpcheckcat should return a return code of 0
+        And gpcheckcat should not print "Execution error:" to stdout
         And the user runs "dropdb all_good"
 
     Scenario: gpcheckcat should drop leaked schemas
@@ -155,6 +158,27 @@ Feature: gpcheckcat tests
         And the user runs "dropdb owner_db2"
         And the path "gpcheckcat.repair.*" is removed from current working directory
 
+    Scenario: gpcheckcat should report and repair owner errors on appendonly tables and its indexes
+        Given database "owner_db" is dropped and recreated
+          And the path "gpcheckcat.repair.*" is removed from current working directory
+          And there is a "ao" table "public.gpadmin_ao_tbl" in "owner_db" with data
+          And the user runs "psql owner_db -c "CREATE INDEX gpadmin_ao_tbl_idx on gpadmin_ao_tbl (column1);""
+          And the user runs sql "alter table gpadmin_ao_tbl OWNER TO wolf" in "owner_db" on first primary segment
+         Then psql should return a return code of 0
+
+        When the user runs "gpcheckcat -R owner owner_db"
+         Then gpcheckcat should return a return code of 3
+         Then the path "gpcheckcat.repair.*" is found in cwd "1" times
+
+        When the user runs all the repair scripts in the dir "gpcheckcat.repair.*"
+          And the path "gpcheckcat.repair.*" is removed from current working directory
+          And the user runs "gpcheckcat -R owner owner_db"
+         Then Then gpcheckcat should return a return code of 0
+         Then the path "gpcheckcat.repair.*" is found in cwd "0" times
+
+        And the user runs "dropdb owner_db"
+        And the path "gpcheckcat.repair.*" is removed from current working directory
+        
     Scenario: gpcheckcat should report and repair invalid constraints
         Given database "constraint_db" is dropped and recreated
         And the path "gpcheckcat.repair.*" is removed from current working directory
@@ -435,7 +459,7 @@ Feature: gpcheckcat tests
         Then gpcheckcat should print "Table pg_type has a dependency issue on oid .* at content 0" to stdout
         And the user runs "dropdb gpcheckcat_dependency"
 
-    Scenario: gpcheckcat should report no inconsistency of pg_extension between Master and Segements
+    Scenario: gpcheckcat should report no inconsistency of pg_extension between Coordinator and Segements
         Given database "pgextension_db" is dropped and recreated
         And the user runs sql "set allow_system_table_mods=true;update pg_extension set extconfig='{2130}', extcondition='{2130}';" in "pgextension_db" on first primary segment
         Then the user runs "gpcheckcat -R inconsistent pgextension_db"
@@ -651,11 +675,6 @@ Feature: gpcheckcat tests
         And the user runs "dropdb check_dependency_error"
         And the user runs "psql -d postgres -c "DROP ROLE foo""
 
-
-########################### @concourse_cluster tests ###########################
-# The @concourse_cluster tag denotes the scenario that requires a remote cluster
-
-    @concourse_cluster
     Scenario Outline: gpcheckcat should discover missing attributes for external tables
         Given database "miss_attr_db3" is dropped and recreated
         And the user runs "echo > /tmp/backup_gpfdist_dummy"
@@ -675,42 +694,42 @@ Feature: gpcheckcat tests
             | attrname   | tablename          |
             | ftrelid    | pg_foreign_table   |
 
-# GPDB_12_MERGE_FIXME:
-# 1, this case is removed because 12 partitioning implementation will not record pg_constraint, right?
-# 2, gpcheckcat in the concourse only runs 1 or 2 tests, how about merging into another task?
-#
-#    @concourse_cluster
-#    Scenario Outline: gpcheckcat should discover missing attributes for external tables
-#        Given database "miss_attr_db3" is dropped and recreated
-#        And the user runs "echo > /tmp/backup_gpfdist_dummy"
-#        And the user runs "gpfdist -p 8098 -d /tmp &"
-#        And there is a partition table "part_external" has external partitions of gpfdist with file "backup_gpfdist_dummy" on port "8098" in "miss_attr_db3" with data
-#        Then data for partition table "part_external" with leaf partition distributed across all segments on "miss_attr_db3"
-#        When the user runs "gpcheckcat miss_attr_db3"
-#        And gpcheckcat should return a return code of 0
-#        Then gpcheckcat should not print "Missing" to stdout
-#        And the user runs "psql miss_attr_db3 -c "SET allow_system_table_mods=true; DELETE FROM <tablename> where <attrname>='part_external_1_prt_p_2'::regclass::oid;""
-#        Then psql should return a return code of 0
-#        When the user runs "gpcheckcat miss_attr_db3"
-#        Then gpcheckcat should print "Missing" to stdout
-#        And gpcheckcat should print "part_external_1_prt_p_2_check" to stdout
-#        Examples:
-#            | attrname   | tablename     |
-#            | conrelid   | pg_constraint |
-#
-
-    Scenario: gpcheckcat should discover missing attributes of pg_description catalogue table
-        Given there is a "heap" table "public.heap_table" in "miss_attr_db5" with data and description
-        When the user runs "gpcheckcat -v miss_attr_db5"
+    Scenario Outline: gpcheckcat should discover missing attributes for external tables
+        Given database "miss_attr_db3" is dropped and recreated
+        And the user runs "echo > /tmp/backup_gpfdist_dummy"
+        And the user runs "gpfdist -p 8098 -d /tmp &"
+        And there is a partition table "part_external" has external partitions of gpfdist with file "backup_gpfdist_dummy" on port "8098" in "miss_attr_db3" with data
+        Then data for partition table "part_external" with leaf partition distributed across all segments on "miss_attr_db3"
+        When the user runs "gpcheckcat miss_attr_db3"
         And gpcheckcat should return a return code of 0
         Then gpcheckcat should not print "Missing" to stdout
-        And the user runs "psql miss_attr_db5 -c "SET allow_system_table_mods=true; DELETE FROM pg_description where objoid='heap_table'::regclass::oid;""
+        And the user runs "psql miss_attr_db3 -c "SET allow_system_table_mods=true; DELETE FROM <tablename> where <attrname>='part_external_1_prt_p_2';""
         Then psql should return a return code of 0
-        When the user runs "gpcheckcat -v miss_attr_db5"
+        When the user runs "gpcheckcat miss_attr_db3"
+        Then gpcheckcat should print "Missing" to stdout
+        And gpcheckcat should print "Name of test which found this issue: missing_extraneous_pg_class" to stdout
+        And gpcheckcat should print "Relation name: part_external_1_prt_p_2" to stdout
+        Examples:
+            | attrname   | tablename          |
+            | relname    | pg_class           |
+
+    Scenario: gpcheckcat should discover missing attributes of pg_description and pg_shdescription catalogue table without errors
+        Given database "miss_attr_db5" is dropped and recreated
+        And there is a "heap" table "public.heap_table" in "miss_attr_db5" with data and description
+        And a tablespace is created with data and description
+        When the user runs "gpcheckcat miss_attr_db5"
+        Then gpcheckcat should return a return code of 0
+        And gpcheckcat should not print "Missing" to stdout
+        When the user runs "psql miss_attr_db5 -c "SET allow_system_table_mods=true; DELETE FROM pg_description where objoid='heap_table'::regclass::oid;""
+        Then psql should return a return code of 0
+        When the user runs "psql miss_attr_db5 -c "SET allow_system_table_mods=true; DELETE FROM pg_shdescription where objoid=(SELECT oid from pg_tablespace where spcname='outerspace');""
+        Then psql should return a return code of 0
+        When the user runs "gpcheckcat miss_attr_db5"
         Then gpcheckcat should print "Missing description metadata of {.*} on content -1" to stdout
         And gpcheckcat should not print "Execution error:" to stdout
         And gpcheckcat should print "Name of test which found this issue: missing_extraneous_pg_description" to stdout
-
+        Then gpcheckcat should print "Missing shdescription metadata of {.*} on content -1" to stdout
+        And gpcheckcat should print "Name of test which found this issue: missing_extraneous_pg_shdescription" to stdout
 
     Scenario: set multiple GUC at session level in gpcheckcat
         Given database "all_good" is dropped and recreated
@@ -728,6 +747,13 @@ Feature: gpcheckcat tests
         And the user runs "dropdb all_good"
 
 
+    # The first half needs a postmaster started with gp_role=utility to reject
+    # non-utility connections ("System was started in single node mode - only
+    # utility mode connections are allowed").  Greenplum does that in
+    # InitPostgres(); Cloudberry dropped the check, so the connection succeeds
+    # and gpcheckcat returns 0.  Kept aligned with upstream so the scenario can
+    # be enabled once the check is restored.
+    @not_implemented
     Scenario: validate session GUC passed with -x is set
         Given the database is not running
           And the user runs "gpstart -ma"
@@ -741,5 +767,96 @@ Feature: gpcheckcat tests
           And "gpstop -m" should return a return code of 0
           And the user runs "gpstart -a"
 
+    Scenario: Validate if gpecheckcat throws error when there are tables created using mix distribution policy
+        Given database "hashops_db" is dropped and recreated
+        And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_legacy_hash_ops_tables.sql"
+        Then psql should return a return code of 0
+        And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_non_legacy_hashops_tables.sql"
+        Then psql should return a return code of 0
+        When the user runs "gpcheckcat -R mix_distribution_policy hashops_db "
+        And gpcheckcat should print "Found tables created using both legacy and non legacy hashops in distribution policy." to stdout
+        And gpcheckcat should print "Please run the gpcheckcat.distpolicy.sql file to list the tables." to stdout
+        And the user runs "dropdb hashops_db"
 
+    Scenario: Validate if gpcheckcat succeeds and there are no tables
+        Given database "hashops_db" is dropped and recreated
+        When the user runs "gpcheckcat -R mix_distribution_policy hashops_db"
+        And gpcheckcat should print "PASSED" to stdout
+        And the user runs "dropdb hashops_db"
 
+    Scenario: Validate if gpcheckcat throws error when GUC gp_use_legacy_hashops is on and there are non legacy tables
+        Given database "hashops_db" is dropped and recreated
+        And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_non_legacy_hashops_tables.sql"
+        Then psql should return a return code of 0
+        And the user runs "gpconfig -c gp_use_legacy_hashops -v on --skipvalidation"
+        Then gpconfig should return a return code of 0
+        And the user runs "gpstop -a"
+        Then gpstop should return a return code of 0
+        And the user runs "gpstart -a"
+        When the user runs "gpcheckcat -R mix_distribution_policy hashops_db"
+        And gpcheckcat should print "GUC gp_use_legacy_hashops is on." to stdout
+        And gpcheckcat should print "all newly created tables will use legacy hash ops by default for hash distributed table," to stdout
+        And gpcheckcat should print "but there are tables using non-legacy hash ops in the cluster." to stdout
+        And gpcheckcat should print "Please run the gpcheckcat.distpolicy.sql file to list the tables." to stdout
+        And the user runs "dropdb hashops_db"
+
+      Scenario: Validate if gpcheckcat succeeds when GUC gp_use_legacy_hashops is on and there are legacy tables
+        Given database "hashops_db" is dropped and recreated
+        And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_legacy_hash_ops_tables.sql"
+        Then psql should return a return code of 0
+        And the user runs "gpconfig -c gp_use_legacy_hashops -v on --skipvalidation"
+        Then gpconfig should return a return code of 0
+        And the user runs "gpstop -a"
+        Then gpstop should return a return code of 0
+        And the user runs "gpstart -a"
+        When the user runs "gpcheckcat -R mix_distribution_policy hashops_db"
+         And gpcheckcat should print "PASSED" to stdout
+        And the user runs "dropdb hashops_db"
+
+    Scenario: Validate if gpcheckcat throws error when GUC gp_use_legacy_hashops is off and there are legacy tables
+        Given database "hashops_db" is dropped and recreated
+        And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_legacy_hash_ops_tables.sql"
+        And the user runs "gpconfig -c gp_use_legacy_hashops -v off --skipvalidation"
+        Then gpconfig should return a return code of 0
+        And the user runs "gpstop -a"
+        Then gpstop should return a return code of 0
+        And the user runs "gpstart -a"
+        When the user runs "gpcheckcat -R mix_distribution_policy hashops_db"
+        And gpcheckcat should print "GUC gp_use_legacy_hashops is off." to stdout
+        And gpcheckcat should print "all newly created tables will use non legacy hash ops by default for hash distributed table," to stdout
+        And gpcheckcat should print "but there are tables using legacy hash ops in the cluster." to stdout
+        And gpcheckcat should print "Please run the gpcheckcat.distpolicy.sql file to list the tables." to stdout
+        And the user runs "dropdb hashops_db"
+
+    Scenario: Validate if gpcheckcat succeeds when GUC gp_use_legacy_hashops is off and there are non legacy tables 
+        Given database "hashops_db" is dropped and recreated
+        And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_non_legacy_hashops_tables.sql"
+        And the user runs "gpconfig -c gp_use_legacy_hashops -v off --skipvalidation"
+        Then gpconfig should return a return code of 0
+        And the user runs "gpstop -a"
+        Then gpstop should return a return code of 0
+        And the user runs "gpstart -a"
+        When the user runs "gpcheckcat -R mix_distribution_policy hashops_db"
+        And gpcheckcat should print "PASSED" to stdout
+        And the user runs "dropdb hashops_db"
+
+    Scenario: gpcheckcat -l should report mix_distribution_policy to stdout
+        When the user runs "gpcheckcat -l "
+        And gpcheckcat should print "mix_distribution_policy" to stdout
+
+    Scenario: gpcheckcat report all tables created using legacy opclass on multiple database
+        Given database "hashops_db" is dropped and recreated
+        And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_legacy_hash_ops_tables.sql"
+        And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_non_legacy_hashops_tables.sql"
+        Then psql should return a return code of 0
+        Given database "hashops_db2" is dropped and recreated
+        And the user runs "psql hashops_db2 -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_legacy_hash_ops_tables.sql"
+        And the user runs "psql hashops_db2 -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_non_legacy_hashops_tables.sql"
+        Then psql should return a return code of 0
+        When the user runs "gpcheckcat -A -R mix_distribution_policy"
+        And gpcheckcat should print "Found tables created using both legacy and non legacy hashops in distribution policy." to stdout
+        And gpcheckcat should print "Please run the gpcheckcat.distpolicy.sql file to list the tables." to stdout
+        Then gpcheckcat should print "Completed 1 test(s) on database 'hashops_db'" to logfile with latest timestamp
+        Then gpcheckcat should print "Completed 1 test(s) on database 'hashops_db2'" to logfile with latest timestamp
+        And the user runs "dropdb hashops_db"
+        And the user runs "dropdb hashops_db2"
