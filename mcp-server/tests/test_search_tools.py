@@ -178,7 +178,9 @@ async def fixture_tables():
         yield conn
     finally:
         try:
-            await conn.execute(f"DROP SCHEMA IF EXISTS {SCHEMA} CASCADE")
+            # The pgvector skip above has already closed the connection.
+            if not conn.is_closed():
+                await conn.execute(f"DROP SCHEMA IF EXISTS {SCHEMA} CASCADE")
         finally:
             await conn.close()
 
