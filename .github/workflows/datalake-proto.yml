@@ -1,0 +1,138 @@
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+# datalake gRPC contract
+#
+# The proto files are the contract between datalake_fdw and
+# datalake_agent, and nothing generated from them is committed: each
+# side runs protoc when it builds.  This checks, on every change to
+# them, that both generators accept them -- the C++ one the extension
+# will build with and the Java one the agent will -- so a contract that
+# only one side can compile never lands.
+# --------------------------------------------------------------------
+
+name: datalake proto
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'contrib/datalake_agent/proto/**'
+      - 'contrib/datalake_fdw/src/meta/*.proto'
+      - '.github/workflows/datalake-proto.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'contrib/datalake_agent/proto/**'
+      - 'contrib/datalake_fdw/src/meta/*.proto'
+      - '.github/workflows/datalake-proto.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      # The Java side's versions are the ones the agent's Maven build pins;
+      # the digests are checked against what Maven Central publishes.
+      PROTOC_VERSION: 3.25.5
+      PROTOC_SHA256: d69b0a9ac8264bb3d464ae22742430943aa0a6cdf3734180af5a607c0bf8adaa
+      GRPC_JAVA_VERSION: 1.81.0
+      GRPC_JAVA_SHA256: 4f7596c60a137524b54f2b11d956fa200f3fe97678de1cddd827d10954250f7d
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      # The distribution's protoc and grpc_cpp_plugin are a matched pair, and
+      # a distribution's packages are what the extension builds against.
+      - name: Install the C++ generators
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends \
+            protobuf-compiler protobuf-compiler-grpc libprotobuf-dev
+
+      - name: Fetch the Java generators
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/bin"
+          cd "${RUNNER_TEMP}/bin"
+          base=https://repo1.maven.org/maven2
+          curl -fsSL --retry 5 --retry-all-errors -o protoc \
+            "${base}/com/google/protobuf/protoc/${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.exe"
+          curl -fsSL --retry 5 --retry-all-errors -o protoc-gen-grpc-java \
+            "${base}/io/grpc/protoc-gen-grpc-java/${GRPC_JAVA_VERSION}/protoc-gen-grpc-java-${GRPC_JAVA_VERSION}-linux-x86_64.exe"
+          printf '%s  protoc\n%s  protoc-gen-grpc-java\n' \
+            "${PROTOC_SHA256}" "${GRPC_JAVA_SHA256}" | sha256sum -c -
+          chmod +x protoc protoc-gen-grpc-java
+
+      # --fatal_warnings, because a warning here -- an unused import, say --
+      # is a contract that says something it does not mean.
+      - name: Generate C++
+        run: |
+          set -euo pipefail
+          out="${RUNNER_TEMP}/cpp"
+          mkdir -p "${out}"
+          protoc --version
+          protoc --fatal_warnings \
+            -I contrib/datalake_agent/proto \
+            -I contrib/datalake_fdw/src/meta \
+            --cpp_out="${out}" \
+            --grpc_out="${out}" \
+            --plugin=protoc-gen-grpc="$(command -v grpc_cpp_plugin)" \
+            contrib/datalake_agent/proto/*.proto \
+            contrib/datalake_fdw/src/meta/fragment.proto
+          ls "${out}"
+
+      - name: Generate Java
+        run: |
+          set -euo pipefail
+          out="${RUNNER_TEMP}/java"
+          mkdir -p "${out}"
+          bin="${RUNNER_TEMP}/bin"
+          "${bin}/protoc" --version
+          "${bin}/protoc" --fatal_warnings \
+            -I contrib/datalake_agent/proto \
+            -I contrib/datalake_fdw/src/meta \
+            -I /usr/include \
+            --java_out="${out}" \
+            --grpc-java_out="${out}" \
+            --plugin=protoc-gen-grpc-java="${bin}/protoc-gen-grpc-java" \
+            contrib/datalake_agent/proto/*.proto \
+            contrib/datalake_fdw/src/meta/fragment.proto
+          find "${out}" -name '*Grpc.java' | sort
+
+          # Every file declares the same java_package, and one that lost it
+          # still generates -- into a package the agent never imports.
+          stray=$(find "${out}" -name '*.java' \
+                    -not -path "${out}/org/apache/cloudberry/dlagent/proto/*")
+          if [[ -n "${stray}" ]]; then
+            echo "::error::generated outside org.apache.cloudberry.dlagent.proto:"
+            printf '%s\n' "${stray}"
+            exit 1
+          fi
