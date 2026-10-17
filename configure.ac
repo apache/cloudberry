@@ -1096,6 +1096,18 @@ AC_MSG_RESULT([checking whether to build with datalake_fdw support ... $enable_d
 AC_SUBST(enable_datalake_fdw)
 
 #
+# Lance support (contrib/lance_fdw)
+#
+# lance_fdw links liblance_c, the C binding of the Lance columnar format.  It
+# is written in Rust and is not part of this source tree: build or install it
+# separately and point --with-includes and --with-libraries at it.  Nothing
+# but contrib/lance_fdw links it, so it is not added to LIBS.
+#
+PGAC_ARG_BOOL(with, lance, no, [build contrib/lance_fdw, which reads Lance datasets])
+AC_MSG_RESULT([checking whether to build with Lance support ... $with_lance])
+AC_SUBST(with_lance)
+
+#
 # Include directories
 #
 ac_save_IFS=$IFS
@@ -1865,6 +1877,12 @@ if test "$with_libxml" = yes ; then
   AC_CHECK_LIB(xml2, xmlSaveToBuffer, [], [AC_MSG_ERROR([library 'xml2' (version >= 2.6.23) is required for XML support])])
 fi
 
+if test "$with_lance" = yes ; then
+  AC_CHECK_LIB(lance_c, lance_dataset_open, [:],
+               [AC_MSG_ERROR([library 'lance_c' is required for Lance support])],
+               [-lpthread -ldl -lm])
+fi
+
 #
 # enable redirect openssl interface to internal implements if not implements in openssl 
 #
@@ -2132,6 +2150,10 @@ fi
 
 if test "$with_libxml" = yes ; then
   AC_CHECK_HEADER(libxml/parser.h, [], [AC_MSG_ERROR([header file <libxml/parser.h> is required for XML support])])
+fi
+
+if test "$with_lance" = yes ; then
+  AC_CHECK_HEADER(lance/lance.h, [], [AC_MSG_ERROR([header file <lance/lance.h> is required for Lance support])])
 fi
 
 if test "$with_libxslt" = yes ; then
