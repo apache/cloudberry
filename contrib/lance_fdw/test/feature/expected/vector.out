@@ -1,0 +1,796 @@
+-- vector: the three distance operators on real[], and ORDER BY distance LIMIT k
+-- sent to Lance's nearest-neighbour search.
+--
+-- vectors.lance has no index, so Lance searches it exhaustively and every
+-- pushed-down result must equal the exact one; vectors_idx.lance holds the same
+-- rows with an IVF_PQ index, whose results are approximate and are only ever
+-- checked by bounds.  Which segment searches depends on the session id, so it
+-- is compared against that, never printed.  vectors_seg.lance has the same rows
+-- again, indexed the distributed way: one segment for each of fragments 0-2 and
+-- none for fragment 3, which is what a search split by fragment has to handle.
+\pset format unaligned
+DO $$
+BEGIN
+  EXECUTE format('CREATE SERVER vec_files FOREIGN DATA WRAPPER lance_fdw OPTIONS (base_uri %L)',
+                 current_setting('regress.fixture_dir'));
+END
+$$;
+CREATE FOREIGN TABLE lance_feature.vec (id integer, cat integer, emb real[])
+  SERVER vec_files OPTIONS (uri 'vectors.lance');
+CREATE FOREIGN TABLE lance_feature.vec_idx (id integer, cat integer, emb real[])
+  SERVER vec_files OPTIONS (uri 'vectors_idx.lance');
+CREATE FOREIGN TABLE lance_feature.vec_coord (id integer, cat integer, emb real[])
+  SERVER vec_files OPTIONS (uri 'vectors.lance', mpp_execute 'coordinator');
+CREATE FOREIGN TABLE lance_feature.vec_any (id integer, cat integer, emb real[])
+  SERVER vec_files OPTIONS (uri 'vectors.lance', mpp_execute 'any');
+CREATE FOREIGN TABLE lance_feature.vec_nulls (id integer, cat integer, emb real[])
+  SERVER vec_files OPTIONS (uri 'vectors_nulls.lance');
+CREATE FOREIGN TABLE lance_feature.vec_f64 (id integer, c_fsl_f64_4 double precision[])
+  SERVER vec_files OPTIONS (uri 'types_all.lance');
+CREATE FOREIGN TABLE lance_feature.vec_seg (id integer, cat integer, emb real[])
+  SERVER vec_files OPTIONS (uri 'vectors_seg.lance');
+-- The ids a statement returns, in order, from a top-level query: wrapping the
+-- statement in a subquery would itself turn the pushdown off.
+CREATE FUNCTION lance_feature.ids(stmt text) RETURNS int[]
+LANGUAGE plpgsql AS $$
+DECLARE
+  r record;
+  out int[] := '{}';
+BEGIN
+  FOR r IN EXECUTE stmt LOOP
+    out := out || r.id;
+  END LOOP;
+  RETURN out;
+END;
+$$;
+-- The same statement with the pushdown on and off: equal, or what differs.
+CREATE FUNCTION lance_feature.same_as_exact(stmt text) RETURNS text
+LANGUAGE plpgsql AS $$
+DECLARE
+  pushed int[];
+  exact int[];
+BEGIN
+  pushed := lance_feature.ids(stmt);
+  PERFORM set_config('lance_fdw.enable_vector_pushdown', 'off', true);
+  exact := lance_feature.ids(stmt);
+  PERFORM set_config('lance_fdw.enable_vector_pushdown', 'on', true);
+  IF pushed = exact THEN
+    RETURN 'same as exact';
+  END IF;
+  RETURN format('pushed %s, exact %s', pushed, exact);
+END;
+$$;
+CREATE FUNCTION lance_feature.pushed(stmt text) RETURNS boolean
+LANGUAGE sql AS $$
+  SELECT lance_feature.plan_mentions(stmt, 'COSTS OFF', 'Lance Vector Search:');
+$$;
+-- How many distinct segments the rows of a statement selecting seg came from.
+CREATE FUNCTION lance_feature.segments(stmt text) RETURNS int
+LANGUAGE plpgsql AS $$
+DECLARE
+  r record;
+  segs int[] := '{}';
+BEGIN
+  FOR r IN EXECUTE stmt LOOP
+    IF NOT r.seg = ANY (segs) THEN
+      segs := segs || r.seg;
+    END IF;
+  END LOOP;
+  RETURN cardinality(segs);
+END;
+$$;
+-- Whether EXPLAIN ANALYZE names the segment this session's id selects.
+CREATE FUNCTION lance_feature.search_segment(stmt text) RETURNS text
+LANGUAGE plpgsql AS $$
+DECLARE
+  line text;
+  expected int := (current_setting('gp_session_id')::int % 3 + 3) % 3;
+BEGIN
+  FOR line IN EXECUTE format('EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF) %s', stmt)
+  LOOP
+    line := btrim(line);
+    IF line LIKE 'Lance Search Segment: %' THEN
+      IF line = 'Lance Search Segment: ' || expected THEN
+        RETURN 'the session''s segment';
+      END IF;
+      RETURN line;
+    END IF;
+  END LOOP;
+  RETURN 'no search';
+END;
+$$;
+-- Which way EXPLAIN ANALYZE says the search ran, and why.
+CREATE FUNCTION lance_feature.search_mode(stmt text) RETURNS text
+LANGUAGE plpgsql AS $$
+DECLARE
+  line text;
+BEGIN
+  FOR line IN EXECUTE format('EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF) %s', stmt)
+  LOOP
+    line := btrim(line);
+    IF line LIKE 'Lance Search Mode: %' THEN
+      RETURN substr(line, length('Lance Search Mode: ') + 1);
+    END IF;
+  END LOOP;
+  RETURN 'no search mode';
+END;
+$$;
+-- recall@10 of an indexed table against the exact vec, over forty queries taken
+-- from the rows themselves, half of them with a cat filter.
+CREATE FUNCTION lance_feature.recall(tbl text DEFAULT 'vec_idx') RETURNS numeric
+LANGUAGE plpgsql AS $$
+DECLARE
+  q real[];
+  i int;
+  stmt text;
+  approx int[];
+  exact int[];
+  hits int := 0;
+BEGIN
+  FOR i IN 0..39 LOOP
+    SELECT emb INTO q FROM lance_feature.vec WHERE id = i * 37 % 960;
+    stmt := CASE WHEN i % 2 = 0
+      THEN format('SELECT id FROM lance_feature.%%I ORDER BY emb <-> %L::real[] LIMIT 10', q)
+      ELSE format('SELECT id FROM lance_feature.%%I WHERE cat = %s ORDER BY emb <-> %L::real[] LIMIT 10',
+                  i % 5, q)
+    END;
+    approx := lance_feature.ids(format(stmt, tbl));
+    exact := lance_feature.ids(format(stmt, 'vec'));
+    hits := hits + (SELECT count(*) FROM unnest(approx) a WHERE a = ANY (exact));
+  END LOOP;
+  RETURN hits / 400.0;
+END;
+$$;
+-- The operators, on plain arrays: Euclidean, 1 - cos (NaN for a zero
+-- vector, as in pgvector), and the negative inner product.  STRICT: NULL in,
+-- NULL out.
+SELECT '{1,2,3}'::real[] <-> '{4,6,3}'::real[] AS l2,
+       '{1,0}'::real[] <=> '{0,1}'::real[] AS cos_orthogonal,
+       '{1,0}'::real[] <=> '{2,0}'::real[] AS cos_parallel,
+       '{0,0}'::real[] <=> '{1,0}'::real[] AS cos_zero,
+       '{1,2,3}'::real[] <#> '{4,5,6}'::real[] AS neg_ip,
+       NULL::real[] <-> '{1}'::real[] AS l2_null,
+       '{}'::real[] <-> '{}'::real[] AS l2_empty;
+l2|cos_orthogonal|cos_parallel|cos_zero|neg_ip|l2_null|l2_empty
+5|1|0|NaN|-32||0
+(1 row)
+-- What has no distance is an error, never a guess.
+SELECT * FROM lance_feature.report($$SELECT '{1,2,3}'::real[] <-> '{1,2}'::real[]$$);
+report
+ERROR:  lance_fdw: vectors of different dimensions
+DETAIL:  The left vector has 3 elements and the right one 2.
+(2 rows)
+SELECT * FROM lance_feature.report($$SELECT '{{1,2},{3,4}}'::real[] <=> '{1,2,3,4}'::real[]$$);
+report
+ERROR:  lance_fdw: a vector must be a one-dimensional array
+DETAIL:  The array has 2 dimensions.
+(2 rows)
+SELECT * FROM lance_feature.report($$SELECT '{1,NULL}'::real[] <#> '{1,2}'::real[]$$);
+report
+ERROR:  lance_fdw: a vector must not contain NULL elements
+(1 row)
+-- Each operator goes to Lance with its metric and k; the filter goes
+-- with it, and the plan above the scan is the plain scan's.
+SELECT * FROM lance_feature.explain_lance(
+  $$SELECT id FROM lance_feature.vec WHERE cat = 2 ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 5$$);
+explain_lance
+Lance URI: <redacted>
+Lance Version: latest
+Lance Columns: id, emb
+Lance Filter: (`cat` = 2)
+Lance Vector Search: emb <-> (L2), k=5
+(5 rows)
+SELECT * FROM lance_feature.explain_lance(
+  $$SELECT id FROM lance_feature.vec ORDER BY '{1,2,3,4,5,6,7,8}' <=> emb LIMIT 7$$);
+explain_lance
+Lance URI: <redacted>
+Lance Version: latest
+Lance Columns: id, emb
+Lance Vector Search: emb <=> (cosine), k=7
+(4 rows)
+SELECT * FROM lance_feature.explain_lance(
+  $$SELECT id FROM lance_feature.vec WHERE cat IN (1, 3) ORDER BY emb <#> '{1,2,3,4,5,6,7,8}' LIMIT 3$$,
+  'COSTS OFF, VERBOSE');
+explain_lance
+Lance URI: <redacted>
+Lance Version: latest
+Lance Columns: id, emb
+Lance Filter: `cat` IN (1, 3)
+Lance Vector Search: emb <#> (inner product), k=3
+Lance nprobes: default
+Lance refine_factor: default
+(7 rows)
+SET lance_fdw.nprobes = 4;
+SET lance_fdw.refine_factor = 2;
+SELECT * FROM lance_feature.explain_lance(
+  $$SELECT id FROM lance_feature.vec ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$,
+  'COSTS OFF, VERBOSE');
+explain_lance
+Lance URI: <redacted>
+Lance Version: latest
+Lance Columns: id, emb
+Lance Vector Search: emb <-> (L2), k=3
+Lance nprobes: 4
+Lance refine_factor: 2
+(6 rows)
+RESET lance_fdw.nprobes;
+RESET lance_fdw.refine_factor;
+-- Without an index Lance searches every row: the same rows as the
+-- exact path, in PostgreSQL's order, for each operator, filtered or not.
+SELECT id, round((emb <-> '{1,2,3,4,5,6,7,8}')::numeric, 4) AS dist
+  FROM lance_feature.vec WHERE cat = 2 ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 5;
+id|dist
+442|17.9700
+22|18.0076
+922|18.0709
+92|18.1629
+262|18.2540
+(5 rows)
+SELECT lance_feature.same_as_exact(
+  $$SELECT id FROM lance_feature.vec ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 20$$) AS l2;
+l2
+same as exact
+(1 row)
+SELECT lance_feature.same_as_exact(
+  $$SELECT id FROM lance_feature.vec WHERE cat = 4 ORDER BY emb <=> '{-1,2,-3,4,-5,6,-7,8}' LIMIT 20$$) AS cosine;
+cosine
+same as exact
+(1 row)
+SELECT lance_feature.same_as_exact(
+  $$SELECT id FROM lance_feature.vec WHERE id >= 500 ORDER BY emb <#> '{3,1,4,1,5,9,2,6}' LIMIT 20$$) AS inner_product;
+inner_product
+same as exact
+(1 row)
+SELECT lance_feature.same_as_exact(
+  $$SELECT id FROM lance_feature.vec WHERE cat = 0 ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 1000$$) AS k_beyond_rows;
+k_beyond_rows
+same as exact
+(1 row)
+-- The filter is applied before the search, not after it: the query is
+-- row 0, in cluster 0, and the filter keeps only cluster 7.  Searching first and
+-- filtering afterwards would leave nothing; the search must still find k rows,
+-- and with nprobes set as low as it goes too.
+SELECT cardinality(lance_feature.ids(
+  $$SELECT id FROM lance_feature.vec_idx
+     WHERE id IN (7, 19, 31, 43, 55, 67, 79, 91, 103, 115, 127, 139, 151, 163)
+     ORDER BY emb <-> '{-2.5468276,-3.586937,-5.857939,-2.8779135,5.3313246,-9.145959,-4.7810936,-5.7633853}'
+     LIMIT 10$$)) AS rows_found;
+rows_found
+10
+(1 row)
+SET lance_fdw.nprobes = 1;
+SELECT cardinality(lance_feature.ids(
+  $$SELECT id FROM lance_feature.vec_idx
+     WHERE id IN (7, 19, 31, 43, 55, 67, 79, 91, 103, 115, 127, 139, 151, 163)
+     ORDER BY emb <-> '{-2.5468276,-3.586937,-5.857939,-2.8779135,5.3313246,-9.145959,-4.7810936,-5.7633853}'
+     LIMIT 10$$)) AS rows_found_nprobes_1;
+rows_found_nprobes_1
+10
+(1 row)
+SELECT cardinality(lance_feature.ids(
+  $$SELECT id FROM lance_feature.vec_idx WHERE id = 7
+     ORDER BY emb <-> '{-2.5468276,-3.586937,-5.857939,-2.8779135,5.3313246,-9.145959,-4.7810936,-5.7633853}'
+     LIMIT 10$$)) AS one_far_row_nprobes_1;
+one_far_row_nprobes_1
+1
+(1 row)
+RESET lance_fdw.nprobes;
+-- Searched by one segment - the one the session id selects - every row
+-- comes from it, and the result is still the exact one.
+SET lance_fdw.vector_search_mode = single;
+SELECT lance_feature.segments(
+  $$SELECT gp_execution_segment() AS seg, id FROM lance_feature.vec
+     ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 30$$) AS segments_with_rows;
+segments_with_rows
+1
+(1 row)
+SELECT lance_feature.search_segment(
+  $$SELECT id FROM lance_feature.vec ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$);
+search_segment
+the session's segment
+(1 row)
+SELECT lance_feature.search_mode(
+  $$SELECT id FROM lance_feature.vec ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$);
+search_mode
+single, set by lance_fdw.vector_search_mode
+(1 row)
+SELECT lance_feature.same_as_exact(
+  $$SELECT id FROM lance_feature.vec WHERE cat = 4 ORDER BY emb <=> '{-1,2,-3,4,-5,6,-7,8}' LIMIT 20$$) AS single_cosine;
+single_cosine
+same as exact
+(1 row)
+RESET lance_fdw.vector_search_mode;
+-- Distributed Top-K.  With no index every segment searches a range of the
+-- fragments - every row is read either way, and this way the work divides -
+-- and the rows come from all of them.  The exact cases above already ran
+-- this way.
+SELECT lance_feature.search_mode(
+  $$SELECT id FROM lance_feature.vec ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$) AS no_index;
+no_index
+distributed, no index on emb
+(1 row)
+SELECT lance_feature.search_segment(
+  $$SELECT id FROM lance_feature.vec ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$);
+search_segment
+Lance Search Segment: all
+(1 row)
+SELECT lance_feature.segments(
+  $$SELECT gp_execution_segment() AS seg, id FROM lance_feature.vec
+     ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 30$$) AS segments_with_rows;
+segments_with_rows
+3
+(1 row)
+-- An index of one segment would be probed in full by every segment, so it
+-- stays with one.
+SELECT lance_feature.search_mode(
+  $$SELECT id FROM lance_feature.vec_idx ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$) AS one_segment;
+one_segment
+single, the index has one segment
+(1 row)
+SELECT lance_feature.search_segment(
+  $$SELECT id FROM lance_feature.vec_idx ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$);
+search_segment
+the session's segment
+(1 row)
+-- An index of several segments splits with the fragments.
+SELECT lance_feature.search_mode(
+  $$SELECT id FROM lance_feature.vec_seg ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$) AS three_segments;
+three_segments
+distributed, the index has 3 segments
+(1 row)
+-- Fragment 3 is in no segment: whoever has it searches it exhaustively, so a
+-- query equal to one of its rows finds that row first.  Ids 720-959 are
+-- fragment 3.
+SELECT (lance_feature.ids(format(
+  'SELECT id FROM lance_feature.vec_seg ORDER BY emb <-> %L::real[] LIMIT 5',
+  (SELECT emb FROM lance_feature.vec WHERE id = 800))))[1] AS unindexed_row_first;
+unindexed_row_first
+800
+(1 row)
+SELECT (lance_feature.ids(format(
+  'SELECT id FROM lance_feature.vec_seg WHERE cat = 0 ORDER BY emb <-> %L::real[] LIMIT 5',
+  (SELECT emb FROM lance_feature.vec WHERE id = 900))))[1] AS unindexed_row_first_filtered;
+unindexed_row_first_filtered
+900
+(1 row)
+-- Each segment returns its own k: no row twice, and k of them.
+SELECT count(*) AS k, count(DISTINCT id) AS distinct_ids
+  FROM unnest(lance_feature.ids(
+    $$SELECT id FROM lance_feature.vec_seg ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 50$$)) AS id;
+k|distinct_ids
+50|50
+(1 row)
+SELECT lance_feature.recall('vec_seg') >= 0.8 AS recall_at_10_segments;
+recall_at_10_segments
+t
+(1 row)
+SET lance_fdw.refine_factor = 5;
+SELECT lance_feature.recall('vec_seg') >= 0.95 AS recall_at_10_segments_refine_5;
+recall_at_10_segments_refine_5
+t
+(1 row)
+RESET lance_fdw.refine_factor;
+-- A query metric the segments were not trained with is searched exhaustively
+-- fragment by fragment, so the result is exact.
+SELECT lance_feature.same_as_exact(
+  $$SELECT id FROM lance_feature.vec_seg WHERE cat = 3 ORDER BY emb <=> '{1,2,3,4,5,6,7,8}' LIMIT 10$$) AS cosine_on_l2_segments;
+cosine_on_l2_segments
+same as exact
+(1 row)
+-- Fewer fragments than segments: vectors_nulls has two, so one segment has
+-- nothing to search and must not search the whole dataset instead.
+SELECT lance_feature.same_as_exact(
+  $$SELECT id FROM lance_feature.vec_nulls ORDER BY emb <-> '{1,0,0,0}' LIMIT 3$$) AS two_fragments;
+two_fragments
+same as exact
+(1 row)
+SELECT count(*) AS k, count(DISTINCT id) AS distinct_ids
+  FROM unnest(lance_feature.ids(
+    $$SELECT id FROM lance_feature.vec_nulls ORDER BY emb <-> '{1,0,0,0}' LIMIT 7$$)) AS id;
+k|distinct_ids
+7|7
+(1 row)
+-- The setting overrides the choice either way, and a cached plan follows it
+-- without being replanned: the choice is made when the statement starts.
+-- DISTRIBUTED is a keyword in Cloudberry, so that value needs its quotes.
+SELECT lance_feature.message($$SET lance_fdw.vector_search_mode = distributed$$) AS unquoted;
+unquoted
+syntax error at or near "distributed"
+(1 row)
+SET lance_fdw.vector_search_mode = 'distributed';
+SELECT lance_feature.search_mode(
+  $$SELECT id FROM lance_feature.vec_idx ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$) AS forced_distributed;
+forced_distributed
+distributed, set by lance_fdw.vector_search_mode
+(1 row)
+SELECT count(*) AS k, count(DISTINCT id) AS distinct_ids
+  FROM unnest(lance_feature.ids(
+    $$SELECT id FROM lance_feature.vec_idx ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 20$$)) AS id;
+k|distinct_ids
+20|20
+(1 row)
+SET lance_fdw.vector_search_mode = single;
+SELECT lance_feature.search_mode(
+  $$SELECT id FROM lance_feature.vec_seg ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$) AS forced_single;
+forced_single
+single, set by lance_fdw.vector_search_mode
+(1 row)
+SELECT (lance_feature.ids(format(
+  'SELECT id FROM lance_feature.vec_seg ORDER BY emb <-> %L::real[] LIMIT 5',
+  (SELECT emb FROM lance_feature.vec WHERE id = 800))))[1] AS unindexed_row_first_single;
+unindexed_row_first_single
+800
+(1 row)
+RESET lance_fdw.vector_search_mode;
+SET plan_cache_mode = force_generic_plan;
+PREPARE vq_mode(real[]) AS SELECT id FROM lance_feature.vec ORDER BY emb <-> $1 LIMIT 3;
+SELECT lance_feature.search_mode($$EXECUTE vq_mode('{1,2,3,4,5,6,7,8}')$$) AS generic_auto;
+generic_auto
+distributed, no index on emb
+(1 row)
+SET lance_fdw.vector_search_mode = single;
+SELECT lance_feature.search_mode($$EXECUTE vq_mode('{1,2,3,4,5,6,7,8}')$$) AS generic_single;
+generic_single
+single, set by lance_fdw.vector_search_mode
+(1 row)
+RESET lance_fdw.vector_search_mode;
+DEALLOCATE vq_mode;
+RESET plan_cache_mode;
+-- The coordinator searches on its own whatever the setting says.
+SET lance_fdw.vector_search_mode = 'distributed';
+SELECT lance_feature.search_segment(
+  $$SELECT id FROM lance_feature.vec_coord ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$) AS coordinator_distributed;
+coordinator_distributed
+Lance Search Segment: coordinator
+(1 row)
+SELECT lance_feature.search_mode(
+  $$SELECT id FROM lance_feature.vec_coord ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$) AS coordinator_mode;
+coordinator_mode
+no search mode
+(1 row)
+RESET lance_fdw.vector_search_mode;
+SELECT lance_feature.message($$SET lance_fdw.vector_search_mode = 'everywhere'$$);
+message
+invalid value for parameter "lance_fdw.vector_search_mode": "everywhere"
+(1 row)
+-- The index is approximate; its recall over the fixture is bounded, not
+-- exact, because training it is not reproducible.  Re-ranking enough candidates
+-- by their exact distance recovers the exact answer.
+SELECT lance_feature.recall() >= 0.8 AS recall_at_10_default;
+recall_at_10_default
+t
+(1 row)
+SET lance_fdw.refine_factor = 5;
+SELECT lance_feature.recall() >= 0.95 AS recall_at_10_refine_5;
+recall_at_10_refine_5
+t
+(1 row)
+RESET lance_fdw.refine_factor;
+-- A metric the index was not trained with: Lance searches exhaustively and the
+-- result is exact again.
+SELECT lance_feature.same_as_exact(
+  $$SELECT id FROM lance_feature.vec_idx WHERE cat = 3 ORDER BY emb <=> '{1,2,3,4,5,6,7,8}' LIMIT 10$$) AS cosine_on_l2_index;
+cosine_on_l2_index
+same as exact
+(1 row)
+-- A prepared statement keeps pushing down under a generic plan, where
+-- the query vector is a parameter that only the QD's evaluation resolves.
+SET plan_cache_mode = force_generic_plan;
+PREPARE vq(real[]) AS
+  SELECT id FROM lance_feature.vec WHERE cat = 1 ORDER BY emb <-> $1 LIMIT 4;
+SELECT lance_feature.pushed($$EXECUTE vq('{1,2,3,4,5,6,7,8}')$$) AS generic_plan_pushed;
+generic_plan_pushed
+t
+(1 row)
+EXECUTE vq('{1,2,3,4,5,6,7,8}');
+id
+826
+766
+406
+466
+(4 rows)
+EXECUTE vq('{-8,-7,-6,-5,-4,-3,-2,-1}');
+id
+561
+741
+861
+21
+(4 rows)
+SELECT lance_feature.same_as_exact($$EXECUTE vq('{-8,-7,-6,-5,-4,-3,-2,-1}')$$) AS generic_plan;
+generic_plan
+same as exact
+(1 row)
+-- At execution the QD looks at the value: NULL, NaN, a zero vector under
+-- cosine and a vector of the wrong size are not searched for, and the
+-- statement runs the plain way - with the exact path's result, or its error.
+SELECT * FROM lance_feature.explain_lance($$EXECUTE vq(NULL)$$,
+  'ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF');
+explain_lance
+Lance URI: <redacted>
+Lance Version: latest
+Lance Columns: id, emb
+Lance Filter: (`cat` = 1)
+Lance Vector Search: fell back (the query vector is NULL)
+Lance Fragments: 4
+(6 rows)
+-- Every distance is NULL, so which four rows come back is a tie; only the count
+-- is the exact path's.
+SELECT cardinality(lance_feature.ids($$EXECUTE vq(NULL)$$)) AS rows_null_vector;
+rows_null_vector
+4
+(1 row)
+SELECT * FROM lance_feature.explain_lance($$EXECUTE vq('{1,2,3,4,5,6,7,NaN}')$$,
+  'ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF');
+explain_lance
+Lance URI: <redacted>
+Lance Version: latest
+Lance Columns: id, emb
+Lance Filter: (`cat` = 1)
+Lance Vector Search: fell back (the query vector has a NaN or infinite element)
+Lance Fragments: 4
+(6 rows)
+SELECT lance_feature.message($$EXECUTE vq('{1,2,3}')$$);
+message
+lance_fdw: vectors of different dimensions
+(1 row)
+PREPARE vq_empty(real[]) AS
+  SELECT id FROM lance_feature.vec WHERE cat = 9 ORDER BY emb <-> $1 LIMIT 4;
+EXECUTE vq_empty('{1,2,3}');
+id
+(0 rows)
+PREPARE vq_cos(real[]) AS
+  SELECT id FROM lance_feature.vec ORDER BY emb <=> $1 LIMIT 4;
+SELECT * FROM lance_feature.explain_lance($$EXECUTE vq_cos('{0,0,0,0,0,0,0,0}')$$,
+  'ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF');
+explain_lance
+Lance URI: <redacted>
+Lance Version: latest
+Lance Columns: id, emb
+Lance Vector Search: fell back (the query vector is zero)
+Lance Fragments: 4
+(5 rows)
+-- Every distance is NaN: a tie again, so the count is what is compared.
+SELECT cardinality(lance_feature.ids($$EXECUTE vq_cos('{0,0,0,0,0,0,0,0}')$$)) AS rows_zero_vector;
+rows_zero_vector
+4
+(1 row)
+-- Turning the pushdown off reaches cached plans at once, and so does a
+-- SET LOCAL and the restore at the end of its transaction.
+SET lance_fdw.enable_vector_pushdown = off;
+SELECT lance_feature.pushed($$EXECUTE vq('{1,2,3,4,5,6,7,8}')$$) AS after_set_off;
+after_set_off
+f
+(1 row)
+RESET lance_fdw.enable_vector_pushdown;
+SELECT lance_feature.pushed($$EXECUTE vq('{1,2,3,4,5,6,7,8}')$$) AS after_reset;
+after_reset
+t
+(1 row)
+BEGIN;
+SET LOCAL lance_fdw.enable_vector_pushdown = off;
+SELECT lance_feature.pushed($$EXECUTE vq('{1,2,3,4,5,6,7,8}')$$) AS inside_set_local;
+inside_set_local
+f
+(1 row)
+ROLLBACK;
+SELECT lance_feature.pushed($$EXECUTE vq('{1,2,3,4,5,6,7,8}')$$) AS after_rollback;
+after_rollback
+t
+(1 row)
+SET lance_fdw.vector_pushdown_max_k = 3;
+SELECT lance_feature.pushed($$EXECUTE vq('{1,2,3,4,5,6,7,8}')$$) AS k_above_max;
+k_above_max
+f
+(1 row)
+RESET lance_fdw.vector_pushdown_max_k;
+RESET plan_cache_mode;
+DEALLOCATE vq;
+DEALLOCATE vq_empty;
+DEALLOCATE vq_cos;
+-- 'coordinator' searches in the QD itself; 'any' does not push down.
+SELECT * FROM lance_feature.explain_lance(
+  $$SELECT id FROM lance_feature.vec_coord WHERE cat = 2 ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$,
+  'ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF');
+explain_lance
+Lance URI: <redacted>
+Lance Version: latest
+Lance Columns: id, emb
+Lance Filter: (`cat` = 2)
+Lance Vector Search: emb <-> (L2), k=3
+Lance Search Segment: coordinator
+(6 rows)
+SELECT lance_feature.same_as_exact(
+  $$SELECT id FROM lance_feature.vec_coord WHERE cat = 2 ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 10$$) AS coordinator;
+coordinator
+same as exact
+(1 row)
+SELECT lance_feature.pushed(
+  $$SELECT id FROM lance_feature.vec_any ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$) AS any_pushed;
+any_pushed
+f
+(1 row)
+SELECT lance_feature.ids(
+  $$SELECT id FROM lance_feature.vec_any WHERE cat = 2 ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$) AS any_ids;
+any_ids
+{442,22,922}
+(1 row)
+-- Every shape where cutting to k first would not be the same thing
+-- stays with PostgreSQL.
+SELECT lance_feature.pushed($$SELECT v.id FROM lance_feature.vec v JOIN lance_feature.vec w USING (id)
+  ORDER BY v.emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$) AS join_;
+join_
+f
+(1 row)
+SELECT lance_feature.pushed($$SELECT * FROM (SELECT id FROM lance_feature.vec
+  ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3) s$$) AS subquery;
+subquery
+f
+(1 row)
+SELECT lance_feature.pushed($$WITH c AS MATERIALIZED (SELECT id FROM lance_feature.vec
+  ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3) SELECT * FROM c$$) AS cte;
+cte
+f
+(1 row)
+SELECT lance_feature.pushed($$SELECT cat, min(emb <-> '{1,2,3,4,5,6,7,8}') FROM lance_feature.vec
+  GROUP BY cat ORDER BY 2 LIMIT 3$$) AS group_by;
+group_by
+f
+(1 row)
+SELECT lance_feature.pushed($$SELECT DISTINCT cat, emb <-> '{1,2,3,4,5,6,7,8}' FROM lance_feature.vec
+  ORDER BY 2 LIMIT 3$$) AS distinct_;
+distinct_
+f
+(1 row)
+SELECT lance_feature.pushed($$SELECT id, count(*) OVER () FROM lance_feature.vec
+  ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$) AS window_;
+window_
+f
+(1 row)
+SELECT lance_feature.pushed($$SELECT id FROM lance_feature.vec
+  ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3 OFFSET 1$$) AS offset_;
+offset_
+f
+(1 row)
+SELECT lance_feature.pushed($$SELECT id FROM lance_feature.vec
+  ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' FETCH FIRST 3 ROWS WITH TIES$$) AS with_ties;
+with_ties
+f
+(1 row)
+SELECT lance_feature.pushed($$SELECT id FROM lance_feature.vec
+  ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' DESC LIMIT 3$$) AS desc_;
+desc_
+f
+(1 row)
+SELECT lance_feature.pushed($$SELECT id FROM lance_feature.vec
+  ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' NULLS FIRST LIMIT 3$$) AS nulls_first;
+nulls_first
+f
+(1 row)
+SELECT lance_feature.pushed($$SELECT id FROM lance_feature.vec
+  ORDER BY emb <-> '{1,2,3,4,5,6,7,8}', id LIMIT 3$$) AS two_sort_keys;
+two_sort_keys
+f
+(1 row)
+SELECT lance_feature.pushed($$SELECT id FROM lance_feature.vec WHERE id + 1 > 3
+  ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$) AS local_qual;
+local_qual
+f
+(1 row)
+SELECT lance_feature.pushed($$SELECT id FROM lance_feature.vec
+  ORDER BY emb <-> NULL::real[] LIMIT 3$$) AS null_constant;
+null_constant
+f
+(1 row)
+SELECT lance_feature.pushed($$SELECT id FROM lance_feature.vec
+  ORDER BY emb <-> emb LIMIT 3$$) AS column_as_query;
+column_as_query
+f
+(1 row)
+SELECT lance_feature.pushed($$SELECT id FROM lance_feature.vec
+  ORDER BY emb <-> array_fill(random()::real, ARRAY[8]) LIMIT 3$$) AS volatile_function_as_query;
+volatile_function_as_query
+f
+(1 row)
+-- An immutable function of constants is folded to a constant before the scan is
+-- planned, so that one is a constant query vector like any other.
+SELECT lance_feature.pushed($$SELECT id FROM lance_feature.vec
+  ORDER BY emb <-> array_fill(1::real, ARRAY[8]) LIMIT 3$$) AS immutable_function_as_query;
+immutable_function_as_query
+t
+(1 row)
+SELECT lance_feature.pushed($$SELECT id FROM lance_feature.vec_f64
+  ORDER BY c_fsl_f64_4::real[] <-> '{1,2,3,4}' LIMIT 3$$) AS double_precision_column;
+double_precision_column
+f
+(1 row)
+SELECT lance_feature.pushed($$SELECT id FROM lance_feature.vec
+  ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3 FOR UPDATE$$) AS for_update;
+for_update
+f
+(1 row)
+SELECT lance_feature.pushed($$SELECT id FROM lance_feature.vec
+  ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 10001$$) AS k_above_default_max;
+k_above_default_max
+f
+(1 row)
+SET lance_fdw.enable_filter_pushdown = off;
+SELECT lance_feature.pushed($$SELECT id FROM lance_feature.vec WHERE cat = 2
+  ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$) AS filter_pushdown_off;
+filter_pushdown_off
+f
+(1 row)
+SELECT lance_feature.pushed($$SELECT id FROM lance_feature.vec
+  ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$) AS filter_pushdown_off_no_where;
+filter_pushdown_off_no_where
+t
+(1 row)
+RESET lance_fdw.enable_filter_pushdown;
+-- ORCA hands GetForeignPaths a PlannerInfo of its own making, so it never
+-- pushes down; pushdown.sql switches the optimizer on the same way.
+SET optimizer = on;
+SELECT lance_feature.pushed($$SELECT id FROM lance_feature.vec
+  ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$) AS orca;
+orca
+f
+(1 row)
+RESET optimizer;
+-- Same rows either way, for the shapes whose answer does not depend on ties.
+SELECT lance_feature.same_as_exact($$SELECT id FROM lance_feature.vec WHERE id + 1 > 3
+  ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3$$) AS local_qual;
+local_qual
+same as exact
+(1 row)
+SELECT lance_feature.same_as_exact($$SELECT id FROM lance_feature.vec
+  ORDER BY emb <-> '{1,2,3,4,5,6,7,8}' LIMIT 3 OFFSET 1$$) AS offset_;
+offset_
+same as exact
+(1 row)
+-- An operator of the same name and signature in another schema is not ours.
+CREATE SCHEMA vec_other;
+CREATE FUNCTION vec_other.not_l2(real[], real[]) RETURNS double precision
+  LANGUAGE sql IMMUTABLE AS 'SELECT 0::double precision';
+CREATE OPERATOR vec_other.<-> (LEFTARG = real[], RIGHTARG = real[], FUNCTION = vec_other.not_l2);
+SELECT lance_feature.pushed($$SELECT id FROM lance_feature.vec
+  ORDER BY emb OPERATOR(vec_other.<->) '{1,2,3,4,5,6,7,8}' LIMIT 3$$) AS other_schema_operator;
+other_schema_operator
+f
+(1 row)
+DROP SCHEMA vec_other CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function vec_other.not_l2(real[],real[])
+drop cascades to operator vec_other.<->(real[],real[])
+-- A row whose vector is NULL - or, under cosine, zero - has no distance
+-- to search by.  The exact path sorts it last and returns it only when fewer
+-- than k rows have a distance; the search never returns it.
+SELECT lance_feature.ids($$SELECT id FROM lance_feature.vec_nulls ORDER BY emb <-> '{1,0,0,0}' LIMIT 3$$) AS pushed_3,
+       lance_feature.same_as_exact($$SELECT id FROM lance_feature.vec_nulls ORDER BY emb <-> '{1,0,0,0}' LIMIT 3$$) AS exact_3;
+pushed_3|exact_3
+{0,1,5}|same as exact
+(1 row)
+SELECT lance_feature.ids($$SELECT id FROM lance_feature.vec_nulls ORDER BY emb <-> '{1,0,0,0}' LIMIT 10$$) AS pushed_10;
+pushed_10
+{0,1,5,6,9,3,7}
+(1 row)
+SET lance_fdw.enable_vector_pushdown = off;
+SELECT lance_feature.ids($$SELECT id FROM lance_feature.vec_nulls ORDER BY emb <-> '{1,0,0,0}' LIMIT 10$$) AS exact_10;
+exact_10
+{0,1,5,6,9,3,7,8,2,4}
+(1 row)
+SELECT lance_feature.ids($$SELECT id FROM lance_feature.vec_nulls ORDER BY emb <=> '{1,0,0,0}' LIMIT 10$$) AS exact_10_cosine;
+exact_10_cosine
+{0,1,3,6,7,9,5,8,2,4}
+(1 row)
+RESET lance_fdw.enable_vector_pushdown;
+SELECT lance_feature.ids($$SELECT id FROM lance_feature.vec_nulls ORDER BY emb <=> '{1,0,0,0}' LIMIT 10$$) AS pushed_10_cosine;
+pushed_10_cosine
+{0,1,3,6,7,9}
+(1 row)
+DROP SERVER vec_files CASCADE;
+NOTICE:  drop cascades to 7 other objects
+DETAIL:  drop cascades to foreign table lance_feature.vec
+drop cascades to foreign table lance_feature.vec_idx
+drop cascades to foreign table lance_feature.vec_coord
+drop cascades to foreign table lance_feature.vec_any
+drop cascades to foreign table lance_feature.vec_nulls
+drop cascades to foreign table lance_feature.vec_f64
+drop cascades to foreign table lance_feature.vec_seg

@@ -336,6 +336,11 @@ jobs:
                "pgxs_extension":"contrib/datalake_fdw",
                "shared_preload_libraries":"datalake_fdw"
               },
+              {"test":"ic-lance-fdw",
+               "make_configs":["contrib/lance_fdw:installcheck"],
+               "pgxs_extension":"contrib/lance_fdw",
+               "pg_settings":{"optimizer":"off"}
+              },
               {"test":"ic-gpcontrib",
                "make_configs":["gpcontrib/orafce:installcheck",
                                "gpcontrib/zstd:installcheck",
@@ -1450,6 +1455,17 @@ jobs:
       # entry.  Note that those entries cannot carry make variables: the runner
       # joins the list and re-splits it on spaces, so "dir:target VAR=1" would
       # be read as two configurations and the second one would fail.
+      # lance_fdw links liblance_c, which is written in Rust and is not part of
+      # this tree.  Building it takes a quarter of an hour, so the result is
+      # cached per image and per lance-c revision.
+      - name: Restore liblance_c
+        id: lance-c-cache
+        if: success() && needs.check-skip.outputs.should_skip != 'true' && matrix.pgxs_extension == 'contrib/lance_fdw'
+        uses: actions/cache/restore@v4
+        with:
+          path: /usr/local/lance-c
+          key: lance-c-rocky${{ matrix.rocky_version }}-${{ runner.arch }}-${{ hashFiles('contrib/lance_fdw/ci/build-lance-c.sh') }}
+
       - name: Build extension against the installed server
         if: success() && needs.check-skip.outputs.should_skip != 'true'
         env:
@@ -1496,6 +1512,12 @@ jobs:
             fi
           fi
 
+          PGXS_MAKE_ARGS=""
+          if [[ "${PGXS_EXTENSION}" == "contrib/lance_fdw" ]]; then
+            bash "${SRC_DIR}/contrib/lance_fdw/ci/build-lance-c.sh" /usr/local/lance-c
+            PGXS_MAKE_ARGS="LANCE_C_PREFIX=/usr/local/lance-c"
+          fi
+
           # The RPM installs as root; the build runs as gpadmin, as everywhere
           # else in this job.  -H follows the command-line symlink.
           chown -RH gpadmin:gpadmin "${BUILD_DESTINATION}/"
@@ -1504,8 +1526,8 @@ jobs:
             echo "=== Building ${PGXS_EXTENSION} with PGXS ==="
             if ! time su - gpadmin -c "source ${BUILD_DESTINATION}/cloudberry-env.sh && \
                  cd ${SRC_DIR}/${PGXS_EXTENSION} && \
-                 make USE_PGXS=1 && \
-                 make USE_PGXS=1 install"; then
+                 make USE_PGXS=1 ${PGXS_MAKE_ARGS} && \
+                 make USE_PGXS=1 ${PGXS_MAKE_ARGS} install"; then
               echo "::error::Building ${PGXS_EXTENSION} with PGXS failed"
               exit 1
             fi
@@ -1515,6 +1537,13 @@ jobs:
               ls -l \"\$(pg_config --pkglibdir)\" | grep '$(basename "${PGXS_EXTENSION}")' && \
               ls -l \"\$(pg_config --sharedir)/extension\" | grep '$(basename "${PGXS_EXTENSION}")'"
           } 2>&1 | tee -a build-logs/details/build-pgxs-extension.log
+
+      - name: Save liblance_c
+        if: success() && needs.check-skip.outputs.should_skip != 'true' && matrix.pgxs_extension == 'contrib/lance_fdw' && steps.lance-c-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /usr/local/lance-c
+          key: lance-c-rocky${{ matrix.rocky_version }}-${{ runner.arch }}-${{ hashFiles('contrib/lance_fdw/ci/build-lance-c.sh') }}
 
       - name: Create Apache Cloudberry demo cluster
         if: success() && needs.check-skip.outputs.should_skip != 'true'
@@ -1539,6 +1568,17 @@ jobs:
             fi
 
           } 2>&1 | tee -a build-logs/details/create-cloudberry-demo-cluster.log
+
+      # The lance_fdw suites read Lance datasets from a local directory and from
+      # S3: generate them, start an S3 gateway on this host and upload them.
+      - name: Prepare lance_fdw test data
+        if: success() && needs.check-skip.outputs.should_skip != 'true' && matrix.pgxs_extension == 'contrib/lance_fdw'
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+          bash "${SRC_DIR}/contrib/lance_fdw/ci/prepare-tests.sh" gpadmin 2>&1 |
+            tee -a build-logs/details/prepare-lance-fdw-tests.log
 
       - name: "Run Tests: ${{ matrix.test }}"
         if: success() && needs.check-skip.outputs.should_skip != 'true'
