@@ -40,6 +40,9 @@ select gp_request_fts_probe_scan();
 3&: commit;
 
 -- this should not block due to direct dispatch to primary with active synced mirror
+-- Do not wait for the blocked commit: this test exercises direct dispatch on
+-- another primary while synchronous replication is waiting.
+4: SET debug_disable_distributed_snapshot = on;
 4: insert into segwalrep_commit_blocking values (6);
 
 -- bring the mirror back up
