@@ -297,6 +297,9 @@ test: freeze_aux_tables
 # cbdb parallel test
 test: cbdb_parallel
 
+# ORCA parallel append over partitioned tables
+test: orca_parallel_append
+
 # window function parallel test
 test: window_parallel
 
