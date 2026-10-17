@@ -1,0 +1,193 @@
+-- ddl: the option surface - what is accepted, what is
+-- rejected, and where - plus a pg_dump round trip and a clean uninstall.
+-- Every uri here is synthetic: the DDL itself never reaches an object store,
+-- which is what shows that validation does no I/O, and the one scan
+-- below is there to fail.
+\pset format unaligned
+CREATE SERVER lance_ddl_srv FOREIGN DATA WRAPPER lance_fdw
+  OPTIONS (base_uri 'file:///lance/base',
+           aws_endpoint 'http://minio.invalid:9000',
+           aws_region 'us-east-1',
+           allow_http 'true',
+           virtual_hosted_style_request 'false');
+-- Not a credential: this suite never reaches an object store.
+CREATE USER MAPPING FOR PUBLIC SERVER lance_ddl_srv
+  OPTIONS (aws_access_key_id 'AKIA_EXAMPLE',
+           aws_secret_access_key 'example-only',
+           aws_session_token 'example-token');
+CREATE FOREIGN TABLE lance_feature.ddl_all (
+  id integer,
+  v text OPTIONS (column_name 'renamed_v')
+) SERVER lance_ddl_srv
+  OPTIONS (uri 'ds.lance', version '3', batch_size '128', rows_hint '4200');
+SELECT o.opt AS server_option
+  FROM pg_foreign_server s, unnest(s.srvoptions) AS o(opt)
+  WHERE s.srvname = 'lance_ddl_srv' ORDER BY 1;
+server_option
+allow_http=true
+aws_endpoint=http://minio.invalid:9000
+aws_region=us-east-1
+base_uri=file:///lance/base
+virtual_hosted_style_request=false
+(5 rows)
+-- Names only: the values are credentials, and credentials do not belong in an
+-- expected file even when they are made up.
+SELECT split_part(o.opt, '=', 1) AS user_mapping_option
+  FROM pg_user_mappings u, unnest(u.umoptions) AS o(opt)
+  WHERE u.srvname = 'lance_ddl_srv' ORDER BY 1;
+user_mapping_option
+aws_access_key_id
+aws_secret_access_key
+aws_session_token
+(3 rows)
+SELECT o.opt AS table_option
+  FROM pg_foreign_table t, unnest(t.ftoptions) AS o(opt)
+  WHERE t.ftrelid = 'lance_feature.ddl_all'::regclass ORDER BY 1;
+table_option
+batch_size=128
+rows_hint=4200
+uri=ds.lance
+version=3
+(4 rows)
+SELECT format('%s: %s', a.attname, o.opt) AS column_option
+  FROM pg_attribute a, unnest(a.attfdwoptions) AS o(opt)
+  WHERE a.attrelid = 'lance_feature.ddl_all'::regclass ORDER BY 1;
+column_option
+v: column_name=renamed_v
+(1 row)
+-- The byte limit on its own is accepted; ALTER has to see the combination too,
+-- because the validator is handed the merged option list, not just the change.
+CREATE FOREIGN TABLE lance_feature.ddl_bytes (id integer) SERVER lance_ddl_srv
+  OPTIONS (uri 'ds.lance', batch_size_bytes '1048576');
+SELECT o.opt AS bytes_option
+  FROM pg_foreign_table t, unnest(t.ftoptions) AS o(opt)
+  WHERE t.ftrelid = 'lance_feature.ddl_bytes'::regclass ORDER BY 1;
+bytes_option
+batch_size_bytes=1048576
+uri=ds.lance
+(2 rows)
+ALTER FOREIGN TABLE lance_feature.ddl_bytes OPTIONS (ADD batch_size '128');
+ERROR:  options "batch_size" and "batch_size_bytes" cannot be used together
+DETAIL:  lance lets the byte limit take precedence, so "batch_size" would have no effect.
+HINT:  Keep whichever limit you meant.
+-- mpp_execute may be overridden on a server and on a table.
+CREATE SERVER lance_coord_srv FOREIGN DATA WRAPPER lance_fdw
+  OPTIONS (base_uri 'file:///lance/base', mpp_execute 'coordinator');
+ALTER FOREIGN TABLE lance_feature.ddl_all OPTIONS (ADD mpp_execute 'any');
+SELECT o.opt AS mpp_option
+  FROM pg_foreign_table t, unnest(t.ftoptions) AS o(opt)
+  WHERE t.ftrelid = 'lance_feature.ddl_all'::regclass AND o.opt LIKE 'mpp%';
+mpp_option
+mpp_execute=any
+(1 row)
+-- Rejected: an option that belongs on another object, or a value that is not
+-- what it claims to be.
+CREATE SERVER lance_bad FOREIGN DATA WRAPPER lance_fdw OPTIONS (bogus 'x');
+ERROR:  invalid option "bogus"
+HINT:  Valid options in this context are: mpp_execute, base_uri, aws_endpoint, aws_region, allow_http, virtual_hosted_style_request.
+CREATE SERVER lance_bad FOREIGN DATA WRAPPER lance_fdw OPTIONS (uri 'x');
+ERROR:  invalid option "uri"
+HINT:  Valid options in this context are: mpp_execute, base_uri, aws_endpoint, aws_region, allow_http, virtual_hosted_style_request.
+CREATE SERVER lance_bad FOREIGN DATA WRAPPER lance_fdw OPTIONS (allow_http 'maybe');
+ERROR:  invalid value for option "allow_http": "maybe"
+DETAIL:  The value must be a boolean, for example true or false.
+CREATE SERVER lance_bad FOREIGN DATA WRAPPER lance_fdw OPTIONS (mpp_execute 'sideways');
+ERROR:  "sideways" is not a valid mpp_execute value
+CREATE USER MAPPING FOR PUBLIC SERVER lance_coord_srv OPTIONS (password 'x');
+ERROR:  invalid option "password"
+HINT:  Valid options in this context are: aws_access_key_id, aws_secret_access_key, aws_session_token.
+CREATE FOREIGN TABLE lance_feature.bad (id integer) SERVER lance_ddl_srv
+  OPTIONS (version '1');
+ERROR:  option "uri" is required for lance_fdw foreign tables
+HINT:  Give the dataset uri, absolute or relative to the server's base_uri.
+CREATE FOREIGN TABLE lance_feature.bad (id integer) SERVER lance_ddl_srv
+  OPTIONS (uri 'x', version 'HEAD');
+ERROR:  invalid value for option "version": "HEAD"
+DETAIL:  The version must be a non-negative integer; 0 means the latest version.
+CREATE FOREIGN TABLE lance_feature.bad (id integer) SERVER lance_ddl_srv
+  OPTIONS (uri 'x', version '-1');
+ERROR:  invalid value for option "version": "-1"
+DETAIL:  The version must be a non-negative integer; 0 means the latest version.
+CREATE FOREIGN TABLE lance_feature.bad (id integer) SERVER lance_ddl_srv
+  OPTIONS (uri 'x', batch_size '0');
+ERROR:  invalid value for option "batch_size": "0"
+DETAIL:  The batch size must be a positive integer.
+CREATE FOREIGN TABLE lance_feature.bad (id integer) SERVER lance_ddl_srv
+  OPTIONS (uri 'x', batch_size_bytes '0');
+ERROR:  invalid value for option "batch_size_bytes": "0"
+DETAIL:  The batch size in bytes must be a positive integer.
+CREATE FOREIGN TABLE lance_feature.bad (id integer) SERVER lance_ddl_srv
+  OPTIONS (uri 'x', batch_size_bytes 'lots');
+ERROR:  invalid value for option "batch_size_bytes": "lots"
+DETAIL:  The batch size in bytes must be a positive integer.
+-- lance lets a byte limit override a row limit, so taking both would ignore
+-- one of them without saying so.
+CREATE FOREIGN TABLE lance_feature.bad (id integer) SERVER lance_ddl_srv
+  OPTIONS (uri 'x', batch_size '128', batch_size_bytes '1048576');
+ERROR:  options "batch_size" and "batch_size_bytes" cannot be used together
+DETAIL:  lance lets the byte limit take precedence, so "batch_size" would have no effect.
+HINT:  Keep whichever limit you meant.
+CREATE FOREIGN TABLE lance_feature.bad (id integer) SERVER lance_ddl_srv
+  OPTIONS (uri 'x', rows_hint 'lots');
+ERROR:  invalid value for option "rows_hint": "lots"
+DETAIL:  The row estimate must be a positive number.
+CREATE FOREIGN TABLE lance_feature.bad (id integer) SERVER lance_ddl_srv
+  OPTIONS (uri 'x', base_uri 'y');
+ERROR:  invalid option "base_uri"
+HINT:  Valid options in this context are: mpp_execute, uri, version, batch_size, batch_size_bytes, rows_hint.
+CREATE FOREIGN TABLE lance_feature.bad (id integer OPTIONS (nope 'x')) SERVER lance_ddl_srv
+  OPTIONS (uri 'x');
+ERROR:  invalid option "nope"
+HINT:  Valid options in this context are: column_name.
+-- The one statement in this suite that does reach for a store, and the uri is
+-- synthetic, so it comes back as a lance error rather than rows.
+SELECT lance_feature.capture($$SELECT * FROM lance_feature.ddl_all$$) AS scan;
+scan
+lance error
+(1 row)
+-- pg_dump round trip: the dumped definition rebuilds the same foreign table.
+\! pg_dump --schema-only --no-owner --table=lance_feature.ddl_all contrib_regression > test/feature/results/ddl_dump.sql 2>&1
+\! grep -c '^CREATE FOREIGN TABLE lance_feature.ddl_all (' test/feature/results/ddl_dump.sql
+1
+DROP FOREIGN TABLE lance_feature.ddl_all;
+\! psql -X -q -o /dev/null -d contrib_regression -f test/feature/results/ddl_dump.sql 2>&1
+SELECT o.opt AS table_option
+  FROM pg_foreign_table t, unnest(t.ftoptions) AS o(opt)
+  WHERE t.ftrelid = 'lance_feature.ddl_all'::regclass ORDER BY 1;
+table_option
+batch_size=128
+mpp_execute=any
+rows_hint=4200
+uri=ds.lance
+version=3
+(5 rows)
+SELECT format('%s: %s', a.attname, o.opt) AS column_option
+  FROM pg_attribute a, unnest(a.attfdwoptions) AS o(opt)
+  WHERE a.attrelid = 'lance_feature.ddl_all'::regclass ORDER BY 1;
+column_option
+v: column_name=renamed_v
+(1 row)
+-- DROP EXTENSION CASCADE takes every lance object with it.  The notice lists
+-- the cascaded objects in dependency order, which is not worth pinning down,
+-- so it is silenced rather than compared.
+SET client_min_messages = warning;
+DROP EXTENSION lance_fdw CASCADE;
+RESET client_min_messages;
+SELECT count(*) AS lance_servers FROM pg_foreign_server WHERE srvname LIKE 'lance%';
+lance_servers
+0
+(1 row)
+SELECT count(*) AS lance_foreign_tables
+  FROM pg_foreign_table t
+  JOIN pg_class c ON c.oid = t.ftrelid
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'lance_feature';
+lance_foreign_tables
+0
+(1 row)
+SELECT count(*) AS wrappers FROM pg_foreign_data_wrapper WHERE fdwname = 'lance_fdw';
+wrappers
+0
+(1 row)
+-- and back, for the suites that follow
+CREATE EXTENSION lance_fdw;
