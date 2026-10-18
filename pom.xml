@@ -327,8 +327,10 @@ code or new licensing patterns.
             <exclude>config/python.m4</exclude>
             <exclude>config/tcl.m4</exclude>
 
-            <!-- GPLv2-AUTOEXC -->
+            <!-- GPLv2-or-later with the Autoconf exception -->
             <exclude>config/pkg.m4</exclude>
+
+            <!-- GPLv3-or-later with the Autoconf Macro exception -->
             <exclude>config/ax_pthread.m4</exclude>
 
             <exclude>.abi-check/**</exclude>
@@ -547,7 +549,6 @@ code or new licensing patterns.
             <exclude>gpAux/Makefile.global</exclude>
             <exclude>gpAux/Makefile</exclude>
             <exclude>gpAux/Makefile.thirdparty</exclude>
-            <exclude>gpAux/extensions/pljava/src/java/Makefile.global</exclude>
             <exclude>gpAux/releng/set_bld_arch.sh</exclude>
             <exclude>gpAux/releng/gppkg.mk</exclude>
             <exclude>gpAux/client/scripts/cloudberry_clients_path.sh</exclude>
@@ -1628,6 +1629,8 @@ code or new licensing patterns.
             -->
             <exclude>licenses/LICENSE-amalgamate.txt</exclude>
             <exclude>licenses/LICENSE-boost.txt</exclude>
+            <exclude>licenses/LICENSE-geqo.txt</exclude>
+            <exclude>licenses/LICENSE-pg_dump.txt</exclude>
             <exclude>licenses/LICENSE-termcolor.txt</exclude>
             <exclude>licenses/LICENSE-vixie-cron.txt</exclude>
             <exclude>licenses/LICENSE-x0213.txt</exclude>
@@ -1678,6 +1681,7 @@ code or new licensing patterns.
             -->
             <exclude>devops/build/packaging/deb/ubuntu22.04/**</exclude>
             <exclude>devops/build/packaging/deb/ubuntu24.04/**</exclude>
+            <exclude>devops/build/packaging/deb/ubuntu26.04/**</exclude>
 
             <!-- Exclude the multinode hosts configuration file for Cloudberry sandbox
             -->
@@ -1827,6 +1831,7 @@ code or new licensing patterns.
               <licenseFamilyName>Apache License (Broadcom-derived)</licenseFamilyName>
               <licenseFamilyCategory>BRDC</licenseFamilyCategory>
               <patterns>
+                <!-- ORCA files Greenplum added in 2024, after Broadcom acquired VMware. -->
                 <pattern>Copyright (C) 2024 VMware by Broadcom.</pattern>
                 <pattern>Copyright (C) 2024 Broadcom</pattern>
               </patterns>
@@ -1859,6 +1864,7 @@ code or new licensing patterns.
                 <pattern>Copyright (c) 2007 Greenplum Inc</pattern>
                 <pattern>Copyright (c) 2010, Greenplum Software</pattern>
                 <pattern>Copyright (c) Greenplum Inc 2010</pattern>
+                <!-- Metapa was one of the two companies that merged to form Greenplum. -->
                 <pattern>Copyright (c) Metapa 2005. All Rights Reserved.</pattern>
                 <pattern>Copyright Greenplum 2008</pattern>
               </patterns>

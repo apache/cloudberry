@@ -87,12 +87,12 @@ INFO:  (slice 1) Dispatch command to SINGLE content
 (1 row)
 
 update key_value_table set value=300 where key =200;
-INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
 savepoint s;
 update key_value_table set value=200 where key =300;
-INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
 update key_value_table set value=300 where key =200;
-INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
 rollback to s;
 commit;
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 2 0 1
@@ -107,7 +107,7 @@ INFO:  (slice 1) Dispatch command to SINGLE content
 
 savepoint s;
 update key_value_table set value=200 where key =300;
-INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
 rollback;
 INFO:  Distributed transaction command 'Distributed Abort (No Prepared)' to ALL contents: 2 0 1
 savepoint s;
