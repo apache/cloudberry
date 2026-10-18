@@ -20,7 +20,7 @@
 (exited with code 0)
 !\retcode gpconfig -c archive_command -v '/bin/true';
 (exited with code 0)
-!\retcode gpstop -rai;
+!\retcode gpstop -ra;
 (exited with code 0)
 
 1: create extension if not exists gp_inject_fault;
@@ -169,5 +169,5 @@ DROP
 (exited with code 0)
 !\retcode gpconfig -r archive_command --skipvalidation;
 (exited with code 0)
-!\retcode gpstop -rai;
+!\retcode gpstop -ra;
 (exited with code 0)
