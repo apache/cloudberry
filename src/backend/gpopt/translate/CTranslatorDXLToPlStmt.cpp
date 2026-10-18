@@ -3931,8 +3931,6 @@ CTranslatorDXLToPlStmt::TranslateDXLProjectSet(const CDXLNode *result_dxlnode)
 	// translate operator costs
 	TranslatePlanCosts(result_dxlnode, plan);
 
-	SetParamIds(plan);
-
 	return (Plan *) project_set;
 }
 
@@ -4314,6 +4312,16 @@ CTranslatorDXLToPlStmt::TranslateDXLResult(
 
 	// Attaching the child plan
 	project_set_child_plan->lefttree = child_plan;
+
+	// ProjectSet target lists and child links are assigned after the nodes are
+	// created. Compute parameter dependencies only after the complete chain
+	// exists, including parameters referenced by lower SRF levels. Otherwise
+	// a parameterized Sort may reuse rows from a previous subplan invocation.
+	for (Plan *current_plan = final_plan; current_plan != child_plan;
+		 current_plan = current_plan->lefttree)
+	{
+		SetParamIds(current_plan);
+	}
 
 	// cleanup
 	child_contexts->Release();
