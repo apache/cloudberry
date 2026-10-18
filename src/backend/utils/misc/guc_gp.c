@@ -4090,7 +4090,6 @@ struct config_int ConfigureNamesInt_gp[] =
 		NULL, NULL, NULL
 	},
 
-
 	{
 		{"gp_fts_probe_timeout", PGC_SIGHUP, GP_ARRAY_TUNING,
 			gettext_noop("Maximum time (in seconds) allowed for FTS to complete probing a segment."),
