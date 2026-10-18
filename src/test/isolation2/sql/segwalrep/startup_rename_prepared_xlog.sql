@@ -16,8 +16,10 @@
 -- The last xlog segment is renamed to .partial only when archive mode is on
 !\retcode gpconfig -c archive_mode -v on;
 !\retcode gpconfig -c archive_command -v '/bin/true';
-!\retcode gpstop -ra;
+!\retcode gpstop -rai;
 
+-- make sure the mirror is in sync, otherwise FTS will not promote it below
+1: select wait_until_segment_synchronized(0);
 1: create extension if not exists gp_inject_fault;
 1: create table t_rename1 (a int);
 1: create table t_rename2 (a int);
@@ -86,4 +88,4 @@
 !\retcode gpconfig -r gp_gang_creation_retry_timer --skipvalidation;
 !\retcode gpconfig -r archive_mode --skipvalidation;
 !\retcode gpconfig -r archive_command --skipvalidation;
-!\retcode gpstop -ra;
+!\retcode gpstop -rai;

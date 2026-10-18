@@ -23,6 +23,12 @@
 !\retcode gpstop -ra;
 (exited with code 0)
 
+-- make sure the mirror is in sync, otherwise FTS will not promote it below
+1: select wait_until_segment_synchronized(0);
+ wait_until_segment_synchronized 
+---------------------------------
+ OK                              
+(1 row)
 1: create extension if not exists gp_inject_fault;
 CREATE
 1: create table t_rename1 (a int);
