@@ -668,6 +668,7 @@ enum Edxltoken
 	EdxltokenGPDBAggIntermediateResultTypeId,
 	EdxltokenGPDBAggSplittable,
 	EdxltokenGPDBAggHashAggCapable,
+	EdxltokenGPDBAggFinalFuncVolatile,
 
 	EdxltokenEntireRow,
 

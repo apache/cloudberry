@@ -20,6 +20,7 @@
 #include "access/hash.h"
 #include "access/htup_details.h"
 #include "access/nbtree.h"
+#include "access/transam.h"
 #include "bootstrap/bootstrap.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_am.h"
@@ -4095,7 +4096,9 @@ aggregate_exists(Oid oid)
 	return SearchSysCacheExists(AGGFNOID, oid, 0, 0, 0);
 }
 
-// Get oid of aggregate with given name and argument type
+// Get oid of a built-in aggregate with the given name and argument type.
+// ORCA type metadata uses this identity to infer MIN/MAX semantics; an
+// unrelated user aggregate with the same name need not have those properties.
 Oid
 get_aggregate(const char *aggname, Oid oidType)
 {
@@ -4113,6 +4116,12 @@ get_aggregate(const char *aggname, Oid oidType)
 		HeapTuple htup = &catlist->members[i]->tuple;
 		Form_pg_proc proctuple = (Form_pg_proc) GETSTRUCT(htup);
 		Oid oidProc = proctuple->oid;
+
+		if (proctuple->pronamespace != PG_CATALOG_NAMESPACE ||
+			oidProc >= FirstNormalObjectId)
+		{
+			continue;
+		}
 
 		// skip functions with the wrong number of type of arguments
 		if (1 != proctuple->pronargs || oidType != proctuple->proargtypes.values[0])

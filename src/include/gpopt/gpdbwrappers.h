@@ -262,6 +262,8 @@ List *ExtractNodesExpression(Node *node, int node_tag,
 // intermediate result type of given aggregate
 Oid GetAggIntermediateResultType(Oid aggid);
 
+bool IsAggFinalFuncVolatile(Oid aggid);
+
 // Identify the specific datatypes passed to an aggregate call.
 int GetAggregateArgTypes(Aggref *aggref, Oid *inputTypes);
 
