@@ -20,7 +20,7 @@
 (exited with code 0)
 !\retcode gpconfig -c archive_command -v '/bin/true';
 (exited with code 0)
-!\retcode gpstop -ra;
+!\retcode gpstop -rai;
 (exited with code 0)
 
 -- make sure the mirror is in sync, otherwise FTS will not promote it below
@@ -175,5 +175,5 @@ DROP
 (exited with code 0)
 !\retcode gpconfig -r archive_command --skipvalidation;
 (exited with code 0)
-!\retcode gpstop -ra;
+!\retcode gpstop -rai;
 (exited with code 0)
