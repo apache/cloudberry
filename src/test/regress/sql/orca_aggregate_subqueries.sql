@@ -149,6 +149,50 @@ SELECT count(*) AS rows, sum(v) AS total FROM (
     FROM many_o o WHERE d<1000
 ) q;
 
+-- ANY over a scalar aggregate compares with its single result, including a
+-- NULL result. A missing input group is not an empty ANY result set.
+SELECT a,d,
+    31 IN (SELECT sum(b)+1 FROM i WHERE i.a=o.d) AS sum_match,
+    a IN (SELECT avg(b) FROM i WHERE i.a=o.d) AS avg_match,
+    1 IN (SELECT coalesce(sum(b),0)+1 FROM i WHERE i.a=o.d) AS coalesce_match,
+    0 IN (SELECT regr_count(a,b) FROM i WHERE i.a=o.d) AS regr_match,
+    0 IN (SELECT sum_zero(b) FROM i WHERE i.a=o.d) AS custom_match,
+    a NOT IN (SELECT sum(b) FROM i WHERE i.a=o.d) AS sum_differs
+FROM o ORDER BY d,a;
+SELECT a,d FROM o
+WHERE 1 IN (SELECT coalesce(sum(b),0)+1 FROM i WHERE i.a=o.d)
+ORDER BY d,a;
+SELECT a,d FROM o
+WHERE 0 IN (SELECT sum_zero(b) FROM i WHERE i.a=o.d) OR a=2
+ORDER BY d,a;
+SELECT a,d,
+    (SELECT o.a) < ANY (SELECT coalesce(sum(b),0) FROM i WHERE i.a=o.d) AS less
+FROM o ORDER BY d,a;
+
+-- These forms can return no rows: in particular, NULL IN (empty) is false.
+SELECT a,d,
+    NULL::int IN (SELECT sum(b) FROM i WHERE i.a=o.d HAVING count(*)>0) AS having,
+    0 IN (SELECT sum_zero(b) FROM i WHERE i.a=o.d HAVING count(*)<2) AS custom_having,
+    0 IN (SELECT sum_zero(b) FROM i WHERE i.a=o.d GROUP BY i.a) AS grouped,
+    0 IN (SELECT sum_zero(b) FROM i WHERE i.a=o.d LIMIT 0) AS limited,
+    0 IN (SELECT sum_zero(b) FROM i WHERE i.a=o.d OFFSET 1) AS skipped
+FROM o ORDER BY d,a;
+
+EXPLAIN (COSTS OFF)
+SELECT d FROM many_o o
+WHERE 1 IN (SELECT coalesce(sum(b),0)+1 FROM many_i i WHERE i.a=o.d);
+SELECT count(*) FROM many_o o
+WHERE 1 IN (SELECT coalesce(sum(b),0)+1 FROM many_i i WHERE i.a=o.d);
+
+-- A constant ANY operand still needs NULL rows in the native SubPlan.
+SELECT a,d,
+    10 IN (SELECT b FROM i WHERE i.a=o.d) AS any_value,
+    NULL::int IN (SELECT b FROM i WHERE i.a=o.d) AS any_null,
+    10 <> ALL (SELECT b FROM i WHERE i.a=o.d) AS all_value,
+    NULL::int = ALL (SELECT sum(b) FROM i WHERE i.a=o.d
+                    HAVING count(*)>0) AS all_having
+FROM o ORDER BY d,a;
+
 -- Filter context may discard a missing scalar row only when the predicate
 -- rejects NULL. Test aggregates and ordinary scalar subqueries alike.
 SELECT a,d FROM o WHERE
