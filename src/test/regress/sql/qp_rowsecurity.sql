@@ -117,6 +117,10 @@ t1.a=bar_rls.p and bar_rls.q is null and leak_data(c);
 
 -- The RTE of the relation containing security quals is present inside a
 -- SUBLINK node
+-- leak_data() is VOLATILE by default and emits NOTICEs, so ORCA keeps a
+-- SubPlan instead of pulling up the subquery into a semi join: decorrelation
+-- could change the number of calls. This tests RLS quals inside a subquery,
+-- not whether the subquery can be pulled up.
 explain (costs off ) select * from bar_rls where bar_rls.p in (select a
 from foo_rls where abs(a) >= 10 and leak_data(c)) and bar_rls.q is not null;
 
@@ -233,6 +237,10 @@ where t1.a=bar_part_rls.p and bar_part_rls.q is not null and leak_data(c);
 
 -- The RTE of the relation containing security quals is present inside a
 -- SUBLINK node
+-- leak_data() is VOLATILE by default and emits NOTICEs, so ORCA keeps a
+-- SubPlan instead of pulling up the subquery into a semi join: decorrelation
+-- could change the number of calls. This tests RLS quals inside a subquery,
+-- not whether the subquery can be pulled up.
 explain (costs off ) select * from bar_part_rls where bar_part_rls.p in
 (select a from foo_part_rls where abs(a) >= 10 and leak_data(c)) and
 bar_part_rls.q is not null;
