@@ -115,6 +115,10 @@ SELECT n_live_tup, n_dead_tup, last_vacuum is not null as has_last_vacuum, vacuu
 -- phase (at injecting point vacuum_ao_post_cleanup_end), which is different from above case
 -- in which vacuum worker isn't changed.
 
+-- The post-cleanup worker only changes if the compact phase commit blocks on
+-- syncrep, which needs seg1's mirror to be in sync when we stop it below.
+SELECT wait_until_all_segments_synchronized();
+
 DROP TABLE IF EXISTS vacuum_progress_ao_row;
 CREATE TABLE vacuum_progress_ao_row(i int, j int);
 CREATE INDEX on vacuum_progress_ao_row(i);
