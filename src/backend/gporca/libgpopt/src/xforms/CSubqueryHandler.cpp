@@ -308,32 +308,359 @@ CSubqueryHandler::FProjectCountSubquery(CExpression *pexprSubquery,
 }
 
 
-//---------------------------------------------------------------------------
-//	@function:
-//		FContainsEmptyGbAgg
-//
-//	@doc:
-//		Return true if pexpr contains a GbAgg with empty grouping columns
-//		(i.e., GROUP BY ())
-//
-//---------------------------------------------------------------------------
-static BOOL
-FContainsEmptyGbAgg(CExpression *pexpr)
+// Return a scalar aggregate under scalar projections and, when requested,
+// HAVING filters. Quantified subqueries need exactly one row before they can
+// become scalar comparisons, so they must not skip filters here.
+static CExpression *
+PexprScalarGbAgg(CExpression *pexpr, BOOL fSkipHaving = false)
 {
-	if (COperator::EopLogicalGbAgg == pexpr->Pop()->Eopid())
+	while (COperator::EopLogicalProject == pexpr->Pop()->Eopid() ||
+		   (fSkipHaving &&
+			COperator::EopLogicalSelect == pexpr->Pop()->Eopid()))
 	{
-		return 0 == CLogicalGbAgg::PopConvert(pexpr->Pop())->Pdrgpcr()->Size();
+		pexpr = (*pexpr)[0];
 	}
-	const ULONG arity = pexpr->Arity();
-	for (ULONG ul = 0; ul < arity; ul++)
+	if (COperator::EopLogicalGbAgg == pexpr->Pop()->Eopid() &&
+		0 == CLogicalGbAgg::PopConvert(pexpr->Pop())->Pdrgpcr()->Size())
 	{
-		CExpression *pexprChild = (*pexpr)[ul];
-		if (pexprChild->Pop()->FLogical() && FContainsEmptyGbAgg(pexprChild))
+		return pexpr;
+	}
+	return nullptr;
+}
+
+
+// A scalar aggregate returns one row even for an empty input. Decorrelation
+// adds the correlation keys to GROUP BY and can lose that row. Handle only a
+// single aggregation level here; other shapes retain correlated execution.
+static BOOL
+FCanDecorrelateScalarAgg(CExpression *pexprInner, CExpression *pexprGbAgg)
+{
+	if (nullptr == pexprGbAgg || CUtils::FHasScalarAgg((*pexprGbAgg)[0]) ||
+		CUtils::FHasSubqueryOrApply((*pexprGbAgg)[0]) ||
+		(*pexprGbAgg)[1]->DeriveHasSubquery())
+	{
+		return false;
+	}
+	if (!(*pexprGbAgg)[0]->DeriveOutputColumns()->ContainsAll(
+			(*pexprGbAgg)[1]->DeriveUsedColumns()))
+	{
+		// Aggregate arguments, including ordered-set direct arguments, can
+		// depend on the outer row and must retain their evaluation order.
+		return false;
+	}
+	CExpression *agg_list = (*pexprGbAgg)[1];
+	for (ULONG ul = 0; ul < agg_list->Arity(); ul++)
+	{
+		CExpression *agg = (*(*agg_list)[ul])[0];
+		if (COperator::EopScalarAggFunc == agg->Pop()->Eopid())
 		{
-			return true;
+			CExpression *direct_args = (*agg)[EaggfuncIndexDirectArgs];
+			for (ULONG arg = 0; arg < direct_args->Arity(); arg++)
+			{
+				if (COperator::EopScalarConst !=
+					(*direct_args)[arg]->Pop()->Eopid())
+				{
+					return false;
+				}
+			}
 		}
 	}
-	return false;
+	for (CExpression *pexpr = pexprInner; pexpr != pexprGbAgg;
+		 pexpr = (*pexpr)[0])
+	{
+		if ((*pexpr)[1]->DeriveHasSubquery() ||
+			(*pexpr)[1]->DeriveHasNonScalarFunction())
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+
+// Substitute already computed projection expressions without copying a
+// relational subtree. FCanDecorrelateScalarAgg excludes nested subqueries.
+static CExpression *
+PexprSubstituteAggColumns(CMemoryPool *mp, CExpression *pexpr,
+						  CColRefArray *colrefs, CExpressionArray *values)
+{
+	GPOS_CHECK_STACK_SIZE;
+	if (COperator::EopScalarIdent == pexpr->Pop()->Eopid())
+	{
+		const CColRef *colref = CScalarIdent::PopConvert(pexpr->Pop())->Pcr();
+		for (ULONG ul = 0; ul < colrefs->Size(); ul++)
+		{
+			if ((*colrefs)[ul] == colref)
+			{
+				(*values)[ul]->AddRef();
+				return (*values)[ul];
+			}
+		}
+	}
+	CExpressionArray *children = GPOS_NEW(mp) CExpressionArray(mp);
+	for (ULONG ul = 0; ul < pexpr->Arity(); ul++)
+	{
+		children->Append(
+			PexprSubstituteAggColumns(mp, (*pexpr)[ul], colrefs, values));
+	}
+	pexpr->Pop()->AddRef();
+	return GPOS_NEW(mp) CExpression(mp, pexpr->Pop(), children);
+}
+
+
+// Type metadata identifies the built-in MIN/MAX aggregates; their empty-input
+// result is NULL. Do not infer this for an arbitrary aggregate of the same type.
+static BOOL
+FMinMaxAgg(CExpression *project_elem)
+{
+	CExpression *agg = (*project_elem)[0];
+	if (COperator::EopScalarAggFunc != agg->Pop()->Eopid())
+	{
+		return false;
+	}
+	const CColRef *colref =
+		CScalarProjectElement::PopConvert(project_elem->Pop())->Pcr();
+	CScalarAggFunc *agg_func = CScalarAggFunc::PopConvert(agg->Pop());
+	return agg_func->IsMinMax(colref->RetrieveType());
+}
+
+
+// A bare built-in NULL-on-empty aggregate needs no missing-row repair.
+// Keep its existing decorrelation path, including subqueries in its input.
+// Nested scalar aggregates can themselves supply a row on empty input and
+// still require the general safety checks.
+static BOOL
+FScalarAggReturnsNullOnEmpty(CExpression *pexprInner, const CColRef *colref)
+{
+	CExpression *pexprGbAgg = PexprScalarGbAgg(pexprInner);
+	if (nullptr == pexprGbAgg || pexprGbAgg != pexprInner ||
+		1 != (*pexprGbAgg)[1]->Arity() ||
+		CUtils::FHasScalarAgg((*pexprGbAgg)[0]) ||
+		!(*pexprGbAgg)[0]->DeriveOutputColumns()->ContainsAll(
+			(*pexprGbAgg)[1]->DeriveUsedColumns()))
+	{
+		return false;
+	}
+	CExpression *elem = (*(*pexprGbAgg)[1])[0];
+	CExpression *agg = (*elem)[0];
+	if (CScalarProjectElement::PopConvert(elem->Pop())->Pcr() != colref ||
+		COperator::EopScalarAggFunc != agg->Pop()->Eopid())
+	{
+		return false;
+	}
+	if (FMinMaxAgg(elem))
+	{
+		return true;
+	}
+	CExpression *args = (*agg)[EaggfuncIndexArgs];
+	if (1 != args->Arity())
+	{
+		return false;
+	}
+	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
+	const IMDType *arg_type = md_accessor->RetrieveType(
+		CScalar::PopConvert((*args)[0]->Pop())->MdidType());
+	IMDId *agg_mdid = CScalarAggFunc::PopConvert(agg->Pop())->MDId();
+	return agg_mdid->Equals(arg_type->GetMdidForAggType(IMDType::EaggSum)) ||
+		   agg_mdid->Equals(arg_type->GetMdidForAggType(IMDType::EaggAvg));
+}
+
+
+// Preserve the scalar aggregate's empty-input row and evaluate its projections
+// only for the requested outer rows. The real input can still be aggregated
+// once and joined by correlation key. When its empty result is not known, a
+// guarded SubPlan computes the original aggregate and projections over an empty
+// table when no group matches. HAVING is evaluated after restoring that row.
+// This uses the aggregate's actual semantics, including user-defined final
+// functions, rather than assuming that every non-count aggregate returns NULL.
+// Takes ownership of pexprOuter and pexprInner.
+static CExpression *
+PexprScalarAggApply(CMemoryPool *mp, CExpression *pexprOuter,
+					CExpression *pexprInner, const CColRef *colref,
+					CExpression **ppexprValue)
+{
+	CExpression *pexprGbAgg = PexprScalarGbAgg(pexprInner, true);
+	GPOS_ASSERT(FCanDecorrelateScalarAgg(pexprInner, pexprGbAgg));
+	CColumnFactory *col_factory = COptCtxt::PoctxtFromTLS()->Pcf();
+	UlongToColRefMap *mapping = GPOS_NEW(mp) UlongToColRefMap(mp);
+	CColRefArray *empty_cols = GPOS_NEW(mp) CColRefArray(mp);
+	CColRefSetIter input_cols(*(*pexprGbAgg)[0]->DeriveOutputColumns());
+	while (input_cols.Advance())
+	{
+		CColRef *pcr = input_cols.Pcr();
+		CColRef *copy = col_factory->PcrCreate(pcr);
+		mapping->Insert(GPOS_NEW(mp) ULONG(pcr->Id()), copy);
+		empty_cols->Append(copy);
+	}
+	if (0 == empty_cols->Size())
+	{
+		empty_cols->Append(col_factory->PcrCreate(
+			COptCtxt::PoctxtFromTLS()->Pmda()->PtMDType<IMDTypeBool>(),
+			default_type_modifier));
+	}
+	CExpression *pexprEmpty = GPOS_NEW(mp)
+		CExpression(mp, GPOS_NEW(mp) CLogicalConstTableGet(
+							mp, empty_cols, GPOS_NEW(mp) IDatum2dArray(mp)));
+
+	// Rebuild the empty aggregate, projections and filters from the bottom up,
+	// with fresh local columns. Keep outer references bound to the outer row.
+	CExpressionArray *chain = GPOS_NEW(mp) CExpressionArray(mp);
+	for (CExpression *pexpr = pexprInner;; pexpr = (*pexpr)[0])
+	{
+		pexpr->AddRef();
+		chain->Append(pexpr);
+		if (pexpr == pexprGbAgg)
+		{
+			break;
+		}
+	}
+	CColRefArray *defined = GPOS_NEW(mp) CColRefArray(mp);
+	CExpressionArray *matched = GPOS_NEW(mp) CExpressionArray(mp);
+	CExpression *having = nullptr;
+	for (ULONG pos = chain->Size(); 0 < pos; pos--)
+	{
+		CExpression *pexpr = (*chain)[pos - 1];
+		CExpression *project_list = (*pexpr)[1];
+		if (COperator::EopLogicalSelect == pexpr->Pop()->Eopid())
+		{
+			CExpression *predicate = PexprSubstituteAggColumns(
+				mp, project_list, defined, matched);
+			if (nullptr == having)
+			{
+				having = predicate;
+			}
+			else
+			{
+				// A later filter is evaluated only if the earlier filters
+				// retained the row, including when one returned NULL.
+				CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
+				IMDId *bool_type = md_accessor->PtMDType<IMDTypeBool>()->MDId();
+				bool_type->AddRef();
+				having = GPOS_NEW(mp) CExpression(
+					mp, GPOS_NEW(mp) CScalarIf(mp, bool_type), having,
+					predicate, CUtils::PexprScalarConstBool(mp, false));
+			}
+		}
+		else
+		{
+			for (ULONG ul = 0; ul < project_list->Arity(); ul++)
+			{
+				CExpression *elem = (*project_list)[ul];
+				CColRef *pcr =
+					CScalarProjectElement::PopConvert(elem->Pop())->Pcr();
+				mapping->Insert(GPOS_NEW(mp) ULONG(pcr->Id()),
+								col_factory->PcrCreate(pcr));
+				CExpression *value = pexpr == pexprGbAgg
+										 ? CUtils::PexprScalarIdent(mp, pcr)
+										 : PexprSubstituteAggColumns(
+											   mp, (*elem)[0], defined, matched);
+				defined->Append(pcr);
+				matched->Append(value);
+			}
+		}
+		pexprEmpty = GPOS_NEW(mp) CExpression(
+			mp, pexpr->Pop()->PopCopyWithRemappedColumns(mp, mapping, false),
+			pexprEmpty,
+			project_list->PexprCopyWithRemappedColumns(mp, mapping, false));
+	}
+	const CColRef *empty_value = CUtils::PcrRemap(colref, mapping, true);
+	CExpression *matched_value = nullptr;
+	for (ULONG ul = 0; ul < defined->Size(); ul++)
+	{
+		if ((*defined)[ul] == colref)
+		{
+			matched_value = (*matched)[ul];
+			matched_value->AddRef();
+			break;
+		}
+	}
+	GPOS_ASSERT(nullptr != matched_value);
+	if (nullptr != having)
+	{
+		IMDId *type = colref->RetrieveType()->MDId();
+		type->AddRef();
+		matched_value = GPOS_NEW(mp) CExpression(
+			mp, GPOS_NEW(mp) CScalarIf(mp, type), having, matched_value,
+			CUtils::PexprScalarConstNull(mp, colref->RetrieveType(),
+									   colref->TypeModifier()));
+	}
+
+	// COUNT and MIN/MAX have known empty-input values. Substitute every
+	// aggregate output, including duplicate COUNTs used by SELECT and HAVING,
+	// before evaluating projections and filters for the missing group.
+	CExpression *known_empty_value = nullptr;
+	CColRefArray *agg_cols = GPOS_NEW(mp) CColRefArray(mp);
+	CExpressionArray *empty_values = GPOS_NEW(mp) CExpressionArray(mp);
+	CExpression *agg_list = (*pexprGbAgg)[1];
+	BOOL all_known = true;
+	for (ULONG ul = 0; ul < agg_list->Arity(); ul++)
+	{
+		CExpression *elem = (*agg_list)[ul];
+		CColRef *agg_col =
+			CScalarProjectElement::PopConvert(elem->Pop())->Pcr();
+		CColRef *count_col = nullptr;
+		if (CUtils::FCountAggProjElem(elem, &count_col))
+		{
+			empty_values->Append(CUtils::PexprScalarConstInt8(mp, 0));
+		}
+		else if (FMinMaxAgg(elem))
+		{
+			empty_values->Append(CUtils::PexprScalarConstNull(
+				mp, agg_col->RetrieveType(), agg_col->TypeModifier()));
+		}
+		else
+		{
+			all_known = false;
+			break;
+		}
+		agg_cols->Append(agg_col);
+	}
+	if (all_known)
+	{
+		known_empty_value = PexprSubstituteAggColumns(
+			mp, matched_value, agg_cols, empty_values);
+	}
+	agg_cols->Release();
+	empty_values->Release();
+	chain->Release();
+	mapping->Release();
+	defined->Release();
+	matched->Release();
+
+	pexprGbAgg->AddRef();
+	CExpression *with_flag = CUtils::PexprAddProjection(
+		mp, pexprGbAgg, CUtils::PexprScalarConstBool(mp, true));
+	const CColRef *flag =
+		CScalarProjectElement::PopConvert((*(*with_flag)[1])[0]->Pop())->Pcr();
+	pexprInner->Release();
+	CExpression *result = CUtils::PexprLogicalApply<CLogicalLeftOuterApply>(
+		mp, pexprOuter, with_flag,
+		with_flag->DeriveOutputColumns()->Pdrgpcr(mp),
+		COperator::EopScalarSubquery);
+
+	CExpression *unmatched_value = known_empty_value;
+	if (nullptr == unmatched_value)
+	{
+		// Gate above the aggregate: filtering its input would still finalize
+		// an empty aggregate even when a real group exists.
+		pexprEmpty = CUtils::PexprLogicalSelect(
+			mp, pexprEmpty,
+			CUtils::PexprIsNull(mp, CUtils::PexprScalarIdent(mp, flag)));
+		result = CUtils::PexprLogicalApply<CLogicalLeftOuterCorrelatedApply>(
+			mp, result, pexprEmpty, empty_value, COperator::EopScalarSubquery);
+		unmatched_value = CUtils::PexprScalarIdent(mp, empty_value);
+	}
+	else
+	{
+		pexprEmpty->Release();
+	}
+	IMDId *type = colref->RetrieveType()->MDId();
+	type->AddRef();
+	*ppexprValue = GPOS_NEW(mp)
+		CExpression(mp, GPOS_NEW(mp) CScalarIf(mp, type),
+					CUtils::PexprScalarIdent(mp, flag), matched_value,
+					unmatched_value);
+	return result;
 }
 
 
@@ -374,7 +701,7 @@ FHasCorrelatedSelectAboveGbAgg(CExpression *pexpr)
 		// pattern we want to detect.
 		CExpression *pexprLogicalChild = (*pexpr)[0];
 		if (!pexprLogicalChild->HasOuterRefs() &&
-			FContainsEmptyGbAgg(pexprLogicalChild))
+			CUtils::FHasScalarAgg(pexprLogicalChild))
 		{
 			return true;
 		}
@@ -392,6 +719,153 @@ FHasCorrelatedSelectAboveGbAgg(CExpression *pexpr)
 		}
 	}
 	return false;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		PexprReplaceScalarSubqueryWithNull
+//
+//	@doc:
+//		Return a copy with the selected scalar subquery replaced by a NULL
+//		of its type, leaving all other subqueries unknown
+//
+//---------------------------------------------------------------------------
+static CExpression *
+PexprReplaceScalarSubqueryWithNull(CMemoryPool *mp, CExpression *pexpr,
+								   CExpression *pexprSubquery)
+{
+	GPOS_CHECK_STACK_SIZE;
+
+	COperator *pop = pexpr->Pop();
+	if (pexpr == pexprSubquery)
+	{
+		CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
+		CScalarSubquery *popSubquery = CScalarSubquery::PopConvert(pop);
+		return CUtils::PexprScalarConstNull(
+			mp, md_accessor->RetrieveType(popSubquery->MdidType()),
+			popSubquery->Pcr()->TypeModifier());
+	}
+
+	const ULONG arity = pexpr->Arity();
+	if (0 == arity)
+	{
+		pexpr->AddRef();
+		return pexpr;
+	}
+
+	CExpressionArray *pdrgpexprChildren = GPOS_NEW(mp) CExpressionArray(mp);
+	for (ULONG ul = 0; ul < arity; ul++)
+	{
+		CExpression *pexprChild = (*pexpr)[ul];
+		if (pexprChild->Pop()->FScalar())
+		{
+			pdrgpexprChildren->Append(
+				PexprReplaceScalarSubqueryWithNull(mp, pexprChild,
+												  pexprSubquery));
+		}
+		else
+		{
+			pexprChild->AddRef();
+			pdrgpexprChildren->Append(pexprChild);
+		}
+	}
+	pop->AddRef();
+	return GPOS_NEW(mp) CExpression(mp, pop, pdrgpexprChildren);
+}
+
+
+// Reject NULL from each subquery individually.  Replacing all subqueries
+// at once is insufficient: COALESCE(sq1, sq2) can be non-NULL when either
+// one is NULL, even though it is NULL when both are NULL. A subquery known
+// to be nonempty needs no NULL-rejection check: an inner apply cannot drop
+// an outer row for it.
+static BOOL
+FNullRejectingOnEachSubquery(CMemoryPool *mp, CExpression *pexprScalar,
+							   CExpression *pexpr)
+{
+	GPOS_CHECK_STACK_SIZE;
+
+	if (COperator::EopScalarSubquery == pexpr->Pop()->Eopid())
+	{
+		// A constant table with one row, e.g. (SELECT 1), cannot lose an
+		// outer row through an empty result. Keep its existing context;
+		// changing it to Value would unnecessarily introduce an outer join.
+		CExpression *pexprInner = (*pexpr)[0];
+		while (COperator::EopLogicalProject == pexprInner->Pop()->Eopid() &&
+			   !(*pexprInner)[1]->DeriveHasNonScalarFunction())
+		{
+			pexprInner = (*pexprInner)[0];
+		}
+		if (COperator::EopLogicalConstTableGet == pexprInner->Pop()->Eopid() &&
+			1 == CLogicalConstTableGet::PopConvert(pexprInner->Pop())
+					 ->Pdrgpdrgpdatum()->Size())
+		{
+			return true;
+		}
+
+		CExpression *pexprNull =
+			PexprReplaceScalarSubqueryWithNull(mp, pexprScalar, pexpr);
+		CScalar::EBoolEvalResult eber = CScalar::EberEvaluate(mp, pexprNull);
+		pexprNull->Release();
+		return CScalar::EberNull == eber || CScalar::EberFalse == eber ||
+			   CScalar::EberNotTrue == eber;
+	}
+
+	for (ULONG ul = 0; ul < pexpr->Arity(); ul++)
+	{
+		if ((*pexpr)[ul]->Pop()->FScalar() &&
+			!FNullRejectingOnEachSubquery(mp, pexprScalar, (*pexpr)[ul]))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		FNullRejectingOnSubqueries
+//
+//	@doc:
+//		Return true if the boolean scalar expression cannot be true when any
+//		one of its scalar subqueries returns NULL, e.g. "a > (SELECT ...)", but not
+//		"(SELECT ...) IS NULL" or "coalesce((SELECT ...), 0) = 0". Subqueries
+//		known to be nonempty are also safe to retain in the filter context.
+//
+//---------------------------------------------------------------------------
+static BOOL
+FNullRejectingOnSubqueries(CMemoryPool *mp, CExpression *pexprScalar)
+{
+	COperator::EOperatorId eopid = pexprScalar->Pop()->Eopid();
+	if (COperator::EopScalarProjectList == eopid ||
+		COperator::EopScalarProjectElement == eopid ||
+		COperator::EopScalarNAryJoinPredList == eopid)
+	{
+		return false;
+	}
+
+	// These nodes group operands and have no result type of their own.
+	// Their enclosing predicate has already been checked; do not call
+	// MdidType(), which asserts for both operators.
+	if (COperator::EopScalarArrayRefIndexList == eopid ||
+		COperator::EopScalarSwitchCase == eopid)
+	{
+		return true;
+	}
+
+	// only a boolean expression can be the predicate, its operands are
+	// covered by the check on the predicate itself
+	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
+	IMDId *mdid_type = CScalar::PopConvert(pexprScalar->Pop())->MdidType();
+	if (nullptr == mdid_type ||
+		!mdid_type->Equals(md_accessor->PtMDType<IMDTypeBool>()->MDId()))
+	{
+		return true;
+	}
+
+	return FNullRejectingOnEachSubquery(mp, pexprScalar, pexprScalar);
 }
 
 
@@ -462,25 +936,31 @@ CSubqueryHandler::Psd(CMemoryPool *mp, CExpression *pexprSubquery,
 			FProjectCountSubquery(pexprSubquery, psd->m_pcrCountAgg);
 	}
 
+	// QuantifiedToAgg has its own empty-input handling. Its generated
+	// aggregates and bare NULL-on-empty built-ins retain their existing paths.
+	BOOL fNeedsEmptyInputFix =
+		!CScalarSubquery::PopConvert(pexprSubquery->Pop())
+			 ->FGeneratedByQuantified() &&
+		psd->m_fHasOuterRefs && CUtils::FHasScalarAgg(pexprInner) &&
+		!FScalarAggReturnsNullOnEmpty(pexprInner, pcrSubquery);
+
 	// set flag for using subquery in a value context
-	psd->m_fValueSubquery = EsqctxtValue == esqctxt ||
-							(psd->m_fHasCountAgg && psd->m_fHasOuterRefs);
+	psd->m_fValueSubquery =
+		EsqctxtValue == esqctxt ||
+		(psd->m_fHasCountAgg && psd->m_fHasOuterRefs) || fNeedsEmptyInputFix;
 
 	// set flag of correlated execution
 	psd->SetCorrelatedExecution();
 
-	// A correlated scalar subquery of the form
-	//   SELECT count(*) FROM t GROUP BY () HAVING <outer_ref_condition>
-	// must execute as a correlated SubPlan.  After NormalizeHaving() the HAVING
-	// clause becomes a CLogicalSelect with outer refs sitting above the GbAgg.
-	// If we decorrelate such a subquery the join filter replaces the HAVING
-	// condition, but a LEFT JOIN returns 0 (not NULL) for count(*) when no
-	// rows match — which is semantically wrong.  Forcing correlated execution
-	// preserves the correct NULL-when-no-rows semantics.
-	if (!psd->m_fCorrelatedExecution && psd->m_fHasCountAgg &&
-		psd->m_fHasOuterRefs &&
-		FHasCorrelatedSelectAboveGbAgg(pexprInner))
+	if ((psd->m_fHasCountAgg && psd->m_fHasOuterRefs &&
+		 FHasCorrelatedSelectAboveGbAgg(pexprInner)) ||
+		(fNeedsEmptyInputFix &&
+		 !FCanDecorrelateScalarAgg(pexprInner,
+								 PexprScalarGbAgg(pexprInner, true))))
 	{
+		// A correlated HAVING above an uncorrelated COUNT must still be
+		// able to remove its row. Nested aggregates and subqueries also
+		// need their original evaluation and cardinality checks.
 		psd->m_fCorrelatedExecution = true;
 	}
 
@@ -537,8 +1017,7 @@ CSubqueryHandler::FRemoveScalarSubquery(CExpression *pexprOuter,
 	BOOL fSuccess = false;
 	if (psd->m_fProjectCount && !psd->m_fCorrelatedExecution)
 	{
-		// count(*)/count(Any) have special semantics: they produce '0' if their input is empty,
-		// all other agg functions produce 'NULL' if their input is empty
+		// count(*)/count(Any) produce '0' if their input is empty.
 
 		// for subqueries of the form (SELECT 'abc' || count(*) from X where x.i=outer.i),
 		// we first create a LeftOuterApply expression to compute 'count' value and replace NULL
@@ -830,6 +1309,23 @@ CSubqueryHandler::FCreateOuterApplyForScalarSubquery(
 	const CColRef *colref = popSubquery->Pcr();
 	BOOL fSuccess = true;
 
+	CExpression *pexprGbAgg = PexprScalarGbAgg(pexprInner, true);
+	const CLogicalGbAgg *count_gb = nullptr;
+	BOOL fSingleCount =
+		pexprGbAgg == pexprInner && 1 == (*pexprGbAgg)[1]->Arity() &&
+		CUtils::FHasCountAggMatchingColumn(pexprInner, colref, &count_gb);
+	BOOL fNullOnEmpty = FScalarAggReturnsNullOnEmpty(pexprInner, colref);
+	// Restore a missing group only when the aggregate input is correlated.
+	// Outer references confined to HAVING or projections need no such repair.
+	if (!popSubquery->FGeneratedByQuantified() &&
+		FCanDecorrelateScalarAgg(pexprInner, pexprGbAgg) &&
+		(*pexprGbAgg)[0]->HasOuterRefs() && !fSingleCount && !fNullOnEmpty)
+	{
+		*ppexprNewOuter = PexprScalarAggApply(mp, pexprOuter, pexprInner,
+											  colref, ppexprResidualScalar);
+		return true;
+	}
+
 	// generate an outer apply between outer expression and the relational child of scalar subquery
 	CExpression *pexprLeftOuterApply =
 		CUtils::PexprLogicalApply<CLogicalLeftOuterApply>(
@@ -839,7 +1335,9 @@ CSubqueryHandler::FCreateOuterApplyForScalarSubquery(
 	BOOL fHasCountAggMatchingColumn = CUtils::FHasCountAggMatchingColumn(
 		(*pexprSubquery)[0], colref, &pgbAgg);
 
-	if (!fHasCountAggMatchingColumn)
+	if (!fHasCountAggMatchingColumn ||
+		(!popSubquery->FGeneratedByQuantified() &&
+		 (!fSingleCount || !pexprInner->HasOuterRefs())))
 	{
 		// residual scalar uses the scalar subquery column
 		*ppexprNewOuter = pexprLeftOuterApply;
@@ -2171,6 +2669,17 @@ CSubqueryHandler::FRecursiveHandler(CExpression *pexprOuter,
 		COperator::EopScalarProjectElement == popScalar->Eopid())
 	{
 		// set subquery context to Value
+		esqctxt = EsqctxtValue;
+	}
+
+	// In a filter a scalar subquery is unnested into an inner apply, which
+	// drops the outer rows the subquery returns no row for. That is right
+	// only if the predicate cannot be true when the subquery is NULL, like
+	// "a > (SELECT ...)"; for "(SELECT ...) IS NULL" or
+	// "coalesce((SELECT ...), 0) = 0" those rows must be kept.
+	if (EsqctxtFilter == esqctxt && !CPredicateUtils::FAnd(pexprScalar) &&
+		!FNullRejectingOnSubqueries(mp, pexprScalar))
+	{
 		esqctxt = EsqctxtValue;
 	}
 

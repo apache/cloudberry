@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+  <dxl:Metadata>
+    <dxl:GPDBAgg Mdid="0.200001.1.0" Name="volatile_agg" FinalFuncVolatile="true" IsSplittable="false" HashAggCapable="false">
+      <dxl:ResultType Mdid="0.23.1.0"/>
+      <dxl:IntermediateResultType Mdid="0.23.1.0"/>
+    </dxl:GPDBAgg>
+    <dxl:GPDBAgg Mdid="0.200002.1.0" Name="ordinary_agg" IsSplittable="false" HashAggCapable="false">
+      <dxl:ResultType Mdid="0.23.1.0"/>
+      <dxl:IntermediateResultType Mdid="0.23.1.0"/>
+    </dxl:GPDBAgg>
+  </dxl:Metadata>
+</dxl:DXLMessage>
