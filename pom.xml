@@ -92,8 +92,6 @@ code or new licensing patterns.
             <exclude>gpcontrib/gp_inject_fault/gp_inject_fault.control</exclude>
             <exclude>gpcontrib/gp_inject_fault/gp_inject_fault.c</exclude>
 
-            <exclude>gpcontrib/gpmapreduce/**</exclude>
-
             <exclude>gpcontrib/Makefile</exclude>
 
             <exclude>gpcontrib/gpcloud/Makefile</exclude>

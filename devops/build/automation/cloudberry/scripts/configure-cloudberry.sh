@@ -30,7 +30,6 @@
 # Configuration Features:
 #   - Cloud Storage Integration (gpcloud)
 #   - IC Proxy Support
-#   - MapReduce Processing
 #   - Oracle Compatibility (orafce)
 #   - ORCA Query Optimizer
 #   - PAX Access Method
@@ -154,7 +153,6 @@ execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
             --disable-external-fts \
             --enable-gpcloud \
             --enable-ic-proxy \
-            --enable-mapreduce \
             --enable-orafce \
             --enable-orca \
             --enable-pax \

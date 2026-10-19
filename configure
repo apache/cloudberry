@@ -767,7 +767,6 @@ HAVE_CXX14
 enable_gpcloud
 enable_link_postgres_with_shared
 enable_shared_postgres_backend
-enable_mapreduce
 enable_serverless
 enable_catalog_ext
 enable_orca
@@ -909,7 +908,6 @@ enable_cassert
 enable_orca
 enable_catalog_ext
 enable_serverless
-enable_mapreduce
 enable_shared_postgres_backend
 enable_link_postgres_with_shared
 enable_gpcloud
@@ -1629,7 +1627,6 @@ Optional Features:
   --disable-orca          disable ORCA optimizer
   --enable-catalog-ext    enable Cloudberry catalog extension
   --enable-serverless     use serverless mode of Cloudberry
-  --enable-mapreduce      enable Cloudberry Mapreduce support
   --disable-shared-postgres-backend
                           enable Cloudberry shared postgres backend support
   --enable-link-postgres-with-shared
@@ -8910,38 +8907,6 @@ $as_echo "checking whether to use serverless mode of Cloudberry... $enable_serve
 
 
 #
-# --enable-mapreduce enables GPMapreduce support
-#
-
-
-# Check whether --enable-mapreduce was given.
-if test "${enable_mapreduce+set}" = set; then :
-  enableval=$enable_mapreduce;
-  case $enableval in
-    yes)
-
-$as_echo "#define USE_MAPREDUCE 1" >>confdefs.h
-
-      ;;
-    no)
-      :
-      ;;
-    *)
-      as_fn_error $? "no argument expected for --enable-mapreduce option" "$LINENO" 5
-      ;;
-  esac
-
-else
-  enable_mapreduce=no
-
-fi
-
-
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build with Cloudberry Mapreduce... $enable_mapreduce" >&5
-$as_echo "checking whether to build with Cloudberry Mapreduce... $enable_mapreduce" >&6; }
-
-
-#
 # --enable-shared-postgres-backend enables shared postgres backend support
 #
 
@@ -15516,71 +15481,6 @@ fi
   LIBS="$_LIBS"
 fi
 
-if test "$enable_mapreduce" = yes ; then
-  _LIBS="$LIBS"
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for library containing yaml_parser_initialize" >&5
-$as_echo_n "checking for library containing yaml_parser_initialize... " >&6; }
-if ${ac_cv_search_yaml_parser_initialize+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  ac_func_search_save_LIBS=$LIBS
-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-/* Override any GCC internal prototype to avoid an error.
-   Use char because int might match the return type of a GCC
-   builtin and then its argument prototype would still apply.  */
-#ifdef __cplusplus
-extern "C"
-#endif
-char yaml_parser_initialize ();
-int
-main ()
-{
-return yaml_parser_initialize ();
-  ;
-  return 0;
-}
-_ACEOF
-for ac_lib in '' yaml; do
-  if test -z "$ac_lib"; then
-    ac_res="none required"
-  else
-    ac_res=-l$ac_lib
-    LIBS="-l$ac_lib  $ac_func_search_save_LIBS"
-  fi
-  if ac_fn_c_try_link "$LINENO"; then :
-  ac_cv_search_yaml_parser_initialize=$ac_res
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext
-  if ${ac_cv_search_yaml_parser_initialize+:} false; then :
-  break
-fi
-done
-if ${ac_cv_search_yaml_parser_initialize+:} false; then :
-
-else
-  ac_cv_search_yaml_parser_initialize=no
-fi
-rm conftest.$ac_ext
-LIBS=$ac_func_search_save_LIBS
-fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_search_yaml_parser_initialize" >&5
-$as_echo "$ac_cv_search_yaml_parser_initialize" >&6; }
-ac_res=$ac_cv_search_yaml_parser_initialize
-if test "$ac_res" != no; then :
-  test "$ac_res" = "none required" || LIBS="$ac_res $LIBS"
-  have_yaml=yes; YAML_LIBS=" -lyaml"
-else
-  as_fn_error $? "libyaml is required for Cloudberry Mapreduce" "$LINENO" 5
-fi
-
-
-
-  LIBS="$_LIBS"
-fi
-
 #
 # SSL Library
 #
@@ -17894,26 +17794,6 @@ _ACEOF
 
 else
   as_fn_error $? "header file <time.h> is required for realtime library support" "$LINENO" 5
-fi
-
-done
-
-fi
-
-if test "$enable_mapreduce" = yes; then
-  if test "$with_perl" = no; then
-    as_fn_error $? "Cloudberry Mapreduce requires Perl, reconfigure with --with-perl" "$LINENO" 5
-  fi
-  for ac_header in yaml.h
-do :
-  ac_fn_c_check_header_mongrel "$LINENO" "yaml.h" "ac_cv_header_yaml_h" "$ac_includes_default"
-if test "x$ac_cv_header_yaml_h" = xyes; then :
-  cat >>confdefs.h <<_ACEOF
-#define HAVE_YAML_H 1
-_ACEOF
-
-else
-  as_fn_error $? "header file <yaml.h> is required for Cloudberry Mapreduce" "$LINENO" 5
 fi
 
 done

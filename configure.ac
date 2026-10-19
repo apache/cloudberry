@@ -924,15 +924,6 @@ AC_MSG_RESULT([checking whether to use serverless mode of Cloudberry... $enable_
 AC_SUBST(enable_serverless)
 
 #
-# --enable-mapreduce enables GPMapreduce support
-#
-PGAC_ARG_BOOL(enable, mapreduce, no, [enable Cloudberry Mapreduce support],
-              [AC_DEFINE([USE_MAPREDUCE], 1,
-			             [Define to 1 to build with Mapreduce capabilities (--enable-mapreduce)])])
-AC_MSG_RESULT([checking whether to build with Cloudberry Mapreduce... $enable_mapreduce])
-AC_SUBST(enable_mapreduce)
-
-#
 # --enable-shared-postgres-backend enables shared postgres backend support
 #
 PGAC_ARG_BOOL(enable, shared-postgres-backend, yes, [enable Cloudberry shared postgres backend support],
@@ -1786,14 +1777,6 @@ if test "$enable_gpfdist" = yes ; then
   LIBS="$_LIBS"
 fi
 
-if test "$enable_mapreduce" = yes ; then
-  _LIBS="$LIBS"
-  AC_SEARCH_LIBS(yaml_parser_initialize, [yaml], [have_yaml=yes; YAML_LIBS=" -lyaml"], [AC_MSG_ERROR([libyaml is required for Cloudberry Mapreduce])])
-  AC_SUBST(YAML_LIBS)
-  AC_SUBST(have_yaml)
-  LIBS="$_LIBS"
-fi
-
 #
 # SSL Library
 #
@@ -2218,13 +2201,6 @@ esac
 if test "$with_rt" = yes; then
 	AC_CHECK_HEADERS([time.h], [],
 			 [AC_MSG_ERROR([header file <time.h> is required for realtime library support])])
-fi
-
-if test "$enable_mapreduce" = yes; then
-  if test "$with_perl" = no; then
-    AC_MSG_ERROR([Cloudberry Mapreduce requires Perl, reconfigure with --with-perl])
-  fi
-  AC_CHECK_HEADERS(yaml.h, [], [AC_MSG_ERROR([header file <yaml.h> is required for Cloudberry Mapreduce])])
 fi
 
 if test "$PORTNAME" = "win32" ; then

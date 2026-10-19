@@ -228,7 +228,6 @@ enable_serverless = @enable_serverless@
 enable_gpfdist		= @enable_gpfdist@
 enable_debug_extensions = @enable_debug_extensions@
 enable_orafce		= @enable_orafce@
-enable_mapreduce    = @enable_mapreduce@
 enable_shared_postgres_backend    = @enable_shared_postgres_backend@
 enable_link_postgres_with_shared  = @enable_link_postgres_with_shared@
 enable_datalake_fdw = @enable_datalake_fdw@
