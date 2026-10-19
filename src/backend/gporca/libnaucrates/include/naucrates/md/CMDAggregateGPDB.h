@@ -66,6 +66,8 @@ class CMDAggregateGPDB : public IMDAggregate
 	// is aggregate replication slice safe for execution
 	BOOL m_is_repsafe;
 
+	BOOL m_is_final_func_volatile;
+
 public:
 	CMDAggregateGPDB(const CMDAggregateGPDB &) = delete;
 
@@ -74,7 +76,7 @@ public:
 					 IMDId *result_type_mdid,
 					 IMDId *intermediate_result_type_mdid, BOOL is_ordered_agg,
 					 BOOL is_splittable, BOOL is_hash_agg_capable,
-					 BOOL is_repsafe);
+					 BOOL is_repsafe, BOOL is_final_func_volatile = false);
 
 	//dtor
 	~CMDAggregateGPDB() override;
@@ -123,6 +125,12 @@ public:
 	IsAggRepSafe() const override
 	{
 		return m_is_repsafe;
+	}
+
+	BOOL
+	IsFinalFuncVolatile() const override
+	{
+		return m_is_final_func_volatile;
 	}
 
 #ifdef GPOS_DEBUG

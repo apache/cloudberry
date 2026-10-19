@@ -134,6 +134,9 @@ public:
 	// match function
 	BOOL Matches(COperator *pop) const override;
 
+	CFunctionProp *DeriveFunctionProperties(
+		CMemoryPool *mp, CExpressionHandle &exprhdl) const override;
+
 	// sensitivity to order of inputs
 	BOOL
 	FInputOrderSensitive() const override

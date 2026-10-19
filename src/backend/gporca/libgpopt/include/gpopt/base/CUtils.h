@@ -269,6 +269,9 @@ public:
 	// check if given expression has a count(*)/count(Any) agg
 	static BOOL FHasCountAgg(CExpression *pexpr, CColRef **ppcrCount);
 
+	// check for an aggregate with an empty grouping set in a logical tree
+	static BOOL FHasScalarAgg(CExpression *pexpr);
+
 	// check if given expression has count matching the given column, returns the Logical GroupBy Agg above
 	static BOOL FHasCountAggMatchingColumn(const CExpression *pexpr,
 										   const CColRef *colref,

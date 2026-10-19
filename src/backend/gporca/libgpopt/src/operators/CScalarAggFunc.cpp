@@ -24,6 +24,20 @@
 using namespace gpopt;
 using namespace gpmd;
 
+CFunctionProp *
+CScalarAggFunc::DeriveFunctionProperties(CMemoryPool *mp,
+										CExpressionHandle &exprhdl) const
+{
+	const IMDAggregate *mdagg =
+		COptCtxt::PoctxtFromTLS()->Pmda()->RetrieveAgg(m_pmdidAggFunc);
+	IMDFunction::EFuncStbl stability = mdagg->IsFinalFuncVolatile()
+										 ? IMDFunction::EfsVolatile
+										 : IMDFunction::EfsImmutable;
+	return PfpDeriveFromChildren(mp, exprhdl, stability,
+								false /*fHasVolatileFunctionScan*/,
+								false /*fScan*/);
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CScalarAggFunc::CScalarAggFunc
