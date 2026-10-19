@@ -261,8 +261,9 @@ HINT:  likely caused by a function that reads or modifies data in a distributed 
 CONTEXT:  SQL function "rngfunct" statement 1
 -- function in subselect
 select * from rngfunc2 where f2 in (select f2 from rngfunct(1) z where z.rngfuncid = rngfunc2.rngfuncid) ORDER BY 1,2;
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.rngfunc2"
-CONTEXT:  SQL function "rngfunct" during startup
+ERROR:  query plan with multiple segworker groups is not supported
+HINT:  likely caused by a function that reads or modifies data in a distributed table
+CONTEXT:  SQL function "rngfunct" statement 1
 -- function in subselect
 select * from rngfunc2 where f2 in (select f2 from rngfunct(rngfunc2.rngfuncid) z where z.rngfuncid = 1) ORDER BY 1,2;
 ERROR:  query plan with multiple segworker groups is not supported
