@@ -2085,6 +2085,41 @@ CSubqueryHandler::FRemoveAnySubquery(CExpression *pexprOuter,
 		CScalarSubqueryAny::PopConvert(pexprSubquery->Pop())->Pcr();
 	COperator::EOperatorId eopidSubq = pexprSubquery->Pop()->Eopid();
 
+	if (fOuterRefsUnderInner && CUtils::FHasScalarAgg(pexprInner))
+	{
+		// A scalar aggregate under scalar projections returns exactly one
+		// row, including on empty input. Evaluate that row before comparing
+		// it, preserving NULL versus false in value context as well.
+		if (FCanDecorrelateScalarAgg(pexprInner, PexprScalarGbAgg(pexprInner)))
+		{
+			pexprInner->AddRef();
+			CExpression *pexprScalarSubquery = GPOS_NEW(mp) CExpression(
+				mp,
+				GPOS_NEW(mp)
+					CScalarSubquery(mp, colref, false /*fGeneratedByExist*/,
+									false /*fGeneratedByQuantified*/),
+				pexprInner);
+			CExpression *pexprOuterScalar = (*pexprSubquery)[1];
+			pexprOuterScalar->AddRef();
+			IMDId *mdid_op = pScalarSubqAny->MdIdOp();
+			mdid_op->AddRef();
+			CExpression *pexprComparison = CUtils::PexprScalarCmp(
+				mp, pexprOuterScalar, pexprScalarSubquery,
+				*pScalarSubqAny->PstrOp(), mdid_op);
+			BOOL fSuccess = FProcess(pexprOuter, pexprComparison, EsqctxtValue,
+									 ppexprNewOuter, ppexprResidualScalar);
+			pexprComparison->Release();
+			return fSuccess;
+		}
+
+		// HAVING, grouping and LIMIT can remove the aggregate row. ANY over
+		// no rows is false, whereas a scalar comparison would yield NULL.
+		// Nested aggregates/subqueries also keep their original execution.
+		return FCreateCorrelatedApplyForExistOrQuant(
+			mp, pexprOuter, pexprSubquery, esqctxt, ppexprNewOuter,
+			ppexprResidualScalar);
+	}
+
 	// build subquery quantified comparison
 	CExpression *pexprResult = nullptr;
 	CExpression *pexprPredicate =
