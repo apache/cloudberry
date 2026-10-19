@@ -1634,7 +1634,8 @@ CTranslatorRelcacheToDXL::RetrieveAgg(CMemoryPool *mp, IMDId *mdid)
 
 	CMDAggregateGPDB *pmdagg = GPOS_NEW(mp) CMDAggregateGPDB(
 		mp, mdid, mdname, result_type_mdid, intermediate_result_type_mdid,
-		is_ordered, is_splittable, is_hash_agg_capable, is_repsafe);
+		is_ordered, is_splittable, is_hash_agg_capable, is_repsafe,
+		gpdb::IsAggFinalFuncVolatile(agg_oid));
 	return pmdagg;
 }
 
