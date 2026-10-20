@@ -4640,8 +4640,6 @@ CTranslatorDXLToPlStmt::TranslateDXLParallelAppend(
 		nullptr,  // translate context for the base table
 		child_contexts, output_context);
 
-	SetParamIds(plan);
-
 	// cleanup
 	child_contexts->Release();
 
