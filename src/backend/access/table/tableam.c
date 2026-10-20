@@ -24,6 +24,8 @@
 #include "access/syncscan.h"
 #include "access/tableam.h"
 #include "access/xact.h"
+#include "cdb/cdbaocsam.h"
+#include "cdb/cdbappendonlyam.h"
 #include "optimizer/plancat.h"
 #include "port/pg_bitutils.h"
 #include "storage/bufmgr.h"
@@ -196,7 +198,7 @@ table_parallelscan_initialize(Relation rel, ParallelTableScanDesc pscan,
 			appendOnlyMetaDataSnapshot = GetTransactionSnapshot();
 		}
 		seginfo = GetAllFileSegInfo(rel, appendOnlyMetaDataSnapshot, &segfile_count, NULL);
-		bpscan->phs_nblocks = segfile_count;
+		bpscan->phs_nblocks = appendonly_parallelscan_compute_chunks(rel, seginfo, segfile_count);
 		if (seginfo)
 		{
 			FreeAllSegFileInfo(seginfo, segfile_count);
@@ -205,26 +207,14 @@ table_parallelscan_initialize(Relation rel, ParallelTableScanDesc pscan,
 	}
 	else if (RelationIsAoCols(rel))
 	{
-		Snapshot appendOnlyMetaDataSnapshot = snapshot;
 		ParallelBlockTableScanDesc bpscan = (ParallelBlockTableScanDesc) pscan;
-		int			segfile_count;
-		AOCSFileSegInfo **seginfo;
-		if (snapshot == SnapshotAny)
-		{
-			/*
-			* the append-only meta data should never be fetched with
-			* SnapshotAny as bogus results are returned.
-			*/
-			appendOnlyMetaDataSnapshot = GetTransactionSnapshot();
-		}
-		seginfo = GetAllAOCSFileSegInfo(rel, appendOnlyMetaDataSnapshot, &segfile_count, NULL);
-		bpscan->phs_nblocks = segfile_count;
-		if (seginfo)
-		{
-			FreeAllAOCSSegFileInfo(seginfo, segfile_count);
-			pfree(seginfo);
-		}
-		
+
+		/*
+		 * The chunk size depends on the columns the scan reads, so the first
+		 * aocs_beginscan() of the scan sets the number of chunks, see
+		 * aocs_parallelscan_init().
+		 */
+		bpscan->phs_nblocks = InvalidBlockNumber;
 	}
 }
 
