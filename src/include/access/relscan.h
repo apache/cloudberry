@@ -84,10 +84,15 @@ typedef struct ParallelBlockTableScanDescData
 	pg_atomic_uint64 phs_nallocated;	/* number of blocks allocated to
 										 * workers so far. */
 	/*
-	 * The Set of fields has different meaning for AO/AOCO tables:
-	 * phs_nblocks: total # of segment files
-	 * phs_nallocated: # of processed segment file
-	 * phs_startblock: not used
+	 * These fields have a different meaning for AO and AOCS tables:
+	 *
+	 * AO:   phs_nblocks is the number of segment files, and phs_nallocated
+	 *       the number of segment files handed out to workers.
+	 * AOCS: phs_nblocks is the number of chunks, and phs_nallocated the
+	 *       number of chunks handed out to workers.  A chunk is a range of
+	 *       rows of one segment file; see aocs_parallelscan_nchunks().
+	 *
+	 * phs_startblock and phs_mutex are not used.
 	 */
 }			ParallelBlockTableScanDescData;
 typedef struct ParallelBlockTableScanDescData *ParallelBlockTableScanDesc;

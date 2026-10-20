@@ -32,6 +32,7 @@
 
 #include "access/aosegfiles.h"
 #include "access/aocssegfiles.h"
+#include "cdb/cdbaocsam.h"
 
 /*
  * Constants to control the behavior of block allocation to parallel workers
@@ -218,7 +219,7 @@ table_parallelscan_initialize(Relation rel, ParallelTableScanDesc pscan,
 			appendOnlyMetaDataSnapshot = GetTransactionSnapshot();
 		}
 		seginfo = GetAllAOCSFileSegInfo(rel, appendOnlyMetaDataSnapshot, &segfile_count, NULL);
-		bpscan->phs_nblocks = segfile_count;
+		bpscan->phs_nblocks = aocs_parallelscan_nchunks(rel, seginfo, segfile_count);
 		if (seginfo)
 		{
 			FreeAllAOCSSegFileInfo(seginfo, segfile_count);

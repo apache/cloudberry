@@ -343,6 +343,7 @@ initscan_with_colinfo(AOCSScanDesc scan)
 	MemoryContextSwitchTo(oldCtx);
 
 	scan->cur_seg = -1;
+	scan->chunk_seg = -1;
 	scan->segrowsprocessed = 0;
 
 	ItemPointerSet(&scan->cdb_fake_ctid, 0, 0);
@@ -352,32 +353,321 @@ initscan_with_colinfo(AOCSScanDesc scan)
 	pgstat_count_heap_scan(scan->rs_base.rs_rd);
 }
 
+/* ----------------------------------------------------------------------------
+ * Parallel scan support.
+ *
+ * Work is handed out in chunks.  A chunk is a range of row ordinals within one
+ * segment file, where the ordinal of a row is its position among the rows
+ * physically stored in that file.  Ordinals are the only coordinate that all
+ * column files of a segment file agree on: blocks have different boundaries
+ * in each column file, and row numbers have gaps.
+ *
+ * The chunk layout follows from the segment file tuple counts alone.  Every
+ * process of the scan reads the same segment files with the same snapshot,
+ * so every process computes the same layout from its own seginfo[], and the
+ * shared ParallelBlockTableScanDesc only holds the number of chunks
+ * (phs_nblocks) and the number handed out so far (phs_nallocated).  Each
+ * process positions its column readers at the first row of a chunk by
+ * reading block headers, so no block directory is needed.
+ * ----------------------------------------------------------------------------
+ */
+
+/*
+ * Target number of chunks per scan, and the smallest chunk worth handing out.
+ * As with PARALLEL_SEQSCAN_NCHUNKS for heap, there should be enough chunks for
+ * the workers to finish at about the same time, but few enough that the cost
+ * of positioning at the first row of each chunk stays small.
+ */
+#define AOCS_PARALLEL_SCAN_NCHUNKS			2048
+#define AOCS_PARALLEL_SCAN_MIN_CHUNK_ROWS	16384
+
+static void close_cur_scan_seg(AOCSScanDesc scan);
+
+static inline bool
+aocs_segfile_has_rows(AOCSFileSegInfo *seginfo)
+{
+	/*
+	 * subtle: we must check for AWAITING_DROP before looking at vpinfo, see
+	 * open_next_scan_seg().
+	 */
+	return seginfo->total_tupcount > 0 &&
+		seginfo->state != AOSEG_STATE_AWAITING_DROP;
+}
+
+/*
+ * Compute the chunk layout of a parallel scan, and return the number of
+ * chunks.
+ *
+ * *rows_per_chunk and *total_rows are set.  If first_chunk is not NULL,
+ * first_chunk[i] is set to the number of the first chunk of seginfo[i].
+ * Empty and AWAITING_DROP segment files get no chunks, so their first chunk
+ * equals that of the next segment file.  claim_next_chunk() picks the last
+ * segment file whose first chunk is not after the chunk number, so it never
+ * picks them.
+ */
+static uint64
+aocs_parallelscan_layout(AOCSFileSegInfo **seginfo, int total_seg,
+						 uint64 *first_chunk, int64 *rows_per_chunk,
+						 int64 *total_rows)
+{
+	int64		rows = 0;
+	int64		chunk_rows;
+	uint64		nchunks = 0;
+
+	for (int i = 0; i < total_seg; i++)
+	{
+		if (aocs_segfile_has_rows(seginfo[i]))
+			rows += seginfo[i]->total_tupcount;
+	}
+
+	chunk_rows = Max(rows / AOCS_PARALLEL_SCAN_NCHUNKS,
+					 AOCS_PARALLEL_SCAN_MIN_CHUNK_ROWS);
+
+	for (int i = 0; i < total_seg; i++)
+	{
+		int64		tupcount;
+
+		tupcount = aocs_segfile_has_rows(seginfo[i]) ? seginfo[i]->total_tupcount : 0;
+
+		if (first_chunk != NULL)
+			first_chunk[i] = nchunks;
+		nchunks += (tupcount + chunk_rows - 1) / chunk_rows;
+	}
+
+	*rows_per_chunk = chunk_rows;
+	*total_rows = rows;
+	return nchunks;
+}
+
+/*
+ * Return the number of chunks of a parallel scan.
+ *
+ * Called from table_parallelscan_initialize() by the process that initializes
+ * the shared state, which stores the result in phs_nblocks.
+ */
+BlockNumber
+aocs_parallelscan_nchunks(Relation rel, AOCSFileSegInfo **seginfo,
+						  int total_seg)
+{
+	int64		rows_per_chunk;
+	int64		total_rows;
+	uint64		nchunks;
+
+	nchunks = aocs_parallelscan_layout(seginfo, total_seg, NULL,
+									   &rows_per_chunk, &total_rows);
+
+	if (nchunks > MaxBlockNumber)
+		elog(ERROR, "too many chunks for parallel scan of relation \"%s\"",
+			 RelationGetRelationName(rel));
+
+	elog(DEBUG1, "parallel scan of AOCS relation \"%s\": %d segment files, "
+		 INT64_FORMAT " rows, " INT64_FORMAT " rows per chunk, " UINT64_FORMAT " chunks",
+		 RelationGetRelationName(rel), total_seg, total_rows, rows_per_chunk,
+		 nchunks);
+
+	return (BlockNumber) nchunks;
+}
+
+/*
+ * Compute this process's copy of the chunk layout, and check that it agrees
+ * with the number of chunks in the shared state.
+ */
+static void
+aocs_parallelscan_init_layout(AOCSScanDesc scan)
+{
+	ParallelBlockTableScanDesc bpscan =
+		(ParallelBlockTableScanDesc) scan->rs_base.rs_parallel;
+	int64		total_rows;
+	uint64		nchunks;
+
+	scan->chunk_first = (uint64 *) palloc(Max(scan->total_seg, 1) * sizeof(uint64));
+	nchunks = aocs_parallelscan_layout(scan->seginfo, scan->total_seg,
+									   scan->chunk_first, &scan->rows_per_chunk,
+									   &total_rows);
+
+	/*
+	 * All processes of the scan use the same snapshot, so they must see the
+	 * same segment files.  Otherwise rows would be skipped or returned twice.
+	 */
+	if (nchunks != bpscan->phs_nblocks)
+		elog(ERROR, "parallel scan of relation \"%s\" has " UINT64_FORMAT " chunks in this process, but %u in the shared state",
+			 RelationGetRelationName(scan->rs_base.rs_rd), nchunks,
+			 bpscan->phs_nblocks);
+}
+
+/*
+ * Has the current chunk of a parallel scan been read completely?
+ */
+static inline bool
+aocs_chunk_done(AOCSScanDesc scan)
+{
+	return scan->rs_base.rs_parallel != NULL &&
+		scan->segrowsprocessed >= scan->chunk_end_row;
+}
+
+/*
+ * Return the number of rows of the current block of a datum stream that have
+ * already been consumed.
+ */
+static inline int64
+aocs_block_rows_consumed(DatumStreamRead *ds)
+{
+	switch (ds->largeObjectState)
+	{
+		case DatumStreamLargeObjectState_None:
+			return DatumStreamBlockRead_Nth(&ds->blockRead) + 1;
+		case DatumStreamLargeObjectState_HaveAoContent:
+			return 0;
+		default:
+			/* a large object block holds exactly one row */
+			return 1;
+	}
+}
+
+/*
+ * Move every projected column forward by 'nrows' rows, so that the next
+ * datumstreamread_advance() on each of them returns the same row.
+ *
+ * Whole blocks are skipped by reading only their headers, as aocs_gettuple()
+ * does, so skipped blocks are never decompressed.  Each column file has its
+ * own block boundaries; an int column holds about twice as many rows per
+ * block as a bigint column.
+ */
+static void
+aocs_skip_rows(AOCSScanDesc scan, int64 nrows)
+{
+	if (nrows == 0)
+		return;
+
+	for (AttrNumber i = 0; i < scan->columnScanInfo.num_proj_atts; i++)
+	{
+		AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
+		DatumStreamRead *ds = scan->columnScanInfo.ds[attno];
+		int64		consumed = aocs_block_rows_consumed(ds);
+		int64		left = nrows;
+
+		if (left >= ds->blockRowCount - consumed)
+		{
+			/* the target row is past the current block */
+			left -= ds->blockRowCount - consumed;
+
+			for (;;)
+			{
+				if (!datumstreamread_block_info(ds))
+					elog(ERROR, "unexpected end of segment file %d, column %d, of relation \"%s\" in parallel scan",
+						 scan->seginfo[scan->cur_seg]->segno, attno + 1,
+						 RelationGetRelationName(scan->rs_base.rs_rd));
+
+				if (left < ds->blockRowCount)
+					break;
+
+				left -= ds->blockRowCount;
+				AppendOnlyStorageRead_SkipCurrentBlock(&ds->ao_read);
+			}
+
+			datumstreamread_block_content(ds);
+			AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
+			consumed = 0;
+		}
+
+		/*
+		 * Skip forward inside the block.  Stop one row short, because the
+		 * caller's next datumstreamread_advance() returns the target row.
+		 */
+		if (left > 0)
+		{
+			Assert(ds->largeObjectState == DatumStreamLargeObjectState_None);
+			datumstreamread_find(ds, consumed + left - 1);
+		}
+	}
+}
+
+/*
+ * Claim the next chunk of a parallel scan and position the column readers at
+ * its first row.  open_next_scan_seg() calls this for parallel scans.
+ *
+ * Returns the index in seginfo[] of the chunk's segment file, or -1 if all
+ * chunks have been handed out.
+ *
+ * Chunks are numbered in segment file order and phs_nallocated only grows, so
+ * a process's next chunk in the same segment file is always after the point
+ * where it stopped.  A process therefore only moves forward, and reads the
+ * block headers of each column file at most once.
+ */
+static int
+claim_next_chunk(AOCSScanDesc scan)
+{
+	ParallelBlockTableScanDesc bpscan =
+		(ParallelBlockTableScanDesc) scan->rs_base.rs_parallel;
+	uint64		chunk;
+	int64		startrow;
+	int			seg;
+	int			lo;
+	int			hi;
+
+	/* building a block directory needs to see every block, in order */
+	Assert(scan->blockDirectory == NULL);
+
+	chunk = pg_atomic_fetch_add_u64(&bpscan->phs_nallocated, 1);
+	if (chunk >= bpscan->phs_nblocks)
+	{
+		close_cur_scan_seg(scan);
+		return -1;
+	}
+
+	/* find the last segment file whose first chunk is not after this one */
+	lo = 0;
+	hi = scan->total_seg - 1;
+	while (lo < hi)
+	{
+		int			mid = (lo + hi + 1) / 2;
+
+		if (scan->chunk_first[mid] <= chunk)
+			lo = mid;
+		else
+			hi = mid - 1;
+	}
+	seg = lo;
+
+	startrow = (int64) (chunk - scan->chunk_first[seg]) * scan->rows_per_chunk;
+	scan->chunk_end_row = Min(startrow + scan->rows_per_chunk,
+							  scan->seginfo[seg]->total_tupcount);
+	scan->chunks_claimed++;
+	scan->rows_claimed += scan->chunk_end_row - startrow;
+
+	if (scan->chunk_seg != seg || startrow < scan->segrowsprocessed)
+	{
+		close_cur_scan_seg(scan);
+
+		if (getAOCSVPEntry(scan->seginfo[seg], scan->columnScanInfo.proj_atts[0])->eof == 0)
+			elog(ERROR, "inconsistent segment state for relation %s, segment %d, tuple count " INT64_FORMAT,
+				 RelationGetRelationName(scan->rs_base.rs_rd),
+				 scan->seginfo[seg]->segno,
+				 scan->seginfo[seg]->total_tupcount);
+
+		scan->cur_seg = seg;
+		open_all_datumstreamread_segfiles(scan, scan->seginfo[seg]);
+		scan->chunk_seg = seg;
+		scan->segrowsprocessed = 0;
+	}
+
+	aocs_skip_rows(scan, startrow - scan->segrowsprocessed);
+	scan->segrowsprocessed = startrow;
+
+	return seg;
+}
+
 static int
 open_next_scan_seg(AOCSScanDesc scan)
 {
-	bool 		isParallel = false;
-	ParallelBlockTableScanDesc pbscan = NULL;
-
 	if (scan->rs_base.rs_parallel != NULL)
-	{
-		isParallel = true;
-		pbscan = (ParallelBlockTableScanDesc) scan->rs_base.rs_parallel;
-	}
+		return claim_next_chunk(scan);
 
 	while (scan->cur_seg < scan->total_seg)
 	{
-		if (isParallel)
-		{
-			scan->cur_seg = pg_atomic_fetch_add_u64(&pbscan->phs_nallocated, 1);
-			if (scan->cur_seg >= pbscan->phs_nblocks)
-				break;
-		}
-		else
-		{
-			scan->cur_seg = scan->cur_seg + 1;
-			if (scan->cur_seg >= scan->total_seg)
-				break;
-		}
+		scan->cur_seg = scan->cur_seg + 1;
+		if (scan->cur_seg >= scan->total_seg)
+			break;
 
 		AOCSFileSegInfo *curSegInfo = scan->seginfo[scan->cur_seg];
 
@@ -431,6 +721,7 @@ open_next_scan_seg(AOCSScanDesc scan)
 				}
 
 				open_all_datumstreamread_segfiles(scan, curSegInfo);
+				scan->segrowsprocessed = 0;
 
 				return scan->cur_seg;
 			}
@@ -463,6 +754,8 @@ close_cur_scan_seg(AOCSScanDesc scan)
 
 	if (scan->blockDirectory)
 		AppendOnlyBlockDirectory_End_forInsert(scan->blockDirectory);
+
+	scan->chunk_seg = -1;
 }
 
 static void
@@ -600,6 +893,9 @@ aocs_beginscan_internal(Relation relation,
 	scan->appendOnlyMetaDataSnapshot = appendOnlyMetaDataSnapshot;
 	scan->seginfo = seginfo;
 	scan->total_seg = total_seg;
+	scan->chunk_seg = -1;
+	if (parallel_scan != NULL)
+		aocs_parallelscan_init_layout(scan);
 	scan->columnScanInfo.scanCtx = CurrentMemoryContext;
 
 	/* relationTupleDesc will be inited by the slot when needed */
@@ -681,7 +977,16 @@ aocs_rescan(AOCSScanDesc scan)
 void
 aocs_endscan(AOCSScanDesc scan)
 {
+	if (scan->rs_base.rs_parallel != NULL)
+		elog(DEBUG1, "parallel scan of AOCS relation \"%s\": this process claimed "
+			 INT64_FORMAT " chunks, " INT64_FORMAT " rows",
+			 RelationGetRelationName(scan->rs_base.rs_rd),
+			 scan->chunks_claimed, scan->rows_claimed);
+
 	close_cur_scan_seg(scan);
+
+	if (scan->chunk_first)
+		pfree(scan->chunk_first);
 
 	if (scan->columnScanInfo.ds)
 	{
@@ -1161,7 +1466,7 @@ aocs_getnext_noqual(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *
 
 ReadNext:
 		/* If necessary, open next seg */
-		if (scan->cur_seg < 0 || err < 0)
+		if (scan->cur_seg < 0 || err < 0 || aocs_chunk_done(scan))
 		{
 			err = open_next_scan_seg(scan);
 			if (err < 0)
@@ -1171,7 +1476,6 @@ ReadNext:
 				scan->cur_seg = -1;
 				return false;
 			}
-			scan->segrowsprocessed = 0;
 		}
 
 		Assert(scan->cur_seg >= 0);
@@ -1308,7 +1612,7 @@ aocs_getnext_withqual(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot
 
 ReadNext:
 		/* If necessary, open next seg */
-		if (scan->cur_seg < 0 || err < 0)
+		if (scan->cur_seg < 0 || err < 0 || aocs_chunk_done(scan))
 		{
 			err = open_next_scan_seg(scan);
 			if (err < 0)
@@ -1318,7 +1622,6 @@ ReadNext:
 				scan->cur_seg = -1;
 				return false;
 			}
-			scan->segrowsprocessed = 0;
 		}
 
 		Assert(scan->cur_seg >= 0);
@@ -3045,7 +3348,7 @@ aocs_getnext_sample(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *
 
 ReadNext:
 		/* If necessary, open next seg */
-		if (scan->cur_seg < 0 || err < 0)
+		if (scan->cur_seg < 0 || err < 0 || aocs_chunk_done(scan))
 		{
 			err = open_next_scan_seg(scan);
 			if (err < 0)
@@ -3055,7 +3358,6 @@ ReadNext:
 				scan->cur_seg = -1;
 				return false;
 			}
-			scan->segrowsprocessed = 0;
 		}
 
 		Assert(scan->cur_seg >= 0);

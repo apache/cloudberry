@@ -253,6 +253,28 @@ typedef struct AOCSScanDescData
 	int32					 cur_seg;
 
 	/*
+	 * Parallel scan state, used only when rs_base.rs_parallel is set.
+	 *
+	 * Every process computes the chunk layout from its own seginfo[]:
+	 * rows_per_chunk, and chunk_first[i], the number of the first chunk of
+	 * seginfo[i].  The shared ParallelBlockTableScanDesc holds only the total
+	 * number of chunks and the number handed out so far.
+	 *
+	 * chunk_seg is the index in seginfo[] of the segment file whose column
+	 * files are open, or -1 if none are.  chunk_end_row is the ordinal just
+	 * past the current chunk; it is compared with segrowsprocessed, the number
+	 * of rows consumed in the segment file so far.  chunks_claimed and
+	 * rows_claimed count this process's share of the scan, for the DEBUG1
+	 * message in aocs_endscan().
+	 */
+	int64					 rows_per_chunk;
+	uint64					*chunk_first;
+	int32					 chunk_seg;
+	int64					 chunk_end_row;
+	int64					 chunks_claimed;
+	int64					 rows_claimed;
+
+	/*
 	 * The only relation wide Storage Option, the rest are aquired in a per
 	 * column basis and there is no need to keep track of.
 	 */
@@ -365,6 +387,10 @@ typedef AOCSAddColumnDescData *AOCSAddColumnDesc;
  *		function prototypes for appendoptimized columnar access method
  * ----------------
  */
+
+extern BlockNumber aocs_parallelscan_nchunks(Relation rel,
+											 AOCSFileSegInfo **seginfo,
+											 int total_seg);
 
 extern AOCSScanDesc aocs_beginscan(Relation relation, Snapshot snapshot, ParallelTableScanDesc parallel_scan,
 								   bool *proj, uint32 flags);
