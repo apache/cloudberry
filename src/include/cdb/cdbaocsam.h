@@ -253,6 +253,23 @@ typedef struct AOCSScanDescData
 	int32					 cur_seg;
 
 	/*
+	 * Parallel scan state, used only when rs_base.rs_parallel is set.
+	 *
+	 * Every process computes the chunk layout from its own seginfo[]:
+	 * rows_per_chunk, and seg_first_chunk[i], the number of the first chunk of
+	 * seginfo[i].  The shared ParallelBlockTableScanDesc holds only the total
+	 * number of chunks and the number handed out so far.
+	 *
+	 * chunk_end_row is the ordinal just past the current chunk, or
+	 * PG_INT64_MAX for the last chunk of a segment file, which is read to the
+	 * end of the file; it is compared with segrowsprocessed, the number of
+	 * rows consumed in the segment file so far.
+	 */
+	int64					 rows_per_chunk;
+	uint64					*seg_first_chunk;
+	int64					 chunk_end_row;
+
+	/*
 	 * The only relation wide Storage Option, the rest are aquired in a per
 	 * column basis and there is no need to keep track of.
 	 */
@@ -427,6 +444,7 @@ extern ExprState * aocs_predicate_pushdown_prepare(AOCSScanDesc scan,
 								ExprState *state,
 								ExprContext *ecxt,
 								PlanState *ps);
+
 /*
  * Update total bytes read for the entire scan. If the block was compressed,
  * update it with the compressed length. If the block was not compressed, update
