@@ -76,6 +76,11 @@ ALTER RESOURCE GROUP rg_bypass_test set concurrency 1;
 ALTER RESOURCE GROUP rg_bypass_test set concurrency 0;
 61: SET enable_hashagg to on;
 61: SHOW enable_hashagg;
+-- Roll back a GUC change in one query message; restoration must not wait
+-- for a resource-group slot (concurrency is still zero).
+61: SET DateStyle = 'ISO, MDY';
+61: SET DateStyle = 'SQL, DMY'; SET work_mem = 'invalid';
+61: SHOW DateStyle;
 61: invalid_syntax;
 61q:
 

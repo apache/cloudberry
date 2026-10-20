@@ -116,6 +116,21 @@ DROP ROLE role_concurrency_test;
 DROP RESOURCE GROUP rg_concurrency_test;
 
 -- test5: terminate a query waiting for a slot, that opens a transaction on exit callback
+CREATE FUNCTION wait_for_temp_table_cleanup(owner_role regrole) RETURNS bool AS $$
+DECLARE
+    retries int; /* in func */
+BEGIN
+    FOR retries IN 1..600 LOOP
+        IF NOT EXISTS (SELECT 1 FROM pg_class
+                       WHERE relowner = owner_role AND relpersistence = 't') THEN
+            RETURN true; /* in func */
+        END IF; /* in func */
+        PERFORM pg_sleep(0.1); /* in func */
+    END LOOP; /* in func */
+    RAISE EXCEPTION 'timed out waiting for temporary table cleanup for %', owner_role; /* in func */
+END; /* in func */
+$$ LANGUAGE plpgsql;
+
 DROP ROLE IF EXISTS role_concurrency_test;
 -- start_ignore
 DROP RESOURCE GROUP rg_concurrency_test;
@@ -138,7 +153,10 @@ SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE wait_event_type='Re
 SELECT * FROM rg_concurrency_view;
 1q:
 2q:
+-- Wait until backend cleanup has removed the role's temporary tables.
+SELECT wait_for_temp_table_cleanup('role_concurrency_test');
 DROP ROLE role_concurrency_test;
 DROP RESOURCE GROUP rg_concurrency_test;
 
 DROP VIEW rg_concurrency_view;
+DROP FUNCTION wait_for_temp_table_cleanup(regrole);

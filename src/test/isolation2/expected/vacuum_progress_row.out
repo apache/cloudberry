@@ -40,21 +40,31 @@ ABORT
 -- Abort so that segno 1 has logical EOF = 0.
 1: ABORT;
 ABORT
+-- Flush the aborted insert statistics before waiting in another session.
+1q: ... <quitting>
 
--- Also delete half of the tuples evenly before the EOF of segno 2.
-DELETE FROM vacuum_progress_ao_row where j % 2 = 0;
-DELETE 50000
-
--- Lookup pg_class and collected stats view before VACUUM
-SELECT relpages, reltuples, relallvisible FROM pg_class where relname = 'vacuum_progress_ao_row';
- relpages | reltuples | relallvisible 
-----------+-----------+---------------
- 0        | -1        | 0             
+-- pg_stat_all_tables aggregates tuple counters from the segments. Wait on
+-- segment 1, which holds all rows, before reading the view and before DELETE.
+1U: SELECT wait_until_dead_tup_change_to('vacuum_progress_ao_row'::regclass::oid, 200000);
+ wait_until_dead_tup_change_to 
+-------------------------------
+ OK                            
 (1 row)
 SELECT n_live_tup, n_dead_tup, last_vacuum, vacuum_count FROM pg_stat_all_tables WHERE relname = 'vacuum_progress_ao_row';
  n_live_tup | n_dead_tup | last_vacuum | vacuum_count 
 ------------+------------+-------------+--------------
  100000     | 200000     |             | 0            
+(1 row)
+
+-- Also delete half of the tuples evenly before the EOF of segno 2.
+DELETE FROM vacuum_progress_ao_row where j % 2 = 0;
+DELETE 50000
+
+-- Lookup pg_class before VACUUM
+SELECT relpages, reltuples, relallvisible FROM pg_class where relname = 'vacuum_progress_ao_row';
+ relpages | reltuples | relallvisible 
+----------+-----------+---------------
+ 0        | -1        | 0             
 (1 row)
 
 -- Perform VACUUM and observe the progress

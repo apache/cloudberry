@@ -934,7 +934,8 @@ pull_up_subqueries_recurse(PlannerInfo *root, Node *jtnode,
 
 		/*
 		 * Alternatively, is it a simple UNION ALL subquery?  If so, flatten
-		 * into an "append relation".
+		 * into an "append relation".  As above, keep gp_dist_random subqueries
+		 * intact so set_subquery_pathlist can enforce segment execution.
 		 *
 		 * It's safe to do this regardless of whether this query is itself an
 		 * appendrel member.  (If you're thinking we should try to flatten the
@@ -942,6 +943,7 @@ pull_up_subqueries_recurse(PlannerInfo *root, Node *jtnode,
 		 * in set_append_rel_pathlist, not here.)
 		 */
 		if (rte->rtekind == RTE_SUBQUERY &&
+			!rte->forceDistRandom &&
 			is_simple_union_all(rte->subquery))
 			return pull_up_simple_union_all(root, jtnode, rte);
 

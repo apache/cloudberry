@@ -26,13 +26,19 @@ CREATE INDEX on vacuum_progress_ao_row(j);
 2q:
 -- Abort so that segno 1 has logical EOF = 0.
 1: ABORT;
+-- Flush the aborted insert statistics before waiting in another session.
+1q:
+
+-- pg_stat_all_tables aggregates tuple counters from the segments. Wait on
+-- segment 1, which holds all rows, before reading the view and before DELETE.
+1U: SELECT wait_until_dead_tup_change_to('vacuum_progress_ao_row'::regclass::oid, 200000);
+SELECT n_live_tup, n_dead_tup, last_vacuum, vacuum_count FROM pg_stat_all_tables WHERE relname = 'vacuum_progress_ao_row';
 
 -- Also delete half of the tuples evenly before the EOF of segno 2.
 DELETE FROM vacuum_progress_ao_row where j % 2 = 0;
 
--- Lookup pg_class and collected stats view before VACUUM
+-- Lookup pg_class before VACUUM
 SELECT relpages, reltuples, relallvisible FROM pg_class where relname = 'vacuum_progress_ao_row';
-SELECT n_live_tup, n_dead_tup, last_vacuum, vacuum_count FROM pg_stat_all_tables WHERE relname = 'vacuum_progress_ao_row';
 
 -- Perform VACUUM and observe the progress
 
