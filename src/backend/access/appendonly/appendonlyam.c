@@ -102,10 +102,14 @@ extern void finishWriteBlock(AppendOnlyInsertDesc aoInsertDesc);
 extern void setupNextWriteBlock(AppendOnlyInsertDesc aoInsertDesc);
 static void appendonly_insert_finish_guts(AppendOnlyInsertDesc aoInsertDesc);
 
-/* Hook for plugins to get control in appendonly_delete() */
-appendonly_delete_hook_type appendonly_delete_hook = NULL;
 static void AppendOnlyScanDesc_UpdateTotalBytesRead(
 										AppendOnlyScanDesc scan);
+
+static void appendonly_parallelscan_init(AppendOnlyScanDesc scan);
+static bool appendonly_parallelscan_next_block(AppendOnlyScanDesc scan);
+
+/* Hook for plugins to get control in appendonly_delete() */
+appendonly_delete_hook_type appendonly_delete_hook = NULL;
 
 /* ----------------
  *		initscan - scan code common to appendonly_beginscan and appendonly_rescan
@@ -125,6 +129,7 @@ initscan(AppendOnlyScanDesc scan, ScanKey key)
 	scan->aos_need_new_segfile = true;	/* need to assign a file to be scanned */
 	scan->aos_done_all_segfiles = false;
 	scan->needNextBuffer = true;
+	scan->cur_seg = -1;
 
 	if (scan->initedStorageRoutines)
 		AppendOnlyExecutorReadBlock_ResetCounts(
@@ -147,15 +152,6 @@ SetNextFileSegForRead(AppendOnlyScanDesc scan)
 	int			formatversion = -2; /* some invalid value */
 	bool		finished_all_files = true;	/* assume */
 	int32		fileSegNo;
-	bool 		isParallel = false;
-	ParallelBlockTableScanDesc pbscan = NULL;
-
-	if (scan->rs_base.rs_parallel != NULL)
-	{
-		isParallel = true;
-		pbscan = (ParallelBlockTableScanDesc) scan->rs_base.rs_parallel;
-	}
-
 
 	Assert(scan->aos_need_new_segfile); /* only call me when last segfile
 										 * completed */
@@ -233,16 +229,7 @@ SetNextFileSegForRead(AppendOnlyScanDesc scan)
 	int idx; /* fetch segfile idx */
 	while (scan->aos_segfiles_processed < scan->aos_total_segfiles)
 	{
-		if (isParallel)
-		{
-			idx = pg_atomic_fetch_add_u64(&pbscan->phs_nallocated, 1);
-			if (idx >= pbscan->phs_nblocks)
-				break;
-		}
-		else
-		{
-			idx = scan->aos_segfiles_processed;
-		}
+		idx = scan->aos_segfiles_processed;
 
 		FileSegInfo *fsinfo = scan->aos_segfile_arr[idx];
 
@@ -1080,6 +1067,9 @@ AppendOnlyExecutorReadBlock_FetchTuple(AppendOnlyExecutorReadBlock *executorRead
 static bool
 getNextBlock(AppendOnlyScanDesc scan)
 {
+	if (scan->rs_base.rs_parallel != NULL)
+		return appendonly_parallelscan_next_block(scan);
+
 	if (scan->aos_need_new_segfile)
 	{
 		/*
@@ -1796,6 +1786,9 @@ appendonly_beginrangescan_internal(Relation relation,
 
 	scan->totalBytesRead = 0;
 
+	if (scan->rs_base.rs_parallel != NULL)
+		appendonly_parallelscan_init(scan);
+
 	return scan;
 }
 
@@ -1950,6 +1943,9 @@ appendonly_endscan(TableScanDesc scan)
 
 		pfree(aoscan->aos_segfile_arr);
 	}
+
+	if (aoscan->seg_first_chunk)
+		pfree(aoscan->seg_first_chunk);
 
 	CloseScannedFileSeg(aoscan);
 
@@ -3376,6 +3372,272 @@ appendonly_predicate_pushdown_prepare(AppendOnlyScanDesc aoscan,
 	 * with seqscan node.
 	 */
 	return NULL;
+}
+
+/*
+ * Return the number of rows of a segment file that a parallel scan reads.
+ * AWAITING_DROP segment files are skipped, as in SetNextFileSegForRead().
+ */
+static inline int64
+appendonly_segfile_scan_rows(FileSegInfo *seginfo)
+{
+	if (seginfo->state == AOSEG_STATE_AWAITING_DROP)
+		return 0;
+
+	return seginfo->total_tupcount;
+}
+
+/*
+ * Return the number of rows in each chunk of a parallel scan.  The last chunk
+ * of a segment file may be shorter.
+ *
+ * The average row size is the uncompressed size of the segment files the scan
+ * reads, divided by their number of rows.
+ */
+static int64
+appendonly_parallelscan_rows_per_chunk(FileSegInfo **seginfo, int total_seg)
+{
+	int64		total_rows = 0;
+	int64		total_bytes = 0;
+
+	for (int i = 0; i < total_seg; i++)
+	{
+		int64		rows = appendonly_segfile_scan_rows(seginfo[i]);
+
+		if (rows == 0)
+			continue;
+
+		total_rows += rows;
+		total_bytes += seginfo[i]->eof_uncompressed;
+	}
+
+	return AppendOnlyParallelScan_RowsPerChunk(total_rows, total_bytes);
+}
+
+/*
+ * Return the number of chunks of a segment file.  Empty and AWAITING_DROP
+ * segment files have none.
+ */
+static inline uint64
+appendonly_segfile_chunks(FileSegInfo *seginfo, int64 rows_per_chunk)
+{
+	return (appendonly_segfile_scan_rows(seginfo) + rows_per_chunk - 1) / rows_per_chunk;
+}
+
+/*
+ * Return the number of chunks of a parallel scan.
+ *
+ * Called from table_parallelscan_initialize() by the process that initializes
+ * the shared state, which stores the result in phs_nblocks.
+ */
+BlockNumber
+appendonly_parallelscan_compute_chunks(Relation rel, FileSegInfo **seginfo,
+									   int total_seg)
+{
+	int64		rows_per_chunk;
+	uint64		total_chunks = 0;
+
+	rows_per_chunk = appendonly_parallelscan_rows_per_chunk(seginfo, total_seg);
+	for (int i = 0; i < total_seg; i++)
+		total_chunks += appendonly_segfile_chunks(seginfo[i], rows_per_chunk);
+
+	if (total_chunks > MaxBlockNumber)
+		elog(ERROR, "too many chunks for parallel scan of relation \"%s\"",
+			 RelationGetRelationName(rel));
+
+	elog(DEBUG1, "parallel scan of AO relation \"%s\": %d segment files, "
+		 INT64_FORMAT " rows per chunk, " UINT64_FORMAT " chunks",
+		 RelationGetRelationName(rel), total_seg, rows_per_chunk, total_chunks);
+
+	return (BlockNumber) total_chunks;
+}
+
+/*
+ * Compute this process's copy of the chunk layout, and check that it agrees
+ * with the number of chunks in the shared state.
+ */
+static void
+appendonly_parallelscan_init(AppendOnlyScanDesc scan)
+{
+	ParallelBlockTableScanDesc bpscan;
+	uint64		total_chunks = 0;
+
+	bpscan = (ParallelBlockTableScanDesc) scan->rs_base.rs_parallel;
+	scan->rows_per_chunk = appendonly_parallelscan_rows_per_chunk(scan->aos_segfile_arr,
+																  scan->aos_total_segfiles);
+	scan->seg_first_chunk = (uint64 *)
+		palloc(Max(scan->aos_total_segfiles, 1) * sizeof(uint64));
+
+	/*
+	 * seg_first_chunk[i] is the number of the first chunk of
+	 * aos_segfile_arr[i].  A segment file without chunks gets the same number
+	 * as the next one.  appendonly_parallelscan_next_chunk() picks the last
+	 * segment file whose first chunk is not after the chunk number, so it
+	 * never picks such a segment file.
+	 */
+	for (int i = 0; i < scan->aos_total_segfiles; i++)
+	{
+		scan->seg_first_chunk[i] = total_chunks;
+		total_chunks += appendonly_segfile_chunks(scan->aos_segfile_arr[i],
+							  scan->rows_per_chunk);
+	}
+
+	/*
+	 * All processes of the scan use the same snapshot, so they must see the
+	 * same segment files.  Otherwise rows would be skipped or returned twice.
+	 */
+	if (total_chunks != bpscan->phs_nblocks)
+		elog(ERROR, "parallel scan of relation \"%s\" has " UINT64_FORMAT
+			 " chunks in this process, but %u in the shared state",
+			 RelationGetRelationName(scan->aos_rd), total_chunks,
+			 bpscan->phs_nblocks);
+}
+
+/*
+ * Claim the next chunk of a parallel scan, and open its segment file if it is
+ * not the one of the previous chunk.
+ *
+ * Returns false if all chunks have been handed out.
+ *
+ * Chunks are numbered in segment file order and phs_nallocated only grows, so
+ * a process's next chunk in the same segment file is always after the blocks
+ * it has already read or skipped, and the file is never read backwards.
+ */
+static bool
+appendonly_parallelscan_next_chunk(AppendOnlyScanDesc scan)
+{
+	ParallelBlockTableScanDesc bpscan;
+	uint64		chunk;
+	int			seg;
+	int			lo;
+	int			hi;
+
+	bpscan = (ParallelBlockTableScanDesc) scan->rs_base.rs_parallel;
+	chunk = pg_atomic_fetch_add_u64(&bpscan->phs_nallocated, 1);
+	if (chunk >= bpscan->phs_nblocks)
+	{
+		CloseScannedFileSeg(scan);
+		scan->aos_need_new_segfile = false;
+		scan->aos_done_all_segfiles = true;
+		return false;
+	}
+
+	/* find the last segment file whose first chunk is not after this one */
+	lo = 0;
+	hi = scan->aos_total_segfiles - 1;
+	while (lo < hi)
+	{
+		int			mid = (lo + hi + 1) / 2;
+
+		if (scan->seg_first_chunk[mid] <= chunk)
+			lo = mid;
+		else
+			hi = mid - 1;
+	}
+	seg = lo;
+
+	if (seg != scan->cur_seg)
+	{
+		CloseScannedFileSeg(scan);
+
+		/* make SetNextFileSegForRead() open aos_segfile_arr[seg] */
+		scan->aos_segfiles_processed = seg;
+		if (!SetNextFileSegForRead(scan) || scan->aos_segfiles_processed != seg + 1)
+			elog(ERROR, "inconsistent segment state for relation %s, segment %d, tuple count " INT64_FORMAT,
+				 RelationGetRelationName(scan->aos_rd),
+				 scan->aos_segfile_arr[seg]->segno,
+				 scan->aos_segfile_arr[seg]->total_tupcount);
+
+		scan->cur_seg = seg;
+		scan->segrowsprocessed = 0;
+	}
+
+	scan->chunk_start_row = (int64) (chunk - scan->seg_first_chunk[seg]) *
+		scan->rows_per_chunk;
+
+	/*
+	 * The last chunk of a segment file is read to the end of the file, as a
+	 * serial scan does, so that rows are not skipped even if tupcount were
+	 * too small.  The layout is still computed from tupcount.
+	 */
+	if (scan->chunk_start_row + scan->rows_per_chunk >=
+		scan->aos_segfile_arr[seg]->total_tupcount)
+		scan->chunk_end_row = PG_INT64_MAX;
+	else
+		scan->chunk_end_row = scan->chunk_start_row + scan->rows_per_chunk;
+
+	return true;
+}
+
+/*
+ * Get the next block of a parallel scan.  getNextBlock() calls this for
+ * parallel scans.
+ *
+ * Returns false when all chunks have been handed out.
+ */
+static bool
+appendonly_parallelscan_next_block(AppendOnlyScanDesc scan)
+{
+	AppendOnlyExecutorReadBlock *varblock = &scan->executorReadBlock;
+
+	/* building a block directory needs to see every block, in order */
+	Assert(scan->blockDirectory == NULL);
+
+	for (;;)
+	{
+		bool		mine;
+
+		CHECK_FOR_INTERRUPTS();
+
+		/* the current chunk is done, or there is no chunk yet */
+		if (scan->cur_seg < 0 || scan->segrowsprocessed >= scan->chunk_end_row)
+		{
+			if (!appendonly_parallelscan_next_chunk(scan))
+				return false;
+			continue;
+		}
+
+		/*
+		 * The next block starts at ordinal segrowsprocessed, which is inside
+		 * the current chunk.  The end of the file ends the last chunk of the
+		 * segment file; any other chunk must have a block here.
+		 */
+		if (!AppendOnlyExecutorReadBlock_GetBlockInfo(&scan->storageRead, varblock))
+		{
+			FileSegInfo *fsinfo = scan->aos_segfile_arr[scan->cur_seg];
+
+			if (scan->chunk_end_row == PG_INT64_MAX)
+			{
+				if (!appendonly_parallelscan_next_chunk(scan))
+					return false;
+				continue;
+			}
+
+			elog(ERROR, "unexpected end of segment file %d of relation \"%s\" in parallel scan, "
+				 "after " INT64_FORMAT " of " INT64_FORMAT " rows",
+				 fsinfo->segno, RelationGetRelationName(scan->aos_rd),
+				 scan->segrowsprocessed, fsinfo->total_tupcount);
+		}
+
+		Assert(varblock->rowCount > 0);
+		mine = (scan->segrowsprocessed >= scan->chunk_start_row);
+		scan->segrowsprocessed += varblock->rowCount;
+
+		if (mine)
+		{
+			AppendOnlyExecutorReadBlock_GetContents(varblock);
+			AppendOnlyScanDesc_UpdateTotalBytesRead(scan);
+			return true;
+		}
+
+		/*
+		 * The block belongs to an earlier chunk.  Skip it without
+		 * decompressing it, and keep the row numbers of the blocks that
+		 * follow right; they are not stored in older block formats.
+		 */
+		AppendOnlyExecutionReadBlock_FinishedScanBlock(varblock);
+		AppendOnlyStorageRead_SkipCurrentBlock(&scan->storageRead);
+	}
 }
 
 /* end of file */
