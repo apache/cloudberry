@@ -170,6 +170,13 @@ CDecorrelator::FProcess(CMemoryPool *mp, CExpression *pexpr, BOOL fEqualityOnly,
 					CUtils::FCorrelatedApply(pexpr->Pop()) &&
 						"Apply expression is encountered by decorrelator");
 
+	// Decorrelation can share an inner result between outer rows. This also
+	// applies to aggregates whose final function is volatile.
+	if (IMDFunction::EfsVolatile == pexpr->DeriveFunctionProperties()->Efs())
+	{
+		return false;
+	}
+
 	// no outer references?
 	if (outerRefsToRemove->IsDisjoint(pexpr->DeriveOuterReferences()))
 	{

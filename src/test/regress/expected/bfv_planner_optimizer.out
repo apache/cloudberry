@@ -453,18 +453,16 @@ explain (costs off) select * from t_hashdist where a > All (select random() from
 (10 rows)
 
 explain (costs off) select * from t_hashdist where a in (select random()::int from generate_series(1, 10));
-                        QUERY PLAN                        
-----------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Semi Join
-         Hash Cond: (t_hashdist.a = ((random())::integer))
+                   QUERY PLAN                   
+------------------------------------------------
+ Result
+   Filter: (hashed SubPlan 1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Seq Scan on t_hashdist
-         ->  Hash
-               ->  Redistribute Motion 1:3  (slice2)
-                     Hash Key: ((random())::integer)
-                     ->  Function Scan on generate_series
- Optimizer: Pivotal Optimizer (GPORCA)
-(9 rows)
+   SubPlan 1
+     ->  Function Scan on generate_series
+ Optimizer: GPORCA
+(7 rows)
 
 -- subplan
 explain (costs off, verbose) select * from
