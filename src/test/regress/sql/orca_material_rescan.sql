@@ -1,0 +1,71 @@
+-- Materialize must invalidate a Motion-free correlated child when its
+-- PARAM_EXEC inputs change, while continuing to shield Motion subtrees.
+-- Leave the tables unanalyzed so the SubPlan has a Materialize over
+-- ProjectSet on the inner side of its nested loop.
+--
+CREATE SCHEMA orca_material_rescan;
+SET search_path TO orca_material_rescan;
+
+CREATE TABLE ae_event (
+    seq_nvl        numeric(10)   NOT NULL,
+    ae_rule_id_ctn varchar(200)  NULL,
+    ae_occr_dtm    timestamp     NULL
+) USING ao_row DISTRIBUTED RANDOMLY;
+
+CREATE TABLE ae_rule (
+    ae_rule_id varchar(50)  NOT NULL,
+    ae_rule_nm varchar(200) NULL
+) USING ao_row DISTRIBUTED RANDOMLY;
+
+INSERT INTO ae_rule VALUES
+    ('R_01', 'Overheating'),
+    ('R_02',  NULL),
+    ('R_03', 'Calibration Error'),
+    ('R_04', 'Sensor Offline');
+
+-- Edge cases: rule id lists with a duplicate, an id with no match in
+-- ae_rule, and empty lists.  Every row must get its own aggregate, not
+-- a replay of the first row's.
+INSERT INTO ae_event VALUES
+    (1, 'R_01,R_02', '2026-06-10 08:59:49'),
+    (2, 'R_03',      '2026-06-10 08:59:50'),
+    (3, '',          '2026-06-10 08:59:51'),
+    (4, 'R_04,R_99', '2026-06-10 08:59:52'),
+    (5, 'R_01,R_01', '2026-06-10 08:59:53'),
+    (6, '',          '2026-06-10 08:59:54');
+
+SELECT $query$
+SELECT seq_nvl, ae_rule_id_ctn
+    , ( SELECT string_agg(rul_nm, ',' ORDER BY ae_rule_id)
+        FROM ( SELECT coalesce(ae_rule_nm, ae_rule_id) AS rul_nm, ae_rule_id
+               FROM ae_rule t1
+               JOIN ( SELECT unnest(string_to_array(sh.ae_rule_id_ctn, ',')) ) t2(column2)
+                 ON t1.ae_rule_id = t2.column2 ) t
+      ) AS rule_ctrl
+FROM ae_event sh
+WHERE sh.ae_occr_dtm >= '2026-06-10 06:00:00'
+  AND sh.ae_occr_dtm < '2026-06-11 06:00:00'
+ORDER BY seq_nvl
+$query$ AS qry \gset
+
+SET optimizer TO on;
+
+-- The shape under test: the SubPlan's nestloop inner side must be a
+-- Materialize over a Motion-free ProjectSet consuming the outer param.
+EXPLAIN (COSTS OFF)
+:qry ;
+
+:qry ;
+
+-- Reuse a generic plan with both client parameters and correlated exec params.
+SET plan_cache_mode TO force_generic_plan;
+PREPARE material_rescan(numeric) AS
+SELECT * FROM (:qry) q WHERE seq_nvl >= $1;
+EXECUTE material_rescan(1);
+EXECUTE material_rescan(4);
+DEALLOCATE material_rescan;
+RESET plan_cache_mode;
+
+RESET optimizer;
+RESET search_path;
+DROP SCHEMA orca_material_rescan CASCADE;

@@ -397,4 +397,27 @@ ORDER BY a.id;
  12 | 
 (12 rows)
 
+-- A Result's one-time filter must not hide parameters used by its child.
+SELECT a.id,
+       (SELECT sum(s.v + 1)
+        FROM (SELECT generate_series(1, a.n) AS v ORDER BY v LIMIT 2) s
+        WHERE a.id > 0) AS gated
+FROM projectset_outer a
+ORDER BY a.id;
+ id | gated 
+----+-------
+  1 |     2
+  2 |     5
+  3 |     5
+  4 |      
+  5 |     2
+  6 |     5
+  7 |     5
+  8 |      
+  9 |     2
+ 10 |     5
+ 11 |     5
+ 12 |      
+(12 rows)
+
 ROLLBACK;

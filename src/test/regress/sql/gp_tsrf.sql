@@ -94,4 +94,11 @@ SELECT a.id,
         FROM (SELECT generate_series(1, generate_series(1, a.n)) v) s) AS nested
 FROM projectset_outer a
 ORDER BY a.id;
+-- A Result's one-time filter must not hide parameters used by its child.
+SELECT a.id,
+       (SELECT sum(s.v + 1)
+        FROM (SELECT generate_series(1, a.n) AS v ORDER BY v LIMIT 2) s
+        WHERE a.id > 0) AS gated
+FROM projectset_outer a
+ORDER BY a.id;
 ROLLBACK;
