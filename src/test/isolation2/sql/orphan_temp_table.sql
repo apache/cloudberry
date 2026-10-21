@@ -31,5 +31,8 @@
 2: select * from test_temp_table_cleanup;
 2q:
 
+-- 2q only closes the connection; the backend drops its temp objects on
+-- exit asynchronously, so wait for that to finish (up to 60s).
+3: do $$ begin for i in 1..600 loop if (select count(*) from pg_class where relname = 'test_temp_table_cleanup') = 0 then return; end if; perform pg_sleep(0.1); end loop; end $$;
 3: select count(*) from pg_class where relname = 'test_temp_table_cleanup';
 3q:
