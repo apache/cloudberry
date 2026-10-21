@@ -1842,7 +1842,7 @@ CXformUtils::PcrsIndexColumns(CMemoryPool *mp, CColRefArray *colref_array,
 //
 //	@doc:
 //		Return the set of columns from the given array of columns which are
-//		retunable through the index (to determine index-only scan capable)
+//		returnable through the index (to determine index-only scan capable)
 //
 //---------------------------------------------------------------------------
 CColRefSet *
@@ -3036,8 +3036,15 @@ CXformUtils::PexprBitmapSelectBestIndex(
 				continue;
 			}
 
-			CColRefArray *indexColumns = CXformUtils::PdrgpcrIndexKeys(
-				mp, pdrgpcrOutput, pmdindex, pmdrel);
+			// This array is used below for two things: to check the first key
+			// of the index, and to compare candidate indexes by width. The
+			// width comparison is a proxy for how big the index is on disk, so
+			// it must count the INCLUDE columns as well - they are stored in
+			// every index tuple. Key columns still come first, so looking at
+			// element 0 for the first key stays correct.
+			CColRefArray *indexColumns = CXformUtils::PdrgpcrIndexColumns(
+				mp, pdrgpcrOutput, pmdindex, pmdrel,
+				CXformUtils::EicKeyAndIncluded);
 
 			// make sure the first key of index is included in the scalar predicate
 			// (except for BRIN, which are symmetrical)

@@ -478,6 +478,23 @@ EXPLAIN (COSTS OFF)
 SELECT * FROM test_include_col_pred WHERE c0 AND c1;
 SELECT * FROM test_include_col_pred WHERE c0 AND c1 ORDER BY c2;
 
+-- When two indexes have the same keys, the bitmap candidate with fewer stored
+-- columns must still win: INCLUDE columns make the index wider on disk even
+-- though they can never be used in an index condition. i_bmidx_wide is created
+-- first on purpose, so a tie on width would hand it the plan.
+CREATE TABLE test_bitmap_include_width(a int, b int, payload text) DISTRIBUTED BY (a);
+CREATE INDEX i_bmidx_wide ON test_bitmap_include_width(a) INCLUDE (payload);
+CREATE INDEX i_bmidx_narrow ON test_bitmap_include_width(a);
+CREATE INDEX i_bmidx_b ON test_bitmap_include_width(b);
+INSERT INTO test_bitmap_include_width SELECT i, i, repeat('x', 100) FROM generate_series(1, 2000) i;
+VACUUM ANALYZE test_bitmap_include_width;
+
+-- KEYS: [a]    INCLUDED: [payload]
+-- KEYS: [a]
+-- KEYS: [b]
+EXPLAIN (COSTS OFF)
+SELECT * FROM test_bitmap_include_width WHERE a IN (1, 100, 1000) OR b = 17;
+
 
 reset optimizer_trace_fallback;
 reset enable_seqscan;
