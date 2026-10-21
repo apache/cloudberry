@@ -610,8 +610,28 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 				{
 					// the column has no histogram, so the child left none
 					// behind; treat the child like a multi-column predicate
-					// and only merge its histogram map and scale factor
+					// and only merge its histogram map and scale factor.
+					//
+					// The multi-column path below is otherwise only reached
+					// with colid == gpos::ulong_max, which makes
+					// IsNewStatsColumn() true at the top of the loop, so it
+					// assumes the pending per-column state has already been
+					// flushed. Flush it here and forget the column id too,
+					// otherwise the pending histogram would be dropped and
+					// a later child on the same column would overwrite this
+					// child's scale factor instead of accumulating it.
+					if (nullptr != previous_histogram)
+					{
+						scale_factors->Append(
+							GPOS_NEW(mp) CDouble(previous_scale_factor.Get()));
+						CStatisticsUtils::UpdateDisjStatistics(
+							mp, non_updatable_cols, input_rows, cumulative_rows,
+							previous_histogram, disjunctive_result_histograms,
+							previous_colid);
+						previous_histogram = nullptr;
+					}
 					is_colid_present = false;
+					colid = gpos::ulong_max;
 				}
 			}
 		}
