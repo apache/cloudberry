@@ -447,9 +447,8 @@ CREATE TABLE nametbl (c1 int, c2 name, c3 float);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX nametbl_c1_c2_idx ON nametbl (c2, c1) INCLUDE (c3);
-INSERT INTO nametbl  SELECT x, 'two', 3.0 FROM generate_series(1,100) AS x;;
-VACUUM FREEZE nametbl;
-ANALYZE nametbl;
+INSERT INTO nametbl VALUES(1, 'two', 3.0);
+VACUUM nametbl;
 SET enable_seqscan = 0;
 -- Ensure we get an index only scan plan
 EXPLAIN (COSTS OFF) SELECT c2, c1, c3 FROM nametbl WHERE c2 = 'two' AND c1 = 1;
