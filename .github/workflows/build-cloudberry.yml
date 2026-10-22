@@ -1915,8 +1915,10 @@ jobs:
           set +e -uo pipefail
           status=0
 
-          log=$(ls build-logs/details/make-ic-datalake-fdw-config*.log 2>/dev/null | head -1)
-          if [[ -z "${log}" ]]; then
+          # Named, not globbed: config0-results.log matches the same pattern,
+          # and which of the two sorts first depends on the locale.
+          log=build-logs/details/make-ic-datalake-fdw-config0.log
+          if [[ ! -f "${log}" ]]; then
             echo "::error::no test log to check"
             exit 1
           fi
