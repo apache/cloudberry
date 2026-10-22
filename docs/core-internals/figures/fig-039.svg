@@ -1,0 +1,97 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg viewBox="0 0 860 300" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,monospace" font-size="12" style="max-width:100%;height:auto">
+  <defs>
+    <marker id="m162ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#6b4fa0"/></marker>
+    <marker id="m162ab" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8a6d1a"/></marker>
+    <marker id="m162ag" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#2f7d4f"/></marker>
+  </defs>
+
+  <!-- ===== Redistribute ===== -->
+  <text x="130" y="20" text-anchor="middle" font-weight="bold" fill="#6b4fa0">Redistribute  N:N</text>
+  <g fill="#f5edff" stroke="#cdb4db" stroke-width="1.5">
+    <rect x="20"  y="40" width="66" height="34" rx="5"/>
+    <rect x="97"  y="40" width="66" height="34" rx="5"/>
+    <rect x="174" y="40" width="66" height="34" rx="5"/>
+    <rect x="20"  y="200" width="66" height="34" rx="5"/>
+    <rect x="97"  y="200" width="66" height="34" rx="5"/>
+    <rect x="174" y="200" width="66" height="34" rx="5"/>
+  </g>
+  <g fill="#4a3570" text-anchor="middle">
+    <text x="53" y="61">seg0</text><text x="130" y="61">seg1</text><text x="207" y="61">seg2</text>
+    <text x="53" y="221">seg0</text><text x="130" y="221">seg1</text><text x="207" y="221">seg2</text>
+  </g>
+  <g stroke="#6b4fa0" stroke-width="1.3" fill="none" marker-end="url(#m162ah)" opacity="0.85">
+    <path d="M53,76 L53,198"/>
+    <path d="M60,76 L123,198"/>
+    <path d="M67,76 L200,198"/>
+    <path d="M123,76 L60,198"/>
+    <path d="M130,76 L130,198"/>
+    <path d="M137,76 L200,198"/>
+    <path d="M193,76 L60,198"/>
+    <path d="M200,76 L130,198"/>
+    <path d="M207,76 L207,198"/>
+  </g>
+  <text x="130" y="258" text-anchor="middle" fill="#555">re-hash on new key</text>
+  <text x="130" y="274" text-anchor="middle" fill="#555">each row moves once</text>
+
+  <!-- ===== Broadcast ===== -->
+  <text x="430" y="20" text-anchor="middle" font-weight="bold" fill="#8a6d1a">Broadcast  N:N</text>
+  <g fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.5">
+    <rect x="360" y="40" width="140" height="34" rx="5"/>
+  </g>
+  <text x="430" y="61" text-anchor="middle" fill="#5c4708">small rel (all rows)</text>
+  <g fill="#eafaf0" stroke="#cfead9" stroke-width="1.5">
+    <rect x="325" y="200" width="66" height="34" rx="5"/>
+    <rect x="397" y="200" width="66" height="34" rx="5"/>
+    <rect x="469" y="200" width="66" height="34" rx="5"/>
+  </g>
+  <g fill="#2f5d43" text-anchor="middle">
+    <text x="358" y="221">seg0</text><text x="430" y="221">seg1</text><text x="502" y="221">seg2</text>
+  </g>
+  <g stroke="#8a6d1a" stroke-width="1.3" fill="none" marker-end="url(#m162ab)" opacity="0.85">
+    <path d="M400,76 L358,198"/>
+    <path d="M430,76 L430,198"/>
+    <path d="M460,76 L502,198"/>
+  </g>
+  <text x="430" y="258" text-anchor="middle" fill="#555">full copy to every segment</text>
+  <text x="430" y="274" text-anchor="middle" fill="#555">N x its size on the wire</text>
+
+  <!-- ===== Gather ===== -->
+  <text x="740" y="20" text-anchor="middle" font-weight="bold" fill="#2f7d4f">Gather  N:1</text>
+  <g fill="#eafaf0" stroke="#cfead9" stroke-width="1.5">
+    <rect x="640" y="40" width="60" height="34" rx="5"/>
+    <rect x="710" y="40" width="60" height="34" rx="5"/>
+    <rect x="780" y="40" width="60" height="34" rx="5"/>
+  </g>
+  <g fill="#2f5d43" text-anchor="middle">
+    <text x="670" y="61">seg0</text><text x="740" y="61">seg1</text><text x="810" y="61">seg2</text>
+  </g>
+  <g fill="#e9dcff" stroke="#6b4fa0" stroke-width="1.8">
+    <rect x="700" y="200" width="80" height="34" rx="5"/>
+  </g>
+  <text x="740" y="221" text-anchor="middle" fill="#4a3570" font-weight="bold">QD</text>
+  <g stroke="#2f7d4f" stroke-width="1.3" fill="none" marker-end="url(#m162ag)" opacity="0.85">
+    <path d="M670,76 L725,198"/>
+    <path d="M740,76 L740,198"/>
+    <path d="M810,76 L755,198"/>
+  </g>
+  <text x="740" y="258" text-anchor="middle" fill="#555">funnel all rows to</text>
+  <text x="740" y="274" text-anchor="middle" fill="#555">one process (final result)</text>
+</svg>

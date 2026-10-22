@@ -1,0 +1,60 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 254" width="100%" style="height:auto;display:block;min-width:600px" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11">
+        <defs>
+          <marker id="brm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#c79a3a"/></marker>
+          <marker id="brd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#aab2bb"/></marker>
+        </defs>
+        <rect x="212" y="8" width="296" height="26" rx="5" fill="#f5edff" stroke="#b79ad6" stroke-width="1.5"/>
+        <text x="360" y="25" text-anchor="middle" font-weight="700" fill="#5e4b86">predicate: ts ∈ [ Feb 01 00:00 … 06:00 ]</text>
+        <text x="102" y="50" text-anchor="middle" font-size="9.5" fill="#8a7aa8" font-weight="700">heap ranges</text>
+        <text x="310" y="50" text-anchor="middle" font-size="9.5" fill="#8a7aa8" font-weight="700">revmap (range → TID)</text>
+        <text x="530" y="50" text-anchor="middle" font-size="9.5" fill="#8a7aa8" font-weight="700">summary tuples</text>
+        <rect x="14" y="58" width="176" height="50" rx="5" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+        <text x="102" y="74" text-anchor="middle" font-weight="700">range 0 · blk 0..127</text>
+        <text x="102" y="88" text-anchor="middle" font-size="9.5" fill="#444">[Jan01 , Jul17]</text>
+        <text x="102" y="101" text-anchor="middle" font-size="9" fill="#4a6b55" font-weight="700">overlaps → scan + recheck</text>
+        <rect x="14" y="118" width="176" height="50" rx="5" fill="#eef0f2" stroke="#cdb4db" stroke-width="1.5"/>
+        <text x="102" y="134" text-anchor="middle" font-weight="700" fill="#8a939c">range 1 · blk 128..255</text>
+        <text x="102" y="148" text-anchor="middle" font-size="9.5" fill="#8a939c">[Jul17 , Jan31]</text>
+        <text x="102" y="161" text-anchor="middle" font-size="9" fill="#8a939c" font-weight="700">no overlap → SKIP</text>
+        <rect x="14" y="178" width="176" height="50" rx="5" fill="#eef0f2" stroke="#cdb4db" stroke-width="1.5"/>
+        <text x="102" y="194" text-anchor="middle" font-weight="700" fill="#8a939c">range 2 · blk 256..383</text>
+        <text x="102" y="208" text-anchor="middle" font-size="9.5" fill="#8a939c">[Jan31 , Aug18]</text>
+        <text x="102" y="221" text-anchor="middle" font-size="9" fill="#8a939c" font-weight="700">no overlap → SKIP</text>
+        <rect x="250" y="58" width="120" height="50" rx="5" fill="#fff4d6" stroke="#e0b365"/>
+        <text x="310" y="87" text-anchor="middle" fill="#8a6d1a">range 0 → (blk,off)</text>
+        <rect x="250" y="118" width="120" height="50" rx="5" fill="#fff4d6" stroke="#e0b365"/>
+        <text x="310" y="147" text-anchor="middle" fill="#8a6d1a">range 1 → (blk,off)</text>
+        <rect x="250" y="178" width="120" height="50" rx="5" fill="#fff4d6" stroke="#e0b365"/>
+        <text x="310" y="207" text-anchor="middle" fill="#8a6d1a">range 2 → (blk,off)</text>
+        <rect x="430" y="58" width="200" height="50" rx="5" fill="#f5edff" stroke="#b79ad6"/>
+        <text x="530" y="87" text-anchor="middle" fill="#5e4b86">summary 0 · [Jan01, Jul17]</text>
+        <rect x="430" y="118" width="200" height="50" rx="5" fill="#f5edff" stroke="#b79ad6"/>
+        <text x="530" y="147" text-anchor="middle" fill="#5e4b86">summary 1 · [Jul17, Jan31]</text>
+        <rect x="430" y="178" width="200" height="50" rx="5" fill="#f5edff" stroke="#b79ad6"/>
+        <text x="530" y="207" text-anchor="middle" fill="#5e4b86">summary 2 · [Jan31, Aug18]</text>
+        <path d="M190 83 H248" fill="none" stroke="#aab2bb" stroke-width="1.3" marker-end="url(#brd)"/>
+        <path d="M190 143 H248" fill="none" stroke="#aab2bb" stroke-width="1.3" marker-end="url(#brd)"/>
+        <path d="M190 203 H248" fill="none" stroke="#aab2bb" stroke-width="1.3" marker-end="url(#brd)"/>
+        <path d="M370 83 H428" fill="none" stroke="#c79a3a" stroke-width="1.8" marker-end="url(#brm)"/>
+        <path d="M370 143 H428" fill="none" stroke="#c79a3a" stroke-width="1.8" marker-end="url(#brm)"/>
+        <path d="M370 203 H428" fill="none" stroke="#c79a3a" stroke-width="1.8" marker-end="url(#brm)"/>
+        <text x="409" y="52" text-anchor="middle" font-size="8" fill="#8a6d1a">one TID / range</text>
+      </svg>

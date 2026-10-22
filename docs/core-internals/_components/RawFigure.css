@@ -1,0 +1,60 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+/* Layout for the HTML-and-CSS figures, lifted from the handbook's own
+   stylesheet so the figures render identically here. */
+
+.book-figure { margin: 1.4rem 0; }
+.book-figure figcaption {
+  margin-top: .5rem;
+  font-size: .9em;
+  color: var(--ifm-color-emphasis-600);
+}
+
+/* Selective highlight: the handbook wraps a key token so it stands out.
+   Same three rules as the standalone edition. */
+.hl { border-radius: 2px; font-weight: 700; }
+figure.code .hl { background: #fff8c5; color: #1f2328; }
+figure.session pre code .hl { background: #bb800940; color: #ffea7f; }
+.book-figure .hl { background: #fff8c5; color: #1f2328; padding: 0 2px; }
+
+/* Layered module map and the banded brick figures. */
+.bricks { border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--soft) }
+.bk-band { display:flex;align-items:stretch;border-top:1px solid var(--border) }
+.bk-band:first-child { border-top:none }
+.bk-lbl { flex:0 0 116px;display:flex;flex-direction:column;justify-content:center;gap:2px;padding:10px 13px }
+.bk-lbl b { font-size:12.5px;font-weight:800;color:var(--fg);line-height:1.2 }
+.bk-lbl span { font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px }
+.bk-row { flex:1 1 auto;display:flex;flex-wrap:wrap;gap:7px;padding:9px 10px }
+.bk { flex:1 1 118px;min-width:104px;display:flex;flex-direction:column;justify-content:center;gap:2px; padding:8px 11px;border-radius:7px;border:1px solid;background:#fff;text-decoration:none;transition:.13s }
+.bk-t2 { font-size:12.5px;font-weight:700;line-height:1.25 }
+.bk-ch { font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;opacity:.8 }
+.bk:hover { transform:translateY(-2px);box-shadow:0 4px 12px #0000001f;text-decoration:none }
+.bk-q { background:#eef6ff }
+.bk-q .bk { border-color:#54aeff66;color:#0a3069;background:#ddf4ff }
+.bk-s { background:#eefcf2 }
+.bk-s .bk { border-color:#4ac26b80;color:#04260f;background:#dafbe1 }
+.bk-t { background:#fff6ef }
+.bk-t .bk { border-color:#fb8f4480;color:#5e2700;background:#fff1e5 }
+.bk-h { background:#fff4f3 }
+.bk-h .bk { border-color:#ff818280;color:#5c0011;background:#ffebe9 }
+.bk-r { background:#f3f5f8 }
+.bk-r .bk { border-color:#afb8c1;color:#1f2328;background:#eaeef2 }
+.bk-band { flex-direction:column }
+.bk-lbl { flex-basis:auto;border-bottom:1px solid var(--border) }

@@ -1,0 +1,57 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 470" width="100%" style="min-width:600px;font-family:ui-monospace,monospace;font-size:12px">
+  <defs>
+    <marker id="d133disp" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#b45309"/></marker>
+    <marker id="d133tup" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#0f766e"/></marker>
+  </defs>
+  <rect x="270" y="16" width="220" height="60" rx="8" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <text x="380" y="38" text-anchor="middle" fill="#3a2a5a" font-weight="bold">QD  -  coordinator</text>
+  <text x="380" y="55" text-anchor="middle" fill="#3a2a5a">PlannedStmt + SliceTable</text>
+  <text x="380" y="70" text-anchor="middle" fill="#8a6d1a">slice0 runs here (root)</text>
+  <text x="380" y="112" text-anchor="middle" fill="#6b5b8a">sliced at Motion nodes into slice0 .. slice3</text>
+  <rect x="55" y="330" width="160" height="118" rx="8" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <rect x="300" y="330" width="160" height="118" rx="8" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <rect x="545" y="330" width="160" height="118" rx="8" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <text x="135" y="352" text-anchor="middle" fill="#245c3d" font-weight="bold">QE gang - seg0</text>
+  <text x="380" y="352" text-anchor="middle" fill="#245c3d" font-weight="bold">QE gang - seg1</text>
+  <text x="625" y="352" text-anchor="middle" fill="#245c3d" font-weight="bold">QE gang - seg2</text>
+  <text x="135" y="370" text-anchor="middle" fill="#245c3d">port 7102</text>
+  <text x="380" y="370" text-anchor="middle" fill="#245c3d">port 7103</text>
+  <text x="625" y="370" text-anchor="middle" fill="#245c3d">port 7104</text>
+  <text x="135" y="392" text-anchor="middle" fill="#3a2a5a">slice1 (agg)</text>
+  <text x="380" y="392" text-anchor="middle" fill="#3a2a5a">slice1 (agg)</text>
+  <text x="625" y="392" text-anchor="middle" fill="#3a2a5a">slice1 (agg)</text>
+  <text x="135" y="410" text-anchor="middle" fill="#3a2a5a">slice2 (join)</text>
+  <text x="380" y="410" text-anchor="middle" fill="#3a2a5a">slice2 (join)</text>
+  <text x="625" y="410" text-anchor="middle" fill="#3a2a5a">slice2 (join)</text>
+  <text x="135" y="428" text-anchor="middle" fill="#3a2a5a">slice3 (scan)</text>
+  <text x="380" y="428" text-anchor="middle" fill="#3a2a5a">slice3 (scan)</text>
+  <text x="625" y="428" text-anchor="middle" fill="#3a2a5a">slice3 (scan)</text>
+  <path d="M320,78 C230,190 150,240 120,328" fill="none" stroke="#b45309" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#d133disp)"/>
+  <path d="M370,78 C365,190 365,240 365,328" fill="none" stroke="#b45309" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#d133disp)"/>
+  <path d="M420,78 C520,190 600,240 610,328" fill="none" stroke="#b45309" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#d133disp)"/>
+  <path d="M160,328 C220,240 300,180 355,80" fill="none" stroke="#0f766e" stroke-width="1.6" marker-end="url(#d133tup)"/>
+  <path d="M395,328 C398,240 398,180 398,80" fill="none" stroke="#0f766e" stroke-width="1.6" marker-end="url(#d133tup)"/>
+  <path d="M600,328 C540,240 460,180 405,80" fill="none" stroke="#0f766e" stroke-width="1.6" marker-end="url(#d133tup)"/>
+  <text x="210" y="205" fill="#b45309" transform="rotate(-52 210 205)">dispatch payload</text>
+  <text x="560" y="205" fill="#0f766e">Gather Motion 3:1</text>
+  <rect x="40" y="452" width="14" height="4" fill="#b45309"/><text x="60" y="459" fill="#8a6d1a">dispatch (MPPEXEC)</text>
+  <rect x="250" y="452" width="14" height="4" fill="#0f766e"/><text x="270" y="459" fill="#0f766e">tuple flow (Motion)</text>
+</svg>
