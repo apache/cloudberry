@@ -115,6 +115,9 @@ option('llvm', type: 'feature', value: 'disabled',
 option('lz4', type: 'feature', value: 'auto',
   description: 'LZ4 support')
 
+option('copy_program', type: 'feature', value: 'enabled',
+  description: 'COPY TO/FROM PROGRAM support')
+
 option('nls', type: 'feature', value: 'auto',
   description: 'Native language support')
 

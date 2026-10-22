@@ -107,7 +107,7 @@ test: task
 # psql depends on create_am
 # amutils depends on geometry, create_index_spgist, hash_index, brin
 # ----------
-test: create_table_like alter_generic alter_operator misc async dbsize misc_functions sysviews tsrf tid tidscan tidrangescan collate.icu.utf8 incremental_sort
+test: create_table_like alter_generic alter_operator misc async dbsize merge misc_functions sysviews tsrf tid tidscan tidrangescan collate.icu.utf8 incremental_sort
 # test: incremental_matview
 
 # ----------

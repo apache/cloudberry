@@ -333,6 +333,7 @@ bool		optimizer_enable_motion_gather;
 bool		optimizer_enable_motion_redistribute;
 bool		optimizer_enable_sort;
 bool		optimizer_enable_materialize;
+bool		optimizer_enable_parallel_append;
 bool		optimizer_enable_partition_propagation;
 bool		optimizer_enable_partition_selection;
 bool		optimizer_enable_outerjoin_rewrite;
@@ -2273,6 +2274,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"optimizer_enable_parallel_append", PGC_USERSET, DEVELOPER_OPTIONS,
+		 gettext_noop("Enable parallel append for seq/bitmap/index scan in partition table."),
+		 NULL,
+		 GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_parallel_append,
+		false,
+		NULL, NULL, NULL
+	},
+	{
 		{"optimizer_enable_partition_propagation", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Enable plans with Partition Propagation operators in the optimizer."),
 			NULL,
@@ -4075,7 +4086,7 @@ struct config_int ConfigureNamesInt_gp[] =
 			gettext_noop("Used by the fts-probe process."),
 		},
 		&gp_fts_probe_retries,
-		5, 0, 100,
+		60, 0, 100,
 		NULL, NULL, NULL
 	},
 
@@ -4086,7 +4097,7 @@ struct config_int ConfigureNamesInt_gp[] =
 			GUC_UNIT_S
 		},
 		&gp_fts_probe_timeout,
-		20, 0, 3600,
+		40, 0, 3600,
 		NULL, NULL, NULL
 	},
 

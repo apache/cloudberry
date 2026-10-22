@@ -53,8 +53,6 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 
 set optimizer_enable_dml_constraints=on;
 explain update constr_tab set b = 10;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 13 not found in project list
                                QUERY PLAN                              
 -----------------------------------------------------------------------
  Update on constr_tab  (cost=0.00..271.00 rows=0 width=0)

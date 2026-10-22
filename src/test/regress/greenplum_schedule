@@ -51,6 +51,7 @@ test: instr_in_shmem
 
 test: createdb
 test: gp_aggregates gp_aggregates_costs gp_metadata variadic_parameters default_parameters function_extensions spi gp_xml shared_scan update_gp triggers_gp returning_gp resource_queue_with_rule gp_types gp_index cluster_gp combocid_gp gp_sort gp_prepared_xacts gp_backend_info gp_locale
+test: gp_group_by_constant
 test: foreign_key_gp
 test: spi_processed64bit
 test: gp_tablespace_with_faults
@@ -64,7 +65,7 @@ test: leastsquares opr_sanity_gp decode_expr bitmapscan bitmapscan_ao case_gp li
 # below test(s) inject faults so each of them need to be in a separate group
 test: gpcopy
 
-test: orca_static_pruning orca_groupingsets_fallbacks
+test: orca_static_pruning orca_groupingsets_fallbacks orca_split_update
 test: filter gpctas gpdist gpdist_opclasses gpdist_legacy_opclasses matrix sublink table_functions olap_setup complex opclass_ddl information_schema guc_env_var gp_explain distributed_transactions explain_format olap_plans gp_copy_dtx
 # below test(s) inject faults so each of them need to be in a separate group
 test: guc_gp
@@ -296,6 +297,9 @@ test: freeze_aux_tables
 # cbdb parallel test
 test: cbdb_parallel
 
+# ORCA parallel append over partitioned tables
+test: orca_parallel_append
+
 # window function parallel test
 test: window_parallel
 
@@ -351,6 +355,8 @@ test: aqumv
 
 # Tests of materialized view data catalog maintenance
 test: matview_data
+
+test: aqumv_regress_rewrites
 
 # test access method with encoding options
 test: am_encoding

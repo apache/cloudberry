@@ -34,8 +34,10 @@ CDXLPhysicalAppend::CDXLPhysicalAppend(CMemoryPool *mp, BOOL fIsTarget,
 {
 }
 
-CDXLPhysicalAppend::CDXLPhysicalAppend(CMemoryPool *mp, BOOL fIsTarget,
-									   BOOL fIsZapped, ULONG scan_id,
+CDXLPhysicalAppend::CDXLPhysicalAppend(CMemoryPool *mp,
+									   BOOL fIsTarget,
+									   BOOL fIsZapped,
+									   ULONG scan_id,
 									   CDXLTableDescr *dxl_table_desc,
 									   ULongPtrArray *selector_ids)
 	: CDXLPhysical(mp),

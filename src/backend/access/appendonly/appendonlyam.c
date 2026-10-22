@@ -831,29 +831,33 @@ AppendOnlyExecutorReadBlock_ProcessTuple(AppendOnlyExecutorReadBlock *executorRe
 	 */
 	Assert (slot);
 	{
-		bool		shouldFree = false;
-
 		Assert(executorReadBlock->mt_bind);
 
-		ExecClearTuple(slot);
-		memtuple_deform(tuple, executorReadBlock->mt_bind, slot->tts_values, slot->tts_isnull);
-		slot->tts_tid = fake_ctid;
-
-		if (shouldFree)
+		/*
+		 * Hand the tuple to the slot as it is.  Attributes are fetched from
+		 * it only as the executor asks for them, so a query over a wide table
+		 * does not pay for the columns it never reads.
+		 *
+		 * The tuple points into the read buffer and stays valid until the
+		 * next block is read, which is why the slot does not own it.
+		 */
+		if (TTS_IS_MEMTUPLE(slot))
+		{
+			ExecStoreMemTuple(tuple, executorReadBlock->mt_bind, slot, false);
+			slot->tts_tid = fake_ctid;
+		}
+		else
 		{
 			/*
-			 * Store the converted memtuple in slot->data, so that it gets free'd
-			 * automatically when it's no longer needed.
+			 * A caller that brought its own slot type gets the tuple expanded
+			 * up front, which is all a virtual slot can represent.
 			 */
-			Assert(TTS_IS_VIRTUAL(slot));
-			VirtualTupleTableSlot *vslot = (VirtualTupleTableSlot *) slot;
-			Assert(vslot->data == NULL);
-			Assert(!TTS_SHOULDFREE(slot));
-
-			slot->tts_flags |= TTS_FLAG_SHOULDFREE;
-			vslot->data = (char *) tuple;
+			ExecClearTuple(slot);
+			memtuple_deform(tuple, executorReadBlock->mt_bind,
+							slot->tts_values, slot->tts_isnull);
+			slot->tts_tid = fake_ctid;
+			ExecStoreVirtualTuple(slot);
 		}
-		ExecStoreVirtualTuple(slot);
 	}
 
 	/* skip visibility test, all tuples are visible */

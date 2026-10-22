@@ -149,7 +149,7 @@ def get_extensions():
     return create_casts, dict(create_functions)
 
 def find_create_casts_in_text(text):
-    create_cast_pattern = 'CREATE CAST\s*\((\w+) AS (\w+)\)\s*([\w\s\(\)]+);'
+    create_cast_pattern = 'CREATE CAST\\s*\\((\\w+) AS (\\w+)\\)\\s*([\\w\\s\\(\\)]+);'
     create_casts = []
 
     for target, source, f in re.findall(create_cast_pattern, text):
@@ -159,29 +159,29 @@ def find_create_casts_in_text(text):
         if re.match('WITHOUT FUNCTION', f) is not None:
             create_casts += [(target, source, 'WITHOUT FUNCTION')]
 
-        m = re.match('WITH FUNCTION ([\w\(\)]+)', f)
+        m = re.match('WITH FUNCTION ([\\w\\(\\)]+)', f)
         if m is not None:
             # print(m[1])
             create_casts += [(target, source, m[1])]
     
     return create_casts
 
-p_space = '\s+'
+p_space = '\\s+'
 
 def find_create_function_in_text(text):
-    create_function_pattern = 'CREATE FUNCTION' + p_space + '(\w+)\([\w\s,]+\)' + p_space + 'RETURNS' + p_space + '\w+' + p_space + 'AS' + p_space + '([\',\w\s]+)' + p_space + 'LANGUAGE[\w\s,]+;'
+    create_function_pattern = 'CREATE FUNCTION' + p_space + '(\\w+)\\([\\w\\s,]+\\)' + p_space + 'RETURNS' + p_space + '\\w+' + p_space + 'AS' + p_space + '([\',\\w\\s]+)' + p_space + 'LANGUAGE[\\w\\s,]+;'
     create_functions = {}
 
     for sql_name, c_obj in re.findall(create_function_pattern, text):
         # print(target, source, f)
         
-        m = re.fullmatch("\'(\w+)\'", c_obj)
+        m = re.fullmatch("\'(\\w+)\'", c_obj)
         if m is not None:
             c_name = m[1]
             create_functions[sql_name] = c_name
             continue
 
-        m = re.fullmatch("\'MODULE_PATHNAME\',\s+\'(\w+)\'", c_obj)
+        m = re.fullmatch("\'MODULE_PATHNAME\',\\s+\'(\\w+)\'", c_obj)
         if m is not None:
             c_name = m[1]
             create_functions[sql_name] = c_name

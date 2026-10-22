@@ -67,6 +67,18 @@ ARROW_CPPFLAGS := $(filter-out -std=%,\
 	$(shell $(PKG_CONFIG) --cflags $(ARROW_MODULES) 2>/dev/null))
 ARROW_LIBS := $(shell $(PKG_CONFIG) --libs $(ARROW_MODULES) 2>/dev/null)
 
+# Arrow 23 moved its headers to C++20 (std::span, std::bit_width); older ones
+# are written for C++17, which every compiler this builds with has.  C++20
+# deprecates ++ and -- on a volatile, and the server's own headers do that
+# (HOLD_INTERRUPTS in miscadmin.h), so that one warning is not ours to fix.
+ARROW_VERSION_MAJOR := $(firstword $(subst ., ,\
+	$(shell $(PKG_CONFIG) --modversion arrow 2>/dev/null)))
+ifeq ($(shell test "0$(ARROW_VERSION_MAJOR)" -ge 23 && echo yes),yes)
+DL_CXX_STD = -std=c++20 -Wno-volatile
+else
+DL_CXX_STD = -std=c++17
+endif
+
 # This has to refuse at parse time.  A recipe hung off `all` would run after
 # pgxs.mk's own all-lib, so the compiler would fail on a missing arrow/api.h
 # first and this would never be reached.  Not for the clean targets, because
@@ -86,7 +98,7 @@ endif
 # "override CFLAGS +=" would give CFLAGS override origin and silently discard
 # Makefile.global's own "CFLAGS = @CFLAGS@" assignment.
 PG_CFLAGS = -fvisibility=hidden
-PG_CXXFLAGS = -fvisibility=hidden -fvisibility-inlines-hidden -std=c++17
+PG_CXXFLAGS = -fvisibility=hidden -fvisibility-inlines-hidden $(DL_CXX_STD)
 PG_CPPFLAGS = -I$(srcdir)/src $(ARROW_CPPFLAGS)
 
 # The regression cases live with the rest of the test material rather than in a

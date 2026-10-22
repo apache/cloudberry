@@ -1633,8 +1633,6 @@ select * from TblUp1;
 (3 rows)
 
 update TblUp2 set a=100 where a not in (select a from TblUp4);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 26 not found in project list
 select * from TblUp2;
   a  | b 
 -----+---
