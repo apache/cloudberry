@@ -438,6 +438,18 @@ CREATE SERVER dlskel_bad_bucket
   OPTIONS (base_path 's3://UPPER_case/p');
 ERROR:  invalid iceberg volume base_path "s3://UPPER_case/p"
 DETAIL:  s3 bucket in location URI "s3://UPPER_case/p" must start and end with a lowercase letter or digit
+-- What stands before "://" is quoted back only when it is a scheme.  Anything
+-- else there may be userinfo or a query typed in front of it, and is masked.
+CREATE SERVER dlskel_bad_scheme_userinfo
+  FOREIGN DATA WRAPPER iceberg_volume_fdw
+  OPTIONS (base_path 'user:hunter2@evil://x/y');
+ERROR:  invalid iceberg volume base_path "***://x/y"
+DETAIL:  location URI "***://x/y" does not begin with a valid scheme
+CREATE SERVER dlskel_bad_scheme_query
+  FOREIGN DATA WRAPPER iceberg_volume_fdw
+  OPTIONS (base_path '?token=hunter2://b/c');
+ERROR:  invalid iceberg volume base_path "***://b/c"
+DETAIL:  location URI "***://b/c" does not begin with a valid scheme
 -- The metadata engine is not selectable, so naming one is an unknown option.
 CREATE TABLE dlskel_bad_engine (a int)
   USING iceberg

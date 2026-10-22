@@ -28,6 +28,8 @@
 
 #include "postgres.h"
 
+#include <ctype.h>
+
 #include "access/relation.h"
 #include "access/reloptions.h"
 #include "am_iceberg/pg_iceberg_options.h"
@@ -518,6 +520,29 @@ s3_bucket_char(char ch)
 }
 
 /*
+ * Whether the text before "://" is a scheme as RFC 3986 spells one: a letter,
+ * then letters, digits, "+", "-" or ".".  Anything else in front of "://" is
+ * not a scheme being named but something else entirely -- userinfo or a query
+ * typed before it, say -- and must be treated as text that may hold a secret.
+ */
+static bool
+location_scheme_is_valid(const char *scheme, Size scheme_len)
+{
+	Size		i;
+
+	if (scheme_len == 0 || !isalpha((unsigned char) scheme[0]))
+		return false;
+	for (i = 1; i < scheme_len; i++)
+	{
+		unsigned char c = (unsigned char) scheme[i];
+
+		if (!isalnum(c) && c != '+' && c != '-' && c != '.')
+			return false;
+	}
+	return true;
+}
+
+/*
  * A form of the URI that is safe to put in an error message.
  *
  * A rejected URI is quoted back so the user can see what was wrong with it,
@@ -538,10 +563,21 @@ pg_iceberg_redacted_location_uri(const char *uri)
 	initStringInfo(&safe);
 
 	authority = strstr(uri, "://");
-	authority = authority == NULL ? uri : authority + 3;
+	if (authority == NULL)
+		authority = uri;
+	else if (location_scheme_is_valid(uri, (Size) (authority - uri)))
+	{
+		authority += 3;
+		appendBinaryStringInfo(&safe, uri, (int) (authority - uri));
+	}
+	else
+	{
+		/* Not a scheme, so nothing says it is safe to show. */
+		authority += 3;
+		appendStringInfoString(&safe, "***://");
+	}
 
-	/* Everything up to the authority, then the authority without userinfo. */
-	appendBinaryStringInfo(&safe, uri, (int) (authority - uri));
+	/* The authority without userinfo, then the rest. */
 	{
 		const char *slash = strchr(authority, '/');
 		Size		scan_len = slash == NULL ?
@@ -623,6 +659,10 @@ pg_iceberg_parse_location(const char *uri, const char *endpoint,
 										 safe_uri));
 
 	scheme_len = scheme_end - uri;
+	if (!location_scheme_is_valid(uri, scheme_len))
+		return invalid_location(errdetail,
+								psprintf("location URI \"%s\" does not begin with a valid scheme",
+										 safe_uri));
 	is_s3 = scheme_len == strlen(DATALAKE_ICEBERG_VOLUME_SERVER_TYPE_S3) &&
 		strncmp(uri, DATALAKE_ICEBERG_VOLUME_SERVER_TYPE_S3, scheme_len) == 0;
 	is_file = scheme_len == strlen("file") &&
