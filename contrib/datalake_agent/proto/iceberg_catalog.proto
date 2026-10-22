@@ -90,7 +90,7 @@ message CreateTableRequest {
   map<string, string> table_properties = 6;
   StorageConfig storage = 7;
   string operation_id = 8;
-  AuditContext audit_context = 9;  // v1.1: audit identity for snapshots created by this operation
+  AuditContext audit_context = 9;  // audit identity for snapshots created by this operation
 }
 message CreateTableResponse {
   TableIdentifier table = 1;
@@ -110,8 +110,8 @@ message LoadTableResponse {
   TableIdentifier table = 1;
   google.protobuf.Struct table_metadata = 2;
   ResponseHeader response_header = 3;
-  int64 snapshot_id = 4;       // v1.2: exact current snapshot ID; 0 means no snapshot
-  int64 sequence_number = 5;   // v1.2: exact current sequence number; 0 means no snapshot
+  int64 snapshot_id = 4;       // exact current snapshot ID; 0 means no snapshot
+  int64 sequence_number = 5;   // exact current sequence number; 0 means no snapshot
   // The version of the table this answer describes, which GetFragment then
   // plans against, so a commit in between cannot change what is scanned.
   string metadata_location = 6;
@@ -151,8 +151,8 @@ message GetStatisticsRequest {
 message GetStatisticsResponse {
   google.protobuf.Struct statistics = 1;
   ResponseHeader response_header = 2;
-  int64 snapshot_id = 3;       // v1.2: exact selected snapshot ID; 0 means no snapshot
-  int64 sequence_number = 4;   // v1.2: exact selected sequence number; 0 means no snapshot
+  int64 snapshot_id = 3;       // exact selected snapshot ID; 0 means no snapshot
+  int64 sequence_number = 4;   // exact selected sequence number; 0 means no snapshot
 }
 
 message AppendRequest {
@@ -161,8 +161,8 @@ message AppendRequest {
   google.protobuf.Struct write_options = 3;
   repeated FileMeta data_files = 4;
   string operation_id = 5;
-  int64 starting_snapshot_id = 6;  // v1.1: exact baseline snapshot; 0 means current
-  AuditContext audit_context = 7;  // v1.1: copied to the produced snapshot summary
+  int64 starting_snapshot_id = 6;  // exact baseline snapshot; 0 means current
+  AuditContext audit_context = 7;  // copied to the produced snapshot summary
   // Required: the UUID LoadTable returned.  Refused when empty or when it is
   // not the table's, so files written for a table that has since been dropped
   // and recreated are never committed to its replacement.
@@ -188,7 +188,7 @@ message UpdateRequest {
   // whatever another writer committed in between.  A table with no snapshot
   // has no rows for an UPDATE or DELETE to touch.
   int64 starting_snapshot_id = 6;
-  AuditContext audit_context = 7;  // v1.1: copied to the produced snapshot summary
+  AuditContext audit_context = 7;  // copied to the produced snapshot summary
   // Required: the UUID LoadTable returned.  Refused when empty or when it is
   // not the table's, so files written for a table that has since been dropped
   // and recreated are never committed to its replacement.
@@ -210,8 +210,8 @@ message CommitAppendRequest {
   repeated FileMeta data_files = 4;
   google.protobuf.Struct commit_properties = 5;
   string operation_id = 6;
-  int64 starting_snapshot_id = 7;  // v1.1: exact baseline snapshot; 0 means current
-  AuditContext audit_context = 8;  // v1.1: copied to the produced snapshot summary
+  int64 starting_snapshot_id = 7;  // exact baseline snapshot; 0 means current
+  AuditContext audit_context = 8;  // copied to the produced snapshot summary
   // Required: the UUID LoadTable returned.  Refused when empty or when it is
   // not the table's, so files written for a table that has since been dropped
   // and recreated are never committed to its replacement.
@@ -240,7 +240,7 @@ message CommitUpdateRequest {
   // whatever another writer committed in between.  A table with no snapshot
   // has no rows for an UPDATE or DELETE to touch.
   int64 starting_snapshot_id = 8;
-  AuditContext audit_context = 9;  // v1.1: copied to the produced snapshot summary
+  AuditContext audit_context = 9;  // copied to the produced snapshot summary
   // Required: the UUID LoadTable returned.  Refused when empty or when it is
   // not the table's, so files written for a table that has since been dropped
   // and recreated are never committed to its replacement.
@@ -261,7 +261,7 @@ message GetFragmentRequest {
   TableIdentifier table = 2;
   google.protobuf.Struct scan_options = 3;
   uint32 batch_size_hint = 4;
-  FilterExpr filter = 5;  // v1.1: typed predicate; omitted means no server-side filtering
+  FilterExpr filter = 5;  // typed predicate; omitted means no server-side filtering
   // Required: the exact table version to plan, as LoadTable returned it.
   // Planning against whatever is current would scan a snapshot, and perhaps a
   // schema, other than the one the statement was planned for.
@@ -273,7 +273,7 @@ message PlanFileGroupsRequest {
   TableIdentifier table = 2;
   google.protobuf.Struct plan_options = 3;
   uint32 batch_size_hint = 4;
-  int64 starting_snapshot_id = 5;  // v1.1: exact rewrite-planning baseline; 0 means current
+  int64 starting_snapshot_id = 5;  // exact rewrite-planning baseline; 0 means current
 }
 
 // A rewrite commits one file group at a time, so its request is a stream: one

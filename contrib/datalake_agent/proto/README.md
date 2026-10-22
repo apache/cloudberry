@@ -36,8 +36,8 @@ same name; a new meaning is a new message or a new RPC.
 
 ## Version handshake
 
-Versions are `MAJOR.MINOR.PATCH`, and compatibility is decided on
-`MAJOR.MINOR`.
+The contract described by these files is version **1.0.0**.  Versions are
+`MAJOR.MINOR.PATCH`, and compatibility is decided on `MAJOR.MINOR`.
 
 - The client sends its own contract version in the
   `x-cloudberry-client-version` request metadata.

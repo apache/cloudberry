@@ -35,14 +35,14 @@ message Header {
 }
 
 /*
- * Structured audit identity added in contract v1.1. Values are copied to
- * Iceberg snapshot summaries; empty values are omitted.
+ * Structured audit identity. Values are copied to Iceberg snapshot
+ * summaries; empty values are omitted.
  */
 message AuditContext {
-  string query_id = 1;    // v1.1: query identifier written as cloudberry.query-id
-  string xid = 2;         // v1.1: database transaction identifier written as cloudberry.xid
-  string session_id = 3;  // v1.1: database session identifier written as cloudberry.session
-  string user_id = 4;     // v1.1: database user identifier written as cloudberry.user
+  string query_id = 1;    // query identifier written as cloudberry.query-id
+  string xid = 2;         // database transaction identifier written as cloudberry.xid
+  string session_id = 3;  // database session identifier written as cloudberry.session
+  string user_id = 4;     // database user identifier written as cloudberry.user
 }
 
 /*
