@@ -386,7 +386,10 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 -- end_ignore
 
 1:SELECT verify_cpu_usage('rg1_cpu_test', 10, 2);
-1:SELECT verify_cpu_usage('rg2_cpu_test', 20, 2);
+-- Each sample covers only ~300ms, i.e. about three 100ms CFS periods, so a
+-- capped group's reported usage jumps by a whole quota burst depending on
+-- where the window falls.  Allow the same 20% relative error as rg1 (10 +/- 2).
+1:SELECT verify_cpu_usage('rg2_cpu_test', 20, 4);
 
 -- start_ignore
 1:SELECT * FROM cancel_all;
