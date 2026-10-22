@@ -202,15 +202,18 @@ dl_storage_status_to_err(const arrow::Status &status, const char *operation)
 {
 	DlErrCode	code;
 	std::string type;
-	std::string message;
 
 	if (status.ok())
 		return DL_OK;
 
+	/*
+	 * A failure stays one whatever a backend's detail claims: DL_OK here would
+	 * hand the caller a success with nothing behind it.
+	 */
 	code = classify_status(status, &type);
-	if (message.empty())
-		message = status.message();
-	dl_error_set(code, operation, type.c_str(), message.c_str());
+	if (code == DL_OK)
+		code = DL_ERR_INTERNAL;
+	dl_error_set(code, operation, type.c_str(), status.message().c_str());
 	return code;
 }
 
@@ -373,6 +376,7 @@ datalake_fs_list(DatalakeFileSystem fs, const char *prefix,
 		{
 			arrow::fs::FileSelector selector;
 			std::vector<std::string> paths;
+			bool		listed = false;
 
 			*names_out = NULL;
 			*nnames_out = 0;
@@ -385,6 +389,7 @@ datalake_fs_list(DatalakeFileSystem fs, const char *prefix,
 				rc = dl_storage_status_to_err(infos.status(), "list storage");
 			else
 			{
+				listed = true;
 				for (const auto &info : *infos)
 				{
 					if (info.IsFile())
@@ -393,7 +398,7 @@ datalake_fs_list(DatalakeFileSystem fs, const char *prefix,
 				std::sort(paths.begin(), paths.end());
 			}
 
-			if (rc == DL_ERR_INTERNAL && paths.empty())
+			if (listed && paths.empty())
 			{
 				/*
 				 * No file under the prefix.  Object storage cannot tell an
@@ -419,7 +424,7 @@ datalake_fs_list(DatalakeFileSystem fs, const char *prefix,
 							 message.c_str());
 				rc = DL_ERR_NOT_FOUND;
 			}
-			else if (rc == DL_ERR_INTERNAL)
+			else if (listed)
 			{
 				/* The count leaves through an int, so it has to fit in one. */
 				if (paths.size() > static_cast<size_t>(INT_MAX))
