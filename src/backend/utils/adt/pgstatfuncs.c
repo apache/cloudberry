@@ -120,6 +120,49 @@ PG_STAT_GET_RELENTRY_INT64(tuples_updated)
 /* pg_stat_get_vacuum_count */
 PG_STAT_GET_RELENTRY_INT64(vacuum_count)
 
+/* pg_stat_get_vacuum_failsafe_count */
+PG_STAT_GET_RELENTRY_INT64(vacuum_failsafe_count)
+
+/* pg_stat_get_visible_page_marks_cleared */
+PG_STAT_GET_RELENTRY_INT64(visible_page_marks_cleared)
+
+/* pg_stat_get_frozen_page_marks_cleared */
+PG_STAT_GET_RELENTRY_INT64(frozen_page_marks_cleared)
+
+#define PG_STAT_GET_RELENTRY_FLOAT8(stat)						\
+Datum															\
+CppConcat(pg_stat_get_,stat)(PG_FUNCTION_ARGS)					\
+{																\
+	Oid			relid = PG_GETARG_OID(0);						\
+	double		result;											\
+	PgStat_StatTabEntry *tabentry;								\
+																\
+	if ((tabentry = pgstat_fetch_stat_tabentry(relid)) == NULL)	\
+		result = 0;												\
+	else														\
+		result = (double) (tabentry->stat);						\
+																\
+	PG_RETURN_FLOAT8(result);									\
+}
+
+/* pg_stat_get_total_vacuum_time */
+PG_STAT_GET_RELENTRY_FLOAT8(total_vacuum_time)
+
+/* pg_stat_get_total_autovacuum_time */
+PG_STAT_GET_RELENTRY_FLOAT8(total_autovacuum_time)
+
+/* pg_stat_get_total_analyze_time */
+PG_STAT_GET_RELENTRY_FLOAT8(total_analyze_time)
+
+/* pg_stat_get_total_autoanalyze_time */
+PG_STAT_GET_RELENTRY_FLOAT8(total_autoanalyze_time)
+
+/* pg_stat_get_total_vacuum_delay_time */
+PG_STAT_GET_RELENTRY_FLOAT8(total_vacuum_delay_time)
+
+/* pg_stat_get_total_autovacuum_delay_time */
+PG_STAT_GET_RELENTRY_FLOAT8(total_autovacuum_delay_time)
+
 #define PG_STAT_GET_RELENTRY_TIMESTAMPTZ(stat)					\
 Datum															\
 CppConcat(pg_stat_get_,stat)(PG_FUNCTION_ARGS)					\
@@ -1099,6 +1142,9 @@ PG_STAT_GET_DBENTRY_INT64(conflict_tablespace)
 /* pg_stat_get_db_deadlocks */
 PG_STAT_GET_DBENTRY_INT64(deadlocks)
 
+/* pg_stat_get_db_vacuum_interrupt_count */
+PG_STAT_GET_DBENTRY_INT64(vacuum_interrupt_count)
+
 /* pg_stat_get_db_sessions */
 PG_STAT_GET_DBENTRY_INT64(sessions)
 
@@ -1247,6 +1293,21 @@ PG_STAT_GET_DBENTRY_FLOAT8_MS(blk_write_time)
 
 /* pg_stat_get_db_idle_in_transaction_time */
 PG_STAT_GET_DBENTRY_FLOAT8_MS(idle_in_transaction_time)
+
+/* pg_stat_get_db_total_vacuum_time */
+PG_STAT_GET_DBENTRY_FLOAT8_MS(total_vacuum_time)
+
+/* pg_stat_get_db_total_autovacuum_time */
+PG_STAT_GET_DBENTRY_FLOAT8_MS(total_autovacuum_time)
+
+/* pg_stat_get_db_total_vacuum_delay_time */
+PG_STAT_GET_DBENTRY_FLOAT8_MS(total_vacuum_delay_time)
+
+/* pg_stat_get_db_total_autovacuum_delay_time */
+PG_STAT_GET_DBENTRY_FLOAT8_MS(total_autovacuum_delay_time)
+
+/* pg_stat_get_db_vacuum_failsafe_count */
+PG_STAT_GET_DBENTRY_INT64(vacuum_failsafe_count)
 
 /* pg_stat_get_db_session_time */
 PG_STAT_GET_DBENTRY_FLOAT8_MS(session_time)
@@ -1810,7 +1871,7 @@ pg_stat_reset(PG_FUNCTION_ARGS)
  * Reset some shared cluster-wide counters
  *
  * When adding a new reset target, ideally the name should match that in
- * pgstat_kind_infos, if relevant.
+ * pgstat_kind_builtin_infos, if relevant.
  */
 Datum
 pg_stat_reset_shared(PG_FUNCTION_ARGS)
@@ -1854,6 +1915,25 @@ pg_stat_reset_single_table_counters(PG_FUNCTION_ARGS)
 	Oid			dboid = (IsSharedRelation(taboid) ? InvalidOid : MyDatabaseId);
 
 	pgstat_reset(PGSTAT_KIND_RELATION, dboid, taboid);
+
+	PG_RETURN_VOID();
+}
+
+/* Reset native VACUUM work, without affecting other cumulative statistics. */
+Datum
+pg_stat_reset_vacuum_stats(PG_FUNCTION_ARGS)
+{
+	if (PG_ARGISNULL(0))
+		pgstat_reset_vacuum_counters(MyDatabaseId, InvalidOid);
+	else
+	{
+		Oid			relid = PG_GETARG_OID(0);
+		Oid			dboid = IsSharedRelation(relid) ? InvalidOid : MyDatabaseId;
+
+		/* OID zero is a missing relation, not a request to reset a database. */
+		if (OidIsValid(relid))
+			pgstat_reset_vacuum_counters(dboid, relid);
+	}
 
 	PG_RETURN_VOID();
 }
@@ -2210,4 +2290,58 @@ pg_stat_have_stats(PG_FUNCTION_ARGS)
 	PgStat_Kind kind = pgstat_get_kind_from_str(stats_type);
 
 	PG_RETURN_BOOL(pgstat_have_entry(kind, dboid, objoid));
+}
+
+/* Native VACUUM work statistics, independent of ext_vacuum_statistics. */
+static Datum
+pgstat_vacuum_stats_tuple(FunctionCallInfo fcinfo, const PgStat_VacuumStats *stats,
+						 bool database)
+{
+	TupleDesc	tupdesc;
+	Datum		values[16];
+	bool		nulls[16] = {false};
+	int			i = 0;
+
+	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+		elog(ERROR, "return type must be a row type");
+
+	values[i++] = Int64GetDatum(stats ? stats->tuples_deleted : 0);
+	if (!database)
+		values[i++] = Int64GetDatum(stats ? stats->dead_tuples : 0);
+	if (!database)
+		values[i++] = Int64GetDatum(stats ? stats->pages_deleted : 0);
+	values[i++] = Int64GetDatum(stats ? stats->dead_pages : 0);
+	values[i++] = Int64GetDatum(stats ? stats->pages_frozen : 0);
+	values[i++] = Int64GetDatum(stats ? stats->pages_all_visible : 0);
+	values[i++] = Int64GetDatum(stats ? stats->freeze_age_vacuum_count : 0);
+	values[i++] = Int64GetDatum(stats ? stats->tuples_frozen : 0);
+	values[i++] = Int64GetDatum(stats ? stats->recently_dead_tuples : 0);
+	values[i++] = Int64GetDatum(stats ? stats->missed_dead_tuples : 0);
+	values[i++] = Int64GetDatum(stats ? stats->pages_scanned : 0);
+	values[i++] = Int64GetDatum(stats ? stats->pages_removed : 0);
+	values[i++] = Int64GetDatum(stats ? stats->missed_dead_pages : 0);
+	if (!database)
+		values[i++] = Int64GetDatum(stats ? stats->total_file_segs : 0);
+	values[i++] = Int64GetDatum(stats ? stats->compacted_segments : 0);
+	values[i++] = Int64GetDatum(stats ? stats->tuples_moved : 0);
+	Assert(i == tupdesc->natts);
+	return HeapTupleGetDatum(heap_form_tuple(BlessTupleDesc(tupdesc), values, nulls));
+}
+
+Datum
+pg_stat_get_vacuum_stats(PG_FUNCTION_ARGS)
+{
+	PgStat_StatTabEntry *entry = pgstat_fetch_stat_tabentry(PG_GETARG_OID(0));
+
+	return pgstat_vacuum_stats_tuple(fcinfo, entry ? &entry->vacuum_stats : NULL,
+								   false);
+}
+
+Datum
+pg_stat_get_vacuum_database_stats(PG_FUNCTION_ARGS)
+{
+	PgStat_StatDBEntry *entry = pgstat_fetch_stat_dbentry(PG_GETARG_OID(0));
+
+	return pgstat_vacuum_stats_tuple(fcinfo, entry ? &entry->vacuum_stats : NULL,
+								   true);
 }

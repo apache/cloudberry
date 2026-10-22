@@ -1,0 +1,5 @@
+# ext_vacuum_statistics extension
+comment = 'Extended vacuum statistics via hook (requires shared_preload_libraries)'
+default_version = '1.0'
+relocatable = true
+module_pathname = '$libdir/ext_vacuum_statistics'
