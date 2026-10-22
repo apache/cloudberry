@@ -235,7 +235,11 @@ $(shlib): $(EXPORT_LIST)
 # backend outside this library, built against the installed headers alone, can
 # register and be used.  Its cases -- storage_local and conformance_dltest --
 # therefore need it in shared_preload_libraries beside datalake_fdw.
-DLTEST_MAKE = $(MAKE) -C dltest $(if $(USE_PGXS),USE_PGXS=1 PG_CONFIG=$(PG_CONFIG),)
+#
+# The module shares this library's headers, so it is compiled to the same C++
+# standard; it is handed down rather than chosen twice.
+DLTEST_MAKE = $(MAKE) -C dltest $(if $(USE_PGXS),USE_PGXS=1 PG_CONFIG=$(PG_CONFIG),) \
+	DL_CXX_STD='$(DL_CXX_STD)'
 
 all: dltest-all
 install: dltest-install
@@ -247,7 +251,9 @@ clean distclean maintainer-clean: dltest-clean
 dltest-all:
 	+$(DLTEST_MAKE) all
 
-dltest-install:
+# After dltest-all, not beside it: install also depends on all, and under -j
+# the two recursive makes would otherwise build the same objects at once.
+dltest-install: dltest-all
 	+$(DLTEST_MAKE) install
 
 dltest-clean:

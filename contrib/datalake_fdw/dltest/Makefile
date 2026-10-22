@@ -22,7 +22,20 @@ ARROW_CPPFLAGS := $(filter-out -std=%,\
 	$(shell $(PKG_CONFIG) --cflags $(ARROW_MODULES) 2>/dev/null))
 ARROW_LIBS := $(shell $(PKG_CONFIG) --libs $(ARROW_MODULES) 2>/dev/null)
 
-PG_CXXFLAGS = -fvisibility=hidden -fvisibility-inlines-hidden -std=c++17
+# The parent hands down the standard it compiles to; built on its own, the
+# module chooses it the same way: C++20 for Arrow 23 and later, whose headers
+# need it, and C++17 before that.
+ifndef DL_CXX_STD
+ARROW_VERSION_MAJOR := $(firstword $(subst ., ,\
+	$(shell $(PKG_CONFIG) --modversion arrow 2>/dev/null)))
+ifeq ($(shell test "0$(ARROW_VERSION_MAJOR)" -ge 23 && echo yes),yes)
+DL_CXX_STD = -std=c++20 -Wno-volatile
+else
+DL_CXX_STD = -std=c++17
+endif
+endif
+
+PG_CXXFLAGS = -fvisibility=hidden -fvisibility-inlines-hidden $(DL_CXX_STD)
 PG_CPPFLAGS = -I$(srcdir)/../src $(ARROW_CPPFLAGS)
 
 # Shared libraries are linked with $(CC), so a module containing C++
