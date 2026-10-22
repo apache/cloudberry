@@ -5,7 +5,7 @@
  *	  (pg_ts_config_map)
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_ts_config_map.h
@@ -48,7 +48,6 @@ FOREIGN_KEY(mapdict REFERENCES pg_ts_dict(oid));
 
 typedef FormData_pg_ts_config_map *Form_pg_ts_config_map;
 
-DECLARE_UNIQUE_INDEX_PKEY(pg_ts_config_map_index, 3609, on pg_ts_config_map using btree(mapcfg oid_ops, maptokentype int4_ops, mapseqno int4_ops));
-#define TSConfigMapIndexId	3609
+DECLARE_UNIQUE_INDEX_PKEY(pg_ts_config_map_index, 3609, TSConfigMapIndexId, on pg_ts_config_map using btree(mapcfg oid_ops, maptokentype int4_ops, mapseqno int4_ops));
 
 #endif							/* PG_TS_CONFIG_MAP_H */

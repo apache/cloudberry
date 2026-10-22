@@ -1,10 +1,10 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 use strict;
 use warnings;
-use TestLib;
-use Test::More tests => 7;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 use FindBin;
 use lib $FindBin::RealBin;
@@ -60,7 +60,7 @@ template1
   SKIP:
 	{
 		skip "unix-style permissions not supported on Windows", 1
-		  if ($windows_os);
+		  if ($windows_os || $Config::Config{osname} eq 'cygwin');
 
 		ok(check_mode_recursive($node_primary->data_dir(), 0750, 0640),
 			'check PGDATA permissions');
@@ -74,4 +74,4 @@ template1
 run_test('local');
 run_test('remote');
 
-exit(0);
+done_testing();

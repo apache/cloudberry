@@ -3,5 +3,5 @@
 -- 'pgcrypto.fips' immediately after creating the extension on master.
 -- start_ignore
 \! gpconfig -c shared_preload_libraries -v '$libdir/pgcrypto'
-\! gpstop -air
+\! gpstop -afr
 -- end_ignore

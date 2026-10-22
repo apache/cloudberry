@@ -35,8 +35,9 @@ ROLLBACK [ WORK | TRANSACTION ] TO [ SAVEPOINT ] <replaceable>savepoint_name</re
 
   <para>
    Roll back all commands that were executed after the savepoint was
-   established.  The savepoint remains valid and can be rolled back to
-   again later, if needed.
+   established and then start a new subtransaction at the same transaction level.
+   The savepoint remains valid and can be rolled back to again later,
+   if needed.
   </para>
 
   <para>
@@ -112,14 +113,14 @@ DECLARE foo CURSOR FOR SELECT 1 UNION SELECT 2;
 SAVEPOINT foo;
 
 FETCH 1 FROM foo;
- ?column? 
+ ?column?
 ----------
         1
 
 ROLLBACK TO SAVEPOINT foo;
 
 FETCH 1 FROM foo;
- ?column? 
+ ?column?
 ----------
         2
 

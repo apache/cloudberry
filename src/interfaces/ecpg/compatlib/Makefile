@@ -2,7 +2,7 @@
 #
 # Makefile for ecpg compatibility library
 #
-# Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+# Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
 # Portions Copyright (c) 1994, Regents of the University of California
 #
 # src/interfaces/ecpg/compatlib/Makefile
@@ -39,7 +39,7 @@ OBJS = \
 	$(WIN32RES) \
 	informix.o
 
-PKG_CONFIG_REQUIRES_PRIVATE = libecpg libpgtypes
+PKG_CONFIG_REQUIRES_PRIVATE = libecpg, libpgtypes
 
 all: all-lib
 

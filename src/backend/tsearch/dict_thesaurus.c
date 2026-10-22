@@ -3,7 +3,7 @@
  * dict_thesaurus.c
  *		Thesaurus dictionary: phrase to phrase substitution
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  *
  *
  * IDENTIFICATION
@@ -190,8 +190,8 @@ thesaurusRead(const char *filename, DictThesaurus *d)
 		ptr = line;
 
 		/* is it a comment? */
-		while (*ptr && t_isspace(ptr))
-			ptr += pg_mblen(ptr);
+		while (*ptr && t_isspace_cstr(ptr))
+			ptr += pg_mblen_cstr(ptr);
 
 		if (t_iseq(ptr, '#') || *ptr == '\0' ||
 			t_iseq(ptr, '\n') || t_iseq(ptr, '\r'))
@@ -212,7 +212,7 @@ thesaurusRead(const char *filename, DictThesaurus *d)
 								 errmsg("unexpected delimiter")));
 					state = TR_WAITSUBS;
 				}
-				else if (!t_isspace(ptr))
+				else if (!t_isspace_cstr(ptr))
 				{
 					beginwrd = ptr;
 					state = TR_INLEX;
@@ -225,7 +225,7 @@ thesaurusRead(const char *filename, DictThesaurus *d)
 					newLexeme(d, beginwrd, ptr, idsubst, posinsubst++);
 					state = TR_WAITSUBS;
 				}
-				else if (t_isspace(ptr))
+				else if (t_isspace_cstr(ptr))
 				{
 					newLexeme(d, beginwrd, ptr, idsubst, posinsubst++);
 					state = TR_WAITLEX;
@@ -237,15 +237,15 @@ thesaurusRead(const char *filename, DictThesaurus *d)
 				{
 					useasis = true;
 					state = TR_INSUBS;
-					beginwrd = ptr + pg_mblen(ptr);
+					beginwrd = ptr + pg_mblen_cstr(ptr);
 				}
 				else if (t_iseq(ptr, '\\'))
 				{
 					useasis = false;
 					state = TR_INSUBS;
-					beginwrd = ptr + pg_mblen(ptr);
+					beginwrd = ptr + pg_mblen_cstr(ptr);
 				}
-				else if (!t_isspace(ptr))
+				else if (!t_isspace_cstr(ptr))
 				{
 					useasis = false;
 					beginwrd = ptr;
@@ -254,7 +254,7 @@ thesaurusRead(const char *filename, DictThesaurus *d)
 			}
 			else if (state == TR_INSUBS)
 			{
-				if (t_isspace(ptr))
+				if (t_isspace_cstr(ptr))
 				{
 					if (ptr == beginwrd)
 						ereport(ERROR,
@@ -267,7 +267,7 @@ thesaurusRead(const char *filename, DictThesaurus *d)
 			else
 				elog(ERROR, "unrecognized thesaurus state: %d", state);
 
-			ptr += pg_mblen(ptr);
+			ptr += pg_mblen_cstr(ptr);
 		}
 
 		if (state == TR_INSUBS)
@@ -599,6 +599,7 @@ thesaurus_init(PG_FUNCTION_ARGS)
 	DictThesaurus *d;
 	char	   *subdictname = NULL;
 	bool		fileloaded = false;
+	List	   *namelist;
 	ListCell   *l;
 
 	d = (DictThesaurus *) palloc0(sizeof(DictThesaurus));
@@ -642,7 +643,8 @@ thesaurus_init(PG_FUNCTION_ARGS)
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("missing Dictionary parameter")));
 
-	d->subdictOid = get_ts_dict_oid(stringToQualifiedNameList(subdictname), false);
+	namelist = stringToQualifiedNameList(subdictname, NULL);
+	d->subdictOid = get_ts_dict_oid(namelist, false);
 	d->subdict = lookup_ts_dictionary_cache(d->subdictOid);
 
 	compileTheLexeme(d);

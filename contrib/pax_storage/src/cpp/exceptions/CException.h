@@ -107,8 +107,9 @@
 namespace cbdb {
 
 #define DEFAULT_STACK_MAX_DEPTH 63
+/* 255KB is too large to cause stack overflow, 63KB maybe enough */
 #define DEFAULT_STACK_MAX_SIZE \
-  ((DEFAULT_STACK_MAX_DEPTH + 1) * PIPE_MAX_PAYLOAD)
+  ((DEFAULT_STACK_MAX_DEPTH + 1) * PIPE_MAX_PAYLOAD / 4)
 #define MAX_SIZE_OF_ERROR_MESSAGE 2048
 // error message buffer
 class ErrorMessage final {
@@ -179,8 +180,8 @@ class CException {
                     const char *message) __attribute__((__noreturn__));
   static void Raise(const char *filename, int line, ExType extype,
                     const std::string &message) __attribute__((__noreturn__));
-  static void Raise(CException ex, bool reraise) __attribute__((__noreturn__));
-  static void ReRaise(CException ex) __attribute__((__noreturn__));
+  static void Raise(CException &ex, bool reraise) __attribute__((__noreturn__));
+  static void ReRaise(CException &ex) __attribute__((__noreturn__));
 
  private:
   char stack_[DEFAULT_STACK_MAX_SIZE];

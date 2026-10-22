@@ -66,6 +66,7 @@
 #include "utils/lsyscache.h"
 #include "lib/stringinfo.h"
 #include "libpq/pqformat.h"
+#include "varatt.h"
 
 #include "utils/hyperloglog/gp_hyperloglog.h"
 

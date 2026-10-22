@@ -35,7 +35,7 @@ CREATE OPERATOR CLASS box_ops DEFAULT
 	FUNCTION 7	gist_box_same(box, box, internal);
 -- Create gist2 index on fast_emp4000
 CREATE INDEX grect2ind2 ON fast_emp4000 USING gist2 (home_base);
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:736)
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 -- Now check the results from plain indexscan; temporarily drop existing
 -- index grect2ind to ensure it doesn't capture the plan
 -- DROP INDEX grect2ind;

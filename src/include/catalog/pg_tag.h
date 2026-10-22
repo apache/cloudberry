@@ -61,9 +61,7 @@ CATALOG(pg_tag,6461,TagRelationId) BKI_SHARED_RELATION BKI_ROWTYPE_OID(6462,TagR
  */
 typedef FormData_pg_tag *Form_pg_tag;
 
-DECLARE_UNIQUE_INDEX_PKEY(pg_tag_tagname_index, 6463, on pg_tag using btree(tagname name_ops));
-#define TagNameIndexId  6463
-DECLARE_UNIQUE_INDEX(pg_tag_oid_index, 6465, on pg_tag using btree(oid oid_ops));
-#define TagOidIndexId   6465
+DECLARE_UNIQUE_INDEX_PKEY(pg_tag_tagname_index, 6463, TagNameIndexId, on pg_tag using btree(tagname name_ops));
+DECLARE_UNIQUE_INDEX(pg_tag_oid_index, 6465, TagOidIndexId, on pg_tag using btree(oid oid_ops));
 
 #endif							/* PG_TAG_H */

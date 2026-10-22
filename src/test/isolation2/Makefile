@@ -29,7 +29,7 @@ test_parallel_retrieve_cursor_extended_query_error: test_parallel_retrieve_curso
 	$(CC) $(CPPFLAGS) $(rpath) -I$(top_builddir)/src/interfaces/libpq -L$(GPHOME)/lib -L$(top_builddir)/src/interfaces/libpq  -o $@ $< -lpq
 
 pg_regress.o:
-	$(MAKE) -C $(top_builddir)/src/test/regress pg_regress.o
+	$(MAKE) -C $(top_builddir)/src/test/regress install
 	rm -f $@ && $(LN_S) $(top_builddir)/src/test/regress/pg_regress.o .
 
 gpstringsubs.pl:

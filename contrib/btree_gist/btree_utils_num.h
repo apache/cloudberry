@@ -87,24 +87,7 @@ typedef struct
 	 (ivp)->day * (24.0 * SECS_PER_HOUR) + \
 	 (ivp)->month * (30.0 * SECS_PER_DAY))
 
-#define GET_FLOAT_DISTANCE(t, arg1, arg2)	Abs( ((float8) *((const t *) (arg1))) - ((float8) *((const t *) (arg2))) )
-
-/*
- * check to see if a float4/8 val has underflowed or overflowed
- * borrowed from src/backend/utils/adt/float.c
- */
-#define CHECKFLOATVAL(val, inf_is_valid, zero_is_valid)			\
-do {															\
-	if (isinf(val) && !(inf_is_valid))							\
-		ereport(ERROR,											\
-				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),	\
-		  errmsg("value out of range: overflow")));				\
-																\
-	if ((val) == 0.0 && !(zero_is_valid))						\
-		ereport(ERROR,											\
-				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),	\
-		 errmsg("value out of range: underflow")));				\
-} while(0)
+#define GET_FLOAT_DISTANCE(t, arg1, arg2)	fabs( ((float8) *((const t *) (arg1))) - ((float8) *((const t *) (arg2))) )
 
 
 extern Interval *abs_interval(Interval *a);

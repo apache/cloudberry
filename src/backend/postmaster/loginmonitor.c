@@ -242,9 +242,6 @@ LoginMonitorLauncherMain(int argc, char *argv[]) {
 	pqsignal(SIGFPE, FloatExceptionHandler);
 	pqsignal(SIGCHLD, SIG_DFL);
 
-	/* Early initialization */
-	BaseInit();
-
 	/*
 	 * Create a per-backend PGPROC struct in shared memory, except in the
 	 * EXEC_BACKEND case where this was done in SubPostmasterMain. We must do
@@ -254,8 +251,12 @@ LoginMonitorLauncherMain(int argc, char *argv[]) {
 #ifndef EXEC_BACKEND
 	InitProcess();
 #endif
+	
+	/* Early initialization */
+	BaseInit();
 
-	InitPostgres(NULL, InvalidOid, NULL, InvalidOid, NULL, false);
+
+	InitPostgres(NULL, InvalidOid, NULL, InvalidOid, false, false, NULL);
 
 	SetProcessingMode(NormalProcessing);
 
@@ -303,7 +304,6 @@ LoginMonitorLauncherMain(int argc, char *argv[]) {
 		 * transaction.
 		 */
 		LWLockReleaseAll();
-		AbortBufferIO();
 		UnlockBuffers();
 		/* this is probably dead code, but let's be safe: */
 		if (AuxProcessResourceOwner)
@@ -588,7 +588,7 @@ LoginMonitorWorkerMain(int argc, char *argv[]) {
 
 	if (LoginMonitorShmem->curr_user_name[0] != '\0')
 	{
-		InitPostgres(DB_FOR_COMMON_ACCESS, InvalidOid, NULL, InvalidOid, NULL, false);
+		InitPostgres(DB_FOR_COMMON_ACCESS, InvalidOid, NULL, InvalidOid, false, false, NULL);
 		SetProcessingMode(NormalProcessing);
 		set_ps_display(LoginMonitorShmem->curr_user_name);
 		ereport(DEBUG1,

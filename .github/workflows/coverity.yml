@@ -59,7 +59,7 @@ jobs:
 
     steps:
     - name: Checkout Apache Cloudberry
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         fetch-depth: 1
         submodules: true
@@ -99,13 +99,13 @@ jobs:
             --enable-orafce \
             --enable-orca \
             --enable-pax \
-            --enable-pxf \
             --enable-tap-tests \
             --with-gssapi \
             --with-ldap \
             --with-libxml \
             --with-lz4 \
             --with-openssl \
+            --with-zstd \
             --with-pam \
             --with-perl \
             --with-pgport=5432 \

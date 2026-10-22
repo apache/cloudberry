@@ -3,7 +3,7 @@
  * execAmi.c
  *	  miscellaneous executor access method routines
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *	src/backend/executor/execAmi.c
@@ -151,11 +151,11 @@ ExecReScan(PlanState *node)
 			if (splan->plan->extParam != NULL)
 				UpdateChangedParamSet(splan, node->chgParam);
 		}
-		/* Well. Now set chgParam for left/right trees. */
-		if (node->lefttree != NULL)
-			UpdateChangedParamSet(node->lefttree, node->chgParam);
-		if (node->righttree != NULL)
-			UpdateChangedParamSet(node->righttree, node->chgParam);
+		/* Well. Now set chgParam for child trees. */
+		if (outerPlanState(node) != NULL)
+			UpdateChangedParamSet(outerPlanState(node), node->chgParam);
+		if (innerPlanState(node) != NULL)
+			UpdateChangedParamSet(innerPlanState(node), node->chgParam);
 	}
 
 	/* Call expression callbacks */
@@ -226,7 +226,6 @@ ExecReScan(PlanState *node)
 			break;
 
 		case T_DynamicIndexScanState:
-		case T_DynamicIndexOnlyScanState:
 			ExecReScanDynamicIndex((DynamicIndexScanState *) node);
 			break;
 
@@ -553,13 +552,10 @@ ExecSupportsMarkRestore(Path *pathnode)
 			return true;
 
 		case T_CustomScan:
-			{
-				CustomPath *customPath = castNode(CustomPath, pathnode);
+			if (castNode(CustomPath, pathnode)->flags & CUSTOMPATH_SUPPORT_MARK_RESTORE)
+				return true;
+			return false;
 
-				if (customPath->flags & CUSTOMPATH_SUPPORT_MARK_RESTORE)
-					return true;
-				return false;
-			}
 		case T_Result:
 
 			/*
@@ -684,12 +680,8 @@ ExecSupportsBackwardScan(Plan *node)
 		case T_ShareInputScan:
 			return true;
 		case T_CustomScan:
-			{
-				uint32		flags = ((CustomScan *) node)->flags;
-
-				if (flags & CUSTOMPATH_SUPPORT_BACKWARD_SCAN)
-					return true;
-			}
+			if (((CustomScan *) node)->flags & CUSTOMPATH_SUPPORT_BACKWARD_SCAN)
+				return true;
 			return false;
 
 		case T_SeqScan:
@@ -828,7 +820,6 @@ ExecSquelchNode(PlanState *node, bool force)
 		case T_IndexScanState:
 		case T_DynamicSeqScanState:
 		case T_DynamicIndexScanState:
-		case T_DynamicIndexOnlyScanState:
 		case T_IndexOnlyScanState:
 		case T_DynamicBitmapIndexScanState:
 		case T_BitmapIndexScanState:

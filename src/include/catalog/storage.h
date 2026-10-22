@@ -4,7 +4,7 @@
  *	  prototypes for functions in backend/catalog/storage.c
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/storage.h
@@ -15,12 +15,12 @@
 #define STORAGE_H
 
 #include "storage/block.h"
-#include "storage/relfilenode.h"
+#include "storage/relfilelocator.h"
 #include "storage/smgr.h"
 #include "utils/relcache.h"
 
 /* GUC variables */
-extern int	wal_skip_threshold;
+extern PGDLLIMPORT int wal_skip_threshold;
 
 /*
  * We keep a list of all relations (represented as RelFileNode values)
@@ -46,8 +46,9 @@ typedef struct PendingRelDelete
 {
 	struct PendingRelDeleteAction *action;	/* The action is to do pending
 											 * delete */
-	RelFileNodePendingDelete relnode;	/* relation that may need to be
+	RelFileNodePendingDelete rlocator;	/* relation that may need to be
 										 * deleted */
+	BackendId	backend;                /* InvalidBackendId if not a temp rel */
 	bool		atCommit;		/* T=delete at commit; F=delete at abort */
 	int			nestLevel;		/* xact nesting level of request */
 
@@ -103,17 +104,19 @@ struct PendingRelDeleteAction
 */
 #define PENDING_REL_DELETE_DEFAULT_FLAG PENDING_REL_DELETE_NEED_DROP_DELAY_DELETE
 
-extern SMgrRelation RelationCreateStorage(RelFileNode rnode,
+extern SMgrRelation RelationCreateStorage(RelFileLocator rlocator,
 										  char relpersistence,
+										  bool register_delete,
 										  SMgrImpl smgr_which,
 										  Relation rel);
+
 extern void RelationDropStorage(Relation rel);
-extern void RelationPreserveStorage(RelFileNode rnode, bool atCommit);
+extern void RelationPreserveStorage(RelFileLocator rlocator, bool atCommit);
 extern void RelationPreTruncate(Relation rel);
 extern void RelationTruncate(Relation rel, BlockNumber nblocks);
 extern void RelationCopyStorage(SMgrRelation src, SMgrRelation dst,
 								ForkNumber forkNum, char relpersistence);
-extern bool RelFileNodeSkippingWAL(RelFileNode rnode);
+extern bool RelFileLocatorSkippingWAL(RelFileLocator rlocator);
 extern Size EstimatePendingSyncsSpace(void);
 extern void SerializePendingSyncs(Size maxSize, char *startAddress);
 extern void RestorePendingSyncs(char *startAddress);

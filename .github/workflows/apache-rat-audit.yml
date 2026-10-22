@@ -52,12 +52,14 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
+          # The release tarball includes submodules; audit the same tree.
+          submodules: recursive
 
       - name: Set up Java and Maven
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '11'
@@ -115,7 +117,7 @@ jobs:
       - name: Check for binary files
         run: |
           echo "Checking for binary files..."
-          echo "Checking extensions: class, jar, tar, tgz, zip, exe, dll, so, gz, bz2"
+          echo "Checking extensions: class, jar, tar, tgz, zip, exe, dll, so, gz, bz2, zst, deb, rpm, gppkg, bin"
           echo "----------------------------------------------------------------------"
           
           # Binary file allowlist, see README.apache.md
@@ -127,10 +129,13 @@ jobs:
             "src/bin/gpfdist/regress/data/gpfdist2/gz_multi_chunk_2.tbl.gz"
             "src/bin/gpfdist/regress/data/gpfdist2/lineitem.tbl.bz2"
             "src/bin/gpfdist/regress/data/gpfdist2/lineitem.tbl.gz"
+            "src/bin/gpfdist/regress/data/gpfdist2/lineitem.tbl.zst"
+            "gpMgmt/test/behave/mgmt_utils/steps/data/sample.gppkg"
+            "src/bin/pgevent/MSG00001.bin"
           )
           
           # Check for specific binary file extensions
-          binary_extensions="class jar tar tgz zip exe dll so gz bz2"
+          binary_extensions="class jar tar tgz zip exe dll so gz bz2 zst deb rpm gppkg bin"
           echo "BINARY_EXTENSIONS=${binary_extensions}" >> $GITHUB_ENV
           binary_results=""
           binaryfiles_found=false
@@ -195,7 +200,7 @@ jobs:
 
       - name: Upload Rat check results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rat-check-results
           path: rat-output.log

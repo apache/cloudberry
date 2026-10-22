@@ -20,7 +20,7 @@
  *
  * Portions Copyright (c) 2007-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/utils/palloc.h
@@ -132,12 +132,55 @@ extern void *MemoryContextAllocZero(MemoryContext context, Size size);
 extern void *MemoryContextAllocZeroAligned(MemoryContext context, Size size);
 extern void *MemoryContextAllocExtended(MemoryContext context,
 										Size size, int flags);
+extern void *MemoryContextAllocAligned(MemoryContext context,
+									   Size size, Size alignto, int flags);
 
 extern void *palloc(Size size);
 extern void *palloc0(Size size);
 extern void *palloc_extended(Size size, int flags);
+extern void *palloc_aligned(Size size, Size alignto, int flags);
 extern pg_nodiscard void *repalloc(void *pointer, Size size);
+extern pg_nodiscard void *repalloc_extended(void *pointer,
+											Size size, int flags);
+extern pg_nodiscard void *repalloc0(void *pointer, Size oldsize, Size size);
 extern void pfree(void *pointer);
+
+/*
+ * Support for safe calculation of memory request sizes
+ */
+extern Size add_size(Size s1, Size s2);
+extern Size mul_size(Size s1, Size s2);
+extern void *palloc_mul(Size s1, Size s2);
+extern void *palloc0_mul(Size s1, Size s2);
+extern void *palloc_mul_extended(Size s1, Size s2, int flags);
+pg_nodiscard extern void *repalloc_mul(void *p, Size s1, Size s2);
+pg_nodiscard extern void *repalloc_mul_extended(void *p, Size s1, Size s2,
+												int flags);
+
+/*
+ * Variants with easier notation and more type safety
+ */
+
+/*
+ * Allocate space for one object of type "type"
+ */
+#define palloc_object(type) ((type *) palloc(sizeof(type)))
+#define palloc0_object(type) ((type *) palloc0(sizeof(type)))
+
+/*
+ * Allocate space for "count" objects of type "type"
+ */
+#define palloc_array(type, count) ((type *) palloc_mul(sizeof(type), count))
+#define palloc0_array(type, count) ((type *) palloc0_mul(sizeof(type), count))
+#define palloc_array_extended(type, count, flags) ((type *) palloc_mul_extended(sizeof(type), count, flags))
+
+/*
+ * Change size of allocation pointed to by "pointer" to have space for "count"
+ * objects of type "type"
+ */
+#define repalloc_array(pointer, type, count) ((type *) repalloc_mul(pointer, sizeof(type), count))
+#define repalloc0_array(pointer, type, oldcount, count) ((type *) repalloc0(pointer, mul_size(sizeof(type), oldcount), mul_size(sizeof(type), count)))
+#define repalloc_array_extended(pointer, type, count, flags) ((type *) repalloc_mul_extended(pointer, sizeof(type), count, flags))
 
 /*
  * The result of palloc() is always word-aligned, so we can skip testing

@@ -5,5 +5,5 @@
 
 -- start_ignore
 \! gpconfig -c shared_preload_libraries -v 'pgcrypto.so'
-\! gpstop -air
+\! gpstop -afr
 -- end_ignore

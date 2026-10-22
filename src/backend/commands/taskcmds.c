@@ -30,6 +30,7 @@
 
 #include "catalog/dependency.h"
 #include "catalog/namespace.h"
+#include "catalog/pg_database.h"
 #include "catalog/pg_task.h"
 #include "catalog/pg_task_run_history.h"
 #include "cdb/cdbvars.h"
@@ -57,7 +58,7 @@ DefineTask(ParseState *pstate, CreateTaskStmt * stmt)
 	AclResult	aclresult;
 
 	/* must have CREATE privilege on database */
-	aclresult = pg_database_aclcheck(MyDatabaseId, GetUserId(), ACL_CREATE);
+	aclresult = object_aclcheck(DatabaseRelationId, MyDatabaseId, GetUserId(), ACL_CREATE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error(aclresult, OBJECT_DATABASE,
 					   get_database_name(MyDatabaseId));

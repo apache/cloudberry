@@ -7,8 +7,10 @@
 
 #include "catalog/pg_type.h"
 #include "lib/qunique.h"
+#include "miscadmin.h"
 #include "trgm.h"
 #include "tsearch/ts_locale.h"
+#include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/pg_crc.h"
@@ -19,8 +21,6 @@ PG_MODULE_MAGIC;
 double		similarity_threshold = 0.3f;
 double		word_similarity_threshold = 0.6f;
 double		strict_word_similarity_threshold = 0.5f;
-
-void		_PG_init(void);
 
 PG_FUNCTION_INFO_V1(set_limit);
 PG_FUNCTION_INFO_V1(show_limit);
@@ -68,7 +68,7 @@ _PG_init(void)
 							 "Sets the threshold used by the % operator.",
 							 "Valid range is 0.0 .. 1.0.",
 							 &similarity_threshold,
-							 0.3,
+							 0.3f,
 							 0.0,
 							 1.0,
 							 PGC_USERSET,
@@ -80,7 +80,7 @@ _PG_init(void)
 							 "Sets the threshold used by the <% operator.",
 							 "Valid range is 0.0 .. 1.0.",
 							 &word_similarity_threshold,
-							 0.6,
+							 0.6f,
 							 0.0,
 							 1.0,
 							 PGC_USERSET,
@@ -92,7 +92,7 @@ _PG_init(void)
 							 "Sets the threshold used by the <<% operator.",
 							 "Valid range is 0.0 .. 1.0.",
 							 &strict_word_similarity_threshold,
-							 0.5,
+							 0.5f,
 							 0.0,
 							 1.0,
 							 PGC_USERSET,
@@ -100,6 +100,8 @@ _PG_init(void)
 							 NULL,
 							 NULL,
 							 NULL);
+
+	MarkGUCPrefixReserved("pg_trgm");
 }
 
 /*
@@ -171,18 +173,29 @@ static char *
 find_word(char *str, int lenstr, char **endword, int *charlen)
 {
 	char	   *beginword = str;
+	const char *endstr = str + lenstr;
 
-	while (beginword - str < lenstr && !ISWORDCHR(beginword))
-		beginword += pg_mblen(beginword);
+	while (beginword < endstr)
+	{
+		int			clen = pg_mblen_range(beginword, endstr);
 
-	if (beginword - str >= lenstr)
+		if (ISWORDCHR(beginword, clen))
+			break;
+		beginword += clen;
+	}
+
+	if (beginword >= endstr)
 		return NULL;
 
 	*endword = beginword;
 	*charlen = 0;
-	while (*endword - str < lenstr && ISWORDCHR(*endword))
+	while (*endword < endstr)
 	{
-		*endword += pg_mblen(*endword);
+		int			clen = pg_mblen_range(*endword, endstr);
+
+		if (!ISWORDCHR(*endword, clen))
+			break;
+		*endword += clen;
 		(*charlen)++;
 	}
 
@@ -230,9 +243,9 @@ make_trigrams(trgm *tptr, char *str, int bytelen, int charlen)
 	if (bytelen > charlen)
 	{
 		/* Find multibyte character boundaries and apply compact_trigram */
-		int			lenfirst = pg_mblen(str),
-					lenmiddle = pg_mblen(str + lenfirst),
-					lenlast = pg_mblen(str + lenfirst + lenmiddle);
+		int			lenfirst = pg_mblen_unbounded(str),
+					lenmiddle = pg_mblen_unbounded(str + lenfirst),
+					lenlast = pg_mblen_unbounded(str + lenfirst + lenmiddle);
 
 		while ((ptr - str) + lenfirst + lenmiddle + lenlast <= bytelen)
 		{
@@ -243,7 +256,7 @@ make_trigrams(trgm *tptr, char *str, int bytelen, int charlen)
 
 			lenfirst = lenmiddle;
 			lenmiddle = lenlast;
-			lenlast = pg_mblen(ptr + lenfirst + lenmiddle);
+			lenlast = pg_mblen_unbounded(ptr + lenfirst + lenmiddle);
 		}
 	}
 	else
@@ -374,7 +387,7 @@ generate_trgm(char *str, int slen)
 	 */
 	if (len > 1)
 	{
-		qsort((void *) GETARR(trg), len, sizeof(trgm), comp_trgm);
+		qsort(GETARR(trg), len, sizeof(trgm), comp_trgm);
 		len = qunique(GETARR(trg), len, sizeof(trgm), comp_trgm);
 	}
 
@@ -441,14 +454,15 @@ comp_ptrgm(const void *v1, const void *v2)
 
 /*
  * Iterative search function which calculates maximum similarity with word in
- * the string. But maximum similarity is calculated only if check_only == false.
+ * the string. Maximum similarity is only calculated only if the flag
+ * WORD_SIMILARITY_CHECK_ONLY isn't set.
  *
  * trg2indexes: array which stores indexes of the array "found".
  * found: array which stores true of false values.
  * ulen1: count of unique trigrams of array "trg1".
  * len2: length of array "trg2" and array "trg2indexes".
  * len: length of the array "found".
- * lags: set of boolean flags parameterizing similarity calculation.
+ * flags: set of boolean flags parameterizing similarity calculation.
  * bounds: whether each trigram is left/right bound of word.
  *
  * Returns word similarity.
@@ -492,8 +506,12 @@ iterate_word_similarity(int *trg2indexes,
 
 	for (i = 0; i < len2; i++)
 	{
+		int			trgindex;
+
+		CHECK_FOR_INTERRUPTS();
+
 		/* Get index of next trigram */
-		int			trgindex = trg2indexes[i];
+		trgindex = trg2indexes[i];
 
 		/* Update last position of this trigram */
 		if (lower >= 0 || found[trgindex])
@@ -723,6 +741,7 @@ get_wildcard_part(const char *str, int lenstr,
 {
 	const char *beginword = str;
 	const char *endword;
+	const char *endstr = str + lenstr;
 	char	   *s = buf;
 	bool		in_leading_wildcard_meta = false;
 	bool		in_trailing_wildcard_meta = false;
@@ -735,11 +754,13 @@ get_wildcard_part(const char *str, int lenstr,
 	 * from this loop to the next one, since we may exit at a word character
 	 * that is in_escape.
 	 */
-	while (beginword - str < lenstr)
+	while (beginword < endstr)
 	{
+		clen = pg_mblen_range(beginword, endstr);
+
 		if (in_escape)
 		{
-			if (ISWORDCHR(beginword))
+			if (ISWORDCHR(beginword, clen))
 				break;
 			in_escape = false;
 			in_leading_wildcard_meta = false;
@@ -750,12 +771,12 @@ get_wildcard_part(const char *str, int lenstr,
 				in_escape = true;
 			else if (ISWILDCARDCHAR(beginword))
 				in_leading_wildcard_meta = true;
-			else if (ISWORDCHR(beginword))
+			else if (ISWORDCHR(beginword, clen))
 				break;
 			else
 				in_leading_wildcard_meta = false;
 		}
-		beginword += pg_mblen(beginword);
+		beginword += clen;
 	}
 
 	/*
@@ -788,12 +809,12 @@ get_wildcard_part(const char *str, int lenstr,
 	 * string boundary.  Strip escapes during copy.
 	 */
 	endword = beginword;
-	while (endword - str < lenstr)
+	while (endword < endstr)
 	{
-		clen = pg_mblen(endword);
+		clen = pg_mblen_range(endword, endstr);
 		if (in_escape)
 		{
-			if (ISWORDCHR(endword))
+			if (ISWORDCHR(endword, clen))
 			{
 				memcpy(s, endword, clen);
 				(*charlen)++;
@@ -821,7 +842,7 @@ get_wildcard_part(const char *str, int lenstr,
 				in_trailing_wildcard_meta = true;
 				break;
 			}
-			else if (ISWORDCHR(endword))
+			else if (ISWORDCHR(endword, clen))
 			{
 				memcpy(s, endword, clen);
 				(*charlen)++;
@@ -922,7 +943,7 @@ generate_wildcard_trgm(const char *str, int slen)
 	 */
 	if (len > 1)
 	{
-		qsort((void *) GETARR(trg), len, sizeof(trgm), comp_trgm);
+		qsort(GETARR(trg), len, sizeof(trgm), comp_trgm);
 		len = qunique(GETARR(trg), len, sizeof(trgm), comp_trgm);
 	}
 
@@ -975,12 +996,7 @@ show_trgm(PG_FUNCTION_ARGS)
 		d[i] = PointerGetDatum(item);
 	}
 
-	a = construct_array(d,
-						ARRNELEM(trg),
-						TEXTOID,
-						-1,
-						false,
-						TYPALIGN_INT);
+	a = construct_array_builtin(d, ARRNELEM(trg), TEXTOID);
 
 	for (i = 0; i < ARRNELEM(trg); i++)
 		pfree(DatumGetPointer(d[i]));

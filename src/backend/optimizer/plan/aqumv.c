@@ -56,6 +56,7 @@
 #include "nodes/nodeFuncs.h"
 #include "nodes/pathnodes.h"
 #include "nodes/pg_list.h"
+#include "parser/parse_relation.h"
 
 static bool aqumv_process_from_quals(Node *query_quals, Node *mv_quals, List** post_quals);
 
@@ -372,7 +373,14 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 		}
 		else if (parse->hasAggs && viewQuery->hasAggs)
 		{
-			/* Both don't have group by. */
+			/*
+			 * Both have no GROUP BY here (viewQuery's is declined below):
+			 * the tlist is replaced by plain Vars on the MV's columns,
+			 * which cannot carry GROUP BY entries.
+			 */
+			if (viewQuery->groupClause != NIL)
+				continue;
+
 			{
 			if (parse->hasDistinctOn ||
 				parse->distinctClause != NIL ||
@@ -1213,6 +1221,43 @@ answer_query_using_materialized_views_for_join(PlannerInfo *root, AqumvContext a
 			viewQuery->targetList = new_tlist;
 		}
 
+		/*
+		 * ORDER BY expressions outside the MV's SELECT list existed only as
+		 * resjunk tlist entries, which the new tlist drops: decline the MV.
+		 */
+		if (viewQuery->sortClause != NIL)
+		{
+			ListCell   *slc;
+			bool		sort_refs_missing = false;
+
+			foreach(slc, viewQuery->sortClause)
+			{
+				SortGroupClause *sgc = lfirst_node(SortGroupClause, slc);
+				ListCell   *tlc;
+				bool		found = false;
+
+				foreach(tlc, viewQuery->targetList)
+				{
+					TargetEntry *tle = lfirst_node(TargetEntry, tlc);
+
+					if (tle->ressortgroupref == sgc->tleSortGroupRef)
+					{
+						found = true;
+						break;
+					}
+				}
+
+				if (!found)
+				{
+					sort_refs_missing = true;
+					break;
+				}
+			}
+
+			if (sort_refs_missing)
+				continue;
+		}
+
 		/* Create new RTE for the MV. */
 		mvrte = makeNode(RangeTblEntry);
 		mvrte->rtekind = RTE_RELATION;
@@ -1241,6 +1286,7 @@ answer_query_using_materialized_views_for_join(PlannerInfo *root, AqumvContext a
 		}
 
 		viewQuery->rtable = list_make1(mvrte);
+		addRTEPermissionInfo(&viewQuery->rteperminfos, mvrte);
 		viewQuery->jointree = makeFromExpr(list_make1(makeNode(RangeTblRef)), NULL);
 		((RangeTblRef *) linitial(viewQuery->jointree->fromlist))->rtindex = 1;
 
@@ -1300,7 +1346,7 @@ answer_query_using_materialized_views_for_join(PlannerInfo *root, AqumvContext a
 		{
 			standard_qp_extra *qp = (standard_qp_extra *) aqumv_context->qp_extra;
 			qp->activeWindows = NIL;
-			qp->groupClause = NIL;
+			qp->gset_data = NULL;
 		}
 		mv_final_rel = query_planner(subroot, qp_callback, aqumv_context->qp_extra);
 

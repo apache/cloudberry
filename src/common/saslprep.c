@@ -12,7 +12,7 @@
  *	  http://www.ietf.org/rfc/rfc4013.txt
  *
  *
- * Portions Copyright (c) 2017-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 2017-2023, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  src/common/saslprep.c
@@ -21,6 +21,7 @@
  */
 #ifndef FRONTEND
 #include "postgres.h"
+#include "utils/memutils.h"
 #else
 #include "postgres_fe.h"
 #endif
@@ -1077,6 +1078,8 @@ pg_saslprep(const char *input, char **output)
 	input_size = pg_utf8_string_len(input);
 	if (input_size < 0)
 		return SASLPREP_INVALID_UTF8;
+	if (input_size >= MaxAllocSize / sizeof(pg_wchar))
+		goto oom;
 
 	input_chars = ALLOC((input_size + 1) * sizeof(pg_wchar));
 	if (!input_chars)

@@ -56,6 +56,10 @@ PG_MODULE_MAGIC;
 #define CONST86
 #endif
 
+#if !HAVE_TCL_VERSION(8,7)
+typedef int Tcl_Size;
+#endif
+
 /* define our text domain for translations */
 #undef TEXTDOMAIN
 #define TEXTDOMAIN PG_TEXTDOMAIN("pltcl")
@@ -261,7 +265,6 @@ static const TclExceptionNameMap exception_name_map[] = {
 /**********************************************************************
  * Forward declarations
  **********************************************************************/
-void		_PG_init(void);
 
 static void pltcl_init_interp(pltcl_interp_desc *interp_desc,
 							  Oid prolang, bool pltrusted);
@@ -474,6 +477,9 @@ _PG_init(void)
 							   PGC_SUSET, 0,
 							   NULL, NULL, NULL);
 
+	MarkGUCPrefixReserved("pltcl");
+	MarkGUCPrefixReserved("pltclu");
+
 	pltcl_pm_init_done = true;
 }
 
@@ -613,11 +619,11 @@ call_pltcl_start_proc(Oid prolang, bool pltrusted)
 	error_context_stack = &errcallback;
 
 	/* Parse possibly-qualified identifier and look up the function */
-	namelist = stringToQualifiedNameList(start_proc);
+	namelist = stringToQualifiedNameList(start_proc, NULL);
 	procOid = LookupFuncName(namelist, 0, NULL, false);
 
 	/* Current user must have permission to call function */
-	aclresult = pg_proc_aclcheck(procOid, GetUserId(), ACL_EXECUTE);
+	aclresult = object_aclcheck(ProcedureRelationId, procOid, GetUserId(), ACL_EXECUTE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error(aclresult, OBJECT_FUNCTION, start_proc);
 
@@ -826,11 +832,15 @@ pltcl_func_handler(PG_FUNCTION_ARGS, pltcl_call_state *call_state,
 	{
 		ReturnSetInfo *rsi = (ReturnSetInfo *) fcinfo->resultinfo;
 
-		if (!rsi || !IsA(rsi, ReturnSetInfo) ||
-			(rsi->allowedModes & SFRM_Materialize) == 0)
+		if (!rsi || !IsA(rsi, ReturnSetInfo))
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("set-valued function called in context that cannot accept a set")));
+
+		if (!(rsi->allowedModes & SFRM_Materialize))
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("materialize mode required, but it is not allowed in this context")));
 
 		call_state->rsi = rsi;
 		call_state->tuple_store_cxt = rsi->econtext->ecxt_per_query_memory;
@@ -981,7 +991,7 @@ pltcl_func_handler(PG_FUNCTION_ARGS, pltcl_call_state *call_state,
 		HeapTuple	tup;
 		Tcl_Obj    *resultObj;
 		Tcl_Obj   **resultObjv;
-		int			resultObjc;
+		Tcl_Size	resultObjc;
 
 		/*
 		 * Set up data about result type.  XXX it's tempting to consider
@@ -1020,7 +1030,10 @@ pltcl_func_handler(PG_FUNCTION_ARGS, pltcl_call_state *call_state,
 		/* Convert function result to tuple */
 		resultObj = Tcl_GetObjResult(interp);
 		if (Tcl_ListObjGetElements(interp, resultObj, &resultObjc, &resultObjv) == TCL_ERROR)
-			throw_tcl_error(interp, prodesc->user_proname);
+			ereport(ERROR,
+					(errcode(ERRCODE_EXTERNAL_ROUTINE_EXCEPTION),
+					 errmsg("could not parse function return value: %s",
+							utf_u2e(Tcl_GetStringResult(interp)))));
 
 		tup = pltcl_build_tuple_result(interp, resultObjv, resultObjc,
 									   call_state);
@@ -1054,7 +1067,7 @@ pltcl_trigger_handler(PG_FUNCTION_ARGS, pltcl_call_state *call_state,
 	int			tcl_rc;
 	int			i;
 	const char *result;
-	int			result_Objc;
+	Tcl_Size	result_Objc;
 	Tcl_Obj   **result_Objv;
 	int			rc PG_USED_FOR_ASSERTS_ONLY;
 
@@ -1236,7 +1249,6 @@ pltcl_trigger_handler(PG_FUNCTION_ARGS, pltcl_call_state *call_state,
 		for (i = 0; i < trigdata->tg_trigger->tgnargs; i++)
 			Tcl_ListObjAppendElement(NULL, tcl_cmd,
 									 Tcl_NewStringObj(utf_e2u(trigdata->tg_trigger->tgargs[i]), -1));
-
 	}
 	PG_CATCH();
 	{
@@ -1287,7 +1299,7 @@ pltcl_trigger_handler(PG_FUNCTION_ARGS, pltcl_call_state *call_state,
 							   &result_Objc, &result_Objv) != TCL_OK)
 		ereport(ERROR,
 				(errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
-				 errmsg("could not split return value from trigger: %s",
+				 errmsg("could not parse trigger return value: %s",
 						utf_u2e(Tcl_GetStringResult(interp)))));
 
 	/* Convert function result to tuple */
@@ -1350,6 +1362,10 @@ pltcl_event_trigger_handler(PG_FUNCTION_ARGS, pltcl_call_state *call_state,
 
 /**********************************************************************
  * throw_tcl_error	- ereport an error returned from the Tcl interpreter
+ *
+ * Caution: use this only to report errors returned by Tcl_EvalObjEx() or
+ * other variants of Tcl_Eval().  Other functions may not fill "errorInfo",
+ * so it could be unset or even contain details from some previous error.
  **********************************************************************/
 static void
 throw_tcl_error(Tcl_Interp *interp, const char *proname)
@@ -1394,6 +1410,7 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 	volatile MemoryContext proc_cxt = NULL;
 	Tcl_DString proc_internal_def;
 	Tcl_DString proc_internal_body;
+	Tcl_DString proc_internal_args;
 
 	/* We'll need the pg_proc tuple in any case... */
 	procTup = SearchSysCache1(PROCOID, ObjectIdGetDatum(fn_oid));
@@ -1441,17 +1458,16 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 	 ************************************************************/
 	Tcl_DStringInit(&proc_internal_def);
 	Tcl_DStringInit(&proc_internal_body);
+	Tcl_DStringInit(&proc_internal_args);
 	PG_TRY();
 	{
 		bool		is_trigger = OidIsValid(tgreloid);
 		char		internal_proname[128];
 		HeapTuple	typeTup;
 		Form_pg_type typeStruct;
-		char		proc_internal_args[33 * FUNC_MAX_ARGS];
 		Datum		prosrcdatum;
-		bool		isnull;
 		char	   *proc_source;
-		char		buf[48];
+		char		buf[64];
 		Tcl_Interp *interp;
 		int			i;
 		int			tcl_rc;
@@ -1484,7 +1500,7 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 		 * struct prodesc and subsidiary data must all live in proc_cxt.
 		 ************************************************************/
 		oldcontext = MemoryContextSwitchTo(proc_cxt);
-		prodesc = (pltcl_proc_desc *) palloc0(sizeof(pltcl_proc_desc));
+		prodesc = palloc0_object(pltcl_proc_desc);
 		prodesc->user_proname = pstrdup(NameStr(procStruct->proname));
 		MemoryContextSetIdentifier(proc_cxt, prodesc->user_proname);
 		prodesc->internal_proname = pstrdup(internal_proname);
@@ -1493,8 +1509,8 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 		prodesc->fn_xmin = HeapTupleHeaderGetRawXmin(procTup->t_data);
 		prodesc->fn_tid = procTup->t_self;
 		prodesc->nargs = procStruct->pronargs;
-		prodesc->arg_out_func = (FmgrInfo *) palloc0(prodesc->nargs * sizeof(FmgrInfo));
-		prodesc->arg_is_rowtype = (bool *) palloc0(prodesc->nargs * sizeof(bool));
+		prodesc->arg_out_func = palloc0_array(FmgrInfo, prodesc->nargs);
+		prodesc->arg_is_rowtype = palloc0_array(bool, prodesc->nargs);
 		MemoryContextSwitchTo(oldcontext);
 
 		/* Remember if function is STABLE/IMMUTABLE */
@@ -1561,7 +1577,6 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 		 ************************************************************/
 		if (!is_trigger && !is_event_trigger)
 		{
-			proc_internal_args[0] = '\0';
 			for (i = 0; i < prodesc->nargs; i++)
 			{
 				Oid			argtype = procStruct->proargtypes.values[i];
@@ -1594,8 +1609,8 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 				}
 
 				if (i > 0)
-					strcat(proc_internal_args, " ");
-				strcat(proc_internal_args, buf);
+					Tcl_DStringAppend(&proc_internal_args, " ", -1);
+				Tcl_DStringAppend(&proc_internal_args, buf, -1);
 
 				ReleaseSysCache(typeTup);
 			}
@@ -1603,13 +1618,14 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 		else if (is_trigger)
 		{
 			/* trigger procedure has fixed args */
-			strcpy(proc_internal_args,
-				   "TG_name TG_relid TG_table_name TG_table_schema TG_relatts TG_when TG_level TG_op __PLTcl_Tup_NEW __PLTcl_Tup_OLD args");
+			Tcl_DStringAppend(&proc_internal_args,
+							  "TG_name TG_relid TG_table_name TG_table_schema TG_relatts TG_when TG_level TG_op __PLTcl_Tup_NEW __PLTcl_Tup_OLD args",
+							  -1);
 		}
 		else if (is_event_trigger)
 		{
 			/* event trigger procedure has fixed args */
-			strcpy(proc_internal_args, "TG_event TG_tag");
+			Tcl_DStringAppend(&proc_internal_args, "TG_event TG_tag", -1);
 		}
 
 		/************************************************************
@@ -1622,7 +1638,8 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 		 ************************************************************/
 		Tcl_DStringAppendElement(&proc_internal_def, "proc");
 		Tcl_DStringAppendElement(&proc_internal_def, internal_proname);
-		Tcl_DStringAppendElement(&proc_internal_def, proc_internal_args);
+		Tcl_DStringAppendElement(&proc_internal_def,
+								 Tcl_DStringValue(&proc_internal_args));
 
 		/************************************************************
 		 * prefix procedure body with
@@ -1668,10 +1685,8 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 		/************************************************************
 		 * Add user's function definition to proc body
 		 ************************************************************/
-		prosrcdatum = SysCacheGetAttr(PROCOID, procTup,
-									  Anum_pg_proc_prosrc, &isnull);
-		if (isnull)
-			elog(ERROR, "null prosrc");
+		prosrcdatum = SysCacheGetAttrNotNull(PROCOID, procTup,
+											 Anum_pg_proc_prosrc);
 		proc_source = TextDatumGetCString(prosrcdatum);
 		UTF_BEGIN;
 		Tcl_DStringAppend(&proc_internal_body, UTF_E2U(proc_source), -1);
@@ -1704,6 +1719,7 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 			MemoryContextDelete(proc_cxt);
 		Tcl_DStringFree(&proc_internal_def);
 		Tcl_DStringFree(&proc_internal_body);
+		Tcl_DStringFree(&proc_internal_args);
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
@@ -1732,6 +1748,7 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 
 	Tcl_DStringFree(&proc_internal_def);
 	Tcl_DStringFree(&proc_internal_body);
+	Tcl_DStringFree(&proc_internal_args);
 
 	ReleaseSysCache(procTup);
 
@@ -1999,7 +2016,7 @@ pltcl_quote(ClientData cdata, Tcl_Interp *interp,
 	char	   *tmp;
 	const char *cp1;
 	char	   *cp2;
-	int			length;
+	Tcl_Size	length;
 
 	/************************************************************
 	 * Check call syntax
@@ -2015,7 +2032,7 @@ pltcl_quote(ClientData cdata, Tcl_Interp *interp,
 	 * grow to and initialize pointers
 	 ************************************************************/
 	cp1 = Tcl_GetStringFromObj(objv[1], &length);
-	tmp = palloc(length * 2 + 1);
+	tmp = palloc(add_size(mul_size(length, 2), 1));
 	cp2 = tmp;
 
 	/************************************************************
@@ -2193,7 +2210,7 @@ pltcl_returnnext(ClientData cdata, Tcl_Interp *interp,
 		if (prodesc->fn_retistuple)
 		{
 			Tcl_Obj   **rowObjv;
-			int			rowObjc;
+			Tcl_Size	rowObjc;
 
 			/* result should be a list, so break it down */
 			if (Tcl_ListObjGetElements(interp, objv[1], &rowObjc, &rowObjv) == TCL_ERROR)
@@ -2436,6 +2453,7 @@ pltcl_process_SPI_result(Tcl_Interp *interp,
 		case SPI_OK_INSERT:
 		case SPI_OK_DELETE:
 		case SPI_OK_UPDATE:
+		case SPI_OK_MERGE:
 			Tcl_SetObjResult(interp, Tcl_NewWideIntObj(ntuples));
 			break;
 
@@ -2533,7 +2551,7 @@ pltcl_SPI_prepare(ClientData cdata, Tcl_Interp *interp,
 				  int objc, Tcl_Obj *const objv[])
 {
 	volatile MemoryContext plan_cxt = NULL;
-	int			nargs;
+	Tcl_Size	nargs;
 	Tcl_Obj   **argsObj;
 	pltcl_query_desc *qdesc;
 	int			i;
@@ -2569,12 +2587,12 @@ pltcl_SPI_prepare(ClientData cdata, Tcl_Interp *interp,
 									 "PL/Tcl spi_prepare query",
 									 ALLOCSET_SMALL_SIZES);
 	MemoryContextSwitchTo(plan_cxt);
-	qdesc = (pltcl_query_desc *) palloc0(sizeof(pltcl_query_desc));
+	qdesc = palloc0_object(pltcl_query_desc);
 	snprintf(qdesc->qname, sizeof(qdesc->qname), "%p", qdesc);
 	qdesc->nargs = nargs;
-	qdesc->argtypes = (Oid *) palloc(nargs * sizeof(Oid));
-	qdesc->arginfuncs = (FmgrInfo *) palloc(nargs * sizeof(FmgrInfo));
-	qdesc->argtypioparams = (Oid *) palloc(nargs * sizeof(Oid));
+	qdesc->argtypes = palloc_array(Oid, nargs);
+	qdesc->arginfuncs = palloc_array(FmgrInfo, nargs);
+	qdesc->argtypioparams = palloc_array(Oid, nargs);
 	MemoryContextSwitchTo(oldcontext);
 
 	/************************************************************
@@ -2598,7 +2616,8 @@ pltcl_SPI_prepare(ClientData cdata, Tcl_Interp *interp,
 						typIOParam;
 			int32		typmod;
 
-			parseTypeString(Tcl_GetString(argsObj[i]), &typId, &typmod, false);
+			(void) parseTypeString(Tcl_GetString(argsObj[i]),
+								   &typId, &typmod, NULL);
 
 			getTypeInputInfo(typId, &typInput, &typIOParam);
 
@@ -2670,7 +2689,7 @@ pltcl_SPI_execute_plan(ClientData cdata, Tcl_Interp *interp,
 	const char *arrayname = NULL;
 	Tcl_Obj    *loop_body = NULL;
 	int			count = 0;
-	int			callObjc;
+	Tcl_Size	callObjc;
 	Tcl_Obj   **callObjv = NULL;
 	Datum	   *argvalues;
 	MemoryContext oldcontext = CurrentMemoryContext;
@@ -2816,7 +2835,7 @@ pltcl_SPI_execute_plan(ClientData cdata, Tcl_Interp *interp,
 		 * Setup the value array for SPI_execute_plan() using
 		 * the type specific input functions
 		 ************************************************************/
-		argvalues = (Datum *) palloc(callObjc * sizeof(Datum));
+		argvalues = palloc_array(Datum, callObjc);
 
 		for (j = 0; j < callObjc; j++)
 		{
@@ -3187,7 +3206,7 @@ pltcl_build_tuple_result(Tcl_Interp *interp, Tcl_Obj **kvObjv, int kvObjc,
 		attinmeta = NULL;
 	}
 
-	values = (char **) palloc0(tupdesc->natts * sizeof(char *));
+	values = palloc0_array(char *, tupdesc->natts);
 
 	if (kvObjc % 2 != 0)
 		ereport(ERROR,

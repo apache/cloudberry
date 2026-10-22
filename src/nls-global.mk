@@ -8,13 +8,15 @@
 #
 # CATALOG_NAME          -- name of the message catalog (xxx.po); probably
 #                          name of the program
-# AVAIL_LANGUAGES       -- list of languages that are provided/supported
 # GETTEXT_FILES         -- list of source files that contain message strings
 # GETTEXT_TRIGGERS      -- (optional) list of functions that contain
 #                          translatable strings
 # GETTEXT_FLAGS         -- (optional) list of gettext --flag arguments to mark
 #                          function arguments that contain C format strings
 #                          (functions must be listed in TRIGGERS and FLAGS)
+#
+# Also, provide a text file 'po/LINGUAS' with a space-separated list
+# of languages that are provided/supported.
 #
 # That's all, the rest is done here, if --enable-nls was specified.
 #
@@ -26,6 +28,8 @@
 
 # existence checked by Makefile.global; otherwise we won't get here
 include $(srcdir)/nls.mk
+
+AVAIL_LANGUAGES := $(shell cat $(srcdir)/po/LINGUAS)
 
 # If user specified the languages he wants in --enable-nls=LANGUAGES,
 # filter out the rest.  Else use all available ones.
@@ -72,10 +76,16 @@ BACKEND_COMMON_GETTEXT_FLAGS = \
 FRONTEND_COMMON_GETTEXT_FILES = $(top_srcdir)/src/common/logging.c
 
 FRONTEND_COMMON_GETTEXT_TRIGGERS = \
-    pg_log_fatal pg_log_error pg_log_warning pg_log_info pg_log_generic:2 pg_log_generic_v:2
+    pg_log_error pg_log_error_detail pg_log_error_hint \
+    pg_log_warning pg_log_warning_detail pg_log_warning_hint \
+    pg_log_info pg_log_info_detail pg_log_info_hint \
+    pg_fatal pg_log_generic:3 pg_log_generic_v:3
 
 FRONTEND_COMMON_GETTEXT_FLAGS = \
-    pg_log_fatal:1:c-format pg_log_error:1:c-format pg_log_warning:1:c-format pg_log_info:1:c-format pg_log_generic:2:c-format pg_log_generic_v:2:c-format
+    pg_log_error:1:c-format pg_log_error_detail:1:c-format pg_log_error_hint:1:c-format \
+    pg_log_warning:1:c-format pg_log_warning_detail:1:c-format pg_log_warning_hint:1:c-format \
+    pg_log_info:1:c-format pg_log_info_detail:1:c-format pg_log_info_hint:1:c-format \
+    pg_fatal:1:c-format pg_log_generic:3:c-format pg_log_generic_v:3:c-format
 
 
 all-po: $(MO_FILES)

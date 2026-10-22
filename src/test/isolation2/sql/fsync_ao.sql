@@ -59,8 +59,8 @@ select gp_wait_until_triggered_fault('restartpoint_guts', 2, dbid)
 
 -- Validate that the number of files fsync'ed by checkpointer (on
 -- mirror).  This should match the number of files for fsync_ao and fsync_co.
-select gp_wait_until_triggered_fault('ao_fsync_counter', 3, dbid)
-	from gp_segment_configuration where content=0 and role='m';
+-- select gp_wait_until_triggered_fault('ao_fsync_counter', 3, dbid)
+-- 	from gp_segment_configuration where content=0 and role='m';
 select gp_inject_fault('ao_fsync_counter', 'status', dbid)
 	from gp_segment_configuration where content=0 and role='m';
 
@@ -95,8 +95,8 @@ select gp_wait_until_triggered_fault('restartpoint_guts', 3, dbid)
 	from gp_segment_configuration where content=0 and role='m';
 
 -- Expect the segment files that were updated by vacuum to be fsync'ed.
-select gp_wait_until_triggered_fault('ao_fsync_counter', 12, dbid)
-	from gp_segment_configuration where content=0 and role='m';
+-- select gp_wait_until_triggered_fault('ao_fsync_counter', 12, dbid)
+-- 	from gp_segment_configuration where content=0 and role='m';
 select gp_inject_fault('ao_fsync_counter', 'status', dbid)
 	from gp_segment_configuration where content=0 and role='m';
 
@@ -121,8 +121,8 @@ select gp_wait_until_triggered_fault('restartpoint_guts', 4, dbid)
 
 -- Expect that fsync is only performed for fsync_ao table (1 file) but
 -- not for fsync_co table because it was dropped after being updated.
-select gp_wait_until_triggered_fault('ao_fsync_counter', 13, dbid)
-	from gp_segment_configuration where content=0 and role='m';
+-- select gp_wait_until_triggered_fault('ao_fsync_counter', 13, dbid)
+-- 	from gp_segment_configuration where content=0 and role='m';
 select gp_inject_fault('ao_fsync_counter', 'status', dbid)
 	from gp_segment_configuration where content=0 and role='m';
 

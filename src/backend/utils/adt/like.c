@@ -7,7 +7,7 @@
  *		A big hack of the regexp.c code!! Contributed by
  *		Keith Parks <emkxp01@mtcc.demon.co.uk> (7/95).
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -24,6 +24,7 @@
 #include "miscadmin.h"
 #include "utils/builtins.h"
 #include "utils/pg_locale.h"
+#include "varatt.h"
 
 
 #define LIKE_TRUE						1
@@ -33,11 +34,11 @@
 
 static int	SB_MatchText(const char *t, int tlen, const char *p, int plen,
 						 pg_locale_t locale, bool locale_is_c);
-static text *SB_do_like_escape(text *, text *);
+static text *SB_do_like_escape(text *pat, text *esc);
 
 static int	MB_MatchText(const char *t, int tlen, const char *p, int plen,
 						 pg_locale_t locale, bool locale_is_c);
-static text *MB_do_like_escape(text *, text *);
+static text *MB_do_like_escape(text *pat, text *esc);
 
 static int	UTF8_MatchText(const char *t, int tlen, const char *p, int plen,
 						   pg_locale_t locale, bool locale_is_c);
@@ -54,20 +55,20 @@ static int	Generic_Text_IC_like(text *str, text *pat, Oid collation);
  *--------------------
  */
 static inline int
-wchareq(const char *p1, const char *p2)
+wchareq(const char *p1, int p1len, const char *p2, int p2len)
 {
-	int			p1_len;
+	int			p1clen;
 
 	/* Optimization:  quickly compare the first byte. */
 	if (*p1 != *p2)
 		return 0;
 
-	p1_len = pg_mblen(p1);
-	if (pg_mblen(p2) != p1_len)
+	p1clen = pg_mblen_with_len(p1, p1len);
+	if (pg_mblen_with_len(p2, p2len) != p1clen)
 		return 0;
 
 	/* They are the same length */
-	while (p1_len--)
+	while (p1clen--)
 	{
 		if (*p1++ != *p2++)
 			return 0;
@@ -106,11 +107,11 @@ SB_lower_char(unsigned char c, pg_locale_t locale, bool locale_is_c)
 #define NextByte(p, plen)	((p)++, (plen)--)
 
 /* Set up to compile like_match.c for multibyte characters */
-#define CHAREQ(p1, p2) wchareq((p1), (p2))
+#define CHAREQ(p1, p1len, p2, p2len) wchareq((p1), (p1len), (p2), (p2len))
 #define NextChar(p, plen) \
-	do { int __l = pg_mblen(p); (p) +=__l; (plen) -=__l; } while (0)
+	do { int __l = pg_mblen_with_len((p), (plen)); (p) +=__l; (plen) -=__l; } while (0)
 #define CopyAdvChar(dst, src, srclen) \
-	do { int __l = pg_mblen(src); \
+	do { int __l = pg_mblen_with_len((src), (srclen)); \
 		 (srclen) -= __l; \
 		 while (__l-- > 0) \
 			 *(dst)++ = *(src)++; \
@@ -122,7 +123,7 @@ SB_lower_char(unsigned char c, pg_locale_t locale, bool locale_is_c)
 #include "like_match.c"
 
 /* Set up to compile like_match.c for single-byte characters */
-#define CHAREQ(p1, p2) (*(p1) == *(p2))
+#define CHAREQ(p1, p1len, p2, p2len) (*(p1) == *(p2))
 #define NextChar(p, plen) NextByte((p), (plen))
 #define CopyAdvChar(dst, src, srclen) (*(dst)++ = *(src)++, (srclen)--)
 
@@ -150,11 +151,11 @@ SB_lower_char(unsigned char c, pg_locale_t locale, bool locale_is_c)
 static inline int
 GenericMatchText(const char *s, int slen, const char *p, int plen, Oid collation)
 {
-	if (collation && !lc_ctype_is_c(collation) && collation != DEFAULT_COLLATION_OID)
+	if (collation && !lc_ctype_is_c(collation))
 	{
 		pg_locale_t locale = pg_newlocale_from_collation(collation);
 
-		if (locale && !locale->deterministic)
+		if (!pg_locale_deterministic(locale))
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("nondeterministic collations are not supported for LIKE")));
@@ -178,28 +179,27 @@ Generic_Text_IC_like(text *str, text *pat, Oid collation)
 	pg_locale_t locale = 0;
 	bool		locale_is_c = false;
 
+	if (!OidIsValid(collation))
+	{
+		/*
+		 * This typically means that the parser could not resolve a conflict
+		 * of implicit collations, so report it that way.
+		 */
+		ereport(ERROR,
+				(errcode(ERRCODE_INDETERMINATE_COLLATION),
+				 errmsg("could not determine which collation to use for ILIKE"),
+				 errhint("Use the COLLATE clause to set the collation explicitly.")));
+	}
+
 	if (lc_ctype_is_c(collation))
 		locale_is_c = true;
-	else if (collation != DEFAULT_COLLATION_OID)
-	{
-		if (!OidIsValid(collation))
-		{
-			/*
-			 * This typically means that the parser could not resolve a
-			 * conflict of implicit collations, so report it that way.
-			 */
-			ereport(ERROR,
-					(errcode(ERRCODE_INDETERMINATE_COLLATION),
-					 errmsg("could not determine which collation to use for ILIKE"),
-					 errhint("Use the COLLATE clause to set the collation explicitly.")));
-		}
+	else
 		locale = pg_newlocale_from_collation(collation);
 
-		if (locale && !locale->deterministic)
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("nondeterministic collations are not supported for ILIKE")));
-	}
+	if (!pg_locale_deterministic(locale))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("nondeterministic collations are not supported for ILIKE")));
 
 	/*
 	 * For efficiency reasons, in the single byte case we don't call lower()

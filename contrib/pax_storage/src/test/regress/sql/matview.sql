@@ -14,8 +14,8 @@ SELECT * FROM mvtest_tv ORDER BY type;
 
 -- create a materialized view with no data, and confirm correct behavior
 EXPLAIN (costs off)
-  CREATE MATERIALIZED VIEW mvtest_tm AS SELECT type, sum(amt) AS totamt FROM mvtest_t GROUP BY type WITH NO DATA distributed by(type);
-CREATE MATERIALIZED VIEW mvtest_tm AS SELECT type, sum(amt) AS totamt FROM mvtest_t GROUP BY type WITH NO DATA distributed by(type);
+  CREATE MATERIALIZED VIEW IF NOT EXISTS mvtest_tm AS SELECT type, sum(amt) AS totamt FROM mvtest_t GROUP BY type WITH NO DATA distributed by(type);
+CREATE MATERIALIZED VIEW IF NOT EXISTS mvtest_tm AS SELECT type, sum(amt) AS totamt FROM mvtest_t GROUP BY type WITH NO DATA distributed by(type);
 SELECT relispopulated FROM pg_class WHERE oid = 'mvtest_tm'::regclass;
 SELECT * FROM mvtest_tm ORDER BY type;
 REFRESH MATERIALIZED VIEW mvtest_tm;
@@ -187,6 +187,12 @@ SELECT * FROM mvtest_mv_v_3;
 SELECT * FROM mvtest_mv_v_4;
 DROP TABLE mvtest_v CASCADE;
 
+-- Check that CREATE IF NOT EXISTS accept DISTRIBUTED BY
+CREATE MATERIALIZED VIEW IF NOT EXISTS mv_ine_distr (a, b) AS
+  SELECT generate_series(1, 10) a, generate_series(1, 10) b  DISTRIBUTED BY (b);
+\d+ mv_ine_distr
+DROP MATERIALIZED VIEW mv_ine_distr;
+
 -- Check that unknown literals are converted to "text" in CREATE MATVIEW,
 -- so that we don't end up with unknown-type columns.
 CREATE MATERIALIZED VIEW mv_unspecified_types AS
@@ -215,10 +221,10 @@ SET ROLE regress_user_mvtest;
 -- duplicate all the aliases used in those queries
 CREATE TABLE mvtest_foo_data AS SELECT i,
   i+1 AS tid,
-  md5(random()::text) AS mv,
-  md5(random()::text) AS newdata,
-  md5(random()::text) AS newdata2,
-  md5(random()::text) AS diff
+  fipshash(random()::text) AS mv,
+  fipshash(random()::text) AS newdata,
+  fipshash(random()::text) AS newdata2,
+  fipshash(random()::text) AS diff
   FROM generate_series(1, 10) i;
 CREATE MATERIALIZED VIEW mvtest_mv_foo AS SELECT * FROM mvtest_foo_data distributed by(i);
 CREATE MATERIALIZED VIEW mvtest_mv_foo AS SELECT * FROM mvtest_foo_data distributed by(i);
@@ -229,6 +235,23 @@ REFRESH MATERIALIZED VIEW mvtest_mv_foo;
 REFRESH MATERIALIZED VIEW CONCURRENTLY mvtest_mv_foo;
 DROP OWNED BY regress_user_mvtest CASCADE;
 DROP ROLE regress_user_mvtest;
+
+-- Concurrent refresh requires a unique index on the materialized
+-- view. Test what happens if it's dropped during the refresh.
+CREATE OR REPLACE FUNCTION mvtest_drop_the_index()
+  RETURNS bool AS $$
+BEGIN
+  EXECUTE 'DROP INDEX IF EXISTS mvtest_drop_idx';
+  RETURN true;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE MATERIALIZED VIEW drop_idx_matview AS
+  SELECT 1 as i WHERE mvtest_drop_the_index();
+
+CREATE UNIQUE INDEX mvtest_drop_idx ON drop_idx_matview (i);
+REFRESH MATERIALIZED VIEW CONCURRENTLY drop_idx_matview;
+DROP MATERIALIZED VIEW drop_idx_matview; -- clean up
 
 -- make sure that create WITH NO DATA works via SPI
 BEGIN;
@@ -316,3 +339,91 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
   CREATE MATERIALIZED VIEW IF NOT EXISTS matview_ine_tab AS
     SELECT 1 / 0 WITH NO DATA; -- ok
 DROP MATERIALIZED VIEW matview_ine_tab;
+
+-- test REFRESH fast path
+create materialized view mv_fast as select * from mvtest_t;
+set gp_enable_refresh_fast_path = off;
+select relfilenode into temp mv_fast_relfilenode_0 from pg_class where oid = 'mv_fast'::regclass::oid;
+refresh materialized view mv_fast;
+select relfilenode into temp mv_fast_relfilenode_1 from pg_class where oid = 'mv_fast'::regclass::oid;
+-- shoule be 0
+select count(*) from mv_fast_relfilenode_0 natural join mv_fast_relfilenode_1;
+
+-- relfilenode should not be changed then.
+set gp_enable_refresh_fast_path = on;
+refresh materialized view mv_fast;
+select relfilenode into temp mv_fast_relfilenode_2 from pg_class where oid = 'mv_fast'::regclass::oid;
+-- shoule be 1
+select count(*) from mv_fast_relfilenode_1 natural join mv_fast_relfilenode_2;
+
+reset gp_enable_refresh_fast_path;
+drop materialized view mv_fast;
+
+-- test REFRESH MATERIALIZED VIEW with 'WITH NO DATA' option can be executed immediately.
+DROP TABLE IF EXISTS mvtest_twn;
+CREATE TABLE mvtest_twn(a int);
+CREATE MATERIALIZED VIEW mat_view_twn as SELECT a.a as p, b.a as q, c.a as x, d.a as y FROM mvtest_twn a, mvtest_twn b, mvtest_twn c, mvtest_twn d;
+INSERT INTO mvtest_twn SELECT i FROM generate_series(1,10000)i;
+-- t1 contains 10000 tuples, after cross join it four times, the output is much too huge
+-- refresh with 'no data' should not actually execute the sql
+set statement_timeout = 5000;
+REFRESH MATERIALIZED VIEW mat_view_twn WITH NO DATA;
+reset statement_timeout;
+SELECT relispopulated FROM pg_class WHERE oid = 'mat_view_twn'::regclass;
+SELECT relispopulated FROM gp_dist_random('pg_class') WHERE oid = 'mat_view_twn'::regclass;
+SELECT * FROM mat_view_twn;
+
+DROP MATERIALIZED VIEW mat_view_twn;
+DROP TABLE mvtest_twn;
+
+--
+-- https://github.com/apache/cloudberry/issues/865
+--
+set default_table_access_method TO AO_ROW;
+
+CREATE TABLE t_issue_865_ao
+(
+    id           bigint NOT NULL,
+    user_id      bigint
+);
+insert into t_issue_865_ao values (1, 1), (2, 1), (3, 2), (4, 2), (5, 3), (6, 3), (7, 4), (8, 4), (9, 5), (10, 5);
+
+CREATE MATERIALIZED VIEW matview_issue_865_ao AS SELECT * FROM t_issue_865_ao WHERE id < 6;
+CREATE INDEX idx_matview_issue_865_ao ON matview_issue_865_ao USING btree (user_id);
+
+BEGIN;
+UPDATE t_issue_865_ao SET id = id WHERE id = 1;
+UPDATE t_issue_865_ao SET id = id WHERE id = 2;
+UPDATE t_issue_865_ao SET id = id WHERE id = 3;
+COMMIT;
+
+VACUUM t_issue_865_ao;
+
+REFRESH MATERIALIZED VIEW matview_issue_865_ao;
+
+-- AOCS
+set default_table_access_method TO AO_COLUMN;
+
+CREATE TABLE t_issue_865_aocs
+(
+    id           bigint NOT NULL,
+    user_id      bigint
+);
+insert into t_issue_865_aocs values (1, 1), (2, 1), (3, 2), (4, 2), (5, 3), (6, 3), (7, 4), (8, 4), (9, 5), (10, 5);
+
+CREATE MATERIALIZED VIEW matview_issue_865_aocs AS SELECT * FROM t_issue_865_aocs WHERE id < 6;
+CREATE INDEX idx_matview_issue_865_aocs ON matview_issue_865_aocs USING btree (user_id);
+
+BEGIN;
+UPDATE t_issue_865_aocs SET id = id WHERE id = 1;
+UPDATE t_issue_865_aocs SET id = id WHERE id = 2;
+UPDATE t_issue_865_aocs SET id = id WHERE id = 3;
+COMMIT;
+
+VACUUM t_issue_865_aocs;
+
+REFRESH MATERIALIZED VIEW matview_issue_865_aocs;
+
+RESET default_table_access_method;
+DROP TABLE t_issue_865_ao CASCADE; 
+DROP TABLE t_issue_865_aocs CASCADE; 

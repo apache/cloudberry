@@ -16,7 +16,7 @@
  * for each file.  Finally, it sorts the array to the final order that the
  * actions should be executed in.
  *
- * Copyright (c) 2013-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2013-2023, PostgreSQL Global Development Group
  *
  *-------------------------------------------------------------------------
  */
@@ -41,14 +41,14 @@
  * appearing in source and target systems.
  */
 static uint32 hash_string_pointer(const char *s);
-#define SH_PREFIX		filehash
-#define SH_ELEMENT_TYPE	file_entry_t
-#define SH_KEY_TYPE		const char *
-#define	SH_KEY			path
+#define SH_PREFIX				filehash
+#define SH_ELEMENT_TYPE			file_entry_t
+#define SH_KEY_TYPE				const char *
+#define SH_KEY					path
 #define SH_HASH_KEY(tb, key)	hash_string_pointer(key)
 #define SH_EQUAL(tb, a, b)		(strcmp(a, b) == 0)
-#define	SH_SCOPE		static inline
-#define SH_RAW_ALLOCATOR	pg_malloc0
+#define SH_SCOPE				static inline
+#define SH_RAW_ALLOCATOR		pg_malloc0
 #define SH_DECLARE
 #define SH_DEFINE
 #include "lib/simplehash.h"
@@ -58,13 +58,42 @@ static uint32 hash_string_pointer(const char *s);
 static filehash_hash *filehash;
 
 static bool isRelDataFile(const char *path);
-static char *datasegpath(RelFileNode rnode, ForkNumber forknum,
+static char *datasegpath(RelFileLocator rlocator, ForkNumber forknum,
 						 BlockNumber segno);
 
 
 static file_entry_t *insert_filehash_entry(const char *path);
 static file_entry_t *lookup_filehash_entry(const char *path);
+
+/*
+ * A separate hash table which tracks WAL files that must not be deleted.
+ */
+typedef struct keepwal_entry
+{
+	const char *path;
+	uint32		status;
+} keepwal_entry;
+
+#define SH_PREFIX				keepwal
+#define SH_ELEMENT_TYPE			keepwal_entry
+#define SH_KEY_TYPE				const char *
+#define SH_KEY					path
+#define SH_HASH_KEY(tb, key)	hash_string_pointer(key)
+#define SH_EQUAL(tb, a, b)		(strcmp(a, b) == 0)
+#define SH_SCOPE				static inline
+#define SH_RAW_ALLOCATOR		pg_malloc0
+#define SH_DECLARE
+#define SH_DEFINE
+#include "lib/simplehash.h"
+
+#define KEEPWAL_INITIAL_SIZE	1000
+
+
+static keepwal_hash *keepwal = NULL;
+static bool keepwal_entry_exists(const char *path);
+
 static int	final_filemap_cmp(const void *a, const void *b);
+
 static bool check_file_excluded(const char *path, bool is_source);
 
 /*
@@ -91,9 +120,8 @@ struct exclude_list_item
 static const char *excludeDirContents[] =
 {
 	/*
-	 * Skip temporary statistics files. PG_STAT_TMP_DIR must be skipped even
-	 * when stats_temp_directory is set because PGSS_TEXT_FILE is always
-	 * created there.
+	 * Skip temporary statistics files. PG_STAT_TMP_DIR must be skipped
+	 * because extensions like pg_stat_statements store data there.
 	 */
 	"pg_stat_tmp",				/* defined as PG_STAT_TMP_DIR */
 
@@ -156,9 +184,9 @@ static const struct exclude_list_item excludeFiles[] =
 	{"pg_internal.init", true}, /* defined as RELCACHE_INIT_FILENAME */
 
 	/*
-	 * If there's a backup_label or tablespace_map file, it belongs to a
-	 * backup started by the user with pg_start_backup().  It is *not* correct
-	 * for this backup.  Our backup_label is written later on separately.
+	 * If there is a backup_label or tablespace_map file, it indicates that a
+	 * recovery failed and this cluster probably can't be rewound, but exclude
+	 * them anyway if they are found.
 	 */
 	{"backup_label", false},	/* defined as BACKUP_LABEL_FILE */
 	{"tablespace_map", false},	/* defined as TABLESPACE_MAP */
@@ -230,6 +258,39 @@ lookup_filehash_entry(const char *path)
 	return filehash_lookup(filehash, path);
 }
 
+
+/*
+ * Initialize a hash table to store WAL file names that must be kept.
+ */
+void
+keepwal_init(void)
+{
+	/* An initial hash size out of thin air */
+	keepwal = keepwal_create(KEEPWAL_INITIAL_SIZE, NULL);
+}
+
+/* Mark the given file to prevent its removal */
+void
+keepwal_add_entry(const char *path)
+{
+	keepwal_entry *entry;
+	bool		found;
+
+	/* Should only be called with keepwal initialized */
+	Assert(keepwal != NULL);
+
+	entry = keepwal_insert(keepwal, path, &found);
+
+	if (!found)
+		entry->path = pg_strdup(path);
+}
+
+/* Return true if file is marked as not to be removed, false otherwise */
+static bool
+keepwal_entry_exists(const char *path)
+{
+	return keepwal_lookup(keepwal, path) != NULL;
+}
 
 /*
  * Callback for processing source file list.
@@ -335,7 +396,7 @@ process_target_file(const char *path, file_type_t type, size_t size,
  * hash table!
  */
 void
-process_target_wal_block_change(ForkNumber forknum, RelFileNode rnode,
+process_target_wal_block_change(ForkNumber forknum, RelFileLocator rlocator,
 								BlockNumber blkno)
 {
 	char	   *path;
@@ -346,8 +407,7 @@ process_target_wal_block_change(ForkNumber forknum, RelFileNode rnode,
 	segno = blkno / RELSEG_SIZE;
 	blkno_inseg = blkno % RELSEG_SIZE;
 
-	path = datasegpath(rnode, forknum, segno);
-
+	path = datasegpath(rlocator, forknum, segno);
 	entry = lookup_filehash_entry(path);
 	pfree(path);
 
@@ -390,12 +450,12 @@ process_target_wal_block_change(ForkNumber forknum, RelFileNode rnode,
 }
 
 void
-process_target_wal_aofile_change(RelFileNode rnode, int segno, int64 offset)
+process_target_wal_aofile_change(RelFileLocator rlocator, int segno, int64 offset)
 {
 	char	   *path;
 	file_entry_t *entry;
 
-	path = datasegpath(rnode, MAIN_FORKNUM, segno);
+	path = datasegpath(rlocator, MAIN_FORKNUM, segno);
 	entry = lookup_filehash_entry(path);
 	pfree(path);
 
@@ -605,7 +665,7 @@ print_filemap(filemap_t *filemap)
 static bool
 isRelDataFile(const char *path)
 {
-	RelFileNode rnode;
+	RelFileLocator rlocator;
 	unsigned int segNo;
 	int			nmatch;
 	bool		matched;
@@ -629,32 +689,32 @@ isRelDataFile(const char *path)
 	 *
 	 *----
 	 */
-	rnode.spcNode = InvalidOid;
-	rnode.dbNode = InvalidOid;
-	rnode.relNode = InvalidOid;
+	rlocator.spcOid = InvalidOid;
+	rlocator.dbOid = InvalidOid;
+	rlocator.relNumber = InvalidRelFileNumber;
 	segNo = 0;
 	matched = false;
 
-	nmatch = sscanf(path, "global/%u.%u", &rnode.relNode, &segNo);
+	nmatch = sscanf(path, "global/%u.%u", &rlocator.relNumber, &segNo);
 	if (nmatch == 1 || nmatch == 2)
 	{
-		rnode.spcNode = GLOBALTABLESPACE_OID;
-		rnode.dbNode = 0;
+		rlocator.spcOid = GLOBALTABLESPACE_OID;
+		rlocator.dbOid = 0;
 		matched = true;
 	}
 	else
 	{
 		nmatch = sscanf(path, "base/%u/%u.%u",
-						&rnode.dbNode, &rnode.relNode, &segNo);
+						&rlocator.dbOid, &rlocator.relNumber, &segNo);
 		if (nmatch == 2 || nmatch == 3)
 		{
-			rnode.spcNode = DEFAULTTABLESPACE_OID;
+			rlocator.spcOid = DEFAULTTABLESPACE_OID;
 			matched = true;
 		}
 		else
 		{
 			nmatch = sscanf(path, "pg_tblspc/%u/" GP_TABLESPACE_VERSION_DIRECTORY "/%u/%u.%u",
-							&rnode.spcNode, &rnode.dbNode, &rnode.relNode,
+							&rlocator.spcOid, &rlocator.dbOid, &rlocator.relNumber,
 							&segNo);
 			if (nmatch == 3 || nmatch == 4)
 				matched = true;
@@ -664,12 +724,12 @@ isRelDataFile(const char *path)
 	/*
 	 * The sscanf tests above can match files that have extra characters at
 	 * the end. To eliminate such cases, cross-check that GetRelationPath
-	 * creates the exact same filename, when passed the RelFileNode
+	 * creates the exact same filename, when passed the RelFileLocator
 	 * information we extracted from the filename.
 	 */
 	if (matched)
 	{
-		char	   *check_path = datasegpath(rnode, MAIN_FORKNUM, segNo);
+		char	   *check_path = datasegpath(rlocator, MAIN_FORKNUM, segNo);
 
 		if (strcmp(check_path, path) != 0)
 			matched = false;
@@ -686,12 +746,12 @@ isRelDataFile(const char *path)
  * The returned path is palloc'd
  */
 static char *
-datasegpath(RelFileNode rnode, ForkNumber forknum, BlockNumber segno)
+datasegpath(RelFileLocator rlocator, ForkNumber forknum, BlockNumber segno)
 {
 	char	   *path;
 	char	   *segpath;
 
-	path = relpathperm(rnode, forknum);
+	path = relpathperm(rlocator, forknum);
 	if (segno > 0)
 	{
 		segpath = psprintf("%s.%u", path, segno);
@@ -744,6 +804,10 @@ decide_file_action(file_entry_t *entry)
 	if (strcmp(path, "global/pg_control") == 0)
 		return FILE_ACTION_NONE;
 
+	/* Skip macOS system files */
+	if (strstr(path, ".DS_Store") != NULL)
+		return FILE_ACTION_NONE;
+
 	/*
 	 * Remove all files matching the exclusion filters in the target.
 	 */
@@ -782,7 +846,15 @@ decide_file_action(file_entry_t *entry)
 	}
 	else if (entry->target_exists && !entry->source_exists)
 	{
-		/* File exists in target, but not source. Remove it. */
+		/*
+		 * For files that exist in target but not in source, we check the
+		 * keepwal hash table; any files listed therein must not be removed.
+		 */
+		if (keepwal_entry_exists(path))
+		{
+			pg_log_debug("Not removing file \"%s\" because it is required for recovery", path);
+			return FILE_ACTION_NONE;
+		}
 		return FILE_ACTION_REMOVE;
 	}
 	else if (!entry->target_exists && !entry->source_exists)

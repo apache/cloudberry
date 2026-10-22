@@ -9,7 +9,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -137,6 +137,7 @@
 #include "executor/nodeSequence.h"
 #include "executor/nodeShareInputScan.h"
 #include "executor/nodeSplitUpdate.h"
+#include "executor/nodeSplitMerge.h"
 #include "executor/nodeTableFunction.h"
 #include "pg_trace.h"
 #include "tcop/tcopprot.h"
@@ -170,6 +171,7 @@ static TupleTableSlot *ExecProcNodeFirst(PlanState *node);
 static TupleTableSlot *ExecProcNodeInstr(PlanState *node);
 #endif
 static TupleTableSlot *ExecProcNodeGPDB(PlanState *node);
+static bool ExecShutdownNode_walker(PlanState *node, void *context);
 
 
 /* ------------------------------------------------------------------------
@@ -509,6 +511,10 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 
 		case T_SplitUpdate:
 			result = (PlanState *) ExecInitSplitUpdate((SplitUpdate *) node,
+												  estate, eflags);
+			break;
+		case T_SplitMerge:
+			result = (PlanState *) ExecInitSplitMerge((SplitMerge *) node,
 												  estate, eflags);
 			break;
 		case T_AssertOp:
@@ -887,7 +893,6 @@ ExecEndNode(PlanState *node)
 			break;
 
 		case T_DynamicIndexScanState:
-		case T_DynamicIndexOnlyScanState:
 			ExecEndDynamicIndexScan((DynamicIndexScanState *) node);
 			break;
 
@@ -1053,6 +1058,9 @@ ExecEndNode(PlanState *node)
 			 */
 		case T_SplitUpdateState:
 			ExecEndSplitUpdate((SplitUpdateState *) node);
+			break;
+		case T_SplitMergeState:
+			ExecEndSplitMerge((SplitMergeState *) node);
 			break;
 		case T_AssertOpState:
 			ExecEndAssertOp((AssertOpState *) node);
@@ -1286,6 +1294,28 @@ planstate_walk_kids(PlanState *planstate,
 			Assert(!planstate->lefttree && !planstate->righttree);
 			break;
 
+		case T_CustomScanState:
+			{
+				CustomScanState *css = (CustomScanState *) planstate;
+				ListCell   *lc;
+
+				Assert(!(css->custom_ps != NIL &&
+						 (planstate->lefttree || planstate->righttree)));
+
+				v = CdbVisit_Walk;
+				foreach(lc, css->custom_ps)
+				{
+					v = planstate_walk_node_extended((PlanState *) lfirst(lc), walker, context, flags);
+					if (v != CdbVisit_Walk)
+						break;
+				}
+				if (v == CdbVisit_Walk && planstate->lefttree)
+					v = planstate_walk_node_extended(planstate->lefttree, walker, context, flags);
+				if (v == CdbVisit_Walk && planstate->righttree)
+					v = planstate_walk_node_extended(planstate->righttree, walker, context, flags);
+				break;
+			}
+
 		default:
 			/* Left subtree */
 			v = planstate_walk_node_extended(planstate->lefttree, walker, context, flags);
@@ -1346,8 +1376,14 @@ planstate_walk_kids(PlanState *planstate,
  * Give execution nodes a chance to stop asynchronous resource consumption
  * and release any resources still held.
  */
-bool
+void
 ExecShutdownNode(PlanState *node)
+{
+	(void) ExecShutdownNode_walker(node, NULL);
+}
+
+static bool
+ExecShutdownNode_walker(PlanState *node, void *context)
 {
 	if (node == NULL)
 		return false;
@@ -1367,7 +1403,7 @@ ExecShutdownNode(PlanState *node)
 	if (node->instrument && node->instrument->running)
 		InstrStartNode(node->instrument);
 
-	planstate_tree_walker(node, ExecShutdownNode, NULL);
+	planstate_tree_walker(node, ExecShutdownNode_walker, context);
 
 	switch (nodeTag(node))
 	{

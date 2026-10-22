@@ -41,6 +41,8 @@ CATALOG(pg_resqueuecapability,6060,ResQueueCapabilityRelationId) BKI_SHARED_RELA
 FOREIGN_KEY(resqueueid REFERENCES pg_resqueue(oid));
 FOREIGN_KEY(restypid REFERENCES pg_resourcetype(restypid));
 
+DECLARE_INDEX(pg_resqueuecapability_resqueueid_index, 6442, ResQueueCapabilityResqueueidIndexId, on pg_resqueuecapability using btree(resqueueid oid_ops));
+DECLARE_INDEX(pg_resqueuecapability_restypid_index, 6443, ResQueueCapabilityRestypidIndexId, on pg_resqueuecapability using btree(restypid int2_ops));
 /* ----------------
  *		Form_pg_resqueuecapability corresponds to a pointer to a tuple with
  *		the format of pg_resqueuecapability relation.

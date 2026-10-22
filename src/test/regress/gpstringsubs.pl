@@ -143,7 +143,7 @@ if (1)
 
 	$psql_str .= " -X -t -A -c 'show LC_CTYPE'";
 
-	my $syslocale = `$psql_str`;
+	my $syslocale = "en_US.utf8";
 	my $syslocaleexp = '\\@gp_syslocale\\@';
 
 	chomp $syslocale;

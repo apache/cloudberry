@@ -6,6 +6,7 @@ SET search_path to qp_orca_fallback;
 -- Test the optimizer_enable_dml_constraints GUC, which forces GPORCA to fall back when there
 -- are NULL or CHECK constraints on a table.
 
+set optimizer_trace_fallback = on;
 
 DROP TABLE IF EXISTS constr_tab;
 CREATE TABLE constr_tab ( a int check (a>0) , b int, c int, d int, CHECK (a+b>5)) DISTRIBUTED BY (a);
@@ -102,14 +103,27 @@ set optimizer_enable_hashagg = off;
 set optimizer_enable_groupagg = off;
 explain select count(*) from foo group by a;
 
+-- Orca should fallback for RTE_TABLEFUNC RTE type
+explain SELECT * FROM xmltable('/root' passing '' COLUMNS element text);
+
 create table ext_part(a int) partition by list(a);
 create table p1(a int);
 create external web table p2_ext (like p1) EXECUTE 'cat something.txt' FORMAT 'TEXT';
 alter table ext_part attach partition p1 for values in (1);
 alter table ext_part attach partition p2_ext for values in (2);
-explain select * from ext_part;
+explain insert into ext_part values (1);
+explain delete from ext_part where a=1;
+explain update ext_part set a=1;
+set optimizer_enable_orderedagg=off;
+select array_agg(a order by b)
+  from (values (1,4),(2,3),(3,1),(4,2)) v(a,b);
+
+-- Orca should fallback if a function in 'from' clause uses 'WITH ORDINALITY'
+SELECT * FROM jsonb_array_elements('["b", "a"]'::jsonb) WITH ORDINALITY;
+
 -- start_ignore
 -- FIXME: gpcheckcat fails due to mismatching distribution policy if this table isn't dropped
 -- Keep this table around once this is fixed
+reset optimizer_enable_orderedagg;
 drop table ext_part;
 -- end_ignore

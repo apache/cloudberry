@@ -16,7 +16,7 @@
 #define PG_RE_THROW() siglongjmp(*PG_exception_stack, 1)
 
 static void
-_errfinish_impl()
+_errfinish_impl(void *arg)
 {
 	PG_RE_THROW();
 }
@@ -45,6 +45,7 @@ test_check_superuser_connection_limit_error(void **state)
 	am_ftshandler = false;
 
 	expect_value(HaveNFreeProcs, n, RESERVED_FTS_CONNECTIONS);
+	expect_any(HaveNFreeProcs, nfree);
 	will_return(HaveNFreeProcs, false);
 
 	expect_ereport(FATAL);
@@ -69,6 +70,7 @@ test_check_superuser_connection_limit_ok_with_free_procs(void **state)
 	am_ftshandler = false;
 
 	expect_value(HaveNFreeProcs, n, RESERVED_FTS_CONNECTIONS);
+	expect_any(HaveNFreeProcs, nfree);
 	will_return(HaveNFreeProcs, true);
 
 	/*

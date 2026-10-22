@@ -1211,7 +1211,10 @@ explain (costs off) select * from rep_tab;
 (3 rows)
 
 set optimizer_enable_replicated_table=off;
+set optimizer_trace_fallback=on;
 explain (costs off) select * from rep_tab;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Use optimizer_enable_replicated_table to enable replicated tables
                 QUERY PLAN
 ------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -1219,12 +1222,65 @@ explain (costs off) select * from rep_tab;
  Optimizer: Postgres query optimizer
 (3 rows)
 
+reset optimizer_trace_fallback;
 reset optimizer_enable_replicated_table;
+-- Ensure plan with Gather Motion node is generated.
+drop table if exists t;
+NOTICE:  table "t" does not exist, skipping
+create table t (i int, j int) distributed replicated;
+insert into t values (1, 2);
+explain (costs off) select j, (select j) AS "Correlated Field" from t;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  Seq Scan on t
+         SubPlan 1
+           ->  Result
+                 ->  Result
+ Optimizer: GPORCA
+(6 rows)
+
+select j, (select j) AS "Correlated Field" from t;
+ j | Correlated Field 
+---+------------------
+ 2 |                2
+(1 row)
+
+explain (costs off) select j, (select 5) AS "Uncorrelated Field" from t;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  Nested Loop Left Join
+         Join Filter: true
+         ->  Seq Scan on t
+         ->  Materialize
+               ->  Result
+ Optimizer: GPORCA
+(7 rows)
+
+select j, (select 5) AS "Uncorrelated Field" from t;
+ j | Uncorrelated Field 
+---+--------------------
+ 2 |                  5
+(1 row)
+
 -- start_ignore
 drop schema rpt cascade;
-NOTICE:  drop cascades to 7 other objects
+NOTICE:  drop cascades to 16 other objects
 DETAIL:  drop cascades to table foo
 drop cascades to table bar
+drop cascades to view v_foo
 drop cascades to table baz
 drop cascades to table qux
+drop cascades to table cursor_update
+drop cascades to table minmaxtest
+drop cascades to table t_hashdist
+drop cascades to table t_replicate_volatile
+drop cascades to sequence seq_for_insert_replicated_table
+drop cascades to table dist_tab
+drop cascades to table rep_tab
+drop cascades to table rand_tab
+drop cascades to table t1_13532
+drop cascades to table t2_13532
+drop cascades to table t
 -- end_ignore

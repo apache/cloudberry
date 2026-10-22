@@ -34,11 +34,11 @@ WHERE
 ------------+-----------+-------------+--------------+---------------
  t_ao       | ao_column | t           |              |             0
  t_ao_enc   | ao_column | t           |              |             0
- t_ao_a     | ao_column | t           |              |             0
- t_ao_b     | ao_column | t           |              |             0
+ t_ao_a     | heap      |             |              |              
+ t_ao_b     | heap      |             |              |              
  t_ao_c     | heap      |             |              |              
- t_ao_enc_a | ao_column | t           |              |             0
- t_ao_d     | ao_column | t           |              |             0
+ t_ao_enc_a | heap      |             |              |              
+ t_ao_d     | ao_row    | f           |              |             0
 (7 rows)
 
 SELECT
@@ -51,13 +51,11 @@ FROM
 		JOIN pg_catalog.pg_attribute_encoding a ON (a.attrelid = c.oid)
 WHERE
 	c.relname like 't_ao_enc%';
-  relname   | attnum | filenum |                     attoptions                      
-------------+--------+---------+-----------------------------------------------------
- t_ao_enc   |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
- t_ao_enc   |      1 |       1 | {compresstype=none,compresslevel=0,blocksize=32768}
- t_ao_enc_a |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
- t_ao_enc_a |      1 |       1 | {compresstype=none,compresslevel=0,blocksize=32768}
-(4 rows)
+ relname  | attnum | filenum |                     attoptions                      
+----------+--------+---------+-----------------------------------------------------
+ t_ao_enc |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ t_ao_enc |      1 |       1 | {compresstype=none,compresslevel=0,blocksize=32768}
+(2 rows)
 
 -- EXTERNAL TABLE
 CREATE EXTERNAL TABLE t_ext (a integer) LOCATION ('file://127.0.0.1/tmp/foo') FORMAT 'text';

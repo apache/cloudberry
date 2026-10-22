@@ -83,7 +83,6 @@ SET enable_seqscan TO on;
 DROP INDEX inet_idx1;
 
 -- check that gist index works correctly
--- PAX not support gist/spgist/brin indexes
 CREATE INDEX inet_idx2 ON inet_tbl using gist (i inet_ops);
 SET enable_seqscan TO off;
 SELECT * FROM inet_tbl WHERE i << '192.168.1.0/24'::cidr ORDER BY i,c;
@@ -107,7 +106,6 @@ SET enable_seqscan TO on;
 DROP INDEX inet_idx2;
 
 -- check that spgist index works correctly
--- PAX not support gist/spgist/brin indexes
 CREATE INDEX inet_idx3 ON inet_tbl using spgist (i);
 SET enable_seqscan TO off;
 SELECT * FROM inet_tbl WHERE i << '192.168.1.0/24'::cidr ORDER BY i;
@@ -255,3 +253,12 @@ SELECT a FROM (VALUES
   ('ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/0'::inet),
   ('ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/128'::inet)
 ) AS i(a) ORDER BY a;
+
+-- test non-error-throwing API for some core types
+SELECT pg_input_is_valid('1234', 'cidr');
+SELECT * FROM pg_input_error_info('1234', 'cidr');
+SELECT pg_input_is_valid('192.168.198.200/24', 'cidr');
+SELECT * FROM pg_input_error_info('192.168.198.200/24', 'cidr');
+
+SELECT pg_input_is_valid('1234', 'inet');
+SELECT * FROM pg_input_error_info('1234', 'inet');

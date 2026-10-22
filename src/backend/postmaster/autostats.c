@@ -19,6 +19,7 @@
 #include "postgres.h"
 
 #include "catalog/catalog.h"
+#include "catalog/pg_database.h"
 #include "cdb/cdbvars.h"
 #include "commands/vacuum.h"
 #include "executor/execdesc.h"
@@ -60,8 +61,8 @@ autostats_issue_analyze(Oid relationOid)
 		 * If this user does not own the table, then auto-stats will not issue the
 		 * analyze.  This check will be skipped if gp_autostats_allow_nonowner=true
 		 */
-		if (!(pg_class_ownercheck(relationOid, GetUserId()) ||
-			 (pg_database_ownercheck(MyDatabaseId, GetUserId()) && !IsSharedRelation(relationOid))))
+		if (!(object_ownercheck(RelationRelationId, relationOid, GetUserId()) ||
+			 (object_ownercheck(DatabaseRelationId, MyDatabaseId, GetUserId()) && !IsSharedRelation(relationOid))))
 		{
 			if (log_autostats)
 				elog(LOG, "Auto-stats did not issue ANALYZE on tableoid %d since the user does not have table-owner level permissions.",
@@ -103,6 +104,7 @@ autostats_on_change_check(AutoStatsCmdType cmdType, uint64 ntuples)
 		case AUTOSTATS_CMDTYPE_INSERT:
 		case AUTOSTATS_CMDTYPE_DELETE:
 		case AUTOSTATS_CMDTYPE_UPDATE:
+		case AUTOSTATS_CMDTYPE_MERGE:
 		case AUTOSTATS_CMDTYPE_COPY:
 			result = true;
 			break;
@@ -203,6 +205,8 @@ autostats_cmdtype_to_string(AutoStatsCmdType cmdType)
 			return "DELETE";
 		case AUTOSTATS_CMDTYPE_UPDATE:
 			return "UPDATE";
+		case AUTOSTATS_CMDTYPE_MERGE:
+			return "MERGE";
 		case AUTOSTATS_CMDTYPE_COPY:
 			return "COPY";
 		default:
@@ -245,6 +249,7 @@ autostats_get_cmdtype(QueryDesc *queryDesc, AutoStatsCmdType * pcmdType, Oid *pr
 		case CMD_INSERT:
 		case CMD_UPDATE:
 		case CMD_DELETE:
+		case CMD_MERGE:
 			{
 				RangeTblEntry *rte;
 
@@ -258,6 +263,8 @@ autostats_get_cmdtype(QueryDesc *queryDesc, AutoStatsCmdType * pcmdType, Oid *pr
 					cmdType = AUTOSTATS_CMDTYPE_INSERT;
 				else if (stmt->commandType == CMD_UPDATE)
 					cmdType = AUTOSTATS_CMDTYPE_UPDATE;
+				else if (stmt->commandType == CMD_MERGE)
+					cmdType = AUTOSTATS_CMDTYPE_MERGE;
 				else
 					cmdType = AUTOSTATS_CMDTYPE_DELETE;
 			}

@@ -34,8 +34,7 @@
  * get_char(file) : like getc() but increment LineNumber on newlines
  */
 int
-get_char(file)
-	FILE	*file;
+get_char(FILE *file)
 {
 	int	ch;
 
@@ -75,9 +74,7 @@ get_char(file)
  * unget_char(ch, file) : like ungetc but do LineNumber processing
  */
 void
-unget_char(ch, file)
-	int		ch;
-	FILE	*file;
+unget_char(int ch, FILE *file)
 {
 	/*
 	 * Sneaky hack: we wrapped an in-memory buffer into a FILE*
@@ -108,11 +105,7 @@ unget_char(ch, file)
  * (4) returns EOF or terminating character, whichever
  */
 int
-get_string(string, size, file, terms)
-	char	*string;
-	int	size;
-	FILE	*file;
-	char	*terms;
+get_string(char *string, int size, FILE *file, char *terms)
 {
 	int	ch;
 
@@ -133,8 +126,7 @@ get_string(string, size, file, terms)
  * skip_comments(file) : read past comment (if any)
  */
 void
-skip_comments(file)
-	FILE	*file;
+skip_comments(FILE *file)
 {
 	int	ch;
 

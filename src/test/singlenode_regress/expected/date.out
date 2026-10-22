@@ -1129,15 +1129,15 @@ SELECT EXTRACT(DECADE FROM DATE '0012-12-31 BC'); --  -2
 -- all possible fields
 --
 SELECT EXTRACT(MICROSECONDS  FROM DATE '2020-08-11');
-ERROR:  date units "microseconds" not supported
+ERROR:  unit "microseconds" not supported for type date
 SELECT EXTRACT(MILLISECONDS  FROM DATE '2020-08-11');
-ERROR:  date units "milliseconds" not supported
+ERROR:  unit "milliseconds" not supported for type date
 SELECT EXTRACT(SECOND        FROM DATE '2020-08-11');
-ERROR:  date units "second" not supported
+ERROR:  unit "second" not supported for type date
 SELECT EXTRACT(MINUTE        FROM DATE '2020-08-11');
-ERROR:  date units "minute" not supported
+ERROR:  unit "minute" not supported for type date
 SELECT EXTRACT(HOUR          FROM DATE '2020-08-11');
-ERROR:  date units "hour" not supported
+ERROR:  unit "hour" not supported for type date
 SELECT EXTRACT(DAY           FROM DATE '2020-08-11');
  extract 
 ---------
@@ -1235,11 +1235,11 @@ SELECT EXTRACT(DOY           FROM DATE '2020-08-11');
 (1 row)
 
 SELECT EXTRACT(TIMEZONE      FROM DATE '2020-08-11');
-ERROR:  date units "timezone" not supported
+ERROR:  unit "timezone" not supported for type date
 SELECT EXTRACT(TIMEZONE_M    FROM DATE '2020-08-11');
-ERROR:  date units "timezone_m" not supported
+ERROR:  unit "timezone_m" not supported for type date
 SELECT EXTRACT(TIMEZONE_H    FROM DATE '2020-08-11');
-ERROR:  date units "timezone_h" not supported
+ERROR:  unit "timezone_h" not supported for type date
 SELECT EXTRACT(EPOCH         FROM DATE '2020-08-11');
   extract   
 ------------
@@ -1264,7 +1264,7 @@ SELECT DATE_TRUNC('MILLENNIUM', TIMESTAMP '1970-03-20 04:30:00.00000'); -- 1001
 SELECT DATE_TRUNC('MILLENNIUM', DATE '1970-03-20'); -- 1001-01-01
           date_trunc          
 ------------------------------
- Thu Jan 01 00:00:00 1001 PST
+ Thu Jan 01 00:00:00 1001 LMT
 (1 row)
 
 SELECT DATE_TRUNC('CENTURY', TIMESTAMP '1970-03-20 04:30:00.00000'); -- 1901
@@ -1288,13 +1288,13 @@ SELECT DATE_TRUNC('CENTURY', DATE '2004-08-10'); -- 2001-01-01
 SELECT DATE_TRUNC('CENTURY', DATE '0002-02-04'); -- 0001-01-01
           date_trunc          
 ------------------------------
- Mon Jan 01 00:00:00 0001 PST
+ Mon Jan 01 00:00:00 0001 LMT
 (1 row)
 
 SELECT DATE_TRUNC('CENTURY', DATE '0055-08-10 BC'); -- 0100-01-01 BC
            date_trunc            
 ---------------------------------
- Tue Jan 01 00:00:00 0100 PST BC
+ Tue Jan 01 00:00:00 0100 LMT BC
 (1 row)
 
 SELECT DATE_TRUNC('DECADE', DATE '1993-12-25'); -- 1990-01-01
@@ -1306,13 +1306,13 @@ SELECT DATE_TRUNC('DECADE', DATE '1993-12-25'); -- 1990-01-01
 SELECT DATE_TRUNC('DECADE', DATE '0004-12-25'); -- 0001-01-01 BC
            date_trunc            
 ---------------------------------
- Sat Jan 01 00:00:00 0001 PST BC
+ Sat Jan 01 00:00:00 0001 LMT BC
 (1 row)
 
 SELECT DATE_TRUNC('DECADE', DATE '0002-12-31 BC'); -- 0011-01-01 BC
            date_trunc            
 ---------------------------------
- Mon Jan 01 00:00:00 0011 PST BC
+ Mon Jan 01 00:00:00 0011 LMT BC
 (1 row)
 
 --
@@ -1462,7 +1462,7 @@ SELECT EXTRACT(EPOCH      FROM DATE 'infinity');    --  Infinity
 -- wrong fields from non-finite date:
 --
 SELECT EXTRACT(MICROSEC  FROM DATE 'infinity');     -- error
-ERROR:  date units "microsec" not recognized
+ERROR:  unit "microsec" not recognized for type date
 -- test constructors
 select make_date(2013, 7, 15);
  make_date  

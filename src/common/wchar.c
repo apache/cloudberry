@@ -3,7 +3,7 @@
  * wchar.c
  *	  Functions for working with multibyte characters in various encodings.
  *
- * Portions Copyright (c) 1998-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1998-2023, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  src/common/wchar.c
@@ -12,7 +12,29 @@
  */
 #include "c.h"
 
+#include <limits.h>
+
 #include "mb/pg_wchar.h"
+#include "utils/ascii.h"
+
+
+/*
+ * In today's multibyte encodings other than UTF8, this two-byte sequence
+ * ensures pg_encoding_mblen() == 2 && pg_encoding_verifymbstr() == 0.
+ *
+ * For historical reasons, several verifychar implementations opt to reject
+ * this pair specifically.  Byte pair range constraints, in encoding
+ * originator documentation, always excluded this pair.  No core conversion
+ * could translate it.  However, longstanding verifychar implementations
+ * accepted any non-NUL byte.  big5_to_euc_tw and big5_to_mic even translate
+ * pairs not valid per encoding originator documentation.  To avoid tightening
+ * core or non-core conversions in a security patch, we sought this one pair.
+ *
+ * PQescapeString() historically used spaces for BYTE1; many other values
+ * could suffice for BYTE1.
+ */
+#define NONUTF8_INVALID_BYTE0 (0x8d)
+#define NONUTF8_INVALID_BYTE1 (' ')
 
 
 /*
@@ -60,6 +82,9 @@
  * subset to the ASCII routines to ensure consistency.
  */
 
+/* No error-reporting facility.  Ignore incomplete trailing byte sequence. */
+#define MB2CHAR_NEED_AT_LEAST(len, need) if ((len) < (need)) break
+
 /*
  * SQL/ASCII
  */
@@ -105,22 +130,24 @@ pg_euc2wchar_with_len(const unsigned char *from, pg_wchar *to, int len)
 
 	while (len > 0 && *from)
 	{
-		if (*from == SS2 && len >= 2)	/* JIS X 0201 (so called "1 byte
-										 * KANA") */
+		if (*from == SS2)		/* JIS X 0201 (so called "1 byte KANA") */
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 2);
 			from++;
 			*to = (SS2 << 8) | *from++;
 			len -= 2;
 		}
-		else if (*from == SS3 && len >= 3)	/* JIS X 0212 KANJI */
+		else if (*from == SS3)	/* JIS X 0212 KANJI */
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 3);
 			from++;
 			*to = (SS3 << 16) | (*from++ << 8);
 			*to |= *from++;
 			len -= 3;
 		}
-		else if (IS_HIGHBIT_SET(*from) && len >= 2) /* JIS X 0208 KANJI */
+		else if (IS_HIGHBIT_SET(*from)) /* JIS X 0208 KANJI */
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 2);
 			*to = *from++ << 8;
 			*to |= *from++;
 			len -= 2;
@@ -232,22 +259,25 @@ pg_euccn2wchar_with_len(const unsigned char *from, pg_wchar *to, int len)
 
 	while (len > 0 && *from)
 	{
-		if (*from == SS2 && len >= 3)	/* code set 2 (unused?) */
+		if (*from == SS2)		/* code set 2 (unused?) */
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 3);
 			from++;
 			*to = (SS2 << 16) | (*from++ << 8);
 			*to |= *from++;
 			len -= 3;
 		}
-		else if (*from == SS3 && len >= 3)	/* code set 3 (unused ?) */
+		else if (*from == SS3)	/* code set 3 (unused ?) */
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 3);
 			from++;
 			*to = (SS3 << 16) | (*from++ << 8);
 			*to |= *from++;
 			len -= 3;
 		}
-		else if (IS_HIGHBIT_SET(*from) && len >= 2) /* code set 1 */
+		else if (IS_HIGHBIT_SET(*from)) /* code set 1 */
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 2);
 			*to = *from++ << 8;
 			*to |= *from++;
 			len -= 2;
@@ -264,12 +294,22 @@ pg_euccn2wchar_with_len(const unsigned char *from, pg_wchar *to, int len)
 	return cnt;
 }
 
+/*
+ * mbverifychar does not accept SS2 or SS3 (CS2 and CS3 are not defined for
+ * EUC_CN), but mb2wchar_with_len does.  Tell a coherent story for code that
+ * relies on agreement between mb2wchar_with_len and mblen.  Invalid text
+ * datums (e.g. from shared catalogs) reach this.
+ */
 static int
 pg_euccn_mblen(const unsigned char *s)
 {
 	int			len;
 
-	if (IS_HIGHBIT_SET(*s))
+	if (*s == SS2)
+		len = 3;
+	else if (*s == SS3)
+		len = 3;
+	else if (IS_HIGHBIT_SET(*s))
 		len = 2;
 	else
 		len = 1;
@@ -299,23 +339,26 @@ pg_euctw2wchar_with_len(const unsigned char *from, pg_wchar *to, int len)
 
 	while (len > 0 && *from)
 	{
-		if (*from == SS2 && len >= 4)	/* code set 2 */
+		if (*from == SS2)		/* code set 2 */
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 4);
 			from++;
 			*to = (((uint32) SS2) << 24) | (*from++ << 16);
 			*to |= *from++ << 8;
 			*to |= *from++;
 			len -= 4;
 		}
-		else if (*from == SS3 && len >= 3)	/* code set 3 (unused?) */
+		else if (*from == SS3)	/* code set 3 (unused?) */
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 3);
 			from++;
 			*to = (SS3 << 16) | (*from++ << 8);
 			*to |= *from++;
 			len -= 3;
 		}
-		else if (IS_HIGHBIT_SET(*from) && len >= 2) /* code set 2 */
+		else if (IS_HIGHBIT_SET(*from)) /* code set 2 */
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 2);
 			*to = *from++ << 8;
 			*to |= *from++;
 			len -= 2;
@@ -452,8 +495,7 @@ pg_utf2wchar_with_len(const unsigned char *from, pg_wchar *to, int len)
 		}
 		else if ((*from & 0xe0) == 0xc0)
 		{
-			if (len < 2)
-				break;			/* drop trailing incomplete char */
+			MB2CHAR_NEED_AT_LEAST(len, 2);
 			c1 = *from++ & 0x1f;
 			c2 = *from++ & 0x3f;
 			*to = (c1 << 6) | c2;
@@ -461,8 +503,7 @@ pg_utf2wchar_with_len(const unsigned char *from, pg_wchar *to, int len)
 		}
 		else if ((*from & 0xf0) == 0xe0)
 		{
-			if (len < 3)
-				break;			/* drop trailing incomplete char */
+			MB2CHAR_NEED_AT_LEAST(len, 3);
 			c1 = *from++ & 0x0f;
 			c2 = *from++ & 0x3f;
 			c3 = *from++ & 0x3f;
@@ -471,8 +512,7 @@ pg_utf2wchar_with_len(const unsigned char *from, pg_wchar *to, int len)
 		}
 		else if ((*from & 0xf8) == 0xf0)
 		{
-			if (len < 4)
-				break;			/* drop trailing incomplete char */
+			MB2CHAR_NEED_AT_LEAST(len, 4);
 			c1 = *from++ & 0x07;
 			c2 = *from++ & 0x3f;
 			c3 = *from++ & 0x3f;
@@ -602,8 +642,8 @@ pg_utf_mblen(const unsigned char *s)
 
 struct mbinterval
 {
-	unsigned short first;
-	unsigned short last;
+	unsigned int first;
+	unsigned int last;
 };
 
 /* auxiliary function for binary search in interval table */
@@ -639,14 +679,8 @@ mbbisearch(pg_wchar ucs, const struct mbinterval *table, int max)
  *		value of -1.
  *
  *	  - Non-spacing and enclosing combining characters (general
- *		category code Mn or Me in the Unicode database) have a
+ *		category code Mn, Me or Cf in the Unicode database) have a
  *		column width of 0.
- *
- *	  - Other format characters (general category code Cf in the Unicode
- *		database) and ZERO WIDTH SPACE (U+200B) have a column width of 0.
- *
- *	  - Hangul Jamo medial vowels and final consonants (U+1160-U+11FF)
- *		have a column width of 0.
  *
  *	  - Spacing characters in the East Asian Wide (W) or East Asian
  *		FullWidth (F) category as defined in Unicode Technical
@@ -663,7 +697,8 @@ mbbisearch(pg_wchar ucs, const struct mbinterval *table, int max)
 static int
 ucs_wcwidth(pg_wchar ucs)
 {
-#include "common/unicode_combining_table.h"
+#include "common/unicode_nonspacing_table.h"
+#include "common/unicode_east_asian_fw_table.h"
 
 	/* test for 8-bit control characters */
 	if (ucs == 0)
@@ -672,27 +707,25 @@ ucs_wcwidth(pg_wchar ucs)
 	if (ucs < 0x20 || (ucs >= 0x7f && ucs < 0xa0) || ucs > 0x0010ffff)
 		return -1;
 
-	/* binary search in table of non-spacing characters */
-	if (mbbisearch(ucs, combining,
-				   sizeof(combining) / sizeof(struct mbinterval) - 1))
+	/*
+	 * binary search in table of non-spacing characters
+	 *
+	 * XXX: In the official Unicode sources, it is possible for a character to
+	 * be described as both non-spacing and wide at the same time. As of
+	 * Unicode 13.0, treating the non-spacing property as the determining
+	 * factor for display width leads to the correct behavior, so do that
+	 * search first.
+	 */
+	if (mbbisearch(ucs, nonspacing,
+				   sizeof(nonspacing) / sizeof(struct mbinterval) - 1))
 		return 0;
 
-	/*
-	 * if we arrive here, ucs is not a combining or C0/C1 control character
-	 */
+	/* binary search in table of wide characters */
+	if (mbbisearch(ucs, east_asian_fw,
+				   sizeof(east_asian_fw) / sizeof(struct mbinterval) - 1))
+		return 2;
 
-	return 1 +
-		(ucs >= 0x1100 &&
-		 (ucs <= 0x115f ||		/* Hangul Jamo init. consonants */
-		  (ucs >= 0x2e80 && ucs <= 0xa4cf && (ucs & ~0x0011) != 0x300a &&
-		   ucs != 0x303f) ||	/* CJK ... Yi */
-		  (ucs >= 0xac00 && ucs <= 0xd7a3) ||	/* Hangul Syllables */
-		  (ucs >= 0xf900 && ucs <= 0xfaff) ||	/* CJK Compatibility
-												 * Ideographs */
-		  (ucs >= 0xfe30 && ucs <= 0xfe6f) ||	/* CJK Compatibility Forms */
-		  (ucs >= 0xff00 && ucs <= 0xff5f) ||	/* Fullwidth Forms */
-		  (ucs >= 0xffe0 && ucs <= 0xffe6) ||
-		  (ucs >= 0x20000 && ucs <= 0x2ffff)));
+	return 1;
 }
 
 /*
@@ -742,28 +775,32 @@ pg_mule2wchar_with_len(const unsigned char *from, pg_wchar *to, int len)
 
 	while (len > 0 && *from)
 	{
-		if (IS_LC1(*from) && len >= 2)
+		if (IS_LC1(*from))
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 2);
 			*to = *from++ << 16;
 			*to |= *from++;
 			len -= 2;
 		}
-		else if (IS_LCPRV1(*from) && len >= 3)
+		else if (IS_LCPRV1(*from))
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 3);
 			from++;
 			*to = *from++ << 16;
 			*to |= *from++;
 			len -= 3;
 		}
-		else if (IS_LC2(*from) && len >= 3)
+		else if (IS_LC2(*from))
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 3);
 			*to = *from++ << 16;
 			*to |= *from++ << 8;
 			*to |= *from++;
 			len -= 3;
 		}
-		else if (IS_LCPRV2(*from) && len >= 4)
+		else if (IS_LCPRV2(*from))
 		{
+			MB2CHAR_NEED_AT_LEAST(len, 4);
 			from++;
 			*to = *from++ << 16;
 			*to |= *from++ << 8;
@@ -1791,11 +1828,227 @@ pg_utf8_verifychar(const unsigned char *s, int len)
 	return l;
 }
 
+/*
+ * The fast path of the UTF-8 verifier uses a deterministic finite automaton
+ * (DFA) for multibyte characters. In a traditional table-driven DFA, the
+ * input byte and current state are used to compute an index into an array of
+ * state transitions. Since the address of the next transition is dependent
+ * on this computation, there is latency in executing the load instruction,
+ * and the CPU is not kept busy.
+ *
+ * Instead, we use a "shift-based" DFA as described by Per Vognsen:
+ *
+ * https://gist.github.com/pervognsen/218ea17743e1442e59bb60d29b1aa725
+ *
+ * In a shift-based DFA, the input byte is an index into array of integers
+ * whose bit pattern encodes the state transitions. To compute the next
+ * state, we simply right-shift the integer by the current state and apply a
+ * mask. In this scheme, the address of the transition only depends on the
+ * input byte, so there is better pipelining.
+ *
+ * The naming convention for states and transitions was adopted from a UTF-8
+ * to UTF-16/32 transcoder, whose table is reproduced below:
+ *
+ * https://github.com/BobSteagall/utf_utils/blob/6b7a465265de2f5fa6133d653df0c9bdd73bbcf8/src/utf_utils.cpp
+ *
+ * ILL  ASC  CR1  CR2  CR3  L2A  L3A  L3B  L3C  L4A  L4B  L4C CLASS / STATE
+ * ==========================================================================
+ * err, END, err, err, err, CS1, P3A, CS2, P3B, P4A, CS3, P4B,      | BGN/END
+ * err, err, err, err, err, err, err, err, err, err, err, err,      | ERR
+ *                                                                  |
+ * err, err, END, END, END, err, err, err, err, err, err, err,      | CS1
+ * err, err, CS1, CS1, CS1, err, err, err, err, err, err, err,      | CS2
+ * err, err, CS2, CS2, CS2, err, err, err, err, err, err, err,      | CS3
+ *                                                                  |
+ * err, err, err, err, CS1, err, err, err, err, err, err, err,      | P3A
+ * err, err, CS1, CS1, err, err, err, err, err, err, err, err,      | P3B
+ *                                                                  |
+ * err, err, err, CS2, CS2, err, err, err, err, err, err, err,      | P4A
+ * err, err, CS2, err, err, err, err, err, err, err, err, err,      | P4B
+ *
+ * In the most straightforward implementation, a shift-based DFA for UTF-8
+ * requires 64-bit integers to encode the transitions, but with an SMT solver
+ * it's possible to find state numbers such that the transitions fit within
+ * 32-bit integers, as Dougall Johnson demonstrated:
+ *
+ * https://gist.github.com/dougallj/166e326de6ad4cf2c94be97a204c025f
+ *
+ * This packed representation is the reason for the seemingly odd choice of
+ * state values below.
+ */
+
+/* Error */
+#define	ERR  0
+/* Begin */
+#define	BGN 11
+/* Continuation states, expect 1/2/3 continuation bytes */
+#define	CS1 16
+#define	CS2  1
+#define	CS3  5
+/* Partial states, where the first continuation byte has a restricted range */
+#define	P3A  6					/* Lead was E0, check for 3-byte overlong */
+#define	P3B 20					/* Lead was ED, check for surrogate */
+#define	P4A 25					/* Lead was F0, check for 4-byte overlong */
+#define	P4B 30					/* Lead was F4, check for too-large */
+/* Begin and End are the same state */
+#define	END BGN
+
+/* the encoded state transitions for the lookup table */
+
+/* ASCII */
+#define ASC (END << BGN)
+/* 2-byte lead */
+#define L2A (CS1 << BGN)
+/* 3-byte lead */
+#define L3A (P3A << BGN)
+#define L3B (CS2 << BGN)
+#define L3C (P3B << BGN)
+/* 4-byte lead */
+#define L4A (P4A << BGN)
+#define L4B (CS3 << BGN)
+#define L4C (P4B << BGN)
+/* continuation byte */
+#define CR1 (END << CS1) | (CS1 << CS2) | (CS2 << CS3) | (CS1 << P3B) | (CS2 << P4B)
+#define CR2 (END << CS1) | (CS1 << CS2) | (CS2 << CS3) | (CS1 << P3B) | (CS2 << P4A)
+#define CR3 (END << CS1) | (CS1 << CS2) | (CS2 << CS3) | (CS1 << P3A) | (CS2 << P4A)
+/* invalid byte */
+#define ILL ERR
+
+static const uint32 Utf8Transition[256] =
+{
+	/* ASCII */
+
+	ILL, ASC, ASC, ASC, ASC, ASC, ASC, ASC,
+	ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC,
+	ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC,
+	ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC,
+
+	ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC,
+	ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC,
+	ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC,
+	ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC,
+
+	ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC,
+	ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC,
+	ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC,
+	ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC,
+
+	ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC,
+	ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC,
+	ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC,
+	ASC, ASC, ASC, ASC, ASC, ASC, ASC, ASC,
+
+	/* continuation bytes */
+
+	/* 80..8F */
+	CR1, CR1, CR1, CR1, CR1, CR1, CR1, CR1,
+	CR1, CR1, CR1, CR1, CR1, CR1, CR1, CR1,
+
+	/* 90..9F */
+	CR2, CR2, CR2, CR2, CR2, CR2, CR2, CR2,
+	CR2, CR2, CR2, CR2, CR2, CR2, CR2, CR2,
+
+	/* A0..BF */
+	CR3, CR3, CR3, CR3, CR3, CR3, CR3, CR3,
+	CR3, CR3, CR3, CR3, CR3, CR3, CR3, CR3,
+	CR3, CR3, CR3, CR3, CR3, CR3, CR3, CR3,
+	CR3, CR3, CR3, CR3, CR3, CR3, CR3, CR3,
+
+	/* leading bytes */
+
+	/* C0..DF */
+	ILL, ILL, L2A, L2A, L2A, L2A, L2A, L2A,
+	L2A, L2A, L2A, L2A, L2A, L2A, L2A, L2A,
+	L2A, L2A, L2A, L2A, L2A, L2A, L2A, L2A,
+	L2A, L2A, L2A, L2A, L2A, L2A, L2A, L2A,
+
+	/* E0..EF */
+	L3A, L3B, L3B, L3B, L3B, L3B, L3B, L3B,
+	L3B, L3B, L3B, L3B, L3B, L3C, L3B, L3B,
+
+	/* F0..FF */
+	L4A, L4B, L4B, L4B, L4C, ILL, ILL, ILL,
+	ILL, ILL, ILL, ILL, ILL, ILL, ILL, ILL
+};
+
+static void
+utf8_advance(const unsigned char *s, uint32 *state, int len)
+{
+	/* Note: We deliberately don't check the state's value here. */
+	while (len > 0)
+	{
+		/*
+		 * It's important that the mask value is 31: In most instruction sets,
+		 * a shift by a 32-bit operand is understood to be a shift by its mod
+		 * 32, so the compiler should elide the mask operation.
+		 */
+		*state = Utf8Transition[*s++] >> (*state & 31);
+		len--;
+	}
+
+	*state &= 31;
+}
+
 static int
 pg_utf8_verifystr(const unsigned char *s, int len)
 {
 	const unsigned char *start = s;
+	const int	orig_len = len;
+	uint32		state = BGN;
 
+/*
+ * With a stride of two vector widths, gcc will unroll the loop. Even if
+ * the compiler can unroll a longer loop, it's not worth it because we
+ * must fall back to the byte-wise algorithm if we find any non-ASCII.
+ */
+#define STRIDE_LENGTH (2 * sizeof(Vector8))
+
+	if (len >= STRIDE_LENGTH)
+	{
+		while (len >= STRIDE_LENGTH)
+		{
+			/*
+			 * If the chunk is all ASCII, we can skip the full UTF-8 check,
+			 * but we must first check for a non-END state, which means the
+			 * previous chunk ended in the middle of a multibyte sequence.
+			 */
+			if (state != END || !is_valid_ascii(s, STRIDE_LENGTH))
+				utf8_advance(s, &state, STRIDE_LENGTH);
+
+			s += STRIDE_LENGTH;
+			len -= STRIDE_LENGTH;
+		}
+
+		/* The error state persists, so we only need to check for it here. */
+		if (state == ERR)
+		{
+			/*
+			 * Start over from the beginning with the slow path so we can
+			 * count the valid bytes.
+			 */
+			len = orig_len;
+			s = start;
+		}
+		else if (state != END)
+		{
+			/*
+			 * The fast path exited in the middle of a multibyte sequence.
+			 * Walk backwards to find the leading byte so that the slow path
+			 * can resume checking from there. We must always backtrack at
+			 * least one byte, since the current byte could be e.g. an ASCII
+			 * byte after a 2-byte lead, which is invalid.
+			 */
+			do
+			{
+				Assert(s > start);
+				s--;
+				len++;
+				Assert(IS_HIGHBIT_SET(*s));
+			} while (pg_utf_mblen(s) <= 1);
+		}
+	}
+
+	/* check remaining bytes */
 	while (len > 0)
 	{
 		int			l;
@@ -1914,7 +2167,7 @@ pg_encoding_set_invalid(int encoding, char *dst)
 const pg_wchar_tbl pg_wchar_table[] = {
 	{pg_ascii2wchar_with_len, pg_wchar2single_with_len, pg_ascii_mblen, pg_ascii_dsplen, pg_ascii_verifychar, pg_ascii_verifystr, 1},	/* PG_SQL_ASCII */
 	{pg_eucjp2wchar_with_len, pg_wchar2euc_with_len, pg_eucjp_mblen, pg_eucjp_dsplen, pg_eucjp_verifychar, pg_eucjp_verifystr, 3},	/* PG_EUC_JP */
-	{pg_euccn2wchar_with_len, pg_wchar2euc_with_len, pg_euccn_mblen, pg_euccn_dsplen, pg_euccn_verifychar, pg_euccn_verifystr, 2},	/* PG_EUC_CN */
+	{pg_euccn2wchar_with_len, pg_wchar2euc_with_len, pg_euccn_mblen, pg_euccn_dsplen, pg_euccn_verifychar, pg_euccn_verifystr, 3},	/* PG_EUC_CN */
 	{pg_euckr2wchar_with_len, pg_wchar2euc_with_len, pg_euckr_mblen, pg_euckr_dsplen, pg_euckr_verifychar, pg_euckr_verifystr, 3},	/* PG_EUC_KR */
 	{pg_euctw2wchar_with_len, pg_wchar2euc_with_len, pg_euctw_mblen, pg_euctw_dsplen, pg_euctw_verifychar, pg_euctw_verifystr, 4},	/* PG_EUC_TW */
 	{pg_eucjp2wchar_with_len, pg_wchar2euc_with_len, pg_eucjp_mblen, pg_eucjp_dsplen, pg_eucjp_verifychar, pg_eucjp_verifystr, 3},	/* PG_EUC_JIS_2004 */
@@ -1959,10 +2212,27 @@ const pg_wchar_tbl pg_wchar_table[] = {
 /*
  * Returns the byte length of a multibyte character.
  *
- * Caution: when dealing with text that is not certainly valid in the
- * specified encoding, the result may exceed the actual remaining
- * string length.  Callers that are not prepared to deal with that
- * should use pg_encoding_mblen_bounded() instead.
+ * Choose "mblen" functions based on the input string characteristics.
+ * pg_encoding_mblen() can be used when ANY of these conditions are met:
+ *
+ * - The input string is zero-terminated
+ *
+ * - The input string is known to be valid in the encoding (e.g., string
+ *   converted from database encoding)
+ *
+ * - The encoding is not GB18030 (e.g., when only database encodings are
+ *   passed to 'encoding' parameter)
+ *
+ * encoding==GB18030 requires examining up to two bytes to determine character
+ * length.  Therefore, callers satisfying none of those conditions must use
+ * pg_encoding_mblen_or_incomplete() instead, as access to mbstr[1] cannot be
+ * guaranteed to be within allocation bounds.
+ *
+ * When dealing with text that is not certainly valid in the specified
+ * encoding, the result may exceed the actual remaining string length.
+ * Callers that are not prepared to deal with that should use Min(remaining,
+ * pg_encoding_mblen_or_incomplete()).  For zero-terminated strings, that and
+ * pg_encoding_mblen_bounded() are interchangeable.
  */
 int
 pg_encoding_mblen(int encoding, const char *mbstr)
@@ -1973,8 +2243,28 @@ pg_encoding_mblen(int encoding, const char *mbstr)
 }
 
 /*
- * Returns the byte length of a multibyte character; but not more than
- * the distance to end of string.
+ * Returns the byte length of a multibyte character (possibly not
+ * zero-terminated), or INT_MAX if too few bytes remain to determine a length.
+ */
+int
+pg_encoding_mblen_or_incomplete(int encoding, const char *mbstr,
+								size_t remaining)
+{
+	/*
+	 * Define zero remaining as too few, even for single-byte encodings.
+	 * pg_gb18030_mblen() reads one or two bytes; single-byte encodings read
+	 * zero; others read one.
+	 */
+	if (remaining < 1 ||
+		(encoding == PG_GB18030 && IS_HIGHBIT_SET(*mbstr) && remaining < 2))
+		return INT_MAX;
+	return pg_encoding_mblen(encoding, mbstr);
+}
+
+/*
+ * Returns the byte length of a multibyte character; but not more than the
+ * distance to the terminating zero byte.  For input that might lack a
+ * terminating zero, use Min(remaining, pg_encoding_mblen_or_incomplete()).
  */
 int
 pg_encoding_mblen_bounded(int encoding, const char *mbstr)

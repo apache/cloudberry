@@ -3,7 +3,7 @@
  * partbounds.c
  *		Support routines for manipulating partition bounds
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -31,6 +31,7 @@
 #include "partitioning/partbounds.h"
 #include "partitioning/partdesc.h"
 #include "partitioning/partprune.h"
+#include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/datum.h"
 #include "utils/fmgroids.h"
@@ -103,7 +104,7 @@ static PartitionBoundInfo create_list_bounds(PartitionBoundSpec **boundspecs,
 static PartitionBoundInfo create_range_bounds(PartitionBoundSpec **boundspecs,
 											  int nparts, PartitionKey key, int **mapping);
 static PartitionBoundInfo merge_list_bounds(FmgrInfo *partsupfunc,
-											Oid *collations,
+											Oid *partcollation,
 											RelOptInfo *outer_rel,
 											RelOptInfo *inner_rel,
 											JoinType jointype,
@@ -122,8 +123,8 @@ static void free_partition_map(PartitionMap *map);
 static bool is_dummy_partition(RelOptInfo *rel, int part_index);
 static int	merge_matching_partitions(PartitionMap *outer_map,
 									  PartitionMap *inner_map,
-									  int outer_part,
-									  int inner_part,
+									  int outer_index,
+									  int inner_index,
 									  int *next_index);
 static int	process_outer_partition(PartitionMap *outer_map,
 									PartitionMap *inner_map,
@@ -246,8 +247,7 @@ static List *get_range_nulltest(PartitionKey key);
  *		expressions as partition constraint
  */
 List *
-get_qual_from_partbound(Relation rel, Relation parent,
-						PartitionBoundSpec *spec)
+get_qual_from_partbound(Relation parent, PartitionBoundSpec *spec)
 {
 	PartitionKey key = RelationGetPartitionKey(parent);
 	List	   *my_qual = NIL;
@@ -270,10 +270,6 @@ get_qual_from_partbound(Relation rel, Relation parent,
 			Assert(spec->strategy == PARTITION_STRATEGY_RANGE);
 			my_qual = get_qual_for_range(parent, spec, false);
 			break;
-
-		default:
-			elog(ERROR, "unexpected partition strategy: %d",
-				 (int) key->strategy);
 	}
 
 	return my_qual;
@@ -338,11 +334,6 @@ partition_bounds_create(PartitionBoundSpec **boundspecs, int nparts,
 
 		case PARTITION_STRATEGY_RANGE:
 			return create_range_bounds(boundspecs, nparts, key, mapping);
-
-		default:
-			elog(ERROR, "unexpected partition strategy: %d",
-				 (int) key->strategy);
-			break;
 	}
 
 	Assert(false);
@@ -396,6 +387,7 @@ create_hash_bounds(PartitionBoundSpec **boundspecs, int nparts,
 	boundinfo->ndatums = nparts;
 	boundinfo->datums = (Datum **) palloc0(nparts * sizeof(Datum *));
 	boundinfo->kind = NULL;
+	boundinfo->interleaved_parts = NULL;
 	boundinfo->nindexes = greatest_modulus;
 	boundinfo->indexes = (int *) palloc(greatest_modulus * sizeof(int));
 	for (i = 0; i < greatest_modulus; i++)
@@ -453,7 +445,7 @@ get_non_null_list_datum_count(PartitionBoundSpec **boundspecs, int nparts)
 
 		foreach(lc, boundspecs[i]->listdatums)
 		{
-			Const	   *val = castNode(Const, lfirst(lc));
+			Const	   *val = lfirst_node(Const, lc);
 
 			if (!val->constisnull)
 				count++;
@@ -514,7 +506,7 @@ create_list_bounds(PartitionBoundSpec **boundspecs, int nparts,
 
 		foreach(c, spec->listdatums)
 		{
-			Const	   *val = castNode(Const, lfirst(c));
+			Const	   *val = lfirst_node(Const, c);
 
 			if (!val->constisnull)
 			{
@@ -539,11 +531,12 @@ create_list_bounds(PartitionBoundSpec **boundspecs, int nparts,
 	Assert(j == ndatums);
 
 	qsort_arg(all_values, ndatums, sizeof(PartitionListValue),
-			  qsort_partition_list_value_cmp, (void *) key);
+			  qsort_partition_list_value_cmp, key);
 
 	boundinfo->ndatums = ndatums;
 	boundinfo->datums = (Datum **) palloc0(ndatums * sizeof(Datum *));
 	boundinfo->kind = NULL;
+	boundinfo->interleaved_parts = NULL;
 	boundinfo->nindexes = ndatums;
 	boundinfo->indexes = (int *) palloc(ndatums * sizeof(int));
 
@@ -607,6 +600,70 @@ create_list_bounds(PartitionBoundSpec **boundspecs, int nparts,
 		(*mapping)[default_index] = next_index++;
 		boundinfo->default_index = (*mapping)[default_index];
 	}
+
+	/*
+	 * Calculate interleaved partitions.  Here we look for partitions which
+	 * might be interleaved with other partitions and set a bit in
+	 * interleaved_parts for any partitions which may be interleaved with
+	 * another partition.
+	 */
+
+	/*
+	 * There must be multiple partitions to have any interleaved partitions,
+	 * otherwise there's nothing to interleave with.
+	 */
+	if (nparts > 1)
+	{
+		/*
+		 * Short-circuit check to see if only 1 Datum is allowed per
+		 * partition.  When this is true there's no need to do the more
+		 * expensive checks to look for interleaved values.
+		 */
+		if (boundinfo->ndatums +
+			partition_bound_accepts_nulls(boundinfo) +
+			partition_bound_has_default(boundinfo) != nparts)
+		{
+			int			last_index = -1;
+
+			/*
+			 * Since the indexes array is sorted in Datum order, if any
+			 * partitions are interleaved then it will show up by the
+			 * partition indexes not being in ascending order.  Here we check
+			 * for that and record all partitions that are out of order.
+			 */
+			for (i = 0; i < boundinfo->nindexes; i++)
+			{
+				int			index = boundinfo->indexes[i];
+
+				if (index < last_index)
+					boundinfo->interleaved_parts = bms_add_member(boundinfo->interleaved_parts,
+																  index);
+
+				/*
+				 * Otherwise, if the null_index exists in the indexes array,
+				 * then the NULL partition must also allow some other Datum,
+				 * therefore it's "interleaved".
+				 */
+				else if (partition_bound_accepts_nulls(boundinfo) &&
+						 index == boundinfo->null_index)
+					boundinfo->interleaved_parts = bms_add_member(boundinfo->interleaved_parts,
+																  index);
+
+				last_index = index;
+			}
+		}
+
+		/*
+		 * The DEFAULT partition is the "catch-all" partition that can contain
+		 * anything that does not belong to any other partition.  If there are
+		 * any other partitions then the DEFAULT partition must be marked as
+		 * interleaved.
+		 */
+		if (partition_bound_has_default(boundinfo))
+			boundinfo->interleaved_parts = bms_add_member(boundinfo->interleaved_parts,
+														  boundinfo->default_index);
+	}
+
 
 	/* All partitions must now have been assigned canonical indexes. */
 	Assert(next_index == nparts);
@@ -680,7 +737,7 @@ create_range_bounds(PartitionBoundSpec **boundspecs, int nparts,
 	qsort_arg(all_bounds, ndatums,
 			  sizeof(PartitionRangeBound *),
 			  qsort_partition_rbound_cmp,
-			  (void *) key);
+			  key);
 
 	/* Save distinct bounds from all_bounds into rbounds. */
 	rbounds = (PartitionRangeBound **)
@@ -751,6 +808,7 @@ create_range_bounds(PartitionBoundSpec **boundspecs, int nparts,
 	boundinfo->kind = (PartitionRangeDatumKind **)
 		palloc(ndatums *
 			   sizeof(PartitionRangeDatumKind *));
+	boundinfo->interleaved_parts = NULL;
 
 	/*
 	 * For range partitioning, an additional value of -1 is stored as the last
@@ -952,7 +1010,7 @@ partition_bounds_copy(PartitionBoundInfo src,
 	int			partnatts;
 	bool		hash_part;
 	int			natts;
-	Datum      *boundDatums;
+	Datum	   *boundDatums;
 
 	dest = (PartitionBoundInfo) palloc(sizeof(PartitionBoundInfoData));
 
@@ -969,10 +1027,13 @@ partition_bounds_copy(PartitionBoundInfo src,
 	if (src->kind != NULL)
 	{
 		PartitionRangeDatumKind *boundKinds;
+
 		/* only RANGE partition should have a non-NULL kind */
 		Assert(key->strategy == PARTITION_STRATEGY_RANGE);
+
 		dest->kind = (PartitionRangeDatumKind **) palloc(ndatums *
 														 sizeof(PartitionRangeDatumKind *));
+
 		/*
 		 * In the loop below, to save from allocating a series of small arrays
 		 * for storing the PartitionRangeDatumKind, we allocate a single chunk
@@ -989,6 +1050,9 @@ partition_bounds_copy(PartitionBoundInfo src,
 	}
 	else
 		dest->kind = NULL;
+
+	/* copy interleaved partitions for LIST partitioned tables */
+	dest->interleaved_parts = bms_copy(src->interleaved_parts);
 
 	/*
 	 * For hash partitioning, datums array will have two elements - modulus
@@ -1107,12 +1171,9 @@ partition_bounds_merge(int partnatts,
 									  jointype,
 									  outer_parts,
 									  inner_parts);
-
-		default:
-			elog(ERROR, "unexpected partition strategy: %d",
-				 (int) outer_rel->boundinfo->strategy);
-			return NULL;		/* keep compiler quiet */
 	}
+
+	return NULL;
 }
 
 /*
@@ -2278,9 +2339,9 @@ merge_default_partitions(PartitionMap *outer_map,
 		/*
 		 * The default partitions have to be joined with each other, so merge
 		 * them.  Note that each of the default partitions isn't merged yet
-		 * (see, process_outer_partition()/process_innerer_partition()), so
-		 * they should be merged successfully.  The merged partition will act
-		 * as the default partition of the join relation.
+		 * (see, process_outer_partition()/process_inner_partition()), so they
+		 * should be merged successfully.  The merged partition will act as
+		 * the default partition of the join relation.
 		 */
 		Assert(outer_merged_index == -1);
 		Assert(inner_merged_index == -1);
@@ -2491,6 +2552,9 @@ build_merged_partition_bounds(char strategy, List *merged_datums,
 		Assert(merged_kinds == NIL);
 		merged_bounds->kind = NULL;
 	}
+
+	/* interleaved_parts is always NULL for join relations. */
+	merged_bounds->interleaved_parts = NULL;
 
 	Assert(list_length(merged_indexes) == ndatums);
 	merged_bounds->nindexes = ndatums;
@@ -2777,13 +2841,15 @@ add_merged_range_bounds(int partnatts, FmgrInfo *partsupfuncs,
  *		that is partitions appearing earlier in the PartitionDesc sequence
  *		contain partition keys strictly less than those appearing later.
  *		Also, if NULL values are possible, they must come in the last
- *		partition defined in the PartitionDesc.
+ *		partition defined in the PartitionDesc.  'live_parts' marks which
+ *		partitions we should include when checking the ordering.  Partitions
+ *		that do not appear in 'live_parts' are ignored.
  *
  * If out of order, or there is insufficient info to know the order,
  * then we return false.
  */
 bool
-partitions_are_ordered(PartitionBoundInfo boundinfo, int nparts)
+partitions_are_ordered(PartitionBoundInfo boundinfo, Bitmapset *live_parts)
 {
 	Assert(boundinfo != NULL);
 
@@ -2795,40 +2861,25 @@ partitions_are_ordered(PartitionBoundInfo boundinfo, int nparts)
 			 * RANGE-type partitioning guarantees that the partitions can be
 			 * scanned in the order that they're defined in the PartitionDesc
 			 * to provide sequential, non-overlapping ranges of tuples.
-			 * However, if a DEFAULT partition exists then it doesn't work, as
-			 * that could contain tuples from either below or above the
-			 * defined range, or tuples belonging to gaps between partitions.
+			 * However, if a DEFAULT partition exists and it's contained
+			 * within live_parts, then the partitions are not ordered.
 			 */
-			if (!partition_bound_has_default(boundinfo))
+			if (!partition_bound_has_default(boundinfo) ||
+				!bms_is_member(boundinfo->default_index, live_parts))
 				return true;
 			break;
 
 		case PARTITION_STRATEGY_LIST:
 
 			/*
-			 * LIST partitioning can also guarantee ordering, but only if the
-			 * partitions don't accept interleaved values.  We could likely
-			 * check for this by looping over the PartitionBound's indexes
-			 * array to check that the indexes are in order.  For now, let's
-			 * just keep it simple and just accept LIST partitioning when
-			 * there's no DEFAULT partition, exactly one value per partition,
-			 * and optionally a NULL partition that does not accept any other
-			 * values.  Such a NULL partition will come last in the
-			 * PartitionDesc, and the other partitions will be properly
-			 * ordered.  This is a cheap test to make as it does not require
-			 * any per-partition processing.  Maybe we'd like to handle more
-			 * complex cases in the future.
+			 * LIST partitioned are ordered providing none of live_parts
+			 * overlap with the partitioned table's interleaved partitions.
 			 */
-			if (partition_bound_has_default(boundinfo))
-				return false;
-
-			if (boundinfo->ndatums + partition_bound_accepts_nulls(boundinfo)
-				== nparts)
+			if (!bms_overlap(live_parts, boundinfo->interleaved_parts))
 				return true;
-			break;
 
-		default:
-			/* HASH, or some other strategy */
+			break;
+		case PARTITION_STRATEGY_HASH:
 			break;
 	}
 
@@ -3011,7 +3062,7 @@ check_new_partition_bound(char *relname, Relation parent,
 
 					foreach(cell, spec->listdatums)
 					{
-						Const	   *val = castNode(Const, lfirst(cell));
+						Const	   *val = lfirst_node(Const, cell);
 
 						overlap_location = val->location;
 						if (!val->constisnull)
@@ -3141,7 +3192,7 @@ check_new_partition_bound(char *relname, Relation parent,
 								 * datums list.
 								 */
 								PartitionRangeDatum *datum =
-								list_nth(spec->upperdatums, Abs(cmpval) - 1);
+									list_nth(spec->upperdatums, abs(cmpval) - 1);
 
 								/*
 								 * The new partition overlaps with the
@@ -3167,7 +3218,7 @@ check_new_partition_bound(char *relname, Relation parent,
 						 * if we have equality, point to the first one.
 						 */
 						datum = cmpval == 0 ? linitial(spec->lowerdatums) :
-							list_nth(spec->lowerdatums, Abs(cmpval) - 1);
+							list_nth(spec->lowerdatums, abs(cmpval) - 1);
 						overlap = true;
 						overlap_location = datum->location;
 						with = boundinfo->indexes[offset + 1];
@@ -3176,10 +3227,6 @@ check_new_partition_bound(char *relname, Relation parent,
 
 				break;
 			}
-
-		default:
-			elog(ERROR, "unexpected partition strategy: %d",
-				 (int) key->strategy);
 	}
 
 	if (overlap)
@@ -3396,7 +3443,7 @@ make_one_partition_rbound(PartitionKey key, int index, List *datums, bool lower)
 	i = 0;
 	foreach(lc, datums)
 	{
-		PartitionRangeDatum *datum = castNode(PartitionRangeDatum, lfirst(lc));
+		PartitionRangeDatum *datum = lfirst_node(PartitionRangeDatum, lc);
 
 		/* What's contained in this range datum? */
 		bound->kind[i] = datum->kind;
@@ -3730,8 +3777,8 @@ partition_hash_bsearch(PartitionBoundInfo boundinfo,
 static int32
 qsort_partition_hbound_cmp(const void *a, const void *b)
 {
-	PartitionHashBound *const h1 = (PartitionHashBound *const) a;
-	PartitionHashBound *const h2 = (PartitionHashBound *const) b;
+	const PartitionHashBound *h1 = (const PartitionHashBound *) a;
+	const PartitionHashBound *h2 = (const PartitionHashBound *) b;
 
 	return partition_hbound_cmp(h1->modulus, h1->remainder,
 								h2->modulus, h2->remainder);
@@ -3745,8 +3792,8 @@ qsort_partition_hbound_cmp(const void *a, const void *b)
 static int32
 qsort_partition_list_value_cmp(const void *a, const void *b, void *arg)
 {
-	Datum		val1 = ((PartitionListValue *const) a)->value,
-				val2 = ((PartitionListValue *const) b)->value;
+	Datum		val1 = ((const PartitionListValue *) a)->value,
+				val2 = ((const PartitionListValue *) b)->value;
 	PartitionKey key = (PartitionKey) arg;
 
 	return DatumGetInt32(FunctionCall2Coll(&key->partsupfunc[0],
@@ -3874,6 +3921,7 @@ make_partition_op_expr(PartitionKey key, int keynum,
 					saopexpr->opno = operoid;
 					saopexpr->opfuncid = get_opcode(operoid);
 					saopexpr->hashfuncid = InvalidOid;
+					saopexpr->negfuncid = InvalidOid;
 					saopexpr->useOr = true;
 					saopexpr->inputcollid = key->partcollation[keynum];
 					saopexpr->args = list_make2(arg1, arrexpr);
@@ -3914,8 +3962,8 @@ make_partition_op_expr(PartitionKey key, int keynum,
 								   key->partcollation[keynum]);
 			break;
 
-		default:
-			elog(ERROR, "invalid partitioning strategy");
+		case PARTITION_STRATEGY_HASH:
+			Assert(false);
 			break;
 	}
 
@@ -4099,7 +4147,7 @@ get_qual_for_list(Relation parent, PartitionBoundSpec *spec)
 		 */
 		foreach(cell, spec->listdatums)
 		{
-			Const	   *val = castNode(Const, lfirst(cell));
+			Const	   *val = lfirst_node(Const, cell);
 
 			if (val->constisnull)
 				list_has_null = true;
@@ -4255,26 +4303,21 @@ get_qual_for_range(Relation parent, PartitionBoundSpec *spec,
 		PartitionDesc pdesc = RelationGetPartitionDesc(parent, false);
 		Oid		   *inhoids = pdesc->oids;
 		int			nparts = pdesc->nparts,
-					i;
+					k;
 
-		for (i = 0; i < nparts; i++)
+		for (k = 0; k < nparts; k++)
 		{
-			Oid			inhrelid = inhoids[i];
+			Oid			inhrelid = inhoids[k];
 			HeapTuple	tuple;
 			Datum		datum;
-			bool		isnull;
 			PartitionBoundSpec *bspec;
 
 			tuple = SearchSysCache1(RELOID, inhrelid);
 			if (!HeapTupleIsValid(tuple))
 				elog(ERROR, "cache lookup failed for relation %u", inhrelid);
 
-			datum = SysCacheGetAttr(RELOID, tuple,
-									Anum_pg_class_relpartbound,
-									&isnull);
-			if (isnull)
-				elog(ERROR, "null relpartbound for relation %u", inhrelid);
-
+			datum = SysCacheGetAttrNotNull(RELOID, tuple,
+										   Anum_pg_class_relpartbound);
 			bspec = (PartitionBoundSpec *)
 				stringToNode(TextDatumGetCString(datum));
 			if (!IsA(bspec, PartitionBoundSpec))
@@ -4354,8 +4397,8 @@ get_qual_for_range(Relation parent, PartitionBoundSpec *spec,
 		Datum		test_result;
 		bool		isNull;
 
-		ldatum = castNode(PartitionRangeDatum, lfirst(cell1));
-		udatum = castNode(PartitionRangeDatum, lfirst(cell2));
+		ldatum = lfirst_node(PartitionRangeDatum, cell1);
+		udatum = lfirst_node(PartitionRangeDatum, cell2);
 
 		/*
 		 * Since get_range_key_properties() modifies partexprs_item, and we
@@ -4436,11 +4479,11 @@ get_qual_for_range(Relation parent, PartitionBoundSpec *spec,
 			PartitionRangeDatum *ldatum_next = NULL,
 					   *udatum_next = NULL;
 
-			ldatum = castNode(PartitionRangeDatum, lfirst(cell1));
+			ldatum = lfirst_node(PartitionRangeDatum, cell1);
 			if (lnext(spec->lowerdatums, cell1))
 				ldatum_next = castNode(PartitionRangeDatum,
 									   lfirst(lnext(spec->lowerdatums, cell1)));
-			udatum = castNode(PartitionRangeDatum, lfirst(cell2));
+			udatum = lfirst_node(PartitionRangeDatum, cell2);
 			if (lnext(spec->upperdatums, cell2))
 				udatum_next = castNode(PartitionRangeDatum,
 									   lfirst(lnext(spec->upperdatums, cell2)));

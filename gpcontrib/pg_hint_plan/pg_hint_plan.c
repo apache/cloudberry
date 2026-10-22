@@ -53,7 +53,6 @@
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "utils/resowner.h"
-#include "utils/queryjumble.h"
 #include "catalog/pg_class.h"
 
 #include "executor/spi.h"
@@ -2004,7 +2003,7 @@ get_hints_from_comment(const char *p)
 {
 	const char *hint_head;
 	char	   *head;
-	char	   *tail;
+	const char	   *tail;
 	int			len;
 
 	if (p == NULL)
@@ -2051,7 +2050,7 @@ get_hints_from_comment(const char *p)
 	}
 
 	/* We don't support nested block comments. */
-	if ((head = strstr(p, BLOCK_COMMENT_START)) != NULL && head < tail)
+	if ((head = (char *)strstr(p, BLOCK_COMMENT_START)) != NULL && head < tail)
 	{
 		hint_ereport(head, ("Nested block comments are not supported."));
 		return NULL;
@@ -2964,7 +2963,7 @@ get_current_hint_string(ParseState *pstate, Query *query)
 
 		if (jumblequery)
 		{
-			jstate = JumbleQueryDirect(query, query_str);
+			jstate = JumbleQueryDirect(query);
 
 			/*
 			 * Normalize the query string by replacing constants with '?'
@@ -4103,18 +4102,20 @@ find_relid_aliasname(PlannerInfo *root, char *aliasname, List *initial_rels,
  * Return join hint which matches given joinrelids.
  */
 static JoinMethodHint *
-find_join_hint(Relids joinrelids)
+find_join_hint(PlannerInfo *root, Relids joinrelids)
 {
 	List	   *join_hint;
 	ListCell   *l;
-
-	join_hint = current_hint_state->join_hint_level[bms_num_members(joinrelids)];
+	Bitmapset  *baseRelSet;
+	
+	baseRelSet = bms_intersect(joinrelids, root->all_baserels);
+	join_hint = current_hint_state->join_hint_level[bms_num_members(baseRelSet)];
 
 	foreach(l, join_hint)
 	{
 		JoinMethodHint *hint = (JoinMethodHint *) lfirst(l);
 
-		if (bms_equal(joinrelids, hint->joinrelids))
+		if (bms_equal(baseRelSet, hint->joinrelids))
 			return hint;
 	}
 
@@ -4165,7 +4166,7 @@ OuterInnerJoinCreate(OuterInnerRels *outer_inner, LeadingHint *leading_hint,
 	 * If we don't have join method hint, create new one for the
 	 * join combination with all join methods are enabled.
 	 */
-	hint = find_join_hint(join_relids);
+	hint = find_join_hint(root, join_relids);
 	if (hint == NULL)
 	{
 		/*
@@ -4390,7 +4391,7 @@ transform_join_hints(HintState *hstate, PlannerInfo *root, int nbaserel,
 			 * If we don't have join method hint, create new one for the
 			 * join combination with all join methods are enabled.
 			 */
-			hint = find_join_hint(joinrelids);
+			hint = find_join_hint(root, joinrelids);
 			if (hint == NULL)
 			{
 				/*
@@ -4736,7 +4737,7 @@ pg_hint_plan_make_join_rel(PlannerInfo *root, RelOptInfo *rel1, RelOptInfo *rel2
 	}
 
 	joinrelids = bms_union(rel1->relids, rel2->relids);
-	hint = find_join_hint(joinrelids);
+	hint = find_join_hint(root, joinrelids);
 	bms_free(joinrelids);
 
 	if (!hint)
@@ -4789,7 +4790,7 @@ pg_hint_plan_add_paths_to_joinrel(PlannerInfo *root,
 	}
 
 	joinrelids = bms_union(outerrel->relids, innerrel->relids);
-	join_hint = find_join_hint(joinrelids);
+	join_hint = find_join_hint(root, joinrelids);
 	bms_free(joinrelids);
 
 	if (join_hint && join_hint->inner_nrels != 0)

@@ -1,7 +1,8 @@
 <!-- doc/src/sgml/pgbuffercache.sgml -->
 
 <sect1 id="pgbuffercache" xreflabel="pg_buffercache">
- <title>pg_buffercache</title>
+ <title>pg_buffercache &mdash; inspect <productname>PostgreSQL</productname>
+    buffer cache state</title>
 
  <indexterm zone="pgbuffercache">
   <primary>pg_buffercache</primary>
@@ -51,7 +52,7 @@
   using <command>GRANT</command>.
  </para>
 
- <sect2>
+ <sect2 id="pgbuffercache-pg-buffercache">
   <title>The <structname>pg_buffercache</structname> View</title>
 
   <para>
@@ -186,14 +187,14 @@
   </para>
  </sect2>
 
- <sect2>
+ <sect2 id="pgbuffercache-summary">
   <title>The <function>pg_buffercache_summary()</function> Function</title>
 
   <para>
-   The definitions of the columns exposed by the function are shown in <xref linkend="pgbuffercache_summary-columns"/>.
+   The definitions of the columns exposed by the function are shown in <xref linkend="pgbuffercache-summary-columns"/>.
   </para>
 
-  <table id="pgbuffercache_summary-columns">
+  <table id="pgbuffercache-summary-columns">
    <title><function>pg_buffercache_summary()</function> Output Columns</title>
    <tgroup cols="1">
     <thead>
@@ -213,7 +214,7 @@
        <structfield>buffers_used</structfield> <type>int4</type>
       </para>
       <para>
-       Number of unused shared buffers
+       Number of used shared buffers
       </para></entry>
      </row>
 
@@ -272,7 +273,7 @@
   </para>
  </sect2>
 
- <sect2>
+ <sect2 id="pgbuffercache-usage-counts">
   <title>The <function>pg_buffercache_usage_counts()</function> Function</title>
 
   <para>
@@ -399,7 +400,7 @@ regression=# SELECT * FROM pg_buffercache_usage_counts();
 </screen>
  </sect2>
 
- <sect2>
+ <sect2 id="pgbuffercache-authors">
   <title>Authors</title>
 
   <para>

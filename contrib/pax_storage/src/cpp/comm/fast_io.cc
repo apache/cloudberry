@@ -41,6 +41,7 @@
 namespace pax
 {
 
+#ifdef __linux__
 bool IOUringFastIO::available() {
   static int8_t support_io_uring = 0;
 
@@ -110,6 +111,7 @@ std::pair<int, int> IOUringFastIO::read(int fd, std::vector<IORequest> &request,
   }
   return {retcode, success_read}; // Placeholder
 }
+#endif // __linux__
 
 std::pair<int, int> SyncFastIO::read(int fd, std::vector<IORequest> &request, std::vector<bool> &result) {
   size_t total_requests = request.size();

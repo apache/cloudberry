@@ -3,7 +3,7 @@
  * to_tsany.c
  *		to_ts* function definitions
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  *
  *
  * IDENTIFICATION
@@ -97,7 +97,7 @@ uniqueWORD(ParsedWord *a, int32 l)
 	/*
 	 * Sort words with its positions
 	 */
-	qsort((void *) a, l, sizeof(ParsedWord), compareWORD);
+	qsort(a, l, sizeof(ParsedWord), compareWORD);
 
 	/*
 	 * Initialize first word and its first position
@@ -166,8 +166,8 @@ TSVector
 make_tsvector(ParsedText *prs)
 {
 	int			i,
-				j,
-				lenstr = 0,
+				j;
+	size_t		lenstr = 0,
 				totallen;
 	TSVector	in;
 	WordEntry  *ptr;
@@ -178,10 +178,22 @@ make_tsvector(ParsedText *prs)
 	if (prs->curwords > 0)
 		prs->curwords = uniqueWORD(prs->words, prs->curwords);
 
-	/* Determine space needed */
+	/*
+	 * Determine space needed.  Since what we are calculating is equivalent to
+	 * the size of a portion of the input data structure, lenstr surely can't
+	 * overflow size_t.
+	 */
 	for (i = 0; i < prs->curwords; i++)
 	{
-		lenstr += prs->words[i].len;
+		int			toklen = prs->words[i].len;
+
+		/* Double-check that caller passed only lexemes of valid lengths */
+		if (toklen <= 0 || toklen > MAXSTRLEN)
+			ereport(ERROR,
+					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+					 errmsg("lexeme is too long for tsvector (%zu bytes, max %zu bytes)",
+							(size_t) toklen, (size_t) MAXSTRLEN)));
+		lenstr += toklen;
 		if (prs->words[i].alen)
 		{
 			lenstr = SHORTALIGN(lenstr);
@@ -192,7 +204,8 @@ make_tsvector(ParsedText *prs)
 	if (lenstr > MAXSTRPOS)
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				 errmsg("string is too long for tsvector (%d bytes, max %d bytes)", lenstr, MAXSTRPOS)));
+				 errmsg("string is too long for tsvector (%zu bytes, max %zu bytes)",
+						lenstr, (size_t) MAXSTRPOS)));
 
 	totallen = CALCDATASIZE(prs->curwords, lenstr);
 	in = (TSVector) palloc0(totallen);
@@ -252,6 +265,8 @@ to_tsvector_byid(PG_FUNCTION_ARGS)
 												 * number */
 	if (prs.lenwords < 2)
 		prs.lenwords = 2;
+	else if (prs.lenwords > MaxAllocSize / sizeof(ParsedWord))
+		prs.lenwords = MaxAllocSize / sizeof(ParsedWord);
 	prs.curwords = 0;
 	prs.pos = 0;
 	prs.words = (ParsedWord *) palloc(sizeof(ParsedWord) * prs.lenwords);
@@ -569,7 +584,6 @@ pushval_morph(Datum opaque, TSQueryParserState state, char *strval, int lenval, 
 		}
 
 		pfree(prs.words);
-
 	}
 	else
 		pushStop(state);
@@ -595,7 +609,8 @@ to_tsquery_byid(PG_FUNCTION_ARGS)
 	query = parse_tsquery(text_to_cstring(in),
 						  pushval_morph,
 						  PointerGetDatum(&data),
-						  0);
+						  0,
+						  NULL);
 
 	PG_RETURN_TSQUERY(query);
 }
@@ -631,7 +646,8 @@ plainto_tsquery_byid(PG_FUNCTION_ARGS)
 	query = parse_tsquery(text_to_cstring(in),
 						  pushval_morph,
 						  PointerGetDatum(&data),
-						  P_TSQ_PLAIN);
+						  P_TSQ_PLAIN,
+						  NULL);
 
 	PG_RETURN_POINTER(query);
 }
@@ -668,7 +684,8 @@ phraseto_tsquery_byid(PG_FUNCTION_ARGS)
 	query = parse_tsquery(text_to_cstring(in),
 						  pushval_morph,
 						  PointerGetDatum(&data),
-						  P_TSQ_PLAIN);
+						  P_TSQ_PLAIN,
+						  NULL);
 
 	PG_RETURN_TSQUERY(query);
 }
@@ -705,7 +722,8 @@ websearch_to_tsquery_byid(PG_FUNCTION_ARGS)
 	query = parse_tsquery(text_to_cstring(in),
 						  pushval_morph,
 						  PointerGetDatum(&data),
-						  P_TSQ_WEB);
+						  P_TSQ_WEB,
+						  NULL);
 
 	PG_RETURN_TSQUERY(query);
 }
@@ -720,5 +738,4 @@ websearch_to_tsquery(PG_FUNCTION_ARGS)
 	PG_RETURN_DATUM(DirectFunctionCall2(websearch_to_tsquery_byid,
 										ObjectIdGetDatum(cfgId),
 										PointerGetDatum(in)));
-
 }

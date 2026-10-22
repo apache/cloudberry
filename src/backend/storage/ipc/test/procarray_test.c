@@ -51,7 +51,7 @@ test__CreateDistributedSnapshot(void **state)
 	setup();
 
 #ifdef USE_ASSERT_CHECKING
-	expect_value_count(LWLockHeldByMe, l, ProcArrayLock, -1);
+	expect_value_count(LWLockHeldByMe, lock, ProcArrayLock, -1);
 	will_return_count(LWLockHeldByMe, true, -1);
 #endif
 

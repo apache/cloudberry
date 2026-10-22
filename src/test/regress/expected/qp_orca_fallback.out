@@ -26,12 +26,12 @@ explain insert into constr_tab values (1,2,3);
 INSERT INTO constr_tab VALUES(1,5,3,4);
 set optimizer_enable_dml_constraints=off;
 explain update constr_tab set a = 10;
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
- Update on constr_tab  (cost=0.00..1.03 rows=1 width=22)
-   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=22)
-         ->  Split  (cost=0.00..1.03 rows=1 width=22)
-               ->  Seq Scan on constr_tab  (cost=0.00..1.01 rows=1 width=22)
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Update on constr_tab  (cost=0.00..1219.00 rows=0 width=0)
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..1219.00 rows=47400 width=26)
+         ->  Split Update  (cost=0.00..271.00 rows=47400 width=26)
+               ->  Seq Scan on constr_tab  (cost=0.00..271.00 rows=23700 width=26)
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -58,12 +58,12 @@ CREATE TABLE constr_tab ( a int NOT NULL, b int, c int, d int, CHECK (a+b>5)) DI
 INSERT INTO constr_tab VALUES(1,5,3,4);
 set optimizer_enable_dml_constraints=off;
 explain update constr_tab set a = 10;
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
- Update on constr_tab  (cost=0.00..1.05 rows=1 width=26)
-   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..1.05 rows=1 width=26)
-         ->  Split  (cost=0.00..1.01 rows=1 width=26)
-               ->  Seq Scan on constr_tab  (cost=0.00..1.01 rows=1 width=26)
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Update on constr_tab  (cost=0.00..1219.00 rows=0 width=0)
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..1219.00 rows=47400 width=26)
+         ->  Split Update  (cost=0.00..271.00 rows=47400 width=26)
+               ->  Seq Scan on constr_tab  (cost=0.00..271.00 rows=23700 width=26)
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -73,12 +73,12 @@ INSERT INTO constr_tab VALUES(1,5,3,4);
 INSERT INTO constr_tab VALUES(1,5,3,4);
 set optimizer_enable_dml_constraints=off;
 explain update constr_tab set b = 10;
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
- Update on constr_tab  (cost=0.00..1.03 rows=1 width=22)
-   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=22)
-         ->  Split  (cost=0.00..1.03 rows=1 width=22)
-               ->  Seq Scan on constr_tab  (cost=0.00..1.01 rows=1 width=22)
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Update on constr_tab  (cost=0.00..1219.00 rows=0 width=0)
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..1219.00 rows=47400 width=26)
+         ->  Split Update  (cost=0.00..271.00 rows=47400 width=26)
+               ->  Seq Scan on constr_tab  (cost=0.00..271.00 rows=23700 width=26)
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -88,12 +88,12 @@ INSERT INTO constr_tab VALUES(1,5,3,4);
 INSERT INTO constr_tab VALUES(1,5,3,4);
 set optimizer_enable_dml_constraints=off;
 explain update constr_tab set a = 10;
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
- Update on constr_tab  (cost=0.00..1.03 rows=1 width=22)
-   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=22)
-         ->  Split  (cost=0.00..1.03 rows=1 width=22)
-               ->  Seq Scan on constr_tab  (cost=0.00..1.01 rows=1 width=22)
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Update on constr_tab  (cost=0.00..1219.00 rows=0 width=0)
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..1219.00 rows=47400 width=26)
+         ->  Split Update  (cost=0.00..271.00 rows=47400 width=26)
+               ->  Seq Scan on constr_tab  (cost=0.00..271.00 rows=23700 width=26)
  Optimizer: Postgres query optimizer
 (5 rows)
 

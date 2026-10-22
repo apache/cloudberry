@@ -14,7 +14,7 @@
 -- Enable gp_autostats_mode to make sure the single value insert triger 2pc
 !\retcode gpconfig -c gp_autostats_mode -v 'on_no_stats' --skipvalidation;
 (exited with code 0)
-!\retcode gpstop -ari;
+!\retcode gpstop -arf;
 (exited with code 0)
 
 5: create table prepare_limit1 (a int);
@@ -119,5 +119,5 @@ DROP
 (exited with code 0)
 !\retcode gpconfig -c gp_autostats_mode -v 'none' --skipvalidation;
 (exited with code 0)
-!\retcode gpstop -ari;
+!\retcode gpstop -arf;
 (exited with code 0)

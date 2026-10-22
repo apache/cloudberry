@@ -24,6 +24,7 @@ A Model Communication Protocol (MCP) server for Apache Cloudberry database inter
 ## Features
 
 - **Database Metadata Resources**: Access schemas, tables, views, indexes, and column information
+- **Retrieval Tools**: Vector, full-text, and hybrid search for agent and RAG workloads
 - **Safe Query Tools**: Execute parameterized SQL queries with security validation
 - **Administrative Tools**: Table statistics, large table analysis, and query optimization
 - **Context-Aware Prompts**: Predefined prompts for common database tasks
@@ -114,9 +115,15 @@ python -m cbmcp.client
 
 ### Tools
 
+#### Retrieval Tools
+- `list_searchable_columns(schema, table, include_unindexed_text)` - Discover embedding columns, tsvector columns, and text columns with a full-text index
+- `vector_search(schema, table, vector_column, query_vector, limit, select_columns, filters, metric, probes, ef_search)` - Nearest neighbour search, optionally pre-filtered
+- `fulltext_search(schema, table, text_column, query, limit, select_columns, filters, language, query_mode, match_mode)` - Keyword search ranked by `ts_rank`
+- `hybrid_search(schema, table, vector_column, text_column, query_vector, query, limit, select_columns, filters, metric, language, query_mode, match_mode, rrf_k, candidates, probes, ef_search)` - Both of the above, fused by reciprocal rank
+
 #### Query Tools
-- `execute_query(query, params, readonly)` - Execute a SQL query
-- `explain_query(query, params)` - Get query execution plan
+- `execute_query(query, params, readonly)` - Execute a SQL query. `params` is a list bound to `$1, $2, ...` in order
+- `explain_query(query, params)` - Get query execution plan. Read-only statements only, because `EXPLAIN ANALYZE` runs what it is given
 - `get_table_stats(schema, table)` - Get table statistics
 - `list_large_tables(limit)` - List largest tables
 
@@ -151,6 +158,152 @@ python -m cbmcp.client
 - `suggest_indexes` - Index recommendation guidance
 - `database_health_check` - Database health assessment
 
+## Retrieval
+
+The retrieval tools let an agent search rather than only query. They run over
+Apache Cloudberry's own storage: embeddings in `pgvector` columns, documents in
+`text` or `tsvector` columns. Nothing is cached or indexed outside the database.
+
+### Prerequisites
+
+Vector search covers `vector`, `halfvec` and `sparsevec` columns. A query
+vector is always supplied as a plain list of numbers; for a `sparsevec` column
+it is converted to that type's own text form, which lists only the non-zero
+entries.
+
+Vector search needs the `pgvector` extension in the target database:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+Full-text search needs no extension. A GIN index over `to_tsvector(...)` is
+what makes it fast, and is also what `list_searchable_columns` looks for when
+deciding whether a text column is worth reporting.
+
+### Discovering what to search
+
+An agent that cannot see which columns hold embeddings has to guess from
+names. `list_searchable_columns` reports the column kind, the declared
+dimension, and the indexes defined on it:
+
+```json
+[
+  {"schema": "public", "table": "docs", "column": "embedding", "kind": "vector",
+   "type": "vector(8)", "dimension": 8, "full_text_indexed": false,
+   "indexes": [{"name": "docs_embedding_ivf", "method": "ivfflat", "on_expression": false}]},
+  {"schema": "public", "table": "docs", "column": "content", "kind": "text",
+   "type": "text", "dimension": null, "full_text_indexed": true,
+   "indexes": [{"name": "docs_content_gin", "method": "gin", "on_expression": true}]}
+]
+```
+
+### Filters
+
+`filters` is a list of conditions applied *before* ranking, so an approximate
+nearest neighbour search ranks only rows that already satisfy them:
+
+```json
+{"filters": [{"column": "customer_id", "operator": "in", "value": [1, 2, 3]}]}
+```
+
+Operators are `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in`, `not_in`, `like`,
+`ilike`, `is_null`, `is_not_null`. Column names are checked against the catalog
+and values are bound as query parameters, so a filter cannot inject SQL. For
+anything these do not express, use `execute_query`.
+
+### Matching every term, or any of them
+
+PostgreSQL's query constructors require *every* term to be present, so
+`query latency slow` becomes `'queri' & 'latenc' & 'slow'`. A document holding
+the first two but not the third does not match. The longer and more natural the
+query, the likelier it is that nothing matches at all, and the caller gets an
+empty result rather than an error. To an agent that reads as "this database
+holds nothing on the subject", which is the wrong conclusion when most of the
+terms did match something.
+
+`match_mode` decides how the terms are combined:
+
+| Mode | Behaviour |
+| --- | --- |
+| `all` | Every term must appear. Precise, and empty when one term is missing |
+| `any` | Any term may appear. `ts_rank` still puts the fuller matches first |
+| `all_then_any` | Requires every term, and widens to any of them only if that matched nothing. The default |
+
+A query that carries an explicit operator is never widened. ORing the lexemes
+of `latency -dashboard` would return exactly the rows the caller excluded, and
+flattening a phrase is the opposite of asking for one, so a negation or a
+phrase is read as an instruction to leave the query alone. The result then
+reports `widening_refused: true` alongside an empty row set.
+
+The result always says which reading produced the rows, so widening is never
+silent:
+
+```json
+{"search": {"match_mode": "all_then_any", "matched_with": "any", "widened": true}}
+```
+
+Under `all_then_any` the existence check is how the decision is made, so it
+runs on every call, not only when the strict reading fails. With a full-text
+index in place it is an index probe. Widening cannot rescue a query made
+entirely of stop words, because the parser produces no lexemes to widen to.
+
+This matters most in `hybrid_search`. Without it the keyword arm can go empty
+while the vector arm still returns rows, so the fused result is pure vector
+search presenting itself as hybrid, and nothing in the response says so.
+
+### Recall
+
+An IVFFlat index reads `ivfflat.probes` lists per scan, and the default of 1
+can miss the true nearest neighbour outright. `probes` (IVFFlat) and
+`ef_search` (HNSW) trade latency for recall, and the settings that were applied
+come back in the result so a run can be reproduced:
+
+```json
+{"search": {"mode": "vector", "settings": {"ivfflat.probes": 20}}}
+```
+
+The settings are session level and reset once the statement finishes, because
+Apache Cloudberry does not dispatch `SET LOCAL` to the segments where the index
+scan runs. Their upper bounds come from the installed pgvector rather than from
+this server, so a value it would refuse is rejected before anything is applied:
+`hnsw.ef_search` stops at 1000 while `ivfflat.probes` runs to 32768.
+
+Recall also decides whether a pre-filtered search finds anything at all. The
+filter is applied inside the index scan, so a selective filter combined with a
+low probe count can return no rows even though matching rows exist. Raise
+`probes` before concluding that a filter matched nothing.
+
+### Results
+
+Every retrieval tool returns the rows, the generated SQL, and what it searched:
+
+```json
+{
+  "columns": ["id", "content", "distance"],
+  "rows": [[4138, "...", 0.27]],
+  "row_count": 1,
+  "sql": "SELECT ... ORDER BY \"embedding\" <-> $1::text::\"vector\" LIMIT $2",
+  "search": {"mode": "vector", "metric": "l2", "limit": 1}
+}
+```
+
+Embedding columns are left out of the default projection because they are large
+and of no use to a reader; name one in `select_columns` and it comes back as
+text.
+
+A table is free to have a column of its own called `rank` or `score`. Because
+rows come back as positional lists, the computed column is renamed rather than
+duplicated, and `search` names it: `distance_column`, `rank_column`,
+`score_column`, `vector_rank_column`, `text_rank_column`. Read the name from
+there rather than assuming it.
+
+`hybrid_search` adds `score`, `vector_rank` and `text_rank`. A `null` rank means
+that arm did not return the row. A row scores
+`1 / (rrf_k + rank)` from each arm it appears in, so a row that only one arm
+found still places. Ranks are fused rather than raw scores because a distance
+and a `ts_rank` share no scale, but their orderings do.
+
 ## Security Features
 
 - **SQL Injection Prevention**: Comprehensive query validation
@@ -158,6 +311,7 @@ python -m cbmcp.client
 - **Parameterized Queries**: Safe parameter handling
 - **Connection Pooling**: Secure connection management
 - **Sensitive Table Protection**: Blocks access to system tables
+- **Catalog-Checked Identifiers**: Retrieval tools resolve every schema, table and column name against the catalog before it reaches a statement, and quote it afterwards
 
 
 ## Quick Start with Cloudberry Demo Cluster

@@ -187,7 +187,9 @@ ERROR:  functions in IMMV must be marked IMMUTABLE
     <listitem>
      <para>
       The name (optionally schema-qualified) of the materialized view to be
-      created.
+      created.  The name must be distinct from the name of any other relation
+      (table, sequence, index, view, materialized view, or foreign table) in
+      the same schema.
      </para>
     </listitem>
    </varlistentry>

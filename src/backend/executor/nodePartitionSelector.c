@@ -101,8 +101,7 @@ ExecInitPartitionSelector(PartitionSelector *node, EState *estate, int eflags)
 	outerPlanState(psstate) = ExecInitNode(outerPlan(node), estate, eflags);
 
 	/* Create the working data structure for pruning. */
-	psstate->prune_state = ExecCreatePartitionPruneState(&psstate->ps,
-														 node->part_prune_info);
+	psstate->prune_state = CreatePartitionPruneState(&psstate->ps, node->part_prune_info);
 
 	return psstate;
 }

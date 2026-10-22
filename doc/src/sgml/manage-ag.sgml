@@ -136,15 +136,21 @@ CREATE DATABASE <replaceable>name</replaceable>;
   </para>
 
   <para>
-   A second database,
-   <literal>template1</literal>,<indexterm><primary>template1</primary></indexterm>
-   is also created during database cluster initialization.  Whenever a
+   Two additional databases,
+   <literal>template1</literal><indexterm><primary>template1</primary></indexterm>
+   and
+   <literal>template0</literal>,<indexterm><primary>template0</primary></indexterm>
+   are also created during database cluster initialization.  Whenever a
    new database is created within the
    cluster, <literal>template1</literal> is essentially cloned.
    This means that any changes you make in <literal>template1</literal> are
    propagated to all subsequently created databases. Because of this,
    avoid creating objects in <literal>template1</literal> unless you want them
-   propagated to every newly created database.  More details
+   propagated to every newly created database.
+   <literal>template0</literal> is meant as a pristine copy of the original
+   contents of <literal>template1</literal>.  It can be cloned instead
+   of <literal>template1</literal> when it is important to make a database
+   without any such site-local additions.  More details
    appear in <xref linkend="manage-ag-templatedbs"/>.
   </para>
 
@@ -205,6 +211,12 @@ createdb -O <replaceable>rolename</replaceable> <replaceable>dbname</replaceable
    language <application>PL/Perl</application> in <literal>template1</literal>, it will
    automatically be available in user databases without any extra
    action being taken when those databases are created.
+  </para>
+
+  <para>
+   However, <command>CREATE DATABASE</command> does not copy database-level
+   <command>GRANT</command> permissions attached to the source database.
+   The new database has default database-level permissions.
   </para>
 
   <para>
@@ -406,7 +418,7 @@ dropdb <replaceable class="parameter">dbname</replaceable>
      of data files. They are dependent on metadata contained in the main
      data directory, and therefore cannot be attached to a different
      database cluster or backed up individually.  Similarly, if you lose
-     a tablespace (file deletion, disk failure, etc), the database cluster
+     a tablespace (file deletion, disk failure, etc.), the database cluster
      might become unreadable or unable to start.  Placing a tablespace
      on a temporary file system like a RAM disk risks the reliability of
      the entire cluster.
@@ -522,13 +534,6 @@ SELECT spcname FROM pg_tablespace;
 </synopsis>
    The <xref linkend="app-psql"/> program's <literal>\db</literal> meta-command
    is also useful for listing the existing tablespaces.
-  </para>
-
-  <para>
-   <productname>PostgreSQL</productname> makes use of symbolic links
-   to simplify the implementation of tablespaces. This
-   means that tablespaces can be used <emphasis>only</emphasis> on systems
-   that support symbolic links.
   </para>
 
   <para>

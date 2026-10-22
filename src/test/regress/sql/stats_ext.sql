@@ -103,10 +103,9 @@ ALTER TABLE ab1 ALTER a SET STATISTICS -1;
 ALTER STATISTICS ab1_a_b_stats SET STATISTICS 0;
 \d ab1
 ANALYZE ab1;
-SELECT stxname, stxdndistinct, stxddependencies, stxdmcv
-  FROM pg_statistic_ext s, pg_statistic_ext_data d
- WHERE s.stxname = 'ab1_a_b_stats'
-   AND d.stxoid = s.oid;
+SELECT stxname, stxdndistinct, stxddependencies, stxdmcv, stxdinherit
+  FROM pg_statistic_ext s LEFT JOIN pg_statistic_ext_data d ON (d.stxoid = s.oid)
+ WHERE s.stxname = 'ab1_a_b_stats';
 ALTER STATISTICS ab1_a_b_stats SET STATISTICS -1;
 \d+ ab1
 -- partial analyze doesn't build stats either
@@ -138,22 +137,25 @@ SELECT * FROM check_estimated_rows('SELECT a, b FROM stxdinh* GROUP BY 1, 2');
 SELECT * FROM check_estimated_rows('SELECT a, b FROM stxdinh* WHERE a = 0 AND b = 0');
 CREATE STATISTICS stxdinh ON a, b FROM stxdinh;
 VACUUM ANALYZE stxdinh, stxdinh1, stxdinh2;
--- Since the stats object does not include inherited stats, it should not
--- affect the estimates
+-- See if the extended stats affect the estimates
 SELECT * FROM check_estimated_rows('SELECT a, b FROM stxdinh* GROUP BY 1, 2');
 -- Dependencies are applied at individual relations (within append), so
 -- this estimate changes a bit because we improve estimates for the parent
 SELECT * FROM check_estimated_rows('SELECT a, b FROM stxdinh* WHERE a = 0 AND b = 0');
+-- Ensure correct (non-inherited) stats are applied to inherited query
+SELECT * FROM check_estimated_rows('SELECT a, b FROM ONLY stxdinh GROUP BY 1, 2');
+SELECT * FROM check_estimated_rows('SELECT a, b FROM ONLY stxdinh WHERE a = 0 AND b = 0');
 DROP TABLE stxdinh, stxdinh1, stxdinh2;
 
 -- Ensure inherited stats ARE applied to inherited query in partitioned table
 CREATE TABLE stxdinp(i int, a int, b int) PARTITION BY RANGE (i);
 CREATE TABLE stxdinp1 PARTITION OF stxdinp FOR VALUES FROM (1) TO (100);
 INSERT INTO stxdinp SELECT 1, a/100, a/100 FROM generate_series(1, 999) a;
-CREATE STATISTICS stxdinp ON a, b FROM stxdinp;
+CREATE STATISTICS stxdinp ON (a + 1), a, b FROM stxdinp;
 VACUUM ANALYZE stxdinp; -- partitions are processed recursively
 SELECT 1 FROM pg_statistic_ext WHERE stxrelid = 'stxdinp'::regclass;
 SELECT * FROM check_estimated_rows('SELECT a, b FROM stxdinp GROUP BY 1, 2');
+SELECT * FROM check_estimated_rows('SELECT a + 1, b FROM ONLY stxdinp GROUP BY 1, 2');
 DROP TABLE stxdinp;
 
 -- basic test for statistics on expressions
@@ -176,14 +178,21 @@ CREATE STATISTICS ab1_exprstat_4 ON date_trunc('day', d) FROM ab1;
 -- date_trunc on timestamp is immutable
 CREATE STATISTICS ab1_exprstat_5 ON date_trunc('day', c) FROM ab1;
 
+-- check use of a boolean-returning expression
+CREATE STATISTICS ab1_exprstat_6 ON
+  (case a when 1 then true else false end), b FROM ab1;
+
 -- insert some data and run analyze, to test that these cases build properly
 INSERT INTO ab1
-SELECT
-    generate_series(1,10),
-    generate_series(1,10),
-    generate_series('2020-10-01'::timestamp, '2020-10-10'::timestamp, interval '1 day'),
-    generate_series('2020-10-01'::timestamptz, '2020-10-10'::timestamptz, interval '1 day');
+SELECT x / 10, x / 3,
+    '2020-10-01'::timestamp + x * interval '1 day',
+    '2020-10-01'::timestamptz + x * interval '1 day'
+FROM generate_series(1, 100) x;
 ANALYZE ab1;
+
+-- apply some stats
+SELECT * FROM check_estimated_rows('SELECT * FROM ab1 WHERE (case a when 1 then true else false end) AND b=2');
+
 DROP TABLE ab1;
 
 -- Verify supported object types for extended statistics
@@ -923,7 +932,8 @@ CREATE TABLE mcv_lists (
     b VARCHAR,
     filler3 DATE,
     c INT,
-    d TEXT
+    d TEXT,
+    ia INT[]
 )
 WITH (autovacuum_enabled = off);
 
@@ -972,8 +982,9 @@ SELECT * FROM check_estimated_rows('SELECT * FROM mcv_lists WHERE mod(a,7) = 1 A
 TRUNCATE mcv_lists;
 DROP STATISTICS mcv_lists_stats;
 
-INSERT INTO mcv_lists (a, b, c, filler1)
-     SELECT mod(i,100), mod(i,50), mod(i,25), i FROM generate_series(1,5000) s(i);
+INSERT INTO mcv_lists (a, b, c, ia, filler1)
+     SELECT mod(i,100), mod(i,50), mod(i,25), array[mod(i,25)], i
+       FROM generate_series(1,5000) s(i);
 
 ANALYZE mcv_lists;
 
@@ -1022,9 +1033,11 @@ SELECT * FROM check_estimated_rows('SELECT * FROM mcv_lists WHERE a < ALL (ARRAY
 SELECT * FROM check_estimated_rows('SELECT * FROM mcv_lists WHERE a < ALL (ARRAY[4, 5]) AND b IN (''1'', ''2'', ''3'') AND c > ANY (ARRAY[1, 2, 3])');
 
 SELECT * FROM check_estimated_rows('SELECT * FROM mcv_lists WHERE a < ALL (ARRAY[4, 5]) AND b IN (''1'', ''2'', NULL, ''3'') AND c > ANY (ARRAY[1, 2, NULL, 3])');
+
+SELECT * FROM check_estimated_rows('SELECT * FROM mcv_lists WHERE a = ANY (ARRAY[4,5]) AND 4 = ANY(ia)');
 
 -- create statistics
-CREATE STATISTICS mcv_lists_stats (mcv) ON a, b, c FROM mcv_lists;
+CREATE STATISTICS mcv_lists_stats (mcv) ON a, b, c, ia FROM mcv_lists;
 
 ANALYZE mcv_lists;
 
@@ -1075,6 +1088,8 @@ SELECT * FROM check_estimated_rows('SELECT * FROM mcv_lists WHERE a < ALL (ARRAY
 SELECT * FROM check_estimated_rows('SELECT * FROM mcv_lists WHERE a < ALL (ARRAY[4, 5]) AND b IN (''1'', ''2'', ''3'') AND c > ANY (ARRAY[1, 2, 3])');
 
 SELECT * FROM check_estimated_rows('SELECT * FROM mcv_lists WHERE a < ALL (ARRAY[4, 5]) AND b IN (''1'', ''2'', NULL, ''3'') AND c > ANY (ARRAY[1, 2, NULL, 3])');
+
+SELECT * FROM check_estimated_rows('SELECT * FROM mcv_lists WHERE a = ANY (ARRAY[4,5]) AND 4 = ANY(ia)');
 
 -- check change of unrelated column type does not reset the MCV statistics
 ALTER TABLE mcv_lists ALTER COLUMN d TYPE VARCHAR(64);
@@ -1283,25 +1298,25 @@ WITH (autovacuum_enabled = off);
 
 INSERT INTO mcv_lists_uuid (a, b, c)
      SELECT
-         md5(mod(i,100)::text)::uuid,
-         md5(mod(i,50)::text)::uuid,
-         md5(mod(i,25)::text)::uuid
+         fipshash(mod(i,100)::text)::uuid,
+         fipshash(mod(i,50)::text)::uuid,
+         fipshash(mod(i,25)::text)::uuid
      FROM generate_series(1,5000) s(i);
 
 ANALYZE mcv_lists_uuid;
 
-SELECT * FROM check_estimated_rows('SELECT * FROM mcv_lists_uuid WHERE a = ''1679091c-5a88-0faf-6fb5-e6087eb1b2dc'' AND b = ''1679091c-5a88-0faf-6fb5-e6087eb1b2dc''');
+SELECT * FROM check_estimated_rows('SELECT * FROM mcv_lists_uuid WHERE a = ''e7f6c011-776e-8db7-cd33-0b54174fd76f'' AND b = ''e7f6c011-776e-8db7-cd33-0b54174fd76f''');
 
-SELECT * FROM check_estimated_rows('SELECT * FROM mcv_lists_uuid WHERE a = ''1679091c-5a88-0faf-6fb5-e6087eb1b2dc'' AND b = ''1679091c-5a88-0faf-6fb5-e6087eb1b2dc'' AND c = ''1679091c-5a88-0faf-6fb5-e6087eb1b2dc''');
+SELECT * FROM check_estimated_rows('SELECT * FROM mcv_lists_uuid WHERE a = ''e7f6c011-776e-8db7-cd33-0b54174fd76f'' AND b = ''e7f6c011-776e-8db7-cd33-0b54174fd76f'' AND c = ''e7f6c011-776e-8db7-cd33-0b54174fd76f''');
 
 CREATE STATISTICS mcv_lists_uuid_stats (mcv) ON a, b, c
   FROM mcv_lists_uuid;
 
 ANALYZE mcv_lists_uuid;
 
-SELECT * FROM check_estimated_rows('SELECT * FROM mcv_lists_uuid WHERE a = ''1679091c-5a88-0faf-6fb5-e6087eb1b2dc'' AND b = ''1679091c-5a88-0faf-6fb5-e6087eb1b2dc''');
+SELECT * FROM check_estimated_rows('SELECT * FROM mcv_lists_uuid WHERE a = ''e7f6c011-776e-8db7-cd33-0b54174fd76f'' AND b = ''e7f6c011-776e-8db7-cd33-0b54174fd76f''');
 
-SELECT * FROM check_estimated_rows('SELECT * FROM mcv_lists_uuid WHERE a = ''1679091c-5a88-0faf-6fb5-e6087eb1b2dc'' AND b = ''1679091c-5a88-0faf-6fb5-e6087eb1b2dc'' AND c = ''1679091c-5a88-0faf-6fb5-e6087eb1b2dc''');
+SELECT * FROM check_estimated_rows('SELECT * FROM mcv_lists_uuid WHERE a = ''e7f6c011-776e-8db7-cd33-0b54174fd76f'' AND b = ''e7f6c011-776e-8db7-cd33-0b54174fd76f'' AND c = ''e7f6c011-776e-8db7-cd33-0b54174fd76f''');
 
 DROP TABLE mcv_lists_uuid;
 
@@ -1315,7 +1330,7 @@ WITH (autovacuum_enabled = off);
 
 INSERT INTO mcv_lists_arrays (a, b, c)
      SELECT
-         ARRAY[md5((i/100)::text), md5((i/100-1)::text), md5((i/100+1)::text)],
+         ARRAY[fipshash((i/100)::text), fipshash((i/100-1)::text), fipshash((i/100+1)::text)],
          ARRAY[(i/100-1)::numeric/1000, (i/100)::numeric/1000, (i/100+1)::numeric/1000],
          ARRAY[(i/100-1), i/100, (i/100+1)]
      FROM generate_series(1,5000) s(i);
@@ -1515,7 +1530,7 @@ DROP TABLE expr_stats;
 
 -- statistics on expressions with different data types
 CREATE TABLE expr_stats (a int, b name, c text);
-INSERT INTO expr_stats SELECT mod(i,10), md5(mod(i,10)::text), md5(mod(i,10)::text) FROM generate_series(1,1000) s(i);
+INSERT INTO expr_stats SELECT mod(i,10), fipshash(mod(i,10)::text), fipshash(mod(i,10)::text) FROM generate_series(1,1000) s(i);
 ANALYZE expr_stats;
 
 SELECT * FROM check_estimated_rows('SELECT * FROM expr_stats WHERE a = 0 AND (b || c) <= ''z'' AND (c || b) >= ''0''');
@@ -1569,12 +1584,12 @@ ANALYZE tststats.priv_test_tbl;
 
 -- Check printing info about extended statistics by \dX
 create table stts_t1 (a int, b int);
-create statistics stts_1 (ndistinct) on a, b from stts_t1;
-create statistics stts_2 (ndistinct, dependencies) on a, b from stts_t1;
-create statistics stts_3 (ndistinct, dependencies, mcv) on a, b from stts_t1;
+create statistics (ndistinct) on a, b from stts_t1;
+create statistics (ndistinct, dependencies) on a, b from stts_t1;
+create statistics (ndistinct, dependencies, mcv) on a, b from stts_t1;
 
 create table stts_t2 (a int, b int, c int);
-create statistics stts_4 on b, c from stts_t2;
+create statistics on b, c from stts_t2;
 
 create table stts_t3 (col1 int, col2 int, col3 int);
 create statistics stts_hoge on col1, col2, col3 from stts_t3;
@@ -1589,12 +1604,20 @@ analyze stts_t1;
 set search_path to public, stts_s1, stts_s2, tststats;
 
 \dX
-\dX stts_?
+\dX stts_t*
 \dX *stts_hoge
 \dX+
-\dX+ stts_?
+\dX+ stts_t*
 \dX+ *stts_hoge
 \dX+ stts_s2.stts_yama
+
+create statistics (mcv) ON a, b, (a+b), (a-b) FROM stts_t1;
+create statistics (mcv) ON a, b, (a+b), (a-b) FROM stts_t1;
+create statistics (mcv) ON (a+b), (a-b) FROM stts_t1;
+\dX stts_t*expr*
+drop statistics stts_t1_a_b_expr_expr_stat;
+drop statistics stts_t1_a_b_expr_expr_stat1;
+drop statistics stts_t1_expr_expr_stat;
 
 set search_path to public, stts_s1;
 \dX
@@ -1625,7 +1648,14 @@ CREATE FUNCTION op_leak(int, int) RETURNS bool
     LANGUAGE plpgsql;
 CREATE OPERATOR <<< (procedure = op_leak, leftarg = int, rightarg = int,
                      restrict = scalarltsel);
+CREATE FUNCTION op_leak(record, record) RETURNS bool
+    AS 'BEGIN RAISE NOTICE ''op_leak => %, %'', $1, $2; RETURN $1 < $2; END'
+    LANGUAGE plpgsql;
+CREATE OPERATOR <<< (procedure = op_leak, leftarg = record, rightarg = record,
+                     restrict = scalarltsel);
 SELECT * FROM tststats.priv_test_tbl WHERE a <<< 0 AND b <<< 0; -- Permission denied
+SELECT * FROM tststats.priv_test_tbl t
+ WHERE a <<< 0 AND (b <<< 0 OR t.* <<< (1, 1) IS NOT NULL); -- Permission denied
 DELETE FROM tststats.priv_test_tbl WHERE a <<< 0 AND b <<< 0; -- Permission denied
 
 -- Grant access via a security barrier view, but hide all data
@@ -1637,17 +1667,47 @@ GRANT SELECT, DELETE ON tststats.priv_test_view TO regress_stats_user1;
 -- Should now have access via the view, but see nothing and leak nothing
 SET SESSION AUTHORIZATION regress_stats_user1;
 SELECT * FROM tststats.priv_test_view WHERE a <<< 0 AND b <<< 0; -- Should not leak
+SELECT * FROM tststats.priv_test_view t
+ WHERE a <<< 0 AND (b <<< 0 OR t.* <<< (1, 1) IS NOT NULL); -- Should not leak
 DELETE FROM tststats.priv_test_view WHERE a <<< 0 AND b <<< 0; -- Should not leak
 
 -- Grant table access, but hide all data with RLS
 RESET SESSION AUTHORIZATION;
 ALTER TABLE tststats.priv_test_tbl ENABLE ROW LEVEL SECURITY;
+CREATE POLICY priv_test_tbl_pol ON tststats.priv_test_tbl USING (2 * a < 0);
 GRANT SELECT, DELETE ON tststats.priv_test_tbl TO regress_stats_user1;
 
 -- Should now have direct table access, but see nothing and leak nothing
 SET SESSION AUTHORIZATION regress_stats_user1;
 SELECT * FROM tststats.priv_test_tbl WHERE a <<< 0 AND b <<< 0; -- Should not leak
+SELECT * FROM tststats.priv_test_tbl t
+ WHERE a <<< 0 AND (b <<< 0 OR t.* <<< (1, 1) IS NOT NULL); -- Should not leak
 DELETE FROM tststats.priv_test_tbl WHERE a <<< 0 AND b <<< 0; -- Should not leak
+
+-- Create plain inheritance parent table with no access permissions
+RESET SESSION AUTHORIZATION;
+CREATE TABLE tststats.priv_test_parent_tbl (a int, b int);
+ALTER TABLE tststats.priv_test_tbl INHERIT tststats.priv_test_parent_tbl;
+
+-- Should not have access to parent, and should leak nothing
+SET SESSION AUTHORIZATION regress_stats_user1;
+SELECT * FROM tststats.priv_test_parent_tbl WHERE a <<< 0 AND b <<< 0; -- Permission denied
+SELECT * FROM tststats.priv_test_parent_tbl t
+ WHERE a <<< 0 AND (b <<< 0 OR t.* <<< (1, 1) IS NOT NULL); -- Permission denied
+DELETE FROM tststats.priv_test_parent_tbl WHERE a <<< 0 AND b <<< 0; -- Permission denied
+
+-- Grant table access to parent, but hide all data with RLS
+RESET SESSION AUTHORIZATION;
+ALTER TABLE tststats.priv_test_parent_tbl ENABLE ROW LEVEL SECURITY;
+CREATE POLICY priv_test_parent_tbl_pol ON tststats.priv_test_parent_tbl USING (2 * a < 0);
+GRANT SELECT, DELETE ON tststats.priv_test_parent_tbl TO regress_stats_user1;
+
+-- Should now have direct table access to parent, but see nothing and leak nothing
+SET SESSION AUTHORIZATION regress_stats_user1;
+SELECT * FROM tststats.priv_test_parent_tbl WHERE a <<< 0 AND b <<< 0; -- Should not leak
+SELECT * FROM tststats.priv_test_parent_tbl t
+ WHERE a <<< 0 AND (b <<< 0 OR t.* <<< (1, 1) IS NOT NULL); -- Should not leak
+DELETE FROM tststats.priv_test_parent_tbl WHERE a <<< 0 AND b <<< 0; -- Should not leak
 
 -- privilege checks for pg_stats_ext and pg_stats_ext_exprs
 RESET SESSION AUTHORIZATION;
@@ -1675,12 +1735,47 @@ SELECT statistics_name, most_common_vals FROM pg_stats_ext x
 SELECT statistics_name, most_common_vals FROM pg_stats_ext_exprs x
     WHERE tablename = 'stats_ext_tbl' ORDER BY ROW(x.*);
 
+-- CREATE STATISTICS checks for CREATE on the schema
+RESET SESSION AUTHORIZATION;
+CREATE SCHEMA sts_sch1 CREATE TABLE sts_sch1.tbl (a INT, b INT);
+CREATE SCHEMA sts_sch2;
+GRANT USAGE ON SCHEMA sts_sch1, sts_sch2 TO regress_stats_user1;
+ALTER TABLE sts_sch1.tbl OWNER TO regress_stats_user1;
+SET SESSION AUTHORIZATION regress_stats_user1;
+CREATE STATISTICS ON a, b FROM sts_sch1.tbl;
+CREATE STATISTICS sts_sch2.fail ON a, b FROM sts_sch1.tbl;
+RESET SESSION AUTHORIZATION;
+GRANT CREATE ON SCHEMA sts_sch1 TO regress_stats_user1;
+SET SESSION AUTHORIZATION regress_stats_user1;
+CREATE STATISTICS ON a, b FROM sts_sch1.tbl;
+CREATE STATISTICS sts_sch2.fail ON a, b FROM sts_sch1.tbl;
+RESET SESSION AUTHORIZATION;
+REVOKE CREATE ON SCHEMA sts_sch1 FROM regress_stats_user1;
+GRANT CREATE ON SCHEMA sts_sch2 TO regress_stats_user1;
+SET SESSION AUTHORIZATION regress_stats_user1;
+CREATE STATISTICS ON a, b FROM sts_sch1.tbl;
+CREATE STATISTICS sts_sch2.pass1 ON a, b FROM sts_sch1.tbl;
+RESET SESSION AUTHORIZATION;
+GRANT CREATE ON SCHEMA sts_sch1, sts_sch2 TO regress_stats_user1;
+SET SESSION AUTHORIZATION regress_stats_user1;
+CREATE STATISTICS ON a, b FROM sts_sch1.tbl;
+CREATE STATISTICS sts_sch2.pass2 ON a, b FROM sts_sch1.tbl;
+
+-- re-creating statistics via ALTER TABLE bypasses checks for CREATE on schema
+RESET SESSION AUTHORIZATION;
+REVOKE CREATE ON SCHEMA sts_sch1, sts_sch2 FROM regress_stats_user1;
+SET SESSION AUTHORIZATION regress_stats_user1;
+ALTER TABLE sts_sch1.tbl ALTER COLUMN a TYPE SMALLINT;
+
 -- Tidy up
 DROP OPERATOR <<< (int, int);
 DROP FUNCTION op_leak(int, int);
+DROP OPERATOR <<< (record, record);
+DROP FUNCTION op_leak(record, record);
 RESET SESSION AUTHORIZATION;
 DROP TABLE stats_ext_tbl;
 DROP SCHEMA tststats CASCADE;
+DROP SCHEMA sts_sch1, sts_sch2 CASCADE;
 DROP USER regress_stats_user1;
 
 -- test analyze with extended statistics 

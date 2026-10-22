@@ -16,7 +16,7 @@
  * be linked into libpq.
  *
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/interfaces/libpq/pqexpbuffer.c
@@ -47,8 +47,6 @@ static const char oom_buffer[1] = "";
 
 /* Need a char * for unconstify() compatibility */
 static const char *oom_buffer_ptr = oom_buffer;
-
-
 
 /*
  * markPQExpBufferBroken

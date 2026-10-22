@@ -1,27 +1,24 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 # Test pg_verifybackup's WAL verification.
 
 use strict;
 use warnings;
-use Cwd;
-use Config;
-use File::Path qw(rmtree);
-use PostgresNode;
-use TestLib;
-use Test::More tests => 9;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 # Start up the server and take a backup.
-my $primary = get_new_node('primary');
+my $primary = PostgreSQL::Test::Cluster->new('primary');
 $primary->init(allows_streaming => 1);
 $primary->start;
 my $backup_path = $primary->backup_dir . '/test_wal';
-$primary->command_ok([ 'pg_basebackup', '-D', $backup_path, '--target-gp-dbid', '123', '--no-sync' ],
+$primary->command_ok([ 'pg_basebackup', '-D', $backup_path, '--target-gp-dbid', '123', '--no-sync', '-cfast' ],
 	"base backup ok");
 
 # Rename pg_wal.
-my $original_pg_wal  = $backup_path . '/pg_wal';
+my $original_pg_wal = $backup_path . '/pg_wal';
 my $relocated_pg_wal = $primary->backup_dir . '/relocated_pg_wal';
 rename($original_pg_wal, $relocated_pg_wal) || die "rename pg_wal: $!";
 
@@ -48,7 +45,7 @@ my @walfiles = grep { /^[0-9A-F]{24}$/ } slurp_dir($original_pg_wal);
 
 # Replace the contents of one of the files with garbage of equal length.
 my $wal_corruption_target = $original_pg_wal . '/' . $walfiles[0];
-my $wal_size              = -s $wal_corruption_target;
+my $wal_size = -s $wal_corruption_target;
 open(my $fh, '>', $wal_corruption_target)
   || die "open $wal_corruption_target: $!";
 print $fh 'w' x $wal_size;
@@ -71,8 +68,10 @@ $primary->safe_psql('postgres', 'SELECT pg_switch_wal()');
 my $backup_path2 = $primary->backup_dir . '/test_tli';
 # The base backup run below does a checkpoint, that removes the first segment
 # of the current timeline.
-$primary->command_ok([ 'pg_basebackup', '-D', $backup_path2, '--target-gp-dbid', '123', '--no-sync' ],
+$primary->command_ok([ 'pg_basebackup', '-D', $backup_path2, '--target-gp-dbid', '123', '--no-sync', '-cfast' ],
 	"base backup 2 ok");
 command_ok(
 	[ 'pg_verifybackup', $backup_path2 ],
 	'valid base backup with timeline > 1');
+
+done_testing();

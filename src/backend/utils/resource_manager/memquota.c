@@ -287,6 +287,16 @@ IsRootOperatorInGroup(Node *node)
  * in a plan.
  */
 
+static bool PolicyAutoPrelimWalker(Node *node, PolicyAutoContext *context);
+static bool PolicyAutoAssignWalker(Node *node, PolicyAutoContext *context);
+static bool PolicyEagerFreePrelimWalker(Node *node, PolicyEagerFreeContext *context);
+static bool PolicyEagerFreeAssignWalker(Node *node, PolicyEagerFreeContext *context);
+
+static bool PolicyAutoPrelimWalker_adapter(Node *node, void *context);
+static bool PolicyAutoAssignWalker_adapter(Node *node, void *context);
+static bool PolicyEagerFreePrelimWalker_adapter(Node *node, void *context);
+static bool PolicyEagerFreeAssignWalker_adapter(Node *node, void *context);
+
 static bool PolicyAutoPrelimWalker(Node *node, PolicyAutoContext *context)
 {
 	if (node == NULL)
@@ -306,7 +316,7 @@ static bool PolicyAutoPrelimWalker(Node *node, PolicyAutoContext *context)
 			context->numNonMemIntensiveOperators++;
 		}
 	}
-	return plan_tree_walker(node, PolicyAutoPrelimWalker, context, true);
+	return plan_tree_walker(node, PolicyAutoPrelimWalker_adapter, context, true);
 }
 
 /**
@@ -350,7 +360,7 @@ static bool PolicyAutoAssignWalker(Node *node, PolicyAutoContext *context)
 			elog(GP_RESMANAGER_MEMORY_LOG_LEVEL, "assigning plan node memory = %dKB", (int )planNode->operatorMemKB);
 		}
 	}
-	return plan_tree_walker(node, PolicyAutoAssignWalker, context, true);
+	return plan_tree_walker(node, PolicyAutoAssignWalker_adapter, context, true);
 }
 
 /**
@@ -715,7 +725,7 @@ PolicyEagerFreePrelimWalker(Node *node, PolicyEagerFreeContext *context)
 		}
 	}
 
-	bool result = plan_tree_walker(node, PolicyEagerFreePrelimWalker, context, true);
+	bool result = plan_tree_walker(node, PolicyEagerFreePrelimWalker_adapter, context, true);
 	Assert(!result);
 
 	/*
@@ -820,7 +830,7 @@ PolicyEagerFreeAssignWalker(Node *node, PolicyEagerFreeContext *context)
 		}
 	}
 
-	bool result = plan_tree_walker(node, PolicyEagerFreeAssignWalker, context, true);
+	bool result = plan_tree_walker(node, PolicyEagerFreeAssignWalker_adapter, context, true);
 	Assert(!result);
 
 	/*
@@ -833,6 +843,30 @@ PolicyEagerFreeAssignWalker(Node *node, PolicyEagerFreeContext *context)
 	}
 
 	return result;
+}
+
+static bool
+PolicyAutoPrelimWalker_adapter(Node *node, void *context)
+{
+	return PolicyAutoPrelimWalker(node, (PolicyAutoContext *) context);
+}
+
+static bool
+PolicyAutoAssignWalker_adapter(Node *node, void *context)
+{
+	return PolicyAutoAssignWalker(node, (PolicyAutoContext *) context);
+}
+
+static bool
+PolicyEagerFreePrelimWalker_adapter(Node *node, void *context)
+{
+	return PolicyEagerFreePrelimWalker(node, (PolicyEagerFreeContext *) context);
+}
+
+static bool
+PolicyEagerFreeAssignWalker_adapter(Node *node, void *context)
+{
+	return PolicyEagerFreeAssignWalker(node, (PolicyEagerFreeContext *) context);
 }
 
 /*

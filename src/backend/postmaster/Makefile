@@ -15,13 +15,13 @@ override CPPFLAGS := -I$(libpq_srcdir) $(CPPFLAGS)
 
 OBJS = \
 	autovacuum.o \
+	auxprocess.o \
 	bgworker.o \
 	bgwriter.o \
 	checkpointer.o \
 	fork_process.o \
 	interrupt.o \
 	pgarch.o \
-	pgstat.o \
 	postmaster.o \
 	startup.o \
 	syslogger.o \

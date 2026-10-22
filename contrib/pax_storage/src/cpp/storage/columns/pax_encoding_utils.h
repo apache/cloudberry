@@ -114,7 +114,11 @@ uint32 GetClosestAlignedBits(uint32 n);
 uint32 FindClosestBits(int64 value);
 
 // histogram functions
-void BuildHistogram(int32 *histogram, int64_t *data, size_t number);
+// NB: use PG's int64 (typedef'd to `long int` on every supported port)
+// rather than C99 int64_t — on macOS x86_64 int64_t is `long long`, which
+// is a distinct type from `long` for overload resolution even though both
+// are 64-bit.
+void BuildHistogram(int32 *histogram, int64 *data, size_t number);
 uint32_t GetPercentileBits(const int32 *histogram, size_t histogram_len,
                            double p);
 
@@ -154,6 +158,6 @@ inline int64 UnZigZagWithUnsigned(T value) {
   CBDB_RAISE(cbdb::CException::ExType::kExTypeLogicError);
 }
 
-void ZigZagBuffers(int64_t *input, int64_t *output, size_t number);
+void ZigZagBuffers(int64 *input, int64 *output, size_t number);
 
 }  // namespace pax

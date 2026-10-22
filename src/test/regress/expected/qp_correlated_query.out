@@ -169,11 +169,11 @@ select A.i, B.i, C.j from A, B, C where A.j in (select C.j from C where C.j = A.
 -- Test for sublink pull-up based on both left-hand and right-hand input
 explain (costs off)
 select * from A where exists (select * from B where A.i in (select C.i from C where C.i = B.i));
-                    QUERY PLAN                    
---------------------------------------------------
+                QUERY PLAN                
+------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Semi Join
-         Hash Cond: ((c.i = b.i) AND (a.i = b.i))
+         Hash Cond: (a.i = b.i)
          ->  Hash Semi Join
                Hash Cond: (a.i = c.i)
                ->  Seq Scan on a
@@ -1357,12 +1357,12 @@ select C.j from C where not exists (select rank() over (order by B.i) from B  wh
 explain select * from A where not exists (select sum(C.i) from C where C.i = A.i group by a.i);
                                  QUERY PLAN                                 
 ----------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=3.20..6.31 rows=4 width=8)
-   ->  Hash Anti Join  (cost=3.20..6.31 rows=2 width=8)
-         Hash Cond: (a.i = c.i)
-         ->  Seq Scan on a  (cost=0.00..3.05 rows=2 width=8)
-         ->  Hash  (cost=3.09..3.09 rows=3 width=4)
-               ->  Seq Scan on c  (cost=0.00..3.09 rows=3 width=4)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=1.04..2.13 rows=3 width=8)
+   ->  Hash Right Anti Join  (cost=1.04..2.09 rows=1 width=8)
+         Hash Cond: (c.i = a.i)
+         ->  Seq Scan on c  (cost=0.00..1.03 rows=3 width=4)
+         ->  Hash  (cost=1.02..1.02 rows=2 width=8)
+               ->  Seq Scan on a  (cost=0.00..1.02 rows=2 width=8)
  Optimizer: Postgres query optimizer
 (7 rows)
 
@@ -1373,21 +1373,20 @@ select * from A where not exists (select sum(C.i) from C where C.i = A.i group b
 (1 row)
 
 explain select A.i from A where not exists (select B.i from B where B.i in (select C.i from C) and B.i = A.i);
-                                  QUERY PLAN                                   
--------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=6.44..9.55 rows=4 width=4)
-   ->  Hash Anti Join  (cost=6.44..9.55 rows=2 width=4)
-         Hash Cond: (a.i = b.i)
-         ->  Seq Scan on a  (cost=0.00..3.05 rows=2 width=4)
-         ->  Hash  (cost=6.36..6.36 rows=3 width=4)
-               ->  Hash Semi Join  (cost=3.20..6.36 rows=3 width=4)
-                     Hash Cond: (b.i = c.i)
-                     ->  Seq Scan on b  (cost=0.00..3.06 rows=2 width=4)
-                     ->  Hash  (cost=3.09..3.09 rows=3 width=4)
-                           ->  Seq Scan on c  (cost=0.00..3.09 rows=3 width=4)
- Settings:  optimizer=off
- Optimizer status: Postgres query optimizer
-(12 rows)
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=2.10..3.22 rows=3 width=4)
+   ->  Hash Right Anti Join  (cost=2.10..3.17 rows=1 width=4)
+         Hash Cond: (b.i = a.i)
+         ->  Hash Semi Join  (cost=1.07..2.12 rows=2 width=4)
+               Hash Cond: (b.i = c.i)
+               ->  Seq Scan on b  (cost=0.00..1.02 rows=2 width=4)
+               ->  Hash  (cost=1.03..1.03 rows=3 width=4)
+                     ->  Seq Scan on c  (cost=0.00..1.03 rows=3 width=4)
+         ->  Hash  (cost=1.02..1.02 rows=2 width=4)
+               ->  Seq Scan on a  (cost=0.00..1.02 rows=2 width=4)
+ Optimizer: Postgres query optimizer
+(11 rows)
 
 select A.i from A where not exists (select B.i from B where B.i in (select C.i from C) and B.i = A.i);
  i  
@@ -1402,23 +1401,23 @@ select A.i from A where not exists (select B.i from B where B.i in (select C.i f
 -- 'c' and 'a'. Investigate why we lost that
 -- end_ignore
 explain select * from B where not exists (select * from C,A where C.i in (select C.i from C where C.i = A.i and C.i != 10) AND B.i = C.i);
-                                     QUERY PLAN                                      
--------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=8.66..11.78 rows=4 width=8)
-   ->  Hash Anti Join  (cost=8.66..11.78 rows=2 width=8)
-         Hash Cond: (b.i = c.i)
-         ->  Seq Scan on b  (cost=0.00..3.06 rows=2 width=8)
-         ->  Hash  (cost=8.59..8.59 rows=2 width=4)
-               ->  Hash Semi Join  (cost=5.33..8.59 rows=2 width=4)
-                     Hash Cond: (a.i = c_1.i)
-                     ->  Hash Join  (cost=2.11..5.30 rows=2 width=8)
-                           Hash Cond: (c.i = a.i)
-                           ->  Seq Scan on c  (cost=0.00..3.09 rows=3 width=4)
-                           ->  Hash  (cost=2.05..2.05 rows=2 width=4)
-                                 ->  Seq Scan on a  (cost=0.00..2.05 rows=2 width=4)
-                     ->  Hash  (cost=3.11..3.11 rows=3 width=4)
-                           ->  Seq Scan on c c_1  (cost=0.00..3.11 rows=3 width=4)
-                                 Filter: (i <> 10)
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=3.15..4.30 rows=3 width=8)
+   ->  Hash Right Anti Join  (cost=3.15..4.25 rows=1 width=8)
+         Hash Cond: (c.i = b.i)
+         ->  Hash Semi Join  (cost=2.11..3.19 rows=2 width=4)
+               Hash Cond: (a.i = c_1.i)
+               ->  Hash Join  (cost=1.04..2.10 rows=2 width=8)
+                     Hash Cond: (c.i = a.i)
+                     ->  Seq Scan on c  (cost=0.00..1.03 rows=3 width=4)
+                     ->  Hash  (cost=1.02..1.02 rows=2 width=4)
+                           ->  Seq Scan on a  (cost=0.00..1.02 rows=2 width=4)
+               ->  Hash  (cost=1.04..1.04 rows=3 width=4)
+                     ->  Seq Scan on c c_1  (cost=0.00..1.04 rows=3 width=4)
+                           Filter: (i <> 10)
+         ->  Hash  (cost=1.02..1.02 rows=2 width=8)
+               ->  Seq Scan on b  (cost=0.00..1.02 rows=2 width=8)
  Optimizer: Postgres query optimizer
 (16 rows)
 
@@ -1463,13 +1462,13 @@ select * from A where A.i in (select C.j from C,B where B.i in (select i from C)
 explain select * from A where not exists (select sum(c.i) from C where C.i = A.i group by C.i having c.i > 3);
                                  QUERY PLAN                                 
 ----------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=3.18..6.29 rows=4 width=8)
-   ->  Hash Anti Join  (cost=3.18..6.29 rows=2 width=8)
-         Hash Cond: (a.i = c.i)
-         ->  Seq Scan on a  (cost=0.00..3.05 rows=2 width=8)
-         ->  Hash  (cost=3.11..3.11 rows=2 width=4)
-               ->  Seq Scan on c  (cost=0.00..3.11 rows=2 width=4)
-                     Filter: (i > 3)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=1.04..2.14 rows=3 width=8)
+   ->  Hash Right Anti Join  (cost=1.04..2.09 rows=1 width=8)
+         Hash Cond: (c.i = a.i)
+         ->  Seq Scan on c  (cost=0.00..1.04 rows=2 width=4)
+               Filter: (i > 3)
+         ->  Hash  (cost=1.02..1.02 rows=2 width=8)
+               ->  Seq Scan on a  (cost=0.00..1.02 rows=2 width=8)
  Optimizer: Postgres query optimizer
 (8 rows)
 

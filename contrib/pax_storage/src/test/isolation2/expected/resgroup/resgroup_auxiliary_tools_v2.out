@@ -27,7 +27,7 @@ ERROR:  language "plpython3u" already exists
 
 ! gpconfig -c runaway_detector_activation_percent -v 100;
 
-! gpstop -rai;
+! gpstop -raf;
 -- end_ignore
 
 -- after the restart we need a new connection to run the queries

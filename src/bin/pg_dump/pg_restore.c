@@ -46,6 +46,7 @@
 #endif
 
 #include "dumputils.h"
+#include "fe_utils/option_utils.h"
 #include "getopt_long.h"
 #include "parallel.h"
 #include "pg_backup_utils.h"
@@ -65,6 +66,7 @@ main(int argc, char **argv)
 	static int	enable_row_security = 0;
 	static int	if_exists = 0;
 	static int	no_data_for_failed_tables = 0;
+	static int	outputNoTableAm = 0;
 	static int	outputNoTablespaces = 0;
 	static int	use_setsessauth = 0;
 	static int	no_comments = 0;
@@ -113,6 +115,7 @@ main(int argc, char **argv)
 		{"enable-row-security", no_argument, &enable_row_security, 1},
 		{"if-exists", no_argument, &if_exists, 1},
 		{"no-data-for-failed-tables", no_argument, &no_data_for_failed_tables, 1},
+		{"no-table-access-method", no_argument, &outputNoTableAm, 1},
 		{"no-tablespaces", no_argument, &outputNoTablespaces, 1},
 		{"role", required_argument, NULL, 2},
 		{"section", required_argument, NULL, 3},
@@ -122,6 +125,7 @@ main(int argc, char **argv)
 		{"no-publications", no_argument, &no_publications, 1},
 		{"no-security-labels", no_argument, &no_security_labels, 1},
 		{"no-subscriptions", no_argument, &no_subscriptions, 1},
+		{"restrict-key", required_argument, NULL, 6},
 
 		/* GPDB */
 		{"binary-upgrade", no_argument, &binary_upgrade, 1},
@@ -186,7 +190,10 @@ main(int argc, char **argv)
 				break;
 
 			case 'j':			/* number of restore jobs */
-				numWorkers = atoi(optarg);
+				if (!option_parse_int(optarg, "-j/--jobs", 1,
+									  PG_MAX_JOBS,
+									  &numWorkers))
+					exit(1);
 				break;
 
 			case 'l':			/* Dump the TOC summary */
@@ -285,8 +292,13 @@ main(int argc, char **argv)
 				set_dump_section(optarg, &(opts->dumpSections));
 				break;
 
+			case 6:
+				opts->restrict_key = pg_strdup(optarg);
+				break;
+
 			default:
-				fprintf(stderr, _("Try \"%s --help\" for more information.\n"), progname);
+				/* getopt_long already emitted a complaint */
+				pg_log_error_hint("Try \"%s --help\" for more information.", progname);
 				exit_nicely(1);
 		}
 	}
@@ -302,17 +314,13 @@ main(int argc, char **argv)
 	{
 		pg_log_error("too many command-line arguments (first is \"%s\")",
 					 argv[optind]);
-		fprintf(stderr, _("Try \"%s --help\" for more information.\n"),
-				progname);
+		pg_log_error_hint("Try \"%s --help\" for more information.", progname);
 		exit_nicely(1);
 	}
 
 	/* Complain if neither -f nor -d was specified (except if dumping TOC) */
 	if (!opts->cparams.dbname && !opts->filename && !opts->tocSummary)
-	{
-		pg_log_error("one of -d/--dbname and -f/--file must be specified");
-		exit_nicely(1);
-	}
+		pg_fatal("one of -d/--dbname and -f/--file must be specified");
 
 	/* Should get at most one of -d and -f, else user is confused */
 	if (opts->cparams.dbname)
@@ -320,61 +328,49 @@ main(int argc, char **argv)
 		if (opts->filename)
 		{
 			pg_log_error("options -d/--dbname and -f/--file cannot be used together");
-			fprintf(stderr, _("Try \"%s --help\" for more information.\n"),
-					progname);
+			pg_log_error_hint("Try \"%s --help\" for more information.", progname);
 			exit_nicely(1);
 		}
+
+		if (opts->restrict_key)
+			pg_fatal("options -d/--dbname and --restrict-key cannot be used together");
+
 		opts->useDB = 1;
+	}
+	else
+	{
+		/*
+		 * If you don't provide a restrict key, one will be appointed for you.
+		 */
+		if (!opts->restrict_key)
+			opts->restrict_key = generate_restrict_key();
+		if (!opts->restrict_key)
+			pg_fatal("could not generate restrict key");
+		if (!valid_restrict_key(opts->restrict_key))
+			pg_fatal("invalid restrict key");
 	}
 
 	if (opts->dataOnly && opts->schemaOnly)
-	{
-		pg_log_error("options -s/--schema-only and -a/--data-only cannot be used together");
-		exit_nicely(1);
-	}
+		pg_fatal("options -s/--schema-only and -a/--data-only cannot be used together");
 
 	if (opts->dataOnly && opts->dropSchema)
-	{
-		pg_log_error("options -c/--clean and -a/--data-only cannot be used together");
-		exit_nicely(1);
-	}
+		pg_fatal("options -c/--clean and -a/--data-only cannot be used together");
 
 	/*
 	 * -C is not compatible with -1, because we can't create a database inside
 	 * a transaction block.
 	 */
 	if (opts->createDB && opts->single_txn)
-	{
-		pg_log_error("options -C/--create and -1/--single-transaction cannot be used together");
-		exit_nicely(1);
-	}
-
-	if (numWorkers <= 0)
-	{
-		pg_log_error("invalid number of parallel jobs");
-		exit(1);
-	}
-
-	/* See comments in pg_dump.c */
-#ifdef WIN32
-	if (numWorkers > MAXIMUM_WAIT_OBJECTS)
-	{
-		pg_log_error("maximum number of parallel jobs is %d",
-					 MAXIMUM_WAIT_OBJECTS);
-		exit(1);
-	}
-#endif
+		pg_fatal("options -C/--create and -1/--single-transaction cannot be used together");
 
 	/* Can't do single-txn mode with multiple connections */
 	if (opts->single_txn && numWorkers > 1)
-	{
-		pg_log_error("cannot specify both --single-transaction and multiple jobs");
-		exit_nicely(1);
-	}
+		pg_fatal("cannot specify both --single-transaction and multiple jobs");
 
 	opts->disable_triggers = disable_triggers;
 	opts->enable_row_security = enable_row_security;
 	opts->noDataForFailedTables = no_data_for_failed_tables;
+	opts->noTableAm = outputNoTableAm;
 	opts->noTablespace = outputNoTablespaces;
 	opts->use_setsessauth = use_setsessauth;
 	opts->no_comments = no_comments;
@@ -385,10 +381,7 @@ main(int argc, char **argv)
 	opts->binary_upgrade = binary_upgrade;
 
 	if (if_exists && !opts->dropSchema)
-	{
-		pg_log_error("option --if-exists requires option -c/--clean");
-		exit_nicely(1);
-	}
+		pg_fatal("option --if-exists requires option -c/--clean");
 	opts->if_exists = if_exists;
 	opts->strict_names = strict_names;
 
@@ -412,9 +405,8 @@ main(int argc, char **argv)
 				break;
 
 			default:
-				pg_log_error("unrecognized archive format \"%s\"; please specify \"c\", \"d\", or \"t\"",
-							 opts->formatName);
-				exit_nicely(1);
+				pg_fatal("unrecognized archive format \"%s\"; please specify \"c\", \"d\", or \"t\"",
+						 opts->formatName);
 		}
 	}
 
@@ -508,7 +500,9 @@ usage(const char *progname)
 	printf(_("  --no-publications            do not restore publications\n"));
 	printf(_("  --no-security-labels         do not restore security labels\n"));
 	printf(_("  --no-subscriptions           do not restore subscriptions\n"));
+	printf(_("  --no-table-access-method     do not restore table access methods\n"));
 	printf(_("  --no-tablespaces             do not restore tablespace assignments\n"));
+	printf(_("  --restrict-key=RESTRICT_KEY  use provided string as psql \\restrict key\n"));
 	printf(_("  --section=SECTION            restore named section (pre-data, data, or post-data)\n"));
 	printf(_("  --strict-names               require table and/or schema include patterns to\n"
 			 "                               match at least one entity each\n"));

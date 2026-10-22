@@ -33,6 +33,7 @@ GRANT EXECUTE ON FUNCTION bt_index_check(regclass) TO regress_bttest_role;
 GRANT EXECUTE ON FUNCTION bt_index_parent_check(regclass) TO regress_bttest_role;
 GRANT EXECUTE ON FUNCTION bt_index_check(regclass, boolean) TO regress_bttest_role;
 GRANT EXECUTE ON FUNCTION bt_index_parent_check(regclass, boolean) TO regress_bttest_role;
+GRANT CREATE ON SCHEMA public TO regress_bttest_role;
 SET ROLE regress_bttest_role;
 SELECT bt_index_check('bttest_a_idx');
 SELECT bt_index_parent_check('bttest_a_idx');
@@ -116,7 +117,8 @@ INSERT INTO toast_bug SELECT repeat('a', 2200);
 SELECT bt_index_check('toasty', true);
 
 --
--- Check that index expressions and predicates are run as the table's owner
+-- Check that index expressions and predicates are run as the table's owner,
+-- with empty search_path
 --
 TRUNCATE bttest_a;
 INSERT INTO bttest_a SELECT * FROM generate_series(1, 1000);
@@ -124,7 +126,10 @@ ALTER TABLE bttest_a OWNER TO regress_bttest_role;
 -- A dummy index function checking current_user
 CREATE FUNCTION ifun(int8) RETURNS int8 AS $$
 BEGIN
-	ASSERT current_user = 'regress_bttest_role',
+	ASSERT current_setting('search_path') NOT LIKE '%preempt%',
+		format('ifun(%s) called with current_schemas %s, search_path %s',
+			$1, current_schemas(true), current_setting('search_path'));
+	ASSERT "current_user"() = 'regress_bttest_role',
 		format('ifun(%s) called by %s', $1, current_user);
 	RETURN $1;
 END;
@@ -132,8 +137,32 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 
 CREATE INDEX bttest_a_expr_idx ON bttest_a ((ifun(id) + ifun(0)))
 	WHERE ifun(id + 10) > ifun(10);
-
+BEGIN;
+SET LOCAL check_function_bodies = off;
+CREATE SCHEMA preempt;
+GRANT USAGE ON SCHEMA preempt TO regress_bttest_role;
+SET LOCAL search_path = preempt, pg_catalog, public;
+CREATE FUNCTION "current_user"() RETURNS name AS $$
+	broken
+$$ LANGUAGE sql STABLE PARALLEL SAFE STRICT;
 SELECT bt_index_check('bttest_a_expr_idx', true);
+ROLLBACK;
+
+-- Check support of both 1B and 4B header sizes of short varlena datum
+CREATE TABLE varlena_bug (v text);
+ALTER TABLE varlena_bug ALTER column v SET storage plain;
+INSERT INTO varlena_bug VALUES ('x');
+COPY varlena_bug from stdin;
+x
+\.
+CREATE INDEX varlena_bug_idx on varlena_bug(v);
+SELECT bt_index_check('varlena_bug_idx', true);
+
+-- Also check that we compress varlena values, which were previously stored
+-- uncompressed in index.
+INSERT INTO varlena_bug VALUES (repeat('Test', 250));
+ALTER TABLE varlena_bug ALTER COLUMN v SET STORAGE extended;
+SELECT bt_index_check('varlena_bug_idx', true);
 
 -- cleanup
 DROP TABLE bttest_a;
@@ -144,3 +173,4 @@ DROP TABLE toast_bug;
 DROP FUNCTION ifun(int8);
 DROP OWNED BY regress_bttest_role; -- permissions
 DROP ROLE regress_bttest_role;
+DROP TABLE varlena_bug;

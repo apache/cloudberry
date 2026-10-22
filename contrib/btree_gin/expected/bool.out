@@ -95,14 +95,16 @@ EXPLAIN (COSTS OFF) SELECT * FROM test_bool WHERE i<=true ORDER BY i;
 EXPLAIN (COSTS OFF) SELECT * FROM test_bool WHERE i=true ORDER BY i;
                 QUERY PLAN                
 ------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 1:1  (slice1; segments: 1)
    Merge Key: i
    ->  Sort
          Sort Key: i
-         ->  Seq Scan on test_bool
-               Filter: i
+         ->  Bitmap Heap Scan on test_bool
+               Recheck Cond: i
+               ->  Bitmap Index Scan on idx_bool
+                     Index Cond: (i = true)
  Optimizer: Postgres query optimizer
-(7 rows)
+(9 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM test_bool WHERE i>=true ORDER BY i;
                    QUERY PLAN                    
@@ -129,6 +131,21 @@ EXPLAIN (COSTS OFF) SELECT * FROM test_bool WHERE i>true ORDER BY i;
                Recheck Cond: (i > true)
                ->  Bitmap Index Scan on idx_bool
                      Index Cond: (i > true)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+-- probably sufficient to check just this one:
+EXPLAIN (COSTS OFF) SELECT * FROM test_bool WHERE i=false ORDER BY i;
+                QUERY PLAN                 
+-------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   Merge Key: i
+   ->  Sort
+         Sort Key: i
+         ->  Bitmap Heap Scan on test_bool
+               Recheck Cond: (NOT i)
+               ->  Bitmap Index Scan on idx_bool
+                     Index Cond: (i = false)
  Optimizer: Postgres query optimizer
 (9 rows)
 

@@ -55,11 +55,16 @@ endif # win32
 
 SHLIB_LINK = $(perl_embed_ldflags)
 
+# see https://www.postgresql.org/message-id/flat/8c4fcb72-2574-ff7c-4c25-1f032d4a2a57%40enterprisedb.com
+ifeq ($(PORTNAME), cygwin)
+SHLIB_LINK += -Wl,--export-all-symbols
+endif
+
 REGRESS_OPTS = --dbname=$(PL_TESTDB)
 REGRESS_OPTS += --init-file=init_file
 REGRESS = plperl_setup plperl plperl_lc plperl_trigger plperl_shared \
 	plperl_elog plperl_util plperl_init plperlu plperl_array \
-	plperl_call plperl_transaction
+	plperl_call plperl_transaction plperl_env
 # if Perl can support two interpreters in one backend,
 # test plperl-and-plperlu cases
 ifneq ($(PERL),)
@@ -78,7 +83,7 @@ XSUBPPDIR = $(shell $(PERL) -e 'use List::Util qw(first); print first { -r "$$_/
 
 include $(top_srcdir)/src/Makefile.shlib
 
-plperl.o: perlchunks.h plperl_opmask.h plperl_helpers.h
+plperl.o: perlchunks.h plperl_opmask.h
 
 plperl_opmask.h: plperl_opmask.pl
 	@if [ x"$(perl_privlibexp)" = x"" ]; then echo "configure switch --with-perl was not specified."; exit 1; fi
@@ -86,7 +91,7 @@ plperl_opmask.h: plperl_opmask.pl
 
 perlchunks.h: $(PERLCHUNKS)
 	@if [ x"$(perl_privlibexp)" = x"" ]; then echo "configure switch --with-perl was not specified."; exit 1; fi
-	$(PERL) $(srcdir)/text2macro.pl --strip='^(\#.*|\s*)$$' $^ > $@
+	$(PERL) $(srcdir)/text2macro.pl $^ > $@
 
 all: all-lib
 
@@ -109,7 +114,7 @@ uninstall: uninstall-lib uninstall-data
 
 install-data: installdirs
 	$(INSTALL_DATA) $(addprefix $(srcdir)/, $(DATA)) '$(DESTDIR)$(datadir)/extension/'
-	$(INSTALL_DATA) $(srcdir)/plperl.h $(srcdir)/plperl_system.h $(srcdir)/ppport.h $(srcdir)/plperl_helpers.h '$(DESTDIR)$(includedir_server)'
+	$(INSTALL_DATA) $(srcdir)/plperl.h $(srcdir)/plperl_system.h $(srcdir)/ppport.h '$(DESTDIR)$(includedir_server)'
 
 uninstall-data:
 	rm -f $(addprefix '$(DESTDIR)$(datadir)/extension'/, $(notdir $(DATA)))

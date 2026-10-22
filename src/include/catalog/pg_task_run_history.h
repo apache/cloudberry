@@ -41,24 +41,24 @@
  */
 CATALOG(pg_task_run_history,9993,TaskRunHistoryRelationId) BKI_SHARED_RELATION
 {
-	Oid         runid;
-	Oid         jobid;
+	Oid			runid;
+	Oid			jobid;
 	int32		job_pid BKI_DEFAULT(0);
+	timestamptz start_time BKI_FORCE_NULL;
+	timestamptz end_time BKI_FORCE_NULL;
+#ifdef CATALOG_VARLEN			/* variable-length fields start here */
 	text		database;
 	text		username;
 	text		command;
 	text		status;
-    text        return_message;
-    timestamptz start_time;
-    timestamptz end_time;
+	text		return_message BKI_FORCE_NULL;
+#endif
 } FormData_pg_task_run_history;
 
 typedef FormData_pg_task_run_history *Form_pg_task_run_history;
 
-DECLARE_INDEX(pg_task_run_history_jobid_index, 8633, on pg_task_run_history using btree(jobid oid_ops));
-#define TaskRunHistoryJobIdIndexId  8633
-DECLARE_UNIQUE_INDEX_PKEY(pg_task_run_history_runid_index, 8110, on pg_task_run_history using btree(runid oid_ops));
-#define TaskRunHistoryRunIdIndexId  8110
+DECLARE_INDEX(pg_task_run_history_jobid_index, 8633, TaskRunHistoryJobIdIndexId, on pg_task_run_history using btree(jobid oid_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_task_run_history_runid_index, 8110, TaskRunHistoryRunIdIndexId, on pg_task_run_history using btree(runid oid_ops));
 
 extern void TaskRunHistoryCreate(Oid runid, int64 *jobid, const char *database, const char *username,
 								 const char *command, const char *status);

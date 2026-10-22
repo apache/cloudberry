@@ -2107,6 +2107,26 @@ select relname, pg_get_expr(relpartbound, oid) from pg_class where relname like 
  mpp13806_1_prt_test1 | FOR VALUES FROM ('12-31-2007') TO ('01-01-2008')
 (7 rows)
 
+drop table if exists mpp13806;
+ CREATE TABLE mpp13806 (id int, date date, amt decimal(10,2))
+ DISTRIBUTED BY (id)
+ PARTITION BY RANGE (date)
+ ( START (date '2008-01-01') EXCLUSIVE
+	END (date '2008-01-05') EXCLUSIVE
+	EVERY (INTERVAL '1 day') );
+-- For good measure, test the opposite case
+alter table mpp13806 add partition test end (date '2008-01-01') inclusive;
+select relname, pg_get_expr(relpartbound, oid) from pg_class where relname like 'mpp13806%';
+       relname       |                   pg_get_expr                    
+---------------------+--------------------------------------------------
+ mpp13806            | 
+ mpp13806_1_prt_1    | FOR VALUES FROM ('01-02-2008') TO ('01-03-2008')
+ mpp13806_1_prt_2    | FOR VALUES FROM ('01-03-2008') TO ('01-04-2008')
+ mpp13806_1_prt_3    | FOR VALUES FROM ('01-04-2008') TO ('01-05-2008')
+ mpp13806_1_prt_test | FOR VALUES FROM (MINVALUE) TO ('01-02-2008')
+(5 rows)
+
+drop table mpp13806;
 --
 -- Create two tables mpp14613_range (range partitioned) and
 -- mpp14613_list (list partitioned) with 5 partitions (including default
@@ -2798,11 +2818,11 @@ INSERT INTO exchange_tbl VALUES (100);
 ALTER TABLE validation_syntax_tbl EXCHANGE PARTITION p1 WITH TABLE exchange_tbl WITH VALIDATION;
 NOTICE:  specifying "WITH VALIDATION" acts as no operation
 DETAIL:  If the new partition is a regular table, validation is performed to make sure all the rows obey partition constraint. If the new partition is external or foreign table, no validation is performed.
-ERROR:  partition constraint of relation "exchange_tbl" is violated by some row  (seg2 10.13.9.100:7004 pid=17187)
+ERROR:  partition constraint of relation "exchange_tbl" is violated by some row  (seg2 127.0.0.1:7004 pid=4188949)
 ALTER TABLE validation_syntax_tbl EXCHANGE PARTITION p1 WITH TABLE exchange_tbl WITHOUT VALIDATION;
 NOTICE:  specifying "WITHOUT VALIDATION" acts as no operation
 DETAIL:  If the new partition is a regular table, validation is performed to make sure all the rows obey partition constraint. If the new partition is external or foreign table, no validation is performed.
-ERROR:  partition constraint of relation "exchange_tbl" is violated by some row  (seg2 10.13.9.100:7004 pid=17187)
+ERROR:  partition constraint of relation "exchange_tbl" is violated by some row  (seg2 127.0.0.1:7004 pid=4188949)
 DROP TABLE exchange_tbl;
 DROP TABLE validation_syntax_tbl;
 --

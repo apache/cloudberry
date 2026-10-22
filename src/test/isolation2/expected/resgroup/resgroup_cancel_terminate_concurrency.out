@@ -291,6 +291,12 @@ SELECT * FROM rg_concurrency_view;
 (0 rows)
 1q: ... <quitting>
 2q: ... <quitting>
+-- Sleep briefly to allow terminated session to fully clean up temp objects
+SELECT pg_sleep(0.5);
+ pg_sleep 
+----------
+          
+(1 row)
 DROP ROLE role_concurrency_test;
 DROP
 DROP RESOURCE GROUP rg_concurrency_test;

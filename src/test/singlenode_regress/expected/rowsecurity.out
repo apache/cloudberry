@@ -1822,11 +1822,11 @@ AND f_leak(t2_1.b) AND f_leak(t2_2.b) RETURNING *, t2_1, t2_2;
 -----------------------------------------------------------------------
  Update on t2 t2_1
    ->  Hash Join
-         Hash Cond: (t2_2.b = t2_1.b)
-         ->  Seq Scan on t2 t2_2
+         Hash Cond: (t2_1.b = t2_2.b)
+         ->  Seq Scan on t2 t2_1
                Filter: ((a = 3) AND ((a % 2) = 1) AND f_leak(b))
          ->  Hash
-               ->  Seq Scan on t2 t2_1
+               ->  Seq Scan on t2 t2_2
                      Filter: ((a = 3) AND ((a % 2) = 1) AND f_leak(b))
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -3609,17 +3609,21 @@ ALTER TABLE t ENABLE ROW LEVEL SECURITY;
 SAVEPOINT q;
 CREATE RULE "_RETURN" AS ON SELECT TO t DO INSTEAD
   SELECT * FROM generate_series(1,5) t0(c); -- fails due to row-level security enabled
-ERROR:  could not convert table "t" to a view because it has row security enabled
+ERROR:  relation "t" cannot have ON SELECT rules
+DETAIL:  This operation is not supported for tables.
 ROLLBACK TO q;
 ALTER TABLE t DISABLE ROW LEVEL SECURITY;
 SAVEPOINT q;
 CREATE RULE "_RETURN" AS ON SELECT TO t DO INSTEAD
   SELECT * FROM generate_series(1,5) t0(c); -- fails due to policy p on t
-ERROR:  could not convert table "t" to a view because it has row security policies
+ERROR:  relation "t" cannot have ON SELECT rules
+DETAIL:  This operation is not supported for tables.
 ROLLBACK TO q;
 DROP POLICY p ON t;
 CREATE RULE "_RETURN" AS ON SELECT TO t DO INSTEAD
   SELECT * FROM generate_series(1,5) t0(c); -- succeeds
+ERROR:  relation "t" cannot have ON SELECT rules
+DETAIL:  This operation is not supported for tables.
 ROLLBACK;
 --
 -- Policy expression handling

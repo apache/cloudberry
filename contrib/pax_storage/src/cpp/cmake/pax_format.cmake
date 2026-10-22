@@ -109,11 +109,29 @@ set(pax_vec_src ${pax_vec_src}
 endif()
 
 set(pax_target_include ${ZTSD_HEADER} ${CMAKE_CURRENT_SOURCE_DIR} ${CBDB_INCLUDE_DIR} contrib/tabulate/include)
-set(pax_target_link_libs uuid protobuf zstd z uring)
+set(pax_target_link_libs zstd z)
+# protobuf v22+ on macOS splits its abseil deps into separate libs;
+# pull them in via pkg-config.
+if(APPLE)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(PB_PC REQUIRED protobuf)
+  set(pax_target_include ${pax_target_include} ${PB_PC_INCLUDE_DIRS})
+  list(APPEND pax_target_link_libs ${PB_PC_LIBRARIES})
+else()
+  list(APPEND pax_target_link_libs protobuf)
+endif()
+# liburing is Linux-only (kernel io_uring iface). macOS provides uuid_*
+# functions in libSystem, so -luuid is also Linux-only.
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND pax_target_link_libs uuid uring)
+endif()
 if (PAX_USE_LZ4)
   list(APPEND pax_target_link_libs lz4)
 endif()
 set(pax_target_link_directories ${PROJECT_SOURCE_DIR}/../../src/backend/)
+if(APPLE)
+  list(APPEND pax_target_link_directories ${PB_PC_LIBRARY_DIRS})
+endif()
 
 # vec build
 if (VEC_BUILD)
@@ -137,9 +155,18 @@ add_library(paxformat SHARED ${PROTO_SRCS} ${pax_storage_src} ${pax_clustering_s
 target_include_directories(paxformat PUBLIC ${pax_target_include})
 target_link_directories(paxformat PUBLIC ${pax_target_link_directories})
 target_link_libraries(paxformat PRIVATE ${pax_target_link_libs})
-   
+
 set_target_properties(paxformat PROPERTIES
   OUTPUT_NAME paxformat)
+if(APPLE)
+  # PAX C++ code calls PG backend functions (write_stderr,
+  # xlog_check_consistency_hook, ...). On Linux ld defers unresolved
+  # references in .so; macOS ld rejects them unless told otherwise.
+  # Defer them to load time so paxformat is usable wherever PG symbols
+  # are provided.
+  set_target_properties(paxformat PROPERTIES
+    LINK_FLAGS "-Wl,-undefined,dynamic_lookup")
+endif()
 add_dependencies(paxformat generate_protobuf)
 
 # export headers
@@ -197,4 +224,13 @@ install(TARGETS paxformat
 add_executable(paxformat_test paxformat_test.cc)
 target_include_directories(paxformat_test PUBLIC ${pax_target_include} ${CMAKE_CURRENT_SOURCE_DIR})
 add_dependencies(paxformat_test paxformat)
-target_link_libraries(paxformat_test PRIVATE paxformat postgres)
+if(APPLE)
+  # No libpostgres.so to link against on macOS; defer PG symbols to
+  # load time. The test still validates that paxformat itself is a
+  # complete dylib.
+  target_link_libraries(paxformat_test PRIVATE paxformat)
+  set_target_properties(paxformat_test PROPERTIES
+    LINK_FLAGS "-Wl,-undefined,dynamic_lookup")
+else()
+  target_link_libraries(paxformat_test PRIVATE paxformat postgres)
+endif()

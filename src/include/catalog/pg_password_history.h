@@ -39,7 +39,7 @@
  *		typedef struct FormData_pg_password_history
  * ----------------
  */
-CATALOG(pg_password_history,10141,PasswordHistoryRelationId) BKI_SHARED_RELATION BKI_ROWTYPE_OID(10142,PasswordHistoryRelation_Rowtype_Id) BKI_SCHEMA_MACRO
+CATALOG(pg_password_history,10141,PasswordHistoryRelationId) BKI_SHARED_RELATION BKI_ROWTYPE_OID(11144,PasswordHistoryRelation_Rowtype_Id) BKI_SCHEMA_MACRO
 {
 	Oid		passhistroleid BKI_FORCE_NOT_NULL;	/* oid of role */
 #ifdef CATALOG_VARLEN
@@ -59,9 +59,7 @@ DECLARE_TOAST(pg_password_history, 10143, 10144);
 #define PgPasswordHistoryToastTable 10143
 #define PgPasswordHistoryToastIndex 10144
 
-DECLARE_UNIQUE_INDEX(pg_password_history_role_password_index, 10145, on pg_password_history using btree(passhistroleid oid_ops, passhistpassword text_ops));
-#define PasswordHistoryRolePasswordIndexId	10145
-DECLARE_INDEX(pg_password_history_role_passwordsetat_index, 10146, on pg_password_history using btree(passhistroleid oid_ops, passhistpasswordsetat timestamptz_ops));
-#define PasswordHistoryRolePasswordsetatIndexId	10146
+DECLARE_UNIQUE_INDEX(pg_password_history_role_password_index, 10145, PasswordHistoryRolePasswordIndexId, on pg_password_history using btree(passhistroleid oid_ops, passhistpassword text_ops));
+DECLARE_INDEX(pg_password_history_role_passwordsetat_index, 10146, PasswordHistoryRolePasswordsetatIndexId, on pg_password_history using btree(passhistroleid oid_ops, passhistpasswordsetat timestamptz_ops));
 
 #endif							/* PG_PASSWORD_HISTORY_H */

@@ -1961,9 +1961,11 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 INSERT INTO foo values (5),(15);
 ANALYZE (verbose, rootpartition off) foo;
 INFO:  analyzing "public.foo_1_prt_2"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(229792, 400, 'f');
+INFO:  skipping analyze of "public.foo_1_prt_2" inheritance tree --- this inheritance tree contains no child tables
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(215158, 400, 'f');
 INFO:  analyzing "public.foo_1_prt_1"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(229789, 400, 'f');
+INFO:  skipping analyze of "public.foo_1_prt_1" inheritance tree --- this inheritance tree contains no child tables
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(215155, 400, 'f');
 -- root should not have stats
 SELECT count(*) from pg_statistic where starelid='foo'::regclass;
  count 
@@ -1985,16 +1987,20 @@ ANALYZE (verbose, fullscan on) foo;
 INFO:  analyzing "public.foo_1_prt_2"
 INFO:  Executing SQL: select pg_catalog.gp_hyperloglog_accum(a) from public.foo_1_prt_2 as Ta
 INFO:  HLL FULL SCAN
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(229792, 400, 'f');
+INFO:  skipping analyze of "public.foo_1_prt_2" inheritance tree --- this inheritance tree contains no child tables
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(215158, 400, 'f');
 INFO:  analyzing "public.foo_1_prt_1"
 INFO:  Executing SQL: select pg_catalog.gp_hyperloglog_accum(a) from public.foo_1_prt_1 as Ta
 INFO:  HLL FULL SCAN
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(229789, 400, 'f');
+INFO:  skipping analyze of "public.foo_1_prt_1" inheritance tree --- this inheritance tree contains no child tables
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(215155, 400, 'f');
 ANALYZE (verbose, fullscan off) foo;
 INFO:  analyzing "public.foo_1_prt_2"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(229792, 400, 'f');
+INFO:  skipping analyze of "public.foo_1_prt_2" inheritance tree --- this inheritance tree contains no child tables
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(215158, 400, 'f');
 INFO:  analyzing "public.foo_1_prt_1"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(229789, 400, 'f');
+INFO:  skipping analyze of "public.foo_1_prt_1" inheritance tree --- this inheritance tree contains no child tables
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(215155, 400, 'f');
 reset optimizer_analyze_root_partition;
 -- Test merging of stats after the last partition is analyzed. Merging should
 -- be done for root without taking a sample from root if one of the column
@@ -2008,10 +2014,12 @@ ALTER TABLE foo ALTER COLUMN c SET STATISTICS 0;
 INSERT INTO foo SELECT i,i%2+1, NULL FROM generate_series(1,100)i;
 ANALYZE VERBOSE foo_1_prt_1;
 INFO:  analyzing "public.foo_1_prt_1"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(24965, 400, 'f');
+INFO:  skipping analyze of "public.foo_1_prt_1" inheritance tree --- this inheritance tree contains no child tables
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(215164, 400, 'f');
 ANALYZE VERBOSE foo_1_prt_2;
 INFO:  analyzing "public.foo_1_prt_2"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(24971, 400, 'f');
+INFO:  skipping analyze of "public.foo_1_prt_2" inheritance tree --- this inheritance tree contains no child tables
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(215169, 400, 'f');
 INFO:  analyzing "public.foo" inheritance tree
 SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
   tablename  | attname | null_frac | n_distinct | most_common_vals | most_common_freqs | histogram_bounds 
@@ -2031,11 +2039,14 @@ create table foo (a int, b date) distributed by (a) partition by range(b) (parti
 insert into foo select a, '20210101'::date+a from (select generate_series(1,80) a) t1;
 analyze verbose foo;
 INFO:  analyzing "public.foo_1_prt_20210301"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(65906, 400, 'f');
+INFO:  skipping analyze of "public.foo_1_prt_20210301" inheritance tree --- this inheritance tree contains no child tables
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(215183, 400, 'f');
 INFO:  analyzing "public.foo_1_prt_20210201"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(65903, 400, 'f');
+INFO:  skipping analyze of "public.foo_1_prt_20210201" inheritance tree --- this inheritance tree contains no child tables
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(215180, 400, 'f');
 INFO:  analyzing "public.foo_1_prt_20210101"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(65900, 400, 'f');
+INFO:  skipping analyze of "public.foo_1_prt_20210101" inheritance tree --- this inheritance tree contains no child tables
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(215177, 400, 'f');
 INFO:  analyzing "public.foo" inheritance tree
 -- we should see "analyzing "public.foo" inheritance tree" in the output below
 begin;
@@ -2043,6 +2054,7 @@ truncate foo_1_prt_20210201;
 insert into foo select a, '20210101'::date+a from (select generate_series(31,40) a) t1;
 analyze verbose foo_1_prt_20210201;
 INFO:  analyzing "public.foo_1_prt_20210201"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(65903, 400, 'f');
+INFO:  skipping analyze of "public.foo_1_prt_20210201" inheritance tree --- this inheritance tree contains no child tables
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(215180, 400, 'f');
 INFO:  analyzing "public.foo" inheritance tree
 rollback;

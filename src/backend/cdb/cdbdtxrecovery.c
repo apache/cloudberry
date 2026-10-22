@@ -493,6 +493,17 @@ redoDistributedCommitRecord(DistributedTransactionId gxid)
 	int			i;
 	bool 			is_hot_standby_qd = IS_HOT_STANDBY_QD();
 
+	/*
+	 * The coordinator may execute write DTX during gpexpand, so the newly
+	 * added segment may contain DTX info in checkpoint XLOG. However, this step
+	 * is useless and should be avoided for segments, or fatal may be thrown since
+	 * max_tm_gxacts is 0 in segments. See also fc8aab88d
+	*/
+	if (ConvertMasterDataDirToSegment && !IS_QUERY_DISPATCHER())
+	{
+		return;
+	}
+
 	/* 
 	 * Only the startup process can be modifying shmNumCommittedGxacts
 	 * and shmCommittedGxidArray. So should be OK reading the value w/o lock.

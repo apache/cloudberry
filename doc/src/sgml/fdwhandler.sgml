@@ -67,13 +67,16 @@
      foreign tables using the wrapper.
      The validator function must be registered as taking two arguments, a
      text array containing the options to be validated, and an OID
-     representing the type of object the options are associated with (in
-     the form of the OID of the system catalog the object would be stored
-     in, either
-     <literal>ForeignDataWrapperRelationId</literal>,
-     <literal>ForeignServerRelationId</literal>,
-     <literal>UserMappingRelationId</literal>,
-     or <literal>ForeignTableRelationId</literal>).
+     representing the type of object the options are associated with. The
+     latter corresponds to the OID of the system catalog the object
+     would be stored in, one of:
+     <itemizedlist spacing="compact">
+      <listitem><para><literal>AttributeRelationId</literal></para></listitem>
+      <listitem><para><literal>ForeignDataWrapperRelationId</literal></para></listitem>
+      <listitem><para><literal>ForeignServerRelationId</literal></para></listitem>
+      <listitem><para><literal>ForeignTableRelationId</literal></para></listitem>
+      <listitem><para><literal>UserMappingRelationId</literal></para></listitem>
+     </itemizedlist>
      If no validator function is supplied, options are not checked at object
      creation time or object alteration time.
     </para>
@@ -350,6 +353,17 @@ GetForeignJoinPaths(PlannerInfo *root,
      of <structfield>TargetEntry</structfield> nodes, representing the set of columns
      it will supply at run time in the tuples it returns.
     </para>
+
+    <note>
+     <para>
+      Beginning with <productname>PostgreSQL</productname> 16,
+      <structfield>fs_relids</structfield> includes the rangetable indexes
+      of outer joins, if any were involved in this join.  The new field
+      <structfield>fs_base_relids</structfield> includes only base
+      relation indexes, and thus
+      mimics <structfield>fs_relids</structfield>'s old semantics.
+     </para>
+    </note>
 
     <para>
      See <xref linkend="fdw-planning"/> for additional information.
@@ -665,7 +679,9 @@ ExecForeignBatchInsert(EState *estate,
 
     <para>
      Note that this function is also called when inserting routed tuples into
-     a foreign-table partition.  See the callback functions
+     a foreign-table partition or executing <command>COPY FROM</command> on
+     a foreign table, in which case it is called in a different way than it
+     is in the <command>INSERT</command> case.  See the callback functions
      described below that allow the FDW to support that.
     </para>
 
@@ -1089,7 +1105,7 @@ ExecForeignTruncate(List *rels,
      requested in the original <command>TRUNCATE</command> command,
      respectively.
     </para>
-    
+
     <para>
      If <literal>restart_seqs</literal> is <literal>true</literal>,
      the original <command>TRUNCATE</command> command requested the

@@ -111,16 +111,23 @@ enum warn
 	IN_NONE, IN_SOME, IN_THIS, IN_ALL
 };
 
-static char *_add(const char *, char *, const char *);
-static char *_conv(int, const char *, char *, const char *);
-static char *_fmt(const char *, const struct pg_tm *, char *, const char *,
-				  enum warn *);
-static char *_yconv(int, int, bool, bool, char *, char const *);
+static char *_add(const char *str, char *pt, const char *ptlim);
+static char *_conv(int n, const char *format, char *pt, const char *ptlim);
+static char *_fmt(const char *format, const struct pg_tm *t, char *pt, const char *ptlim,
+				  enum warn *warnp);
+static char *_yconv(int a, int b, bool convert_top, bool convert_yy, char *pt, char const *ptlim);
 
 
 /*
  * Convert timestamp t to string s, a caller-allocated buffer of size maxsize,
  * using the given format pattern.
+ *
+ * Unlike standard strftime(), we guarantee to provide a null-terminated
+ * result even on failure, so long as maxsize > 0.  If we overrun the buffer,
+ * return an empty string rather than risking mis-encoded multibyte output.
+ * (Since this module only supports C locale, you might think multibyte
+ * characters are impossible --- but the time zone name printed by %Z comes
+ * from outside and could contain such.)
  *
  * See also timestamptz_to_str.
  */
@@ -135,11 +142,15 @@ pg_strftime(char *s, size_t maxsize, const char *format, const struct pg_tm *t)
 	if (!p)
 	{
 		errno = EOVERFLOW;
+		if (maxsize > 0)
+			*s = '\0';
 		return 0;
 	}
 	if (p == s + maxsize)
 	{
 		errno = ERANGE;
+		if (maxsize > 0)
+			*s = '\0';
 		return 0;
 	}
 	*p = '\0';

@@ -45,6 +45,20 @@ SELECT 1 as one, 2 as two \g (format=csv csv_fieldsep='\t')
 SELECT 1 as one, 2 as two \gx (title='foo bar')
 \g
 
+-- \bind (extended query protocol)
+
+SELECT 1 \bind \g
+SELECT $1 \bind 'foo' \g
+SELECT $1, $2 \bind 'foo' 'bar' \g
+
+-- errors
+-- parse error
+SELECT foo \bind \g
+-- tcop error
+SELECT 1 \; SELECT 2 \bind \g
+-- bind error
+SELECT $1, $2 \bind 'foo' \g
+
 -- \gset
 
 select 10 as test01, 20 as test02, 'Hello' as test03 \gset pref01_
@@ -119,6 +133,14 @@ SELECT 1 AS x, 'Hello', 2 AS y, true AS "dirty\name"
 -- all on one line
 SELECT 3 AS x, 'Hello', 4 AS y, true AS "dirty\name" \gdesc \g
 
+-- test for server bug #17983 with empty statement in aborted transaction
+set search_path = default;
+begin;
+bogus;
+;
+\gdesc
+rollback;
+
 -- \gexec
 
 create temporary table gexec_test(a int, b text, c date, d float);
@@ -140,6 +162,18 @@ select 'drop table gexec_test', 'select ''2000-01-01''::date as party_over'
 \gexec
 
 \unset FETCH_COUNT
+
+-- \setenv, \getenv
+
+-- ensure MYVAR isn't set
+\setenv MYVAR
+-- in which case, reading it doesn't change the target
+\getenv res MYVAR
+\echo :res
+-- now set it
+\setenv MYVAR 'environment value'
+\getenv res MYVAR
+\echo :res
 
 -- show all pset options
 \pset
@@ -996,7 +1030,7 @@ select \if false \\ (bogus \else \\ 42 \endif \\ forty_two;
 	\timing arg1
 	\unset arg1
 	\w arg1
-	\watch arg1
+	\watch arg1 arg2
 	\x arg1
 	-- \else here is eaten as part of OT_FILEPIPE argument
 	\w |/no/such/file \else
@@ -1241,6 +1275,12 @@ drop role regress_partitioning_role;
 \dAp+ btree float_ops
 \dAp * pg_catalog.uuid_ops
 
+-- check \dconfig
+set work_mem = 10240;
+\dconfig work_mem
+\dconfig+ work*
+reset work_mem;
+
 -- check \df, \do with argument specifications
 \df *sqrt
 \df *sqrt num*
@@ -1251,8 +1291,308 @@ drop role regress_partitioning_role;
 \df has_database_privilege oid text
 \df has_database_privilege oid text -
 \dfa bit* small*
+\df *._pg_expandarray
 \do - pg_catalog.int4
 \do && anyarray *
+
+-- check \df+
+-- we have to use functions with a predictable owner name, so make a role
+create role regress_psql_user superuser;
+begin;
+set session authorization regress_psql_user;
+
+create function psql_df_internal (float8)
+  returns float8
+  language internal immutable parallel safe strict
+  as 'dsin';
+create function psql_df_sql (x integer)
+  returns integer
+  security definer
+  begin atomic select x + 1; end;
+create function psql_df_plpgsql ()
+  returns void
+  language plpgsql
+  as $$ begin return; end; $$;
+comment on function psql_df_plpgsql () is 'some comment';
+
+\df+ psql_df_*
+rollback;
+drop role regress_psql_user;
+
+-- check \sf
+\sf information_schema._pg_expandarray
+\sf+ information_schema._pg_expandarray
+\sf+ interval_pl_time
+\sf ts_debug(text)
+\sf+ ts_debug(text)
+
+-- AUTOCOMMIT
+
+CREATE TABLE ac_test (a int);
+\set AUTOCOMMIT off
+
+INSERT INTO ac_test VALUES (1);
+COMMIT;
+SELECT * FROM ac_test;
+COMMIT;
+
+INSERT INTO ac_test VALUES (2);
+ROLLBACK;
+SELECT * FROM ac_test;
+COMMIT;
+
+BEGIN;
+INSERT INTO ac_test VALUES (3);
+COMMIT;
+SELECT * FROM ac_test;
+COMMIT;
+
+BEGIN;
+INSERT INTO ac_test VALUES (4);
+ROLLBACK;
+SELECT * FROM ac_test;
+COMMIT;
+
+\set AUTOCOMMIT on
+DROP TABLE ac_test;
+SELECT * FROM ac_test;  -- should be gone now
+
+-- ON_ERROR_ROLLBACK
+
+\set ON_ERROR_ROLLBACK on
+CREATE TABLE oer_test (a int);
+
+BEGIN;
+INSERT INTO oer_test VALUES (1);
+INSERT INTO oer_test VALUES ('foo');
+INSERT INTO oer_test VALUES (3);
+COMMIT;
+SELECT * FROM oer_test;
+
+BEGIN;
+INSERT INTO oer_test VALUES (4);
+ROLLBACK;
+SELECT * FROM oer_test;
+
+BEGIN;
+INSERT INTO oer_test VALUES (5);
+COMMIT AND CHAIN;
+INSERT INTO oer_test VALUES (6);
+COMMIT;
+SELECT * FROM oer_test;
+
+DROP TABLE oer_test;
+\set ON_ERROR_ROLLBACK off
+
+-- ECHO errors
+\set ECHO errors
+SELECT * FROM notexists;
+\set ECHO all
+
+--
+-- combined queries
+--
+CREATE FUNCTION warn(msg TEXT) RETURNS BOOLEAN LANGUAGE plpgsql
+AS $$
+  BEGIN RAISE NOTICE 'warn %', msg ; RETURN TRUE ; END
+$$;
+
+-- show both
+SELECT 1 AS one \; SELECT warn('1.5') \; SELECT 2 AS two ;
+-- \gset applies to last query only
+SELECT 3 AS three \; SELECT warn('3.5') \; SELECT 4 AS four \gset
+\echo :three :four
+-- syntax error stops all processing
+SELECT 5 \; SELECT 6 + \; SELECT warn('6.5') \; SELECT 7 ;
+-- with aborted transaction, stop on first error
+BEGIN \; SELECT 8 AS eight \; SELECT 9/0 AS nine \; ROLLBACK \; SELECT 10 AS ten ;
+-- close previously aborted transaction
+ROLLBACK;
+
+-- miscellaneous SQL commands
+-- (non SELECT output is sent to stderr, thus is not shown in expected results)
+SELECT 'ok' AS "begin" \;
+CREATE TABLE psql_comics(s TEXT) \;
+INSERT INTO psql_comics VALUES ('Calvin'), ('hobbes') \;
+COPY psql_comics FROM STDIN \;
+UPDATE psql_comics SET s = 'Hobbes' WHERE s = 'hobbes' \;
+DELETE FROM psql_comics WHERE s = 'Moe' \;
+COPY psql_comics TO STDOUT \;
+TRUNCATE psql_comics \;
+DROP TABLE psql_comics \;
+SELECT 'ok' AS "done" ;
+Moe
+Susie
+\.
+
+\set SHOW_ALL_RESULTS off
+SELECT 1 AS one \; SELECT warn('1.5') \; SELECT 2 AS two ;
+
+\set SHOW_ALL_RESULTS on
+DROP FUNCTION warn(TEXT);
+
+--
+-- \g with file
+--
+\getenv abs_builddir PG_ABS_BUILDDIR
+\set g_out_file :abs_builddir '/results/psql-output1'
+
+CREATE TEMPORARY TABLE reload_output(
+  lineno int NOT NULL GENERATED ALWAYS AS IDENTITY,
+  line text
+);
+
+SELECT 1 AS a \g :g_out_file
+COPY reload_output(line) FROM :'g_out_file';
+SELECT 2 AS b\; SELECT 3 AS c\; SELECT 4 AS d \g :g_out_file
+COPY reload_output(line) FROM :'g_out_file';
+COPY (SELECT 'foo') TO STDOUT \; COPY (SELECT 'bar') TO STDOUT \g :g_out_file
+COPY reload_output(line) FROM :'g_out_file';
+
+SELECT line FROM reload_output ORDER BY lineno;
+TRUNCATE TABLE reload_output;
+
+--
+-- \o with file
+--
+\set o_out_file :abs_builddir '/results/psql-output2'
+
+\o :o_out_file
+SELECT max(unique1) FROM onek;
+SELECT 1 AS a\; SELECT 2 AS b\; SELECT 3 AS c;
+
+-- COPY TO file
+-- The data goes to :g_out_file and the status to :o_out_file
+\set QUIET false
+COPY (SELECT unique1 FROM onek ORDER BY unique1 LIMIT 10) TO :'g_out_file';
+-- DML command status
+UPDATE onek SET unique1 = unique1 WHERE false;
+\set QUIET true
+\o
+
+-- Check the contents of the files generated.
+COPY reload_output(line) FROM :'g_out_file';
+SELECT line FROM reload_output ORDER BY lineno;
+TRUNCATE TABLE reload_output;
+COPY reload_output(line) FROM :'o_out_file';
+SELECT line FROM reload_output ORDER BY lineno;
+TRUNCATE TABLE reload_output;
+
+-- Multiple COPY TO STDOUT with output file
+\o :o_out_file
+-- The data goes to :o_out_file with no status generated.
+COPY (SELECT 'foo1') TO STDOUT \; COPY (SELECT 'bar1') TO STDOUT;
+-- Combination of \o and \g file with multiple COPY queries.
+COPY (SELECT 'foo2') TO STDOUT \; COPY (SELECT 'bar2') TO STDOUT \g :g_out_file
+\o
+
+-- Check the contents of the files generated.
+COPY reload_output(line) FROM :'g_out_file';
+SELECT line FROM reload_output ORDER BY lineno;
+TRUNCATE TABLE reload_output;
+COPY reload_output(line) FROM :'o_out_file';
+SELECT line FROM reload_output ORDER BY lineno;
+
+DROP TABLE reload_output;
+
+--
+-- AUTOCOMMIT and combined queries
+--
+\set AUTOCOMMIT off
+\echo '# AUTOCOMMIT:' :AUTOCOMMIT
+-- BEGIN is now implicit
+
+CREATE TABLE foo(s TEXT) \;
+ROLLBACK;
+
+CREATE TABLE foo(s TEXT) \;
+INSERT INTO foo(s) VALUES ('hello'), ('world') \;
+COMMIT;
+
+DROP TABLE foo \;
+ROLLBACK;
+
+-- table foo is still there
+SELECT * FROM foo ORDER BY 1 \;
+DROP TABLE foo \;
+COMMIT;
+
+\set AUTOCOMMIT on
+\echo '# AUTOCOMMIT:' :AUTOCOMMIT
+-- BEGIN now explicit for multi-statement transactions
+
+BEGIN \;
+CREATE TABLE foo(s TEXT) \;
+INSERT INTO foo(s) VALUES ('hello'), ('world') \;
+COMMIT;
+
+BEGIN \;
+DROP TABLE foo \;
+ROLLBACK \;
+
+-- implicit transactions
+SELECT * FROM foo ORDER BY 1 \;
+DROP TABLE foo;
+
+--
+-- test ON_ERROR_ROLLBACK and combined queries
+--
+CREATE FUNCTION psql_error(msg TEXT) RETURNS BOOLEAN AS $$
+  BEGIN
+    RAISE EXCEPTION 'error %', msg;
+  END;
+$$ LANGUAGE plpgsql;
+
+\set ON_ERROR_ROLLBACK on
+\echo '# ON_ERROR_ROLLBACK:' :ON_ERROR_ROLLBACK
+\echo '# AUTOCOMMIT:' :AUTOCOMMIT
+
+BEGIN;
+CREATE TABLE bla(s NO_SUCH_TYPE);               -- fails
+CREATE TABLE bla(s TEXT);                       -- succeeds
+SELECT psql_error('oops!');                     -- fails
+INSERT INTO bla VALUES ('Calvin'), ('Hobbes');
+COMMIT;
+
+SELECT * FROM bla ORDER BY 1;
+
+BEGIN;
+INSERT INTO bla VALUES ('Susie');         -- succeeds
+-- now with combined queries
+INSERT INTO bla VALUES ('Rosalyn') \;     -- will rollback
+SELECT 'before error' AS show \;          -- will show nevertheless!
+  SELECT psql_error('boum!') \;           -- failure
+  SELECT 'after error' AS noshow;         -- hidden by preceding error
+INSERT INTO bla(s) VALUES ('Moe') \;      -- will rollback
+  SELECT psql_error('bam!');
+INSERT INTO bla VALUES ('Miss Wormwood'); -- succeeds
+COMMIT;
+SELECT * FROM bla ORDER BY 1;
+
+-- some with autocommit off
+\set AUTOCOMMIT off
+\echo '# AUTOCOMMIT:' :AUTOCOMMIT
+
+-- implicit BEGIN
+INSERT INTO bla VALUES ('Dad');           -- succeeds
+SELECT psql_error('bad!');                -- implicit partial rollback
+
+INSERT INTO bla VALUES ('Mum') \;         -- will rollback
+SELECT COUNT(*) AS "#mum"
+FROM bla WHERE s = 'Mum' \;               -- but be counted here
+SELECT psql_error('bad!');                -- implicit partial rollback
+COMMIT;
+
+SELECT COUNT(*) AS "#mum"
+FROM bla WHERE s = 'Mum' \;               -- no mum here
+SELECT * FROM bla ORDER BY 1;
+
+-- reset all
+\set AUTOCOMMIT on
+\set ON_ERROR_ROLLBACK off
+\echo '# final ON_ERROR_ROLLBACK:' :ON_ERROR_ROLLBACK
+DROP TABLE bla;
+DROP FUNCTION psql_error;
 
 -- check describing invalid multipart names
 \dA regression.heap
@@ -1495,3 +1835,29 @@ drop role regress_partitioning_role;
 \dP "no.such.database"."no.such.schema"."no.such.partitioned.relation"
 \dT "no.such.database"."no.such.schema"."no.such.data.type"
 \dX "no.such.database"."no.such.schema"."no.such.extended.statistics"
+
+-- check \drg and \du
+CREATE ROLE regress_du_role0;
+CREATE ROLE regress_du_role1;
+CREATE ROLE regress_du_role2;
+CREATE ROLE regress_du_admin;
+
+GRANT regress_du_role0 TO regress_du_admin WITH ADMIN TRUE;
+GRANT regress_du_role1 TO regress_du_admin WITH ADMIN TRUE;
+GRANT regress_du_role2 TO regress_du_admin WITH ADMIN TRUE;
+
+GRANT regress_du_role0 TO regress_du_role1 WITH ADMIN TRUE,  INHERIT TRUE,  SET TRUE  GRANTED BY regress_du_admin;
+GRANT regress_du_role0 TO regress_du_role2 WITH ADMIN TRUE,  INHERIT FALSE, SET FALSE GRANTED BY regress_du_admin;
+GRANT regress_du_role1 TO regress_du_role2 WITH ADMIN TRUE , INHERIT FALSE, SET TRUE  GRANTED BY regress_du_admin;
+GRANT regress_du_role0 TO regress_du_role1 WITH ADMIN FALSE, INHERIT TRUE,  SET FALSE GRANTED BY regress_du_role1;
+GRANT regress_du_role0 TO regress_du_role2 WITH ADMIN FALSE, INHERIT TRUE , SET TRUE  GRANTED BY regress_du_role1;
+GRANT regress_du_role0 TO regress_du_role1 WITH ADMIN FALSE, INHERIT FALSE, SET TRUE  GRANTED BY regress_du_role2;
+GRANT regress_du_role0 TO regress_du_role2 WITH ADMIN FALSE, INHERIT FALSE, SET FALSE GRANTED BY regress_du_role2;
+
+\drg regress_du_role*
+\du regress_du_role*
+
+DROP ROLE regress_du_role0;
+DROP ROLE regress_du_role1;
+DROP ROLE regress_du_role2;
+DROP ROLE regress_du_admin;

@@ -1,5 +1,61 @@
+set optimizer_trace_fallback=on;
 --
 -- HASH_INDEX
+--
+-- directory paths are passed to us in environment variables
+\getenv abs_srcdir PG_ABS_SRCDIR
+CREATE TABLE hash_i4_heap (
+	seqno 		int4,
+	random 		int4
+);
+CREATE TABLE hash_name_heap (
+	seqno 		int4,
+	random 		name
+);
+CREATE TABLE hash_txt_heap (
+	seqno 		int4,
+	random 		text
+);
+CREATE TABLE hash_f8_heap (
+	seqno		int4,
+	random 		float8
+);
+\set filename :abs_srcdir '/data/hash.data'
+COPY hash_i4_heap FROM :'filename';
+COPY hash_name_heap FROM :'filename';
+COPY hash_txt_heap FROM :'filename';
+COPY hash_f8_heap FROM :'filename';
+-- the data in this file has a lot of duplicates in the index key
+-- fields, leading to long bucket chains and lots of table expansion.
+-- this is therefore a stress test of the bucket overflow code (unlike
+-- the data in hash.data, which has unique index keys).
+--
+-- \set filename :abs_srcdir '/data/hashovfl.data'
+-- COPY hash_ovfl_heap FROM :'filename';
+ANALYZE hash_i4_heap;
+ANALYZE hash_name_heap;
+ANALYZE hash_txt_heap;
+ANALYZE hash_f8_heap;
+CREATE INDEX hash_i4_index ON hash_i4_heap USING hash (random int4_ops);
+CREATE INDEX hash_name_index ON hash_name_heap USING hash (random name_ops);
+CREATE INDEX hash_txt_index ON hash_txt_heap USING hash (random text_ops);
+CREATE INDEX hash_f8_index ON hash_f8_heap USING hash (random float8_ops)
+  WITH (fillfactor=60);
+--
+-- Also try building functional, expressional, and partial indexes on
+-- tables that already contain data.
+--
+create unique index hash_f8_index_1 on hash_f8_heap(abs(random));
+ERROR:  UNIQUE index must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "seqno" is not included in the constraint.
+create unique index hash_f8_index_2 on hash_f8_heap((seqno + 1), random);
+ERROR:  UNIQUE index must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "seqno" is not included in the constraint.
+create unique index hash_f8_index_3 on hash_f8_heap(random) where seqno > 1000;
+ERROR:  UNIQUE index must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "seqno" is not included in the constraint.
+--
+-- hash index
 -- grep 843938989 hash.data
 --
 SELECT * FROM hash_i4_heap
@@ -165,27 +221,26 @@ SELECT h.seqno AS t20000
   20000
 (1 row)
 
--- Pax not support IndexDeleteTuples
--- UPDATE hash_f8_heap
---    SET random = '-1234.1234'::float8
---    WHERE hash_f8_heap.seqno = 8906;
+UPDATE hash_f8_heap
+   SET random = '-1234.1234'::float8
+   WHERE hash_f8_heap.seqno = 8906;
 SELECT h.seqno AS i8096, h.random AS f1234_1234
    FROM hash_f8_heap h
    WHERE h.random = '-1234.1234'::float8;
  i8096 | f1234_1234 
 -------+------------
-(0 rows)
+  8906 | -1234.1234
+(1 row)
 
--- Pax not support IndexDeleteTuples
--- UPDATE hash_f8_heap
---    SET seqno = 20000
---    WHERE hash_f8_heap.random = '488912369'::float8;
+UPDATE hash_f8_heap
+   SET seqno = 20000
+   WHERE hash_f8_heap.random = '488912369'::float8;
 SELECT h.seqno AS f20000
    FROM hash_f8_heap h
    WHERE h.random = '488912369'::float8;
  f20000 
 --------
-   8932
+  20000
 (1 row)
 
 -- UPDATE hash_ovfl_heap
@@ -245,3 +300,4 @@ CREATE INDEX hash_f8_index2 ON hash_f8_heap USING hash (random float8_ops)
 	WITH (fillfactor=101);
 ERROR:  value 101 out of bounds for option "fillfactor"
 DETAIL:  Valid values are between "10" and "100".
+reset optimizer_trace_fallback;

@@ -29,7 +29,26 @@
 
 // The libproto defined `FATAL` inside as a marco linker
 #undef FATAL
+// PG defines several macros (Min/Max in c.h, IsPowerOf2 in xlog_internal.h)
+// whose names collide with abseil identifiers reached through protobuf
+// headers. Suppress while including, restore the PG definitions after.
+#undef Min
+#undef Max
+#undef IsPowerOf2
+
+// GCC 14 emits false -Warray-bounds warnings in protobuf 3.19 headers.
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
 #include "storage/proto/micro_partition_stats.pb.h"
 #include "storage/proto/orc_proto.pb.h"
 #include "storage/proto/pax.pb.h"
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
+
 #define FATAL 22
+#define Min(x, y) ((x) < (y) ? (x) : (y))
+#define Max(x, y) ((x) > (y) ? (x) : (y))
+#define IsPowerOf2(x) (x > 0 && ((x) & ((x)-1)) == 0)

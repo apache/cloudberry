@@ -8,7 +8,7 @@
  *
  * This code is released under the terms of the PostgreSQL License.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/test/regress/pg_regress_main.c
@@ -88,7 +88,7 @@ psql_start_test(const char *testname,
 	}
 
 	snprintf(expectfile, sizeof(expectfile), "%s/expected/%s.out",
-			 outputdir, testname);
+			 expecteddir, testname);
 	if (!file_exists(expectfile))
 		snprintf(expectfile, sizeof(expectfile), "%s/expected/%s.out",
 				 inputdir, testname);

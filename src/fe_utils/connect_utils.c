@@ -2,7 +2,7 @@
  *
  * Facilities for frontend code to connect to and disconnect from databases.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/fe_utils/connect_utils.c
@@ -88,11 +88,8 @@ connectDatabase(const ConnParams *cparams, const char *progname,
 		conn = PQconnectdbParams(keywords, values, true);
 
 		if (!conn)
-		{
-			pg_log_error("could not connect to database %s: out of memory",
-						 cparams->dbname);
-			exit(1);
-		}
+			pg_fatal("could not connect to database %s: out of memory",
+					 cparams->dbname);
 
 		/*
 		 * No luck?  Trying asking (again) for a password.
@@ -102,8 +99,7 @@ connectDatabase(const ConnParams *cparams, const char *progname,
 			cparams->prompt_password != TRI_NO)
 		{
 			PQfinish(conn);
-			if (password)
-				free(password);
+			free(password);
 			password = simple_prompt("Password: ", false);
 			new_pass = true;
 		}
@@ -117,8 +113,7 @@ connectDatabase(const ConnParams *cparams, const char *progname,
 			PQfinish(conn);
 			return NULL;
 		}
-		pg_log_error("%s", PQerrorMessage(conn));
-		exit(1);
+		pg_fatal("%s", PQerrorMessage(conn));
 	}
 
 	/* Start strict; callers may override this. */

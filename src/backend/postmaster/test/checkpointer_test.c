@@ -61,7 +61,7 @@ test__ForwardSyncRequest_enqueue(void **state)
 	expect_value(LWLockRelease, lock, CheckpointerCommLock);
 	will_be_called(LWLockRelease);
 #ifdef USE_ASSERT_CHECKING
-	expect_value(LWLockHeldByMe, l, CheckpointerCommLock);
+	expect_value(LWLockHeldByMe, lock, CheckpointerCommLock);
 	will_return(LWLockHeldByMe, true);
 #endif
 	/*

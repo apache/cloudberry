@@ -208,7 +208,7 @@ FwsDabdQUz5O7bgNSnxfmyw1OifGF+W2bIn/8W+0rDf8u3+O+Q==
 '), 'x');
 
 -- Checking various data
-select encode(digest(pgp_sym_decrypt(dearmor('
+select digest(pgp_sym_decrypt(dearmor('
 -----BEGIN PGP MESSAGE-----
 Comment: dat1.aes.sha1.mdc.s2k3.z0
 
@@ -216,10 +216,9 @@ jA0EBwMCGJ+SpuOysINg0kQBJfSjzsW0x4OVcAyr17O7FBvMTwIGeGcJd99oTQU8
 Xtx3kDqnhUq9Z1fS3qPbi5iNP2A9NxOBxPWz2JzxhydANlgbxg==
 =W/ik
 -----END PGP MESSAGE-----
-'), '0123456789abcdefghij'), 'sha1'), 'hex');
--- expected: 0225e3ede6f2587b076d021a189ff60aad67e066
+'), '0123456789abcdefghij'), 'sha1');
 
-select encode(digest(pgp_sym_decrypt(dearmor('
+select digest(pgp_sym_decrypt(dearmor('
 -----BEGIN PGP MESSAGE-----
 Comment: dat2.aes.sha1.mdc.s2k3.z0
 
@@ -227,10 +226,9 @@ jA0EBwMCvdpDvidNzMxg0jUBvj8eS2+1t/9/zgemxvhtc0fvdKGGbjH7dleaTJRB
 SaV9L04ky1qECNDx3XjnoKLC+H7IOQ==
 =Fxen
 -----END PGP MESSAGE-----
-'), '0123456789abcdefghij'), 'sha1'), 'hex');
--- expected: da39a3ee5e6b4b0d3255bfef95601890afd80709
+'), '0123456789abcdefghij'), 'sha1');
 
-select encode(digest(pgp_sym_decrypt(dearmor('
+select digest(pgp_sym_decrypt_bytea(dearmor('
 -----BEGIN PGP MESSAGE-----
 Comment: dat3.aes.sha1.mdc.s2k3.z0
 
@@ -239,11 +237,10 @@ gFnkUKIE0PSaYFp+Yi1VlRfUtRQ/X/LYNGa7tWZS+4VQajz2Xtz4vUeAEiYFYPXk
 73Hb8m1yRhQK
 =ivrD
 -----END PGP MESSAGE-----
-'), '0123456789abcdefghij'), 'sha1'), 'hex');
--- expected: 5e5c135efc0dd00633efc6dfd6e731ea408a5b4c
+'), '0123456789abcdefghij'), 'sha1');
 
 -- Checking CRLF
-select encode(digest(pgp_sym_decrypt(dearmor('
+select digest(pgp_sym_decrypt(dearmor('
 -----BEGIN PGP MESSAGE-----
 Comment: crlf mess
 
@@ -251,10 +248,9 @@ ww0ECQMCt7VAtby6l4Bi0lgB5KMIZiiF/b3CfMfUyY0eDncsGXtkbu1X+l9brjpMP8eJnY79Amms
 a3nsOzKTXUfS9VyaXo8IrncM6n7fdaXpwba/3tNsAhJG4lDv1k4g9v8Ix2dfv6Rs
 =mBP9
 -----END PGP MESSAGE-----
-'), 'key', 'convert-crlf=0'), 'sha1'), 'hex');
--- expected: 9353062be7720f1446d30b9e75573a4833886784
+'), 'key', 'convert-crlf=0'), 'sha1');
 
-select encode(digest(pgp_sym_decrypt(dearmor('
+select digest(pgp_sym_decrypt(dearmor('
 -----BEGIN PGP MESSAGE-----
 Comment: crlf mess
 
@@ -262,12 +258,10 @@ ww0ECQMCt7VAtby6l4Bi0lgB5KMIZiiF/b3CfMfUyY0eDncsGXtkbu1X+l9brjpMP8eJnY79Amms
 a3nsOzKTXUfS9VyaXo8IrncM6n7fdaXpwba/3tNsAhJG4lDv1k4g9v8Ix2dfv6Rs
 =mBP9
 -----END PGP MESSAGE-----
-'), 'key', 'convert-crlf=1'), 'sha1'), 'hex');
--- expected: 7efefcab38467f7484d6fa43dc86cf5281bd78e2
+'), 'key', 'convert-crlf=1'), 'sha1');
 
 -- check BUG #11905, problem with messages 6 less than a power of 2.
 select pgp_sym_decrypt(pgp_sym_encrypt(repeat('x',65530),'1'),'1') = repeat('x',65530);
--- expected: true
 
 
 -- Negative tests
@@ -287,6 +281,26 @@ VsxxqLSPzNLAeIspJk5G
 
 -- Routine text/binary mismatch.
 select pgp_sym_decrypt(pgp_sym_encrypt_bytea('P', 'key'), 'key', 'debug=1');
+
+-- NUL byte in text decrypt.  Ciphertext source:
+-- printf 'a\x00\xc' | gpg --homedir /nonexistent --textmode \
+--      --personal-cipher-preferences aes --no-emit-version --batch \
+--      --symmetric --passphrase key --armor
+do $$
+begin
+  perform pgp_sym_decrypt(dearmor('
+-----BEGIN PGP MESSAGE-----
+
+jA0EBwMCLd9OvySmZNZg0jgBe7vGTmnje5HGXI+zsIQ99WPZu4Zs/P6pQcZ+HZ4n
+SZQHOfE8tagjB6Rqow82QpSBiOfWn4qjhQ==
+=c2cz
+-----END PGP MESSAGE-----
+'), 'key', 'debug=1');
+exception when others then
+  raise '%',
+    regexp_replace(sqlerrm, 'encoding "[^"]*"', 'encoding [REDACTED]');
+end
+$$;
 
 -- Decryption with a certain incorrect key yields an apparent BZip2-compressed
 -- plaintext.  Ciphertext source: iterative pgp_sym_encrypt('secret', 'key')
@@ -313,3 +327,29 @@ UCAAw2JRIISttRHMfDpDuZJpvYo=
 =AZ9M
 -----END PGP MESSAGE-----
 '), 'key', 'debug=1');
+
+-- Check ignore-cipher-failure. This message isn't actually encrypted; it was
+-- created with cipher-algo=bf using an OpenSSL that didn't actually support
+-- Blowfish. After the fix for CVE-2026-14663, we no longer create these broken
+-- ciphertexts, but we allow users to return to the previous behavior during
+-- decryption so that the bad wrapper can be stripped.
+--
+-- Note that if Blowfish is supported by the linked OpenSSL, both decryptions
+-- will fail.
+select pgp_sym_decrypt(dearmor('
+-----BEGIN PGP MESSAGE-----
+
+ww0EBAMC8wIKbtvzJtxi0jABUleCwFJWGCkYKcsNdABqdtXaU2VjcmV0LtMUlnPH3A2QBmZrcucm
+1GPb/s2Bkdg=
+=6aqD
+-----END PGP MESSAGE-----
+'), 'wrong key');
+
+select pgp_sym_decrypt(dearmor('
+-----BEGIN PGP MESSAGE-----
+
+ww0EBAMC8wIKbtvzJtxi0jABUleCwFJWGCkYKcsNdABqdtXaU2VjcmV0LtMUlnPH3A2QBmZrcucm
+1GPb/s2Bkdg=
+=6aqD
+-----END PGP MESSAGE-----
+'), 'wrong key', 'ignore-cipher-failure=1');

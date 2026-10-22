@@ -30,9 +30,9 @@
 #include "utils/lsyscache.h"
 
 
-static void mutate_plan_fields(Plan *newplan, Plan *oldplan, Node *(*mutator) (), void *context);
-static void mutate_join_fields(Join *newplan, Join *oldplan, Node *(*mutator) (), void *context);
-static void mutate_sort_fields(Sort* newplan, Sort* oldplan, Node *(*mutator) (), void *context);
+static void mutate_plan_fields(Plan *newplan, Plan *oldplan, Node *(*mutator) (Node *, void *), void *context);
+static void mutate_join_fields(Join *newplan, Join *oldplan, Node *(*mutator) (Node *, void *), void *context);
+static void mutate_sort_fields(Sort* newplan, Sort* oldplan, Node *(*mutator) (Node *, void *), void *context);
 
 
 
@@ -107,7 +107,7 @@ static void mutate_sort_fields(Sort* newplan, Sort* oldplan, Node *(*mutator) ()
 
 Node *
 plan_tree_mutator(Node *node,
-				  Node *(*mutator) (),
+				  Node *(*mutator) (Node *, void *),
 				  void *context,
 				  bool recurse_into_subplans)
 {
@@ -989,6 +989,17 @@ plan_tree_mutator(Node *node,
 			}
 			break;
 
+		case T_SplitMerge:
+			{
+				SplitMerge	*splitMerge = (SplitMerge *) node;
+				SplitMerge	*newSplitMerge;
+
+				FLATCOPY(newSplitMerge, splitMerge, SplitMerge);
+				PLANMUTATE(newSplitMerge, splitMerge);
+				return (Node *) newSplitMerge;
+			}
+			break;
+
 		case T_IncrementalSort:
 			{
 				IncrementalSort	*incrementalSort = (IncrementalSort *) node;
@@ -1090,7 +1101,7 @@ plan_tree_mutator(Node *node,
  *
  */
 static void
-mutate_plan_fields(Plan *newplan, Plan *oldplan, Node *(*mutator) (), void *context)
+mutate_plan_fields(Plan *newplan, Plan *oldplan, Node *(*mutator) (Node *, void *), void *context)
 {
 	/*
 	 * Scalar fields startup_cost total_cost plan_rows plan_width nParamExec
@@ -1117,7 +1128,7 @@ mutate_plan_fields(Plan *newplan, Plan *oldplan, Node *(*mutator) (), void *cont
  *
  */
 static void
-mutate_join_fields(Join *newjoin, Join *oldjoin, Node *(*mutator) (), void *context)
+mutate_join_fields(Join *newjoin, Join *oldjoin, Node *(*mutator) (Node *, void *), void *context)
 {
 	/* A Join node is a Plan node. */
 	mutate_plan_fields((Plan *) newjoin, (Plan *) oldjoin, mutator, context);
@@ -1135,7 +1146,7 @@ mutate_join_fields(Join *newjoin, Join *oldjoin, Node *(*mutator) (), void *cont
  *
  */
 static void
-mutate_sort_fields(Sort *newsort, Sort *oldsort, Node *(*mutator) (), void *context)
+mutate_sort_fields(Sort *newsort, Sort *oldsort, Node *(*mutator) (Node *, void *), void *context)
 {
 	/* A Join node is a Plan node. */
 	mutate_plan_fields((Plan *) newsort, (Plan *) oldsort, mutator, context);
@@ -1172,7 +1183,7 @@ get_function_name(Oid proid, const char *dflt)
 }
 
 /* Utility to get a name for a tle to use as an eref. */
-Value *
+String *
 get_tle_name(TargetEntry *tle, List *rtable, const char *default_name)
 {
 	char *name = NULL;

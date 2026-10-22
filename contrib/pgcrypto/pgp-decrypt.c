@@ -250,7 +250,8 @@ prefix_init(void **priv_p, void *arg, PullFilter *src)
 	uint8		tmpbuf[PGP_MAX_BLOCK + 2];
 
 	len = pgp_get_cipher_block_size(ctx->cipher_algo);
-	if (len > sizeof(tmpbuf))
+	/* Make sure we have space for prefix */
+	if (len > PGP_MAX_BLOCK)
 		return PXE_BUG;
 
 	res = pullf_read_max(src, len + 2, &buf, tmpbuf);
@@ -594,7 +595,8 @@ decrypt_key(PGP_Context *ctx, const uint8 *src, int len)
 	PGP_CFB    *cfb;
 
 	res = pgp_cfb_create(&cfb, ctx->s2k_cipher_algo,
-						 ctx->s2k.key, ctx->s2k.key_len, 0, NULL);
+						 ctx->s2k.key, ctx->s2k.key_len, 0, NULL,
+						 ctx->ignore_cipher_failure);
 	if (res < 0)
 		return res;
 
@@ -982,7 +984,8 @@ parse_symenc_data(PGP_Context *ctx, PullFilter *pkt, MBuf *dst)
 	PullFilter *pf_prefix = NULL;
 
 	res = pgp_cfb_create(&cfb, ctx->cipher_algo,
-						 ctx->sess_key, ctx->sess_key_len, 1, NULL);
+						 ctx->sess_key, ctx->sess_key_len, 1, NULL,
+						 ctx->ignore_cipher_failure);
 	if (res < 0)
 		goto out;
 
@@ -1025,7 +1028,8 @@ parse_symenc_mdc_data(PGP_Context *ctx, PullFilter *pkt, MBuf *dst)
 	}
 
 	res = pgp_cfb_create(&cfb, ctx->cipher_algo,
-						 ctx->sess_key, ctx->sess_key_len, 0, NULL);
+						 ctx->sess_key, ctx->sess_key_len, 0, NULL,
+						 ctx->ignore_cipher_failure);
 	if (res < 0)
 		goto out;
 

@@ -1,6 +1,6 @@
 -- start_matchsubs
--- m/cluster.c:\d+/
--- s/cluster.c:\d+/cluster.c:###/
+-- m/\(cluster.c:\d+\)/
+-- s/\(cluster.c:\d+\)/\(cluster.c:###\)/
 -- end_matchsubs
 -- ALTER TABLE ... SET DISTRIBUTED BY
 -- This is the main interface for system expansion
@@ -306,7 +306,6 @@ drop table mpp5754;
 
 -- MPP-5918
 create role atsdb;
--- pax table won't create toast table
 create table owner_test(i int, toast text) distributed randomly;
 alter table owner_test owner to atsdb;
 alter table owner_test set with (reorganize = true) distributed by (i);

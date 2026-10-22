@@ -24,7 +24,7 @@ class CFile(object):
     # function pattern
     func_pat = re.compile(
         # modifier
-        r'(?:(static|inline|__inline__|__inline)\s+)*' +
+        r'(?:(static|inline|__inline__|pg_noinline|__inline)\s+)*' +
         # rettype
         r'((?:const\s+)?(?:struct\s+|unsigned\s+)?\w+(?:[\s\*]+|\s+))(?:inline\s+|static\s+)?' +
         # funcname
@@ -242,7 +242,7 @@ class FuncSignature(object):
         if body:
             return body
 
-        subscript = re.compile('\[\d*\]$')
+        subscript = re.compile('\\[\\d*\\]$')
         # otherwise, general method
         buf = []
         # emit check_expected()

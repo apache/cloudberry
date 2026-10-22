@@ -155,7 +155,7 @@ DecodeISO8601Interval(char *str,
 			{
 				case 'Y':
 					tm->tm_year += val;
-					tm->tm_mon += (fval * MONTHS_PER_YEAR);
+					tm->tm_mon += rint(fval * MONTHS_PER_YEAR);
 					break;
 				case 'M':
 					tm->tm_mon += val;
@@ -191,7 +191,7 @@ DecodeISO8601Interval(char *str,
 						return DTERR_BAD_FORMAT;
 
 					tm->tm_year += val;
-					tm->tm_mon += (fval * MONTHS_PER_YEAR);
+					tm->tm_mon += rint(fval * MONTHS_PER_YEAR);
 					if (unit == '\0')
 						return 0;
 					if (unit == 'T')
@@ -528,29 +528,25 @@ DecodeInterval(char **field, int *ftype, int nf,	/* int range, */
 
 					case DTK_YEAR:
 						tm->tm_year += val;
-						if (fval != 0)
-							tm->tm_mon += fval * MONTHS_PER_YEAR;
+						tm->tm_mon += rint(fval * MONTHS_PER_YEAR);
 						tmask = (fmask & DTK_M(YEAR)) ? 0 : DTK_M(YEAR);
 						break;
 
 					case DTK_DECADE:
 						tm->tm_year += val * 10;
-						if (fval != 0)
-							tm->tm_mon += fval * MONTHS_PER_YEAR * 10;
+						tm->tm_mon += rint(fval * MONTHS_PER_YEAR * 10);
 						tmask = (fmask & DTK_M(YEAR)) ? 0 : DTK_M(YEAR);
 						break;
 
 					case DTK_CENTURY:
 						tm->tm_year += val * 100;
-						if (fval != 0)
-							tm->tm_mon += fval * MONTHS_PER_YEAR * 100;
+						tm->tm_mon += rint(fval * MONTHS_PER_YEAR * 100);
 						tmask = (fmask & DTK_M(YEAR)) ? 0 : DTK_M(YEAR);
 						break;
 
 					case DTK_MILLENNIUM:
 						tm->tm_year += val * 1000;
-						if (fval != 0)
-							tm->tm_mon += fval * MONTHS_PER_YEAR * 1000;
+						tm->tm_mon += rint(fval * MONTHS_PER_YEAR * 1000);
 						tmask = (fmask & DTK_M(YEAR)) ? 0 : DTK_M(YEAR);
 						break;
 
@@ -746,9 +742,9 @@ AppendSeconds(char *cp, int sec, fsec_t fsec, int precision, bool fillzeros)
 	else
 	{
 		if (fillzeros)
-			sprintf(cp, "%02d.%0*d", abs(sec), precision, (int) Abs(fsec));
+			sprintf(cp, "%02d.%0*d", abs(sec), precision, abs(fsec));
 		else
-			sprintf(cp, "%d.%0*d", abs(sec), precision, (int) Abs(fsec));
+			sprintf(cp, "%d.%0*d", abs(sec), precision, abs(fsec));
 		TrimTrailingZeros(cp);
 	}
 }
@@ -784,17 +780,17 @@ EncodeInterval(struct /* pg_ */ tm *tm, fsec_t fsec, int style, char *str)
 		case INTSTYLE_SQL_STANDARD:
 			{
 				bool		has_negative = year < 0 || mon < 0 ||
-				mday < 0 || hour < 0 ||
-				min < 0 || sec < 0 || fsec < 0;
+					mday < 0 || hour < 0 ||
+					min < 0 || sec < 0 || fsec < 0;
 				bool		has_positive = year > 0 || mon > 0 ||
-				mday > 0 || hour > 0 ||
-				min > 0 || sec > 0 || fsec > 0;
+					mday > 0 || hour > 0 ||
+					min > 0 || sec > 0 || fsec > 0;
 				bool		has_year_month = year != 0 || mon != 0;
 				bool		has_day_time = mday != 0 || hour != 0 ||
-				min != 0 || sec != 0 || fsec != 0;
+					min != 0 || sec != 0 || fsec != 0;
 				bool		has_day = mday != 0;
 				bool		sql_standard_value = !(has_negative && has_positive) &&
-				!(has_year_month && has_day_time);
+					!(has_year_month && has_day_time);
 
 				/*
 				 * SQL Standard wants only 1 "<sign>" preceding the whole
@@ -951,7 +947,6 @@ interval2tm(interval span, struct tm *tm, fsec_t *fsec)
 	{
 		tm->tm_year = span.month / MONTHS_PER_YEAR;
 		tm->tm_mon = span.month % MONTHS_PER_YEAR;
-
 	}
 	else
 	{

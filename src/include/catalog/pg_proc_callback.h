@@ -42,8 +42,9 @@ FOREIGN_KEY(procallback REFERENCES pg_proc(oid));
  *		Form_pg_proc_callback corresponds to a pointer to a tuple with
  *		the format of pg_proc_callback relation.
  * ----------------
- */
+ */\
 typedef FormData_pg_proc_callback *Form_pg_proc_callback;
+DECLARE_UNIQUE_INDEX(pg_proc_callback_profnoid_promethod_index, 9926, ProcCallbackProfnoidPromethodIndexId, on pg_proc_callback using btree(profnoid oid_ops, promethod char_ops));
 
 /* values for promethod */
 #define PROMETHOD_DESCRIBE 'd'

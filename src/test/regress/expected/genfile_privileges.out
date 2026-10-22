@@ -1,0 +1,73 @@
+--
+-- pg_file_write()/pg_file_rename()/pg_file_unlink() must only be usable by
+-- superusers and members of pg_write_server_files; pg_logdir_ls() is the
+-- read-side equivalent, gated on pg_read_server_files.
+--
+CREATE ROLE regress_genfile_plain;
+CREATE ROLE regress_genfile_writer IN ROLE pg_write_server_files;
+CREATE ROLE regress_genfile_reader IN ROLE pg_read_server_files;
+-- A plain role is denied at the ACL layer by the REVOKE in
+-- system_functions.sql.
+SET SESSION AUTHORIZATION regress_genfile_plain;
+SELECT pg_file_write('regress_genfile.txt', 'hello', false);
+ERROR:  permission denied for function pg_file_write
+SELECT pg_file_rename('regress_genfile.txt', 'regress_genfile2.txt', NULL);
+ERROR:  permission denied for function pg_file_rename
+SELECT pg_file_unlink('regress_genfile.txt');
+ERROR:  permission denied for function pg_file_unlink
+SELECT count(*) >= 0 AS ok FROM pg_logdir_ls() AS t(starttime timestamp, filename text);
+ERROR:  permission denied for function pg_logdir_ls
+RESET SESSION AUTHORIZATION;
+-- On a cluster upgraded in place proacl stays NULL, so the checks in
+-- genfile.c are the only defense.  Simulate that by granting EXECUTE.
+GRANT EXECUTE ON FUNCTION pg_file_write(text,text,boolean),
+                          pg_file_rename(text,text,text),
+                          pg_file_unlink(text),
+                          pg_logdir_ls() TO regress_genfile_plain;
+SET SESSION AUTHORIZATION regress_genfile_plain;
+SELECT pg_file_write('regress_genfile.txt', 'hello', false);
+ERROR:  must be superuser or a member of the pg_write_server_files role to use this function
+SELECT pg_file_rename('regress_genfile.txt', 'regress_genfile2.txt', NULL);
+ERROR:  must be superuser or a member of the pg_write_server_files role to use this function
+SELECT pg_file_unlink('regress_genfile.txt');
+ERROR:  must be superuser or a member of the pg_write_server_files role to use this function
+SELECT count(*) >= 0 AS ok FROM pg_logdir_ls() AS t(starttime timestamp, filename text);
+ERROR:  must be superuser or a member of the pg_read_server_files role to use this function
+RESET SESSION AUTHORIZATION;
+-- A pg_write_server_files member is allowed; the superuser cleans up after
+-- it, which covers the superuser path too.
+SET SESSION AUTHORIZATION regress_genfile_writer;
+SELECT pg_file_write('regress_genfile.txt', 'hello', false);
+ pg_file_write 
+---------------
+             5
+(1 row)
+
+SELECT pg_file_rename('regress_genfile.txt', 'regress_genfile2.txt', NULL);
+ pg_file_rename 
+----------------
+ t
+(1 row)
+
+RESET SESSION AUTHORIZATION;
+SELECT pg_file_unlink('regress_genfile2.txt');
+ pg_file_unlink 
+----------------
+ t
+(1 row)
+
+-- Likewise for pg_logdir_ls().  Which log files exist is not deterministic,
+-- so only assert that the call succeeds.
+SET SESSION AUTHORIZATION regress_genfile_reader;
+SELECT count(*) >= 0 AS ok FROM pg_logdir_ls() AS t(starttime timestamp, filename text);
+ ok 
+----
+ t
+(1 row)
+
+RESET SESSION AUTHORIZATION;
+REVOKE ALL ON FUNCTION pg_file_write(text,text,boolean),
+                       pg_file_rename(text,text,text),
+                       pg_file_unlink(text),
+                       pg_logdir_ls() FROM regress_genfile_plain;
+DROP ROLE regress_genfile_plain, regress_genfile_writer, regress_genfile_reader;

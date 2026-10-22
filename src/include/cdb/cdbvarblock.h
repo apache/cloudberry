@@ -346,7 +346,7 @@ extern void VarBlockReaderInit(
     uint8               *buffer,
     VarBlockByteLen     bufferLen,
 	bool   				needDecrypt,
-	RelFileNode 		*file_nod);
+	RelFileLocator 		*file_nod);
 
 /*
  * Get a pointer to the next variable-length item.

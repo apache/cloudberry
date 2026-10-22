@@ -30,7 +30,7 @@ CREATE
 
 -- end_ignore
 (exited with code 0)
-!\retcode gpstop -ari;
+!\retcode gpstop -arf;
 -- start_ignore
 20200923:12:05:57:014232 gpstop:mdw:gpadmin-[INFO]:-Starting gpstop with args: -ari
 20200923:12:05:57:014232 gpstop:mdw:gpadmin-[INFO]:-Gathering information and validating the environment...
@@ -122,7 +122,7 @@ DROP
 
 -- end_ignore
 (exited with code 0)
-!\retcode gpstop -ari;
+!\retcode gpstop -arf;
 -- start_ignore
 20230630:09:01:15:025313 gpstop:merge:gpadmin-[INFO]:-Starting gpstop with args: -ari
 20230630:09:01:15:025313 gpstop:merge:gpadmin-[INFO]:-Gathering information and validating the environment...

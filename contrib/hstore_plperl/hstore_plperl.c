@@ -3,11 +3,8 @@
 #include "fmgr.h"
 #include "hstore/hstore.h"
 #include "plperl.h"
-#include "plperl_helpers.h"
 
 PG_MODULE_MAGIC;
-
-extern void _PG_init(void);
 
 /* Linkage to functions in hstore module */
 typedef HStore *(*hstoreUpgrade_t) (Datum orig);
@@ -119,15 +116,22 @@ plperl_to_hstore(PG_FUNCTION_ARGS)
 				 errmsg("cannot transform non-hash Perl value to hstore")));
 	hv = (HV *) in;
 
-	pcount = hv_iterinit(hv);
+	(void) hv_iterinit(hv);
 
-	pairs = palloc(pcount * sizeof(Pairs));
+	pcount = 64;				/* arbitrary initial guess */
+	pairs = palloc_array(Pairs, pcount);
 
 	i = 0;
 	while ((he = hv_iternext(hv)))
 	{
 		char	   *key = sv2cstr(HeSVKEY_force(he));
 		SV		   *value = HeVAL(he);
+
+		if (i >= pcount)
+		{
+			pcount *= 2;
+			pairs = repalloc_array(pairs, Pairs, pcount);
+		}
 
 		pairs[i].key = pstrdup(key);
 		pairs[i].keylen = hstoreCheckKeyLen(strlen(pairs[i].key));
@@ -149,7 +153,7 @@ plperl_to_hstore(PG_FUNCTION_ARGS)
 		i++;
 	}
 
-	pcount = hstoreUniquePairs(pairs, pcount, &buflen);
+	pcount = hstoreUniquePairs(pairs, i, &buflen);
 	out = hstorePairs(pairs, pcount, buflen);
 	PG_RETURN_POINTER(out);
 }

@@ -74,6 +74,8 @@ CREATE ROLE role_dumpinfo_test RESOURCE GROUP rg_dumpinfo_test;
 3:BEGIN;
 4:SET ROLE role_dumpinfo_test;
 4&:BEGIN;
+-- Allow resource group wait queue state to stabilize before checking dump info
+SELECT pg_sleep(0.5);
 
 SELECT dump_test_check();
 

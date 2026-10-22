@@ -3,7 +3,7 @@
  * test_integerset.c
  *		Test integer set data structure.
  *
- * Copyright (c) 2019-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2019-2023, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *		src/test/modules/test_integerset/test_integerset.c
@@ -12,6 +12,7 @@
  */
 #include "postgres.h"
 
+#include "common/pg_prng.h"
 #include "fmgr.h"
 #include "lib/integerset.h"
 #include "miscadmin.h"
@@ -248,8 +249,7 @@ test_pattern(const test_spec *spec)
 		 * only a small part of the integer space is used.  We would very
 		 * rarely hit values that are actually in the set.
 		 */
-		x = (pg_lrand48() << 31) | pg_lrand48();
-		x = x % (last_int + 1000);
+		x = pg_prng_uint64_range(&pg_global_prng_state, 0, last_int + 1000);
 
 		/* Do we expect this value to be present in the set? */
 		if (x >= last_int)
@@ -571,7 +571,7 @@ test_huge_distances(void)
 	 */
 	while (num_values < 1000)
 	{
-		val += pg_lrand48();
+		val += pg_prng_uint32(&pg_global_prng_state);
 		values[num_values++] = val;
 	}
 
@@ -585,26 +585,26 @@ test_huge_distances(void)
 	 */
 	for (int i = 0; i < num_values; i++)
 	{
-		uint64		x = values[i];
+		uint64		y = values[i];
 		bool		expected;
 		bool		result;
 
-		if (x > 0)
+		if (y > 0)
 		{
-			expected = (values[i - 1] == x - 1);
-			result = intset_is_member(intset, x - 1);
+			expected = (values[i - 1] == y - 1);
+			result = intset_is_member(intset, y - 1);
 			if (result != expected)
-				elog(ERROR, "intset_is_member failed for " UINT64_FORMAT, x - 1);
+				elog(ERROR, "intset_is_member failed for " UINT64_FORMAT, y - 1);
 		}
 
-		result = intset_is_member(intset, x);
+		result = intset_is_member(intset, y);
 		if (result != true)
-			elog(ERROR, "intset_is_member failed for " UINT64_FORMAT, x);
+			elog(ERROR, "intset_is_member failed for " UINT64_FORMAT, y);
 
-		expected = (i != num_values - 1) ? (values[i + 1] == x + 1) : false;
-		result = intset_is_member(intset, x + 1);
+		expected = (i != num_values - 1) ? (values[i + 1] == y + 1) : false;
+		result = intset_is_member(intset, y + 1);
 		if (result != expected)
-			elog(ERROR, "intset_is_member failed for " UINT64_FORMAT, x + 1);
+			elog(ERROR, "intset_is_member failed for " UINT64_FORMAT, y + 1);
 	}
 
 	/*

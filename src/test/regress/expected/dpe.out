@@ -652,7 +652,7 @@ explain (costs off, timing off, summary off, analyze) select * from t, pt where 
 ---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=18 loops=1)
    ->  Nested Loop (actual rows=8 loops=1)
-         Join Filter: (t.tid = pt.ptid)
+         Join Filter: (pt.ptid = t.tid)
          Rows Removed by Join Filter: 30
          ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
                ->  Seq Scan on t (actual rows=2 loops=1)
@@ -706,7 +706,7 @@ explain (costs off, timing off, summary off, analyze) select * from t, pt where 
 ------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=1 loops=1)
    ->  Nested Loop (actual rows=1 loops=1)
-         Join Filter: (t.tid = pt.ptid)
+         Join Filter: (pt.ptid = t.tid)
          Rows Removed by Join Filter: 1
          ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
                ->  Seq Scan on t (actual rows=2 loops=1)
@@ -745,7 +745,7 @@ explain (costs off, timing off, summary off, analyze) select * from t, pt where 
 -----------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=18 loops=1)
    ->  Nested Loop (actual rows=8 loops=1)
-         Join Filter: (t.tid = pt.ptid)
+         Join Filter: (pt.ptid = t.tid)
          Rows Removed by Join Filter: 30
          ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
                ->  Seq Scan on t (actual rows=2 loops=1)

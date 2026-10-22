@@ -36,7 +36,7 @@ TM_Result CPaxUpdater::UpdateTuple(
     const Relation relation, const ItemPointer otid, TupleTableSlot *slot,
     const CommandId cid, const Snapshot snapshot, const Snapshot /*crosscheck*/,
     const bool /*wait*/, TM_FailureData * tmfd,
-    LockTupleMode * lockmode, bool *update_indexes) {
+    LockTupleMode * lockmode, TU_UpdateIndexes *update_indexes) {
   TM_Result result;
 
   auto dml_state = CPaxDmlStateLocal::Instance();
@@ -51,12 +51,12 @@ TM_Result CPaxUpdater::UpdateTuple(
 
   if (result == TM_Ok) {
     inserter->InsertTuple(relation, slot, cid, 0, nullptr);
-    *update_indexes = true;
+    *update_indexes = TU_All;
   } else {
     // FIXME: set tmfd correctly.
     // FYI, ao ignores both tmfd and lockmode
     tmfd->ctid = *otid;
-    *update_indexes = false;
+    *update_indexes = TU_None;
   }
   // TODO(gongxun): update pgstat info
   return result;

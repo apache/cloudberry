@@ -1,5 +1,5 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 package RewindTest;
 
@@ -35,14 +35,13 @@ use strict;
 use warnings;
 
 use Carp;
-use Config;
 use Exporter 'import';
 use File::Copy;
 use File::Path qw(rmtree);
-use IPC::Run qw(run);
-use PostgresNode;
-use RecursiveCopy;
-use TestLib;
+use IPC::Run   qw(run);
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::RecursiveCopy;
+use PostgreSQL::Test::Utils;
 use Test::More;
 
 our @EXPORT = qw(
@@ -103,40 +102,30 @@ sub check_query
 	  ],
 	  '>', \$stdout, '2>', \$stderr;
 
-	# We don't use ok() for the exit code and stderr, because we want this
-	# check to be just a single test.
-	if (!$result)
-	{
-		fail("$test_name: psql exit code");
-	}
-	elsif ($stderr ne '')
-	{
-		diag $stderr;
-		fail("$test_name: psql no stderr");
-	}
-	else
-	{
-		is($stdout, $expected_stdout, "$test_name: query result matches");
-	}
+	is($result, 1, "$test_name: psql exit code");
+	is($stderr, '', "$test_name: psql no stderr");
+	is($stdout, $expected_stdout, "$test_name: query result matches");
+
 	return;
 }
 
 sub setup_cluster
 {
 	my $extra_name = shift;    # Used to differentiate clusters
-	my $extra      = shift;    # Extra params for initdb
+	my $extra = shift;         # Extra params for initdb
 
 	# Initialize primary, data checksums are mandatory
 	$node_primary =
-	  get_new_node('primary' . ($extra_name ? "_${extra_name}" : ''));
+	  PostgreSQL::Test::Cluster->new(
+		'primary' . ($extra_name ? "_${extra_name}" : ''));
 
 	# Set up pg_hba.conf and pg_ident.conf for the role running
 	# pg_rewind.  This role is used for all the tests, and has
 	# minimal permissions enough to rewind from an online source.
 	$node_primary->init(
 		allows_streaming => 1,
-		extra            => $extra,
-		auth_extra       => [ '--create-role', 'rewind_user' ]);
+		extra => $extra,
+		auth_extra => [ '--create-role', 'rewind_user' ]);
 
 	# Set wal_keep_size to prevent WAL segment recycling after enforced
 	# checkpoints in the tests.
@@ -176,7 +165,8 @@ sub create_standby
 	my $extra_name = shift;
 
 	$node_standby =
-	  get_new_node('standby' . ($extra_name ? "_${extra_name}" : ''));
+	  PostgreSQL::Test::Cluster->new(
+		'standby' . ($extra_name ? "_${extra_name}" : ''));
 	$node_primary->backup('my_backup');
 	$node_standby->init_from_backup($node_primary, 'my_backup');
 	my $connstr_primary = $node_primary->connstr();
@@ -215,14 +205,6 @@ sub promote_standby
 	# the primary out-of-sync with the standby.
 	$node_standby->promote;
 
-	# Force a checkpoint after the promotion. pg_rewind looks at the control
-	# file to determine what timeline the server is on, and that isn't updated
-	# immediately at promotion, but only at the next checkpoint. When running
-	# pg_rewind in remote mode, it's possible that we complete the test steps
-	# after promotion so quickly that when pg_rewind runs, the standby has not
-	# performed a checkpoint after promotion yet.
-	standby_psql("checkpoint");
-
 	return;
 }
 
@@ -248,12 +230,11 @@ sub promote_primary
 
 sub run_pg_rewind
 {
-	my $test_mode       = shift;
-	my (%params)        = @_;
-	my $primary_pgdata   = $node_primary->data_dir;
-	my $standby_pgdata  = $node_standby->data_dir;
+	my $test_mode = shift;
+	my $primary_pgdata = $node_primary->data_dir;
+	my $standby_pgdata = $node_standby->data_dir;
 	my $standby_connstr = $node_standby->connstr('postgres');
-	my $tmp_folder      = TestLib::tempdir;
+	my $tmp_folder = PostgreSQL::Test::Utils::tempdir;
 
 	$params{stop_primary_mode} = 0 unless defined $params{stop_primary_mode};
 	$params{do_not_start_primary} = 0 unless defined $params{do_not_start_primary};
@@ -306,7 +287,9 @@ sub run_pg_rewind
 				"--debug",
 				"--source-pgdata=$standby_pgdata",
 				"--target-pgdata=$primary_pgdata",
-				"--no-sync"
+				"--no-sync",
+				"--config-file",
+				"$tmp_folder/primary-postgresql.conf.tmp"
 			],
 			'pg_rewind local');
 
@@ -321,10 +304,11 @@ sub run_pg_rewind
 		# recovery configuration automatically.
 		command_ok(
 			[
-				'pg_rewind',                       "--debug",
-				"--source-server",                 $standby_connstr,
+				'pg_rewind', "--debug",
+				"--source-server", $standby_connstr,
 				"--target-pgdata=$primary_pgdata", "--no-sync",
-				"--write-recovery-conf"
+				"--write-recovery-conf", "--config-file",
+				"$tmp_folder/primary-postgresql.conf.tmp"
 			],
 			'pg_rewind remote');
 
@@ -350,7 +334,8 @@ sub run_pg_rewind
 		# segments from the old primary to the archives.  These
 		# will be used by pg_rewind.
 		rmtree($node_primary->archive_dir);
-		RecursiveCopy::copypath($node_primary->data_dir . "/pg_wal",
+		PostgreSQL::Test::RecursiveCopy::copypath(
+			$node_primary->data_dir . "/pg_wal",
 			$node_primary->archive_dir);
 
 		# Fast way to remove entire directory content
@@ -371,7 +356,8 @@ sub run_pg_rewind
 
 		# Note the use of --no-ensure-shutdown here.  WAL files are
 		# gone in this mode and the primary has been stopped
-		# gracefully already.
+		# gracefully already.  --config-file reuses the original
+		# postgresql.conf as restore_command has been enabled above.
 		command_ok(
 			[
 				'pg_rewind',
@@ -380,7 +366,9 @@ sub run_pg_rewind
 				"--target-pgdata=$primary_pgdata",
 				"--no-sync",
 				"--no-ensure-shutdown",
-				"--restore-target-wal"
+				"--restore-target-wal",
+				"--config-file",
+				"$primary_pgdata/postgresql.conf"
 			],
 			'pg_rewind archive');
 	}

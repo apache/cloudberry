@@ -119,7 +119,7 @@ CREATE TEMP VIEW view_with_gp_dist_random_special_chars AS SELECT * FROM gp_dist
 SELECT pg_get_viewdef('view_with_gp_dist_random_special_chars');
                                pg_get_viewdef                               
 ----------------------------------------------------------------------------
-  SELECT "foo\'.bar".a                                                     +
+  SELECT a                                                                 +
     FROM gp_dist_random(E'"schema_view\\''.gp_dist_random"."foo\\''.bar"');
 (1 row)
 

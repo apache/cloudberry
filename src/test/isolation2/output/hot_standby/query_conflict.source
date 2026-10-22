@@ -398,14 +398,11 @@ VACUUM
 (exited with code 0)
 
 ----------------------------------------------------------------
--- Test GUC vacuum_defer_cleanup_age
+-- Test open transaction holding back VACUUM cleanup
+-- (replaces removed vacuum_defer_cleanup_age GUC test)
 ----------------------------------------------------------------
--- Use a GUC value that's not 0, so VACUUM does not clean up
--- recent dead rows that the hot standby might be still seeing.
-!\retcode gpconfig -c vacuum_defer_cleanup_age -v 1;
-(exited with code 0)
-!\retcode gpstop -u;
-(exited with code 0)
+-- An open transaction on the primary holds back the xmin horizon,
+-- preventing VACUUM from cleaning up dead rows.
 
 1: create table hs_qc_guc2(a int);
 CREATE
@@ -420,7 +417,16 @@ BEGIN
  10    
 (1 row)
 
--- VACUUM won't cleanup this table since the DELETE is still within vacuum_defer_cleanup_age
+-- Open a transaction on primary to hold back the cleanup horizon
+2: begin;
+BEGIN
+2: select txid_current() is not null as has_xid;
+ has_xid 
+---------
+ t       
+(1 row)
+
+-- VACUUM won't cleanup this table since session 2's open xact holds back xmin
 1: delete from hs_qc_guc2;
 DELETE 10
 1: vacuum hs_qc_guc2;
@@ -447,9 +453,9 @@ SET
  10    
 (1 row)
 
--- only if the age is reached, hot standby will see the same conflict as before
-1: create temp table tt1(a int);
-CREATE
+-- end the holding transaction, now VACUUM can clean up
+2: commit;
+COMMIT
 1: vacuum hs_qc_guc2;
 VACUUM
 -1S: select count(*) from hs_qc_guc2;
@@ -462,9 +468,4 @@ HINT:  In a moment you should be able to reconnect to the database and repeat yo
 -----
  2   
 (1 row)
-
-!\retcode gpconfig -r vacuum_defer_cleanup_age;
-(exited with code 0)
-!\retcode gpstop -u;
-(exited with code 0)
 

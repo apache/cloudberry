@@ -65,9 +65,7 @@ DECLARE_TOAST(gp_storage_server, 6016, 6017);
 #define GpStorageServerToastTable	6016
 #define GpStorageServerToastIndex	6017
 
-DECLARE_UNIQUE_INDEX_PKEY(gp_storage_server_oid_index, 6018, on gp_storage_server using btree(oid oid_ops));
-#define StorageServerOidIndexId		6018
-DECLARE_UNIQUE_INDEX(gp_storage_server_name_index, 6019, on gp_storage_server using btree(srvname name_ops));
-#define StorageServerNameIndexId	6019
+DECLARE_UNIQUE_INDEX_PKEY(gp_storage_server_oid_index, 6018, StorageServerOidIndexId, on gp_storage_server using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX(gp_storage_server_name_index, 6019, StorageServerNameIndexId, on gp_storage_server using btree(srvname name_ops));
 
 #endif //GP_STORAGE_SERVER_H

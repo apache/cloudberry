@@ -57,7 +57,7 @@
  * calls in portal and cursor manipulations.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/tcop/dest.h
@@ -69,10 +69,6 @@
 
 #include "executor/tuptable.h"
 #include "tcop/cmdtag.h"
-
-
-/* buffer size to use for command completion tags */
-#define COMPLETION_TAG_BUFSIZE	72
 
 
 /* ----------------

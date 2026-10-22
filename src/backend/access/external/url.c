@@ -172,7 +172,7 @@ get_eol_delimiter(List *params)
 
 	foreach(lc, params)
 		if (pg_strcasecmp(((DefElem *) lc->ptr_value)->defname, "line_delim") == 0)
-			return pstrdup(((Value *) ((DefElem *) lc->ptr_value)->arg)->val.str);
+			return pstrdup(((String *) ((DefElem *) lc->ptr_value)->arg)->sval);
 
 	return pstrdup("");
 }

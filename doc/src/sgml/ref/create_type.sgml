@@ -189,6 +189,11 @@ CREATE TYPE <replaceable class="parameter">name</replaceable>
     type name.  Otherwise, the multirange type name is formed by appending a
     <literal>_multirange</literal> suffix to the range type name.
    </para>
+
+   <para>
+    To be able to create a range type, you must have <literal>USAGE</literal>
+    privilege on the subtype.
+   </para>
   </refsect2>
 
   <refsect2>
@@ -901,6 +906,17 @@ CREATE TYPE <replaceable class="parameter">name</replaceable>
    the catalogs with shell types as a result of simple typos in function
    definitions, a shell type will only be made this way when the input
    function is written in C.
+  </para>
+
+  <para>
+   In <productname>PostgreSQL</productname> version 16 and later,
+   it is desirable for base types' input functions to
+   return <quote>soft</quote> errors using the
+   new <function>errsave()</function>/<function>ereturn()</function>
+   mechanism, rather than throwing <function>ereport()</function>
+   exceptions as in previous versions.
+   See <filename>src/backend/utils/fmgr/README</filename> for more
+   information.
   </para>
 
  </refsect1>

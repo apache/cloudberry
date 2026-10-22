@@ -3,7 +3,7 @@
  * ts_type.h
  *	  Definitions for the tsvector and tsquery types
  *
- * Copyright (c) 1998-2021, PostgreSQL Global Development Group
+ * Copyright (c) 1998-2023, PostgreSQL Global Development Group
  *
  * src/include/tsearch/ts_type.h
  *
@@ -35,7 +35,9 @@
  *
  * The positions for each lexeme must be sorted.
  *
- * Note, tsvectorsend/recv believe that sizeof(WordEntry) == 4
+ * Note that while the WordEntry items must be sorted per tsCompareString(),
+ * the per-lexeme data storage could be in some other order, ie the series
+ * of WordEntry->pos values need not be strictly ascending.
  */
 
 typedef struct
@@ -46,13 +48,15 @@ typedef struct
 				pos:20;			/* MAX 1Mb */
 } WordEntry;
 
-#define MAXSTRLEN ( (1<<11) - 1)
-#define MAXSTRPOS ( (1<<20) - 1)
+#define MAXSTRLEN ( (1<<11) - 1)	/* maximum value of WordEntry.len */
+#define MAXSTRPOS ( (1<<20) - 1)	/* maximum value of WordEntry.pos */
 
 extern int	compareWordEntryPos(const void *a, const void *b);
 
 /*
- * Equivalent to
+ * Representation of positions (and weights) associated with a lexeme.
+ *
+ * WordEntryPos is equivalent to
  * typedef struct {
  *		uint16
  *			weight:2,
@@ -75,48 +79,76 @@ typedef struct
 	WordEntryPos pos[1];
 } WordEntryPosVector1;
 
+#define MAXNUMPOS	(256)		/* semi-arbitrary limit on npos */
 
+/* Macros for getting/setting the fields of a WordEntryPos */
 #define WEP_GETWEIGHT(x)	( (x) >> 14 )
 #define WEP_GETPOS(x)		( (x) & 0x3fff )
 
 #define WEP_SETWEIGHT(x,v)	( (x) = ( (v) << 14 ) | ( (x) & 0x3fff ) )
 #define WEP_SETPOS(x,v)		( (x) = ( (x) & 0xc000 ) | ( (v) & 0x3fff ) )
 
-#define MAXENTRYPOS (1<<14)
-#define MAXNUMPOS	(256)
+#define MAXENTRYPOS (1<<14)		/* max value of WordEntryPos pos field, +1 */
+/* Macro for clamping a position to what will fit in WordEntryPos pos field */
 #define LIMITPOS(x) ( ( (x) >= MAXENTRYPOS ) ? (MAXENTRYPOS-1) : (x) )
 
 /* This struct represents a complete tsvector datum */
 typedef struct
 {
 	int32		vl_len_;		/* varlena header (do not touch directly!) */
-	int32		size;
+	int32		size;			/* number of entries[] items */
 	WordEntry	entries[FLEXIBLE_ARRAY_MEMBER];
 	/* lexemes follow the entries[] array */
 } TSVectorData;
 
 typedef TSVectorData *TSVector;
 
+/*
+ * Calculate the size of a TSVector given the number of WordEntries and
+ * the total space needed for lexeme text and positions.  NOTE: callers
+ * must enforce lenstr <= MAXSTRPOS, which ensures that WordEntry.pos
+ * fields will not overflow, and also protects against integer overflow here.
+ * (Since we prohibit empty lexemes, nentries can't exceed lenstr.)
+ */
 #define DATAHDRSIZE (offsetof(TSVectorData, entries))
 #define CALCDATASIZE(nentries, lenstr) (DATAHDRSIZE + (nentries) * sizeof(WordEntry) + (lenstr) )
 
 /* pointer to start of a tsvector's WordEntry array */
-#define ARRPTR(x)	( (x)->entries )
+#define ARRPTR(tsv)	( (tsv)->entries )
 
 /* pointer to start of a tsvector's lexeme storage */
-#define STRPTR(x)	( (char *) &(x)->entries[(x)->size] )
+#define STRPTR(tsv)	( (char *) &(tsv)->entries[(tsv)->size] )
 
-#define _POSVECPTR(x, e)	((WordEntryPosVector *)(STRPTR(x) + SHORTALIGN((e)->pos + (e)->len)))
-#define POSDATALEN(x,e) ( ( (e)->haspos ) ? (_POSVECPTR(x,e)->npos) : 0 )
-#define POSDATAPTR(x,e) (_POSVECPTR(x,e)->pos)
+/* pointer to WordEntryPosVector for a WordEntry */
+#define _POSVECPTR(tsv,we) ((WordEntryPosVector *) \
+							(STRPTR(tsv) + SHORTALIGN((we)->pos + (we)->len)))
+/* number of positions stored for a WordEntry */
+#define POSDATALEN(tsv,we) ( (we)->haspos ? _POSVECPTR(tsv,we)->npos : 0 )
+/* pointer to start of positions stored for a WordEntry */
+#define POSDATAPTR(tsv,we) (_POSVECPTR(tsv,we)->pos)
 
 /*
- * fmgr interface macros
+ * fmgr interface functions
  */
 
-#define DatumGetTSVector(X)			((TSVector) PG_DETOAST_DATUM(X))
-#define DatumGetTSVectorCopy(X)		((TSVector) PG_DETOAST_DATUM_COPY(X))
-#define TSVectorGetDatum(X)			PointerGetDatum(X)
+static inline TSVector
+DatumGetTSVector(Datum X)
+{
+	return (TSVector) PG_DETOAST_DATUM(X);
+}
+
+static inline TSVector
+DatumGetTSVectorCopy(Datum X)
+{
+	return (TSVector) PG_DETOAST_DATUM_COPY(X);
+}
+
+static inline Datum
+TSVectorGetDatum(const TSVectorData *X)
+{
+	return PointerGetDatum(X);
+}
+
 #define PG_GETARG_TSVECTOR(n)		DatumGetTSVector(PG_GETARG_DATUM(n))
 #define PG_GETARG_TSVECTOR_COPY(n)	DatumGetTSVectorCopy(PG_GETARG_DATUM(n))
 #define PG_RETURN_TSVECTOR(x)		return TSVectorGetDatum(x)
@@ -169,9 +201,9 @@ typedef struct
 #define OP_PHRASE		4		/* highest code, tsquery_cleanup.c */
 #define OP_COUNT		4
 
-extern const int tsearch_op_priority[OP_COUNT];
+extern PGDLLIMPORT const int tsearch_op_priority[OP_COUNT];
 
-/* get operation priority  by its code*/
+/* get operation priority by its code */
 #define OP_PRIORITY(x)	( tsearch_op_priority[(x) - 1] )
 /* get QueryOperator priority */
 #define QO_PRIORITY(x)	OP_PRIORITY(((QueryOperator *) (x))->oper)
@@ -218,7 +250,8 @@ typedef TSQueryData *TSQuery;
  */
 #define COMPUTESIZE(size, lenofoperand) ( HDRSIZETQ + (size) * sizeof(QueryItem) + (lenofoperand) )
 #define TSQUERY_TOO_BIG(size, lenofoperand) \
-	((size) > (MaxAllocSize - HDRSIZETQ - (lenofoperand)) / sizeof(QueryItem))
+	((size_t) (lenofoperand) > MaxAllocSize - HDRSIZETQ || \
+	 (size) > (MaxAllocSize - HDRSIZETQ - (lenofoperand)) / sizeof(QueryItem))
 
 /* Returns a pointer to the first QueryItem in a TSQuery */
 #define GETQUERY(x)  ((QueryItem*)( (char*)(x)+HDRSIZETQ ))
@@ -227,14 +260,29 @@ typedef TSQueryData *TSQuery;
 #define GETOPERAND(x)	( (char*)GETQUERY(x) + ((TSQuery)(x))->size * sizeof(QueryItem) )
 
 /*
- * fmgr interface macros
+ * fmgr interface functions
  * Note, TSQuery type marked as plain storage, so it can't be toasted
  * but PG_DETOAST_DATUM_COPY is used for simplicity
  */
 
-#define DatumGetTSQuery(X)			((TSQuery) DatumGetPointer(X))
-#define DatumGetTSQueryCopy(X)		((TSQuery) PG_DETOAST_DATUM_COPY(X))
-#define TSQueryGetDatum(X)			PointerGetDatum(X)
+static inline TSQuery
+DatumGetTSQuery(Datum X)
+{
+	return (TSQuery) DatumGetPointer(X);
+}
+
+static inline TSQuery
+DatumGetTSQueryCopy(Datum X)
+{
+	return (TSQuery) PG_DETOAST_DATUM_COPY(X);
+}
+
+static inline Datum
+TSQueryGetDatum(const TSQueryData *X)
+{
+	return PointerGetDatum(X);
+}
+
 #define PG_GETARG_TSQUERY(n)		DatumGetTSQuery(PG_GETARG_DATUM(n))
 #define PG_GETARG_TSQUERY_COPY(n)	DatumGetTSQueryCopy(PG_GETARG_DATUM(n))
 #define PG_RETURN_TSQUERY(x)		return TSQueryGetDatum(x)

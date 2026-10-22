@@ -209,12 +209,12 @@ ftsConnectStart(fts_segment_info *ftsInfo)
 static void
 checkIfFailedDueToNormalRestart(fts_segment_info *ftsInfo)
 {
-	if (strstr(PQerrorMessage(ftsInfo->conn), _(POSTMASTER_IN_RECOVERY_MSG)) ||
-		strstr(PQerrorMessage(ftsInfo->conn), _(POSTMASTER_IN_STARTUP_MSG)))
+	if (strstr(PQerrorMessage(ftsInfo->conn), (POSTMASTER_IN_RECOVERY_MSG)) ||
+		strstr(PQerrorMessage(ftsInfo->conn), (POSTMASTER_IN_STARTUP_MSG)))
 	{
 		XLogRecPtr tmpptr;
 		char *ptr = strstr(PQerrorMessage(ftsInfo->conn),
-				_(POSTMASTER_IN_RECOVERY_DETAIL_MSG));
+				(POSTMASTER_IN_RECOVERY_DETAIL_MSG));
 		uint32		tmp_xlogid;
 		uint32		tmp_xrecoff;
 
@@ -269,7 +269,7 @@ checkIfFailedDueToNormalRestart(fts_segment_info *ftsInfo)
 				   ftsInfo->mirror_cdbinfo->config->dbid);
 		}
 	}
-	else if (strstr(PQerrorMessage(ftsInfo->conn), _(POSTMASTER_IN_RESET_MSG)))
+	else if (strstr(PQerrorMessage(ftsInfo->conn), (POSTMASTER_IN_RESET_MSG)))
 	{
 		ftsInfo->restart_state = PM_IN_RESETTING;
 		elog(LOG, "FTS: detected segment is in RESET state (content=%d) "
@@ -1092,7 +1092,7 @@ processResponse(fts_context *context)
 				/* If primary is in resetting or making progress in recovery, do not mark it down and promote mirror */
 				if (ftsInfo->restart_state == PM_IN_RESETTING)
 				{
-					Assert(strstr(PQerrorMessage(ftsInfo->conn), _(POSTMASTER_IN_RESET_MSG)));
+					Assert(strstr(PQerrorMessage(ftsInfo->conn), (POSTMASTER_IN_RESET_MSG)));
 					elogif(gp_log_fts >= GPVARS_VERBOSITY_VERBOSE, LOG,
 						 "FTS: detected segment is in resetting mode "
 						 "(content=%d) primary dbid=%d, mirror dbid=%d",
@@ -1103,8 +1103,8 @@ processResponse(fts_context *context)
 				}
 				else if (ftsInfo->restart_state == PM_IN_RECOVERY_MAKING_PROGRESS)
 				{
-					Assert(strstr(PQerrorMessage(ftsInfo->conn), _(POSTMASTER_IN_RECOVERY_MSG)) ||
-						   strstr(PQerrorMessage(ftsInfo->conn), _(POSTMASTER_IN_STARTUP_MSG)));
+					Assert(strstr(PQerrorMessage(ftsInfo->conn), (POSTMASTER_IN_RECOVERY_MSG)) ||
+						   strstr(PQerrorMessage(ftsInfo->conn), (POSTMASTER_IN_STARTUP_MSG)));
 					elogif(gp_log_fts >= GPVARS_VERBOSITY_VERBOSE, LOG,
 						 "FTS: detected segment is in recovery mode and making "
 						 "progress (content=%d) primary dbid=%d, mirror dbid=%d",

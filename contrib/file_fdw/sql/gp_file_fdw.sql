@@ -1,0 +1,76 @@
+--
+-- Test foreign-data wrapper file_fdw. Apache Cloudberry MPP specific
+--
+
+-- directory paths are passed to us in environment variables
+\getenv abs_srcdir PG_ABS_SRCDIR
+
+-- Clean up in case a prior regression run failed
+SET client_min_messages TO 'error';
+SET optimizer_trace_fallback = on;
+DROP ROLE IF EXISTS file_fdw_superuser, file_fdw_user, no_priv_user;
+RESET client_min_messages;
+
+CREATE ROLE file_fdw_superuser LOGIN SUPERUSER; -- is a superuser
+
+-- Install file_fdw
+CREATE EXTENSION file_fdw;
+
+-- file_fdw_superuser owns fdw-related objects
+SET ROLE file_fdw_superuser;
+CREATE SERVER file_server FOREIGN DATA WRAPPER file_fdw OPTIONS (mpp_execute 'any');
+
+-- create user mappings and grant privilege to test users
+SET ROLE file_fdw_superuser;
+CREATE USER MAPPING FOR file_fdw_superuser SERVER file_server OPTIONS (mpp_execute 'master'); -- error
+CREATE USER MAPPING FOR file_fdw_superuser SERVER file_server;
+
+-- MPP tests
+\set filename :abs_srcdir '/data/text.csv'
+CREATE FOREIGN TABLE text_csv_any (
+    word1 text, word2 text
+) SERVER file_server
+OPTIONS (format 'csv', filename :'filename', mpp_execute 'any');
+SELECT * FROM text_csv_any;
+
+\set filename_segid :abs_srcdir '/data/text<SEGID>.csv'
+CREATE FOREIGN TABLE text_csv_all (
+    word1 text, word2 text
+) SERVER file_server
+OPTIONS (format 'csv', filename :'filename_segid', mpp_execute 'all segments');
+EXPLAIN SELECT * FROM text_csv_all ORDER BY word1;
+SELECT * FROM text_csv_all ORDER BY word1;
+
+\set filename :abs_srcdir '/data/text.csv'
+CREATE FOREIGN TABLE text_csv_any_from_server (
+    word1 text, word2 text
+) SERVER file_server
+OPTIONS (format 'csv', filename :'filename');
+SELECT * FROM text_csv_any_from_server;
+
+\set filename :abs_srcdir '/data/text.csv'
+CREATE FOREIGN TABLE text_csv_coordinator (
+    word1 text, word2 text, a int, b int
+) SERVER file_server
+OPTIONS (format 'csv', filename :'filename', mpp_execute 'coordinator');
+
+-- Test append works both ways and generates valid plans. Should be able to execute
+-- coordinator fdw on coordinator under redistribute
+explain select word1 from text_csv_coordinator union all select word1 from text_csv_all;
+select word1 from text_csv_coordinator union all select word1 from text_csv_all;
+
+explain select word1 from text_csv_all union all select word1 from text_csv_coordinator;
+select word1 from text_csv_all union all select word1 from text_csv_coordinator;
+
+-- Test join with foreign scan under redistribute on coordinator works and doesn't hang
+create table bar (a text);
+insert into bar values ('AAA'),('XYZ'),('hji');
+analyze bar;
+explain  select word1 from text_csv_coordinator ft1, bar where ft1.word1 = bar.a;
+select word1 from text_csv_coordinator ft1, bar where ft1.word1 = bar.a;
+
+-- cleanup
+DROP TABLE bar;
+RESET ROLE;
+DROP EXTENSION file_fdw CASCADE;
+DROP ROLE file_fdw_superuser;

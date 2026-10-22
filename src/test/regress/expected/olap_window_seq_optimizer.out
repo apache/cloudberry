@@ -8965,7 +8965,7 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 --------+--------+-----------+----------+---------+---------+-------------
  sum    | bigint |           |          |         | plain   | 
 View definition:
- SELECT sum(DISTINCT g.g / 2) OVER (PARTITION BY (g.g / 4)) AS sum
+ SELECT sum(DISTINCT g / 2) OVER (PARTITION BY (g / 4)) AS sum
    FROM generate_series(1, 5) g(g);
 
 -- These are tests for pushing down filter predicates in window functions.

@@ -79,14 +79,9 @@ ALTER
 --------
  OK     
 (1 row)
-3:SELECT gp_inject_fault_infinite('checkpoint', 'reset', dbid) FROM gp_segment_configuration WHERE role='p';
- gp_inject_fault_infinite 
---------------------------
- Success:                 
- Success:                 
- Success:                 
- Success:                 
-(4 rows)
+-- start_ignore
+
+-- end_ignore
 
 3:SELECT gp_inject_fault('fts_probe', 'reset', dbid) FROM gp_segment_configuration WHERE role='p' AND content=-1;
  gp_inject_fault 

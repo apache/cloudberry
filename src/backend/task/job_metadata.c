@@ -26,6 +26,7 @@
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_authid.h"
+#include "catalog/pg_database.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_task.h"
 #include "catalog/pg_task_run_history.h"
@@ -204,7 +205,7 @@ ScheduleCronJob(text *scheduleText, text *commandText, text *databaseText,
 	}
 
 	/* ensure the user that is used in the job can connect to the database */
-	aclresult = pg_database_aclcheck(get_database_oid(database_name, false),
+	aclresult = object_aclcheck(DatabaseRelationId , get_database_oid(database_name, false),
 									 userIdcheckacl, ACL_CONNECT);
 	if (aclresult != ACLCHECK_OK)
 		ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
@@ -677,7 +678,7 @@ AlterCronJob(int64 jobId, char *schedule, char *command,
 	if (database_name != NULL)
 	{
 		/* ensure the user that is used in the job can connect to the database */
-		aclresult = pg_database_aclcheck(get_database_oid(database_name, false),
+		aclresult = object_aclcheck(DatabaseRelationId, get_database_oid(database_name, false),
 										 userIdcheckacl, ACL_CONNECT);
 
 		if (aclresult != ACLCHECK_OK)
@@ -790,7 +791,7 @@ ParseSchedule(char *scheduleText)
 	 */
 	if (TryParseInterval(scheduleText, &secondsInterval))
 	{
-		entry *schedule = calloc(sizeof(entry), sizeof(char));
+		entry *schedule = (entry *) calloc(sizeof(entry), sizeof(char));
 		schedule->secondsInterval = secondsInterval;
 		return schedule;
 	}

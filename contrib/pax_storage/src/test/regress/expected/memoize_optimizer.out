@@ -6,12 +6,6 @@
 -- machines.  Let's just replace the number with an 'N'.  In order to allow us
 -- to perform validation when the measure was zero, we replace a zero value
 -- with "Zero".  All other numbers are replaced with 'N'.
--- start_ignore
--- m/Extra Text: \(seg\d+\)/
--- s/Extra Text: \(seg\d+\)/Extra Text: ###/
--- m/Buckets: \d+/
--- s/Buckets: \d+/Buckets: ###/
--- end_ignore
 create function explain_memoize(query text, hide_hitmiss bool) returns setof text
 language plpgsql as
 $$
@@ -39,30 +33,31 @@ begin
 end;
 $$;
 -- Ensure we get a memoize node on the inner side of the nested loop
+SET optimizer_enable_hashjoin TO off;
+SET optimizer_enable_bitmapscan TO off;
 SET enable_hashjoin TO off;
 SET enable_bitmapscan TO off;
 SELECT explain_memoize('
 SELECT COUNT(*),AVG(t1.unique1) FROM tenk1 t1
 INNER JOIN tenk1 t2 ON t1.unique1 = t2.twenty
 WHERE t2.unique1 < 1000;', false);
-                                             explain_memoize                                             
----------------------------------------------------------------------------------------------------------
+                                         explain_memoize                                          
+--------------------------------------------------------------------------------------------------
  Finalize Aggregate (actual rows=1 loops=N)
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=N)
          ->  Partial Aggregate (actual rows=1 loops=N)
-               ->  Hash Join (actual rows=400 loops=N)
-                     Hash Cond: (t1.unique1 = t2.twenty)
-                     Extra Text: (seg0)   Hash chain length 50.0 avg, 50 max, using 8 of 524288 buckets.
-                     ->  Seq Scan on tenk1 t1 (actual rows=3386 loops=N)
-                     ->  Hash (actual rows=400 loops=N)
-                           Buckets: 524288  Batches: 1  Memory Usage: NkB
-                           ->  Redistribute Motion 3:3  (slice2; segments: 3) (actual rows=400 loops=N)
-                                 Hash Key: t2.twenty
-                                 ->  Seq Scan on tenk1 t2 (actual rows=340 loops=N)
-                                       Filter: (unique1 < 1000)
-                                       Rows Removed by Filter: 2906
+               ->  Nested Loop (actual rows=400 loops=N)
+                     Join Filter: true
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3) (actual rows=400 loops=N)
+                           Hash Key: t2.twenty
+                           ->  Seq Scan on tenk1 t2 (actual rows=340 loops=N)
+                                 Filter: (unique1 < 1000)
+                                 Rows Removed by Filter: 2906
+                     ->  Index Only Scan using tenk1_unique1 on tenk1 t1 (actual rows=1 loops=N)
+                           Index Cond: (unique1 = t2.twenty)
+                           Heap Fetches: N
  Optimizer: GPORCA
-(15 rows)
+(14 rows)
 
 -- And check we get the expected results.
 SELECT COUNT(*),AVG(t1.unique1) FROM tenk1 t1
@@ -76,40 +71,76 @@ WHERE t2.unique1 < 1000;
 -- Try with LATERAL joins
 SELECT explain_memoize('
 SELECT COUNT(*),AVG(t2.unique1) FROM tenk1 t1,
-LATERAL (SELECT t2.unique1 FROM tenk1 t2 WHERE t1.twenty = t2.unique1) t2
+LATERAL (SELECT t2.unique1 FROM tenk1 t2
+         WHERE t1.twenty = t2.unique1 OFFSET 0) t2
 WHERE t1.unique1 < 1000;', false);
-                                            explain_memoize                                             
---------------------------------------------------------------------------------------------------------
- Finalize Aggregate (actual rows=1 loops=N)
-   ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=N)
-         ->  Partial Aggregate (actual rows=1 loops=N)
-               ->  Merge Join (actual rows=400 loops=N)
-                     Merge Cond: (t2.unique1 = t1.twenty)
-                     ->  Index Only Scan using tenk1_unique1 on tenk1 t2 (actual rows=9 loops=N)
-                           Heap Fetches: N
-                     ->  Sort (actual rows=400 loops=N)
-                           Sort Key: t1.twenty
-                           Sort Method:  quicksort  Memory: NkB
-                           ->  Redistribute Motion 3:3  (slice2; segments: 3) (actual rows=400 loops=N)
-                                 Hash Key: t1.twenty
-                                 ->  Seq Scan on tenk1 t1 (actual rows=340 loops=N)
-                                       Filter: (unique1 < 1000)
-                                       Rows Removed by Filter: 2906
+                                             explain_memoize                                              
+----------------------------------------------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=N)
+   ->  Nested Loop (actual rows=1000 loops=N)
+         ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=1000 loops=N)
+               ->  Seq Scan on tenk1 t1 (actual rows=340 loops=N)
+                     Filter: (unique1 < 1000)
+                     Rows Removed by Filter: 2906
+         ->  Materialize (actual rows=1 loops=N)
+               ->  Memoize (actual rows=1 loops=N)
+                     Cache Key: t1.twenty
+                     Cache Mode: binary
+                     Hits: 980  Misses: 20  Evictions: Zero  Overflows: 0  Memory Usage: NkB
+                     ->  Result (actual rows=1 loops=N)
+                           Filter: (t1.twenty = t2.unique1)
+                           ->  Materialize (actual rows=10000 loops=N)
+                                 ->  Gather Motion 3:1  (slice2; segments: 3) (actual rows=10000 loops=N)
+                                       ->  Seq Scan on tenk1 t2 (actual rows=3386 loops=N)
  Optimizer: Postgres query optimizer
-(16 rows)
+(17 rows)
 
 -- And check we get the expected results.
 SELECT COUNT(*),AVG(t2.unique1) FROM tenk1 t1,
-LATERAL (SELECT t2.unique1 FROM tenk1 t2 WHERE t1.twenty = t2.unique1) t2
+LATERAL (SELECT t2.unique1 FROM tenk1 t2
+         WHERE t1.twenty = t2.unique1 OFFSET 0) t2
 WHERE t1.unique1 < 1000;
  count |        avg         
 -------+--------------------
   1000 | 9.5000000000000000
 (1 row)
 
--- Reduce work_mem so that we see some cache evictions
-SET work_mem TO '64kB';
 SET enable_mergejoin TO off;
+-- Test for varlena datatype with expr evaluation
+CREATE TABLE expr_key (x numeric, t text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO expr_key (x, t)
+SELECT d1::numeric, d1::text FROM (
+    SELECT round((d / pi())::numeric, 7) AS d1 FROM generate_series(1, 20) AS d
+) t;
+-- duplicate rows so we get some cache hits
+INSERT INTO expr_key SELECT * FROM expr_key;
+CREATE INDEX expr_key_idx_x_t ON expr_key (x, t);
+VACUUM ANALYZE expr_key;
+-- Ensure we get we get a cache miss and hit for each of the 20 distinct values
+SELECT explain_memoize('
+SELECT * FROM expr_key t1 INNER JOIN expr_key t2
+ON t1.x = t2.t::numeric AND t1.t::numeric = t2.x;', false);
+                                      explain_memoize                                      
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=80 loops=N)
+   ->  Nested Loop (actual rows=28 loops=N)
+         Join Filter: true
+         ->  Redistribute Motion 3:3  (slice2; segments: 3) (actual rows=14 loops=N)
+               Hash Key: (t1.t)::numeric
+               ->  Seq Scan on expr_key t1 (actual rows=14 loops=N)
+         ->  Index Only Scan using expr_key_idx_x_t on expr_key t2 (actual rows=2 loops=N)
+               Index Cond: (x = (t1.t)::numeric)
+               Filter: (t1.x = (t)::numeric)
+               Heap Fetches: N
+ Optimizer: GPORCA
+(11 rows)
+
+DROP TABLE expr_key;
+-- Reduce work_mem and hash_mem_multiplier so that we see some cache evictions
+SET work_mem TO '64kB';
+SET hash_mem_multiplier TO 1.0;
 -- Ensure we get some evictions.  We're unable to validate the hits and misses
 -- here as the number of entries that fit in the cache at once will vary
 -- between different machines.
@@ -117,24 +148,23 @@ SELECT explain_memoize('
 SELECT COUNT(*),AVG(t1.unique1) FROM tenk1 t1
 INNER JOIN tenk1 t2 ON t1.unique1 = t2.thousand
 WHERE t2.unique1 < 1200;', true);
-                                             explain_memoize                                             
----------------------------------------------------------------------------------------------------------
+                                         explain_memoize                                          
+--------------------------------------------------------------------------------------------------
  Finalize Aggregate (actual rows=1 loops=N)
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=N)
          ->  Partial Aggregate (actual rows=1 loops=N)
-               ->  Hash Join (actual rows=407 loops=N)
-                     Hash Cond: (t1.unique1 = t2.thousand)
-                     Extra Text: (seg0)   Hash chain length 1.2 avg, 2 max, using 337 of 524288 buckets.
-                     ->  Seq Scan on tenk1 t1 (actual rows=3386 loops=N)
-                     ->  Hash (actual rows=407 loops=N)
-                           Buckets: 524288  Batches: 1  Memory Usage: NkB
-                           ->  Redistribute Motion 3:3  (slice2; segments: 3) (actual rows=407 loops=N)
-                                 Hash Key: t2.thousand
-                                 ->  Seq Scan on tenk1 t2 (actual rows=407 loops=N)
-                                       Filter: (unique1 < 1200)
-                                       Rows Removed by Filter: 2961
+               ->  Nested Loop (actual rows=407 loops=N)
+                     Join Filter: true
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3) (actual rows=407 loops=N)
+                           Hash Key: t2.thousand
+                           ->  Seq Scan on tenk1 t2 (actual rows=407 loops=N)
+                                 Filter: (unique1 < 1200)
+                                 Rows Removed by Filter: 2961
+                     ->  Index Only Scan using tenk1_unique1 on tenk1 t1 (actual rows=1 loops=N)
+                           Index Cond: (unique1 = t2.thousand)
+                           Heap Fetches: N
  Optimizer: GPORCA
-(15 rows)
+(14 rows)
 
 CREATE TABLE flt (f float);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f' as the Apache Cloudberry data distribution key for this table.
@@ -182,7 +212,7 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX strtest_n_idx ON strtest (n);
 CREATE INDEX strtest_t_idx ON strtest (t);
-INSERT INTO strtest VALUES('one','one'),('two','two'),('three',repeat(md5('three'),100));
+INSERT INTO strtest VALUES('one','one'),('two','two'),('three',repeat(fipshash('three'),100));
 -- duplicate rows so we get some cache hits
 INSERT INTO strtest SELECT * FROM strtest;
 ANALYZE strtest;
@@ -216,6 +246,53 @@ SELECT * FROM strtest s1 INNER JOIN strtest s2 ON s1.t >= s2.t;', false);
 (8 rows)
 
 DROP TABLE strtest;
+-- Ensure memoize works with partitionwise join
+SET enable_partitionwise_join TO on;
+CREATE TABLE prt (a int) PARTITION BY RANGE(a);
+CREATE TABLE prt_p1 PARTITION OF prt FOR VALUES FROM (0) TO (10);
+CREATE TABLE prt_p2 PARTITION OF prt FOR VALUES FROM (10) TO (20);
+INSERT INTO prt VALUES (0), (0), (0), (0);
+INSERT INTO prt VALUES (10), (10), (10), (10);
+CREATE INDEX iprt_p1_a ON prt_p1 (a);
+CREATE INDEX iprt_p2_a ON prt_p2 (a);
+ANALYZE prt;
+SELECT explain_memoize('
+SELECT * FROM prt t1 INNER JOIN prt t2 ON t1.a = t2.a;', false);
+                                     explain_memoize                                     
+-----------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=32 loops=N)
+   ->  Nested Loop (actual rows=16 loops=N)
+         Join Filter: (t1.a = t2.a)
+         ->  Dynamic Seq Scan on prt t1 (actual rows=4 loops=N)
+               Number of partitions to scan: 2 (out of 2)
+               Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+         ->  Dynamic Seq Scan on prt t2 (actual rows=3 loops=N)
+               Number of partitions to scan: 2 (out of 2)
+               Partitions scanned:  Avg 1.4 x 3 workers of 5 scans.  Max 2 parts (seg2).
+(10 rows)
+
+-- Ensure memoize works with parameterized union-all Append path
+SET enable_partitionwise_join TO off;
+SELECT explain_memoize('
+SELECT * FROM prt_p1 t1 INNER JOIN
+(SELECT * FROM prt_p1 UNION ALL SELECT * FROM prt_p2) t2
+ON t1.a = t2.a;', false);
+                                 explain_memoize                                  
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=16 loops=N)
+   ->  Nested Loop (actual rows=16 loops=N)
+         Join Filter: true
+         ->  Append (actual rows=4 loops=N)
+               ->  Seq Scan on prt_p1 (actual rows=4 loops=N)
+               ->  Seq Scan on prt_p2 (actual rows=4 loops=N)
+         ->  Index Only Scan using iprt_p1_a on prt_p1 t1 (actual rows=4 loops=N)
+               Index Cond: (a = prt_p1.a)
+               Heap Fetches: N
+ Optimizer: GPORCA
+(10 rows)
+
+DROP TABLE prt;
+RESET enable_partitionwise_join;
 -- Exercise Memoize code that flushes the cache when a parameter changes which
 -- is not part of the cache key.
 -- Ensure we get a Memoize plan
@@ -226,31 +303,32 @@ WHERE unique1 < 3
 	SELECT 1 FROM tenk1 t1
 	INNER JOIN tenk1 t2 ON t1.unique1 = t2.hundred
 	WHERE t0.ten = t1.twenty AND t0.two <> t2.four OFFSET 0);
-                                        QUERY PLAN                                        
-------------------------------------------------------------------------------------------
+                                              QUERY PLAN
+------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Semi Join
-         Hash Cond: (t0.ten = t1.twenty)
-         Join Filter: (t0.two <> t2.four)
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: t0.ten
-               ->  Bitmap Heap Scan on tenk1 t0
-                     Recheck Cond: (unique1 < 3)
-                     ->  Bitmap Index Scan on tenk1_unique1
-                           Index Cond: (unique1 < 3)
-         ->  Hash
-               ->  Result
-                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                           Hash Key: t1.twenty
-                           ->  Hash Join
-                                 Hash Cond: (t1.unique1 = t2.hundred)
-                                 ->  Seq Scan on tenk1 t1
-                                 ->  Hash
-                                       ->  Redistribute Motion 3:3  (slice4; segments: 3)
-                                             Hash Key: t2.hundred
-                                             ->  Seq Scan on tenk1 t2
+   ->  GroupAggregate
+         Group Key: t0.unique1, t0.ctid, t0.gp_segment_id
+         ->  Sort
+               Sort Key: t0.ctid, t0.gp_segment_id
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: t0.ctid, t0.gp_segment_id
+                     ->  Streaming HashAggregate
+                           Group Key: t0.unique1, t0.ctid, t0.gp_segment_id
+                           ->  Nested Loop
+                                 Join Filter: ((t0.ten = t1.twenty) AND (t0.two <> t2.four))
+                                 ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                       ->  Seq Scan on tenk1 t0
+                                             Filter: (unique1 < 3)
+                                 ->  Materialize
+                                       ->  Nested Loop
+                                             Join Filter: (t1.unique1 = t2.hundred)
+                                             ->  Seq Scan on tenk1 t1
+                                             ->  Materialize
+                                                   ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                                         Hash Key: t2.hundred
+                                                         ->  Seq Scan on tenk1 t2
  Optimizer: GPORCA
-(22 rows)
+(23 rows)
 
 -- Ensure the above query returns the correct result
 SELECT unique1 FROM tenk1 t0
@@ -269,6 +347,9 @@ RESET enable_mergejoin;
 RESET work_mem;
 RESET enable_bitmapscan;
 RESET enable_hashjoin;
+RESET optimizer_enable_hashjoin;
+RESET optimizer_enable_bitmapscan;
+RESET hash_mem_multiplier;
 -- Test parallel plans with Memoize
 SET min_parallel_table_scan_size TO 0;
 SET parallel_setup_cost TO 0;

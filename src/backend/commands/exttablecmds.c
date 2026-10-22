@@ -251,8 +251,8 @@ DefineExternalRelation(CreateExternalStmt *createExtStmt)
 	{
 		if (Gp_role == GP_ROLE_DISPATCH)
 		{
-			Value	*loc = lfirst(list_head(exttypeDesc->location_list));
-			Uri 	*uri = ParseExternalTableUri(loc->val.str);
+			String 	*loc = lfirst(list_head(exttypeDesc->location_list));
+			Uri 	*uri = ParseExternalTableUri(loc->sval);
 
 			if (uri->protocol == URI_FILE || uri->protocol == URI_HTTP)
 			{
@@ -362,10 +362,10 @@ transformLocationUris(List *locs, bool isweb, bool iswritable)
 		char	   *uri_str_orig;
 		char	   *uri_str_final;
 		char	   *uri_str_escape;
-		Value	   *v = lfirst(cell);
+		String 	   *v = lfirst(cell);
 
 		/* get the current URI string from the command */
-		uri_str_orig = v->val.str;
+		uri_str_orig = v->sval;
 
 		/* parse it to its components */
 		uri = ParseExternalTableUri(uri_str_orig);

@@ -2509,9 +2509,34 @@ explain(costs off) with cte1 as (insert into rpt_issue_15860 values (1, 2) retur
 -- CBDB_FIXME: How to derive a plan?
 -- Replicates join OuterQuery
 explain(costs off) with cte1 as (insert into rpt_issue_15860 values (1, 2) returning *) select ( select foo.c1 from (select * from strewn_issue_15860) foo join cte1  using(c2)  where foo.c1 = hash_issue_15860.c1) from hash_issue_15860;
-ERROR:  could not devise a query plan for the given query (pathnode.c:275)
+ERROR:  could not devise a query plan for the given query (pathnode.c:281)
+-- Test case for Github Issue 17460
+create table t_17460 (a int ) distributed replicated;
+create table foo_17460 (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into t_17460 values(1);
+insert into foo_17460 select i from generate_series(1, 10000) i;
+analyze t_17460;
+analyze foo_17460;
+-- update|delete on replicated table should not use unique rowid skill
+-- to plan semi join.
+explain (costs off) delete from t_17460 where a in (select a from foo_17460);
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Delete on t_17460
+   ->  Hash Semi Join
+         Hash Cond: (t_17460.a = foo_17460.a)
+         ->  Seq Scan on t_17460
+         ->  Hash
+               ->  Broadcast Motion 3:3  (slice1; segments: 3)
+                     ->  Seq Scan on foo_17460
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+delete from t_17460 where a in (select a from foo_17460);
 drop schema rpt_joins cascade;
-NOTICE:  drop cascades to 11 other objects
+NOTICE:  drop cascades to 13 other objects
 DETAIL:  drop cascades to table j1_tbl
 drop cascades to table j2_tbl
 drop cascades to table rpt_joins.t1
@@ -2523,3 +2548,5 @@ drop cascades to table rpt_issue_15860
 drop cascades to table rpt2_issue_15860
 drop cascades to table hash_issue_15860
 drop cascades to table strewn_issue_15860
+drop cascades to table t_17460
+drop cascades to table foo_17460

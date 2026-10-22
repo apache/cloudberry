@@ -16,11 +16,7 @@
 #define init_var(v)				memset(v,0,sizeof(numeric))
 
 #define digitbuf_alloc(size) ((NumericDigit *) pgtypes_alloc(size))
-#define digitbuf_free(buf)		\
-	   do { \
-				 if ((buf) != NULL) \
-						  free(buf); \
-		  } while (0)
+#define digitbuf_free(buf) free(buf)
 
 
 /* ----------
@@ -368,7 +364,7 @@ PGTYPESnumeric_to_asc(numeric *num, int dscale)
 }
 
 /* ----------
- * zero_var() -
+ * zero_numeric_var() -
  *
  *	Set a variable to ZERO.
  *	Note: rscale and dscale are not touched.
@@ -667,7 +663,7 @@ PGTYPESnumeric_add(numeric *var1, numeric *var2, numeric *result)
 					 * result = ZERO
 					 * ----------
 					 */
-					zero_var(result);
+					zero_numeric_var(result);
 					result->rscale = Max(var1->rscale, var2->rscale);
 					result->dscale = Max(var1->dscale, var2->dscale);
 					break;
@@ -713,7 +709,7 @@ PGTYPESnumeric_add(numeric *var1, numeric *var2, numeric *result)
 					 * result = ZERO
 					 * ----------
 					 */
-					zero_var(result);
+					zero_numeric_var(result);
 					result->rscale = Max(var1->rscale, var2->rscale);
 					result->dscale = Max(var1->dscale, var2->dscale);
 					break;
@@ -799,7 +795,7 @@ PGTYPESnumeric_sub(numeric *var1, numeric *var2, numeric *result)
 					 * result = ZERO
 					 * ----------
 					 */
-					zero_var(result);
+					zero_numeric_var(result);
 					result->rscale = Max(var1->rscale, var2->rscale);
 					result->dscale = Max(var1->dscale, var2->dscale);
 					break;
@@ -845,7 +841,7 @@ PGTYPESnumeric_sub(numeric *var1, numeric *var2, numeric *result)
 					 * result = ZERO
 					 * ----------
 					 */
-					zero_var(result);
+					zero_numeric_var(result);
 					result->rscale = Max(var1->rscale, var2->rscale);
 					result->dscale = Max(var1->dscale, var2->dscale);
 					break;
@@ -1066,7 +1062,6 @@ PGTYPESnumeric_div(numeric *var1, numeric *var2, numeric *result)
 	int			weight_tmp;
 	int			rscale_tmp;
 	int			ri;
-	int			i;
 	long		guess;
 	long		first_have;
 	long		first_div;
@@ -1104,7 +1099,7 @@ PGTYPESnumeric_div(numeric *var1, numeric *var2, numeric *result)
 	 */
 	if (var1->ndigits == 0)
 	{
-		zero_var(result);
+		zero_numeric_var(result);
 		result->rscale = rscale;
 		return 0;
 	}
@@ -1113,7 +1108,7 @@ PGTYPESnumeric_div(numeric *var1, numeric *var2, numeric *result)
 	 * Initialize local variables
 	 */
 	init_var(&dividend);
-	for (i = 1; i < 10; i++)
+	for (int i = 1; i < 10; i++)
 		init_var(&divisor[i]);
 
 	/*
@@ -1272,7 +1267,7 @@ done:
 	if (dividend.buf != NULL)
 		digitbuf_free(dividend.buf);
 
-	for (i = 1; i < 10; i++)
+	for (int i = 1; i < 10; i++)
 	{
 		if (divisor[i].buf != NULL)
 			digitbuf_free(divisor[i].buf);
@@ -1308,7 +1303,6 @@ PGTYPESnumeric_cmp(numeric *var1, numeric *var2)
 
 	errno = PGTYPES_NUM_BAD_NUMERIC;
 	return INT_MAX;
-
 }
 
 int
@@ -1397,7 +1391,7 @@ PGTYPESnumeric_copy(numeric *src, numeric *dst)
 
 	if (dst == NULL)
 		return -1;
-	zero_var(dst);
+	zero_numeric_var(dst);
 
 	dst->weight = src->weight;
 	dst->rscale = src->rscale;
@@ -1577,7 +1571,7 @@ PGTYPESnumeric_from_decimal(decimal *src, numeric *dst)
 {
 	int			i;
 
-	zero_var(dst);
+	zero_numeric_var(dst);
 
 	dst->weight = src->weight;
 	dst->rscale = src->rscale;

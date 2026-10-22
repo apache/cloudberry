@@ -15,7 +15,7 @@
  *
  * Portions Copyright (c) 2007-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Copyright (c) 2003-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2003-2023, PostgreSQL Global Development Group
  *
  * src/include/nodes/tidbitmap.h
  *
@@ -97,13 +97,15 @@ typedef enum StreamType
  * lossy storage for any page in the chunk's range, since the same
  * hashtable entry has to serve both purposes.
  */
+#define PagetableEntryWordNumber Max(WORDS_PER_PAGE, WORDS_PER_CHUNK)
+
 typedef struct PagetableEntry
 {
 	BlockNumber blockno;		/* page number (hashtable key) */
 	char		status;			/* hash entry status */
 	bool		ischunk;		/* T = lossy storage, F = exact */
 	bool		recheck;		/* should the tuples be rechecked? */
-	tbm_bitmapword	words[Max(WORDS_PER_PAGE, WORDS_PER_CHUNK)];
+	tbm_bitmapword	words[PagetableEntryWordNumber];
 } PagetableEntry;
 
 /*

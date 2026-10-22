@@ -3,7 +3,7 @@
  * test_predtest.c
  *		Test correctness of optimizer's predicate proof logic.
  *
- * Copyright (c) 2018-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2018-2023, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *		src/test/modules/test_predtest/test_predtest.c
@@ -51,7 +51,7 @@ test_predtest(PG_FUNCTION_ARGS)
 				strong_refuted_by,
 				weak_refuted_by;
 	Datum		values[8];
-	bool		nulls[8];
+	bool		nulls[8] = {0};
 	int			i;
 
 	/* We use SPI to parse, plan, and execute the test query */
@@ -75,7 +75,7 @@ test_predtest(PG_FUNCTION_ARGS)
 	if (tupdesc->natts != 2 ||
 		TupleDescAttr(tupdesc, 0)->atttypid != BOOLOID ||
 		TupleDescAttr(tupdesc, 1)->atttypid != BOOLOID)
-		elog(ERROR, "query must yield two boolean columns");
+		elog(ERROR, "test_predtest query must yield two boolean columns");
 
 	s_i_holds = w_i_holds = s_r_holds = w_r_holds = true;
 	for (i = 0; i < SPI_processed; i++)
@@ -125,11 +125,11 @@ test_predtest(PG_FUNCTION_ARGS)
 	 */
 	cplan = SPI_plan_get_cached_plan(spiplan);
 
-	if (list_length(cplan->stmt_list) != 1)
-		elog(ERROR, "failed to decipher query plan");
+	if (cplan == NULL || list_length(cplan->stmt_list) != 1)
+		elog(ERROR, "test_predtest query string must contain exactly one query");
 	stmt = linitial_node(PlannedStmt, cplan->stmt_list);
 	if (stmt->commandType != CMD_SELECT)
-		elog(ERROR, "failed to decipher query plan");
+		elog(ERROR, "test_predtest query must be a SELECT");
 	plan = stmt->planTree;
 	Assert(list_length(plan->targetlist) >= 2);
 
@@ -144,8 +144,8 @@ test_predtest(PG_FUNCTION_ARGS)
 		plan = plan->lefttree;
 	}
 
-	clause1 = castNode(TargetEntry, linitial(plan->targetlist))->expr;
-	clause2 = castNode(TargetEntry, lsecond(plan->targetlist))->expr;
+	clause1 = linitial_node(TargetEntry, plan->targetlist)->expr;
+	clause2 = lsecond_node(TargetEntry, plan->targetlist)->expr;
 
 	/*
 	 * Because the clauses are in the SELECT list, preprocess_expression did
@@ -217,7 +217,6 @@ test_predtest(PG_FUNCTION_ARGS)
 					   "w_r_holds", BOOLOID, -1, 0);
 	tupdesc = BlessTupleDesc(tupdesc);
 
-	MemSet(nulls, 0, sizeof(nulls));
 	values[0] = BoolGetDatum(strong_implied_by);
 	values[1] = BoolGetDatum(weak_implied_by);
 	values[2] = BoolGetDatum(strong_refuted_by);

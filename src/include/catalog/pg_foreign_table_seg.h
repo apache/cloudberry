@@ -21,7 +21,7 @@ CATALOG(pg_foreign_table_seg,5110,ForeignTableRelationSegId)
 
 typedef FormData_pg_foreign_table_seg *Form_pg_foreign_table_seg;
 
-DECLARE_INDEX(pg_foreign_table_seg_relid_index, 5111, on pg_foreign_table_seg using btree(ftsrelid oid_ops));
+DECLARE_INDEX(pg_foreign_table_seg_relid_index, 5111, ForeignTableRelationSegIndexId, on pg_foreign_table_seg using btree(ftsrelid oid_ops));
 
 #define GP_FOREIGN_SERVER_ID_FUNC 6024
 

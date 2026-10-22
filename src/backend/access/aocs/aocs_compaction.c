@@ -142,7 +142,7 @@ AOCSSegmentFileTruncateToEOF(Relation aorel, int segno, AOCSVPInfo *vpinfo, AOVa
 			   get_namespace_name(RelationGetNamespace(aorel)),
 			   relname,
 			   aorel->rd_id,
-			   aorel->rd_node.relNode,
+			   aorel->rd_locator.relNumber,
 			   j,
 			   segno,
 			   fileSegNo,
@@ -159,7 +159,7 @@ AOCSSegmentFileTruncateToEOF(Relation aorel, int segno, AOCSVPInfo *vpinfo, AOVa
 				   get_namespace_name(RelationGetNamespace(aorel)),
 				   relname,
 				   aorel->rd_id,
-				   aorel->rd_node.relNode,
+				   aorel->rd_locator.relNumber,
 				   j,
 				   segno,
 				   fileSegNo,
@@ -172,7 +172,7 @@ AOCSSegmentFileTruncateToEOF(Relation aorel, int segno, AOCSVPInfo *vpinfo, AOVa
 				   get_namespace_name(RelationGetNamespace(aorel)),
 				   relname,
 				   aorel->rd_id,
-				   aorel->rd_node.relNode,
+				   aorel->rd_locator.relNumber,
 				   j,
 				   segno,
 				   fileSegNo,
@@ -209,7 +209,7 @@ AOCSMoveTuple(TupleTableSlot *slot,
 	{
 		ExecInsertIndexTuples(resultRelInfo,
 							  slot, estate, false, false,
-							  NULL, NIL);
+							  NULL, NIL, false);
 		ResetPerTupleExprContext(estate);
 	}
 

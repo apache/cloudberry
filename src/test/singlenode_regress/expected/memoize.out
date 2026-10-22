@@ -115,7 +115,7 @@ WHERE t2.unique1 < 1200;', true);
                Heap Fetches: N
          ->  Sort (actual rows=1200 loops=N)
                Sort Key: t2.thousand
-               Sort Method:  external sort  Disk: 64kB
+               Sort Method:  quicksort  Memory: NkB
                ->  Seq Scan on tenk1 t2 (actual rows=1200 loops=N)
                      Filter: (unique1 < 1200)
                      Rows Removed by Filter: 8800

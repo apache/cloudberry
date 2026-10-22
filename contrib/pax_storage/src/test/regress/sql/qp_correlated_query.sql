@@ -3,6 +3,7 @@
 -- ----------------------------------------------------------------------
 create schema qp_correlated_query;
 set search_path to qp_correlated_query;
+set optimizer_trace_fallback TO on;
 
 -- ----------------------------------------------------------------------
 -- Test: csq_heap_in.sql (Correlated Subquery: CSQ using IN clause (Heap))
@@ -191,6 +192,37 @@ select A.i, B.i, C.j from A, B, C where A.j < all ( select C.j from C where not 
 explain select A.i, B.i, C.j from A, B, C where A.j = all (select C.j from C where C.j = A.j and not exists (select sum(B.i) from B where C.i = B.i and C.i !=10)) order by A.i, B.i, C.j limit 10;
 select A.i, B.i, C.j from A, B, C where A.j = all (select C.j from C where C.j = A.j and not exists (select sum(B.i) from B where C.i = B.i and C.i !=10)) order by A.i, B.i, C.j limit 10;
 
+-- -- -- --
+-- Test ALL clause with subqueries
+-- -- -- --
+create table qp_csq_all_t1(a int) distributed by (a);
+create table qp_csq_all_t2(b int) distributed by (b);
+
+insert into qp_csq_all_t1 values (null);
+select * from qp_csq_all_t1 where (select a from qp_csq_all_t1 limit 1) = all(select b from qp_csq_all_t2);
+
+truncate qp_csq_all_t1, qp_csq_all_t2;
+insert into qp_csq_all_t2 values (null);
+select * from qp_csq_all_t1 where (select a from qp_csq_all_t1 limit 1) = all(select b from qp_csq_all_t2);
+
+truncate qp_csq_all_t1, qp_csq_all_t2;
+insert into qp_csq_all_t1 values (1);
+select * from qp_csq_all_t1 where (select a from qp_csq_all_t1 limit 1) = all(select b from qp_csq_all_t2);
+
+truncate qp_csq_all_t1, qp_csq_all_t2;
+insert into qp_csq_all_t2 values (1);
+select * from qp_csq_all_t1 where (select a from qp_csq_all_t1 limit 1) = all(select b from qp_csq_all_t2);
+
+truncate qp_csq_all_t1, qp_csq_all_t2;
+insert into qp_csq_all_t1 values (1);
+insert into qp_csq_all_t2 values (1);
+select * from qp_csq_all_t1 where (select a from qp_csq_all_t1 limit 1) = all(select b from qp_csq_all_t2);
+
+truncate qp_csq_all_t1, qp_csq_all_t2;
+insert into qp_csq_all_t1 values (1);
+insert into qp_csq_all_t2 values (2);
+select * from qp_csq_all_t1 where (select a from qp_csq_all_t1 limit 1) = all(select b from qp_csq_all_t2);
+
 
 -- ----------------------------------------------------------------------
 -- Test: Correlated Subquery: CSQ using EXISTS clause (Heap)
@@ -342,6 +374,10 @@ SELECT a, (SELECT (SELECT d FROM qp_csq_t3 WHERE a=c)) FROM qp_csq_t1 GROUP BY a
 select A.i, (select C.j from C group by C.j having max(C.j) = any (select min(B.j) from B)) as C_j from A,B,C where A.i = 99 order by A.i, C_j limit 10;
 select (select avg(x) from qp_csq_t1, qp_csq_t2 where qp_csq_t1.a = any (select x)) as avg_x from qp_csq_t1 order by 1;
 
+-- Planner should fail due to skip-level correlation not supported. Query should not cause segfault like in issue #12054.
+select A.j, (select array_agg(a_B) from (select B.j, (select array_agg(a_C) from (select C.j from C where C.i = A.i) a_C) from B where B.i = A.i order by A.j) a_B) from A;
+-- Planner should fail due to skip-level correlation not supported. Query should not return wrong results like in issue #12054.
+select A.j, (select array_agg(a_B) from (select B.j, (select sum(a_C.j) from (select C.j from C where C.i = A.i) a_C) from B where B.i = A.i order by A.j) a_B) from A;
 
 -- ----------------------------------------------------------------------
 -- Test: Correlated Subquery: CSQ with multiple columns (Heap)
@@ -743,8 +779,97 @@ reset optimizer_enforce_subplans;
 DROP TABLE IF EXISTS t1;
 DROP TABLE IF EXISTS supplier;
 
+--------------------------------------------------------------------------------
+-- Planner should fail due to skip-level correlation not supported. Query should
+-- not cause segfault on ORCA. Currently ORCA is falling back to planner which
+-- is undesired. Github Issue #15693
+--------------------------------------------------------------------------------
+CREATE TABLE skip_correlated_t1 (
+    a INT,
+    b INT
+) DISTRIBUTED BY (a);
+
+CREATE TABLE skip_correlated_t2 (
+    a INT,
+    b INT
+) DISTRIBUTED BY (a);
+
+CREATE TABLE skip_correlated_t3 (
+    a INT,
+    b INT
+) DISTRIBUTED BY (a);
+
+CREATE TABLE skip_correlated_t4 (
+    a INT,
+    b INT
+) DISTRIBUTED BY (a);
+
+EXPLAIN (COSTS OFF)
+SELECT *
+FROM skip_correlated_t1
+WHERE EXISTS (
+    SELECT skip_correlated_t2.a
+    FROM skip_correlated_t2
+             LEFT JOIN skip_correlated_t3 ON EXISTS (
+        SELECT skip_correlated_t1.b
+        FROM skip_correlated_t2
+    )
+);
+
+EXPLAIN (COSTS OFF)
+SELECT *
+FROM skip_correlated_t1
+WHERE EXISTS (
+    SELECT skip_correlated_t2.a
+    FROM skip_correlated_t2
+             LEFT JOIN skip_correlated_t3 ON (
+        EXISTS (
+            SELECT 1
+            FROM skip_correlated_t2
+            WHERE a > skip_correlated_t1.b
+        )
+        )
+);
+
+EXPLAIN (COSTS OFF)
+SELECT *
+FROM skip_correlated_t1
+WHERE EXISTS (
+    SELECT skip_correlated_t2.a
+    FROM skip_correlated_t2
+             INNER JOIN skip_correlated_t3 ON skip_correlated_t2.a = skip_correlated_t3.a
+             LEFT JOIN skip_correlated_t4 ON (
+        EXISTS (
+            SELECT skip_correlated_t1.b
+            FROM skip_correlated_t2
+        )
+        )
+);
+
+--------------------------------------------------------------------------------
+-- Query should not cause segfault on ORCA. Will fallback to planner as no plan
+-- is computed by ORCA. Github Issue #15693
+--------------------------------------------------------------------------------
+EXPLAIN (COSTS OFF)
+SELECT *
+FROM skip_correlated_t1
+WHERE EXISTS (
+    SELECT skip_correlated_t2.a
+    FROM skip_correlated_t2
+             LEFT JOIN skip_correlated_t3 ON skip_correlated_t3.a = ALL (
+        SELECT skip_correlated_t1.a
+        FROM skip_correlated_t2
+    )
+);
+
+DROP TABLE skip_correlated_t1;
+DROP TABLE skip_correlated_t2;
+DROP TABLE skip_correlated_t3;
+DROP TABLE skip_correlated_t4;
+
 -- ----------------------------------------------------------------------
 -- Test: teardown.sql
 -- ----------------------------------------------------------------------
 set client_min_messages='warning';
 drop schema qp_correlated_query cascade;
+reset optimizer_trace_fallback;

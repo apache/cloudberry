@@ -192,6 +192,8 @@ set_arg(PGP_Context *ctx, char *key, char *val,
 		res = pgp_set_convert_crlf(ctx, atoi(val));
 	else if (strcmp(key, "unicode-mode") == 0)
 		res = pgp_set_unicode_mode(ctx, atoi(val));
+	else if (strcmp(key, "ignore-cipher-failure") == 0)
+		res = pgp_set_ignore_cipher_failure(ctx, atoi(val));
 
 	/*
 	 * The remaining options are for debugging/testing and are therefore not
@@ -631,6 +633,7 @@ pgp_sym_decrypt_text(PG_FUNCTION_ARGS)
 		arg = PG_GETARG_BYTEA_PP(2);
 
 	res = decrypt_internal(0, 1, data, key, NULL, arg);
+	pg_verifymbstr(VARDATA_ANY(res), VARSIZE_ANY_EXHDR(res), false);
 
 	PG_FREE_IF_COPY(data, 0);
 	PG_FREE_IF_COPY(key, 1);
@@ -732,6 +735,7 @@ pgp_pub_decrypt_text(PG_FUNCTION_ARGS)
 		arg = PG_GETARG_BYTEA_PP(3);
 
 	res = decrypt_internal(1, 1, data, key, psw, arg);
+	pg_verifymbstr(VARDATA_ANY(res), VARSIZE_ANY_EXHDR(res), false);
 
 	PG_FREE_IF_COPY(data, 0);
 	PG_FREE_IF_COPY(key, 1);
@@ -774,13 +778,8 @@ parse_key_value_arrays(ArrayType *key_array, ArrayType *val_array,
 	if (nkdims == 0)
 		return 0;
 
-	deconstruct_array(key_array,
-					  TEXTOID, -1, false, TYPALIGN_INT,
-					  &key_datums, &key_nulls, &key_count);
-
-	deconstruct_array(val_array,
-					  TEXTOID, -1, false, TYPALIGN_INT,
-					  &val_datums, &val_nulls, &val_count);
+	deconstruct_array_builtin(key_array, TEXTOID, &key_datums, &key_nulls, &key_count);
+	deconstruct_array_builtin(val_array, TEXTOID, &val_datums, &val_nulls, &val_count);
 
 	if (key_count != val_count)
 		ereport(ERROR,

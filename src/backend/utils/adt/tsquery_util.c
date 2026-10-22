@@ -3,7 +3,7 @@
  * tsquery_util.c
  *	  Utilities for tsquery datatype
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  *
  *
  * IDENTIFICATION
@@ -16,6 +16,7 @@
 
 #include "miscadmin.h"
 #include "tsearch/ts_utils.h"
+#include "varatt.h"
 
 /*
  * Build QTNode tree for a tsquery given in QueryItem array format.
@@ -172,7 +173,7 @@ QTNSort(QTNode *in)
 	for (i = 0; i < in->nchild; i++)
 		QTNSort(in->child[i]);
 	if (in->nchild > 1 && in->valnode->qoperator.oper != OP_PHRASE)
-		qsort((void *) in->child, in->nchild, sizeof(QTNode *), cmpQTN);
+		qsort(in->child, in->nchild, sizeof(QTNode *), cmpQTN);
 }
 
 /*
@@ -186,7 +187,7 @@ QTNEq(QTNode *a, QTNode *b)
 	if (!(sign == a->sign && sign == b->sign))
 		return false;
 
-	return (QTNodeCompare(a, b) == 0) ? true : false;
+	return (QTNodeCompare(a, b) == 0);
 }
 
 /*
@@ -288,7 +289,7 @@ QTNBinary(QTNode *in)
  * Caller must initialize *sumlen and *nnode to zeroes.
  */
 static void
-cntsize(QTNode *in, int *sumlen, int *nnode)
+cntsize(QTNode *in, size_t *sumlen, size_t *nnode)
 {
 	/* since this function recurses, it could be driven to stack overflow. */
 	check_stack_depth();
@@ -326,10 +327,17 @@ fillQT(QTN2QTState *state, QTNode *in)
 
 	if (in->valnode->type == QI_VAL)
 	{
+		size_t		distance;
+
 		memcpy(state->curitem, in->valnode, sizeof(QueryOperand));
 
 		memcpy(state->curoperand, in->word, in->valnode->qoperand.length);
-		state->curitem->qoperand.distance = state->curoperand - state->operand;
+		distance = state->curoperand - state->operand;
+		if (distance > MAXSTRPOS)
+			ereport(ERROR,
+					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+					 errmsg("tsquery is too large")));
+		state->curitem->qoperand.distance = distance;
 		state->curoperand[in->valnode->qoperand.length] = '\0';
 		state->curoperand += in->valnode->qoperand.length + 1;
 		state->curitem++;
@@ -363,7 +371,7 @@ QTN2QT(QTNode *in)
 {
 	TSQuery		out;
 	int			len;
-	int			sumlen = 0,
+	size_t		sumlen = 0,
 				nnode = 0;
 	QTN2QTState state;
 

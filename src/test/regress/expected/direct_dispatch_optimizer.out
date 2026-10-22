@@ -1675,15 +1675,11 @@ explain select * from t_14887 where a = 'a'::text;
                                     QUERY PLAN                                    
 ----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..764.38 rows=158 width=32)
-   ->  Append  (cost=0.00..762.26 rows=53 width=32)
-         ->  Seq Scan on t0_14887 t_14887_1  (cost=0.00..254.00 rows=18 width=32)
-               Filter: ((a)::text = 'a'::text)
-         ->  Seq Scan on t1_14887 t_14887_2  (cost=0.00..254.00 rows=18 width=32)
-               Filter: ((a)::text = 'a'::text)
-         ->  Seq Scan on t2_14887 t_14887_3  (cost=0.00..254.00 rows=18 width=32)
-               Filter: ((a)::text = 'a'::text)
- Optimizer: Postgres query optimizer
-(9 rows)
+   ->  Dynamic Seq Scan on t_14887
+         Number of partitions to scan: 3 (out of 3)
+         Filter: ((a)::text = 'a'::text)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(4 rows)
 
 begin;
 drop table if exists direct_test;

@@ -258,7 +258,7 @@ ValidateProtocolFunction(List *fnName, ExtPtcFuncType fntype)
 
 
 	/* Check protocol creator has permission to call the function */
-	aclresult = pg_proc_aclcheck(fnOid, GetUserId(), ACL_EXECUTE);
+	aclresult = object_aclcheck(ProcedureRelationId, fnOid, GetUserId(), ACL_EXECUTE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error(aclresult, OBJECT_FUNCTION, get_func_name(fnOid));
 

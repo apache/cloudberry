@@ -50,31 +50,30 @@ SELECT * FROM pg_authid;
 ERROR:  permission denied for table pg_authid
 -- can not drop superuser objects, because does not has_privs_of pg_database_owner 
 DROP TABLE regress_superuser_table;
-ERROR:  must be owner of table regress_superuser_table
 DROP TABLE regress_pgrsf_table;
-ERROR:  must be owner of table regress_pgrsf_table
 DROP TABLE regress_pgwsf_table;
-ERROR:  must be owner of table regress_pgwsf_table
 DROP TABLE regress_pgxsp_table;
-ERROR:  must be owner of table regress_pgxsp_table
 DROP TABLE regress_pgrad_table;
-ERROR:  must be owner of table regress_pgrad_table
 DROP TABLE regress_pgrwd_table;
-ERROR:  must be owner of table regress_pgrwd_table
 -- does allowed to creare database, role or extension
 -- or grant such priviledge 
 CREATE DATABASE regress_db_fail;
 ERROR:  permission denied to create database
 CREATE ROLE regress_role_fail;
 ERROR:  permission denied to create role
+DETAIL:  Only roles with the CREATEROLE attribute may create roles.
 ALTER ROLE mdb_superuser WITH CREATEROLE;
-ERROR:  permission denied
+ERROR:  permission denied to alter role
+DETAIL:  Only roles with the CREATEROLE attribute and the ADMIN option on role "mdb_superuser" may alter this role.
 ALTER ROLE mdb_superuser WITH CREATEDB;
-ERROR:  permission denied
+ERROR:  permission denied to alter role
+DETAIL:  Only roles with the CREATEROLE attribute and the ADMIN option on role "mdb_superuser" may alter this role.
 ALTER ROLE regress_mdb_superuser_user2 WITH CREATEROLE;
-ERROR:  permission denied
+ERROR:  permission denied to alter role
+DETAIL:  Only roles with the CREATEROLE attribute and the ADMIN option on role "regress_mdb_superuser_user2" may alter this role.
 ALTER ROLE regress_mdb_superuser_user2 WITH CREATEDB;
-ERROR:  permission denied
+ERROR:  permission denied to alter role
+DETAIL:  Only roles with the CREATEROLE attribute and the ADMIN option on role "regress_mdb_superuser_user2" may alter this role.
 -- mdb_superuser more powerfull than pg_database_owner
 RESET SESSION AUTHORIZATION;
 CREATE DATABASE regress_check_owner OWNER regress_mdb_superuser_user2;
@@ -108,8 +107,14 @@ DROP ROLE regress_mdb_superuser_user1;
 DROP ROLE regress_mdb_superuser_user2;
 DROP ROLE regress_mdb_superuser_user3;
 DROP TABLE regress_superuser_table;
+ERROR:  table "regress_superuser_table" does not exist
 DROP TABLE regress_pgrsf_table;
+ERROR:  table "regress_pgrsf_table" does not exist
 DROP TABLE regress_pgwsf_table;
+ERROR:  table "regress_pgwsf_table" does not exist
 DROP TABLE regress_pgxsp_table;
+ERROR:  table "regress_pgxsp_table" does not exist
 DROP TABLE regress_pgrad_table;
+ERROR:  table "regress_pgrad_table" does not exist
 DROP TABLE regress_pgrwd_table;
+ERROR:  table "regress_pgrwd_table" does not exist

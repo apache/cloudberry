@@ -1,5 +1,6 @@
 -- Test the optimizer_enable_dml_constraints GUC, which forces GPORCA to fall back when there
 -- are NULL or CHECK constraints on a table.
+set optimizer_trace_fallback = on;
 DROP TABLE IF EXISTS constr_tab;
 NOTICE:  table "constr_tab" does not exist, skipping
 CREATE TABLE constr_tab ( a int check (a>0) , b int, c int, d int, CHECK (a+b>5)) DISTRIBUTED BY (a);
@@ -25,12 +26,12 @@ explain insert into constr_tab values (1,2,3);
 INSERT INTO constr_tab VALUES(1,5,3,4);
 set optimizer_enable_dml_constraints=off;
 explain update constr_tab set a = 10;
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
- Update on constr_tab  (cost=0.00..1.03 rows=1 width=22)
-   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=22)
-         ->  Split  (cost=0.00..1.03 rows=1 width=22)
-               ->  Seq Scan on constr_tab  (cost=0.00..1.01 rows=1 width=22)
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Update on constr_tab  (cost=0.00..1219.00 rows=0 width=0)
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..1219.00 rows=47400 width=26)
+         ->  Split Update  (cost=0.00..271.00 rows=47400 width=26)
+               ->  Seq Scan on constr_tab  (cost=0.00..271.00 rows=23700 width=26)
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -57,12 +58,12 @@ CREATE TABLE constr_tab ( a int NOT NULL, b int, c int, d int, CHECK (a+b>5)) DI
 INSERT INTO constr_tab VALUES(1,5,3,4);
 set optimizer_enable_dml_constraints=off;
 explain update constr_tab set a = 10;
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
- Update on constr_tab  (cost=0.00..1.05 rows=1 width=26)
-   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..1.05 rows=1 width=26)
-         ->  Split  (cost=0.00..1.01 rows=1 width=26)
-               ->  Seq Scan on constr_tab  (cost=0.00..1.01 rows=1 width=26)
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Update on constr_tab  (cost=0.00..1219.00 rows=0 width=0)
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..1219.00 rows=47400 width=26)
+         ->  Split Update  (cost=0.00..271.00 rows=47400 width=26)
+               ->  Seq Scan on constr_tab  (cost=0.00..271.00 rows=23700 width=26)
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -72,12 +73,12 @@ INSERT INTO constr_tab VALUES(1,5,3,4);
 INSERT INTO constr_tab VALUES(1,5,3,4);
 set optimizer_enable_dml_constraints=off;
 explain update constr_tab set b = 10;
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
- Update on constr_tab  (cost=0.00..1.03 rows=1 width=22)
-   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=22)
-         ->  Split  (cost=0.00..1.03 rows=1 width=22)
-               ->  Seq Scan on constr_tab  (cost=0.00..1.01 rows=1 width=22)
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Update on constr_tab  (cost=0.00..1219.00 rows=0 width=0)
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..1219.00 rows=47400 width=26)
+         ->  Split Update  (cost=0.00..271.00 rows=47400 width=26)
+               ->  Seq Scan on constr_tab  (cost=0.00..271.00 rows=23700 width=26)
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -87,12 +88,12 @@ INSERT INTO constr_tab VALUES(1,5,3,4);
 INSERT INTO constr_tab VALUES(1,5,3,4);
 set optimizer_enable_dml_constraints=off;
 explain update constr_tab set a = 10;
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
- Update on constr_tab  (cost=0.00..1.03 rows=1 width=22)
-   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=22)
-         ->  Split  (cost=0.00..1.03 rows=1 width=22)
-               ->  Seq Scan on constr_tab  (cost=0.00..1.01 rows=1 width=22)
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Update on constr_tab  (cost=0.00..1219.00 rows=0 width=0)
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..1219.00 rows=47400 width=26)
+         ->  Split Update  (cost=0.00..271.00 rows=47400 width=26)
+               ->  Seq Scan on constr_tab  (cost=0.00..271.00 rows=23700 width=26)
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -238,6 +239,14 @@ explain select count(*) from foo group by a;
  Optimizer: Postgres query optimizer
 (5 rows)
 
+-- Orca should fallback for RTE_TABLEFUNC RTE type
+explain SELECT * FROM xmltable('/root' passing '' COLUMNS element text);
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Table Function Scan on "xmltable"  (cost=0.00..1.00 rows=100 width=32)
+ Optimizer: Postgres query optimizer
+(2 rows)
+
 create table ext_part(a int) partition by list(a);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
@@ -248,13 +257,45 @@ create external web table p2_ext (like p1) EXECUTE 'cat something.txt' FORMAT 'T
 alter table ext_part attach partition p1 for values in (1);
 alter table ext_part attach partition p2_ext for values in (2);
 NOTICE:  partition constraints are not validated when attaching a readable external table
-explain select * from ext_part;
-                                      QUERY PLAN                                      
---------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..57799.50 rows=3096300 width=4)
-   ->  Append  (cost=0.00..16515.50 rows=1032100 width=4)
-         ->  Seq Scan on p1 ext_part_1  (cost=0.00..355.00 rows=32100 width=4)
-         ->  Foreign Scan on p2_ext ext_part_2  (cost=0.00..11000.00 rows=1000000 width=4)
+explain insert into ext_part values (1);
+                      QUERY PLAN                      
+------------------------------------------------------
+ Insert on ext_part  (cost=0.00..0.03 rows=1 width=4)
+   ->  Result  (cost=0.00..0.01 rows=1 width=4)
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+explain delete from ext_part where a=1;
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Delete on ext_part  (cost=0.00..435.25 rows=0 width=0)
+   Delete on p1 ext_part_1
+   ->  Seq Scan on p1 ext_part_1  (cost=0.00..435.25 rows=32 width=14)
+         Filter: (a = 1)
  Optimizer: Postgres query optimizer
 (5 rows)
 
+explain update ext_part set a=1;
+ERROR:  cannot update foreign table "p2_ext"
+set optimizer_enable_orderedagg=off;
+select array_agg(a order by b)
+  from (values (1,4),(2,3),(3,1),(4,2)) v(a,b);
+ array_agg 
+-----------
+ {3,4,2,1}
+(1 row)
+
+-- Orca should fallback if a function in 'from' clause uses 'WITH ORDINALITY'
+SELECT * FROM jsonb_array_elements('["b", "a"]'::jsonb) WITH ORDINALITY;
+ value | ordinality 
+-------+------------
+ "b"   |          1
+ "a"   |          2
+(2 rows)
+
+-- start_ignore
+-- FIXME: gpcheckcat fails due to mismatching distribution policy if this table isn't dropped
+-- Keep this table around once this is fixed
+reset optimizer_enable_orderedagg;
+drop table ext_part;
+-- end_ignore

@@ -2403,14 +2403,13 @@ explain(costs off) select * from tbl_hash order by col1 limit 3;
 -----------------------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         Merge Key: tbl_hash.col1
-         ->  Limit
-               ->  Merge Append
-                     Sort Key: tbl_hash.col1
-                     ->  Index Scan using p1_col1_idx on p1 tbl_hash_1
-                     ->  Index Scan using p2_col1_idx on p2 tbl_hash_2
- Optimizer: Postgres query optimizer
-(9 rows)
+         Merge Key: col1
+         ->  Sort
+               Sort Key: col1
+               ->  Dynamic Seq Scan on tbl_hash
+                     Number of partitions to scan: 2 (out of 2)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(8 rows)
 
 -- Clean Up
 DROP TABLE tbl_hash;

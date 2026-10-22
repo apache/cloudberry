@@ -6,7 +6,7 @@
  * and interpreting backend output.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/fe_utils/string_utils.c
@@ -910,6 +910,69 @@ parsePGArray(const char *atext, char ***itemarray, int *nitems)
 
 
 /*
+ * Append one element to the text representation of a 1-dimensional Postgres
+ * array.
+ *
+ * The caller must provide the initial '{' and closing '}' of the array.
+ * This function handles all else, including insertion of commas and
+ * quoting of values.
+ *
+ * We assume that typdelim is ','.
+ */
+void
+appendPGArray(PQExpBuffer buffer, const char *value)
+{
+	bool		needquote;
+	const char *tmp;
+
+	if (buffer->data[buffer->len - 1] != '{')
+		appendPQExpBufferChar(buffer, ',');
+
+	/* Decide if we need quotes; this should match array_out()'s choices. */
+	if (value[0] == '\0')
+		needquote = true;		/* force quotes for empty string */
+	else if (pg_strcasecmp(value, "NULL") == 0)
+		needquote = true;		/* force quotes for literal NULL */
+	else
+		needquote = false;
+
+	if (!needquote)
+	{
+		for (tmp = value; *tmp; tmp++)
+		{
+			char		ch = *tmp;
+
+			if (ch == '"' || ch == '\\' ||
+				ch == '{' || ch == '}' || ch == ',' ||
+			/* these match array_isspace(): */
+				ch == ' ' || ch == '\t' || ch == '\n' ||
+				ch == '\r' || ch == '\v' || ch == '\f')
+			{
+				needquote = true;
+				break;
+			}
+		}
+	}
+
+	if (needquote)
+	{
+		appendPQExpBufferChar(buffer, '"');
+		for (tmp = value; *tmp; tmp++)
+		{
+			char		ch = *tmp;
+
+			if (ch == '"' || ch == '\\')
+				appendPQExpBufferChar(buffer, '\\');
+			appendPQExpBufferChar(buffer, ch);
+		}
+		appendPQExpBufferChar(buffer, '"');
+	}
+	else
+		appendPQExpBufferStr(buffer, value);
+}
+
+
+/*
  * Format a reloptions array and append it to the given buffer.
  *
  * "prefix" is prepended to the option names; typically it's "" or "toast.".
@@ -930,8 +993,7 @@ appendReloptionsArray(PQExpBuffer buffer, const char *reloptions,
 
 	if (!parsePGArray(reloptions, &options, &noptions))
 	{
-		if (options)
-			free(options);
+		free(options);
 		return false;
 	}
 
@@ -974,8 +1036,7 @@ appendReloptionsArray(PQExpBuffer buffer, const char *reloptions,
 			appendStringLiteral(buffer, value, encoding, std_strings);
 	}
 
-	if (options)
-		free(options);
+	free(options);
 
 	return true;
 }
@@ -1046,11 +1107,15 @@ processSQLNamePattern(PGconn *conn, PQExpBuffer buf, const char *pattern,
 	 * Convert shell-style 'pattern' into the regular expression(s) we want to
 	 * execute.  Quoting/escaping into SQL literal format will be done below
 	 * using appendStringLiteralConn().
+	 *
+	 * If the caller provided a schemavar, we want to split the pattern on
+	 * ".", otherwise not.
 	 */
 	patternToSQLRegex(PQclientEncoding(conn),
 					  (schemavar ? dbnamebuf : NULL),
-					  (schemavar ? &schemabuf: NULL),
-					  &namebuf, pattern, force_escape, true, dotcnt);
+					  (schemavar ? &schemabuf : NULL),
+					  &namebuf,
+					  pattern, force_escape, true, dotcnt);
 
 	/*
 	 * Now decide what we need to emit.  We may run under a hostile
@@ -1343,4 +1408,7 @@ patternToSQLRegex(int encoding, PQExpBuffer dbnamebuf, PQExpBuffer schemabuf,
 			appendPQExpBufferStr(dbnamebuf, curbuf->data);
 		termPQExpBuffer(curbuf);
 	}
+
+	if (want_literal_dbname)
+		termPQExpBuffer(&left_literal);
 }

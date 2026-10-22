@@ -398,6 +398,25 @@ SELECT '1&(2&(4&(5|!6)))'::query_int;
  1 & 2 & 4 & ( 5 | !6 )
 (1 row)
 
+-- test non-error-throwing input
+SELECT str as "query_int",
+       pg_input_is_valid(str,'query_int') as ok,
+       errinfo.sql_error_code,
+       errinfo.message,
+       errinfo.detail,
+       errinfo.hint
+FROM (VALUES ('1&(2&(4&(5|6)))'),
+             ('1#(2&(4&(5&6)))'),
+             ('foo'))
+      AS a(str),
+     LATERAL pg_input_error_info(a.str, 'query_int') as errinfo;
+    query_int    | ok | sql_error_code |   message    | detail | hint 
+-----------------+----+----------------+--------------+--------+------
+ 1&(2&(4&(5|6))) | t  |                |              |        | 
+ 1#(2&(4&(5&6))) | f  | 42601          | syntax error |        | 
+ foo             | f  | 42601          | syntax error |        | 
+(3 rows)
+
 CREATE TABLE test__int( a int[] );
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
@@ -466,13 +485,19 @@ SELECT count(*) from test__int WHERE a @@ '(20&23)|(50&68)';
 SELECT count(*) from test__int WHERE a @@ '20 | !21';
  count 
 -------
-  6566
+  6567
 (1 row)
 
 SELECT count(*) from test__int WHERE a @@ '!20 & !21';
  count 
 -------
-  6343
+  6344
+(1 row)
+
+SELECT count(*) from test__int WHERE a @@ '!2733 & (2738 | 254)';
+ count 
+-------
+    12
 (1 row)
 
 SET enable_seqscan = off;  -- not all of these would use index by default
@@ -540,15 +565,23 @@ SELECT count(*) from test__int WHERE a @@ '(20&23)|(50&68)';
 SELECT count(*) from test__int WHERE a @@ '20 | !21';
  count 
 -------
-  6566
+  6567
 (1 row)
 
 SELECT count(*) from test__int WHERE a @@ '!20 & !21';
  count 
 -------
-  6343
+  6344
 (1 row)
 
+SELECT count(*) from test__int WHERE a @@ '!2733 & (2738 | 254)';
+ count 
+-------
+    12
+(1 row)
+
+INSERT INTO test__int SELECT array(SELECT x FROM generate_series(1, 1001) x); -- should fail
+ERROR:  input array is too big (199 maximum allowed, 1001 current), use gist__intbig_ops opclass instead
 DROP INDEX text_idx;
 CREATE INDEX text_idx on test__int using gist (a gist__int_ops(numranges = 0));
 ERROR:  value 0 out of bounds for option "numranges"
@@ -620,13 +653,19 @@ SELECT count(*) from test__int WHERE a @@ '(20&23)|(50&68)';
 SELECT count(*) from test__int WHERE a @@ '20 | !21';
  count 
 -------
-  6566
+  6567
 (1 row)
 
 SELECT count(*) from test__int WHERE a @@ '!20 & !21';
  count 
 -------
-  6343
+  6344
+(1 row)
+
+SELECT count(*) from test__int WHERE a @@ '!2733 & (2738 | 254)';
+ count 
+-------
+    12
 (1 row)
 
 DROP INDEX text_idx;
@@ -700,13 +739,19 @@ SELECT count(*) from test__int WHERE a @@ '(20&23)|(50&68)';
 SELECT count(*) from test__int WHERE a @@ '20 | !21';
  count 
 -------
-  6566
+  6567
 (1 row)
 
 SELECT count(*) from test__int WHERE a @@ '!20 & !21';
  count 
 -------
-  6343
+  6344
+(1 row)
+
+SELECT count(*) from test__int WHERE a @@ '!2733 & (2738 | 254)';
+ count 
+-------
+    12
 (1 row)
 
 DROP INDEX text_idx;
@@ -774,13 +819,19 @@ SELECT count(*) from test__int WHERE a @@ '(20&23)|(50&68)';
 SELECT count(*) from test__int WHERE a @@ '20 | !21';
  count 
 -------
-  6566
+  6567
 (1 row)
 
 SELECT count(*) from test__int WHERE a @@ '!20 & !21';
  count 
 -------
-  6343
+  6344
+(1 row)
+
+SELECT count(*) from test__int WHERE a @@ '!2733 & (2738 | 254)';
+ count 
+-------
+    12
 (1 row)
 
 DROP INDEX text_idx;
@@ -848,13 +899,119 @@ SELECT count(*) from test__int WHERE a @@ '(20&23)|(50&68)';
 SELECT count(*) from test__int WHERE a @@ '20 | !21';
  count 
 -------
-  6566
+  6567
 (1 row)
 
 SELECT count(*) from test__int WHERE a @@ '!20 & !21';
  count 
 -------
-  6343
+  6344
+(1 row)
+
+SELECT count(*) from test__int WHERE a @@ '!2733 & (2738 | 254)';
+ count 
+-------
+    12
+(1 row)
+
+DROP INDEX text_idx;
+-- Repeat the same queries with an extended data set. The data set is the
+-- same that we used before, except that each element in the array is
+-- repeated three times, offset by 1000 and 2000. For example, {1, 5}
+-- becomes {1, 1001, 2001, 5, 1005, 2005}.
+--
+-- That has proven to be unreasonably effective at exercising codepaths in
+-- core GiST code related to splitting parent pages, which is not covered by
+-- other tests. This is a bit out-of-place as the point is to test core GiST
+-- code rather than this extension, but there is no suitable GiST opclass in
+-- core that would reach the same codepaths.
+CREATE TABLE more__int AS SELECT
+   -- Leave alone NULLs, empty arrays and the one row that we use to test
+   -- equality; also skip INT_MAX
+   CASE WHEN a IS NULL OR a = '{}' OR a = '{73,23,20}' THEN a ELSE
+     (select array_agg(u) || array_agg(u + 1000) || array_agg(u + 2000)
+      from unnest(a) u where u < 2000000000)
+   END AS a, a as b
+   FROM test__int;
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Apache Cloudberry data distribution key for this table.
+CREATE INDEX ON more__int using gist (a gist__int_ops(numranges = 252));
+SELECT count(*) from more__int WHERE a && '{23,50}';
+ count 
+-------
+   403
+(1 row)
+
+SELECT count(*) from more__int WHERE a @@ '23|50';
+ count 
+-------
+   403
+(1 row)
+
+SELECT count(*) from more__int WHERE a @> '{23,50}';
+ count 
+-------
+    12
+(1 row)
+
+SELECT count(*) from more__int WHERE a @@ '23&50';
+ count 
+-------
+    12
+(1 row)
+
+SELECT count(*) from more__int WHERE a @> '{20,23}';
+ count 
+-------
+    12
+(1 row)
+
+SELECT count(*) from more__int WHERE a <@ '{73,23,20}';
+ count 
+-------
+    10
+(1 row)
+
+SELECT count(*) from more__int WHERE a = '{73,23,20}';
+ count 
+-------
+     1
+(1 row)
+
+SELECT count(*) from more__int WHERE a @@ '50&68';
+ count 
+-------
+     9
+(1 row)
+
+SELECT count(*) from more__int WHERE a @> '{20,23}' or a @> '{50,68}';
+ count 
+-------
+    21
+(1 row)
+
+SELECT count(*) from more__int WHERE a @@ '(20&23)|(50&68)';
+ count 
+-------
+    21
+(1 row)
+
+SELECT count(*) from more__int WHERE a @@ '20 | !21';
+ count 
+-------
+  6567
+(1 row)
+
+SELECT count(*) from more__int WHERE a @@ '!20 & !21';
+ count 
+-------
+  6344
+(1 row)
+
+SELECT count(*) from test__int WHERE a @@ '!2733 & (2738 | 254)';
+ count 
+-------
+    12
 (1 row)
 
 RESET enable_seqscan;

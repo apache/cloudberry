@@ -38,6 +38,12 @@ BEGIN
 4:SET ROLE role_dumpinfo_test;
 SET
 4&:BEGIN;  <waiting ...>
+-- Allow resource group wait queue state to stabilize before checking dump info
+SELECT pg_sleep(0.5);
+ pg_sleep 
+----------
+          
+(1 row)
 
 SELECT dump_test_check();
  dump_test_check 

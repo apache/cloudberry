@@ -76,6 +76,9 @@ CATALOG(pg_resourcetype,6059,ResourceTypeRelationId) BKI_SHARED_RELATION
 } FormData_pg_resourcetype;
 
 /* no foreign keys */
+DECLARE_UNIQUE_INDEX(pg_resourcetype_oid_index, 6061, ResourceTypeOidIndexId, on pg_resourcetype using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_resourcetype_restypid_index, 6062, ResourceTypeRestypidIndexId, on pg_resourcetype using btree(restypid int2_ops));
+DECLARE_UNIQUE_INDEX(pg_resourcetype_resname_index, 6063, ResourceTypeResnameIndexId, on pg_resourcetype using btree(resname name_ops));
 
 /* ----------------
  *		Form_pg_resourcetype corresponds to a pointer to a tuple with

@@ -58,4 +58,27 @@ WITH cte(안녕세계x, こんにちわx) AS
 -- JOIN
 SELECT * FROM hi_안녕세계 hi_안녕세계1, hi_안녕세계 hi_안녕세계2 WHERE hi_안녕세계1.안녕세계1 LIKE '%UPDATE';
 
+-- ALIAS ON CONSTANTS, AGGREGATES AND SET OPERATIONS
+-- These project elements are not Vars, so restoring the alias after a failed
+-- wide character conversion must not depend on the Var-origin lookup.
+SELECT '한글' AS "한글";
+
+SELECT 1+1 AS 안녕세계표현식;
+
+SELECT count(*) AS 안녕세계카운트 FROM hi_안녕세계;
+
+SELECT sum(a) AS 안녕세계합계, max(a) AS 안녕세계최대 FROM hi_안녕세계;
+
+SELECT '안녕' AS 안녕세계유니온 UNION ALL SELECT 'x';
+
+-- SET RETURNING FUNCTION (ProjectSet can be the topmost plan node)
+SELECT generate_series(1,2) AS 안녕세계SRF;
+
+-- The restore must take the name from the top-level target list entry at the
+-- same position, never from a same-position entry inside a subquery.
+SELECT EXISTS(SELECT a, 안녕세계1 FROM hi_안녕세계) AS c, 안녕세계1 AS 안녕세계별칭 FROM hi_안녕세계;
+
+-- A legitimate alias named "UNKNOWN" (no conversion failure) must survive.
+SELECT EXISTS(SELECT a, 안녕세계1 FROM hi_안녕세계) AS c, a AS "UNKNOWN" FROM hi_안녕세계;
+
 RESET optimizer_trace_fallback;

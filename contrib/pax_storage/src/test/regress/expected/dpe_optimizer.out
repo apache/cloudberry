@@ -1,5 +1,9 @@
 -- Tests for Dynamic Partition Elimination, or partition pruning in
 -- PostgreSQL terms, based on join quals.
+-- This test requires autovacuum to be disabled to guarantee a consistent state
+-- after vacuum. An inopportune autovacuum could cause an explicit vacuum to
+-- skip. That leads to stale relallvisible stats which may prevent picking index
+-- only scan plan shapes.
 -- start_matchsubs
 -- m/Memory Usage: \d+\w?B/
 -- s/Memory Usage: \d+\w?B/Memory Usage: ###B/
@@ -60,6 +64,7 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dist'
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index pt1_idx on pt using btree (pt1);
 create index ptid_idx on pt using btree (ptid);
+create index ptid_pt1_idx on pt using btree (ptid, pt1);
 insert into pt select i, 'hello' || i, 'world', 'drop this', i % 6 from generate_series(0,53) i;
 insert into t select i, i % 6, 'hello' || i, 'bar' from generate_series(0,1) i;
 create table t1(dist int, tid int, t1 text, t2 text);
@@ -69,7 +74,7 @@ insert into t1 select i, i % 6, 'hello' || i, 'bar' from generate_series(1,2) i;
 insert into pt1 select * from pt;
 insert into pt1 select dist, pt1, pt2, pt3, ptid-100 from pt;
 alter table pt1 set with(REORGANIZE=false) DISTRIBUTED RANDOMLY;
-analyze pt;
+vacuum analyze pt;
 analyze pt1;
 analyze t;
 analyze t1;
@@ -201,23 +206,22 @@ select * from t, pt where tid = ptid and t1 = 'hello' || tid;
 (18 rows)
 
 explain (costs off, timing off, summary off, analyze) select * from t, pt where t1 = pt1 and ptid = tid;
-                                       QUERY PLAN                                        
+                                       QUERY PLAN
 -----------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=2 loops=1)
-   ->  Nested Loop (actual rows=2 loops=1)
-         Join Filter: true
-         ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
-               ->  Seq Scan on t (actual rows=2 loops=1)
-         ->  Dynamic Bitmap Heap Scan on pt (actual rows=1 loops=2)
+   ->  Hash Join (actual rows=2 loops=1)
+         Hash Cond: ((pt.pt1 = t.t1) AND (pt.ptid = t.tid))
+         Extra Text: ###   Hash chain length ###, using ## of ### buckets.
+         ->  Dynamic Seq Scan on pt (actual rows=8 loops=1)
                Number of partitions to scan: 6 (out of 6)
-               Recheck Cond: (pt1 = t.t1)
-               Filter: ((pt1 = t.t1) AND (ptid = t.tid))
-               Heap Blocks: exact=4294967295
-               Partitions scanned:  Avg 6.0 x 3 workers of 2 scans.  Max 6 parts (seg0).
-               ->  Dynamic Bitmap Index Scan on pt1_idx (actual rows=0 loops=12)
-                     Index Cond: (pt1 = t.t1)
+               Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+         ->  Hash (actual rows=2 loops=1)
+               Buckets: ###  Batches: ###  Memory Usage: ###B
+               ->  Partition Selector (selector id: $0) (actual rows=2 loops=1)
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
+                           ->  Seq Scan on t (actual rows=2 loops=1)
  Optimizer: GPORCA
-(14 rows)
+(13 rows)
 
 select * from t, pt where t1 = pt1 and ptid = tid;
  dist | tid |   t1   | t2  | dist |  pt1   |  pt2  |    pt3    | ptid 
@@ -271,9 +275,44 @@ select * from pt where ptid in (select tid from t where t1 = 'hello' || tid);
    48 | hello48 | world | drop this |    0
 (18 rows)
 
+explain (costs off, timing off, summary off, analyze) select ptid from pt where ptid in (select tid from t where t1 = 'hello' || tid) and pt1 = 'hello1';
+                                         QUERY PLAN
+---------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=1 loops=1)
+   ->  Hash Semi Join (actual rows=1 loops=1)
+         Hash Cond: (pt.ptid = t.tid)
+         Extra Text: ###   Hash chain length ###, using ## of ### buckets.
+         ->  Dynamic Index Only Scan on ptid_pt1_idx on pt (actual rows=1 loops=1)
+               Index Cond: (pt1 = 'hello1'::text)
+               Heap Fetches: 0
+               Number of partitions to scan: 6 (out of 6)
+               Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+         ->  Hash (actual rows=2 loops=1)
+               Buckets: ###  Batches: ###  Memory Usage: ###B
+               ->  Partition Selector (selector id: $0) (actual rows=2 loops=1)
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
+                           ->  Seq Scan on t (actual rows=2 loops=1)
+                                 Filter: (t1 = ('hello'::text || (tid)::text))
+ Optimizer: GPORCA
+(16 rows)
+
+select ptid from pt where ptid in (select tid from t where t1 = 'hello' || tid) and pt1 = 'hello1';
+ ptid 
+------
+    1
+(1 row)
+
 -- start_ignore
 -- Known_opt_diff: MPP-21320
 -- end_ignore
+-- Disable 'CXformSelect2DynamicIndexGet' to avoid picking Dynamic Index Scan and use this test
+-- to showcase dpe alternative
+select disable_xform('CXformSelect2DynamicIndexGet');
+              disable_xform               
+------------------------------------------
+ CXformSelect2DynamicIndexGet is disabled
+(1 row)
+
 explain (costs off, timing off, summary off, analyze) select * from pt where exists (select 1 from t where tid = ptid and t1 = 'hello' || tid);
                                          QUERY PLAN                                          
 ---------------------------------------------------------------------------------------------
@@ -316,6 +355,13 @@ select * from pt where exists (select 1 from t where tid = ptid and t1 = 'hello'
     6 | hello6  | world | drop this |    0
     0 | hello0  | world | drop this |    0
 (18 rows)
+
+-- enable xform
+select enable_xform('CXformSelect2DynamicIndexGet');
+              enable_xform               
+-----------------------------------------
+ CXformSelect2DynamicIndexGet is enabled
+(1 row)
 
 --
 -- group-by on top
@@ -580,23 +626,26 @@ set enable_hashjoin=off;
 -- Known_opt_diff: MPP-21322
 -- end_ignore
 explain (costs off, timing off, summary off, analyze) select * from t, pt where tid = ptid and pt1 = 'hello0';
-                                       QUERY PLAN                                        
+                                       QUERY PLAN
 -----------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=1 loops=1)
-   ->  Nested Loop (actual rows=1 loops=1)
-         Join Filter: true
-         ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
-               ->  Seq Scan on t (actual rows=2 loops=1)
-         ->  Dynamic Bitmap Heap Scan on pt (actual rows=0 loops=2)
-               Number of partitions to scan: 6 (out of 6)
-               Recheck Cond: (pt1 = 'hello0'::text)
-               Filter: ((pt1 = 'hello0'::text) AND (t.tid = ptid))
-               Heap Blocks: exact=4294967295
-               Partitions scanned:  Avg 6.0 x 3 workers of 2 scans.  Max 6 parts (seg0).
-               ->  Dynamic Bitmap Index Scan on pt1_idx (actual rows=0 loops=12)
-                     Index Cond: (pt1 = 'hello0'::text)
+ Hash Join (actual rows=1 loops=1)
+   Hash Cond: (t.tid = pt.ptid)
+   Extra Text: Hash chain length ###, using ## of ### buckets.
+   ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=2 loops=1)
+         ->  Seq Scan on t (actual rows=2 loops=1)
+   ->  Hash (actual rows=1 loops=1)
+         Buckets: ###  Batches: ###  Memory Usage: ###B
+         ->  Gather Motion 3:1  (slice2; segments: 3) (actual rows=1 loops=1)
+               ->  Dynamic Bitmap Heap Scan on pt (actual rows=1 loops=1)
+                     Number of partitions to scan: 6 (out of 6)
+                     Recheck Cond: (pt1 = 'hello0'::text)
+                     Filter: (pt1 = 'hello0'::text)
+                     Heap Blocks: exact=4294967295
+                     Partitions scanned:  Avg 6.0 x 3 workers.  Max 6 parts (seg0).
+                     ->  Dynamic Bitmap Index Scan on pt1_idx (actual rows=0 loops=6)
+                           Index Cond: (pt1 = 'hello0'::text)
  Optimizer: GPORCA
-(14 rows)
+(17 rows)
 
 select * from t, pt where tid = ptid and pt1 = 'hello0';
  dist | tid |   t1   | t2  | dist |  pt1   |  pt2  |    pt3    | ptid 
@@ -1008,16 +1057,13 @@ explain (costs off, timing off, summary off, analyze) select count(*) from pt, p
                            Buckets: 524288  Batches: 1  Memory Usage: 4097kB
                            ->  Partition Selector (selector id: $0) (actual rows=1 loops=1)
                                  ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=1 loops=1)
-                                       ->  Dynamic Bitmap Heap Scan on pt (actual rows=1 loops=1)
+                                       ->  Dynamic Index Only Scan on ptid_pt1_idx on pt (actual rows=1 loops=1)
+                                             Index Cond: (pt1 = 'hello0'::text)
+                                             Heap Fetches: 0
                                              Number of partitions to scan: 6 (out of 6)
-                                             Recheck Cond: (pt1 = 'hello0'::text)
-                                             Filter: (pt1 = 'hello0'::text)
-                                             Heap Blocks: exact=4294967295
                                              Partitions scanned:  Avg 6.0 x 3 workers.  Max 6 parts (seg0).
-                                             ->  Dynamic Bitmap Index Scan on pt1_idx (actual rows=0 loops=6)
-                                                   Index Cond: (pt1 = 'hello0'::text)
  Optimizer: GPORCA
-(22 rows)
+(19 rows)
 
 select count(*) from pt, pt1 where pt.ptid = pt1.ptid and pt.pt1 = 'hello0';
  count 

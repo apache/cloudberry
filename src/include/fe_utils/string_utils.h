@@ -6,7 +6,7 @@
  * assorted contexts.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/fe_utils/string_utils.h
@@ -20,12 +20,12 @@
 #include "pqexpbuffer.h"
 
 /* Global variables controlling behavior of fmtId() and fmtQualifiedId() */
-extern int	quote_all_identifiers;
+extern PGDLLIMPORT int quote_all_identifiers;
 extern PQExpBuffer (*getLocalPQExpBuffer) (void);
 
 /* Functions */
-extern const char *fmtId(const char *identifier);
-extern const char *fmtIdEnc(const char *identifier, int encoding);
+extern const char *fmtId(const char *rawid);
+extern const char *fmtIdEnc(const char *rawid, int encoding);
 extern const char *fmtQualifiedId(const char *schema, const char *id);
 extern const char *fmtQualifiedIdEnc(const char *schema, const char *id, int encoding);
 extern void setFmtEncoding(int encoding);
@@ -52,6 +52,7 @@ extern void appendConnStrVal(PQExpBuffer buf, const char *str);
 extern void appendPsqlMetaConnect(PQExpBuffer buf, const char *dbname);
 
 extern bool parsePGArray(const char *atext, char ***itemarray, int *nitems);
+extern void appendPGArray(PQExpBuffer buffer, const char *value);
 
 extern bool appendReloptionsArray(PQExpBuffer buffer, const char *reloptions,
 								  const char *prefix, int encoding, bool std_strings);

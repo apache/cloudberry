@@ -303,7 +303,7 @@ private:
 								ULONG current_query_level);
 
 	// translate a base table range table entry into a logical get
-	CDXLNode *TranslateRTEToDXLLogicalGet(const RangeTblEntry *rte, ULONG rti,
+	CDXLNode *TranslateRTEToDXLLogicalGet(const RangeTblEntry *rte, const RTEPermissionInfo *perminfo, ULONG rti,
 										  ULONG	 //current_query_level
 	);
 

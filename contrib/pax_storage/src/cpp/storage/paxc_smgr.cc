@@ -31,6 +31,10 @@
 #include "storage/paxc_smgr.h"
 #include "storage/wal/paxc_wal.h"
 
+extern "C" {
+#include "storage/sync.h"
+}
+
 #include <unistd.h>
 
 smgr_get_impl_hook_type prev_smgr_get_impl_hook = NULL;
@@ -38,22 +42,34 @@ extern smgr_get_impl_hook_type smgr_get_impl_hook;
 
 namespace paxc {
 
-static void mdunlink_pax(RelFileNodeBackend rnode, ForkNumber forkNumber,
+static void mdunlink_pax(RelFileLocatorBackend rnode, ForkNumber forkNumber,
                          bool isRedo) {
   // remove the data directory of pax table
   // FIXME(gongxun): can work well with dfs_tablespace
   if (forkNumber == MAIN_FORKNUM) {
     const char *path =
-        paxc::BuildPaxDirectoryPath(rnode.node, rnode.backend);
+        paxc::BuildPaxDirectoryPath(rnode.locator, rnode.backend);
     paxc::DeletePaxDirectoryPath(path, true);
 
     if (isRedo) {
-      paxc::XLogForgetRelation(rnode.node);
+      paxc::XLogForgetRelation(rnode.locator);
     }
   }
 
-  // unlink the relfilenode file directly, mdunlink will not remove
-  // the relfilenode file, only truncate it if isRedo is false.
+  // Forget any pending fsync requests for this relation.  mdcreate()
+  // registers the base relfile with SYNC_HANDLER_MD.  Without canceling
+  // it here, the checkpointer will PANIC when trying to fsync the
+  // already-deleted file.
+  FileTag tag;
+  memset(&tag, 0, sizeof(FileTag));
+  tag.handler = SYNC_HANDLER_MD;
+  tag.rlocator = rnode.locator;
+  tag.forknum = forkNumber;
+  tag.segno = 0;
+  RegisterSyncRequest(&tag, SYNC_FORGET_REQUEST, true /* retryOnError */);
+
+  // unlink the relfilelocator file directly, mdunlink will not remove
+  // the relfilelocator file, only truncate it if isRedo is false.
   auto relpath = relpath(rnode, MAIN_FORKNUM);
   auto ret = unlink(relpath);
   if (ret == -1 && errno != ENOENT) {
@@ -73,6 +89,7 @@ static const f_smgr pax_smgr = {
     .smgr_exists = mdexists,
     .smgr_unlink = mdunlink_pax,
     .smgr_extend = mdextend,
+    .smgr_zeroextend = mdzeroextend,
     .smgr_prefetch = mdprefetch,
     .smgr_read = mdread,
     .smgr_write = mdwrite,

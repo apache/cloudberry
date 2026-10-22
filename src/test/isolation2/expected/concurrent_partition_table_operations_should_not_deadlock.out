@@ -1,5 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
-CREATE EXTENSION
+CREATE
 
 
 -- Two concurrent transactions on partitioned table
@@ -7,9 +7,9 @@ CREATE EXTENSION
 --    2) truncate
 -- should not cause deadlock
 CREATE TABLE pt(a int, b text) DISTRIBUTED BY (a) PARTITION BY range(a) (start (0) end(10) every(2));
-CREATE TABLE
+CREATE
 INSERT INTO pt SELECT i%10, 'text'||i FROM generate_series(1, 10)i;
-INSERT 0 10
+INSERT 10
 VACUUM ANALYZE pt;
 VACUUM
 
@@ -18,9 +18,9 @@ VACUUM
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) 
    ->  Append                             
-         ->  Seq Scan on pt_1_prt_1       
+         ->  Seq Scan on pt_1_prt_1 pt_1  
                Filter: (a < 4)            
-         ->  Seq Scan on pt_1_prt_2       
+         ->  Seq Scan on pt_1_prt_2 pt_2  
                Filter: (a < 4)            
  Optimizer: Postgres query optimizer      
 (7 rows)
@@ -75,9 +75,9 @@ BEGIN
  0 | text10 
 (4 rows)
 1: END;
-COMMIT
+END
 2<:  <... completed>
-TRUNCATE TABLE
+TRUNCATE
 
 
 -- Two concurrent transactions on partitioned table
@@ -85,7 +85,7 @@ TRUNCATE TABLE
 --    2) truncate
 -- should not cause deadlock
 CREATE INDEX idx ON pt(a);
-CREATE INDEX
+CREATE
 VACUUM ANALYZE pt;
 VACUUM
 
@@ -94,9 +94,9 @@ VACUUM
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) 
    ->  Append                             
-         ->  Seq Scan on pt_1_prt_1       
+         ->  Seq Scan on pt_1_prt_1 pt_1  
                Filter: (a < 4)            
-         ->  Seq Scan on pt_1_prt_2       
+         ->  Seq Scan on pt_1_prt_2 pt_2  
                Filter: (a < 4)            
  Optimizer: Postgres query optimizer      
 (7 rows)
@@ -147,9 +147,9 @@ BEGIN
  3 | text3 
 (2 rows)
 1: END;
-COMMIT
+END
 2<:  <... completed>
-TRUNCATE TABLE
+TRUNCATE
 
 
 -- Two concurrent transactions on partitioned table
@@ -164,9 +164,9 @@ VACUUM
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) 
    ->  Append                             
-         ->  Seq Scan on pt_1_prt_1       
+         ->  Seq Scan on pt_1_prt_1 pt_1  
                Filter: (a < 4)            
-         ->  Seq Scan on pt_1_prt_2       
+         ->  Seq Scan on pt_1_prt_2 pt_2  
                Filter: (a < 4)            
  Optimizer: Postgres query optimizer      
 (7 rows)
@@ -217,6 +217,6 @@ BEGIN
  3 
 (2 rows)
 1: END;
-COMMIT
+END
 2<:  <... completed>
-TRUNCATE TABLE
+TRUNCATE

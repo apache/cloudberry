@@ -228,7 +228,7 @@ kmgr_run_cluster_key_command(char *cluster_key_command, char *buf,
 						if (terminal_fd == -1)
 						{
 #ifdef FRONTEND
-							pg_log_fatal("cluster key command referenced %%R, but --authprompt not specified");
+							pg_fatal("cluster key command referenced %%R, but --authprompt not specified");
 #else
 							ereport(ERROR,
 									(errcode(ERRCODE_INTERNAL_ERROR),
@@ -264,8 +264,8 @@ kmgr_run_cluster_key_command(char *cluster_key_command, char *buf,
 	fh = open_pipe_stream(command.data);
 	if (fh == NULL)
 	{
-		pg_log_fatal("could not execute command \"%s\": %m",
-					 command.data);
+		pg_fatal("could not execute command \"%s\": %m",
+				  command.data);
 	}
 #else
 	fh = OpenPipeStream(command.data, "r");
@@ -281,7 +281,7 @@ kmgr_run_cluster_key_command(char *cluster_key_command, char *buf,
 		if (ferror(fh))
 		{
 #ifdef FRONTEND
-			pg_log_fatal("could not read from command \"%s\": %m",
+			pg_fatal("could not read from command \"%s\": %m",
 						 command.data);
 #else
 			ereport(ERROR,
@@ -301,7 +301,7 @@ kmgr_run_cluster_key_command(char *cluster_key_command, char *buf,
 	if (pclose_rc == -1)
 	{
 #ifdef FRONTEND
-		pg_log_fatal("could not close pipe to external command: %m");
+		pg_fatal("could not close pipe to external command: %m");
 #else
 		ereport(ERROR,
 				(errcode_for_file_access(),
@@ -311,7 +311,7 @@ kmgr_run_cluster_key_command(char *cluster_key_command, char *buf,
 	else if (pclose_rc != 0)
 	{
 #ifdef FRONTEND
-		pg_log_fatal("command \"%s\" failed", command.data);
+		pg_fatal("command \"%s\" failed", command.data);
 #else
 		ereport(ERROR,
 				(errcode_for_file_access(),
@@ -424,10 +424,10 @@ read_wrapped_data_key(const char *cryptoKeyDir, uint32 id, unsigned char **key_p
 						path)));
 #else
 	if ((fd = open(path, O_RDONLY | PG_BINARY, 0)) == -1)
-		pg_log_fatal("could not open file \"%s\" for reading: %m",
+		pg_fatal("could not open file \"%s\" for reading: %m",
 					 path);
 	else if (fstat(fd, &st))
-		pg_log_fatal("could not stat file \"%s\": %m",
+		pg_fatal("could not stat file \"%s\": %m",
 					 path);
 #endif
 
@@ -450,7 +450,7 @@ read_wrapped_data_key(const char *cryptoKeyDir, uint32 id, unsigned char **key_p
 					(errcode_for_file_access(),
 					 errmsg("could not read file \"%s\": %m", path)));
 #else
-			pg_log_fatal("could not read file \"%s\": %m", path);
+			pg_fatal("could not read file \"%s\": %m", path);
 #endif
 		}
 		else
@@ -461,7 +461,7 @@ read_wrapped_data_key(const char *cryptoKeyDir, uint32 id, unsigned char **key_p
 					 errmsg("could not read file \"%s\": read %d of %u",
 							path, r, *key_len)));
 #else
-			pg_log_fatal("could not read file \"%s\": read %d of %u",
+			pg_fatal("could not read file \"%s\": read %d of %u",
 						 path, r, *key_len);
 #endif
 		}
@@ -479,6 +479,6 @@ read_wrapped_data_key(const char *cryptoKeyDir, uint32 id, unsigned char **key_p
 						path)));
 #else
 	if (close(fd) != 0)
-		pg_log_fatal("could not close file \"%s\": %m", path);
+		pg_fatal("could not close file \"%s\": %m", path);
 #endif
 }

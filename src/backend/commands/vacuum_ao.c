@@ -225,14 +225,6 @@ ao_vacuum_rel_pre_cleanup(Relation onerel, VacuumParams *params, BufferAccessStr
 	ao_vacuum_rel_recycle_dead_segments(onerel, params, bstrategy, vacrelstats);
 
 	/*
-	 * Make the pg_aoseg updates above visible to AppendOptimizedTruncateToEOF's
-	 * catalog snapshot; without this the zeroed-eof rows are invisible (same
-	 * CommandId) and the old non-zero-eof rows appear live, triggering "file
-	 * size smaller than logical eof".
-	 */
-	CommandCounterIncrement();
-
-	/*
 	 * Also truncate all live segments to the EOF values stored in pg_aoseg.
 	 * This releases space left behind by aborted inserts.
 	 */
@@ -253,11 +245,6 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 	BlockNumber	total_file_segs;
 	int			elevel;
 	int			options = params->options;
-	TransactionId OldestXmin;
-	TransactionId FreezeLimit;
-	MultiXactId MultiXactCutoff;
-	TransactionId xidFullScanLimit;
-	MultiXactId mxactFullScanLimit;
 
 	if (options & VACOPT_VERBOSE)
 		elevel = INFO;
@@ -296,15 +283,11 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 								 &relhasindex,
 								 &total_file_segs);
 
-	vacuum_set_xid_limits(onerel,
-						  params->freeze_min_age,
-						  params->freeze_table_age,
-						  params->multixact_freeze_min_age,
-						  params->multixact_freeze_table_age,
-						  &OldestXmin, &FreezeLimit, &xidFullScanLimit,
-						  &MultiXactCutoff, &mxactFullScanLimit);
-
-	/* Causion: AO/AOCO use relallvisible to represent total segment file count */
+	/*
+	 * AO/AOCO tables have no per-tuple xmin/xmax, so freeze limits don't
+	 * apply. Pass InvalidTransactionId/InvalidMultiXactId to keep
+	 * relfrozenxid and relminmxid unchanged.
+	 */
 	vac_update_relstats(onerel,
 						relpages,
 						reltuples,
@@ -312,8 +295,10 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 							  Heap's 'all visible pages', use this field to represent
 							  AO/AOCO's total segment file count */
 						relhasindex,
-						FreezeLimit,
-						MultiXactCutoff,
+						InvalidTransactionId,
+						InvalidMultiXactId,
+						NULL,
+						NULL,
 						false,
 						true /* isvacuum */);
 
@@ -639,6 +624,7 @@ vacuum_appendonly_index(Relation indexRelation,
 	pg_rusage_init(&ru0);
 
 	ivinfo.index = indexRelation;
+	ivinfo.heaprel = aoRelation;
 	ivinfo.analyze_only = false;
 	ivinfo.message_level = elevel;
 	/* 
@@ -648,6 +634,7 @@ vacuum_appendonly_index(Relation indexRelation,
 	ivinfo.num_heap_tuples = aoRelation->rd_rel->reltuples;
 	ivinfo.estimated_count = true;
 	ivinfo.strategy = bstrategy;
+	ivinfo.heaprel = aoRelation;
 
 	/* Do bulk deletion */
 	stats = index_bulk_delete(&ivinfo, NULL, appendonly_tid_reaped,
@@ -675,6 +662,8 @@ vacuum_appendonly_index(Relation indexRelation,
 							false,
 							InvalidTransactionId,
 							InvalidMultiXactId,
+							NULL,
+							NULL,
 							false,
 							true /* isvacuum */);
 
@@ -810,6 +799,7 @@ scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac
 	pg_rusage_init(&ru0);
 
 	ivinfo.index = indrel;
+	ivinfo.heaprel = aorel;
 	ivinfo.analyze_only = false;
 	ivinfo.message_level = elevel;
 	/* 
@@ -819,6 +809,7 @@ scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac
 	ivinfo.num_heap_tuples = aorel->rd_rel->reltuples;
 	ivinfo.estimated_count = true;
 	ivinfo.strategy = vac_strategy;
+	ivinfo.heaprel = aorel;
 
 
 	/* Do post-VACUUM cleanup */
@@ -838,6 +829,8 @@ scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac
 							false,
 							InvalidTransactionId,
 							InvalidMultiXactId,
+							NULL,
+							NULL,
 							false,
 							true /* isvacuum */);
 

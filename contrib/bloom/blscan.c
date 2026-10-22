@@ -3,7 +3,7 @@
  * blscan.c
  *		Bloom index scan functions.
  *
- * Copyright (c) 2016-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2016-2023, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  contrib/bloom/blscan.c
@@ -139,6 +139,7 @@ blgetbitmap(IndexScanDesc scan, Node **bmNodeP)
 	 */
 	bas = GetAccessStrategy(BAS_BULKREAD);
 	npages = RelationGetNumberOfBlocks(scan->indexRelation);
+	pgstat_count_index_scan(scan->indexRelation);
 
 	for (blkno = BLOOM_HEAD_BLKNO; blkno < npages; blkno++)
 	{

@@ -451,6 +451,13 @@ SubqueryToJoinWalker(Node *node, ConvertSubqueryToJoinContext *context)
 		 */
 		context->safeToConvert = false;
 	}
+	else
+	{
+		/*
+		 * For other expressions, we should keep them in original place.
+		 */
+		context->innerQual = make_and_qual(context->innerQual, node);
+	}
 
 	return;
 }
@@ -1357,9 +1364,9 @@ fetch_outer_exprs(Node *testexpr)
 		 */
 		if (IsA(expr, BoolExpr))
 		{
-			BoolExpr *be    = (BoolExpr *) expr;
 			List     *exprs = NIL;
 			ListCell *lc;
+			BoolExpr *be    = (BoolExpr *) expr;
 
 			/*
 			 * The following cases should not happen, instead of

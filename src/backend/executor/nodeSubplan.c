@@ -13,7 +13,7 @@
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -28,7 +28,6 @@
  */
 #include "postgres.h"
 
-#include <limits.h>
 #include <math.h>
 
 #include "access/htup_details.h"
@@ -37,6 +36,7 @@
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "optimizer/optimizer.h"
 #include "utils/array.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
@@ -247,32 +247,6 @@ ExecScanSubPlan(SubPlanState *node,
 	ListCell   *l;
 	ArrayBuildStateAny *astate = NULL;
 
-	/*
-	 * MULTIEXPR subplans, when "executed", just return NULL; but first we
-	 * mark the subplan's output parameters as needing recalculation.  (This
-	 * is a bit of a hack: it relies on the subplan appearing later in its
-	 * targetlist than any of the referencing Params, so that all the Params
-	 * have been evaluated before we re-mark them for the next evaluation
-	 * cycle.  But in general resjunk tlist items appear after non-resjunk
-	 * ones, so this should be safe.)  Unlike ExecReScanSetParamPlan, we do
-	 * *not* set bits in the parent plan node's chgParam, because we don't
-	 * want to cause a rescan of the parent.
-	 */
-	if (subLinkType == MULTIEXPR_SUBLINK)
-	{
-		EState	   *estate = node->parent->state;
-
-		foreach(l, subplan->setParam)
-		{
-			int			paramid = lfirst_int(l);
-			ParamExecData *prm = &(estate->es_param_exec_vals[paramid]);
-
-			prm->execPlan = node;
-		}
-		*isNull = true;
-		return (Datum) 0;
-	}
-
 	/* Initialize ArrayBuildStateAny in caller's context, if needed */
 	if (subLinkType == ARRAY_SUBLINK)
 		astate = initArrayResultAny(subplan->firstColType,
@@ -323,6 +297,11 @@ ExecScanSubPlan(SubPlanState *node,
 	 * tuple, else an error is raised.  If zero tuples are produced, we return
 	 * NULL.  Assuming we get a tuple, we just use its first column (there can
 	 * be only one non-junk column in this case).
+	 *
+	 * For MULTIEXPR_SUBLINK, we push the per-column subplan outputs out to
+	 * the setParams and then return a dummy false value.  There must not be
+	 * multiple tuples returned from the subplan; if zero tuples are produced,
+	 * set the setParams to NULL.
 	 *
 	 * For ARRAY_SUBLINK we allow the subplan to produce any number of tuples,
 	 * and form an array of the first column's values.  Note in particular
@@ -378,6 +357,47 @@ ExecScanSubPlan(SubPlanState *node,
 			MemoryContextSwitchTo(econtext->ecxt_per_query_memory);
 
 			result = heap_getattr(node->curTuple, 1, tdesc, isNull);
+			/* keep scanning subplan to make sure there's only one tuple */
+			continue;
+		}
+
+		if (subLinkType == MULTIEXPR_SUBLINK)
+		{
+			/* cannot allow multiple input tuples for MULTIEXPR sublink */
+			if (found)
+				ereport(ERROR,
+						(errcode(ERRCODE_CARDINALITY_VIOLATION),
+						 errmsg("more than one row returned by a subquery used as an expression")));
+			found = true;
+
+			/*
+			 * We need to copy the subplan's tuple in case any result is of
+			 * pass-by-ref type --- our output values will point into this
+			 * copied tuple!  Can't use the subplan's instance of the tuple
+			 * since it won't still be valid after next ExecProcNode() call.
+			 * node->curTuple keeps track of the copied tuple for eventual
+			 * freeing.
+			 */
+			if (node->curTuple)
+				heap_freetuple(node->curTuple);
+			node->curTuple = ExecCopySlotHeapTuple(slot);
+
+			/*
+			 * Now set all the setParam params from the columns of the tuple
+			 */
+			col = 1;
+			foreach(plst, subplan->setParam)
+			{
+				int			paramid = lfirst_int(plst);
+				ParamExecData *prmdata;
+
+				prmdata = &(econtext->ecxt_param_exec_vals[paramid]);
+				Assert(prmdata->execPlan == NULL);
+				prmdata->value = heap_getattr(node->curTuple, col, tdesc,
+											  &(prmdata->isnull));
+				col++;
+			}
+
 			/* keep scanning subplan to make sure there's only one tuple */
 			continue;
 		}
@@ -477,6 +497,20 @@ ExecScanSubPlan(SubPlanState *node,
 			result = (Datum) 0;
 			*isNull = true;
 		}
+		else if (subLinkType == MULTIEXPR_SUBLINK)
+		{
+			/* We don't care about function result, but set the setParams */
+			foreach(l, subplan->setParam)
+			{
+				int			paramid = lfirst_int(l);
+				ParamExecData *prmdata;
+
+				prmdata = &(econtext->ecxt_param_exec_vals[paramid]);
+				Assert(prmdata->execPlan == NULL);
+				prmdata->value = (Datum) 0;
+				prmdata->isnull = true;
+			}
+		}
 	}
 
 	return result;
@@ -517,7 +551,7 @@ buildSubPlanHash(SubPlanState *node, ExprContext *econtext)
 	node->havehashrows = false;
 	node->havenullrows = false;
 
-	nbuckets = (long) Min(planstate->plan->plan_rows, (double) LONG_MAX);
+	nbuckets = clamp_cardinality_to_long(planstate->plan->plan_rows);
 	if (nbuckets < 1)
 		nbuckets = 1;
 
@@ -859,10 +893,9 @@ ExecInitSubPlan(SubPlan *subplan, PlanState *parent)
 	sstate->ts_state = NULL;
 
 	/*
-	 * If this is an initplan or MULTIEXPR subplan, it has output parameters
-	 * that the parent plan will use, so mark those parameters as needing
-	 * evaluation.  We don't actually run the subplan until we first need one
-	 * of its outputs.
+	 * If this is an initplan, it has output parameters that the parent plan
+	 * will use, so mark those parameters as needing evaluation.  We don't
+	 * actually run the subplan until we first need one of its outputs.
 	 *
 	 * A CTE subplan's output parameter is never to be evaluated in the normal
 	 * way, so skip this in that case.
@@ -870,7 +903,8 @@ ExecInitSubPlan(SubPlan *subplan, PlanState *parent)
 	 * Note that we don't set parent->chgParam here: the parent plan hasn't
 	 * been run yet, so no need to force it to re-run.
 	 */
-	if (subplan->setParam != NIL && subplan->subLinkType != CTE_SUBLINK)
+	if (subplan->setParam != NIL && subplan->parParam == NIL &&
+		subplan->subLinkType != CTE_SUBLINK)
 	{
 		ListCell   *lst;
 
@@ -1105,9 +1139,9 @@ ExecSetParamPlan(SubPlanState *node, ExprContext *econtext, QueryDesc *queryDesc
 	ScanDirection dir = estate->es_direction;
 	volatile MemoryContext oldcontext = NULL;
 	TupleTableSlot *slot;
-	ListCell   *pvar;
 	ListCell   *l;
 	bool		found = false;
+	ListCell   *pvar;
 	ArrayBuildState *astate pg_attribute_unused() = NULL;
 	Size		savepeakspace = MemoryContextGetPeakSpace(planstate->state->es_query_cxt);
 
@@ -1172,6 +1206,8 @@ PG_TRY();
 		elog(ERROR, "ANY/ALL subselect unsupported as initplan");
 	if (subLinkType == CTE_SUBLINK)
 		elog(ERROR, "CTE subplans should not be executed via ExecSetParamPlan");
+	if (subplan->parParam || node->args)
+		elog(ERROR, "correlated subplans should not be executed via ExecSetParamPlan");
 
 	/*
 	 * Enforce forward scan direction regardless of caller. It's hard but not
@@ -1392,7 +1428,6 @@ PG_TRY();
 		ErrorData *qeError = NULL;
 		CdbDispatchResults *pr = NULL;
 		CdbDispatcherState *ds = queryDesc->estate->dispatcherState;
-		int	primaryWriterSliceIndex = PrimaryWriterSliceIndex(queryDesc->estate);
 
 		cdbdisp_checkDispatchResult(ds, DISPATCH_WAIT_NONE);
 		pr = cdbdisp_getDispatchResults(ds, &qeError);
@@ -1403,9 +1438,6 @@ PG_TRY();
 			FlushErrorState();
 			ThrowErrorData(qeError);
 		}
-
-		/* collect pgstat from QEs for current transaction level */
-		pgstat_combine_from_qe(pr, primaryWriterSliceIndex);
 
 		/* If EXPLAIN ANALYZE, collect execution stats from qExecs. */
 		if (planstate->instrument && planstate->instrument->need_cdb)

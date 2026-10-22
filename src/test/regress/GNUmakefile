@@ -3,7 +3,7 @@
 # GNUmakefile--
 #    Makefile for src/test/regress (the regression tests)
 #
-# Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+# Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
 # Portions Copyright (c) 1994, Regents of the University of California
 #
 # src/test/regress/GNUmakefile
@@ -31,8 +31,7 @@ endif
 
 # stuff to pass into build of pg_regress
 EXTRADEFS = '-DHOST_TUPLE="$(host_tuple)"' \
-	'-DSHELLPROG="$(SHELL)"' \
-	'-DDLSUFFIX="$(DLSUFFIX)"'
+	'-DSHELLPROG="$(SHELL)"'
 
 ##
 ## Prepare for tests
@@ -62,7 +61,7 @@ $(top_builddir)/src/port/pg_config_paths.h: | submake-libpgport
 
 install: all installdirs
 	$(INSTALL_PROGRAM) pg_regress$(X) '$(DESTDIR)$(pgxsdir)/$(subdir)/pg_regress$(X)'
-	$(INSTALL_PROGRAM) regress.so '$(DESTDIR)$(pkglibdir)/regress.so'
+	$(INSTALL_PROGRAM) regress$(DLSUFFIX) '$(DESTDIR)$(pkglibdir)/regress$(DLSUFFIX)'
 	$(INSTALL_PROGRAM) gpdiff.pl '$(DESTDIR)$(pgxsdir)/$(subdir)/gpdiff.pl'
 	$(INSTALL_PROGRAM) gpstringsubs.pl '$(DESTDIR)$(pgxsdir)/$(subdir)/gpstringsubs.pl'
 	$(INSTALL_PROGRAM) atmsort.pl '$(DESTDIR)$(pgxsdir)/$(subdir)/atmsort.pl'
@@ -72,13 +71,13 @@ install: all installdirs
 	$(INSTALL_PROGRAM) GPTest.pm '$(DESTDIR)$(pgxsdir)/$(subdir)/GPTest.pm'
 	$(INSTALL_PROGRAM) scan_flaky_fault_injectors.sh '$(DESTDIR)$(pgxsdir)/$(subdir)/scan_flaky_fault_injectors.sh'
 	$(INSTALL_PROGRAM) twophase_pqexecparams '$(DESTDIR)$(pgxsdir)/$(subdir)/twophase_pqexecparams'
-	$(INSTALL_PROGRAM) hooktest/test_hook.so '$(DESTDIR)$(pkglibdir)/test_hook.so'
-	$(INSTALL_PROGRAM) query_info_hook_test/query_info_hook_test.so '$(DESTDIR)$(pkglibdir)/query_info_hook_test.so'
+	$(INSTALL_PROGRAM) hooktest/test_hook$(DLSUFFIX) '$(DESTDIR)$(pkglibdir)/test_hook$(DLSUFFIX)'
+	$(INSTALL_PROGRAM) query_info_hook_test/query_info_hook_test$(DLSUFFIX) '$(DESTDIR)$(pkglibdir)/query_info_hook_test$(DLSUFFIX)'
 installdirs:
 	$(MKDIR_P) '$(DESTDIR)$(pgxsdir)/$(subdir)'
 
 uninstall:
-	rm -f '$(DESTDIR)$(pkglibdir)/regress.so'
+	rm -f '$(DESTDIR)$(pkglibdir)/regress$(DLSUFFIX)'
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/pg_regress$(X)'
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/gpdiff.pl'
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/gpstringsubs.pl'
@@ -88,8 +87,8 @@ uninstall:
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/explain.pm'
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/GPTest.pm'
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/twophase_pqexecparams'
-	rm -f '$(DESTDIR)$(pkglibdir)/test_hook.so'
-	rm -f '$(DESTDIR)$(pkglibdir)/query_info_hook_test.so'
+	rm -f '$(DESTDIR)$(pkglibdir)/test_hook$(DLSUFFIX)'
+	rm -f '$(DESTDIR)$(pkglibdir)/query_info_hook_test$(DLSUFFIX)'
 
 
 # Build dynamically-loaded object file for CREATE FUNCTION ... LANGUAGE C.
@@ -191,7 +190,7 @@ query_info_hook_test:
 ## Run tests
 ##
 
-REGRESS_OPTS = --dlpath=. --max-concurrent-tests=24 --init-file=$(srcdir)/init_file --make-testtablespace-dir \
+REGRESS_OPTS = --dlpath=. --max-concurrent-tests=24 --init-file=$(srcdir)/init_file \
 	$(EXTRA_REGRESS_OPTS)
 
 check: all
@@ -205,7 +204,7 @@ check-tests: all | temp-install
 installcheck: installcheck-good
 
 installcheck-small: all tablespace-setup
-	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/parallel_schedule $(EXTRA_TESTS)
+	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/serial_schedule $(EXTRA_TESTS)
 
 installcheck-cbdb: all tablespace-setup twophase_pqexecparams hooktest query_info_hook_test
 	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/greenplum_schedule $(EXTRA_TESTS)
@@ -219,13 +218,13 @@ installcheck-parallel: all
 # cbdb parallel plan tests, ignore the incompatible cases, should run with 5 GUCs like below:
 installcheck-cbdb-parallel: all tablespace-setup twophase_pqexecparams
 	( \
-	export PGOPTIONS='-c optimizer=off -c enable_parallel=true -c min_parallel_table_scan_size=0 -c min_parallel_index_scan_size=0 -c force_parallel_mode=1'; \
-	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/parallel_schedule --schedule=$(srcdir)/greenplum_schedule --max-connections=5 $(EXTRA_TESTS) --exclude-tests explain \
+	export PGOPTIONS='-c optimizer=off -c enable_parallel=true -c min_parallel_table_scan_size=0 -c min_parallel_index_scan_size=0'; \
+	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/parallel_schedule --schedule=$(srcdir)/greenplum_schedule --max-connections=5 $(EXTRA_TESTS) --ignore-plans --exclude-tests explain \
 	)
 
 installcheck-orca-parallel: all tablespace-setup twophase_pqexecparams
 	( \
-	export PGOPTIONS='-c optimizer=on -c enable_parallel=true -c min_parallel_table_scan_size=0 -c min_parallel_index_scan_size=0 -c parallel_setup_cost=0'; \
+	export PGOPTIONS='-c optimizer=on -c optimizer_enable_parallel_append=true -c enable_parallel=true -c min_parallel_table_scan_size=0 -c min_parallel_index_scan_size=0 -c parallel_setup_cost=0'; \
 	$(pg_regress_installcheck) $(REGRESS_OPTS) --exclude-file=$(srcdir)/excluded_tests.conf --schedule=$(srcdir)/parallel_schedule --schedule=$(srcdir)/greenplum_schedule --max-connections=4 --ignore-plans $(EXTRA_TESTS) \
 	)
 

@@ -41,7 +41,7 @@ inner_int_contains(ArrayType *a, ArrayType *b)
 			break;				/* db[j] is not in da */
 	}
 
-	return (n == nb) ? true : false;
+	return (n == nb);
 }
 
 /* arguments are assumed sorted */
@@ -212,7 +212,7 @@ isort(int32 *a, int len)
 {
 	bool		r = false;
 
-	qsort_arg(a, len, sizeof(int32), isort_cmp, (void *) &r);
+	qsort_arg(a, len, sizeof(int32), isort_cmp, &r);
 	return r;
 }
 
@@ -382,14 +382,14 @@ intarray_concat_arrays(ArrayType *a, ArrayType *b)
 }
 
 ArrayType *
-int_to_intset(int32 n)
+int_to_intset(int32 elem)
 {
 	ArrayType  *result;
 	int32	   *aa;
 
 	result = new_intArrayType(1);
 	aa = ARRPTR(result);
-	aa[0] = n;
+	aa[0] = elem;
 	return result;
 }
 

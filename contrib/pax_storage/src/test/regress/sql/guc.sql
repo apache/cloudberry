@@ -163,6 +163,13 @@ SHOW custom."bad-guc";
 SET special."weird name" = 'foo';  -- could be allowed, but we choose not to
 SHOW special."weird name";
 
+-- Check what happens when you try to set a "custom" GUC within the
+-- namespace of an extension.
+SET plpgsql.extra_foo_warnings = true;  -- allowed if plpgsql is not loaded yet
+LOAD 'plpgsql';  -- this will throw a warning and delete the variable
+SET plpgsql.extra_foo_warnings = true;  -- now, it's an error
+SHOW plpgsql.extra_foo_warnings;
+
 --
 -- Test DISCARD TEMP
 --
@@ -332,9 +339,6 @@ $$ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = n1, pg_temp;
 
--- Destroy the QD-QE libpq connections.
-select cleanupAllGangs();
-
 select n1.drop_table('public','t1');
 
 -- After funtion drop table, public schema is still in search_path
@@ -344,3 +348,38 @@ drop table public.t1;
 drop type public.ty1;
 drop function n1.drop_table(v_schema character varying, v_table character varying);
 drop schema n1;
+
+-- Test GUC categories and flag patterns
+SELECT pg_settings_get_flags(NULL);
+SELECT pg_settings_get_flags('does_not_exist');
+CREATE TABLE tab_settings_flags AS SELECT name, category,
+    'EXPLAIN'          = ANY(flags) AS explain,
+    'NO_RESET'         = ANY(flags) AS no_reset,
+    'NO_RESET_ALL'     = ANY(flags) AS no_reset_all,
+    'NOT_IN_SAMPLE'    = ANY(flags) AS not_in_sample,
+    'RUNTIME_COMPUTED' = ANY(flags) AS runtime_computed
+  FROM pg_show_all_settings() AS psas,
+    pg_settings_get_flags(psas.name) AS flags;
+
+-- Developer GUCs should be flagged with GUC_NOT_IN_SAMPLE:
+SELECT name FROM tab_settings_flags
+  WHERE category = 'Developer Options' AND NOT not_in_sample
+  ORDER BY 1;
+-- Most query-tuning GUCs are flagged as valid for EXPLAIN.
+-- default_statistics_target is an exception.
+SELECT name FROM tab_settings_flags
+  WHERE category ~ '^Query Tuning' AND NOT explain
+  ORDER BY 1;
+-- Runtime-computed GUCs should be part of the preset category.
+SELECT name FROM tab_settings_flags
+  WHERE NOT category = 'Preset Options' AND runtime_computed
+  ORDER BY 1;
+-- Preset GUCs are flagged as NOT_IN_SAMPLE.
+SELECT name FROM tab_settings_flags
+  WHERE category = 'Preset Options' AND NOT not_in_sample
+  ORDER BY 1;
+-- NO_RESET implies NO_RESET_ALL.
+SELECT name FROM tab_settings_flags
+  WHERE no_reset AND NOT no_reset_all
+  ORDER BY 1;
+DROP TABLE tab_settings_flags;

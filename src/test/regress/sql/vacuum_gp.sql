@@ -302,10 +302,10 @@ BEGIN;
 SET LOCAL synchronous_commit = local;
 SELECT gp_inject_fault('interconnect_stop_recv_chunk', 'interrupt', dbid)
   FROM gp_segment_configuration WHERE content = -1 and role='p';
+-- start_ignore
 analyze relcache_leak_in_motion;
 SELECT gp_inject_fault('interconnect_stop_recv_chunk', 'reset', dbid)
   FROM gp_segment_configuration WHERE content = -1 and role='p';
 COMMIT;
--- start_ignore
 drop table if exists relcache_leak_in_motion;
 -- end_ignore

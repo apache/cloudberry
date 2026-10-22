@@ -1,0 +1,5 @@
+# gp_relsizes_stats extension
+comment = 'gp_relsizes_stats - an extension to track table on-disc sizes in cloudberry'
+default_version = '1.0'
+module_pathname = '$libdir/gp_relsizes_stats'
+trusted = true

@@ -101,6 +101,22 @@ COMMIT;
 
 SELECT * FROM temptest;
 
+-- Test it with a CHECK condition that produces a toasted pg_constraint entry
+BEGIN;
+do $$
+begin
+  execute format($cmd$
+    CREATE TEMP TABLE temptest (col text CHECK (col < %L)) ON COMMIT DROP
+  $cmd$,
+    (SELECT string_agg(g.i::text || ':' || random()::text, '|')
+     FROM generate_series(1, 100) g(i)));
+end$$;
+
+SELECT * FROM temptest;
+COMMIT;
+
+SELECT * FROM temptest;
+
 -- ON COMMIT is only allowed for TEMP
 
 CREATE TABLE temptest(col int) ON COMMIT DELETE ROWS;
@@ -250,52 +266,52 @@ begin;
 create function pg_temp.twophase_func() returns void as
   $$ select '2pc_func'::text $$ language sql;
 prepare transaction 'twophase_func';
-rollback; -- PREPARE TRANACTION is not supported in GPDB
+rollback; -- PREPARE TRANSACTION is not supported in GPDB
 -- Function drop
 create function pg_temp.twophase_func() returns void as
   $$ select '2pc_func'::text $$ language sql;
 begin;
 drop function pg_temp.twophase_func();
 prepare transaction 'twophase_func';
-rollback; -- PREPARE TRANACTION is not supported in GPDB
+rollback; -- PREPARE TRANSACTION is not supported in GPDB
 -- Operator creation
 begin;
 create operator pg_temp.@@ (leftarg = int4, rightarg = int4, procedure = int4mi);
 prepare transaction 'twophase_operator';
-rollback; -- PREPARE TRANACTION is not supported in GPDB
+rollback; -- PREPARE TRANSACTION is not supported in GPDB
 
 -- These generate errors about temporary tables.
 begin;
 create type pg_temp.twophase_type as (a int);
 prepare transaction 'twophase_type';
-rollback; -- PREPARE TRANACTION is not supported in GPDB
+rollback; -- PREPARE TRANSACTION is not supported in GPDB
 begin;
 create view pg_temp.twophase_view as select 1;
 prepare transaction 'twophase_view';
-rollback; -- PREPARE TRANACTION is not supported in GPDB
+rollback; -- PREPARE TRANSACTION is not supported in GPDB
 begin;
 create sequence pg_temp.twophase_seq;
 prepare transaction 'twophase_sequence';
-rollback; -- PREPARE TRANACTION is not supported in GPDB
+rollback; -- PREPARE TRANSACTION is not supported in GPDB
 
 -- Temporary tables cannot be used with two-phase commit.
 create temp table twophase_tab (a int);
 begin;
 select a from twophase_tab;
 prepare transaction 'twophase_tab';
-rollback; -- PREPARE TRANACTION is not supported in GPDB
+rollback; -- PREPARE TRANSACTION is not supported in GPDB
 begin;
 insert into twophase_tab values (1);
 prepare transaction 'twophase_tab';
-rollback; -- PREPARE TRANACTION is not supported in GPDB
+rollback; -- PREPARE TRANSACTION is not supported in GPDB
 begin;
 lock twophase_tab in access exclusive mode;
 prepare transaction 'twophase_tab';
-rollback; -- PREPARE TRANACTION is not supported in GPDB
+rollback; -- PREPARE TRANSACTION is not supported in GPDB
 begin;
 drop table twophase_tab;
 prepare transaction 'twophase_tab';
-rollback; -- PREPARE TRANACTION is not supported in GPDB
+rollback; -- PREPARE TRANSACTION is not supported in GPDB
 
 -- Corner case: current_schema may create a temporary schema if namespace
 -- creation is pending, so check after that.  First reset the connection

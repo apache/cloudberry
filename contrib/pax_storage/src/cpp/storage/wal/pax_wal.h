@@ -31,11 +31,11 @@
 
 namespace cbdb {
 
-void XLogPaxInsert(RelFileNode node, const char *filename, int64 offset,
+void XLogPaxInsert(RelFileLocator node, const char *filename, int64 offset,
                    void *buffer, int32 bufferLen);
 
-void XLogPaxCreateDirectory(RelFileNode node);
+void XLogPaxCreateDirectory(RelFileLocator node);
 
-void XLogPaxTruncate(RelFileNode node);
+void XLogPaxTruncate(RelFileLocator node);
 
 }  // namespace cbdb

@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -184,6 +184,34 @@ ConditionalLockRelationOid(Oid relid, LOCKMODE lockmode)
 }
 
 /*
+ *		LockRelationId
+ *
+ * Lock, given a LockRelId.  Same as LockRelationOid but take LockRelId as an
+ * input.
+ */
+void
+LockRelationId(LockRelId *relid, LOCKMODE lockmode)
+{
+	LOCKTAG		tag;
+	LOCALLOCK  *locallock;
+	LockAcquireResult res;
+
+	SET_LOCKTAG_RELATION(tag, relid->dbId, relid->relId);
+
+	res = LockAcquireExtended(&tag, lockmode, false, false, true, &locallock);
+
+	/*
+	 * Now that we have the lock, check for invalidation messages; see notes
+	 * in LockRelationOid.
+	 */
+	if (res != LOCKACQUIRE_ALREADY_CLEAR)
+	{
+		AcceptInvalidationMessages();
+		MarkLockClear(locallock);
+	}
+}
+
+/*
  *		UnlockRelationId
  *
  * Unlock, given a LockRelId.  This is preferred over UnlockRelationOid
@@ -345,32 +373,26 @@ CheckRelationLockedByMe(Relation relation, LOCKMODE lockmode, bool orstronger)
 						 relation->rd_lockInfo.lockRelId.dbId,
 						 relation->rd_lockInfo.lockRelId.relId);
 
-	if (LockHeldByMe(&tag, lockmode))
-		return true;
+	return (orstronger ?
+			LockOrStrongerHeldByMe(&tag, lockmode) :
+			LockHeldByMe(&tag, lockmode));
+}
 
-	if (orstronger)
-	{
-		LOCKMODE	slockmode;
+/*
+ *		CheckRelationOidLockedByMe
+ *
+ * Like the above, but takes an OID as argument.
+ */
+bool
+CheckRelationOidLockedByMe(Oid relid, LOCKMODE lockmode, bool orstronger)
+{
+	LOCKTAG		tag;
 
-		for (slockmode = lockmode + 1;
-			 slockmode <= MaxLockMode;
-			 slockmode++)
-		{
-			if (LockHeldByMe(&tag, slockmode))
-			{
-#ifdef NOT_USED
-				/* Sometimes this might be useful for debugging purposes */
-				elog(WARNING, "lock mode %s substituted for %s on relation %s",
-					 GetLockmodeName(tag.locktag_lockmethodid, slockmode),
-					 GetLockmodeName(tag.locktag_lockmethodid, lockmode),
-					 RelationGetRelationName(relation));
-#endif
-				return true;
-			}
-		}
-	}
+	SetLocktagRelationOid(&tag, relid);
 
-	return false;
+	return (orstronger ?
+			LockOrStrongerHeldByMe(&tag, lockmode) :
+			LockHeldByMe(&tag, lockmode));
 }
 
 /*
@@ -1005,7 +1027,7 @@ WaitForLockersMultiple(List *locktags, LOCKMODE lockmode, bool progress)
 	int			done = 0;
 
 	/* Done if no locks to wait for */
-	if (list_length(locktags) == 0)
+	if (locktags == NIL)
 		return;
 
 	/* Collect the transactions we need to wait on */
@@ -1109,6 +1131,44 @@ LockDatabaseObject(Oid classid, Oid objid, uint16 objsubid,
 
 	/* Make sure syscaches are up-to-date with any changes we waited for */
 	AcceptInvalidationMessages();
+}
+
+/*
+ *		ConditionalLockDatabaseObject
+ *
+ * As above, but only lock if we can get the lock without blocking.
+ * Returns true iff the lock was acquired.
+ */
+bool
+ConditionalLockDatabaseObject(Oid classid, Oid objid, uint16 objsubid,
+							  LOCKMODE lockmode)
+{
+	LOCKTAG		tag;
+	LOCALLOCK  *locallock;
+	LockAcquireResult res;
+
+	SET_LOCKTAG_OBJECT(tag,
+					   MyDatabaseId,
+					   classid,
+					   objid,
+					   objsubid);
+
+	res = LockAcquireExtended(&tag, lockmode, false, true, true, &locallock);
+
+	if (res == LOCKACQUIRE_NOT_AVAIL)
+		return false;
+
+	/*
+	 * Now that we have the lock, check for invalidation messages; see notes
+	 * in LockRelationOid.
+	 */
+	if (res != LOCKACQUIRE_ALREADY_CLEAR)
+	{
+		AcceptInvalidationMessages();
+		MarkLockClear(locallock);
+	}
+
+	return true;
 }
 
 /*
@@ -1230,6 +1290,45 @@ UnlockSharedObjectForSession(Oid classid, Oid objid, uint16 objsubid,
 	LockRelease(&tag, lockmode, true);
 }
 
+/*
+ *		LockApplyTransactionForSession
+ *
+ * Obtain a session-level lock on a transaction being applied on a logical
+ * replication subscriber. See LockRelationIdForSession for notes about
+ * session-level locks.
+ */
+void
+LockApplyTransactionForSession(Oid suboid, TransactionId xid, uint16 objid,
+							   LOCKMODE lockmode)
+{
+	LOCKTAG		tag;
+
+	SET_LOCKTAG_APPLY_TRANSACTION(tag,
+								  MyDatabaseId,
+								  suboid,
+								  xid,
+								  objid);
+
+	(void) LockAcquire(&tag, lockmode, true, false);
+}
+
+/*
+ *		UnlockApplyTransactionForSession
+ */
+void
+UnlockApplyTransactionForSession(Oid suboid, TransactionId xid, uint16 objid,
+								 LOCKMODE lockmode)
+{
+	LOCKTAG		tag;
+
+	SET_LOCKTAG_APPLY_TRANSACTION(tag,
+								  MyDatabaseId,
+								  suboid,
+								  xid,
+								  objid);
+
+	LockRelease(&tag, lockmode, true);
+}
 
 /*
  * Append a description of a lockable object to buf.
@@ -1328,6 +1427,13 @@ DescribeLockTag(StringInfo buf, const LOCKTAG *tag)
 		case LOCKTAG_WAREHOUSE:
 			appendStringInfo(buf,
 							 _("warehouse %u"),
+							 tag->locktag_field1);
+			break;
+		case LOCKTAG_APPLY_TRANSACTION:
+			appendStringInfo(buf,
+							 _("remote transaction %u of subscription %u of database %u"),
+							 tag->locktag_field3,
+							 tag->locktag_field2,
 							 tag->locktag_field1);
 			break;
 		default:

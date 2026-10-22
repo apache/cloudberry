@@ -15,6 +15,7 @@
 #define APPENDONLYTID_H
 
 #include "c.h"
+#include "storage/itemptr.h"
 
 /*
  * AOTupleId is a unique tuple id, specific to AO relation tuples, of the

@@ -247,7 +247,7 @@ LINE 1: SELECT regtype('int3');
                        ^
 -- with schemaname
 SELECT regoper('ng_catalog.||/');
-ERROR:  schema "ng_catalog" does not exist
+ERROR:  operator does not exist: ng_catalog.||/
 LINE 1: SELECT regoper('ng_catalog.||/');
                        ^
 SELECT regoperator('ng_catalog.+(int4,int4)');
@@ -255,15 +255,15 @@ ERROR:  operator does not exist: ng_catalog.+(int4,int4)
 LINE 1: SELECT regoperator('ng_catalog.+(int4,int4)');
                            ^
 SELECT regproc('ng_catalog.now');
-ERROR:  schema "ng_catalog" does not exist
+ERROR:  function "ng_catalog.now" does not exist
 LINE 1: SELECT regproc('ng_catalog.now');
                        ^
 SELECT regprocedure('ng_catalog.abs(numeric)');
-ERROR:  schema "ng_catalog" does not exist
+ERROR:  function "ng_catalog.abs(numeric)" does not exist
 LINE 1: SELECT regprocedure('ng_catalog.abs(numeric)');
                             ^
 SELECT regclass('ng_catalog.pg_class');
-ERROR:  schema "ng_catalog" does not exist
+ERROR:  relation "ng_catalog.pg_class" does not exist
 LINE 1: SELECT regclass('ng_catalog.pg_class');
                         ^
 SELECT regtype('ng_catalog.int4');
@@ -271,7 +271,7 @@ ERROR:  schema "ng_catalog" does not exist
 LINE 1: SELECT regtype('ng_catalog.int4');
                        ^
 SELECT regcollation('ng_catalog."POSIX"');
-ERROR:  schema "ng_catalog" does not exist
+ERROR:  collation "ng_catalog.POSIX" for encoding "UTF8" does not exist
 LINE 1: SELECT regcollation('ng_catalog."POSIX"');
                             ^
 -- schemaname not applicable
@@ -408,7 +408,11 @@ SELECT to_regrole('"regress_regrole_test"');
 (1 row)
 
 SELECT to_regrole('foo.bar');
-ERROR:  invalid name syntax
+ to_regrole 
+------------
+ 
+(1 row)
+
 SELECT to_regrole('Nonexistent');
  to_regrole 
 ------------
@@ -422,7 +426,11 @@ SELECT to_regrole('"Nonexistent"');
 (1 row)
 
 SELECT to_regrole('foo.bar');
-ERROR:  invalid name syntax
+ to_regrole 
+------------
+ 
+(1 row)
+
 SELECT to_regnamespace('Nonexistent');
  to_regnamespace 
 -----------------
@@ -436,4 +444,8 @@ SELECT to_regnamespace('"Nonexistent"');
 (1 row)
 
 SELECT to_regnamespace('foo.bar');
-ERROR:  invalid name syntax
+ to_regnamespace 
+-----------------
+ 
+(1 row)
+

@@ -11,10 +11,16 @@ include $(top_builddir)/src/Makefile.global
 # adminpack is disabled since the functionality has been imported into
 # GPDB.
 
+# FIXME: installcheck for extension pageinspect, pg_visibility, postgres_fdw, 
+# seg, tsm_system_rows, tsm_system_time, xml2 is failed, which is also failed
+# in gpdb. We'll fix it if we need these plugins to work properly.
+
 SUBDIRS = \
 		amcheck		\
 		auth_delay	\
 		auto_explain	\
+		basic_archive	\
+		basebackup_to_shell	\
 		bloom		\
 		btree_gin	\
 		btree_gist	\
@@ -34,22 +40,23 @@ SUBDIRS = \
 		old_snapshot	\
 		pageinspect	\
 		passwordcheck	\
-		postgres_fdw \
 		pg_buffercache	\
 		pg_freespacemap \
 		pg_prewarm	\
 		pg_stat_statements \
 		pg_surgery	\
 		pg_trgm		\
-		pgcrypto	\
 		pgrowlocks	\
 		pgstattuple	\
 		pg_visibility	\
+		pg_walinspect	\
+		postgres_fdw	\
 		seg		\
 		spi		\
 		tablefunc	\
 		tcn		\
 		test_decoding	\
+		try_convert	\
 		tsm_system_rows \
 		tsm_system_time \
 		unaccent	\
@@ -63,9 +70,9 @@ SUBDIRS += \
 		indexscan
 
 ifeq ($(with_ssl),openssl)
-SUBDIRS += sslinfo
+SUBDIRS += pgcrypto sslinfo
 else
-ALWAYS_SUBDIRS += sslinfo
+ALWAYS_SUBDIRS += pgcrypto sslinfo
 endif
 
 ifneq ($(with_uuid),no)
@@ -102,6 +109,12 @@ ifeq ($(enable_pax),yes)
 SUBDIRS += pax_storage
 else
 ALWAYS_SUBDIRS += pax_storage
+endif
+
+ifeq ($(enable_datalake_fdw),yes)
+SUBDIRS += datalake_fdw
+else
+ALWAYS_SUBDIRS += datalake_fdw
 endif
 
 ifeq ($(enable_ic_udp2),yes)

@@ -367,7 +367,7 @@ all of these.
 
 #### spike: reuse domain socket connections
 
-In current implmentation the domain socket connections are established in
+In current implementation the domain socket connections are established in
 `SetupInterconnect()` and closed in `TeardownInterconnect()`.  For OLTP queries
 it adds a significant overhead doing the connecting and registering logic.  In
 fact we are able to cache these connections, we only need to re-register on

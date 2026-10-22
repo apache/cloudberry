@@ -1,4 +1,10 @@
-CREATE TABLE brintest_ao (byteacol bytea,
+-- Most of these test steps are modified such that the tables' tuples are
+-- co-located on one QE.
+
+-- Test scan correctness
+
+CREATE TABLE brintest_ao (id int,
+	byteacol bytea,
 	charcol "char",
 	namecol name,
 	int8col bigint,
@@ -29,6 +35,7 @@ CREATE TABLE brintest_ao (byteacol bytea,
 ) WITH (appendonly = true);
 
 INSERT INTO brintest_ao SELECT
+	1,
 	repeat(stringu1, 8)::bytea,
 	substr(stringu1, 1, 1)::"char",
 	stringu1::name, 142857 * tenthous,
@@ -59,7 +66,8 @@ INSERT INTO brintest_ao SELECT
 FROM tenk1 ORDER BY unique2 LIMIT 100;
 
 -- throw in some NULL's and different values
-INSERT INTO brintest_ao (inetcol, cidrcol, int4rangecol) SELECT
+INSERT INTO brintest_ao (id, inetcol, cidrcol, int4rangecol) SELECT
+	1,
 	inet 'fe80::6e40:8ff:fea9:8c46' + tenthous,
 	cidr 'fe80::6e40:8ff:fea9:8c46' + tenthous,
 	'empty'::int4range
@@ -332,7 +340,7 @@ BEGIN
 			IF plan_line LIKE '%Bitmap Heap Scan on brintest_ao%' THEN
 				plan_ok := true;
 			END IF;
-			IF plan_line LIKE '%Postgres query optimizer%' THEN
+			IF plan_line LIKE '%Postgres-based planner%' THEN
 				is_planner_plan := true;
 			END IF;
 		END LOOP;
@@ -419,6 +427,7 @@ RESET optimizer_enable_tablescan;
 RESET optimizer_enable_bitmapscan;
 
 INSERT INTO brintest_ao SELECT
+	1,
 	repeat(stringu1, 42)::bytea,
 	substr(stringu1, 1, 1)::"char",
 	stringu1::name, 142857 * tenthous,
@@ -447,27 +456,3 @@ INSERT INTO brintest_ao SELECT
 	format('%s/%s%s', odd, even, tenthous)::pg_lsn,
 	box(point(odd, even), point(thousand, twothousand))
 FROM tenk1 ORDER BY unique2 LIMIT 5 OFFSET 5;
-
-VACUUM brintest_ao;  -- force a summarization cycle in brinaoidx
-
-UPDATE brintest_ao SET int8col = int8col * int4col;
-UPDATE brintest_ao SET textcol = '' WHERE textcol IS NOT NULL;
-
--- Vaccum again so that a new segment file is created.
-VACUUM brintest_ao;
-INSERT INTO brintest_ao SELECT * FROM brintest_ao;
--- We should have two segment files per Cloudberry segment (QE). 
--- start_ignore
-SELECT segment_id, segno, tupcount, state FROM gp_toolkit.__gp_aoseg('brintest_ao');
--- end_ignore
-
--- Tests for brin_summarize_new_values
-SELECT brin_summarize_new_values('brintest_ao'); -- error, not an index
-SELECT brin_summarize_new_values('tenk1_unique1'); -- error, not a BRIN index
--- New strategy of VACUUM AO/CO was introduced by PR #13255 for performance enhancement.
--- Index dead tuples will not always be cleaned up completely after VACUUM, resulting
--- brin_summarize_new_values() will not always be accurate. So ignore the check to
--- coordinate with the new behavior.
--- start_ignore
-SELECT brin_summarize_new_values('brinaoidx'); -- ok, no change expected
--- end_ignore

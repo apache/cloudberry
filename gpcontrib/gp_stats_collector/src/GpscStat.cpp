@@ -46,7 +46,16 @@ struct ProtectedData
 	GpscStat::Data data;
 };
 shmem_startup_hook_type prev_shmem_startup_hook = NULL;
+shmem_request_hook_type prev_shmem_request_hook = NULL;
 ProtectedData *data = nullptr;
+
+void
+gpsc_shmem_request()
+{
+	if (prev_shmem_request_hook)
+		prev_shmem_request_hook();
+	RequestAddinShmemSpace(sizeof(ProtectedData));
+}
 
 void
 gpsc_shmem_startup()
@@ -87,7 +96,8 @@ GpscStat::init()
 {
 	if (!process_shared_preload_libraries_in_progress)
 		return;
-	RequestAddinShmemSpace(sizeof(ProtectedData));
+	prev_shmem_request_hook = shmem_request_hook;
+	shmem_request_hook = gpsc_shmem_request;
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = gpsc_shmem_startup;
 }
@@ -95,6 +105,7 @@ GpscStat::init()
 void
 GpscStat::deinit()
 {
+	shmem_request_hook = prev_shmem_request_hook;
 	shmem_startup_hook = prev_shmem_startup_hook;
 }
 

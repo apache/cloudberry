@@ -1,0 +1,82 @@
+-- Capture current interconnect stats as baseline for future comparisons
+SELECT * FROM gp_interconnect_stats \gset prev_
+-- Verify that all baseline interconnect statistics are >= 0 (no negative values)
+SELECT
+    :prev_total_recv_queue_size >= 0,
+    :prev_recv_queue_conting_time >= 0,
+    :prev_total_capacity >= 0,
+    :prev_capacity_counting_time >= 0,
+    :prev_total_buffers >= 0,
+    :prev_buffer_counting_time >= 0,
+    :prev_retransmits >= 0,
+    :prev_startup_cached_pkts >= 0,
+    :prev_mismatches >= 0,
+    :prev_crs_errors >= 0,
+    :prev_snd_pkt_num >= 0,
+    :prev_recv_pkt_num >= 0,
+    :prev_disordered_pkt_num >= 0,
+    :prev_duplicate_pkt_num >= 0,
+    :prev_recv_ack_num >= 0,
+    :prev_status_query_msg_num >= 0;
+ ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? 
+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------
+ t        | t        | t        | t        | t        | t        | t        | t        | t        | t        | t        | t        | t        | t        | t        | t
+(1 row)
+
+-- Create test table to generate interconnect traffic
+CREATE TABLE test_ic_data
+AS SELECT generate_series(1, 1000) AS id
+DISTRIBUTED RANDOMLY;
+-- Re-capture current state: overwrite prev with latest values
+SELECT * FROM gp_interconnect_stats \gset prev2_
+-- Check if current statistics are >= baseline values after first data insertion
+SELECT
+    :prev2_total_recv_queue_size >= :prev_total_recv_queue_size,
+    :prev2_recv_queue_conting_time >= :prev_recv_queue_conting_time,
+    :prev2_total_capacity >= :prev_total_capacity,
+    :prev2_capacity_counting_time >= :prev_capacity_counting_time,
+    :prev2_total_buffers >= :prev_total_buffers,
+    :prev2_buffer_counting_time >= :prev_buffer_counting_time,
+    :prev2_retransmits >= :prev_retransmits,
+    :prev2_startup_cached_pkts >= :prev_startup_cached_pkts,
+    :prev2_mismatches >= :prev_mismatches,
+    :prev2_crs_errors >= :prev_crs_errors,
+    :prev2_snd_pkt_num >= :prev_snd_pkt_num,
+    :prev2_recv_pkt_num >= :prev_recv_pkt_num,
+    :prev2_disordered_pkt_num >= :prev_disordered_pkt_num,
+    :prev2_duplicate_pkt_num >= :prev_duplicate_pkt_num,
+    :prev2_recv_ack_num >= :prev_recv_ack_num,
+    :prev2_status_query_msg_num >= :prev_status_query_msg_num;
+ ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? 
+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------
+ t        | t        | t        | t        | t        | t        | t        | t        | t        | t        | t        | t        | t        | t        | t        | t
+(1 row)
+
+-- Insert additional data to further test interconnect statistics changes under load
+INSERT INTO test_ic_data SELECT generate_series(1001, 2000);
+-- Re‑check if current statistics remain >= baseline after second data insertion
+SELECT
+    total_recv_queue_size >= :prev2_total_recv_queue_size,
+    recv_queue_conting_time >= :prev2_recv_queue_conting_time,
+    total_capacity >= :prev2_total_capacity,
+    capacity_counting_time >= :prev2_capacity_counting_time,
+    total_buffers >= :prev2_total_buffers,
+    buffer_counting_time >= :prev2_buffer_counting_time,
+    retransmits >= :prev2_retransmits,
+    startup_cached_pkts >= :prev2_startup_cached_pkts,
+    mismatches >= :prev2_mismatches,
+    crs_errors >= :prev2_crs_errors,
+    snd_pkt_num >= :prev2_snd_pkt_num,
+    recv_pkt_num >= :prev2_recv_pkt_num,
+    disordered_pkt_num >= :prev2_disordered_pkt_num,
+    duplicate_pkt_num >= :prev2_duplicate_pkt_num,
+    recv_ack_num >= :prev2_recv_ack_num,
+    status_query_msg_num >= :prev2_status_query_msg_num
+FROM gp_interconnect_stats;
+ ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? | ?column? 
+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------
+ t        | t        | t        | t        | t        | t        | t        | t        | t        | t        | t        | t        | t        | t        | t        | t
+(1 row)
+
+DROP TABLE test_ic_data;
+DROP EXTENSION interconnect;

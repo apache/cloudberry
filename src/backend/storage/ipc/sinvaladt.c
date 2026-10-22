@@ -3,7 +3,7 @@
  * sinvaladt.c
  *	  POSTGRES shared cache invalidation data manager.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -205,6 +205,15 @@ SInvalShmemSize(void)
 	Size		size;
 
 	size = offsetof(SISeg, procState);
+
+	/*
+	 * In Hot Standby mode, the startup process requests a procState array
+	 * slot using InitRecoveryTransactionEnvironment(). Even though
+	 * MaxBackends doesn't account for the startup process, it is guaranteed
+	 * to get a free slot. This is because the autovacuum launcher and worker
+	 * processes, which are included in MaxBackends, are not started in Hot
+	 * Standby mode.
+	 */
 	size = add_size(size, mul_size(sizeof(ProcState), MaxBackends));
 
 	return size;
@@ -395,17 +404,20 @@ BackendIdGetProc(int backendID)
 
 /*
  * BackendIdGetTransactionIds
- *		Get the xid and xmin of the backend. The result may be out of date
- *		arbitrarily quickly, so the caller must be careful about how this
- *		information is used.
+ *		Get the xid, xmin, nsubxid and overflow status of the backend. The
+ *		result may be out of date arbitrarily quickly, so the caller must be
+ *		careful about how this information is used.
  */
 void
-BackendIdGetTransactionIds(int backendID, TransactionId *xid, TransactionId *xmin)
+BackendIdGetTransactionIds(int backendID, TransactionId *xid,
+						   TransactionId *xmin, int *nsubxid, bool *overflowed)
 {
 	SISeg	   *segP = shmInvalBuffer;
 
 	*xid = InvalidTransactionId;
 	*xmin = InvalidTransactionId;
+	*nsubxid = 0;
+	*overflowed = false;
 
 	/* Need to lock out additions/removals of backends */
 	LWLockAcquire(SInvalWriteLock, LW_SHARED);
@@ -419,6 +431,8 @@ BackendIdGetTransactionIds(int backendID, TransactionId *xid, TransactionId *xmi
 		{
 			*xid = proc->xid;
 			*xmin = proc->xmin;
+			*nsubxid = proc->subxidStatus.count;
+			*overflowed = proc->subxidStatus.overflowed;
 		}
 	}
 
@@ -746,6 +760,47 @@ SICleanupQueue(bool callerHasWriteLock, int minFree)
 		if (!callerHasWriteLock)
 			LWLockRelease(SInvalWriteLock);
 	}
+}
+
+/*
+ * SIResetAll
+ *		Mark all active backends as "reset"
+ *
+ * Use this when we don't know what needs to be invalidated.  It's a
+ * cluster-wide InvalidateSystemCaches().  This was a back-branch-only remedy
+ * to avoid a WAL format change.
+ *
+ * The implementation is like SICleanupQueue(false, MAXNUMMESSAGES + 1), with
+ * one addition.  SICleanupQueue() assumes minFree << MAXNUMMESSAGES, so it
+ * assumes hasMessages==true for any backend it resets.  We're resetting even
+ * fully-caught-up backends, so we set hasMessages.
+ */
+void
+SIResetAll(void)
+{
+	SISeg	   *segP = shmInvalBuffer;
+	int			i;
+
+	LWLockAcquire(SInvalWriteLock, LW_EXCLUSIVE);
+	LWLockAcquire(SInvalReadLock, LW_EXCLUSIVE);
+
+	for (i = 0; i < segP->lastBackend; i++)
+	{
+		ProcState  *stateP = &segP->procState[i];
+
+		if (stateP->procPid == 0 || stateP->sendOnly)
+			continue;
+
+		/* Consuming the reset will update "nextMsgNum" and "signaled". */
+		stateP->resetState = true;
+		stateP->hasMessages = true;
+	}
+
+	segP->minMsgNum = segP->maxMsgNum;
+	segP->nextThreshold = CLEANUP_MIN;
+
+	LWLockRelease(SInvalReadLock);
+	LWLockRelease(SInvalWriteLock);
 }
 
 

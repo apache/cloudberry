@@ -4,7 +4,7 @@
  *	  Access to functions to mutate the query environment and retrieve the
  *	  actual data related to entries (if any).
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/utils/queryenvironment.h
@@ -58,6 +58,8 @@ typedef EphemeralNamedRelationData *EphemeralNamedRelation;
 
 typedef struct EphemeralNamedRelationInfo
 {
+	pg_node_attr(no_copy_equal)
+
 	NodeTag 	type;
 	char		*name;			/* name used to identify the relation */
 	Oid			reliddesc;		/* oid of relation to get tupdesc */

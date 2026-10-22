@@ -616,3 +616,31 @@ select count(distinct a), count(distinct b) from dqa_f5 group by c;
 reset optimizer_enable_multiple_distinct_aggs;
 drop table dqa_f4;
 drop table dqa_f5;
+
+-- Test MDQA on a partitioned table.
+-- Pre-fix, CXformGbAggWithMDQA2Join declared every column the child could
+-- produce on the CTE Producer, so unused and system columns with EUnknown
+-- usage leaked into the producer's column list and crashed ORCA on the
+-- partitioned-table path (failed assertion "col_ref->GetUsage() !=
+-- CColRef::EUnknown" in assert builds, SIGSEGV in release builds).
+set optimizer_enable_multiple_distinct_aggs=on;
+
+create table mdqa_part(a int, b int, c int, d int)
+distributed by (a)
+partition by range(a) (
+  start (0) end (100) every (50),
+  default partition other
+);
+insert into mdqa_part select i, i%5, i%3, i%7 from generate_series(1, 100) i;
+create index mdqa_part_b_idx on mdqa_part(b);
+analyze mdqa_part;
+
+explain (costs off)
+select a, count(distinct b) as cnt_b, count(distinct c) as cnt_c
+from mdqa_part where b between 0 and 2 group by a;
+
+select a, count(distinct b) as cnt_b, count(distinct c) as cnt_c
+from mdqa_part where b between 0 and 2 group by a;
+
+reset optimizer_enable_multiple_distinct_aggs;
+drop table mdqa_part;

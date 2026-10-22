@@ -1,9 +1,4 @@
-AROPT = cr
-
-export_dynamic = -Wl,-E
 rpath = -Wl,-R'$(rpathdir)'
-
-DLSUFFIX = .so
 
 
 # Rule for building a shared library from a single .o file

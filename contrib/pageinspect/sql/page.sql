@@ -1,6 +1,7 @@
 CREATE EXTENSION pageinspect;
 
-CREATE TABLE test1 (a int, b int);
+-- Use a temp table so that effects of VACUUM are predictable
+CREATE TEMP TABLE test1 (a int, b int);
 INSERT INTO test1 VALUES (16777217, 131584);
 
 VACUUM (DISABLE_PAGE_SKIPPING) test1;  -- set up FSM
@@ -97,3 +98,9 @@ SHOW block_size \gset
 SELECT fsm_page_contents(decode(repeat('00', :block_size), 'hex'));
 SELECT page_header(decode(repeat('00', :block_size), 'hex'));
 SELECT page_checksum(decode(repeat('00', :block_size), 'hex'), 1);
+
+-- tests for sequences
+create sequence test_sequence start 72057594037927937;
+select tuple_data_split('test_sequence'::regclass, t_data, t_infomask, t_infomask2, t_bits)
+  from heap_page_items(get_raw_page('test_sequence', 0));
+drop sequence test_sequence;

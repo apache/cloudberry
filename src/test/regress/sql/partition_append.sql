@@ -117,6 +117,7 @@ ALTER TABLE two_level_pt ALTER PARTITION FOR (1)
 
 -- different owner 
 create role part_role_append;
+GRANT CREATE ON SCHEMA public TO part_role_append;
 create table bar_p (i int, j int) distributed by (i);
 set session authorization part_role_append;
 -- should fail
@@ -145,6 +146,7 @@ alter table foo_p split partition for (1) at (2) into (partition prt_11, partiti
 \dt foo_*
 drop table foo_p;
 
+REVOKE CREATE ON SCHEMA public FROM part_role_append;
 drop role part_role_append;
 
 -- WITH OIDS is no longer supported. Check that it't rejected with the GPDB
@@ -3888,6 +3890,7 @@ DROP TABLE unexpanded_attach2;
 --
 -- set owner for partition root (should be inherited except for ATTACH, EXCHANGE)
 CREATE ROLE part_inherit_role CREATEROLE;
+GRANT CREATE ON SCHEMA public TO part_inherit_role;
 CREATE ROLE part_inherit_other_role IN ROLE part_inherit_role;
 CREATE ROLE part_inherit_priv_role;
 CREATE ROLE part_inherit_attach_priv_role;
@@ -4090,6 +4093,7 @@ RESET ROLE;
 DROP TABLE part_inherit;
 DROP FUNCTION part_inherit_trig CASCADE;
 DROP TABLE part_inherit_exchange_out;
+REVOKE CREATE ON SCHEMA public FROM part_inherit_role;
 DROP ROLE part_inherit_role;
 DROP ROLE part_inherit_other_role;
 DROP ROLE part_inherit_priv_role;

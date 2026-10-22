@@ -3,7 +3,7 @@
  * pqsignal.c
  *	  Backend signal(2) support (see also src/port/pqsignal.c)
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -96,44 +96,4 @@ pqinitmask(void)
 #ifdef SIGALRM
 	sigdelset(&StartupBlockSig, SIGALRM);
 #endif
-}
-
-/*
- * Set up a postmaster signal handler for signal "signo"
- *
- * Returns the previous handler.
- *
- * This is used only in the postmaster, which has its own odd approach to
- * signal handling.  For signals with handlers, we block all signals for the
- * duration of signal handler execution.  We also do not set the SA_RESTART
- * flag; this should be safe given the tiny range of code in which the
- * postmaster ever unblocks signals.
- *
- * pqinitmask() must have been invoked previously.
- */
-pqsigfunc
-pqsignal_pm(int signo, pqsigfunc func)
-{
-	struct sigaction act,
-				oact;
-
-	act.sa_handler = func;
-	if (func == SIG_IGN || func == SIG_DFL)
-	{
-		/* in these cases, act the same as pqsignal() */
-		sigemptyset(&act.sa_mask);
-		act.sa_flags = SA_RESTART;
-	}
-	else
-	{
-		act.sa_mask = BlockSig;
-		act.sa_flags = 0;
-	}
-#ifdef SA_NOCLDSTOP
-	if (signo == SIGCHLD)
-		act.sa_flags |= SA_NOCLDSTOP;
-#endif
-	if (sigaction(signo, &act, &oact) < 0)
-		return SIG_ERR;
-	return oact.sa_handler;
 }

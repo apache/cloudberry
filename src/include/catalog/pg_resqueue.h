@@ -45,7 +45,8 @@ CATALOG(pg_resqueue,6026,ResQueueRelationId) BKI_SHARED_RELATION
 } FormData_pg_resqueue;
 
 /* no foreign keys */
-
+DECLARE_UNIQUE_INDEX(pg_resqueue_oid_index, 6027, ResQueueOidIndexId, on pg_resqueue using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_resqueue_rsqname_index, 6028, ResQueueRsqnameIndexId, on pg_resqueue using btree(rsqname name_ops));
 /* ----------------
  *		Form_pg_resqueue corresponds to a pointer to a tuple with
  *		the format of pg_resqueue relation.

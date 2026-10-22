@@ -41,6 +41,7 @@
 #include "access/transam.h"
 #include "access/xact.h"
 #include "common/ip.h"
+#include "funcapi.h"
 #include "nodes/execnodes.h"
 #include "nodes/pg_list.h"
 #include "nodes/print.h"
@@ -51,6 +52,8 @@
 #include "pgstat.h"
 #include "postmaster/postmaster.h"
 #include "storage/latch.h"
+#include "storage/lock.h"
+#include "storage/pg_shmem.h"
 #include "storage/pmsignal.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
@@ -131,6 +134,13 @@ WSAPoll(
 #define SEC_TO_MSEC(t)                  ((t) * 1000)
 #define MSEC_TO_USEC(t)                 ((t) * 1000)
 #define USEC_TO_SEC(t)                  ((t) / 1000000)
+
+/* HZ is the kernel timer frequency. Linux defines it in <asm/param.h>
+ * (typically 100). macOS's sys/param.h does not, so provide a fallback. */
+#ifndef HZ
+#define HZ 100
+#endif
+
 #define TIME_TICK (1000000/HZ)/* in us */
 
 #define UDP_INITIAL_RTO                 (MSEC_TO_USEC(200))
@@ -572,7 +582,7 @@ static ICGlobalControlInfo ic_control_info;
  */
 #define UNACK_QUEUE_RING_SLOTS_NUM (2000)
 #define TIMER_SPAN (Gp_interconnect_timer_period * 1000ULL)	/* default: 5ms */
-#define TIMER_SPAN_LOSS (Gp_interconnect_timer_period * 500ULL)     /* default: 5ms */
+#define TIMER_SPAN_LOSS (Gp_interconnect_timer_period * 500ULL)     /* default: 2.5ms */
 #define TIMER_CHECKING_PERIOD Gp_interconnect_timer_checking_period	/* default: 20ms */
 #define UNACK_QUEUE_RING_LENGTH (UNACK_QUEUE_RING_SLOTS_NUM * TIMER_SPAN)
 #define UNACK_QUEUE_RING_LENGTH_LOSS (UNACK_QUEUE_RING_SLOTS_NUM * TIMER_SPAN_LOSS)
@@ -714,6 +724,8 @@ typedef struct ICStatistics
 /* Statistics for UDP interconnect. */
 static ICStatistics ic_statistics;
 
+static ICStatisticsShmem *pICStatisticsShmem = NULL;
+
 /* UDP listen fd */
 int			UDP_listenerFd;
 
@@ -828,7 +840,7 @@ static void sendOnce(ChunkTransportState *transportStates, ChunkTransportStateEn
 static inline uint64 computeExpirationPeriod(MotionConn *conn, uint32 retry);
 
 static ICBuffer *getSndBuffer(MotionConn *conn);
-static void initSndBufferPool();
+static void initSndBufferPool(SendBufferPool *p);
 
 static void putIntoUnackQueueRing(UnackQueueRing *uqr, ICBuffer *buf, uint64 expTime, uint64 now);
 static void initUnackQueueRing(UnackQueueRing *uqr);
@@ -1369,8 +1381,6 @@ addCursorIcEntry(CursorICHistoryTable *t, uint32 icId, uint32 cid)
 	t->count++;
 
 	elog(DEBUG2, "add icid %d cid %d status %d", p->icId, p->cid, p->status);
-
-	return;
 }
 
 /*
@@ -1656,7 +1666,6 @@ setupUDPListeningSocket(int *listenerSocketFd, int32 *listenerPort, int *txFamil
 	 */
 
 #ifndef __darwin__
-#ifdef HAVE_IPV6
 	if (addrs->ai_family == AF_INET && addrs->ai_next != NULL && addrs->ai_next->ai_family == AF_INET6)
 	{
 		/*
@@ -1675,7 +1684,6 @@ setupUDPListeningSocket(int *listenerSocketFd, int32 *listenerPort, int *txFamil
 		addrs = temp;			/* start the list with the old second node */
 		elog(DEBUG1, "Have both IPv6 and IPv4 choices");
 	}
-#endif
 #endif
 
 	for (rp = addrs; rp != NULL; rp = rp->ai_next)
@@ -1758,7 +1766,6 @@ error:
 			(errcode(ERRCODE_GP_INTERCONNECTION_ERROR),
 			 errmsg("interconnect error: Could not set up udp listener socket"),
 			 errdetail("%s: %m", fun)));
-	return;
 }
 
 /*
@@ -1794,8 +1801,6 @@ ic_set_pthread_sigmasks(sigset_t *old_sigs)
 #else
 	(void) old_sigs;
 #endif
-
-	return;
 }
 
 static void
@@ -1810,8 +1815,27 @@ ic_reset_pthread_sigmasks(sigset_t *sigs)
 #else
 	(void) sigs;
 #endif
+}
 
-	return;
+void
+InterconnectShmemInitUDPIFC(void)
+{
+	bool found;
+	pICStatisticsShmem = ShmemInitStruct("global interconnect statistics",
+                                         sizeof(ICStatisticsShmem), &found);
+    if (pICStatisticsShmem == NULL)
+	{
+        ereport(FATAL,
+			(errcode(ERRCODE_OUT_OF_MEMORY),
+			 errmsg("not enough shared memory for global interconnect statistics")));
+	}
+
+	if (!found)
+		memset(pICStatisticsShmem, 0, sizeof(*pICStatisticsShmem));
+
+    int tranche_id = LWLockNewTrancheId();
+    LWLockRegisterTranche(tranche_id, "IC Statistics");
+    LWLockInitialize(&pICStatisticsShmem->lock, tranche_id);
 }
 
 /*
@@ -1912,7 +1936,6 @@ InitMotionUDPIFC(int *listenerSocketFd, int32 *listenerPort)
 	}
 
 	ic_control_info.threadCreated = true;
-	return;
 }
 
 void
@@ -3901,6 +3924,30 @@ chunkTransportStateEntryInitialized(ChunkTransportState *transportStates,
 	return pEntry->valid;
 }
 
+/* Append local interconnect stats to global cummulative stats. */
+static void 
+updateGlobalInterconnectStats(void)
+{
+	LWLockAcquire(&pICStatisticsShmem->lock, LW_EXCLUSIVE);
+	pICStatisticsShmem->totalRecvQueueSize += ic_statistics.totalRecvQueueSize;
+	pICStatisticsShmem->recvQueueSizeCountingTime += ic_statistics.recvQueueSizeCountingTime;
+	pICStatisticsShmem->totalCapacity += ic_statistics.totalCapacity;
+	pICStatisticsShmem->capacityCountingTime += ic_statistics.capacityCountingTime;
+	pICStatisticsShmem->totalBuffers += ic_statistics.totalBuffers;
+	pICStatisticsShmem->bufferCountingTime += ic_statistics.bufferCountingTime;
+	pICStatisticsShmem->retransmits += ic_statistics.retransmits;
+	pICStatisticsShmem->startupCachedPktNum += ic_statistics.startupCachedPktNum;
+	pICStatisticsShmem->mismatchNum += ic_statistics.mismatchNum;
+	pICStatisticsShmem->crcErrors += ic_statistics.crcErrors;
+	pICStatisticsShmem->sndPktNum += ic_statistics.sndPktNum;
+	pICStatisticsShmem->recvPktNum += ic_statistics.recvPktNum;
+	pICStatisticsShmem->disorderedPktNum += ic_statistics.disorderedPktNum;
+	pICStatisticsShmem->duplicatedPktNum += ic_statistics.duplicatedPktNum;
+	pICStatisticsShmem->recvAckNum += ic_statistics.recvAckNum;
+	pICStatisticsShmem->statusQueryMsgNum += ic_statistics.statusQueryMsgNum;
+	LWLockRelease(&pICStatisticsShmem->lock);
+}
+
 /*
  * computeNetworkStatistics
  * 		Compute the max/min/avg network statistics.
@@ -4207,6 +4254,7 @@ TeardownUDPIFCInterconnect_Internal(ChunkTransportState *transportStates,
 		 (minRtt == ~((uint64) 0) ? 0 : minRtt), (minDev == ~((uint64) 0) ? 0 : minDev), avgRtt, avgDev, maxRtt, maxDev,
 		 snd_control_info.cwnd, ic_statistics.statusQueryMsgNum);
 
+	updateGlobalInterconnectStats();
 	ic_control_info.isSender = false;
 	memset(&ic_statistics, 0, sizeof(ICStatistics));
 
@@ -4820,8 +4868,6 @@ markUDPConnInactiveIFC(MotionConn *conn)
 	pthread_mutex_lock(&ic_control_info.lock);
 	conn->stillActive = false;
 	pthread_mutex_unlock(&ic_control_info.lock);
-
-	return;
 }
 
 void
@@ -6979,13 +7025,19 @@ putIntoUnackQueueRing(UnackQueueRing *uqr, ICBuffer *buf, uint64 expTime, uint64
 		}
 		else if (diff < TIMER_SPAN_LOSS)
 		{
-			diff = diff < TIMER_SPAN_LOSS ? TIMER_SPAN_LOSS : diff;
+			diff = TIMER_SPAN_LOSS;
 		}
+			
+		idx = (uqr->idx + diff / TIMER_SPAN_LOSS) % UNACK_QUEUE_RING_SLOTS_NUM;
+
+#ifdef AMS_VERBOSE_LOGGING
+		write_log("PUTTW: curtime " UINT64_FORMAT " now " UINT64_FORMAT " (diff " UINT64_FORMAT ") expTime " UINT64_FORMAT " previdx %d, nowidx %d, nextidx %d", uqr->currentTime, now, diff, expTime, buf->unackQueueRingSlot, uqr->idx, idx);
+#endif
 	}
 	else
 	{
 		if (uqr->currentTime == 0)
-		uqr->currentTime = now - (now % TIMER_SPAN_LOSS);
+		uqr->currentTime = now - (now % TIMER_SPAN);
 
 		diff = now + expTime - uqr->currentTime;
 		if (diff >= UNACK_QUEUE_RING_LENGTH)
@@ -7006,12 +7058,6 @@ putIntoUnackQueueRing(UnackQueueRing *uqr, ICBuffer *buf, uint64 expTime, uint64
 		write_log("PUTTW: curtime " UINT64_FORMAT " now " UINT64_FORMAT " (diff " UINT64_FORMAT ") expTime " UINT64_FORMAT " previdx %d, nowidx %d, nextidx %d", uqr->currentTime, now, diff, expTime, buf->unackQueueRingSlot, uqr->idx, idx);
 #endif
 	}
-
-	idx = (uqr->idx + diff / TIMER_SPAN) % UNACK_QUEUE_RING_SLOTS_NUM;
-
-#ifdef AMS_VERBOSE_LOGGING
-	write_log("PUTTW: curtime " UINT64_FORMAT " now " UINT64_FORMAT " (diff " UINT64_FORMAT ") expTime " UINT64_FORMAT " previdx %d, nowidx %d, nextidx %d", uqr->currentTime, now, diff, expTime, buf->unackQueueRingSlot, uqr->idx, idx);
-#endif
 
 	buf->unackQueueRingSlot = idx;
 	icBufferListAppend(&unack_queue_ring.slots[idx], buf);
@@ -8150,7 +8196,6 @@ send_error:
 		pg_freeaddrinfo_all(hint.ai_family, addrs);
 	if (sockfd != -1)
 		closesocket(sockfd);
-	return;
 }
 
 void logChunkParseDetails(MotionConn *conn, uint32 ic_instance_id)
@@ -8223,4 +8268,73 @@ MlPutRxBufferIFC(ChunkTransportState *transportStates, int motNodeID, int route)
 	 */
 	if (param.msg.len != 0)
 		sendAckWithParam(&param);
+}
+
+PG_FUNCTION_INFO_V1(gp_interconnect_get_stats);
+
+Datum
+gp_interconnect_get_stats(PG_FUNCTION_ARGS)
+{
+	if (Gp_interconnect_type != INTERCONNECT_TYPE_UDPIFC)
+	{
+    	ereport(WARNING,
+        	(errcode(ERRCODE_WARNING_GP_INTERCONNECTION),
+        	errmsg("Interconnect statistics are collected only for UDPIFC protocol")));
+    	PG_RETURN_NULL();
+	}
+
+	/*
+	 * Build a tuple descriptor for our result type
+	 * The number and type of attributes have to match the definition of the
+	 * view gp_interconnect_stats_per_segment
+	 */
+	enum {NUM_IC_STATS_ELEM = 17};
+	TupleDesc tupdesc = CreateTemplateTupleDesc(NUM_IC_STATS_ELEM);
+
+	TupleDescInitEntry(tupdesc, 1, "segid", INT2OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 2, "total_recv_queue_size", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 3, "recv_queue_conting_time", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 4, "total_capacity", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 5, "capacity_counting_time", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 6, "total_buffers", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 7, "buffer_counting_time", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 8, "retransmits", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 9, "startup_cached_pkts", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 10, "mismatches", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 11, "crs_errors", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 12, "snd_pkt_num", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 13, "recv_pkt_num", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 14, "disordered_pkt_num", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 15, "duplicate_pkt_num", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 16, "recv_ack_num", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 17, "status_query_msg_num", INT8OID, -1, 0);
+	tupdesc =  BlessTupleDesc(tupdesc);
+
+	Datum		values[NUM_IC_STATS_ELEM];
+	bool		nulls[NUM_IC_STATS_ELEM] = {0};
+
+	LWLockAcquire(&pICStatisticsShmem->lock, LW_SHARED);
+	values[0] = Int32GetDatum(GpIdentity.segindex);
+	values[1] = Int64GetDatum(pICStatisticsShmem->totalRecvQueueSize);
+	values[2] = Int64GetDatum(pICStatisticsShmem->recvQueueSizeCountingTime);
+	values[3] = Int64GetDatum(pICStatisticsShmem->totalCapacity);
+	values[4] = Int64GetDatum(pICStatisticsShmem->capacityCountingTime);
+	values[5] = Int64GetDatum(pICStatisticsShmem->totalBuffers);
+	values[6] = Int64GetDatum(pICStatisticsShmem->bufferCountingTime);
+	values[7] = Int64GetDatum(pICStatisticsShmem->retransmits);
+	values[8] = Int64GetDatum(pICStatisticsShmem->startupCachedPktNum);
+	values[9] = Int64GetDatum(pICStatisticsShmem->mismatchNum);
+	values[10] = Int64GetDatum(pICStatisticsShmem->crcErrors);
+	values[11] = Int64GetDatum(pICStatisticsShmem->sndPktNum);
+	values[12] = Int64GetDatum(pICStatisticsShmem->recvPktNum);
+	values[13] = Int64GetDatum(pICStatisticsShmem->disorderedPktNum);
+	values[14] = Int64GetDatum(pICStatisticsShmem->duplicatedPktNum);
+	values[15] = Int64GetDatum(pICStatisticsShmem->recvAckNum);
+	values[16] = Int64GetDatum(pICStatisticsShmem->statusQueryMsgNum);
+	LWLockRelease(&pICStatisticsShmem->lock);
+
+	HeapTuple tuple = heap_form_tuple(tupdesc, values, nulls);
+	Datum result = HeapTupleGetDatum(tuple);
+
+	PG_RETURN_DATUM(result);
 }

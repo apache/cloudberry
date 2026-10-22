@@ -1,10 +1,10 @@
-%{
+%top{
 /*-------------------------------------------------------------------------
  *
  * repl_scanner.l
  *	  a lexical scanner for the replication commands
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -15,9 +15,19 @@
  */
 #include "postgres.h"
 
+#include "nodes/parsenodes.h"
 #include "utils/builtins.h"
 #include "parser/scansup.h"
 
+/*
+ * NB: include repl_gram.h only AFTER including walsender_private.h, because
+ * walsender_private includes headers that define XLogRecPtr.
+ */
+#include "replication/walsender_private.h"
+#include "repl_gram.h"
+}
+
+%{
 /* Avoid exit() on fatal scanner errors (a bit ugly -- see yy_fatal_error) */
 #undef fprintf
 #define fprintf(file, fmt, msg)  fprintf_to_ereport(fmt, msg)
@@ -108,17 +118,9 @@ identifier		{ident_start}{ident_cont}*
 %}
 
 BASE_BACKUP			{ return K_BASE_BACKUP; }
-FAST			{ return K_FAST; }
 IDENTIFY_SYSTEM		{ return K_IDENTIFY_SYSTEM; }
+READ_REPLICATION_SLOT	{ return K_READ_REPLICATION_SLOT; }
 SHOW		{ return K_SHOW; }
-LABEL			{ return K_LABEL; }
-NOWAIT			{ return K_NOWAIT; }
-EXCLUDE			{ return K_EXCLUDE; }
-PROGRESS			{ return K_PROGRESS; }
-MAX_RATE		{ return K_MAX_RATE; }
-WAL			{ return K_WAL; }
-TABLESPACE_MAP			{ return K_TABLESPACE_MAP; }
-NOVERIFY_CHECKSUMS	{ return K_NOVERIFY_CHECKSUMS; }
 TIMELINE			{ return K_TIMELINE; }
 START_REPLICATION	{ return K_START_REPLICATION; }
 CREATE_REPLICATION_SLOT		{ return K_CREATE_REPLICATION_SLOT; }
@@ -129,17 +131,16 @@ RESERVE_WAL			{ return K_RESERVE_WAL; }
 LOGICAL				{ return K_LOGICAL; }
 SLOT				{ return K_SLOT; }
 TEMPORARY			{ return K_TEMPORARY; }
+TWO_PHASE			{ return K_TWO_PHASE; }
 EXPORT_SNAPSHOT		{ return K_EXPORT_SNAPSHOT; }
 NOEXPORT_SNAPSHOT	{ return K_NOEXPORT_SNAPSHOT; }
 USE_SNAPSHOT		{ return K_USE_SNAPSHOT; }
 WAIT				{ return K_WAIT; }
-MANIFEST			{ return K_MANIFEST; }
-MANIFEST_CHECKSUMS	{ return K_MANIFEST_CHECKSUMS; }
 
 {space}+		{ /* do nothing */ }
 
 {digit}+		{
-					yylval.uintval = strtoul(yytext, NULL, 10);
+					replication_yylval.uintval = strtoul(yytext, NULL, 10);
 					return UCONST;
 				}
 
@@ -147,8 +148,8 @@ MANIFEST_CHECKSUMS	{ return K_MANIFEST_CHECKSUMS; }
 					uint32	hi,
 							lo;
 					if (sscanf(yytext, "%X/%X", &hi, &lo) != 2)
-						yyerror("invalid streaming start location");
-					yylval.recptr = ((uint64) hi) << 32 | lo;
+						replication_yyerror("invalid streaming start location");
+					replication_yylval.recptr = ((uint64) hi) << 32 | lo;
 					return RECPTR;
 				}
 
@@ -160,7 +161,7 @@ MANIFEST_CHECKSUMS	{ return K_MANIFEST_CHECKSUMS; }
 <xq>{quotestop}	{
 					yyless(1);
 					BEGIN(INITIAL);
-					yylval.str = litbufdup();
+					replication_yylval.str = litbufdup();
 					return SCONST;
 				}
 
@@ -178,12 +179,13 @@ MANIFEST_CHECKSUMS	{ return K_MANIFEST_CHECKSUMS; }
 				}
 
 <xd>{xdstop}	{
-					int len;
+					int			len;
+
 					yyless(1);
 					BEGIN(INITIAL);
-					yylval.str = litbufdup();
-					len = strlen(yylval.str);
-					truncate_identifier(yylval.str, len, true);
+					replication_yylval.str = litbufdup();
+					len = strlen(replication_yylval.str);
+					truncate_identifier(replication_yylval.str, len, true);
 					return IDENT;
 				}
 
@@ -192,9 +194,9 @@ MANIFEST_CHECKSUMS	{ return K_MANIFEST_CHECKSUMS; }
 				}
 
 {identifier}	{
-					int len = strlen(yytext);
+					int			len = strlen(yytext);
 
-					yylval.str = downcase_truncate_identifier(yytext, len, true);
+					replication_yylval.str = downcase_truncate_identifier(yytext, len, true);
 					return IDENT;
 				}
 
@@ -203,7 +205,7 @@ MANIFEST_CHECKSUMS	{ return K_MANIFEST_CHECKSUMS; }
 					return yytext[0];
 				}
 
-<xq,xd><<EOF>>	{ yyerror("unterminated quoted string"); }
+<xq,xd><<EOF>>	{ replication_yyerror("unterminated quoted string"); }
 
 
 <<EOF>>			{
@@ -239,7 +241,7 @@ addlitchar(unsigned char ychar)
 }
 
 void
-yyerror(const char *message)
+replication_yyerror(const char *message)
 {
 	ereport(ERROR,
 			(errcode(ERRCODE_SYNTAX_ERROR),
@@ -299,6 +301,7 @@ replication_scanner_is_replication_command(void)
 		case K_START_REPLICATION:
 		case K_CREATE_REPLICATION_SLOT:
 		case K_DROP_REPLICATION_SLOT:
+		case K_READ_REPLICATION_SLOT:
 		case K_TIMELINE_HISTORY:
 		case K_SHOW:
 			/* Yes; push back the first token so we can parse later. */

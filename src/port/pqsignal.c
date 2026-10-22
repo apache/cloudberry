@@ -4,7 +4,7 @@
  *	  reliable BSD-style signal(2) routine stolen from RWW who stole it
  *	  from Stevens...
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -104,6 +104,9 @@ wrapper_handler(SIGNAL_ARGS)
  * function instead of providing potentially-bogus return values.
  * Unfortunately, that requires modifying the pqsignal() in legacy-pqsignal.c,
  * which in turn requires an SONAME bump, which is probably not worth it.
+ * Note: the actual name of this function is either pqsignal_fe when
+ * compiled with -DFRONTEND, or pqsignal when compiled without that.
+ * This is to avoid a name collision with libpq's legacy-pqsignal.c.
  */
 pqsigfunc
 pqsignal(int signo, pqsigfunc func)

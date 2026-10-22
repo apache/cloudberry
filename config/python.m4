@@ -9,6 +9,9 @@
 # Look for Python and set the output variable 'PYTHON' if found,
 # fail otherwise.
 #
+# Since we are supporting only Python 3.x, prefer python3 to plain python.  If
+# the latter exists at all, it very possibly points to python2.
+
 # As the Python 3 transition happens and PEP 394 isn't updated, we
 # need to cater to systems that don't have unversioned "python" by
 # default.  Some systems ship with "python3" by default and perhaps
@@ -37,8 +40,8 @@ python_majorversion=`echo "$python_fullversion" | sed '[s/^\([0-9]*\).*/\1/]'`
 python_minorversion=`echo "$python_fullversion" | sed '[s/^[0-9]*\.\([0-9]*\).*/\1/]'`
 python_version=`echo "$python_fullversion" | sed '[s/^\([0-9]*\.[0-9]*\).*/\1/]'`
 # Reject unsupported Python versions as soon as practical.
-if test "$python_majorversion" -lt 3 -a "$python_minorversion" -lt 7; then
-  AC_MSG_ERROR([Python version $python_version is too old (version 2.7 or later is required)])
+if test "$python_majorversion" -lt 3; then
+  AC_MSG_ERROR([Python version $python_version is too old (version 3 or later is required)])
 fi
 
 AC_MSG_CHECKING([for Python sysconfig module])
@@ -115,14 +118,22 @@ else
 	fi
 	# Search for a likely-looking file.
 	found_shlib=0
+	# On Darwin, Python ships its shared lib as .dylib regardless of
+	# what DLSUFFIX is set to for modules. Try .dylib in addition to
+	# the configured DLSUFFIX so this check still finds libpython.
+	if test "$PORTNAME" = darwin; then
+		python_shlib_suffixes="$DLSUFFIX .dylib"
+	else
+		python_shlib_suffixes="$DLSUFFIX"
+	fi
 	for d in "${python_libdir}" "${python_configdir}" /usr/lib64 /usr/lib
 	do
-		# We don't know the platform DLSUFFIX here, so check 'em all.
-		for e in .so .dll .dylib .sl; do
-			if test -e "$d/lib${ldlibrary}$e"; then
+		for s in $python_shlib_suffixes
+		do
+			if test -e "$d/lib${ldlibrary}${s}"; then
 				python_libdir="$d"
 				found_shlib=1
-				break 2
+				break 3
 			fi
 		done
 	done

@@ -1292,10 +1292,12 @@ set optimizer_analyze_root_partition=on;
 set optimizer_analyze_midlevel_partition=off;
 analyze verbose p1;
 INFO:  analyzing "public.p1"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(24981, 10000, 'f');
+INFO:  skipping analyze of "public.p1" inheritance tree --- this inheritance tree contains no child tables
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(56435, 10000, 'f');
 analyze verbose p2;
 INFO:  analyzing "public.p2"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(24984, 10000, 'f');
+INFO:  skipping analyze of "public.p2" inheritance tree --- this inheritance tree contains no child tables
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(56438, 10000, 'f');
 select * from pg_stats where tablename like 'part2';
  schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
 ------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
@@ -1304,7 +1306,8 @@ select * from pg_stats where tablename like 'part2';
 set optimizer_analyze_midlevel_partition=on;
 analyze verbose p2;
 INFO:  analyzing "public.p2"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(24984, 10000, 'f');
+INFO:  skipping analyze of "public.p2" inheritance tree --- this inheritance tree contains no child tables
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(56438, 10000, 'f');
 INFO:  analyzing "public.part2" inheritance tree
 INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(24975, 10000, 't');
 select * from pg_stats where tablename like 'part2';
@@ -1341,3 +1344,38 @@ WHERE s.starelid = 'analyze_col_ndv_drop'::regclass AND a.attname = 'b';
 (1 row)
 
 DROP TABLE analyze_col_ndv_drop;
+--
+-- Test merging leaf stats when an emptied leaf partition carries a stale
+-- pg_statistic tuple that lacks the NDV_BY_SEGMENTS slot (here because
+-- column c is entirely NULL in that leaf, so no slot was ever written).
+-- aggregate_leaf_partition_ndvbs used to dereference the zeroed slot's
+-- NULL values array and crash the QD.
+--
+CREATE TABLE analyze_ndvbs_empty_part (a int, b int, c int)
+DISTRIBUTED BY (a)
+PARTITION BY RANGE (b) (START (1) END (3) EVERY (1));
+INSERT INTO analyze_ndvbs_empty_part SELECT i, 1, NULL FROM generate_series(1, 100) i;
+INSERT INTO analyze_ndvbs_empty_part SELECT i, 2, i FROM generate_series(1, 100) i;
+ANALYZE analyze_ndvbs_empty_part_1_prt_1;
+ANALYZE analyze_ndvbs_empty_part_1_prt_2;
+-- empty the first leaf; its stale stats tuple survives with reltuples = 0
+DELETE FROM analyze_ndvbs_empty_part_1_prt_1;
+VACUUM analyze_ndvbs_empty_part_1_prt_1;
+-- must not crash; the empty leaf contributes nothing to the aggregated NDV
+ANALYZE ROOTPARTITION analyze_ndvbs_empty_part;
+SELECT a.attname,
+       CASE WHEN s.stakind1 = 8 THEN array_to_string(s.stavalues1, ',')
+            WHEN s.stakind2 = 8 THEN array_to_string(s.stavalues2, ',')
+            WHEN s.stakind3 = 8 THEN array_to_string(s.stavalues3, ',')
+            WHEN s.stakind4 = 8 THEN array_to_string(s.stavalues4, ',')
+            WHEN s.stakind5 = 8 THEN array_to_string(s.stavalues5, ',')
+       END AS stadistinctbyseg
+FROM pg_statistic s
+JOIN pg_attribute a ON a.attrelid = s.starelid AND a.attnum = s.staattnum
+WHERE s.starelid = 'analyze_ndvbs_empty_part'::regclass AND a.attname = 'c';
+ attname | stadistinctbyseg 
+---------+------------------
+ c       | 100
+(1 row)
+
+DROP TABLE analyze_ndvbs_empty_part;

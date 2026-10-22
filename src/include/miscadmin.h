@@ -10,7 +10,7 @@
  *	  Over time, this has also become the preferred place for widely known
  *	  resource-limitation stuff, such as work_mem and check_stack_depth().
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/miscadmin.h
@@ -96,6 +96,7 @@ extern PGDLLIMPORT volatile sig_atomic_t IdleInTransactionSessionTimeoutPending;
 extern PGDLLIMPORT volatile sig_atomic_t IdleSessionTimeoutPending;
 extern PGDLLIMPORT volatile sig_atomic_t ProcSignalBarrierPending;
 extern PGDLLIMPORT volatile sig_atomic_t LogMemoryContextPending;
+extern PGDLLIMPORT volatile sig_atomic_t IdleStatsUpdateTimeoutPending;
 
 extern PGDLLIMPORT volatile sig_atomic_t CheckClientConnectionPending;
 extern PGDLLIMPORT volatile sig_atomic_t ClientConnectionLost;
@@ -249,15 +250,15 @@ extern PGDLLIMPORT pg_time_t MyStartTime;
 extern PGDLLIMPORT TimestampTz MyStartTimestamp;
 extern PGDLLIMPORT struct Port *MyProcPort;
 extern PGDLLIMPORT struct Latch *MyLatch;
-extern int32 MyCancelKey;
-extern int	MyPMChildSlot;
+extern PGDLLIMPORT int32 MyCancelKey;
+extern PGDLLIMPORT int MyPMChildSlot;
 
-extern char OutputFileName[];
+extern PGDLLIMPORT char OutputFileName[];
 extern PGDLLIMPORT char my_exec_path[];
-extern char pkglib_path[];
+extern PGDLLIMPORT char pkglib_path[];
 
 #ifdef EXEC_BACKEND
-extern char postgres_exec_path[];
+extern PGDLLIMPORT char postgres_exec_path[];
 #endif
 
 /* for pljava */
@@ -330,7 +331,7 @@ extern PGDLLIMPORT int IntervalStyle;
 
 #define MAXTZLEN		10		/* max TZ name len, not counting tr. null */
 
-extern bool enableFsync;
+extern PGDLLIMPORT bool enableFsync;
 extern PGDLLIMPORT bool allowSystemTableMods;
 extern PGDLLIMPORT int planner_work_mem;
 extern PGDLLIMPORT int work_mem;
@@ -341,18 +342,27 @@ extern PGDLLIMPORT int statement_mem;
 extern PGDLLIMPORT int max_statement_mem;
 extern PGDLLIMPORT int gp_vmem_limit_per_query;
 
-extern int	VacuumCostPageHit;
-extern int	VacuumCostPageMiss;
-extern int	VacuumCostPageDirty;
-extern int	VacuumCostLimit;
-extern double VacuumCostDelay;
+/*
+ * Upper and lower hard limits for the buffer access strategy ring size
+ * specified by the VacuumBufferUsageLimit GUC and BUFFER_USAGE_LIMIT option
+ * to VACUUM and ANALYZE.
+ */
+#define MIN_BAS_VAC_RING_SIZE_KB 128
+#define MAX_BAS_VAC_RING_SIZE_KB (16 * 1024 * 1024)
 
-extern int64 VacuumPageHit;
-extern int64 VacuumPageMiss;
-extern int64 VacuumPageDirty;
+extern PGDLLIMPORT int VacuumBufferUsageLimit;
+extern PGDLLIMPORT int VacuumCostPageHit;
+extern PGDLLIMPORT int VacuumCostPageMiss;
+extern PGDLLIMPORT int VacuumCostPageDirty;
+extern PGDLLIMPORT int VacuumCostLimit;
+extern PGDLLIMPORT double VacuumCostDelay;
 
-extern int	VacuumCostBalance;
-extern bool VacuumCostActive;
+extern PGDLLIMPORT int64 VacuumPageHit;
+extern PGDLLIMPORT int64 VacuumPageMiss;
+extern PGDLLIMPORT int64 VacuumPageDirty;
+
+extern PGDLLIMPORT int VacuumCostBalance;
+extern PGDLLIMPORT bool VacuumCostActive;
 
 extern double vacuum_cleanup_index_scale_factor;
 
@@ -361,15 +371,7 @@ extern int gp_vmem_protect_gang_cache_limit;
 
 /* in tcop/postgres.c */
 
-#if defined(__ia64__) || defined(__ia64)
-typedef struct
-{
-	char	   *stack_base_ptr;
-	char	   *register_stack_base_ptr;
-} pg_stack_base_t;
-#else
 typedef char *pg_stack_base_t;
-#endif
 
 extern pg_stack_base_t set_stack_base(void);
 extern void restore_stack_base(pg_stack_base_t base);
@@ -381,8 +383,8 @@ extern void PreventCommandIfReadOnly(const char *cmdname);
 extern void PreventCommandIfParallelMode(const char *cmdname);
 extern void PreventCommandDuringRecovery(const char *cmdname);
 
-/* in utils/misc/guc.c */
-extern int	trace_recovery_messages;
+/* in utils/misc/guc_tables.c */
+extern PGDLLIMPORT int trace_recovery_messages;
 extern int	trace_recovery(int trace_level);
 
 /*
@@ -407,17 +409,19 @@ extern int	trace_recovery(int trace_level);
 #define SECURITY_RESTRICTED_OPERATION	0x0002
 #define SECURITY_NOFORCE_RLS			0x0004
 
-extern char *DatabasePath;
+extern PGDLLIMPORT char *DatabasePath;
 
 /* now in utils/init/miscinit.c */
 extern void InitPostmasterChild(void);
 extern void InitStandaloneProcess(const char *argv0);
+extern void InitProcessLocalLatch(void);
 extern void SwitchToSharedLatch(void);
 extern void SwitchBackToLocalLatch(void);
 
 typedef enum BackendType
 {
 	B_INVALID = 0,
+	B_ARCHIVER,
 	B_AUTOVAC_LAUNCHER,
 	B_AUTOVAC_WORKER,
 	B_BACKEND,
@@ -426,16 +430,19 @@ typedef enum BackendType
 	B_CHECKPOINTER,
 	B_LOGIN_MONITOR,
 	B_LOGIN_MONITOR_WORKER,
+	B_LOGGER,
+	B_STANDALONE_BACKEND,
 	B_STARTUP,
 	B_WAL_RECEIVER,
 	B_WAL_SENDER,
 	B_WAL_WRITER,
-	B_ARCHIVER,
-	B_STATS_COLLECTOR,
-	B_LOGGER,
 } BackendType;
 
-extern BackendType MyBackendType;
+#define BACKEND_NUM_TYPES (B_WAL_WRITER + 1)
+
+extern PGDLLIMPORT BackendType MyBackendType;
+
+#define AmRegularBackendProcess()	(MyBackendType == B_BACKEND)
 
 extern const char *GetBackendTypeDesc(BackendType backendType);
 
@@ -449,8 +456,11 @@ extern Oid	GetUserId(void);
 extern Oid	GetOuterUserId(void);
 extern Oid	GetSessionUserId(void);
 extern void	SetSessionUserId(Oid, bool);
-extern Oid	GetAuthenticatedUserId(void);
 extern bool IsAuthenticatedUserSuperUser(void);
+extern bool GetSessionUserIsSuperuser(void);
+extern Oid	GetAuthenticatedUserId(void);
+extern bool GetAuthenticatedUserIsSuperuser(void);
+extern void SetAuthenticatedUserId(Oid userid, bool is_superuser);
 extern void GetUserIdAndSecContext(Oid *userid, int *sec_context);
 extern void SetUserIdAndSecContext(Oid userid, int sec_context);
 extern bool InLocalUserIdChange(void);
@@ -458,13 +468,16 @@ extern bool InSecurityRestrictedOperation(void);
 extern bool InNoForceRLSOperation(void);
 extern void GetUserIdAndContext(Oid *userid, bool *sec_def_context);
 extern void SetUserIdAndContext(Oid userid, bool sec_def_context);
-extern void InitializeSessionUserId(const char *rolename, Oid useroid);
+extern void InitializeSessionUserId(const char *rolename, Oid roleid);
 extern void InitializeSessionUserIdStandalone(void);
 extern void SetSessionAuthorization(Oid userid, bool is_superuser);
 extern Oid	GetCurrentRoleId(void);
 extern void SetCurrentRoleId(Oid roleid, bool is_superuser);
 extern Oid GetCurrentWarehouseId(void);
 extern void SetCurrentWarehouseId(Oid warehouseid);
+extern void InitializeSystemUser(const char *authn_id,
+								 const char *auth_method);
+extern const char *GetSystemUser(void);
 
 /* in utils/misc/superuser.c */
 extern bool superuser(void);	/* current user is superuser */
@@ -503,7 +516,7 @@ typedef enum ProcessingMode
 	NormalProcessing			/* normal processing */
 } ProcessingMode;
 
-extern ProcessingMode Mode;
+extern PGDLLIMPORT ProcessingMode Mode;
 
 #define IsBootstrapProcessingMode() (Mode == BootstrapProcessing)
 #define IsInitProcessingMode()		(Mode == InitProcessing)
@@ -513,7 +526,7 @@ extern ProcessingMode Mode;
 
 #define SetProcessingMode(mode) \
 	do { \
-		AssertArg((mode) == BootstrapProcessing || \
+		Assert((mode) == BootstrapProcessing || \
 				  (mode) == InitProcessing || \
 				  (mode) == NormalProcessing); \
 		Mode = (mode); \
@@ -523,15 +536,15 @@ extern ProcessingMode Mode;
 /*
  * Auxiliary-process type identifiers.  These used to be in bootstrap.h
  * but it seems saner to have them here, with the ProcessingMode stuff.
- * The MyAuxProcType global is defined and set in bootstrap.c.
+ * The MyAuxProcType global is defined and set in auxprocess.c.
+ *
+ * Make sure to list in the glossary any items you add here.
  */
 
 typedef enum
 {
 	NotAnAuxProcess = -1,
-	CheckerProcess = 0,
-	BootstrapProcess,
-	StartupProcess,
+	StartupProcess = 0,
 	BgWriterProcess,
 	ArchiverProcess,
 	CheckpointerProcess,
@@ -541,9 +554,8 @@ typedef enum
 	NUM_AUXPROCTYPES			/* Must be last! */
 } AuxProcType;
 
-extern AuxProcType MyAuxProcType;
+extern PGDLLIMPORT AuxProcType MyAuxProcType;
 
-#define AmBootstrapProcess()		(MyAuxProcType == BootstrapProcess)
 #define AmStartupProcess()			(MyAuxProcType == StartupProcess)
 #define AmBackgroundWriterProcess() (MyAuxProcType == BgWriterProcess)
 #define AmArchiverProcess()			(MyAuxProcType == ArchiverProcess)
@@ -561,17 +573,21 @@ extern AuxProcType MyAuxProcType;
 extern bool FindMyDatabase(const char *dbname, Oid *db_id, Oid *db_tablespace);
 extern void pg_split_opts(char **argv, int *argcp, const char *optstr);
 extern void InitializeMaxBackends(void);
-extern void InitPostgres(const char *in_dbname, Oid dboid, const char *username,
-						 Oid useroid, char *out_dbname, bool override_allow_connections);
+extern void InitPostgres(const char *in_dbname, Oid dboid,
+						 const char *username, Oid useroid,
+						 bool load_session_libraries,
+						 bool override_allow_connections,
+						 char *out_dbname);
 extern void BaseInit(void);
 
 /* in utils/init/miscinit.c */
-extern bool IgnoreSystemIndexes;
+extern PGDLLIMPORT bool IgnoreSystemIndexes;
 extern PGDLLIMPORT bool process_shared_preload_libraries_in_progress;
-extern bool process_shared_preload_libraries_done;
-extern char *session_preload_libraries_string;
-extern char *shared_preload_libraries_string;
-extern char *local_preload_libraries_string;
+extern PGDLLIMPORT bool process_shared_preload_libraries_done;
+extern PGDLLIMPORT bool process_shmem_requests_in_progress;
+extern PGDLLIMPORT char *session_preload_libraries_string;
+extern PGDLLIMPORT char *shared_preload_libraries_string;
+extern PGDLLIMPORT char *local_preload_libraries_string;
 
 extern void CreateDataDirLockFile(bool amPostmaster);
 extern void CreateSocketLockFile(const char *socketfile, bool amPostmaster,
@@ -582,16 +598,19 @@ extern bool RecheckDataDirLockFile(void);
 extern void ValidatePgVersion(const char *path);
 extern void process_shared_preload_libraries(void);
 extern void process_session_preload_libraries(void);
+extern void process_shmem_requests(void);
 extern void pg_bindtextdomain(const char *domain);
 extern bool has_rolreplication(Oid roleid);
 
-/* in access/transam/xlog.c */
-extern bool BackupInProgress(void);
-extern void CancelBackup(void);
+typedef void (*shmem_request_hook_type) (void);
+extern PGDLLIMPORT shmem_request_hook_type shmem_request_hook;
+
+extern Size EstimateClientConnectionInfoSpace(void);
+extern void SerializeClientConnectionInfo(Size maxsize, char *start_address);
+extern void RestoreClientConnectionInfo(char *conninfo);
 
 /* in executor/nodeHash.c */
 extern size_t get_hash_memory_limit(void);
-extern int	get_hash_mem(void);
 
 /*
  * In GPDB, some utility commands may execute nested in another utilities,

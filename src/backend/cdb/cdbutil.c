@@ -28,6 +28,7 @@
 #endif
 
 #include <sys/param.h>			/* for MAXHOSTNAMELEN */
+#include <sys/resource.h>
 
 #include "access/genam.h"
 #include "common/ip.h"
@@ -79,6 +80,64 @@
 
 MemoryContext CdbComponentsContext = NULL;
 static CdbComponentDatabases *cdb_component_dbs = NULL;
+
+/*
+ * Locate the CdbComponentDatabaseInfo for a segment (contentId >= 0).
+ *
+ * segment_db_info is sorted by (segindex, active primary first), see
+ * CdbComponentDatabaseInfoCompare().  Do NOT assume that every content has
+ * exactly one entry (no mirrors) or exactly two entries (fully mirrored):
+ * while mirrors are being registered one by one, e.g. by gpinitsystem's
+ * REGISTER_MIRRORS or a manual gp_add_segment_mirror(), the catalog
+ * legitimately contains N primaries plus k < N mirrors.  Indexing the array
+ * with 2 * contentId in that state reads past the end of the array and
+ * crashes any dispatching process, such as the dtx recovery bgworker.
+ *
+ * Binary-search the first entry of the content instead, then prefer the
+ * entry whose role matches what the caller wants.  If no entry matches, the
+ * last entry of the content is returned, which preserves the historical
+ * behaviour of falling back to the peer.
+ */
+static CdbComponentDatabaseInfo *
+findSegmentComponentInfo(CdbComponentDatabases *cdbs, int contentId,
+						 bool wantPrimary)
+{
+	CdbComponentDatabaseInfo *cdbInfo;
+	int			lo = 0;
+	int			hi = cdbs->total_segment_dbs;
+
+	Assert(contentId >= 0 && contentId < cdbs->total_segments);
+
+	/* lower bound: first entry with segindex >= contentId */
+	while (lo < hi)
+	{
+		int			mid = lo + (hi - lo) / 2;
+
+		if (cdbs->segment_db_info[mid].config->segindex < contentId)
+			lo = mid + 1;
+		else
+			hi = mid;
+	}
+
+	/* getCdbComponentInfo() guarantees every content in [0, N) is present */
+	if (lo >= cdbs->total_segment_dbs ||
+		cdbs->segment_db_info[lo].config->segindex != contentId)
+		ereport(FATAL,
+				(errcode(ERRCODE_DATA_EXCEPTION),
+				 errmsg("content id %d not found in segment configuration",
+						contentId)));
+
+	cdbInfo = &cdbs->segment_db_info[lo];
+	while (SEGMENT_IS_ACTIVE_PRIMARY(cdbInfo) != wantPrimary &&
+		   lo + 1 < cdbs->total_segment_dbs &&
+		   cdbs->segment_db_info[lo + 1].config->segindex == contentId)
+	{
+		lo++;
+		cdbInfo = &cdbs->segment_db_info[lo];
+	}
+
+	return cdbInfo;
+}
 
 #ifdef USE_INTERNAL_FTS
 
@@ -1059,21 +1118,11 @@ cdbcomponent_getComponentInfo(int contentId)
 		return cdbInfo;
 	}
 
-	/* with mirror, segment_db_info is sorted by content id */
-	if (cdbs->total_segment_dbs != cdbs->total_segments)
-	{
-		Assert(cdbs->total_segment_dbs == cdbs->total_segments * 2);
-		cdbInfo = &cdbs->segment_db_info[2 * contentId];
-
-		/* use the other segment if it is not what the QD wants */
-		if ((IS_HOT_STANDBY_QD() && SEGMENT_IS_ACTIVE_PRIMARY(cdbInfo)) 
-						|| (!IS_HOT_STANDBY_QD() && !SEGMENT_IS_ACTIVE_PRIMARY(cdbInfo)))
-			cdbInfo = &cdbs->segment_db_info[2 * contentId + 1];
-
-		return cdbInfo;
-	}
-
-	return cdbInfo;
+	/*
+	 * With mirrors (possibly only some of them registered yet): a standby QD
+	 * wants the mirror, a regular QD wants the active primary.
+	 */
+	return findSegmentComponentInfo(cdbs, contentId, !IS_HOT_STANDBY_QD());
 }
 
 static void
@@ -1368,8 +1417,6 @@ getDnsCachedAddress(char *name, int port, int elevel, bool use_cache)
 			}
 		}
 
-#ifdef HAVE_IPV6
-
 		/*
 		 * IPv6 probably would work fine, we'd just need to make sure all the
 		 * data structures are big enough for the IPv6 address.  And on some
@@ -1396,7 +1443,6 @@ getDnsCachedAddress(char *name, int port, int elevel, bool use_cache)
 				memcpy(e->hostinfo, hostinfo, sizeof(hostinfo));
 			}
 		}
-#endif
 
 		if (use_cache)
 			MemoryContextSwitchTo(oldContext);
@@ -1406,7 +1452,7 @@ getDnsCachedAddress(char *name, int port, int elevel, bool use_cache)
 
 	/* return a pointer to our cache. */
 	if (use_cache)
-		return e->hostinfo;
+		return e ? e->hostinfo : NULL;
 
 	return pstrdup(hostinfo);
 }
@@ -1990,8 +2036,9 @@ IsOnConflictUpdate(PlannedStmt *ps)
 void
 AvoidCorefileGeneration()
 {
-#if defined(HAVE_GETRLIMIT) && defined(RLIMIT_CORE)
+#if defined(HAVE_GETRLIMIT)
 	struct rlimit lim;
+
 	getrlimit(RLIMIT_CORE, &lim);
 	lim.rlim_cur = 0;
 	if (setrlimit(RLIMIT_CORE, &lim) != 0)
@@ -3469,21 +3516,8 @@ cdbcomponent_getComponentInfo(int contentId)
 		return cdbInfo;
 	}
 
-	/* with mirror, segment_db_info is sorted by content id */
-	if (cdbs->total_segment_dbs != cdbs->total_segments)
-	{
-		Assert(cdbs->total_segment_dbs == cdbs->total_segments * 2);
-		cdbInfo = &cdbs->segment_db_info[2 * contentId];
-
-		if (!SEGMENT_IS_ACTIVE_PRIMARY(cdbInfo))
-		{
-			cdbInfo = &cdbs->segment_db_info[2 * contentId + 1];
-		}
-
-		return cdbInfo;
-	}
-
-	return cdbInfo;
+	/* with mirrors (possibly only some of them registered yet) */
+	return findSegmentComponentInfo(cdbs, contentId, true);
 }
 
 static void
@@ -3750,8 +3784,6 @@ getDnsCachedAddress(char *name, int port, int elevel, bool use_cache)
 			}
 		}
 
-#ifdef HAVE_IPV6
-
 		/*
 		 * IPv6 probably would work fine, we'd just need to make sure all the
 		 * data structures are big enough for the IPv6 address.  And on some
@@ -3778,7 +3810,6 @@ getDnsCachedAddress(char *name, int port, int elevel, bool use_cache)
 				memcpy(e->hostinfo, hostinfo, sizeof(hostinfo));
 			}
 		}
-#endif
 
 		if (use_cache)
 			MemoryContextSwitchTo(oldContext);
@@ -3788,7 +3819,7 @@ getDnsCachedAddress(char *name, int port, int elevel, bool use_cache)
 
 	/* return a pointer to our cache. */
 	if (use_cache)
-		return e->hostinfo;
+		return e ? e->hostinfo : NULL;
 
 	return pstrdup(hostinfo);
 }
@@ -4205,7 +4236,7 @@ IsOnConflictUpdate(PlannedStmt *ps)
 void
 AvoidCorefileGeneration()
 {
-#if defined(HAVE_GETRLIMIT) && defined(RLIMIT_CORE)
+#if defined(HAVE_GETRLIMIT)
 	struct rlimit lim;
 	getrlimit(RLIMIT_CORE, &lim);
 	lim.rlim_cur = 0;

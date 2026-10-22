@@ -45,7 +45,8 @@
    extant versions of the same logical row; to an index, each tuple is
    an independent object that needs its own index entry.  Thus, an
    update of a row always creates all-new index entries for the row, even if
-   the key values did not change.  (HOT tuples are an exception to this
+   the key values did not change.  (<link linkend="storage-hot">HOT
+   tuples</link> are an exception to this
    statement; but indexes do not deal with those, either.)  Index entries for
    dead tuples are reclaimed (by vacuuming) when the dead tuples themselves
    are reclaimed.
@@ -126,6 +127,9 @@ typedef struct IndexAmRoutine
     bool        amcaninclude;
     /* does AM use maintenance_work_mem? */
     bool        amusemaintenanceworkmem;
+    /* does AM summarize tuples, with at least all tuples in the block
+     * summarized in one summary */
+    bool        amsummarizing;
     /* OR of parallel vacuum flags */
     uint8       amparallelvacuumoptions;
     /* type of data stored in index, or InvalidOid if variable */
@@ -246,6 +250,16 @@ typedef struct IndexAmRoutine
    null, independently of <structfield>amoptionalkey</structfield>.
   </para>
 
+  <para>
+   The <structfield>amsummarizing</structfield> flag indicates whether the
+   access method summarizes the indexed tuples, with summarizing granularity
+   of at least per block.
+   Access methods that do not point to individual tuples, but to block ranges
+   (like <acronym>BRIN</acronym>), may allow the <acronym>HOT</acronym> optimization
+   to continue. This does not apply to attributes referenced in index
+   predicates, an update of such an attribute always disables <acronym>HOT</acronym>.
+  </para>
+
  </sect1>
 
  <sect1 id="index-functions">
@@ -318,9 +332,13 @@ aminsert (Relation indexRelation,
    modify any columns covered by the index, but nevertheless requires a
    new version in the index.  The index AM may use this hint to decide
    to apply bottom-up index deletion in parts of the index where many
-   versions of the same logical row accumulate.  Note that updating a
-   non-key column does not affect the value of
-   <literal>indexUnchanged</literal>.
+   versions of the same logical row accumulate.  Note that updating a non-key
+   column or a column that only appears in a partial index predicate does not
+   affect the value of <literal>indexUnchanged</literal>.  The core code
+   determines each tuple's <literal>indexUnchanged</literal> value using a low
+   overhead approach that allows both false positives and false negatives.
+   Index AMs must not treat <literal>indexUnchanged</literal> as an
+   authoritative source of information about tuple visibility or versioning.
   </para>
 
   <para>

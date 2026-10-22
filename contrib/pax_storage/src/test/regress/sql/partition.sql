@@ -209,9 +209,41 @@ alter table foo_p exchange partition for(6) with table bar_p;
 select has_table_privilege('part_role', 'foo_p_1_prt_6'::regclass, 'select');
 select has_table_privilege('part_role', 'bar_p'::regclass, 'select');
 
+-- the ONLY keyword will affect just the partition root for both grant/revoke
+create role part_role2;
+grant select on only foo_p to part_role2;
+select has_table_privilege('part_role2', 'foo_p'::regclass, 'select');
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+
+grant select on foo_p to part_role2;
+revoke select on only foo_p from part_role2;
+select has_table_privilege('part_role2', 'foo_p'::regclass, 'select');
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+revoke select on foo_p from part_role2;
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+
+create table foo_p2 (a int, b int) partition by range(a) (start(1) end(10) every(1));
+grant select on foo_p, only foo_p2 to part_role2; -- multiple tables in same statement
+select has_table_privilege('part_role2', 'foo_p'::regclass, 'select');
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+select has_table_privilege('part_role2', 'foo_p2'::regclass, 'select');
+select has_table_privilege('part_role2', 'foo_p2_1_prt_6'::regclass, 'select');
+
+-- more cases
+revoke all on foo_p from part_role2;
+revoke all on foo_p2 from part_role2;
+grant select on only public.foo_p to part_role2; -- with schema
+select has_table_privilege('part_role2', 'foo_p'::regclass, 'select');
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+grant update(b) on only foo_p2 to part_role2; -- column level priviledge
+select relname, has_column_privilege('part_role2', oid, 'b', 'update') from pg_class
+where relname = 'foo_p2' or relname = 'foo_p2_1_prt_6';
+
 drop table foo_p;
+drop table foo_p2;
 drop table bar_p;
 drop role part_role;
+drop role part_role2;
 
 -- validation
 create table foo_p (i int) partition by range(i)
@@ -2870,30 +2902,6 @@ drop table s cascade;
 
 --   MPP-13750 )
 
--- MPP-13806 start
-drop table if exists mpp13806;
- CREATE TABLE mpp13806 (id int, date date, amt decimal(10,2))
- DISTRIBUTED BY (id)
- PARTITION BY RANGE (date)
- ( START (date '2008-01-01') INCLUSIVE
-	END (date '2008-01-05') EXCLUSIVE
-	EVERY (INTERVAL '1 day') );
- 
--- Adding unbound partition right before the start  used to fail
-alter table mpp13806 add partition test end (date '2008-01-01') exclusive;
- 
-drop table if exists mpp13806;
- CREATE TABLE mpp13806 (id int, date date, amt decimal(10,2))
- DISTRIBUTED BY (id)
- PARTITION BY RANGE (date)
- ( START (date '2008-01-01') EXCLUSIVE
-	END (date '2008-01-05') EXCLUSIVE
-	EVERY (INTERVAL '1 day') );
--- For good measure, test the opposite case
-alter table mpp13806 add partition test end (date '2008-01-01') inclusive;
-drop table mpp13806;
--- MPP-13806 end
-
 -- MPP-14471 start
 -- No unenforceable PK/UK constraints!  (UNIQUE INDEXes still allowed; tested above)
 drop table if exists tc cascade;
@@ -3647,7 +3655,7 @@ alter table sales exchange partition for (101) with table newpart2;
 select * from sales order by pkid;
 drop table sales cascade;
 
--- Exchage partiton table with a table having dropped column
+-- Exchage partition table with a table having dropped column
 create table exchange_part(a int, b int) partition by range(b) (start (0) end (10) every (5));
 create table exchange1(a int, c int, b int);
 alter table exchange1 drop column c;
@@ -3693,11 +3701,11 @@ alter table pt_tab_encode add partition "s_xyz" values ('xyz') WITH (appendonly=
 
 select relname, pg_get_expr(relpartbound, oid) from pg_class where relname like 'pt_tab_encode%';
 
-select gp_segment_id, attrelid::regclass, attnum, attoptions from pg_attribute_encoding where attrelid = 'pt_tab_encode_1_prt_s_abc'::regclass;
-select gp_segment_id, attrelid::regclass, attnum, attoptions from gp_dist_random('pg_attribute_encoding') where attrelid = 'pt_tab_encode_1_prt_s_abc'::regclass order by 1,3 limit 5;
+select gp_segment_id, attrelid::regclass, attnum, filenum, attoptions from pg_attribute_encoding where attrelid = 'pt_tab_encode_1_prt_s_abc'::regclass;
+select gp_segment_id, attrelid::regclass, attnum, filenum, attoptions from gp_dist_random('pg_attribute_encoding') where attrelid = 'pt_tab_encode_1_prt_s_abc'::regclass order by 1,3 limit 5;
 
-select gp_segment_id, attrelid::regclass, attnum, attoptions from pg_attribute_encoding where attrelid = 'pt_tab_encode_1_prt_s_xyz'::regclass;
-select gp_segment_id, attrelid::regclass, attnum, attoptions from gp_dist_random('pg_attribute_encoding') where attrelid = 'pt_tab_encode_1_prt_s_xyz'::regclass order by 1,3 limit 5;
+select gp_segment_id, attrelid::regclass, attnum, filenum, attoptions from pg_attribute_encoding where attrelid = 'pt_tab_encode_1_prt_s_xyz'::regclass;
+select gp_segment_id, attrelid::regclass, attnum, filenum, attoptions from gp_dist_random('pg_attribute_encoding') where attrelid = 'pt_tab_encode_1_prt_s_xyz'::regclass order by 1,3 limit 5;
 
 select c.oid::regclass, relkind, amname, reloptions from pg_class c left join pg_am am on am.oid = relam where c.oid = 'pt_tab_encode_1_prt_s_abc'::regclass;
 select c.oid::regclass, relkind, amname, reloptions from pg_class c left join pg_am am on am.oid = relam where c.oid = 'pt_tab_encode_1_prt_s_xyz'::regclass;

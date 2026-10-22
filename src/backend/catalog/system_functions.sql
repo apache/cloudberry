@@ -1,7 +1,7 @@
 /*
  * PostgreSQL System Functions
  *
- * Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Copyright (c) 1996-2023, PostgreSQL Global Development Group
  *
  * src/backend/catalog/system_functions.sql
  *
@@ -65,6 +65,13 @@ CREATE OR REPLACE FUNCTION bit_length(text)
  LANGUAGE sql
  IMMUTABLE PARALLEL SAFE STRICT COST 1
 RETURN octet_length($1) * 8;
+
+CREATE OR REPLACE FUNCTION
+ random_normal(mean float8 DEFAULT 0, stddev float8 DEFAULT 1)
+ RETURNS float8
+ LANGUAGE internal
+ VOLATILE PARALLEL RESTRICTED STRICT COST 1
+AS 'drandom_normal';
 
 CREATE OR REPLACE FUNCTION log(numeric)
  RETURNS numeric
@@ -386,14 +393,14 @@ BEGIN ATOMIC
 END;
 
 CREATE OR REPLACE FUNCTION
-  pg_start_backup(label text, fast boolean DEFAULT false, exclusive boolean DEFAULT true)
-  RETURNS pg_lsn STRICT VOLATILE LANGUAGE internal AS 'pg_start_backup'
+  pg_backup_start(label text, fast boolean DEFAULT false)
+  RETURNS pg_lsn STRICT VOLATILE LANGUAGE internal AS 'pg_backup_start'
   PARALLEL RESTRICTED;
 
-CREATE OR REPLACE FUNCTION pg_stop_backup (
-        exclusive boolean, wait_for_archive boolean DEFAULT true,
-        OUT lsn pg_lsn, OUT labelfile text, OUT spcmapfile text)
-  RETURNS SETOF record STRICT VOLATILE LANGUAGE internal as 'pg_stop_backup_v2'
+CREATE OR REPLACE FUNCTION pg_backup_stop (
+        wait_for_archive boolean DEFAULT true, OUT lsn pg_lsn,
+        OUT labelfile text, OUT spcmapfile text)
+  RETURNS record STRICT VOLATILE LANGUAGE internal as 'pg_backup_stop'
   PARALLEL RESTRICTED;
 
 CREATE OR REPLACE FUNCTION
@@ -628,15 +635,15 @@ LANGUAGE SQL READS SQL DATA EXECUTE ON COORDINATOR;
 -- available to superuser / cluster owner, if they choose.
 --
 
-REVOKE EXECUTE ON FUNCTION pg_start_backup(text, boolean, boolean) FROM public;
+REVOKE EXECUTE ON FUNCTION pg_backup_start(text, boolean) FROM public;
 
-REVOKE EXECUTE ON FUNCTION pg_stop_backup() FROM public;
-
-REVOKE EXECUTE ON FUNCTION pg_stop_backup(boolean, boolean) FROM public;
+REVOKE EXECUTE ON FUNCTION pg_backup_stop(boolean) FROM public;
 
 REVOKE EXECUTE ON FUNCTION pg_create_restore_point(text) FROM public;
 
 REVOKE EXECUTE ON FUNCTION pg_switch_wal() FROM public;
+
+REVOKE EXECUTE ON FUNCTION pg_log_standby_snapshot() FROM public;
 
 REVOKE EXECUTE ON FUNCTION pg_wal_replay_pause() FROM public;
 
@@ -664,6 +671,10 @@ REVOKE EXECUTE ON FUNCTION pg_stat_reset_single_function_counters(oid) FROM publ
 
 REVOKE EXECUTE ON FUNCTION pg_stat_reset_replication_slot(text) FROM public;
 
+REVOKE EXECUTE ON FUNCTION pg_stat_have_stats(text, oid, oid) FROM public;
+
+REVOKE EXECUTE ON FUNCTION pg_stat_reset_subscription_stats(oid) FROM public;
+
 REVOKE EXECUTE ON FUNCTION lo_import(text) FROM public;
 
 REVOKE EXECUTE ON FUNCTION lo_import(text, oid) FROM public;
@@ -682,11 +693,15 @@ REVOKE EXECUTE ON FUNCTION pg_ls_tmpdir(oid) FROM public;
 
 REVOKE EXECUTE ON FUNCTION pg_read_file(text) FROM public;
 
+REVOKE EXECUTE ON FUNCTION pg_read_file(text,boolean) FROM public;
+
 REVOKE EXECUTE ON FUNCTION pg_read_file(text,bigint,bigint) FROM public;
 
 REVOKE EXECUTE ON FUNCTION pg_read_file(text,bigint,bigint,boolean) FROM public;
 
 REVOKE EXECUTE ON FUNCTION pg_read_binary_file(text) FROM public;
+
+REVOKE EXECUTE ON FUNCTION pg_read_binary_file(text,boolean) FROM public;
 
 REVOKE EXECUTE ON FUNCTION pg_read_binary_file(text,bigint,bigint) FROM public;
 
@@ -724,10 +739,44 @@ REVOKE EXECUTE ON FUNCTION pg_ls_dir(text) FROM public;
 
 REVOKE EXECUTE ON FUNCTION pg_ls_dir(text,boolean,boolean) FROM public;
 
+REVOKE EXECUTE ON FUNCTION pg_ls_logicalsnapdir() FROM PUBLIC;
+
+REVOKE EXECUTE ON FUNCTION pg_ls_logicalmapdir() FROM PUBLIC;
+
+REVOKE EXECUTE ON FUNCTION pg_ls_replslotdir(text) FROM PUBLIC;
+
 REVOKE EXECUTE ON FUNCTION pg_log_backend_memory_contexts(integer) FROM PUBLIC;
+
+-- pg_file_write/pg_file_rename/pg_file_unlink have proacl NULL (PUBLIC
+-- EXECUTE) because their _v1_1 bodies were copied in-core from adminpack
+-- without adminpack's matching REVOKE.  genfile.c now also checks for
+-- superuser/pg_write_server_files membership at call time, but this
+-- REVOKE is defense in depth for new initdbs.  The matching GRANT keeps
+-- pg_write_server_files members able to call them (the EXECUTE ACL check
+-- happens before genfile.c's own membership check ever runs).
+REVOKE EXECUTE ON FUNCTION pg_file_write(text,text,boolean) FROM public;
+
+REVOKE EXECUTE ON FUNCTION pg_file_rename(text,text,text) FROM public;
+
+REVOKE EXECUTE ON FUNCTION pg_file_unlink(text) FROM public;
+
+-- pg_logdir_ls has the same omission (proacl NULL, _v1_1 body with no
+-- privilege check): it's a read-side listing, so gate it like the other
+-- read-side functions above (pg_read_server_files) rather than write.
+REVOKE EXECUTE ON FUNCTION pg_logdir_ls() FROM public;
+
+
 --
 -- We also set up some things as accessible to standard roles.
 --
+
+GRANT EXECUTE ON FUNCTION pg_file_write(text,text,boolean) TO pg_write_server_files;
+
+GRANT EXECUTE ON FUNCTION pg_file_rename(text,text,text) TO pg_write_server_files;
+
+GRANT EXECUTE ON FUNCTION pg_file_unlink(text) TO pg_write_server_files;
+
+GRANT EXECUTE ON FUNCTION pg_logdir_ls() TO pg_read_server_files;
 
 GRANT EXECUTE ON FUNCTION pg_ls_logdir() TO pg_monitor;
 
@@ -738,6 +787,12 @@ GRANT EXECUTE ON FUNCTION pg_ls_archive_statusdir() TO pg_monitor;
 GRANT EXECUTE ON FUNCTION pg_ls_tmpdir() TO pg_monitor;
 
 GRANT EXECUTE ON FUNCTION pg_ls_tmpdir(oid) TO pg_monitor;
+
+GRANT EXECUTE ON FUNCTION pg_ls_logicalsnapdir() TO pg_monitor;
+
+GRANT EXECUTE ON FUNCTION pg_ls_logicalmapdir() TO pg_monitor;
+
+GRANT EXECUTE ON FUNCTION pg_ls_replslotdir(text) TO pg_monitor;
 
 GRANT pg_read_all_settings TO pg_monitor;
 

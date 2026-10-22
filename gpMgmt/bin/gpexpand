@@ -95,7 +95,7 @@ Remaining TODO items:
 
 _usage = """[-f hosts_file]
 
-gpexpand -i input_file [-B batch_size] [-t segment_tar_dir] [-S]
+gpexpand -i input_file [-B batch_size] [-M shutdown_mode] [-t segment_tar_dir] [-S]
 
 gpexpand [-d duration[hh][:mm[:ss]] | [-e 'YYYY-MM-DD hh:mm:ss']]
          [-a] [-n parallel_processes]
@@ -137,6 +137,9 @@ def parseargs():
                       help='Expansion configuration batch size. Valid values are 1-%d' % MAX_BATCH_SIZE)
     parser.add_option('-n', '--parallel', type="int", default=1, metavar="<parallel_processes>",
                       help='number of tables to expand at a time. Valid values are 1-%d.' % MAX_PARALLEL_EXPANDS)
+    parser.add_option('-M', '--mode', type='choice', choices=['fast', 'immediate', 'smart'],
+                      default='smart', metavar='smart|fast|immediate',
+                      help='shutdown mode for newly initialized segments.')
     parser.add_option('-v', '--verbose', action='store_true',
                       help='debug output.')
     parser.add_option('-S', '--simple-progress', action='store_true',
@@ -588,6 +591,7 @@ class SegmentTemplate:
     def __init__(self, logger, statusLogger, pool,
                  gparray, coordinatorDataDirectory,
                  dburl, conn, tempDir, batch_size, is_hba_hostnames,
+                 shutdown_mode,
                  segTarDir='.', schemaTarFile='gpexpand_schema.tar'):
         self.logger = logger
         self.statusLogger = statusLogger
@@ -595,6 +599,7 @@ class SegmentTemplate:
         self.gparray = gparray
         self.tempDir = tempDir
         self.batch_size = batch_size
+        self.shutdown_mode = shutdown_mode
         self.dburl = dburl
         self.conn = conn
         self.coordinatorDataDirectory = coordinatorDataDirectory
@@ -808,7 +813,7 @@ class SegmentTemplate:
             segStopCmd = SegmentStop(
                 name="Stopping new segment dbid %s on host %s." % (str(seg.getSegmentDbId), seg.getSegmentHostName())
                 , dataDir=seg.getSegmentDataDirectory()
-                , mode='smart'
+                , mode=self.shutdown_mode
                 , nowait=False
                 , ctxt=REMOTE
                 , remoteHost=seg.getSegmentHostName()
@@ -845,6 +850,24 @@ class SegmentTemplate:
         # Now update the primary's hba config with the corresponding primary
         # and mirror information
         update_pg_hba_on_segments(self.gparray, self.isHbaHostnames, self.batch_size, expanded_host_content)
+
+        new_segments = self.gparray.getExpansionSegDbList()
+        chmod_commands_by_host = defaultdict(list)
+
+        for seg in new_segments:
+            if seg.isSegmentMirror():
+                continue
+            datadir = seg.getSegmentDataDirectory()
+            hostname = seg.getSegmentHostName()
+            chmod_commands_by_host[hostname].append("chmod 0750 '%s'" % datadir)
+
+        for host, commands in chmod_commands_by_host.items():
+            if commands:
+                self.pool.addCommand(Command(name='gpexpand fix permissions on %s' % host,
+                                 cmdStr=" && ".join(commands), ctxt=REMOTE, remoteHost=host))
+
+        self.pool.join()
+        self.pool.check_results()
 
         self._start_new_primary_segments()
         self._stop_new_primary_segments()
@@ -1312,7 +1335,8 @@ class gpexpand:
                                            tempDir=self.tempDir,
                                            segTarDir=self.options.tardir,
                                            batch_size=self.options.batch_size,
-                                           is_hba_hostnames=self.options.hba_hostnames)
+                                           is_hba_hostnames=self.options.hba_hostnames,
+                                           shutdown_mode=self.options.mode)
         try:
             self.segTemplate.build_segment_template(newTableSpaceInfo)
             self.segTemplate.build_new_segments()

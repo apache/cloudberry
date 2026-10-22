@@ -1,5 +1,6 @@
 create schema qp_subquery;
 set search_path to qp_subquery;
+set optimizer_trace_fallback to on;
 
 begin;
 CREATE TABLE SUBSELECT_TBL1 (f1 integer, f2 integer, f3 float);
@@ -670,5 +671,126 @@ select sum(case when b in (select b from temp_b where t.a>c) then 1 else 0 end),
 select sum(case when b in (select b from temp_b where EXISTS (select sum(d) from temp_c where t.a > d)) then 1 else 0 end),sum(case when not( b in (select b from temp_b where t.a>c)) then 1 else 0 end) from temp_a t;
 select sum(case when b in (select b from temp_b where EXISTS (select sum(d) from temp_c where t.a > d or t.a > temp_b.c)) then 1 else 0 end),sum(case when not( b in (select b from temp_b, temp_c where t.a>temp_b.c or t.a > temp_c.d)) then 1 else 0 end) from temp_a t;
 
+-- Check that predicate with set-returning function is not pushed down
+create table table_with_array_column (an_array_column double precision[]);
+insert into table_with_array_column values (array[1.1, 2.2]);
+
+explain (costs off)
+select *
+from (
+  select unnest(t1.an_array_column) unnested_array_column
+  from table_with_array_column t1, table_with_array_column t2) zz
+where unnested_array_column is not null;
+
+select *
+from (
+  select unnest(t1.an_array_column) unnested_array_column
+  from table_with_array_column t1, table_with_array_column t2) zz
+where unnested_array_column is not null;
+
+-- check that predicate is not pushed through a projected non-correlated subquery
+create table subquery_nonpush_through_1(a int, b int);
+create table subquery_nonpush_through_2(a int, b int);
+
+explain (costs off)
+select *
+from(
+  select (subquery_nonpush_through_1.a in (select a from subquery_nonpush_through_2))::text as xx, subquery_nonpush_through_1.b
+  from subquery_nonpush_through_1,subquery_nonpush_through_2) t
+where xx='dd';
+
+select *
+from(
+  select (subquery_nonpush_through_1.a in (select a from subquery_nonpush_through_2))::text as xx, subquery_nonpush_through_1.b
+  from subquery_nonpush_through_1,subquery_nonpush_through_2) t
+where xx='dd';
+
+-- Ensure we produce a hashed subplan when there are no outer references
+CREATE TABLE a1 AS (
+    SELECT * FROM generate_series(1, 5) AS a1)
+    WITH data distributed replicated;
+
+CREATE TABLE a2 AS (
+    SELECT * FROM generate_series(1, 10) AS a1)
+    WITH data distributed BY (a1);
+
+CREATE TABLE a3 AS (
+	SELECT a1, row_to_json(a2) AS rj FROM a2)
+	WITH data distributed BY (a1);
+
+-- explain "verbose" is needed to show that the subplan is hashed
+explain (verbose, costs off) select a1,case when a2 in (select a1::text from a1 where a1 is not null) then 'true' else 'false' end as checkcol
+from (
+      select a1,rj->>'a1'::text as a2
+      from a3
+      )t;
+
+select a1,case when a2 in (select a1::text from a1 where a1 is not null) then 'true' else 'false' end as checkcol
+from (
+      select a1,rj->>'a1'::text as a2
+      from a3
+      )t;
+
+-- check various [NOT] EXISTS subqueries on materialized views
+create table t (a int, b int) distributed by (a);
+insert into t values (1, 1), (2, NULL), (NULL, 3);
+
+create materialized view v as select a, b from t distributed randomly;
+
+select * from v where exists (select a from v);
+select * from v where exists (select a from v limit 0);
+select * from v where exists (select a from v where a=2);
+select * from v where exists (select a from v where a<>2);
+
+select * from v where not exists (select a from v);
+select * from v where not exists (select a from v limit 0);
+select * from v where not exists (select a from v where a=2);
+select * from v where not exists (select a from v where a<>2);
+
+select * from v where exists (select b from v);
+select * from v where exists (select b from v limit 0);
+select * from v where exists (select b from v where b=2);
+select * from v where exists (select b from v where b<>2);
+
+select * from v where not exists (select b from v);
+select * from v where not exists (select b from v limit 0);
+select * from v where not exists (select b from v where b=2);
+select * from v where not exists (select b from v where b<>2);
+
+-- Check that a query having pattern of Select-Project-NaryJoin,
+-- also containing a Select predicate condition with the same pattern nested in a subquery runs
+CREATE TABLE tab1(a TEXT, b TEXT) DISTRIBUTED RANDOMLY;
+INSERT INTO tab1 SELECT i,i FROM GENERATE_SERIES(1,3)i;
+
+SELECT * FROM (SELECT BTRIM(p1.b) AS param FROM tab1 p1 JOIN tab1 p2 USING(a)) t1
+WHERE EXISTS
+          (SELECT 1 FROM
+              (SELECT BTRIM(p1.b) AS param FROM tab1 p1 JOIN tab1 p2 USING(a)) t2
+           WHERE t2.param = t1.param);
+
+EXPLAIN (COSTS OFF) SELECT * FROM (SELECT BTRIM(p1.b) AS param FROM tab1 p1 JOIN tab1 p2 USING(a)) t1
+WHERE EXISTS
+          (SELECT 1 FROM
+              (SELECT BTRIM(p1.b) AS param FROM tab1 p1 JOIN tab1 p2 USING(a)) t2
+           WHERE t2.param = t1.param);
+
+-- Check that a query having pattern of Select-Project-NaryJoin,
+-- also containing a Select predicate condition with the same pattern nested in a subquery runs when subplan is enforced
+SET optimizer_enforce_subplans TO on;
+SELECT * FROM (SELECT BTRIM(p1.b) AS param FROM tab1 p1 JOIN tab1 p2 USING(a)) t1
+WHERE EXISTS
+          (SELECT 1 FROM
+              (SELECT BTRIM(p1.b) AS param FROM tab1 p1 JOIN tab1 p2 USING(a)) t2
+           WHERE t2.param = t1.param);
+
+EXPLAIN (COSTS OFF) SELECT * FROM (SELECT BTRIM(p1.b) AS param FROM tab1 p1 JOIN tab1 p2 USING(a)) t1
+WHERE EXISTS
+          (SELECT 1 FROM
+              (SELECT BTRIM(p1.b) AS param FROM tab1 p1 JOIN tab1 p2 USING(a)) t2
+           WHERE t2.param = t1.param);
+
+reset optimizer_enforce_subplans;
+
 set client_min_messages='warning';
 drop schema qp_subquery cascade;
+reset optimizer_trace_fallback;

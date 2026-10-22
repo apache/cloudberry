@@ -89,6 +89,11 @@ void CPaxCreateMicroPartitionTable(Relation rel) {
   pax_relid = RelationGetRelid(rel);
 
   // 1. create blocks table.
+  //
+  // The aux relation always lives in pg_ext_aux, regardless of the
+  // parent's persistence.  See the persistence selection comment on
+  // the heap_create_with_catalog call below for why TEMP parents'
+  // aux is clamped to PERMANENT rather than passed through.
   snprintf(aux_relname, sizeof(aux_relname), "pg_pax_blocks_%u", pax_relid);
   aux_namespace_id = PG_EXTAUX_NAMESPACE;
   aux_relid = GetNewOidForRelation(pg_class_desc, ClassOidIndexId,
@@ -121,14 +126,26 @@ void CPaxCreateMicroPartitionTable(Relation rel) {
     attr->attnotnull = true;
   }
 
-  // FIXME: temporary table in aux namespace  is not supported yet.
+  /*
+   * Aux inherits the parent's persistence for PERMANENT / UNLOGGED.
+   * TEMP is clamped down to PERMANENT: the aux lives in pg_ext_aux
+   * (NOT in pg_temp_<N>), so a TEMP-persistence row there would
+   * mis-trigger RELATION_IS_OTHER_TEMP — relcache sets
+   * rd_islocaltemp=false because pg_ext_aux is not a temp namespace,
+   * and any reindex_index() path on the aux (or anything that walks
+   * the catalog and stumbles on it) bails with "cannot reindex
+   * temporary tables of other sessions".  Clamping to PERMANENT
+   * avoids that mis-classification; the trade-off is that the aux
+   * of a TEMP PAX table outlives the session (already a known
+   * limitation — see the long-standing FIXME further up the file).
+   */
   relid = heap_create_with_catalog(
       aux_relname, aux_namespace_id, InvalidOid, aux_relid, InvalidOid,
       InvalidOid, rel->rd_rel->relowner, HEAP_TABLE_AM_OID, tupdesc, NIL,
       RELKIND_RELATION,
-      rel->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED
-          ? RELPERSISTENCE_UNLOGGED
-          : RELPERSISTENCE_PERMANENT,
+      rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP
+          ? RELPERSISTENCE_PERMANENT
+          : rel->rd_rel->relpersistence,
       rel->rd_rel->relisshared, RelationIsMapped(rel), ONCOMMIT_NOOP,
       NULL,                         /* GP Policy */
       (Datum)0, false,              /* use _user_acl */
@@ -492,13 +509,13 @@ void PaxAuxRelationSetNewFilenode(Oid aux_relid) {
   ReindexParams reindex_params = {0};
 
   aux_rel = relation_open(aux_relid, AccessExclusiveLock);
-  RelationSetNewRelfilenode(aux_rel, aux_rel->rd_rel->relpersistence);
+  RelationSetNewRelfilenumber(aux_rel, aux_rel->rd_rel->relpersistence);
   toastrelid = aux_rel->rd_rel->reltoastrelid;
 
   if (OidIsValid(toastrelid)) {
     Relation toast_rel;
     toast_rel = relation_open(toastrelid, AccessExclusiveLock);
-    RelationSetNewRelfilenode(toast_rel, toast_rel->rd_rel->relpersistence);
+    RelationSetNewRelfilenumber(toast_rel, toast_rel->rd_rel->relpersistence);
     relation_close(toast_rel, NoLock);
   }
 
@@ -630,7 +647,7 @@ static void FetchMicroPartitionAuxRowCallback(Datum *values, bool *isnull,
   auto ctx = reinterpret_cast<struct FetchMicroPartitionAuxRowContext *>(arg);
   auto rel = ctx->rel;
   auto rel_path = cbdb::BuildPaxDirectoryPath(
-      rel->rd_node, rel->rd_backend);
+      rel->rd_locator, rel->rd_backend);
 
   Assert(!isnull[ANUM_PG_PAX_BLOCK_TABLES_PTBLOCKNAME]);
   {
@@ -738,24 +755,24 @@ void CCPaxAuxTable::PaxAuxRelationNontransactionalTruncate(Relation rel) {
   // Delete all micro partition file on non-transactional truncate  but reserve
   // top level PAX file directory.
   PaxAuxRelationFileUnlink(
-      rel->rd_node, rel->rd_backend, false,
+      rel->rd_locator, rel->rd_backend, false,
       rel->rd_rel->relpersistence == RELPERSISTENCE_PERMANENT);
 }
 
 void CCPaxAuxTable::PaxAuxRelationCopyData(Relation rel,
-                                           const RelFileNode *newrnode,
+                                           const RelFileLocator *newrnode,
                                            bool createnewpath) {
   PaxCopyAllDataFiles(rel, newrnode, createnewpath);
 }
 
 void CCPaxAuxTable::PaxAuxRelationCopyDataForCluster(Relation old_rel,
                                                      Relation new_rel) {
-  PaxAuxRelationCopyData(old_rel, &new_rel->rd_node, false);
+  PaxAuxRelationCopyData(old_rel, &new_rel->rd_locator, false);
   cbdb::PaxCopyPaxBlockEntry(old_rel, new_rel);
   // TODO(Tony) : here need to implement PAX re-organize semantics logic.
 }
 
-void CCPaxAuxTable::PaxAuxRelationFileUnlink(RelFileNode node,
+void CCPaxAuxTable::PaxAuxRelationFileUnlink(RelFileLocator node,
                                              BackendId backend,
                                              bool delete_topleveldir,
                                              bool need_wal) {

@@ -3,7 +3,7 @@
  * passwordcheck.c
  *
  *
- * Copyright (c) 2009-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2009-2023, PostgreSQL Global Development Group
  *
  * Author: Laurenz Albe <laurenz.albe@wien.gv.at>
  *
@@ -31,9 +31,6 @@ static check_password_hook_type prev_check_password_hook = NULL;
 
 /* passwords shorter than this will be rejected */
 #define MIN_PWD_LENGTH 8
-
-extern void _PG_init(void);
-extern void _PG_fini(void);
 
 /*
  * check_password
@@ -74,7 +71,7 @@ check_password(const char *username,
 		 *
 		 * We only check for username = password.
 		 */
-		char	   *logdetail;
+		const char *logdetail = NULL;
 
 		if (plain_crypt_verify(username, shadow_pass, username, &logdetail) == STATUS_OK)
 			ereport(ERROR,
@@ -148,14 +145,4 @@ _PG_init(void)
 	/* activate password checks when the module is loaded */
 	prev_check_password_hook = check_password_hook;
 	check_password_hook = check_password;
-}
-
-/*
- * Module unload function
- */
-void
-_PG_fini(void)
-{
-	/* uninstall hook */
-	check_password_hook = prev_check_password_hook;
 }

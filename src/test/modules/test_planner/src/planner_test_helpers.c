@@ -12,9 +12,9 @@ get_parsetree_for(const char *query_string)
 }
 
 static Query *
-get_query_for_parsetree(Node *parsetree, const char *query_string)
+get_query_for_parsetree(RawStmt *parsetree, const char *query_string)
 {
-	List *querytree_list = pg_analyze_and_rewrite(parsetree, query_string, NULL, 0, NULL);
+	List *querytree_list = pg_analyze_and_rewrite_fixedparams(parsetree, query_string, NULL, 0, NULL);
 	ListCell *querytree = list_head(querytree_list);
 	return (Query *)lfirst(querytree);
 }
@@ -22,7 +22,7 @@ get_query_for_parsetree(Node *parsetree, const char *query_string)
 Query *
 make_query(const char *query_string)
 {
-	Node *parsetree = get_parsetree_for(query_string);
+	RawStmt *parsetree = get_parsetree_for(query_string);
 
 	return get_query_for_parsetree(parsetree, query_string);
 }

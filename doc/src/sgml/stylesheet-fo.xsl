@@ -10,6 +10,21 @@
 <xsl:param name="tablecolumns.extension" select="0"></xsl:param>
 <xsl:param name="toc.max.depth">3</xsl:param>
 <xsl:param name="ulink.footnotes" select="1"></xsl:param>
+
+<!-- The release notes have too many ulinks to look good as footnotes in print mode -->
+<xsl:template match="sect1[starts-with(@id, 'release-')]//ulink[starts-with(@url, 'https://postgr.es/c/')]">
+  <!-- Do nothing for ulink to avoid footnotes -->
+</xsl:template>
+
+<!--
+Suppress the description of the commit link markers in print mode.
+Use "node()" to keep the paragraph but remove all content;  prevents
+an "Unresolved ID reference found" warning during PDF builds.
+-->
+<xsl:template match="appendix[@id='release']//para[@id='release-commit-links']//node()">
+  <!-- Output an empty para -->
+</xsl:template>
+
 <xsl:param name="use.extensions" select="1"></xsl:param>
 <xsl:param name="variablelist.as.blocks" select="1"></xsl:param>
 <xsl:param name="orderedlist.label.width">1.5em</xsl:param>
@@ -67,6 +82,12 @@
     <xsl:apply-templates mode="bibliography.mode"/>
     <xsl:value-of select="$biblioentry.item.separator"/>
   </fo:inline>
+</xsl:template>
+
+<!-- Make every sect1 in contrib get a page break -->
+<xsl:template match="id('contrib')/sect1">
+  <fo:block break-after='page'/>
+  <xsl:apply-imports/>
 </xsl:template>
 
 <!-- formatting for entries in tables of functions -->

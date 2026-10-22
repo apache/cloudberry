@@ -58,7 +58,7 @@ set local enable_parallel = true;
 set local optimizer=off;
 set local min_parallel_table_scan_size=0;
 set local min_parallel_index_scan_size = 0;
-set local force_parallel_mode=1;
+set local debug_parallel_query=regress;
 EXPLAIN(COSTS OFF) SELECT t1.* FROM segspace_test_hj_skew AS t1, segspace_test_hj_skew AS t2 WHERE t1.i1=t2.i2;
                               QUERY PLAN                               
 -----------------------------------------------------------------------

@@ -1,3 +1,7 @@
+-- start_matchignore
+-- m/^.*Extra Text:.*/
+-- m/^.*Buckets:.*/
+-- end_matchignore
 -- Disable ORCA
 SET optimizer TO off;
 -- Test Suit 1: runtime filter main case

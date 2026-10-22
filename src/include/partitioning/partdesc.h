@@ -2,7 +2,7 @@
  *
  * partdesc.h
  *
- * Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Copyright (c) 1996-2023, PostgreSQL Global Development Group
  *
  * src/include/partitioning/partdesc.h
  *
@@ -31,7 +31,7 @@ typedef struct PartitionDescData
 	int			nparts;			/* Number of partitions */
 	bool		detached_exist; /* Are there any detached partitions? */
 	Oid		   *oids;			/* Array of 'nparts' elements containing
-								 * partition OIDs in order of the their bounds */
+								 * partition OIDs in order of their bounds */
 	bool	   *is_leaf;		/* Array of 'nparts' elements storing whether
 								 * the corresponding 'oids' element belongs to
 								 * a leaf partition or not */

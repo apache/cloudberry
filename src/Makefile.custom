@@ -1,1 +1,34 @@
 CUSTOM_COPT += -Werror
+
+# Apple clang is stricter than gcc on several warning categories that
+# upstream Cloudberry currently trips:
+#
+#   -Wuninitialized
+#       Fires on a few spots upstream that gcc happily accepts
+#       (e.g. functions.c on PG 16).
+#
+#   -Wgnu-variable-sized-type-not-at-end
+#       Clang-only. Fires on PG catalog headers that put a
+#       struct-with-trailing-text inline.
+#
+#   -Wunused-function
+#       Clang flags static functions never referenced anywhere in the
+#       TU; gcc's analysis is sometimes laxer. Touches isolated dead
+#       branches in a few subsystems (e.g. ic_udpifc.c).
+#
+#   -Wdeprecated-non-prototype
+#       Clang-only. Catches K&R-style `foo()` forward declarations
+#       (genuine portability concerns that gcc silently accepts).
+#       Where these turn out to be real bugs we fix them inline; the
+#       demotion is here for the residual stylistic occurrences.
+#
+# Demote them to warnings on darwin so plain `make` works. The block
+# is gated to PORTNAME=darwin so the Linux gcc build path is unchanged
+# (-Werror still in effect for all categories there). -Wno-error= for
+# a category the active compiler doesn't emit is silently ignored.
+ifeq ($(PORTNAME),darwin)
+CUSTOM_COPT += -Wno-error=uninitialized
+CUSTOM_COPT += -Wno-error=gnu-variable-sized-type-not-at-end
+CUSTOM_COPT += -Wno-error=unused-function
+CUSTOM_COPT += -Wno-error=deprecated-non-prototype
+endif

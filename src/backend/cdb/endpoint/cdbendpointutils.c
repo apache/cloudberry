@@ -217,8 +217,7 @@ gp_get_endpoints(PG_FUNCTION_ARGS)
 	Datum		values[9];
 	bool		nulls[9];
 	HeapTuple	tuple;
-	int			res_number,
-				idx;
+	int			res_number;
 
 	if (SRF_IS_FIRSTCALL())
 	{
@@ -314,7 +313,7 @@ gp_get_endpoints(PG_FUNCTION_ARGS)
 		}
 		if (cnt != 0)
 		{
-			idx = all_info->total_num;
+			int idx = all_info->total_num;
 
 			all_info->total_num += cnt;
 			if (all_info->infos)

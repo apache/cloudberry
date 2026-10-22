@@ -1,0 +1,102 @@
+-- bool check
+CREATE TABLE booltmp (a bool);
+INSERT INTO booltmp VALUES (false), (true);
+SET enable_seqscan=on;
+SELECT count(*) FROM booltmp WHERE a <  true;
+ count 
+-------
+     1
+(1 row)
+
+SELECT count(*) FROM booltmp WHERE a <= true;
+ count 
+-------
+     2
+(1 row)
+
+SELECT count(*) FROM booltmp WHERE a  = true;
+ count 
+-------
+     1
+(1 row)
+
+SELECT count(*) FROM booltmp WHERE a >= true;
+ count 
+-------
+     1
+(1 row)
+
+SELECT count(*) FROM booltmp WHERE a >  true;
+ count 
+-------
+     0
+(1 row)
+
+CREATE INDEX boolidx ON booltmp USING gist ( a );
+SET enable_seqscan=off;
+SELECT count(*) FROM booltmp WHERE a <  true;
+ count 
+-------
+     1
+(1 row)
+
+SELECT count(*) FROM booltmp WHERE a <= true;
+ count 
+-------
+     2
+(1 row)
+
+SELECT count(*) FROM booltmp WHERE a  = true;
+ count 
+-------
+     1
+(1 row)
+
+SELECT count(*) FROM booltmp WHERE a >= true;
+ count 
+-------
+     1
+(1 row)
+
+SELECT count(*) FROM booltmp WHERE a >  true;
+ count 
+-------
+     0
+(1 row)
+
+-- Test index-only scans
+SET enable_bitmapscan=off;
+EXPLAIN (COSTS OFF)
+SELECT * FROM booltmp WHERE a;
+                QUERY PLAN                 
+-------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Index Scan using boolidx on booltmp
+         Index Cond: (a = true)
+         Filter: (a = true)
+ Optimizer: GPORCA
+(5 rows)
+
+SELECT * FROM booltmp WHERE a;
+ a 
+---
+ t
+(1 row)
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM booltmp WHERE NOT a;
+                QUERY PLAN                 
+-------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Index Scan using boolidx on booltmp
+         Index Cond: (a = false)
+         Filter: (a = false)
+ Optimizer: GPORCA
+(5 rows)
+
+SELECT * FROM booltmp WHERE NOT a;
+ a 
+---
+ f
+(1 row)
+

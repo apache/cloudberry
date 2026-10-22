@@ -46,6 +46,7 @@ FOREIGN_KEY(compcompressor REFERENCES pg_proc(oid));
 FOREIGN_KEY(compdecompressor REFERENCES pg_proc(oid));
 FOREIGN_KEY(compvalidator REFERENCES pg_proc(oid));
 FOREIGN_KEY(compowner REFERENCES pg_authid(oid));
+DECLARE_UNIQUE_INDEX(pg_compression_compname_index, 7059, CompressionCompnameIndexId, on pg_compression using btree(compname name_ops));
 
 /* ----------------
  *		Form_pg_compression corresponds to a pointer to a tuple with

@@ -110,7 +110,7 @@ strListToArray(List *stringlist)
 
 	foreach(cell, stringlist)
 	{
-		Value	   *val = lfirst(cell);
+		String 	   *val = lfirst(cell);
 		astate = accumArrayResult(astate, CStringGetTextDatum(strVal(val)),
 								  false, TEXTOID,
 								  CurrentMemoryContext);

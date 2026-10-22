@@ -17,6 +17,7 @@
 #include "nodes/execnodes.h"	/* ExecSlice, SliceTable */
 #include "miscadmin.h"
 #include "libpq/libpq-be.h"
+#include "storage/lwlock.h"
 #include "utils/builtins.h"
 #include "utils/memutils.h"
 
@@ -211,5 +212,32 @@ void		MlPutRxBufferIFC(ChunkTransportState * transportStates, int motNodeID, int
 extern void dumpICBufferList(ICBufferList * list, const char *fname);
 extern void dumpUnackQueueRing(const char *fname);
 extern void dumpConnections(ChunkTransportStateEntry * pEntry, const char *fname);
+
+/*
+ * Keeps various statistics about interconnect internal.
+ * Also those numbers are expected to grow big, hence uint64.
+ */
+typedef struct ICStatisticsShmem
+{
+	LWLock 		lock;						/* mutex for synchronizing access to statistics data */
+	uint64		totalRecvQueueSize;			/* receive queue size sum when main thread is trying to get a packet */
+	uint64		recvQueueSizeCountingTime;	/* counting times when computing totalRecvQueueSize */
+	uint64		totalCapacity;				/* the capacity sum when packets are tried to be sent */
+	uint64		capacityCountingTime;		/* counting times used to compute totalCapacity */
+	uint64		totalBuffers;				/* total buffers available when sending packets */
+	uint64		bufferCountingTime;			/* counting times when compute totalBuffers */
+	uint64		retransmits;				/* the number of packet retransmits */
+	uint64		startupCachedPktNum;		/* number of packets cached during connection startup */
+	uint64		mismatchNum;				/* the number of mismatched packets received */
+	uint64		crcErrors;					/* the number of crc errors */
+	uint64		sndPktNum;					/* the number of packets sent by sender */
+	uint64		recvPktNum;					/* the number of packets received by receiver */
+	uint64		disorderedPktNum;			/* disordered packet number */
+	uint64		duplicatedPktNum;			/* duplicate packet number */
+	uint64		recvAckNum;					/* the number of Acks received */
+	uint64		statusQueryMsgNum;			/* the number of status query messages sent */
+} ICStatisticsShmem;
+
+void InterconnectShmemInitUDPIFC(void);
 
 #endif // IC_UDP_INTERFACE_H

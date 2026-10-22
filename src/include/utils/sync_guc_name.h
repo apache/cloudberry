@@ -8,9 +8,9 @@
 */
 /* items in this file should be ordered */
 		"allow_dml_directory_table",
+		"allow_in_place_tablespaces",
 		"allow_segment_DML",
 		"allow_system_table_mods",
-		"allow_in_place_tablespaces",
 		"array_nulls",
 		"backtrace_functions",
 		"bytea_output",

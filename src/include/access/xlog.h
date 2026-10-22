@@ -3,7 +3,7 @@
  *
  * PostgreSQL write-ahead log manager
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/access/xlog.h
@@ -14,6 +14,7 @@
 #include "postgres.h" /* for Datum */
 
 #include "access/rmgr.h"
+#include "access/xlogbackup.h"
 #include "access/xlogdefs.h"
 #include "access/xloginsert.h"
 #include "access/xlogreader.h"
@@ -36,130 +37,48 @@
 #define SYNC_METHOD_OPEN		2	/* for O_SYNC */
 #define SYNC_METHOD_FSYNC_WRITETHROUGH	3
 #define SYNC_METHOD_OPEN_DSYNC	4	/* for O_DSYNC */
-extern int	sync_method;
+extern PGDLLIMPORT int sync_method;
 
-extern PGDLLIMPORT TimeLineID ThisTimeLineID;	/* current TLI */
-
-/*
- * Prior to 8.4, all activity during recovery was carried out by the startup
- * process. This local variable continues to be used in many parts of the
- * code to indicate actions taken by RecoveryManagers. Other processes that
- * potentially perform work during recovery should check RecoveryInProgress().
- * See XLogCtl notes in xlog.c.
- */
-extern bool InRecovery;
-
-/*
- * Like InRecovery, standbyState is only valid in the startup process.
- * In all other processes it will have the value STANDBY_DISABLED (so
- * InHotStandby will read as false).
- *
- * In DISABLED state, we're performing crash recovery or hot standby was
- * disabled in postgresql.conf.
- *
- * In INITIALIZED state, we've run InitRecoveryTransactionEnvironment, but
- * we haven't yet processed a RUNNING_XACTS or shutdown-checkpoint WAL record
- * to initialize our primary-transaction tracking system.
- *
- * When the transaction tracking is initialized, we enter the SNAPSHOT_PENDING
- * state. The tracked information might still be incomplete, so we can't allow
- * connections yet, but redo functions must update the in-memory state when
- * appropriate.
- *
- * In SNAPSHOT_READY mode, we have full knowledge of transactions that are
- * (or were) running on the primary at the current WAL location. Snapshots
- * can be taken, and read-only queries can be run.
- */
-typedef enum
-{
-	STANDBY_DISABLED,
-	STANDBY_INITIALIZED,
-	STANDBY_SNAPSHOT_PENDING,
-	STANDBY_SNAPSHOT_READY
-} HotStandbyState;
-
-extern HotStandbyState standbyState;
-
-#define InHotStandby (standbyState >= STANDBY_SNAPSHOT_PENDING)
-
-/*
- * Recovery target type.
- * Only set during a Point in Time recovery, not when in standby mode.
- */
-typedef enum
-{
-	RECOVERY_TARGET_UNSET,
-	RECOVERY_TARGET_XID,
-	RECOVERY_TARGET_TIME,
-	RECOVERY_TARGET_NAME,
-	RECOVERY_TARGET_LSN,
-	RECOVERY_TARGET_IMMEDIATE
-} RecoveryTargetType;
-
-/*
- * Recovery target TimeLine goal
- */
-typedef enum
-{
-	RECOVERY_TARGET_TIMELINE_CONTROLFILE,
-	RECOVERY_TARGET_TIMELINE_LATEST,
-	RECOVERY_TARGET_TIMELINE_NUMERIC
-} RecoveryTargetTimeLineGoal;
-
-extern XLogRecPtr ProcLastRecPtr;
-extern XLogRecPtr XactLastRecEnd;
+extern PGDLLIMPORT XLogRecPtr ProcLastRecPtr;
+extern PGDLLIMPORT XLogRecPtr XactLastRecEnd;
 extern PGDLLIMPORT XLogRecPtr XactLastCommitEnd;
 
-extern bool reachedConsistency;
-
 /* these variables are GUC parameters related to XLOG */
-extern int	wal_segment_size;
-extern int	min_wal_size_mb;
-extern int	max_wal_size_mb;
-extern int	wal_keep_size_mb;
-extern int	max_slot_wal_keep_size_mb;
-extern int	XLOGbuffers;
-extern int	XLogArchiveTimeout;
-extern int	wal_retrieve_retry_interval;
-extern char *XLogArchiveCommand;
-extern bool EnableHotStandby;
+extern PGDLLIMPORT int	wal_segment_size;
+extern PGDLLIMPORT int	min_wal_size_mb;
+extern PGDLLIMPORT int	max_wal_size_mb;
+extern PGDLLIMPORT int	wal_keep_size_mb;
+extern PGDLLIMPORT int	max_slot_wal_keep_size_mb;
+extern PGDLLIMPORT int	XLOGbuffers;
+extern PGDLLIMPORT int	XLogArchiveTimeout;
+extern PGDLLIMPORT int	wal_retrieve_retry_interval;
+extern PGDLLIMPORT char *XLogArchiveCommand;
+extern PGDLLIMPORT bool EnableHotStandby;
 extern bool EnableHotDR;
 
-extern bool fullPageWrites;
-extern bool wal_log_hints;
-extern bool wal_compression;
-extern bool wal_init_zero;
-extern bool wal_recycle;
-extern bool *wal_consistency_checking;
-extern char *wal_consistency_checking_string;
-extern bool log_checkpoints;
-extern char *recoveryRestoreCommand;
-extern char *recoveryEndCommand;
-extern char *archiveCleanupCommand;
-extern bool recoveryTargetInclusive;
-extern int	recoveryTargetAction;
-extern int	recovery_min_apply_delay;
-extern char *PrimaryConnInfo;
-extern char *PrimarySlotName;
-extern bool wal_receiver_create_temp_slot;
-extern bool track_wal_io_timing;
+extern PGDLLIMPORT bool fullPageWrites;
+extern PGDLLIMPORT bool wal_log_hints;
+extern PGDLLIMPORT int wal_compression;
+extern PGDLLIMPORT bool wal_init_zero;
+extern PGDLLIMPORT bool wal_recycle;
+extern PGDLLIMPORT bool *wal_consistency_checking;
+extern PGDLLIMPORT char *wal_consistency_checking_string;
+extern PGDLLIMPORT bool log_checkpoints;
+extern PGDLLIMPORT char *recoveryRestoreCommand;
+extern PGDLLIMPORT char *recoveryEndCommand;
+extern PGDLLIMPORT char *archiveCleanupCommand;
+extern PGDLLIMPORT bool recoveryTargetInclusive;
+extern PGDLLIMPORT int	recoveryTargetAction;
+extern PGDLLIMPORT int	recovery_min_apply_delay;
+extern PGDLLIMPORT char *PrimaryConnInfo;
+extern PGDLLIMPORT char *PrimarySlotName;
+extern PGDLLIMPORT char	*PromoteTriggerFile;
+extern PGDLLIMPORT bool wal_receiver_create_temp_slot;
+extern PGDLLIMPORT bool track_wal_io_timing;
+extern PGDLLIMPORT int wal_decode_buffer_size;
 
-/* indirectly set via GUC system */
-extern TransactionId recoveryTargetXid;
-extern char *recovery_target_time_string;
-extern const char *recoveryTargetName;
-extern XLogRecPtr recoveryTargetLSN;
-extern RecoveryTargetType recoveryTarget;
-extern char *PromoteTriggerFile;
-extern RecoveryTargetTimeLineGoal recoveryTargetTimeLineGoal;
-extern TimeLineID recoveryTargetTLIRequested;
-extern TimeLineID recoveryTargetTLI;
 
-extern int	CheckPointSegments;
-
-/* option set locally in startup process only when signal files exist */
-extern bool StandbyModeRequested;
-extern bool StandbyMode;
+extern PGDLLIMPORT int CheckPointSegments;
 
 /* tde feature enable or not */
 extern int  FileEncryptionEnabled;
@@ -194,7 +113,7 @@ typedef enum ArchiveMode
 	ARCHIVE_MODE_ON,			/* enabled while server is running normally */
 	ARCHIVE_MODE_ALWAYS			/* enabled always (even during recovery) */
 } ArchiveMode;
-extern int	XLogArchiveMode;
+extern PGDLLIMPORT int XLogArchiveMode;
 
 /* WAL levels */
 typedef enum WalLevel
@@ -204,6 +123,15 @@ typedef enum WalLevel
 	WAL_LEVEL_LOGICAL
 } WalLevel;
 
+/* Compression algorithms for WAL */
+typedef enum WalCompression
+{
+	WAL_COMPRESSION_NONE = 0,
+	WAL_COMPRESSION_PGLZ,
+	WAL_COMPRESSION_LZ4,
+	WAL_COMPRESSION_ZSTD
+} WalCompression;
+
 /* Recovery states */
 typedef enum RecoveryState
 {
@@ -211,14 +139,6 @@ typedef enum RecoveryState
 	RECOVERY_STATE_ARCHIVE,		/* archive recovery */
 	RECOVERY_STATE_DONE			/* currently in production */
 } RecoveryState;
-
-/* Recovery pause states */
-typedef enum RecoveryPauseState
-{
-	RECOVERY_NOT_PAUSED,		/* pause not requested */
-	RECOVERY_PAUSE_REQUESTED,	/* pause requested, but not yet paused */
-	RECOVERY_PAUSED				/* recovery is paused */
-} RecoveryPauseState;
 
 extern PGDLLIMPORT int wal_level;
 
@@ -228,7 +148,6 @@ extern PGDLLIMPORT int wal_level;
 /* Is WAL archiving enabled always (even during recovery)? */
 #define XLogArchivingAlways() \
 	(AssertMacro(XLogArchiveMode == ARCHIVE_MODE_OFF || wal_level >= WAL_LEVEL_REPLICA), XLogArchiveMode == ARCHIVE_MODE_ALWAYS)
-#define XLogArchiveCommandSet() (XLogArchiveCommand[0] != '\0')
 
 /*
  * Is WAL-logging necessary for archival or log-shipping, or can we skip
@@ -256,7 +175,7 @@ extern PGDLLIMPORT int wal_level;
 #define XLogLogicalInfoActive() (wal_level >= WAL_LEVEL_LOGICAL)
 
 #ifdef WAL_DEBUG
-extern bool XLOG_DEBUG;
+extern PGDLLIMPORT bool XLOG_DEBUG;
 #endif
 
 /*
@@ -311,7 +230,7 @@ typedef struct CheckpointStatsData
 									 * entire sync phase. */
 } CheckpointStatsData;
 
-extern CheckpointStatsData CheckpointStats;
+extern PGDLLIMPORT CheckpointStatsData CheckpointStats;
 
 /*
  * GetWALAvailability return codes
@@ -327,44 +246,37 @@ typedef enum WALAvailability
 } WALAvailability;
 
 struct XLogRecData;
+struct XLogReaderState;
 
 extern XLogRecPtr XLogInsertRecord(struct XLogRecData *rdata,
 								   XLogRecPtr fpw_lsn,
 								   uint8 flags,
-								   int num_fpi);
-extern void XLogFlush(XLogRecPtr RecPtr);
+								   int num_fpi,
+								   bool topxid_included);
+extern void XLogFlush(XLogRecPtr record);
 extern bool XLogBackgroundFlush(void);
-extern bool XLogNeedsFlush(XLogRecPtr RecPtr);
-extern int	XLogFileInit(XLogSegNo segno, bool *use_existent, bool use_lock);
-extern int	XLogFileOpen(XLogSegNo segno);
+extern bool XLogNeedsFlush(XLogRecPtr record);
+extern int	XLogFileInit(XLogSegNo logsegno, TimeLineID logtli);
+extern int	XLogFileOpen(XLogSegNo segno, TimeLineID tli);
 
 extern void CheckXLogRemoved(XLogSegNo segno, TimeLineID tli);
 extern XLogSegNo XLogGetLastRemovedSegno(void);
-extern void XLogSetAsyncXactLSN(XLogRecPtr record);
+extern void XLogSetAsyncXactLSN(XLogRecPtr asyncXactLSN);
 extern void XLogSetReplicationSlotMinimumLSN(XLogRecPtr lsn);
 
-extern void xlog_redo(XLogReaderState *record);
-extern void xlog_desc(StringInfo buf, XLogReaderState *record);
+extern void xlog_redo(struct XLogReaderState *record);
+extern void xlog_desc(StringInfo buf, struct XLogReaderState *record);
 extern const char *xlog_identify(uint8 info);
 extern void UnpackCheckPointRecord(struct XLogReaderState *record, CheckpointExtendedRecord *ckptExtended);
 
-extern void issue_xlog_fsync(int fd, XLogSegNo segno);
+extern void issue_xlog_fsync(int fd, XLogSegNo segno, TimeLineID tli);
 
 extern bool RecoveryInProgress(void);
 extern RecoveryState GetRecoveryState(void);
-extern bool HotStandbyActive(void);
-extern bool HotStandbyActiveInReplay(void);
 extern bool XLogInsertAllowed(void);
-extern void GetXLogReceiptTime(TimestampTz *rtime, bool *fromStream);
-extern XLogRecPtr GetXLogReplayRecPtr(TimeLineID *replayTLI);
 extern XLogRecPtr GetXLogInsertRecPtr(void);
 extern XLogRecPtr GetXLogWriteRecPtr(void);
-extern RecoveryPauseState GetRecoveryPauseState(void);
-extern void SetRecoveryPause(bool recoveryPause);
-extern TimestampTz GetLatestXTime(void);
-extern TimestampTz GetCurrentChunkReplayStartTime(void);
 
-extern void UpdateControlFile(void);
 extern uint64 GetSystemIdentifier(void);
 extern char *GetMockAuthenticationNonce(void);
 extern bool DataChecksumsEnabled(void);
@@ -375,14 +287,14 @@ extern XLogRecPtr GetFakeLSNForUnloggedRel(void);
 extern Size XLOGShmemSize(void);
 extern void XLOGShmemInit(void);
 extern void BootStrapXLOG(void);
+extern void InitializeWalConsistencyChecking(void);
 extern void LocalProcessControlFile(bool reset);
+extern WalLevel GetActiveWalLevelOnStandby(void);
 extern void StartupXLOG(void);
 extern void ShutdownXLOG(int code, Datum arg);
-extern void InitXLOGAccess(void);
 extern void CreateCheckPoint(int flags);
 extern bool CreateRestartPoint(int flags);
 extern WALAvailability GetWALAvailability(XLogRecPtr targetLSN);
-extern XLogRecPtr CalculateMaxmumSafeLSN(void);
 extern void XLogPutNextOid(Oid nextOid);
 extern void XLogPutNextRelfilenode(Oid nextRelfilenode);
 extern void XLogPutNextGxid(DistributedTransactionId nextGxid);
@@ -391,9 +303,9 @@ extern void UpdateFullPageWrites(void);
 extern void GetFullPageWriteInfo(XLogRecPtr *RedoRecPtr_p, bool *doPageWrites_p);
 extern XLogRecPtr GetRedoRecPtr(void);
 extern XLogRecPtr GetInsertRecPtr(void);
-extern XLogRecPtr GetFlushRecPtr(void);
+extern XLogRecPtr GetFlushRecPtr(TimeLineID *insertTLI);
+extern TimeLineID GetWALInsertionTimeLine(void);
 extern XLogRecPtr GetLastImportantRecPtr(void);
-extern void RemovePromoteSignalFiles(void);
 
 extern void HandleStartupProcInterrupts(void);
 extern void StartupProcessMain(void);
@@ -403,10 +315,21 @@ extern void WakeupRecovery(void);
 extern void SetWalWriterSleeping(bool sleeping);
 
 extern void StartupRequestWalReceiverRestart(void);
-extern void XLogRequestWalReceiverReply(void);
 
 extern void assign_max_wal_size(int newval, void *extra);
 extern void assign_checkpoint_completion_target(double newval, void *extra);
+
+/*
+ * Routines used by xlogrecovery.c to call back into xlog.c during recovery.
+ */
+extern void RemoveNonParentXlogFiles(XLogRecPtr switchpoint, TimeLineID newTLI);
+extern bool XLogCheckpointNeeded(XLogSegNo new_segno);
+extern void SwitchIntoArchiveRecovery(XLogRecPtr EndRecPtr, TimeLineID replayTLI);
+extern void ReachedEndOfBackup(XLogRecPtr EndRecPtr, TimeLineID tli);
+extern void SetInstallXLogFileSegmentActive(void);
+extern bool IsInstallXLogFileSegmentActive(void);
+extern void XLogShutdownWalRcv(void);
+
 /*
  * Routines to start, stop, and get status of a base backup.
  */
@@ -424,15 +347,13 @@ extern void assign_checkpoint_completion_target(double newval, void *extra);
 typedef enum SessionBackupState
 {
 	SESSION_BACKUP_NONE,
-	SESSION_BACKUP_EXCLUSIVE,
-	SESSION_BACKUP_NON_EXCLUSIVE
+	SESSION_BACKUP_RUNNING,
 } SessionBackupState;
 
-extern XLogRecPtr do_pg_start_backup(const char *backupidstr, bool fast,
-									 TimeLineID *starttli_p, StringInfo labelfile,
-									 List **tablespaces, StringInfo tblspcmapfile);
-extern XLogRecPtr do_pg_stop_backup(char *labelfile, bool waitforarchive,
-									TimeLineID *stoptli_p);
+extern void do_pg_backup_start(const char *backupidstr, bool fast,
+							   List **tablespaces, BackupState *state,
+							   StringInfo tblspcmapfile);
+extern void do_pg_backup_stop(BackupState *state, bool waitforarchive);
 extern void do_pg_abort_backup(int code, Datum arg);
 extern void register_persistent_abort_backup_handler(void);
 extern SessionBackupState get_backup_status(void);
@@ -452,7 +373,6 @@ extern SessionBackupState get_backup_status(void);
 /* Cloudberry additions */
 extern bool IsCrashRecoveryOnly(void);
 extern DBState GetCurrentDBState(void);
-extern XLogRecPtr last_xlog_replay_location(void);
 extern void wait_for_mirror(void);
 extern void wait_to_avoid_large_repl_lag(void);
 extern bool IsRoleMirror(void);

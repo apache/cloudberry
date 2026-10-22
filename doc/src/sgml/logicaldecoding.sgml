@@ -69,7 +69,7 @@ postgres=# SELECT slot_name, plugin, slot_type, database, active, restart_lsn, c
 
 postgres=# -- There are no changes to see yet
 postgres=# SELECT * FROM pg_logical_slot_get_changes('regression_slot', NULL, NULL);
- lsn | xid | data 
+ lsn | xid | data
 -----+-----+------
 (0 rows)
 
@@ -78,7 +78,7 @@ CREATE TABLE
 
 postgres=# -- DDL isn't replicated, so all you'll see is the transaction
 postgres=# SELECT * FROM pg_logical_slot_get_changes('regression_slot', NULL, NULL);
-    lsn    |  xid  |     data     
+    lsn    |  xid  |     data
 -----------+-------+--------------
  0/BA2DA58 | 10297 | BEGIN 10297
  0/BA5A5A0 | 10297 | COMMIT 10297
@@ -87,7 +87,7 @@ postgres=# SELECT * FROM pg_logical_slot_get_changes('regression_slot', NULL, NU
 postgres=# -- Once changes are read, they're consumed and not emitted
 postgres=# -- in a subsequent call:
 postgres=# SELECT * FROM pg_logical_slot_get_changes('regression_slot', NULL, NULL);
- lsn | xid | data 
+ lsn | xid | data
 -----+-----+------
 (0 rows)
 
@@ -97,7 +97,7 @@ postgres=*# INSERT INTO data(data) VALUES('2');
 postgres=*# COMMIT;
 
 postgres=# SELECT * FROM pg_logical_slot_get_changes('regression_slot', NULL, NULL);
-    lsn    |  xid  |                          data                           
+    lsn    |  xid  |                          data
 -----------+-------+---------------------------------------------------------
  0/BA5A688 | 10298 | BEGIN 10298
  0/BA5A6F0 | 10298 | table public.data: INSERT: id[integer]:1 data[text]:'1'
@@ -109,7 +109,7 @@ postgres=# INSERT INTO data(data) VALUES('3');
 
 postgres=# -- You can also peek ahead in the change stream without consuming changes
 postgres=# SELECT * FROM pg_logical_slot_peek_changes('regression_slot', NULL, NULL);
-    lsn    |  xid  |                          data                           
+    lsn    |  xid  |                          data
 -----------+-------+---------------------------------------------------------
  0/BA5A8E0 | 10299 | BEGIN 10299
  0/BA5A8E0 | 10299 | table public.data: INSERT: id[integer]:3 data[text]:'3'
@@ -118,7 +118,7 @@ postgres=# SELECT * FROM pg_logical_slot_peek_changes('regression_slot', NULL, N
 
 postgres=# -- The next call to pg_logical_slot_peek_changes() returns the same changes again
 postgres=# SELECT * FROM pg_logical_slot_peek_changes('regression_slot', NULL, NULL);
-    lsn    |  xid  |                          data                           
+    lsn    |  xid  |                          data
 -----------+-------+---------------------------------------------------------
  0/BA5A8E0 | 10299 | BEGIN 10299
  0/BA5A8E0 | 10299 | table public.data: INSERT: id[integer]:3 data[text]:'3'
@@ -127,7 +127,7 @@ postgres=# SELECT * FROM pg_logical_slot_peek_changes('regression_slot', NULL, N
 
 postgres=# -- options can be passed to output plugin, to influence the formatting
 postgres=# SELECT * FROM pg_logical_slot_peek_changes('regression_slot', NULL, NULL, 'include-timestamp', 'on');
-    lsn    |  xid  |                          data                           
+    lsn    |  xid  |                          data
 -----------+-------+---------------------------------------------------------
  0/BA5A8E0 | 10299 | BEGIN 10299
  0/BA5A8E0 | 10299 | table public.data: INSERT: id[integer]:3 data[text]:'3'
@@ -144,16 +144,19 @@ postgres=# SELECT pg_drop_replication_slot('regression_slot');
 </programlisting>
 
    <para>
-    The following example shows how logical decoding is controlled over the
+    The following examples shows how logical decoding is controlled over the
     streaming replication protocol, using the
     program <xref linkend="app-pgrecvlogical"/> included in the PostgreSQL
     distribution.  This requires that client authentication is set up to allow
     replication connections
     (see <xref linkend="streaming-replication-authentication"/>) and
     that <varname>max_wal_senders</varname> is set sufficiently high to allow
-    an additional connection.
+    an additional connection.  The second example shows how to stream two-phase
+    transactions.  Before you use two-phase commands, you must set
+    <xref linkend="guc-max-prepared-transactions"/> to at least 1.
    </para>
 <programlisting>
+Example 1:
 $ pg_recvlogical -d postgres --slot=test --create-slot
 $ pg_recvlogical -d postgres --slot=test --start -f -
 <keycombo action="simul"><keycap>Control</keycap><keycap>Z</keycap></keycombo>
@@ -162,6 +165,22 @@ $ fg
 BEGIN 693
 table public.data: INSERT: id[integer]:4 data[text]:'4'
 COMMIT 693
+<keycombo action="simul"><keycap>Control</keycap><keycap>C</keycap></keycombo>
+$ pg_recvlogical -d postgres --slot=test --drop-slot
+
+Example 2:
+$ pg_recvlogical -d postgres --slot=test --create-slot --two-phase
+$ pg_recvlogical -d postgres --slot=test --start -f -
+<keycombo action="simul"><keycap>Control</keycap><keycap>Z</keycap></keycombo>
+$ psql -d postgres -c "BEGIN;INSERT INTO data(data) VALUES('5');PREPARE TRANSACTION 'test';"
+$ fg
+BEGIN 694
+table public.data: INSERT: id[integer]:5 data[text]:'5'
+PREPARE TRANSACTION 'test', txid 694
+<keycombo action="simul"><keycap>Control</keycap><keycap>Z</keycap></keycombo>
+$ psql -d postgres -c "COMMIT PREPARED 'test';"
+$ fg
+COMMIT PREPARED 'test', txid 694
 <keycombo action="simul"><keycap>Control</keycap><keycap>C</keycap></keycombo>
 $ pg_recvlogical -d postgres --slot=test --drop-slot
 </programlisting>
@@ -181,7 +200,7 @@ postgres=*# INSERT INTO data(data) VALUES('5');
 postgres=*# PREPARE TRANSACTION 'test_prepared1';
 
 postgres=# SELECT * FROM pg_logical_slot_get_changes('regression_slot', NULL, NULL);
-    lsn    | xid |                          data                           
+    lsn    | xid |                          data
 -----------+-----+---------------------------------------------------------
  0/1689DC0 | 529 | BEGIN 529
  0/1689DC0 | 529 | table public.data: INSERT: id[integer]:3 data[text]:'5'
@@ -190,7 +209,7 @@ postgres=# SELECT * FROM pg_logical_slot_get_changes('regression_slot', NULL, NU
 
 postgres=# COMMIT PREPARED 'test_prepared1';
 postgres=# select * from pg_logical_slot_get_changes('regression_slot', NULL, NULL);
-    lsn    | xid |                    data                    
+    lsn    | xid |                    data
 -----------+-----+--------------------------------------------
  0/168A060 | 529 | COMMIT PREPARED 'test_prepared1', txid 529
 (4 row)
@@ -200,7 +219,7 @@ postgres=# BEGIN;
 postgres=*# INSERT INTO data(data) VALUES('6');
 postgres=*# PREPARE TRANSACTION 'test_prepared2';
 postgres=# select * from pg_logical_slot_get_changes('regression_slot', NULL, NULL);
-    lsn    | xid |                          data                           
+    lsn    | xid |                          data
 -----------+-----+---------------------------------------------------------
  0/168A180 | 530 | BEGIN 530
  0/168A1E8 | 530 | table public.data: INSERT: id[integer]:4 data[text]:'6'
@@ -209,7 +228,7 @@ postgres=# select * from pg_logical_slot_get_changes('regression_slot', NULL, NU
 
 postgres=# ROLLBACK PREPARED 'test_prepared2';
 postgres=# select * from pg_logical_slot_get_changes('regression_slot', NULL, NULL);
-    lsn    | xid |                     data                     
+    lsn    | xid |                     data
 -----------+-----+----------------------------------------------
  0/168A4B8 | 530 | ROLLBACK PREPARED 'test_prepared2', txid 530
 (1 row)
@@ -218,7 +237,7 @@ postgres=# select * from pg_logical_slot_get_changes('regression_slot', NULL, NU
 
   <sect1 id="logicaldecoding-explanation">
    <title>Logical Decoding Concepts</title>
-   <sect2>
+   <sect2 id="logicaldecoding-explanation-log-dec">
     <title>Logical Decoding</title>
 
     <indexterm>
@@ -297,6 +316,35 @@ postgres=# select * from pg_logical_slot_get_changes('regression_slot', NULL, NU
      may consume changes from a slot at any given time.
     </para>
 
+    <para>
+     A logical replication slot can also be created on a hot standby. To prevent
+     <command>VACUUM</command> from removing required rows from the system
+     catalogs, <varname>hot_standby_feedback</varname> should be set on the
+     standby. In spite of that, if any required rows get removed, the slot gets
+     invalidated. It's highly recommended to use a physical slot between the
+     primary and the standby. Otherwise, <varname>hot_standby_feedback</varname>
+     will work but only while the connection is alive (for example a node
+     restart would break it). Then, the primary may delete system catalog rows
+     that could be needed by the logical decoding on the standby (as it does
+     not know about the catalog_xmin on the standby). Existing logical slots
+     on standby also get invalidated if <varname>wal_level</varname> on the
+     primary is reduced to less than <literal>logical</literal>.
+     This is done as soon as the standby detects such a change in the WAL stream.
+     It means that, for walsenders which are lagging (if any), some WAL records up
+     to the <varname>wal_level</varname> parameter change on the primary won't be
+     decoded.
+    </para>
+
+    <para>
+     Creation of a logical slot requires information about all the currently
+     running transactions. On the primary, this information is available
+     directly, but on a standby, this information has to be obtained from
+     primary. Thus, slot creation may need to wait for some activity to happen
+     on the primary. If the primary is idle, creating a logical slot on
+     standby may take noticeable time. This can be sped up by calling the
+     <function>pg_log_standby_snapshot</function> function on the primary.
+    </para>
+
     <caution>
      <para>
       Replication slots persist across crashes and know nothing about the state
@@ -311,7 +359,7 @@ postgres=# select * from pg_logical_slot_get_changes('regression_slot', NULL, NU
     </caution>
    </sect2>
 
-   <sect2>
+   <sect2 id="logicaldecoding-explanation-output-plugins">
     <title>Output Plugins</title>
     <para>
      Output plugins transform the data from the write-ahead log's internal
@@ -319,11 +367,11 @@ postgres=# select * from pg_logical_slot_get_changes('regression_slot', NULL, NU
     </para>
    </sect2>
 
-   <sect2>
+   <sect2 id="logicaldecoding-explanation-exported-snapshots">
     <title>Exported Snapshots</title>
     <para>
      When a new replication slot is created using the streaming replication
-     interface (see <xref linkend="protocol-replication-create-slot"/>), a
+     interface (see <xref linkend="protocol-replication-create-replication-slot"/>), a
      snapshot is exported
      (see <xref linkend="functions-snapshot-synchronization"/>), which will show
      exactly the state of the database after which all changes will be
@@ -460,8 +508,8 @@ typedef void (*LogicalOutputPluginInit) (struct OutputPluginCallbacks *cb);
 </programlisting>
      The <function>begin_cb</function>, <function>change_cb</function>
      and <function>commit_cb</function> callbacks are required,
-     while <function>startup_cb</function>,
-     <function>filter_by_origin_cb</function>, <function>truncate_cb</function>,
+     while <function>startup_cb</function>, <function>truncate_cb</function>,
+     <function>message_cb</function>, <function>filter_by_origin_cb</function>,
      and <function>shutdown_cb</function> are optional.
      If <function>truncate_cb</function> is not set but a
      <command>TRUNCATE</command> is to be decoded, the action will be ignored.
@@ -471,19 +519,21 @@ typedef void (*LogicalOutputPluginInit) (struct OutputPluginCallbacks *cb);
      An output plugin may also define functions to support streaming of large,
      in-progress transactions. The <function>stream_start_cb</function>,
      <function>stream_stop_cb</function>, <function>stream_abort_cb</function>,
-     <function>stream_commit_cb</function>, <function>stream_change_cb</function>,
-     and <function>stream_prepare_cb</function>
+     <function>stream_commit_cb</function>, and <function>stream_change_cb</function>
      are required, while <function>stream_message_cb</function> and
-     <function>stream_truncate_cb</function> are optional.
+     <function>stream_truncate_cb</function> are optional. The
+     <function>stream_prepare_cb</function> is also required if the output
+     plugin also support two-phase commits.
     </para>
 
     <para>
     An output plugin may also define functions to support two-phase commits,
     which allows actions to be decoded on the <command>PREPARE TRANSACTION</command>.
     The <function>begin_prepare_cb</function>, <function>prepare_cb</function>,
-    <function>stream_prepare_cb</function>,
     <function>commit_prepared_cb</function> and <function>rollback_prepared_cb</function>
     callbacks are required, while <function>filter_prepare_cb</function> is optional.
+    The <function>stream_prepare_cb</function> is also required if the output plugin
+    also supports the streaming of large in-progress transactions.
     </para>
    </sect2>
 
@@ -702,7 +752,7 @@ typedef void (*LogicalDecodeChangeCB) (struct LogicalDecodingContext *ctx,
      <title>Truncate Callback</title>
 
      <para>
-      The <function>truncate_cb</function> callback is called for a
+      The optional <function>truncate_cb</function> callback is called for a
       <command>TRUNCATE</command> command.
 <programlisting>
 typedef void (*LogicalDecodeTruncateCB) (struct LogicalDecodingContext *ctx,
@@ -831,7 +881,7 @@ typedef bool (*LogicalDecodeFilterPrepareCB) (struct LogicalDecodingContext *ctx
       <parameter>gid</parameter> field, which is part of the
       <parameter>txn</parameter> parameter, can be used in this callback to
       check if the plugin has already received this <command>PREPARE</command>
-      in which case it can either error out or skip the remaining changes of 
+      in which case it can either error out or skip the remaining changes of
       the transaction.
 <programlisting>
 typedef void (*LogicalDecodeBeginPrepareCB) (struct LogicalDecodingContext *ctx,
@@ -900,8 +950,8 @@ typedef void (*LogicalDecodeRollbackPreparedCB) (struct LogicalDecodingContext *
     <sect3 id="logicaldecoding-output-plugin-stream-start">
      <title>Stream Start Callback</title>
      <para>
-      The <function>stream_start_cb</function> callback is called when opening
-      a block of streamed changes from an in-progress transaction.
+      The required <function>stream_start_cb</function> callback is called when
+      opening a block of streamed changes from an in-progress transaction.
 <programlisting>
 typedef void (*LogicalDecodeStreamStartCB) (struct LogicalDecodingContext *ctx,
                                             ReorderBufferTXN *txn);
@@ -912,8 +962,8 @@ typedef void (*LogicalDecodeStreamStartCB) (struct LogicalDecodingContext *ctx,
     <sect3 id="logicaldecoding-output-plugin-stream-stop">
      <title>Stream Stop Callback</title>
      <para>
-      The <function>stream_stop_cb</function> callback is called when closing
-      a block of streamed changes from an in-progress transaction.
+      The required <function>stream_stop_cb</function> callback is called when
+      closing a block of streamed changes from an in-progress transaction.
 <programlisting>
 typedef void (*LogicalDecodeStreamStopCB) (struct LogicalDecodingContext *ctx,
                                            ReorderBufferTXN *txn);
@@ -924,8 +974,8 @@ typedef void (*LogicalDecodeStreamStopCB) (struct LogicalDecodingContext *ctx,
     <sect3 id="logicaldecoding-output-plugin-stream-abort">
      <title>Stream Abort Callback</title>
      <para>
-      The <function>stream_abort_cb</function> callback is called to abort
-      a previously streamed transaction.
+      The required <function>stream_abort_cb</function> callback is called to
+      abort a previously streamed transaction.
 <programlisting>
 typedef void (*LogicalDecodeStreamAbortCB) (struct LogicalDecodingContext *ctx,
                                             ReorderBufferTXN *txn,
@@ -938,8 +988,10 @@ typedef void (*LogicalDecodeStreamAbortCB) (struct LogicalDecodingContext *ctx,
      <title>Stream Prepare Callback</title>
      <para>
       The <function>stream_prepare_cb</function> callback is called to prepare
-      a previously streamed transaction as part of a two-phase commit.
-<programlisting>
+      a previously streamed transaction as part of a two-phase commit. This
+      callback is required when the output plugin supports both the streaming
+      of large in-progress transactions and two-phase commits.
+      <programlisting>
 typedef void (*LogicalDecodeStreamPrepareCB) (struct LogicalDecodingContext *ctx,
                                               ReorderBufferTXN *txn,
                                               XLogRecPtr prepare_lsn);
@@ -950,8 +1002,8 @@ typedef void (*LogicalDecodeStreamPrepareCB) (struct LogicalDecodingContext *ctx
     <sect3 id="logicaldecoding-output-plugin-stream-commit">
      <title>Stream Commit Callback</title>
      <para>
-      The <function>stream_commit_cb</function> callback is called to commit
-      a previously streamed transaction.
+      The required <function>stream_commit_cb</function> callback is called to
+      commit a previously streamed transaction.
 <programlisting>
 typedef void (*LogicalDecodeStreamCommitCB) (struct LogicalDecodingContext *ctx,
                                              ReorderBufferTXN *txn,
@@ -959,12 +1011,12 @@ typedef void (*LogicalDecodeStreamCommitCB) (struct LogicalDecodingContext *ctx,
 </programlisting>
      </para>
     </sect3>
-    
+
     <sect3 id="logicaldecoding-output-plugin-stream-change">
      <title>Stream Change Callback</title>
      <para>
-      The <function>stream_change_cb</function> callback is called when sending
-      a change in a block of streamed changes (demarcated by
+      The required <function>stream_change_cb</function> callback is called
+      when sending a change in a block of streamed changes (demarcated by
       <function>stream_start_cb</function> and <function>stream_stop_cb</function> calls).
       The actual changes are not displayed as the transaction can abort at a later
       point in time and we don't decode changes for aborted transactions.
@@ -980,8 +1032,8 @@ typedef void (*LogicalDecodeStreamChangeCB) (struct LogicalDecodingContext *ctx,
     <sect3 id="logicaldecoding-output-plugin-stream-message">
      <title>Stream Message Callback</title>
      <para>
-      The <function>stream_message_cb</function> callback is called when sending
-      a generic message in a block of streamed changes (demarcated by
+      The optional <function>stream_message_cb</function> callback is called when
+      sending a generic message in a block of streamed changes (demarcated by
       <function>stream_start_cb</function> and <function>stream_stop_cb</function> calls).
       The message contents for transactional messages are not displayed as the transaction
       can abort at a later point in time and we don't decode changes for aborted
@@ -1001,8 +1053,8 @@ typedef void (*LogicalDecodeStreamMessageCB) (struct LogicalDecodingContext *ctx
     <sect3 id="logicaldecoding-output-plugin-stream-truncate">
      <title>Stream Truncate Callback</title>
      <para>
-      The <function>stream_truncate_cb</function> callback is called for a
-      <command>TRUNCATE</command> command in a block of streamed changes
+      The optional <function>stream_truncate_cb</function> callback is called
+      for a <command>TRUNCATE</command> command in a block of streamed changes
       (demarcated by <function>stream_start_cb</function> and
       <function>stream_stop_cb</function> calls).
 <programlisting>
@@ -1066,7 +1118,7 @@ OutputPluginWrite(ctx, true);
 
   <sect1 id="logicaldecoding-synchronous">
    <title>Synchronous Replication Support for Logical Decoding</title>
-   <sect2>
+   <sect2 id="logicaldecoding-synchronous-overview">
     <title>Overview</title>
 
     <para>
@@ -1180,6 +1232,9 @@ OutputPluginWrite(ctx, true);
     <function>stream_abort_cb</function>, <function>stream_commit_cb</function>
     and <function>stream_change_cb</function>) and two optional callbacks
     (<function>stream_message_cb</function> and <function>stream_truncate_cb</function>).
+    Also, if streaming of two-phase commands is to be supported, then additional
+    callbacks must be provided. (See <xref linkend="logicaldecoding-two-phase-commits"/>
+    for details).
    </para>
 
    <para>
@@ -1187,7 +1242,7 @@ OutputPluginWrite(ctx, true);
     streamed in blocks demarcated by <function>stream_start_cb</function>
     and <function>stream_stop_cb</function> callbacks. Once all the decoded
     changes are transmitted, the transaction can be committed using the
-    the <function>stream_commit_cb</function> callback
+    <function>stream_commit_cb</function> callback
     (or possibly aborted using the <function>stream_abort_cb</function> callback).
     If two-phase commits are supported, the transaction can be prepared using the
     <function>stream_prepare_cb</function> callback,
@@ -1218,7 +1273,13 @@ stream_start_cb(...);   &lt;-- start of second block of changes
   stream_change_cb(...);
 stream_stop_cb(...);    &lt;-- end of second block of changes
 
-stream_commit_cb(...);  &lt;-- commit of the streamed transaction
+
+[a. when using normal commit]
+stream_commit_cb(...);    &lt;-- commit of the streamed transaction
+
+[b. when using two-phase commit]
+stream_prepare_cb(...);   &lt;-- prepare the streamed transaction
+commit_prepared_cb(...);  &lt;-- commit of the prepared transaction
 </programlisting>
    </para>
 

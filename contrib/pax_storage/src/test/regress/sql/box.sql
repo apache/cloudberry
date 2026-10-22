@@ -136,7 +136,7 @@ CREATE TEMPORARY TABLE box_temp (f1 box);
 INSERT INTO box_temp
 	SELECT box(point(i, i), point(i * 2, i * 2))
 	FROM generate_series(1, 50) AS i;
--- PAX not support gist/spgist/brin indexes
+
 CREATE INDEX box_spgist ON box_temp USING spgist (f1);
 
 INSERT INTO box_temp
@@ -212,7 +212,7 @@ VALUES
   (11003, '((-infinity,-infinity),(infinity,infinity))'),
   (11004, '((-infinity,100),(-infinity,500))'),
   (11005, '((-infinity,-infinity),(700,infinity))');
--- PAX not support gist/spgist/brin indexes
+
 CREATE INDEX quad_box_tbl_idx ON quad_box_tbl USING spgist(b);
 ANALYZE quad_box_tbl;
 
@@ -283,3 +283,9 @@ WHERE seq.id IS NULL OR idx.id IS NULL;
 RESET enable_seqscan;
 RESET enable_indexscan;
 RESET enable_bitmapscan;
+
+-- test non-error-throwing API for some core types
+SELECT pg_input_is_valid('200', 'box');
+SELECT * FROM pg_input_error_info('200', 'box');
+SELECT pg_input_is_valid('((200,300),(500, xyz))', 'box');
+SELECT * FROM pg_input_error_info('((200,300),(500, xyz))', 'box');

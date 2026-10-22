@@ -26,6 +26,7 @@
 #include "cdb/ml_ipc.h"
 #include "cdb/tupleremap.h"
 #include "cdb/tupser.h"
+#include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/typcache.h"
 

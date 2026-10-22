@@ -52,6 +52,9 @@ CATALOG(pg_stat_last_operation,6052,StatLastOpRelationId)
 /* GPDB added foreign key definitions for gpcheckcat. */
 FOREIGN_KEY(classid REFERENCES pg_class(oid));
 FOREIGN_KEY(stasysid REFERENCES pg_authid(oid));
+DECLARE_UNIQUE_INDEX(pg_statlastop_classid_objid_staactionname_index, 6054, StatLastOpClassidObjidStaactionnameIndexId, on pg_stat_last_operation using btree(classid oid_ops, objid oid_ops, staactionname name_ops));
+DECLARE_INDEX(pg_statlastshop_classid_objid_index, 6057, StatLastShOpClassidObjidIndexId, on pg_stat_last_shoperation using btree(classid oid_ops, objid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_statlastshop_classid_objid_staactionname_index, 6058, StatLastShOpClassidObjidStaactionnameIndexId, on pg_stat_last_shoperation using btree(classid oid_ops, objid oid_ops, staactionname name_ops));
 
 #undef timestamptz
 

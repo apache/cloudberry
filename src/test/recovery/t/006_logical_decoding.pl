@@ -1,5 +1,5 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 # Testing of logical decoding using SQL interface and/or pg_recvlogical
 #
@@ -8,13 +8,13 @@
 # are required.
 use strict;
 use warnings;
-use PostgresNode;
-use TestLib;
-use Test::More tests => 14;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 use Config;
 
 # Initialize primary node
-my $node_primary = get_new_node('primary');
+my $node_primary = PostgreSQL::Test::Cluster->new('primary');
 $node_primary->init(allows_streaming => 1);
 $node_primary->append_conf(
 	'postgresql.conf', qq(
@@ -38,6 +38,15 @@ my ($result, $stdout, $stderr) = $node_primary->psql(
 ok( $stderr =~
 	  m/replication slot "test_slot" was not created in this database/,
 	"Logical decoding correctly fails to start");
+
+($result, $stdout, $stderr) = $node_primary->psql(
+	'template1',
+	qq[READ_REPLICATION_SLOT test_slot;],
+	replication => 'database');
+like(
+	$stderr,
+	qr/cannot use READ_REPLICATION_SLOT with a logical replication slot/,
+	'READ_REPLICATION_SLOT not supported for logical slots');
 
 # Check case of walsender not using a database connection.  Logical
 # decoding should not be allowed.
@@ -98,8 +107,9 @@ $node_primary->safe_psql('postgres',
 );
 
 my $stdout_recv = $node_primary->pg_recvlogical_upto(
-	'postgres', 'test_slot', $endpos, $TestLib::timeout_default,
-	'include-xids'     => '0',
+	'postgres', 'test_slot', $endpos,
+	$PostgreSQL::Test::Utils::timeout_default,
+	'include-xids' => '0',
 	'skip-empty-xacts' => '1');
 chomp($stdout_recv);
 is($stdout_recv, $expected,
@@ -110,8 +120,9 @@ $node_primary->poll_query_until('postgres',
 ) or die "slot never became inactive";
 
 $stdout_recv = $node_primary->pg_recvlogical_upto(
-	'postgres', 'test_slot', $endpos, $TestLib::timeout_default,
-	'include-xids'     => '0',
+	'postgres', 'test_slot', $endpos,
+	$PostgreSQL::Test::Utils::timeout_default,
+	'include-xids' => '0',
 	'skip-empty-xacts' => '1');
 chomp($stdout_recv);
 is($stdout_recv, '', 'pg_recvlogical acknowledged changes');
@@ -147,8 +158,8 @@ SKIP:
 	is($node_primary->psql('postgres', 'DROP DATABASE otherdb'),
 		3, 'dropping a DB with active logical slots fails');
 	$pg_recvlogical->kill_kill;
-	is($node_primary->slot('otherdb_slot')->{'slot_name'},
-		undef, 'logical slot still exists');
+	is($node_primary->slot('otherdb_slot')->{'plugin'},
+		'test_decoding', 'logical slot still exists');
 }
 
 $node_primary->poll_query_until('otherdb',
@@ -157,8 +168,8 @@ $node_primary->poll_query_until('otherdb',
 
 is($node_primary->psql('postgres', 'DROP DATABASE otherdb'),
 	0, 'dropping a DB with inactive logical slots succeeds');
-is($node_primary->slot('otherdb_slot')->{'slot_name'},
-	undef, 'logical slot was actually dropped with DB');
+is($node_primary->slot('otherdb_slot')->{'plugin'},
+	'', 'logical slot was actually dropped with DB');
 
 # Test logical slot advancing and its durability.
 my $logical_slot = 'logical_slot';
@@ -189,5 +200,76 @@ chomp($logical_restart_lsn_post);
 ok(($logical_restart_lsn_pre cmp $logical_restart_lsn_post) == 0,
 	"logical slot advance persists across restarts");
 
+my $stats_test_slot1 = 'test_slot';
+my $stats_test_slot2 = 'logical_slot';
+
+# Test that reset works for pg_stat_replication_slots
+
+# Stats exist for stats test slot 1
+is( $node_primary->safe_psql(
+		'postgres',
+		qq(SELECT total_bytes > 0, stats_reset IS NULL FROM pg_stat_replication_slots WHERE slot_name = '$stats_test_slot1')
+	),
+	qq(t|t),
+	qq(Total bytes is > 0 and stats_reset is NULL for slot '$stats_test_slot1'.)
+);
+
+# Do reset of stats for stats test slot 1
+$node_primary->safe_psql('postgres',
+	qq(SELECT pg_stat_reset_replication_slot('$stats_test_slot1')));
+
+# Get reset value after reset
+my $reset1 = $node_primary->safe_psql('postgres',
+	qq(SELECT stats_reset FROM pg_stat_replication_slots WHERE slot_name = '$stats_test_slot1')
+);
+
+# Do reset again
+$node_primary->safe_psql('postgres',
+	qq(SELECT pg_stat_reset_replication_slot('$stats_test_slot1')));
+
+is( $node_primary->safe_psql(
+		'postgres',
+		qq(SELECT stats_reset > '$reset1'::timestamptz, total_bytes = 0 FROM pg_stat_replication_slots WHERE slot_name = '$stats_test_slot1')
+	),
+	qq(t|t),
+	qq(Check that reset timestamp is later after the second reset of stats for slot '$stats_test_slot1' and confirm total_bytes was set to 0.)
+);
+
+# Check that test slot 2 has NULL in reset timestamp
+is( $node_primary->safe_psql(
+		'postgres',
+		qq(SELECT stats_reset IS NULL FROM pg_stat_replication_slots WHERE slot_name = '$stats_test_slot2')
+	),
+	qq(t),
+	qq(Stats_reset is NULL for slot '$stats_test_slot2' before reset.));
+
+# Get reset value again for test slot 1
+$reset1 = $node_primary->safe_psql('postgres',
+	qq(SELECT stats_reset FROM pg_stat_replication_slots WHERE slot_name = '$stats_test_slot1')
+);
+
+# Reset stats for all replication slots
+$node_primary->safe_psql('postgres',
+	qq(SELECT pg_stat_reset_replication_slot(NULL)));
+
+# Check that test slot 2 reset timestamp is no longer NULL after reset
+is( $node_primary->safe_psql(
+		'postgres',
+		qq(SELECT stats_reset IS NOT NULL FROM pg_stat_replication_slots WHERE slot_name = '$stats_test_slot2')
+	),
+	qq(t),
+	qq(Stats_reset is not NULL for slot '$stats_test_slot2' after reset all.)
+);
+
+is( $node_primary->safe_psql(
+		'postgres',
+		qq(SELECT stats_reset > '$reset1'::timestamptz FROM pg_stat_replication_slots WHERE slot_name = '$stats_test_slot1')
+	),
+	qq(t),
+	qq(Check that reset timestamp is later after resetting stats for slot '$stats_test_slot1' again.)
+);
+
 # done with the node
 $node_primary->stop;
+
+done_testing();

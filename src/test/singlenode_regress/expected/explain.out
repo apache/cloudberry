@@ -422,13 +422,6 @@ select jsonb_pretty(
              "Sort Key": [                           +
                  "tenk1.tenthous"                    +
              ],                                      +
-             "work_mem": {                           +
-                 "Used": 0,                          +
-                 "Segments": 0,                      +
-                 "Max Memory": 0,                    +
-                 "Workfile Spilling": 0,             +
-                 "Max Memory Segment": 0             +
-             },                                      +
              "Node Type": "Sort",                    +
              "Plan Rows": 0,                         +
              "Plan Width": 0,                        +
@@ -482,8 +475,7 @@ select jsonb_pretty(
          "Slice statistics": [                       +
              {                                       +
                  "Slice": 0,                         +
-                 "Executor Memory": 0,               +
-                 "Work Maximum Memory": 0            +
+                 "Executor Memory": 0                +
              }                                       +
          ],                                          +
          "Statement statistics": {                   +

@@ -1,0 +1,184 @@
+--
+-- external tables - short and simple functional tests.
+--
+-- start_matchsubs
+--
+-- # replace return code in error message (platform specific)
+--
+-- m/ERROR\:\s+external table .* command ended with .* not found/
+-- s/nosuchcommand\:\s*(command)? not found/nosuchcommand\: NOT FOUND/
+--
+-- m/ERROR\:\s+external table .* command ended with .*No such file.*/
+-- s/nosuchfile\.txt\:\s*No such file (or directory)?/nosuchfile\.txt\: NO SUCH FILE/
+-- m/ERROR\:\s+external table .* command ended with .*No such file.*/i
+-- s/cat\: (cannot open)? nosuchfile\.txt/cat\: nosuchfile\.txt/
+--
+-- # remove line number - redhat
+-- m/ERROR\:\s+external table .* command ended with .*NOT FOUND.*/i
+-- s/\s+line \d+\://
+-- # remove line number - Debian
+-- m/ERROR\:\s+external table .* command ended with .*sh: 1: .*NOT FOUND.*/i
+-- s/ sh: 1: / sh: /
+--
+-- m/DETAIL:  Found \d+ URLs and \d+ primary segments./
+-- s/Found.+//
+--
+-- end_matchsubs
+
+set optimizer_trace_fallback=on;
+create schema part_external_table;
+set search_path=part_external_table;
+
+\getenv hostname PG_HOSTNAME
+\getenv abs_srcdir PG_ABS_SRCDIR
+\set part1_file 'file://' :hostname :abs_srcdir '/data/part1.csv'
+\set part2_file 'file://' :hostname :abs_srcdir '/data/part2.csv'
+create table part (a int, b int) partition by range (b);
+create external table p1_e (a int, b int) location (:'part1_file') format 'csv';
+create external table p2_e (a int, b int) location (:'part2_file') format 'csv';
+alter table part attach partition p1_e for values from (0) to (10);
+alter table part attach partition p2_e for values from (10) to (19);
+analyze part;
+
+explain select * from part;
+select * from part;
+
+-- test SPE
+explain select * from part where b>10 and a>0;
+select * from part where b>10 and a>0;
+
+create table non_part (a int, b int) distributed by (a);
+insert into non_part values (15,15);
+analyze non_part;
+
+-- mixed partitions with DPE with multiple dynamic scans, select one partition
+-- start_ignore
+-- unstable test case
+explain analyze select * from part, non_part where part.b=non_part.b;
+--end_ignore
+select * from part, non_part where part.b=non_part.b;
+
+insert into non_part values (5,5);
+analyze non_part;
+-- mixed partitions with DPE with multiple dynamic scans, select both partition
+-- start_ignore
+-- unstable test case
+explain analyze select * from part, non_part where part.b=non_part.b;
+-- end_ignore
+select * from part, non_part where part.b=non_part.b;
+
+create table p3 (a int, b int) distributed by (a);
+create table p4 (a int, b int) distributed by (a);
+alter table part attach partition p3 for values from (20) to (30);
+alter table part attach partition p4 for values from (30) to (40);
+insert into part select i,i from generate_series(25,35)i;
+analyze part;
+insert into non_part values (32,32);
+
+-- mixed partitions
+explain select * from part;
+select * from part;
+
+--mixed partitions with SPE
+explain select * from part where b>10 and b<25;
+select * from part where b>10 and b<25 and a > 2;
+
+--mixed partitions with SPE, only do seq scans
+explain select * from part where b>25;
+select * from part where b>25;
+
+--mixed partitions with SPE, only do foreign scans
+explain select a from part where b<18;
+select a from part where b<18;
+
+truncate non_part;
+-- mixed partitions with DPE with multiple dynamic scans, select no partitions
+explain analyze select * from part, non_part where part.b=non_part.b;
+select * from part, non_part where part.b=non_part.b;
+
+insert into non_part values (15,15), (32,32);
+-- mixed partitions with DPE with multiple dynamic scans, select one partition from each dynamic scan
+explain analyze select * from part, non_part where part.b=non_part.b;
+select * from part, non_part where part.b=non_part.b;
+
+-- test different servers, should create different scans
+-- note: do not select here, just test plan
+
+CREATE EXTENSION file_fdw;
+
+CREATE SERVER file_server1 FOREIGN DATA WRAPPER file_fdw;
+CREATE SERVER file_server2 FOREIGN DATA WRAPPER file_fdw;
+
+CREATE FOREIGN TABLE ft1 (
+	a int,
+	b int
+) SERVER file_server1
+OPTIONS ( filename '/does/not/exist.csv', format 'csv');
+
+CREATE FOREIGN TABLE ft2 (
+	a int,
+	b int
+) SERVER file_server2
+OPTIONS ( filename '/does/not/exist.csv', format 'csv');
+
+alter table part attach partition ft1 for values from (40) to (50);
+alter table part attach partition ft2 for values from (50) to (60);
+analyze part;
+
+-- should have multiple dynamic scans
+explain select * from part;
+
+-- eliminate unnecessary dynamic scans and foreign sans
+explain select * from part where b = 53;
+
+-- only select foreign scans
+explain select * from part where b > 22;
+
+--
+-- exchange & attach partition
+--
+alter table part add partition exch1 start(60) end (70);
+alter table part add partition exch2 start(70) end (80);
+
+-- exchange with external tables
+\set part_ext_file 'cat > ' :abs_srcdir '/data/part-ext.csv'
+create external web table p3_e (a int, b int) execute :'part_ext_file' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
+create writable external web table p4_e (a int, b int) execute :'part_ext_file' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
+
+-- allow exchange readable external table
+alter table part exchange partition exch1 with table p3_e;
+
+-- should disallow writable external table
+alter table part exchange partition exch1 with table p4_e;
+
+-- exchange with foreign tables
+CREATE SERVER file_server3 FOREIGN DATA WRAPPER file_fdw;
+CREATE FOREIGN TABLE ft3 (
+	a int,
+	b int
+) SERVER file_server3
+OPTIONS ( filename '/does/not/exist.csv', format 'csv');
+
+-- exchange works, but no error checking like for external tables
+alter table part exchange partition exch2 with table ft3;
+
+-- same tests for attach partition
+create external web table p5_e (a int, b int) execute :'part_ext_file' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
+create writable external web table p6_e (a int, b int) execute :'part_ext_file' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
+
+-- allow attach readable external table
+alter table part attach partition p5_e for values from (80) to (90);
+
+-- should disallow writable external table
+alter table part attach partition p6_e for values from (90) to (100);
+
+-- attach foreign table
+CREATE SERVER file_server4 FOREIGN DATA WRAPPER file_fdw;
+CREATE FOREIGN TABLE ft4 (
+	a int,
+	b int
+) SERVER file_server4
+OPTIONS ( filename '/does/not/exist.csv', format 'csv');
+
+-- exchange works, but no error checking like for external tables
+alter table part attach partition ft4 for values from (100) to (110);

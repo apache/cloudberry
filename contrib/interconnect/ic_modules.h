@@ -18,5 +18,6 @@ extern MotionIPCLayer proxy_ipc_layer;
 extern MotionIPCLayer udpifc_ipc_layer;
 
 extern void _PG_init(void);
+extern void _PG_fini(void);
 
 #endif // INTER_CONNECT_H

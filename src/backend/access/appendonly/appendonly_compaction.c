@@ -32,6 +32,7 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/toast_internals.h"
+#include "access/tableam.h"
 #include "access/transam.h"
 #include "access/heaptoast.h"
 #include "access/xact.h"
@@ -252,7 +253,7 @@ AppendOnlySegmentFileTruncateToEOF(Relation aorel, int segno, int64 segeof, AOVa
 		   get_namespace_name(RelationGetNamespace(aorel)),
 		   relname,
 		   aorel->rd_id,
-		   aorel->rd_node.relNode,
+		   aorel->rd_locator.relNumber,
 		   segno,
 		   segeof);
 
@@ -267,7 +268,7 @@ AppendOnlySegmentFileTruncateToEOF(Relation aorel, int segno, int64 segeof, AOVa
 			   get_namespace_name(RelationGetNamespace(aorel)),
 			   relname,
 			   aorel->rd_id,
-			   aorel->rd_node.relNode,
+			   aorel->rd_locator.relNumber,
 			   segno,
 			   segeof);
 	}
@@ -278,7 +279,7 @@ AppendOnlySegmentFileTruncateToEOF(Relation aorel, int segno, int64 segeof, AOVa
 			   get_namespace_name(RelationGetNamespace(aorel)),
 			   relname,
 			   aorel->rd_id,
-			   aorel->rd_node.relNode,
+			   aorel->rd_locator.relNumber,
 			   segno,
 			   segeof);
 	}
@@ -315,7 +316,7 @@ AppendOnlyMoveTuple(TupleTableSlot *slot,
 	{
 		ExecInsertIndexTuples(resultRelInfo,
 													slot, estate, false, false,
-													NULL, NIL);
+													NULL, NIL, false);
 		ResetPerTupleExprContext(estate);
 	}
 
@@ -362,7 +363,7 @@ AppendOnlyThrowAwayTuple(Relation rel, TupleTableSlot *slot, MemTupleBinding *mt
 
 			if (toast_isnull[i])
 				continue;
-			else if (VARATT_IS_EXTERNAL_ONDISK(PointerGetDatum(value)))
+			else if (VARATT_IS_EXTERNAL_ONDISK(value))
 				toast_delete_datum(rel, value, false);
 		}
 	}
@@ -443,7 +444,8 @@ AppendOnlySegmentFileFullCompaction(Relation aorel,
 										 &compact_segno, 1, 0, NULL);
 
 	tupDesc = RelationGetDescr(aorel);
-	slot = MakeSingleTupleTableSlot(tupDesc, &TTSOpsVirtual);
+	/* Use the slot type the table's access method hands out, not a fixed one. */
+	slot = table_slot_create(aorel, NULL);
 	slot->tts_tableOid = RelationGetRelid(aorel);
 	mt_bind = create_memtuple_binding(tupDesc);
 
@@ -727,7 +729,7 @@ AppendOptimizedTruncateToEOF(Relation aorel, AOVacuumRelStats *vacrelstats)
 	 * The algorithm below for choosing a target segment is not concurrent-safe.
 	 * Grab a lock to serialize.
 	 */
-	LockDatabaseObject(aorel->rd_node.dbNode, (Oid)aorel->rd_node.relNode, 0, ExclusiveLock);
+	LockDatabaseObject(aorel->rd_locator.dbOid, (Oid)aorel->rd_locator.relNumber, 0, ExclusiveLock);
 
 	GetAppendOnlyEntryAuxOids(aorel,
 							  &segrelid, NULL, NULL, NULL, NULL);
@@ -787,7 +789,7 @@ AppendOptimizedTruncateToEOF(Relation aorel, AOVacuumRelStats *vacrelstats)
 		}
 	}
 	systable_endscan(aoscan);
-	UnlockDatabaseObject(aorel->rd_node.dbNode, (Oid)aorel->rd_node.relNode, 0, ExclusiveLock);
+	UnlockDatabaseObject(aorel->rd_locator.dbOid, (Oid)aorel->rd_locator.relNumber, 0, ExclusiveLock);
 	heap_close(pg_aoseg_rel, AccessShareLock);
 	UnregisterSnapshot(appendOnlyMetaDataSnapshot);
 }

@@ -30,11 +30,9 @@
 # Configuration Features:
 #   - Cloud Storage Integration (gpcloud)
 #   - IC Proxy Support
-#   - MapReduce Processing
 #   - Oracle Compatibility (orafce)
 #   - ORCA Query Optimizer
 #   - PAX Access Method
-#   - PXF External Table Access
 #   - Test Automation Support (tap-tests)
 #
 # System Integration:
@@ -155,11 +153,9 @@ execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
             --disable-external-fts \
             --enable-gpcloud \
             --enable-ic-proxy \
-            --enable-mapreduce \
             --enable-orafce \
             --enable-orca \
             --enable-pax \
-            --disable-pxf \
             --enable-tap-tests \
             ${CONFIGURE_DEBUG_OPTS} \
             --with-diskquota \
@@ -169,6 +165,7 @@ execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
             --with-libxml \
             --with-lz4 \
             --with-openssl \
+            --with-zstd \
             --with-pam \
             --with-perl \
             --with-pgport=5432 \
@@ -184,7 +181,7 @@ log_section_end "Configure"
 
 # Capture version information
 log_section "Version Information"
-execute_cmd ag "GP_VERSION | GP_VERSION_NUM | PG_VERSION | PG_VERSION_NUM | PG_VERSION_STR" src/include/pg_config.h
+execute_cmd grep -E "GP_VERSION|GP_VERSION_NUM|PG_VERSION|PG_VERSION_NUM|PG_VERSION_STR" src/include/pg_config.h || true
 log_section_end "Version Information"
 
 # Log completion

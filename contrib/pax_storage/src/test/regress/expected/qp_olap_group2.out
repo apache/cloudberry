@@ -1,8 +1,10 @@
 --
 -- One purpose of these tests is to make sure that ORCA can handle all these
 -- queries, and not fall back to the Postgres planner. To detect that,
+-- turn optimizer_trace_fallback on, and watch for "falling back to planner"
 -- messages.
 --
+set optimizer_trace_fallback='on';
 -- Query 1
 SELECT GROUPING(product.pname) as g1 FROM product, sale WHERE product.pn=sale.pn GROUP BY GROUPING SETS (sale.pn, product.pname) ORDER BY g1;
  g1 

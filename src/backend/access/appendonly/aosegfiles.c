@@ -47,7 +47,6 @@
 #include "utils/builtins.h"
 #include "utils/faultinjector.h"
 #include "utils/guc.h"
-#include "utils/int8.h"
 #include "utils/lsyscache.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
@@ -621,6 +620,7 @@ ClearFileSegInfo(Relation parentrel, int segno)
 	bool	   *new_record_repl;
 	bool		isNull;
 	Oid segrelid;
+	TU_UpdateIndexes updateIndexes = TU_All;
 
 	GetAppendOnlyEntryAuxOids(parentrel, &segrelid, NULL, NULL, NULL, NULL);
 
@@ -677,7 +677,7 @@ ClearFileSegInfo(Relation parentrel, int segno)
 	new_tuple = heap_modify_tuple(tuple, pg_aoseg_dsc, new_record,
 								  new_record_nulls, new_record_repl);
 
-	simple_heap_update(pg_aoseg_rel, &tuple->t_self, new_tuple);
+	simple_heap_update(pg_aoseg_rel, &tuple->t_self, new_tuple, &updateIndexes);
 	heap_freetuple(new_tuple);
 
 	table_endscan(aoscan);
@@ -757,6 +757,7 @@ UpdateFileSegInfo_internal(Relation parentrel,
 	bool	   *new_record_repl;
 	bool		isNull;
 	Oid segrelid;
+	TU_UpdateIndexes updateIndexes = TU_All;
 
 	Assert(RelationStorageIsAoRows(parentrel));
 	GetAppendOnlyEntryAuxOids(parentrel, &segrelid, NULL, NULL, NULL, NULL);
@@ -828,7 +829,7 @@ UpdateFileSegInfo_internal(Relation parentrel,
 	{
 		elog(ERROR, "Unexpected compressed EOF for relation %s, relfilenode %u, segment file %d. "
 			 "EOF " INT64_FORMAT " to be updated cannot be smaller than current EOF " INT64_FORMAT " in pg_aoseg",
-			 RelationGetRelationName(parentrel), parentrel->rd_node.relNode,
+			 RelationGetRelationName(parentrel), parentrel->rd_locator.relNumber,
 			 segno, eof, old_eof);
 	}
 
@@ -849,7 +850,7 @@ UpdateFileSegInfo_internal(Relation parentrel,
 	{
 		elog(ERROR, "Unexpected EOF for relation %s, relfilenode %u, segment file %d."
 			 "EOF " INT64_FORMAT " to be updated cannot be smaller than current EOF " INT64_FORMAT " in pg_aoseg",
-			 RelationGetRelationName(parentrel), parentrel->rd_node.relNode,
+			 RelationGetRelationName(parentrel), parentrel->rd_locator.relNumber,
 			 segno, eof_uncompressed, old_eof_uncompressed);
 	}
 
@@ -925,7 +926,7 @@ UpdateFileSegInfo_internal(Relation parentrel,
 	new_tuple = heap_modify_tuple(tuple, pg_aoseg_dsc, new_record,
 								  new_record_nulls, new_record_repl);
 
-	simple_heap_update(pg_aoseg_rel, &tuple->t_self, new_tuple);
+	simple_heap_update(pg_aoseg_rel, &tuple->t_self, new_tuple, &updateIndexes);
 
 	heap_freetuple(new_tuple);
 
@@ -1635,10 +1636,10 @@ aorow_compression_ratio_internal(Relation parentrel)
 			{
 				compress_ratio = 1;
 			}
-			else if (scanint8(attr1, true, &eof) &&
-					 scanint8(attr2, true, &eof_uncomp))
+			else
 			{
-				/* guard against division by zero */
+				eof = pg_strtoint64(attr1);
+				eof_uncomp = pg_strtoint64(attr2);
 				if (eof > 0)
 				{
 					/* calculate the compression ratio */
@@ -1647,12 +1648,6 @@ aorow_compression_ratio_internal(Relation parentrel)
 					/* format to 2 digit decimal precision */
 					compress_ratio = round(compress_ratio * 100.0) / 100.0;
 				}
-			}
-			else
-			{
-				ereport(ERROR,
-						(errcode(ERRCODE_INTERNAL_ERROR),
-						errmsg("unable to parse aorow compress_ratio string to int8.")));
 			}
 		}
 

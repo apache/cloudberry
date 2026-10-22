@@ -23,7 +23,7 @@ CREATE LANGUAGE plpython3u;
 ! gpconfig -c gp_resource_manager -v group;
 ! gpconfig -c max_connections -v 250 -m 25;
 ! gpconfig -c runaway_detector_activation_percent -v 100;
-! gpstop -rai;
+! gpstop -raf;
 -- end_ignore
 
 -- after the restart we need a new connection to run the queries
@@ -255,23 +255,26 @@ $$ LANGUAGE plpython3u;
     result = plpy.execute(sql)
     groupid = result[0]['groupid']
 
-    sql = "select hostname from gp_segment_configuration group by hostname"
+    sql = """select sc.hostname, array_agg(pa.pid::text) as pids
+             from gp_stat_activity pa
+             join gp_segment_configuration sc
+               on pa.gp_segment_id = sc.content and sc.role = 'p'
+             where pa.sess_id = %d
+             group by sc.hostname""" % session_id
     result = plpy.execute(sql)
-    hosts = [_['hostname'] for _ in result]
 
-    def get_result(host):
-        stdout = subprocess.run(["ssh", "{}".format(host), "ps -ef | grep postgres | grep con{} | grep -v grep | awk '{{print $2}}'".format(session_id)],
-                                check=True, stdout=subprocess.PIPE).stdout
-        session_pids = stdout.splitlines()
+    for row in result:
+        host = row['hostname']
+        session_pids = set(row['pids'])
+
+        if not session_pids:
+            continue
 
         path = "/sys/fs/cgroup/cpu/gpdb/{}/cgroup.procs".format(groupid)
-        stdout = subprocess.run(["ssh", "{}".format(host), "cat {}".format(path)], check=True, stdout=subprocess.PIPE).stdout
-        cgroups_pids = stdout.splitlines()
+        stdout = subprocess.run(["ssh", "{}".format(host), "cat {}".format(path)], stdout=subprocess.PIPE, check=True).stdout
+        cgroups_pids = set(stdout.decode().splitlines())
 
-        return set(session_pids).issubset(set(cgroups_pids))
-
-    for host in hosts:
-        if not get_result(host):
+        if not session_pids.issubset(cgroups_pids):
             return False
     return True
 

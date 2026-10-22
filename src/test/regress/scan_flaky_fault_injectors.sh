@@ -7,6 +7,12 @@
 
 set -e
 
+# sort(1) and comm(1) must use the same collation. With a UTF-8 locale they can
+# disagree on the order (as the uutils coreutils of Ubuntu 26.04 do), and comm
+# then fails with "input is not in sorted order". The C locale gives plain
+# byte order for both, and the test names are ASCII.
+export LC_ALL=C
+
 fault_injection_tests=$(mktemp fault_injection_tests.XXX)
 parallel_tests=$(mktemp parallel_tests.XXX)
 retcode=0

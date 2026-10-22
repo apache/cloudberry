@@ -166,7 +166,6 @@ SetNextFileSegForRead(AppendOnlyScanDesc scan)
 	if (!scan->initedStorageRoutines)
 	{
 		PGFunction *fns = NULL;
-		RelationOpenSmgr(reln);
 
 		AppendOnlyStorageRead_Init(
 								   &scan->storageRead,
@@ -176,7 +175,8 @@ SetNextFileSegForRead(AppendOnlyScanDesc scan)
 								   RelationGetRelid(scan->aos_rd),
 								   scan->title,
 								   &scan->storageAttributes,
-								   &scan->aos_rd->rd_node, reln->rd_smgr->smgr_ao);
+								   &scan->aos_rd->rd_locator,
+								   RelationGetSmgr(reln)->smgr_ao);
 
 		/*
 		 * There is no guarantee that the current memory context will be
@@ -313,9 +313,9 @@ SetNextFileSegForRead(AppendOnlyScanDesc scan)
 		   "Append-only scan initialize for table '%s', %u/%u/%u, segment file %u, EOF " INT64_FORMAT ", "
 		   "(compression = %s, usable blocksize %d)",
 		   NameStr(scan->aos_rd->rd_rel->relname),
-		   scan->aos_rd->rd_node.spcNode,
-		   scan->aos_rd->rd_node.dbNode,
-		   scan->aos_rd->rd_node.relNode,
+		   scan->aos_rd->rd_locator.spcOid,
+		   scan->aos_rd->rd_locator.dbOid,
+		   scan->aos_rd->rd_locator.relNumber,
 		   segno,
 		   eof,
 		   (scan->storageAttributes.compress ? "true" : "false"),
@@ -347,7 +347,7 @@ errcontext_appendonly_insert_block_user_limit(AppendOnlyInsertDesc aoInsertDesc)
 static void
 SetCurrentFileSegForWrite(AppendOnlyInsertDesc aoInsertDesc)
 {
-	RelFileNodeBackend rnode;
+	RelFileLocatorBackend rnode;
 
 	FileSegInfo *fsinfo;
 	int64		eof;
@@ -355,7 +355,7 @@ SetCurrentFileSegForWrite(AppendOnlyInsertDesc aoInsertDesc)
 	int64		varblockcount;
 	int32		fileSegNo;
 
-	rnode.node = aoInsertDesc->aoi_rel->rd_node;
+	rnode.locator = aoInsertDesc->aoi_rel->rd_locator;
 	rnode.backend = aoInsertDesc->aoi_rel->rd_backend;
 
 	/* Make the 'segment' file name */
@@ -831,29 +831,33 @@ AppendOnlyExecutorReadBlock_ProcessTuple(AppendOnlyExecutorReadBlock *executorRe
 	 */
 	Assert (slot);
 	{
-		bool		shouldFree = false;
-
 		Assert(executorReadBlock->mt_bind);
 
-		ExecClearTuple(slot);
-		memtuple_deform(tuple, executorReadBlock->mt_bind, slot->tts_values, slot->tts_isnull);
-		slot->tts_tid = fake_ctid;
-
-		if (shouldFree)
+		/*
+		 * Hand the tuple to the slot as it is.  Attributes are fetched from
+		 * it only as the executor asks for them, so a query over a wide table
+		 * does not pay for the columns it never reads.
+		 *
+		 * The tuple points into the read buffer and stays valid until the
+		 * next block is read, which is why the slot does not own it.
+		 */
+		if (TTS_IS_MEMTUPLE(slot))
+		{
+			ExecStoreMemTuple(tuple, executorReadBlock->mt_bind, slot, false);
+			slot->tts_tid = fake_ctid;
+		}
+		else
 		{
 			/*
-			 * Store the converted memtuple in slot->data, so that it gets free'd
-			 * automatically when it's no longer needed.
+			 * A caller that brought its own slot type gets the tuple expanded
+			 * up front, which is all a virtual slot can represent.
 			 */
-			Assert(TTS_IS_VIRTUAL(slot));
-			VirtualTupleTableSlot *vslot = (VirtualTupleTableSlot *) slot;
-			Assert(vslot->data == NULL);
-			Assert(!TTS_SHOULDFREE(slot));
-
-			slot->tts_flags |= TTS_FLAG_SHOULDFREE;
-			vslot->data = (char *) tuple;
+			ExecClearTuple(slot);
+			memtuple_deform(tuple, executorReadBlock->mt_bind,
+							slot->tts_values, slot->tts_isnull);
+			slot->tts_tid = fake_ctid;
+			ExecStoreVirtualTuple(slot);
 		}
-		ExecStoreVirtualTuple(slot);
 	}
 
 	/* skip visibility test, all tuples are visible */
@@ -2453,8 +2457,6 @@ appendonly_fetch_init(Relation relation,
 		aoFetchDesc->lastSequence[segno] = ReadLastSequence(aoFormData.segrelid, segno);
 	}
 
-	RelationOpenSmgr(relation);
-
 	AppendOnlyStorageRead_Init(
 							   &aoFetchDesc->storageRead,
 							   aoFetchDesc->initContext,
@@ -2463,7 +2465,8 @@ appendonly_fetch_init(Relation relation,
 							   RelationGetRelid(aoFetchDesc->relation),
 							   aoFetchDesc->title,
 							   &aoFetchDesc->storageAttributes,
-							   &relation->rd_node, relation->rd_smgr->smgr_ao);
+							   &relation->rd_locator,
+							   RelationGetSmgr(relation)->smgr_ao);
 
 
 	fns = get_funcs_for_compression(NameStr(aoFormData.compresstype));
@@ -2535,7 +2538,7 @@ appendonly_fetch(AppendOnlyFetchDesc aoFetchDesc,
 		ereport(ERROR,
 				(errcode(ERRCODE_INTERNAL_ERROR),
 				 errmsg("Row No. %ld in segment file No. %d is out of scanning scope for target relfilenode %u.",
-				 		rowNum, segmentFileNum, aoFetchDesc->relation->rd_node.relNode)));
+				 		rowNum, segmentFileNum, aoFetchDesc->relation->rd_locator.relNumber)));
 
 	/*
 	 * This is an improvement for brin. BRIN index stores ranges of TIDs in
@@ -2981,8 +2984,6 @@ appendonly_insert_init(Relation rel, int segno)
 					 RelationGetRelationName(aoInsertDesc->aoi_rel));
 	aoInsertDesc->title = titleBuf.data;
 
-	RelationOpenSmgr(rel);
-
 	AppendOnlyStorageWrite_Init(
 								&aoInsertDesc->storageWrite,
 								NULL,
@@ -2991,7 +2992,8 @@ appendonly_insert_init(Relation rel, int segno)
 								RelationGetRelid(aoInsertDesc->aoi_rel),
 								aoInsertDesc->title,
 								&aoInsertDesc->storageAttributes,
-								XLogIsNeeded() && RelationNeedsWAL(aoInsertDesc->aoi_rel), rel->rd_smgr->smgr_ao);
+								XLogIsNeeded() && RelationNeedsWAL(aoInsertDesc->aoi_rel),
+								RelationGetSmgr(rel)->smgr_ao);
 
 	aoInsertDesc->storageWrite.compression_functions = fns;
 	aoInsertDesc->storageWrite.compressionState = cs;

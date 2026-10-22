@@ -112,7 +112,7 @@ uint32 FindClosestBits(int64 value) {
   return GetClosestBits(count);
 }
 
-void BuildHistogram(int32 *histogram, int64_t *data, size_t number) {
+void BuildHistogram(int32 *histogram, int64 *data, size_t number) {
   // histogram that store the encoded bit requirement for each values.
   // maximum number of bits that can encoded is 32 (refer FixedBitSizes)
   memset(histogram, 0, FixedBitSizes::kSIZE * sizeof(int32_t));
@@ -141,7 +141,7 @@ uint32_t GetPercentileBits(const int32 *const histogram, size_t histogram_len,
   return 0;
 }
 
-void ZigZagBuffers(int64_t *input, int64_t *output, size_t number) {
+void ZigZagBuffers(int64 *input, int64 *output, size_t number) {
   Assert(input && output);
   for (size_t i = 0; i < number; i++) {
     output[i] = ZigZag(input[i]);

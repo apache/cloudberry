@@ -12,6 +12,7 @@ PGFILEDESC = "amcheck - function for verifying relation integrity"
 
 REGRESS = check check_btree check_heap
 
+EXTRA_INSTALL = contrib/pg_walinspect
 TAP_TESTS = 1
 
 REGRESS_OPTS = --init-file=$(top_srcdir)/src/test/regress/init_file

@@ -4,7 +4,7 @@
  *	  magnetic disk storage manager public interface declarations.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/storage/md.h
@@ -15,7 +15,7 @@
 #define MD_H
 
 #include "storage/block.h"
-#include "storage/relfilenode.h"
+#include "storage/relfilelocator.h"
 #include "storage/smgr.h"
 #include "storage/sync.h"
 
@@ -24,22 +24,24 @@ extern void mdinit(void);
 extern void mdopen(SMgrRelation reln);
 extern void mdclose(SMgrRelation reln, ForkNumber forknum);
 extern void mdcreate(SMgrRelation reln, ForkNumber forknum, bool isRedo);
-extern void mdcreate_ao(RelFileNodeBackend rnode, int32 segmentFileNum, bool isRedo);
+extern void mdcreate_ao(RelFileLocatorBackend rnode, int32 segmentFileNum, bool isRedo);
 extern bool mdexists(SMgrRelation reln, ForkNumber forknum);
-extern void mdunlink(RelFileNodeBackend rnode, ForkNumber forknum, bool isRedo);
+extern void mdunlink(RelFileLocatorBackend rlocator, ForkNumber forknum, bool isRedo);
 extern void mdextend(SMgrRelation reln, ForkNumber forknum,
-					 BlockNumber blocknum, char *buffer, bool skipFsync);
+					 BlockNumber blocknum, const void *buffer, bool skipFsync);
+extern void mdzeroextend(SMgrRelation reln, ForkNumber forknum,
+						 BlockNumber blocknum, int nblocks, bool skipFsync);
 extern bool mdprefetch(SMgrRelation reln, ForkNumber forknum,
 					   BlockNumber blocknum);
 extern void mdread(SMgrRelation reln, ForkNumber forknum, BlockNumber blocknum,
-				   char *buffer);
+				   void *buffer);
 extern void mdwrite(SMgrRelation reln, ForkNumber forknum,
-					BlockNumber blocknum, char *buffer, bool skipFsync);
+					BlockNumber blocknum, const void *buffer, bool skipFsync);
 extern void mdwriteback(SMgrRelation reln, ForkNumber forknum,
 						BlockNumber blocknum, BlockNumber nblocks);
 extern BlockNumber mdnblocks(SMgrRelation reln, ForkNumber forknum);
 extern void mdtruncate(SMgrRelation reln, ForkNumber forknum,
-					   BlockNumber nblocks);
+					   BlockNumber old_blocks, BlockNumber nblocks);
 extern void mdimmedsync(SMgrRelation reln, ForkNumber forknum);
 
 extern void ForgetDatabaseSyncRequests(Oid dbid);

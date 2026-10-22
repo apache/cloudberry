@@ -27,6 +27,7 @@ all:
 	$(MAKE) -C contrib/btree_gin all
 	$(MAKE) -C contrib/pg_trgm all
 	$(MAKE) -C contrib/tablefunc all
+	$(MAKE) -C contrib/try_convert all
 	$(MAKE) -C contrib/passwordcheck all
 	$(MAKE) -C contrib/pg_buffercache all
 ifeq ($(with_openssl), yes)
@@ -77,6 +78,7 @@ install:
 	$(MAKE) -C contrib/btree_gin $@
 	$(MAKE) -C contrib/pg_trgm $@
 	$(MAKE) -C contrib/tablefunc $@
+	$(MAKE) -C contrib/try_convert $@
 	$(MAKE) -C contrib/passwordcheck $@
 	$(MAKE) -C contrib/pg_buffercache $@
 ifeq ($(enable_pax), yes)
@@ -115,7 +117,7 @@ $(call recurse,distprep coverage,doc src config contrib gpcontrib)
 # it's not built by default
 $(call recurse,clean,doc contrib gpcontrib src config)
 clean:
-	rm -rf tmp_install/
+	rm -rf tmp_install/ portlock/
 # Garbage from autoconf:
 	@rm -rf autom4te.cache/
 # leap over gpAux/Makefile into subdirectories to avoid circular dependency.
@@ -132,7 +134,7 @@ distclean maintainer-clean:
 	$(MAKE) -C config $@
 	$(MAKE) -C gpMgmt $@
 	$(MAKE) -C src $@
-	rm -rf tmp_install/
+	rm -rf tmp_install/ portlock/
 # Garbage from autoconf:
 	@rm -rf autom4te.cache/
 	rm -f config.cache config.log config.status GNUmakefile
@@ -173,7 +175,7 @@ check:
 	  . $(prefix)/cloudberry-env.sh && . $(top_builddir)/gpAux/gpdemo/gpdemo-env.sh && $(MAKE) -C $(top_builddir) installcheck; \
 	fi
 
-$(call recurse,check-world,src/test src/pl src/interfaces/ecpg contrib src/bin gpcontrib,check)
+$(call recurse,check-world,src/test src/pl src/interfaces/ecpg contrib src/bin gpcontrib src/tools/pg_bsd_indent,check)
 $(call recurse,checkprep,  src/test src/pl src/interfaces/ecpg contrib src/bin gpcontrib)
 
 # This is a top-level target that runs "all" regression test suites against
@@ -202,6 +204,7 @@ endif
 ICW_TARGETS += gpcontrib gpMgmt/bin
 
 $(call recurse,installcheck-world,src/test src/pl src/interfaces/ecpg $(ICW_TARGETS) src/bin,installcheck)
+
 $(call recurse,install-tests,src/test/regress,install-tests)
 
 # GPDB: Postgres disables the SSL tests during ICW because of the TCP port that

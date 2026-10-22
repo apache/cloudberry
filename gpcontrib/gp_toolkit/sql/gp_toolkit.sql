@@ -8,6 +8,7 @@ create database toolkit_testdb;
 
 create role toolkit_admin superuser createdb;
 create role toolkit_user1 login;
+GRANT CREATE ON SCHEMA public TO toolkit_user1;
 
 CREATE TABLE toolkit_ao (id INTEGER) WITH (appendonly = true);
 CREATE TABLE toolkit_heap (id INTEGER) WITH (appendonly = false);

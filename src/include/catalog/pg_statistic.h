@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2006-2010, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_statistic.h
@@ -145,8 +145,7 @@ typedef FormData_pg_statistic *Form_pg_statistic;
 
 DECLARE_TOAST(pg_statistic, 2840, 2841);
 
-DECLARE_UNIQUE_INDEX_PKEY(pg_statistic_relid_att_inh_index, 2696, on pg_statistic using btree(starelid oid_ops, staattnum int2_ops, stainherit bool_ops));
-#define StatisticRelidAttnumInhIndexId	2696
+DECLARE_UNIQUE_INDEX_PKEY(pg_statistic_relid_att_inh_index, 2696, StatisticRelidAttnumInhIndexId, on pg_statistic using btree(starelid oid_ops, staattnum int2_ops, stainherit bool_ops));
 
 DECLARE_FOREIGN_KEY((starelid, staattnum), pg_attribute, (attrelid, attnum));
 

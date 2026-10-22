@@ -3,7 +3,7 @@
  * spell.c
  *		Normalizing word with ISpell
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  *
  * Ispell dictionary
  * -----------------
@@ -63,6 +63,7 @@
 #include "postgres.h"
 
 #include "catalog/pg_collation.h"
+#include "miscadmin.h"
 #include "tsearch/dicts/spell.h"
 #include "tsearch/ts_locale.h"
 #include "utils/memutils.h"
@@ -231,7 +232,7 @@ findchar(char *str, int c)
 	{
 		if (t_iseq(str, c))
 			return str;
-		str += pg_mblen(str);
+		str += pg_mblen_cstr(str);
 	}
 
 	return NULL;
@@ -244,7 +245,7 @@ findchar2(char *str, int c1, int c2)
 	{
 		if (t_iseq(str, c1) || t_iseq(str, c2))
 			return str;
-		str += pg_mblen(str);
+		str += pg_mblen_cstr(str);
 	}
 
 	return NULL;
@@ -351,6 +352,7 @@ getNextFlagFromString(IspellDict *Conf, char **sflagset, char *sflag)
 	char	   *next,
 			   *sbuf = *sflagset;
 	int			maxstep;
+	int			clen;
 	bool		stop = false;
 	bool		met_comma = false;
 
@@ -362,17 +364,18 @@ getNextFlagFromString(IspellDict *Conf, char **sflagset, char *sflag)
 		{
 			case FM_LONG:
 			case FM_CHAR:
-				COPYCHAR(sflag, *sflagset);
-				sflag += pg_mblen(*sflagset);
+				clen = ts_copychar_cstr(sflag, *sflagset);
+				sflag += clen;
 
 				/* Go to start of the next flag */
-				*sflagset += pg_mblen(*sflagset);
+				*sflagset += clen;
 
 				/* Check if we get all characters of flag */
 				maxstep--;
 				stop = (maxstep == 0);
 				break;
 			case FM_NUM:
+				errno = 0;
 				s = strtol(*sflagset, &next, 10);
 				if (*sflagset == next || errno == ERANGE)
 					ereport(ERROR,
@@ -389,7 +392,7 @@ getNextFlagFromString(IspellDict *Conf, char **sflagset, char *sflag)
 				*sflagset = next;
 				while (**sflagset)
 				{
-					if (t_isdigit(*sflagset))
+					if (t_isdigit_cstr(*sflagset))
 					{
 						if (!met_comma)
 							ereport(ERROR,
@@ -407,7 +410,7 @@ getNextFlagFromString(IspellDict *Conf, char **sflagset, char *sflag)
 											*sflagset)));
 						met_comma = true;
 					}
-					else if (!t_isspace(*sflagset))
+					else if (!t_isspace_cstr(*sflagset))
 					{
 						ereport(ERROR,
 								(errcode(ERRCODE_CONFIG_FILE_ERROR),
@@ -415,7 +418,7 @@ getNextFlagFromString(IspellDict *Conf, char **sflagset, char *sflag)
 										*sflagset)));
 					}
 
-					*sflagset += pg_mblen(*sflagset);
+					*sflagset += pg_mblen_cstr(*sflagset);
 				}
 				stop = true;
 				break;
@@ -541,7 +544,7 @@ NIImportDictionary(IspellDict *Conf, const char *filename)
 			while (*s)
 			{
 				/* we allow only single encoded flags for faster works */
-				if (pg_mblen(s) == 1 && t_isprint(s) && !t_isspace(s))
+				if (pg_mblen_cstr(s) == 1 && t_isprint_unbounded(s) && !t_isspace_unbounded(s))
 					s++;
 				else
 				{
@@ -557,12 +560,12 @@ NIImportDictionary(IspellDict *Conf, const char *filename)
 		s = line;
 		while (*s)
 		{
-			if (t_isspace(s))
+			if (t_isspace_cstr(s))
 			{
 				*s = '\0';
 				break;
 			}
-			s += pg_mblen(s);
+			s += pg_mblen_cstr(s);
 		}
 		pstr = lowerstr_ctx(Conf, line);
 
@@ -655,17 +658,6 @@ FindWord(IspellDict *Conf, const char *word, const char *affixflag, int flag)
 }
 
 /*
- * Context reset/delete callback for a regular expression used in an affix
- */
-static void
-regex_affix_deletion_callback(void *arg)
-{
-	aff_regex_struct *pregex = (aff_regex_struct *) arg;
-
-	pg_regfree(&(pregex->regex));
-}
-
-/*
  * Adds a new affix rule to the Affix field.
  *
  * Conf: current dictionary.
@@ -694,7 +686,7 @@ NIAddAffix(IspellDict *Conf, const char *flag, char flagflags, const char *mask,
 		if (Conf->maffixes)
 		{
 			Conf->maffixes *= 2;
-			Conf->Affix = (AFFIX *) repalloc((void *) Conf->Affix, Conf->maffixes * sizeof(AFFIX));
+			Conf->Affix = (AFFIX *) repalloc(Conf->Affix, Conf->maffixes * sizeof(AFFIX));
 		}
 		else
 		{
@@ -727,7 +719,6 @@ NIAddAffix(IspellDict *Conf, const char *flag, char flagflags, const char *mask,
 		int			err;
 		pg_wchar   *wmask;
 		char	   *tmask;
-		aff_regex_struct *pregex;
 
 		Affix->issimple = 0;
 		Affix->isregis = 0;
@@ -742,31 +733,23 @@ NIAddAffix(IspellDict *Conf, const char *flag, char flagflags, const char *mask,
 		wmasklen = pg_mb2wchar_with_len(tmask, wmask, masklen);
 
 		/*
-		 * The regex engine stores its stuff using malloc not palloc, so we
-		 * must arrange to explicitly clean up the regex when the dictionary's
-		 * context is cleared.  That means the regex_t has to stay in a fixed
-		 * location within the context; we can't keep it directly in the AFFIX
-		 * struct, since we may sort and resize the array of AFFIXes.
+		 * The regex and all internal state created by pg_regcomp are
+		 * allocated in the dictionary's memory context, and will be freed
+		 * automatically when it is destroyed.
 		 */
-		Affix->reg.pregex = pregex = palloc(sizeof(aff_regex_struct));
-
-		err = pg_regcomp(&(pregex->regex), wmask, wmasklen,
+		Affix->reg.pregex = palloc(sizeof(regex_t));
+		err = pg_regcomp(Affix->reg.pregex, wmask, wmasklen,
 						 REG_ADVANCED | REG_NOSUB,
 						 DEFAULT_COLLATION_OID);
 		if (err)
 		{
 			char		errstr[100];
 
-			pg_regerror(err, &(pregex->regex), errstr, sizeof(errstr));
+			pg_regerror(err, Affix->reg.pregex, errstr, sizeof(errstr));
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_REGULAR_EXPRESSION),
 					 errmsg("invalid regular expression: %s", errstr)));
 		}
-
-		pregex->mcallback.func = regex_affix_deletion_callback;
-		pregex->mcallback.arg = (void *) pregex;
-		MemoryContextRegisterResetCallback(CurrentMemoryContext,
-										   &pregex->mcallback);
 	}
 
 	Affix->flagflags = flagflags;
@@ -814,17 +797,17 @@ get_nextfield(char **str, char *next)
 
 	while (**str)
 	{
+		int			clen = pg_mblen_cstr(*str);
+
 		if (state == PAE_WAIT_MASK)
 		{
 			if (t_iseq(*str, '#'))
 				return false;
-			else if (!t_isspace(*str))
+			else if (!t_isspace_cstr(*str))
 			{
-				int			clen = pg_mblen(*str);
-
 				if (clen < avail)
 				{
-					COPYCHAR(next, *str);
+					ts_copychar_with_len(next, *str, clen);
 					next += clen;
 					avail -= clen;
 				}
@@ -833,24 +816,22 @@ get_nextfield(char **str, char *next)
 		}
 		else					/* state == PAE_INMASK */
 		{
-			if (t_isspace(*str))
+			if (t_isspace_cstr(*str))
 			{
 				*next = '\0';
 				return true;
 			}
 			else
 			{
-				int			clen = pg_mblen(*str);
-
 				if (clen < avail)
 				{
-					COPYCHAR(next, *str);
+					ts_copychar_with_len(next, *str, clen);
 					next += clen;
 					avail -= clen;
 				}
 			}
 		}
-		*str += pg_mblen(*str);
+		*str += clen;
 	}
 
 	*next = '\0';
@@ -940,14 +921,15 @@ parse_affentry(char *str, char *mask, char *find, char *repl)
 
 	while (*str)
 	{
+		int			clen = pg_mblen_cstr(str);
+
 		if (state == PAE_WAIT_MASK)
 		{
 			if (t_iseq(str, '#'))
 				return false;
-			else if (!t_isspace(str))
+			else if (!t_isspace_cstr(str))
 			{
-				COPYCHAR(pmask, str);
-				pmask += pg_mblen(str);
+				pmask += ts_copychar_with_len(pmask, str, clen);
 				state = PAE_INMASK;
 			}
 		}
@@ -958,10 +940,9 @@ parse_affentry(char *str, char *mask, char *find, char *repl)
 				*pmask = '\0';
 				state = PAE_WAIT_FIND;
 			}
-			else if (!t_isspace(str))
+			else if (!t_isspace_cstr(str))
 			{
-				COPYCHAR(pmask, str);
-				pmask += pg_mblen(str);
+				pmask += ts_copychar_with_len(pmask, str, clen);
 			}
 		}
 		else if (state == PAE_WAIT_FIND)
@@ -970,13 +951,12 @@ parse_affentry(char *str, char *mask, char *find, char *repl)
 			{
 				state = PAE_INFIND;
 			}
-			else if (t_isalpha(str) || t_iseq(str, '\'') /* english 's */ )
+			else if (t_isalpha_cstr(str) || t_iseq(str, '\'') /* english 's */ )
 			{
-				COPYCHAR(prepl, str);
-				prepl += pg_mblen(str);
+				prepl += ts_copychar_with_len(prepl, str, clen);
 				state = PAE_INREPL;
 			}
-			else if (!t_isspace(str))
+			else if (!t_isspace_cstr(str))
 				ereport(ERROR,
 						(errcode(ERRCODE_CONFIG_FILE_ERROR),
 						 errmsg("syntax error")));
@@ -988,12 +968,11 @@ parse_affentry(char *str, char *mask, char *find, char *repl)
 				*pfind = '\0';
 				state = PAE_WAIT_REPL;
 			}
-			else if (t_isalpha(str))
+			else if (t_isalpha_cstr(str))
 			{
-				COPYCHAR(pfind, str);
-				pfind += pg_mblen(str);
+				pfind += ts_copychar_with_len(pfind, str, clen);
 			}
-			else if (!t_isspace(str))
+			else if (!t_isspace_cstr(str))
 				ereport(ERROR,
 						(errcode(ERRCODE_CONFIG_FILE_ERROR),
 						 errmsg("syntax error")));
@@ -1004,13 +983,12 @@ parse_affentry(char *str, char *mask, char *find, char *repl)
 			{
 				break;			/* void repl */
 			}
-			else if (t_isalpha(str))
+			else if (t_isalpha_cstr(str))
 			{
-				COPYCHAR(prepl, str);
-				prepl += pg_mblen(str);
+				prepl += ts_copychar_with_len(prepl, str, clen);
 				state = PAE_INREPL;
 			}
-			else if (!t_isspace(str))
+			else if (!t_isspace_cstr(str))
 				ereport(ERROR,
 						(errcode(ERRCODE_CONFIG_FILE_ERROR),
 						 errmsg("syntax error")));
@@ -1022,12 +1000,11 @@ parse_affentry(char *str, char *mask, char *find, char *repl)
 				*prepl = '\0';
 				break;
 			}
-			else if (t_isalpha(str))
+			else if (t_isalpha_cstr(str))
 			{
-				COPYCHAR(prepl, str);
-				prepl += pg_mblen(str);
+				prepl += ts_copychar_with_len(prepl, str, clen);
 			}
-			else if (!t_isspace(str))
+			else if (!t_isspace_cstr(str))
 				ereport(ERROR,
 						(errcode(ERRCODE_CONFIG_FILE_ERROR),
 						 errmsg("syntax error")));
@@ -1035,7 +1012,7 @@ parse_affentry(char *str, char *mask, char *find, char *repl)
 		else
 			elog(ERROR, "unrecognized state in parse_affentry: %d", state);
 
-		str += pg_mblen(str);
+		str += clen;
 	}
 
 	*pmask = *pfind = *prepl = '\0';
@@ -1055,6 +1032,7 @@ setCompoundAffixFlagValue(IspellDict *Conf, CompoundAffixFlag *entry,
 		char	   *next;
 		int			i;
 
+		errno = 0;
 		i = strtol(s, &next, 10);
 		if (s == next || errno == ERANGE)
 			ereport(ERROR,
@@ -1087,10 +1065,9 @@ addCompoundAffixFlagValue(IspellDict *Conf, char *s, uint32 val)
 	CompoundAffixFlag *newValue;
 	char		sbuf[BUFSIZ];
 	char	   *sflag;
-	int			clen;
 
-	while (*s && t_isspace(s))
-		s += pg_mblen(s);
+	while (*s && t_isspace_cstr(s))
+		s += pg_mblen_cstr(s);
 
 	if (!*s)
 		ereport(ERROR,
@@ -1099,10 +1076,10 @@ addCompoundAffixFlagValue(IspellDict *Conf, char *s, uint32 val)
 
 	/* Get flag without \n */
 	sflag = sbuf;
-	while (*s && !t_isspace(s) && *s != '\n')
+	while (*s && !t_isspace_cstr(s) && *s != '\n')
 	{
-		clen = pg_mblen(s);
-		COPYCHAR(sflag, s);
+		int			clen = ts_copychar_cstr(sflag, s);
+
 		sflag += clen;
 		s += clen;
 	}
@@ -1115,7 +1092,7 @@ addCompoundAffixFlagValue(IspellDict *Conf, char *s, uint32 val)
 		{
 			Conf->mCompoundAffixFlag *= 2;
 			Conf->CompoundAffixFlags = (CompoundAffixFlag *)
-				repalloc((void *) Conf->CompoundAffixFlags,
+				repalloc(Conf->CompoundAffixFlags,
 						 Conf->mCompoundAffixFlag * sizeof(CompoundAffixFlag));
 		}
 		else
@@ -1157,7 +1134,7 @@ getCompoundAffixFlagValue(IspellDict *Conf, char *s)
 		setCompoundAffixFlagValue(Conf, &key, sflag, 0);
 
 		found = (CompoundAffixFlag *)
-			bsearch(&key, (void *) Conf->CompoundAffixFlags,
+			bsearch(&key, Conf->CompoundAffixFlags,
 					Conf->nCompoundAffixFlag, sizeof(CompoundAffixFlag),
 					cmpcmdflag);
 		if (found != NULL)
@@ -1182,6 +1159,7 @@ getAffixFlagSet(IspellDict *Conf, char *s)
 		int			curaffix;
 		char	   *end;
 
+		errno = 0;
 		curaffix = strtol(s, &end, 10);
 		if (s == end || errno == ERANGE)
 			ereport(ERROR,
@@ -1244,7 +1222,7 @@ NIImportOOAffixes(IspellDict *Conf, const char *filename)
 
 	while ((recoded = tsearch_readline(&trst)) != NULL)
 	{
-		if (*recoded == '\0' || t_isspace(recoded) || t_iseq(recoded, '#'))
+		if (*recoded == '\0' || t_isspace_cstr(recoded) || t_iseq(recoded, '#'))
 		{
 			pfree(recoded);
 			continue;
@@ -1281,8 +1259,8 @@ NIImportOOAffixes(IspellDict *Conf, const char *filename)
 		{
 			char	   *s = recoded + strlen("FLAG");
 
-			while (*s && t_isspace(s))
-				s += pg_mblen(s);
+			while (*s && t_isspace_cstr(s))
+				s += pg_mblen_cstr(s);
 
 			if (*s)
 			{
@@ -1304,7 +1282,7 @@ NIImportOOAffixes(IspellDict *Conf, const char *filename)
 	tsearch_readline_end(&trst);
 
 	if (Conf->nCompoundAffixFlag > 1)
-		qsort((void *) Conf->CompoundAffixFlags, Conf->nCompoundAffixFlag,
+		qsort(Conf->CompoundAffixFlags, Conf->nCompoundAffixFlag,
 			  sizeof(CompoundAffixFlag), cmpcmdflag);
 
 	if (!tsearch_readline_begin(&trst, filename))
@@ -1317,7 +1295,7 @@ NIImportOOAffixes(IspellDict *Conf, const char *filename)
 	{
 		int			fields_read;
 
-		if (*recoded == '\0' || t_isspace(recoded) || t_iseq(recoded, '#'))
+		if (*recoded == '\0' || t_isspace_cstr(recoded) || t_iseq(recoded, '#'))
 			goto nextline;
 
 		fields_read = parse_ooaffentry(recoded, type, sflag, find, repl, mask);
@@ -1480,12 +1458,12 @@ NIImportAffixes(IspellDict *Conf, const char *filename)
 			s = findchar2(recoded, 'l', 'L');
 			if (s)
 			{
-				while (*s && !t_isspace(s))
-					s += pg_mblen(s);
-				while (*s && t_isspace(s))
-					s += pg_mblen(s);
+				while (*s && !t_isspace_cstr(s))
+					s += pg_mblen_cstr(s);
+				while (*s && t_isspace_cstr(s))
+					s += pg_mblen_cstr(s);
 
-				if (*s && pg_mblen(s) == 1)
+				if (*s && pg_mblen_cstr(s) == 1)
 				{
 					addCompoundAffixFlagValue(Conf, s, FF_COMPOUNDFLAG);
 					Conf->usecompound = true;
@@ -1513,8 +1491,8 @@ NIImportAffixes(IspellDict *Conf, const char *filename)
 			s = recoded + 4;	/* we need non-lowercased string */
 			flagflags = 0;
 
-			while (*s && t_isspace(s))
-				s += pg_mblen(s);
+			while (*s && t_isspace_cstr(s))
+				s += pg_mblen_cstr(s);
 
 			if (*s == '*')
 			{
@@ -1535,14 +1513,13 @@ NIImportAffixes(IspellDict *Conf, const char *filename)
 			 * be followed by EOL, whitespace, or ':'.  Otherwise this is a
 			 * new-format flag command.
 			 */
-			if (*s && pg_mblen(s) == 1)
+			if (*s && pg_mblen_cstr(s) == 1)
 			{
-				COPYCHAR(flag, s);
+				flag[0] = *s++;
 				flag[1] = '\0';
 
-				s++;
 				if (*s == '\0' || *s == '#' || *s == '\n' || *s == ':' ||
-					t_isspace(s))
+					t_isspace_cstr(s))
 				{
 					oldformat = true;
 					goto nextline;
@@ -1600,7 +1577,8 @@ MergeAffix(IspellDict *Conf, int a1, int a2)
 	else if (*Conf->AffixData[a2] == '\0')
 		return a1;
 
-	while (Conf->nAffixData + 1 >= Conf->lenAffixData)
+	/* Double the size of AffixData if there's not enough space */
+	if (Conf->nAffixData + 1 >= Conf->lenAffixData)
 	{
 		Conf->lenAffixData *= 2;
 		Conf->AffixData = (char **) repalloc(Conf->AffixData,
@@ -1753,6 +1731,7 @@ NISortDictionary(IspellDict *Conf)
 
 			if (*Conf->Spell[i]->p.flag != '\0')
 			{
+				errno = 0;
 				curaffix = strtol(Conf->Spell[i]->p.flag, &end, 10);
 				if (Conf->Spell[i]->p.flag == end || errno == ERANGE)
 					ereport(ERROR,
@@ -1764,7 +1743,7 @@ NISortDictionary(IspellDict *Conf)
 							(errcode(ERRCODE_CONFIG_FILE_ERROR),
 							 errmsg("invalid affix alias \"%s\"",
 									Conf->Spell[i]->p.flag)));
-				if (*end != '\0' && !t_isdigit(end) && !t_isspace(end))
+				if (*end != '\0' && !t_isdigit_cstr(end) && !t_isspace_cstr(end))
 					ereport(ERROR,
 							(errcode(ERRCODE_CONFIG_FILE_ERROR),
 							 errmsg("invalid affix alias \"%s\"",
@@ -1787,7 +1766,7 @@ NISortDictionary(IspellDict *Conf)
 	else
 	{
 		/* Count the number of different flags used in the dictionary */
-		qsort((void *) Conf->Spell, Conf->nspell, sizeof(SPELL *),
+		qsort(Conf->Spell, Conf->nspell, sizeof(SPELL *),
 			  cmpspellaffix);
 
 		naffix = 0;
@@ -1825,7 +1804,7 @@ NISortDictionary(IspellDict *Conf)
 	}
 
 	/* Start build a prefix tree */
-	qsort((void *) Conf->Spell, Conf->nspell, sizeof(SPELL *), cmpspell);
+	qsort(Conf->Spell, Conf->nspell, sizeof(SPELL *), cmpspell);
 	Conf->Dictionary = mkSPNode(Conf, 0, Conf->nspell, 0);
 }
 
@@ -1999,7 +1978,7 @@ NISortAffixes(IspellDict *Conf)
 
 	/* Store compound affixes in the Conf->CompoundAffix array */
 	if (Conf->naffixes > 1)
-		qsort((void *) Conf->Affix, Conf->naffixes, sizeof(AFFIX), cmpaffix);
+		qsort(Conf->Affix, Conf->naffixes, sizeof(AFFIX), cmpaffix);
 	Conf->CompoundAffix = ptr = (CMPDAffix *) palloc(sizeof(CMPDAffix) * Conf->naffixes);
 	ptr->affix = NULL;
 
@@ -2159,7 +2138,7 @@ CheckAffix(const char *word, size_t len, AFFIX *Affix, int flagflags, char *neww
 		data = (pg_wchar *) palloc((newword_len + 1) * sizeof(pg_wchar));
 		data_len = pg_mb2wchar_with_len(newword, data, newword_len);
 
-		if (pg_regexec(&(Affix->reg.pregex->regex), data, data_len,
+		if (pg_regexec(Affix->reg.pregex, data, data_len,
 					   0, NULL, 0, NULL, 0) == REG_OKAY)
 		{
 			pfree(data);
@@ -2274,7 +2253,7 @@ NormalizeSubWord(IspellDict *Conf, char *word, int flag)
 						{
 							/* prefix success */
 							char	   *ff = (prefix->aff[j]->flagflags & suffix->aff[i]->flagflags & FF_CROSSPRODUCT) ?
-							VoidString : prefix->aff[j]->flag;
+								VoidString : prefix->aff[j]->flag;
 
 							if (FindWord(Conf, pnewword, ff, flag))
 								cur += addToResult(forms, cur, pnewword);
@@ -2398,6 +2377,9 @@ SplitToVariants(IspellDict *Conf, SPNode *snode, SplitVar *orig, char *word, int
 	CMPDAffix  *caff;
 	char	   *notprobed;
 	int			compoundflag = 0;
+
+	/* since this function recurses, it could be driven to stack overflow */
+	check_stack_depth();
 
 	notprobed = (char *) palloc(wordlen);
 	memset(notprobed, 1, wordlen);

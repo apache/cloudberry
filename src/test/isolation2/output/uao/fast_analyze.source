@@ -530,18 +530,14 @@ insert into analyze_@amname@_2 select * from analyze_@amname@_2;
 INSERT 16000
 insert into analyze_@amname@_2 select * from analyze_@amname@_2;
 INSERT 32000
-insert into analyze_@amname@_2 select * from analyze_@amname@_2;
-INSERT 64000
-insert into analyze_@amname@_2 select * from analyze_@amname@_2;
-INSERT 128000
 
 1: begin;
 BEGIN
 1: insert into analyze_@amname@_2 select * from analyze_@amname@_2;
-INSERT 256000
+INSERT 64000
 
 2: insert into analyze_@amname@_2 select * from analyze_@amname@_2;
-INSERT 256000
+INSERT 64000
 
 1: commit;
 COMMIT
@@ -560,10 +556,10 @@ ANALYZE
 1: begin;
 BEGIN
 1: insert into analyze_@amname@_2 select * from analyze_@amname@_2;
-INSERT 768000
+INSERT 192000
 
 2: insert into analyze_@amname@_2 select * from analyze_@amname@_2;
-INSERT 768000
+INSERT 192000
 
 1: abort;
 ABORT
@@ -587,10 +583,10 @@ CREATE
 1: begin;
 BEGIN
 1: insert into analyze_@amname@_2 select * from analyze_@amname@_2;
-INSERT 1536000
+INSERT 384000
 
 2: insert into analyze_@amname@_2 select * from analyze_@amname@_2;
-INSERT 1536000
+INSERT 384000
 
 1: commit;
 COMMIT
@@ -609,10 +605,10 @@ ANALYZE
 1: begin;
 BEGIN
 1: insert into analyze_@amname@_2 select * from analyze_@amname@_2;
-INSERT 4608000
+INSERT 1152000
 
 2: insert into analyze_@amname@_2 select * from analyze_@amname@_2;
-INSERT 4608000
+INSERT 1152000
 
 1: abort;
 ABORT

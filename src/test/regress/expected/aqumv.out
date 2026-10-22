@@ -1581,7 +1581,7 @@ select c1, c3 from aqumv_t4 where c1 > 90 group by (c1, c3) having c3 > 97 ;
                ->  Seq Scan on aqumv.aqumv_t4
                      Output: c1, c3
                      Filter: ((aqumv_t4.c1 > 90) AND (aqumv_t4.c3 > 97))
- Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
+ Settings: enable_answer_query_using_materialized_views = 'off'
  Optimizer: Postgres query optimizer
 (13 rows)
 

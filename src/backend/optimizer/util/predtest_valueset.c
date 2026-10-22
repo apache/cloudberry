@@ -28,7 +28,7 @@
 #define INT32MAX (2147483647)
 #define INT32MIN (-2147483648)
 
-static HTAB *CreateNodeSetHashTable();
+static HTAB *CreateNodeSetHashTable(MemoryContext memoryContext);
 static void AddValue(PossibleValueSet *pvs, Const *valueToCopy);
 static void RemoveValue(PossibleValueSet *pvs, Const *value);
 static bool ContainsValue(PossibleValueSet *pvs, Const *value);

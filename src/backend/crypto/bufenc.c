@@ -185,15 +185,15 @@ set_buffer_encryption_iv(Page page, BlockNumber blkno)
 
 /* Construct iv for the given page */
 static void
-set_buffer_encryption_iv_for_ao(RelFileNode *file_node)
+set_buffer_encryption_iv_for_ao(RelFileLocator *file_node)
 {
 	unsigned char *p = buf_encryption_iv;
 
 	MemSet(buf_encryption_iv, 0, BUFENC_IV_SIZE);
 
 	/* copy the whole file node (4 bytes) */
-	memcpy(p, &file_node->dbNode, sizeof(file_node->dbNode));
-	p += sizeof(file_node->dbNode);
+	memcpy(p, &file_node->dbOid, sizeof(file_node->dbOid));
+	p += sizeof(file_node->dbOid);
 
 	/*
 	 * set the last remain 12 bytes
@@ -204,7 +204,7 @@ set_buffer_encryption_iv_for_ao(RelFileNode *file_node)
 
 void
 EncryptAOBLock(unsigned char *data_buf, const int buf_len,
-				  RelFileNode *file_node)
+				  RelFileLocator *file_node)
 {
 	int			enclen;
 	Assert(BufEncCtx != NULL);
@@ -238,7 +238,7 @@ EncryptAOBLock(unsigned char *data_buf, const int buf_len,
 /* Decrypt the given page with the relation key */
 void
 DecryptAOBlock(unsigned char *data_buf, const int buf_len,
-				  RelFileNode *file_node)
+			   RelFileLocator *file_node)
 {
 	int			enclen;
 	Assert(BufDecCtx != NULL);

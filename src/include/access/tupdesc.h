@@ -4,7 +4,7 @@
  *	  POSTGRES tuple descriptor definitions.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/access/tupdesc.h
@@ -97,8 +97,10 @@ typedef struct TupleDescData *TupleDesc;
  * These are never serialized on disk, only in the read/outfast protocol,
  * as part of PlannedStmts.
  */
-typedef struct tupleDescNode
+typedef struct TupleDescNode
 {
+	pg_node_attr(no_copy_equal, custom_read_write)
+
 	NodeTag		type;
 	int			natts;
 	TupleDesc	tuple;
@@ -143,7 +145,7 @@ extern void DecrTupleDescRefCount(TupleDesc tupdesc);
 
 extern bool equalTupleDescs(TupleDesc tupdesc1, TupleDesc tupdesc2, bool strict);
 
-extern uint32 hashTupleDesc(TupleDesc tupdesc);
+extern uint32 hashTupleDesc(TupleDesc desc);
 
 extern void TupleDescInitEntry(TupleDesc desc,
 							   AttrNumber attributeNumber,

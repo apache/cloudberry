@@ -3,7 +3,7 @@
  *
  *	database server functions
  *
- *	Copyright (c) 2010-2021, PostgreSQL Global Development Group
+ *	Copyright (c) 2010-2023, PostgreSQL Global Development Group
  *	src/bin/pg_upgrade/server.c
  */
 
@@ -11,6 +11,7 @@
 
 #include "common/connect.h"
 #include "fe_utils/string_utils.h"
+#include "libpq/pqcomm.h"
 #include "pg_upgrade.h"
 
 #include "greenplum/pg_upgrade_greenplum.h"
@@ -137,7 +138,7 @@ executeQueryOrDie(PGconn *conn, const char *fmt,...)
 	vsnprintf(query, sizeof(query), fmt, args);
 	va_end(args);
 
-	pg_log(PG_VERBOSE, "executing: %s\n", query);
+	pg_log(PG_VERBOSE, "executing: %s", query);
 	result = PQexec(conn, query);
 	status = PQresultStatus(result);
 
@@ -173,11 +174,11 @@ get_major_server_version(ClusterInfo *cluster)
 	snprintf(ver_filename, sizeof(ver_filename), "%s/PG_VERSION",
 			 cluster->pgdata);
 	if ((version_fd = fopen(ver_filename, "r")) == NULL)
-		pg_fatal("could not open version file \"%s\": %m\n", ver_filename);
+		pg_fatal("could not open version file \"%s\": %m", ver_filename);
 
 	if (fscanf(version_fd, "%63s", cluster->major_version_str) == 0 ||
 		sscanf(cluster->major_version_str, "%d.%d", &v1, &v2) < 1)
-		pg_fatal("could not parse version file \"%s\"\n", ver_filename);
+		pg_fatal("could not parse version file \"%s\"", ver_filename);
 
 	fclose(version_fd);
 
@@ -220,7 +221,7 @@ start_postmaster(ClusterInfo *cluster, bool report_and_exit_on_error)
 
 	socket_string[0] = '\0';
 
-#if defined(HAVE_UNIX_SOCKETS) && !defined(WIN32)
+#if !defined(WIN32)
 	/* prevent TCP/IP connections, restrict socket access */
 	strcat(socket_string,
 		   " -c listen_addresses='' -c unix_socket_permissions=0700");
@@ -242,9 +243,6 @@ start_postmaster(ClusterInfo *cluster, bool report_and_exit_on_error)
 	 * we only modify the new cluster, so only use it there.  If there is a
 	 * crash, the new cluster has to be recreated anyway.  fsync=off is a big
 	 * win on ext4.
-	 *
-	 * Force vacuum_defer_cleanup_age to 0 on the new cluster, so that
-	 * vacuumdb --freeze actually freezes the tuples.
 	 */
 	char *version_opts = "";
 	if (GET_MAJOR_VERSION(cluster->major_version) >= 904)
@@ -271,7 +269,6 @@ start_postmaster(ClusterInfo *cluster, bool report_and_exit_on_error)
 			 cluster->pgopts ? cluster->pgopts : "", 
 			 socket_string, 
 			 version_opts);
-
 
 	/*
 	 * Don't throw an error right away, let connecting throw the error because
@@ -319,11 +316,11 @@ start_postmaster(ClusterInfo *cluster, bool report_and_exit_on_error)
 			PQfinish(conn);
 		if (cluster == &old_cluster)
 			pg_fatal("could not connect to source postmaster started with the command:\n"
-					 "%s\n",
+					 "%s",
 					 cmd);
 		else
 			pg_fatal("could not connect to target postmaster started with the command:\n"
-					 "%s\n",
+					 "%s",
 					 cmd);
 	}
 	PQfinish(conn);
@@ -336,9 +333,9 @@ start_postmaster(ClusterInfo *cluster, bool report_and_exit_on_error)
 	if (!pg_ctl_return)
 	{
 		if (cluster == &old_cluster)
-			pg_fatal("pg_ctl failed to start the source server, or connection failed\n");
+			pg_fatal("pg_ctl failed to start the source server, or connection failed");
 		else
-			pg_fatal("pg_ctl failed to start the target server, or connection failed\n");
+			pg_fatal("pg_ctl failed to start the target server, or connection failed");
 	}
 
 	return true;
@@ -383,7 +380,7 @@ check_pghost_envvar(void)
 	start = PQconndefaults();
 
 	if (!start)
-		pg_fatal("out of memory\n");
+		pg_fatal("out of memory");
 
 	for (option = start; option->keyword != NULL; option++)
 	{
@@ -395,8 +392,8 @@ check_pghost_envvar(void)
 			if (value && strlen(value) > 0 &&
 			/* check for 'local' host values */
 				(strcmp(value, "localhost") != 0 && strcmp(value, "127.0.0.1") != 0 &&
-				 strcmp(value, "::1") != 0 && value[0] != '/'))
-				pg_fatal("libpq environment variable %s has a non-local server value: %s\n",
+				 strcmp(value, "::1") != 0 && !is_unixsock_path(value)))
+				pg_fatal("libpq environment variable %s has a non-local server value: %s",
 						 option->envvar, value);
 		}
 	}

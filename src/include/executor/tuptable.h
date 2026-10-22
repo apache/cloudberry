@@ -4,7 +4,7 @@
  *	  tuple table support stuff
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/executor/tuptable.h
@@ -46,7 +46,6 @@
  * A "minimal" tuple is handled similarly to a palloc'd regular tuple.
  * At present, minimal tuples never are stored in buffers, so there is no
  * parallel to case 1.  Note that a minimal tuple has no "system columns".
- * (Actually, it could have an OID, but we have no need to access the OID.)
  *
  * A "virtual" tuple is an optimization used to minimize physical data copying
  * in a nest of plan nodes.  Until materialized pass-by-reference Datums in
@@ -68,8 +67,8 @@
  * A TupleTableSlot can also be "empty", indicated by flag TTS_FLAG_EMPTY set
  * in tts_flags, holding no valid data.  This is the only valid state for a
  * freshly-created slot that has not yet had a tuple descriptor assigned to
- * it.  In this state, TTS_SHOULDFREE should not be set in tts_flags, tts_tuple
- * must be NULL and tts_nvalid zero.
+ * it.  In this state, TTS_FLAG_SHOULDFREE should not be set in tts_flags and
+ * tts_nvalid should be set to zero.
  *
  * The tupleDescriptor is simply referenced, not copied, by the TupleTableSlot
  * code.  The caller of ExecSetSlotDescriptor() is responsible for providing
@@ -79,8 +78,8 @@
  * mechanism to do more.  However, the slot will increment the tupdesc
  * reference count if a reference-counted tupdesc is supplied.)
  *
- * When TTS_SHOULDFREE is set in tts_flags, the physical tuple is "owned" by
- * the slot and should be freed when the slot's reference to the tuple is
+ * When TTS_FLAG_SHOULDFREE is set in tts_flags, the physical tuple is "owned"
+ * by the slot and should be freed when the slot's reference to the tuple is
  * dropped.
  *
  * tts_values/tts_isnull are allocated either when the slot is created (when
@@ -225,10 +224,17 @@ extern PGDLLIMPORT const TupleTableSlotOps TTSOpsHeapTuple;
 extern PGDLLIMPORT const TupleTableSlotOps TTSOpsMinimalTuple;
 extern PGDLLIMPORT const TupleTableSlotOps TTSOpsBufferHeapTuple;
 
+/*
+ * Append-only row tables store tuples in the MemTuple format, which needs a
+ * MemTupleBinding to be interpreted.  See access/appendonly/memtuple_slot.c.
+ */
+extern PGDLLIMPORT const TupleTableSlotOps TTSOpsMemTuple;
+
 #define TTS_IS_VIRTUAL(slot) ((slot)->tts_ops == &TTSOpsVirtual)
 #define TTS_IS_HEAPTUPLE(slot) ((slot)->tts_ops == &TTSOpsHeapTuple)
 #define TTS_IS_MINIMALTUPLE(slot) ((slot)->tts_ops == &TTSOpsMinimalTuple)
 #define TTS_IS_BUFFERTUPLE(slot) ((slot)->tts_ops == &TTSOpsBufferHeapTuple)
+#define TTS_IS_MEMTUPLE(slot) ((slot)->tts_ops == &TTSOpsMemTuple)
 
 /*
  * Tuple table slot implementations.
@@ -236,6 +242,8 @@ extern PGDLLIMPORT const TupleTableSlotOps TTSOpsBufferHeapTuple;
 
 typedef struct VirtualTupleTableSlot
 {
+	pg_node_attr(abstract)
+
 	TupleTableSlot base;
 
 	char	   *data;			/* data for materialized slots */
@@ -243,6 +251,8 @@ typedef struct VirtualTupleTableSlot
 
 typedef struct HeapTupleTableSlot
 {
+	pg_node_attr(abstract)
+
 	TupleTableSlot base;
 
 #define FIELDNO_HEAPTUPLETABLESLOT_TUPLE 1
@@ -255,19 +265,23 @@ typedef struct HeapTupleTableSlot
 /* heap tuple residing in a buffer */
 typedef struct BufferHeapTupleTableSlot
 {
+	pg_node_attr(abstract)
+
 	HeapTupleTableSlot base;
 
 	/*
 	 * If buffer is not InvalidBuffer, then the slot is holding a pin on the
 	 * indicated buffer page; drop the pin when we release the slot's
 	 * reference to that buffer.  (TTS_FLAG_SHOULDFREE should not be set in
-	 * such a case, since presumably tts_tuple is pointing into the buffer.)
+	 * such a case, since presumably base.tuple is pointing into the buffer.)
 	 */
 	Buffer		buffer;			/* tuple's buffer, or InvalidBuffer */
 } BufferHeapTupleTableSlot;
 
 typedef struct MinimalTupleTableSlot
 {
+	pg_node_attr(abstract)
+
 	TupleTableSlot base;
 
 	/*
@@ -284,6 +298,24 @@ typedef struct MinimalTupleTableSlot
 #define FIELDNO_MINIMALTUPLETABLESLOT_OFF 4
 	uint32		off;			/* saved state for slot_deform_heap_tuple */
 } MinimalTupleTableSlot;
+
+/*
+ * Slot for a MemTuple, the format used by append-only row tables.
+ *
+ * A MemTuple is not self describing, so the binding needed to locate its
+ * attributes is kept here alongside the tuple.  Attributes are fetched on
+ * demand in getsomeattrs; tts_nvalid is the resume point.
+ */
+typedef struct MemTupleTableSlot
+{
+	pg_node_attr(abstract)
+
+	TupleTableSlot base;
+
+	MemTuple	tuple;			/* physical tuple, or NULL if none */
+	MemTupleBinding *mt_bind;	/* binding describing tuple */
+	bool		own_bind;		/* did this slot create mt_bind itself? */
+} MemTupleTableSlot;
 
 /*
  * TupIsNull -- is a TupleTableSlot empty?
@@ -318,6 +350,12 @@ extern TupleTableSlot *ExecStoreMinimalTuple(MinimalTuple mtup,
 											 bool shouldFree);
 extern void ExecForceStoreMinimalTuple(MinimalTuple mtup, TupleTableSlot *slot,
 									   bool shouldFree);
+/* in access/appendonly/memtuple_slot.c */
+extern TupleTableSlot *ExecStoreMemTuple(MemTuple mtup,
+										 MemTupleBinding *mt_bind,
+										 TupleTableSlot *slot,
+										 bool shouldFree);
+
 extern TupleTableSlot *ExecStoreVirtualTuple(TupleTableSlot *slot);
 extern TupleTableSlot *ExecStoreAllNullTuple(TupleTableSlot *slot);
 extern void ExecStoreHeapTupleDatum(Datum data, TupleTableSlot *slot);
@@ -368,7 +406,7 @@ slot_getallattrs(TupleTableSlot *slot)
 static inline bool
 slot_attisnull(TupleTableSlot *slot, int attnum)
 {
-	AssertArg(attnum > 0);
+	Assert(attnum > 0);
 
 	if (attnum > slot->tts_nvalid)
 		slot_getsomeattrs(slot, attnum);
@@ -383,7 +421,7 @@ static inline Datum
 slot_getattr(TupleTableSlot *slot, int attnum,
 			 bool *isnull)
 {
-	AssertArg(attnum > 0);
+	Assert(attnum > 0);
 
 	if (attnum > slot->tts_nvalid)
 		slot_getsomeattrs(slot, attnum);
@@ -403,7 +441,7 @@ slot_getattr(TupleTableSlot *slot, int attnum,
 static inline Datum
 slot_getsysattr(TupleTableSlot *slot, int attnum, bool *isnull)
 {
-	AssertArg(attnum < 0);		/* caller error */
+	Assert(attnum < 0);			/* caller error */
 
 	if (attnum == TableOidAttributeNumber)
 	{
@@ -477,7 +515,7 @@ static inline TupleTableSlot *
 ExecCopySlot(TupleTableSlot *dstslot, TupleTableSlot *srcslot)
 {
 	Assert(!TTS_EMPTY(srcslot));
-	AssertArg(srcslot != dstslot);
+	Assert(srcslot != dstslot);
 
 	dstslot->tts_ops->copyslot(dstslot, srcslot);
 

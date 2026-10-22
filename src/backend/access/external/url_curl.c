@@ -179,11 +179,11 @@ fill_buffer(URL_CURL_FILE *curl, int want);
  */
 #define CURL_EASY_SETOPT(h, opt, val) \
 	do { \
-		int			e; \
+		int			e2; \
 \
-		if ((e = curl_easy_setopt(h, opt, val)) != CURLE_OK) \
+		if ((e2 = curl_easy_setopt(h, opt, val)) != CURLE_OK) \
 			elog(ERROR, "internal error: curl_easy_setopt \"%s\" error (%d - %s)", \
-				 CppAsString(opt), e, curl_easy_strerror(e)); \
+				 CppAsString(opt), e2, curl_easy_strerror(e2)); \
 	} while(0)
 
 /*
@@ -1473,7 +1473,7 @@ url_curl_fopen(char *url, bool forwrite, extvar_t *ev, CopyFormatOptions *opts)
 	{
 		/* use empty message */
 		CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDS, "");
-		CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDSIZE, 0);
+		CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDSIZE, 0L);
 
 		/* post away and check response, retry if failed (timeout or * connect error) */
 		gp_perform_backoff_and_check_response(file, easy_perform_work);
@@ -1932,7 +1932,7 @@ gp_proto0_write_done(URL_CURL_FILE *file)
 
 	/* use empty message */
 	CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDS, "");
-	CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDSIZE, 0);
+	CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDSIZE, 0L);
 
 	/* post away! */
 	gp_perform_backoff_and_check_response(file, easy_perform_work);

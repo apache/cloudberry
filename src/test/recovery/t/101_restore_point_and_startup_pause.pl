@@ -4,17 +4,17 @@
 
 use strict;
 use warnings;
-use PostgresNode;
-use TestLib;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
 use Test::More tests => 12;
 use File::Copy;
 
 # Initialize and start primary node
-my $node_primary = get_new_node('primary');
+my $node_primary = PostgreSQL::Test::Cluster->new('primary');
 $node_primary->init(has_archiving => 1, allows_streaming => 1);
 $node_primary->start;
 
-my $node_standby = get_new_node("standby");
+my $node_standby = PostgreSQL::Test::Cluster->new("standby");
 
 sub test_pause_in_recovery
 {
@@ -118,5 +118,5 @@ $node_standby->safe_psql('postgres', "INSERT INTO table_foo VALUES (generate_ser
 $result = $node_standby->safe_psql('postgres', "SELECT count(*) FROM table_foo;");
 is($result, 6000, "check standby is writable after promotion");
 
-$node_primary->teardown_node;
-$node_standby->teardown_node;
+$node_primary->stop;
+$node_standby->stop;

@@ -526,8 +526,11 @@ cdbdisp_dispatchCommandInternal(DispatchCommandQueryParms *pQueryParms,
 		ThrowErrorData(qeError);
 	}
 
-	/* collect pgstat from QEs for current transaction level */
-	pgstat_combine_from_qe(pr, -1);
+	/*
+	 * GPDB: Merge relation stats sent by QEs so QD's mod_since_analyze
+	 * stays up to date for autovacuum triggering.
+	 */
+	pgstat_combine_from_qe(pr);
 
 	cdbdisp_returnResults(pr, cdb_pgresults);
 
@@ -1652,6 +1655,14 @@ getExecParamsToDispatch(PlannedStmt *stmt, ParamExecData *intPrm)
  * list looking for a specific paramid, and returns its type.
  */
 static bool
+param_walker(Node *node, ParamWalkerContext *context);
+static bool
+param_walker_adapter(Node *node, void *context)
+{
+	return param_walker(node, (ParamWalkerContext *) context);
+}
+
+static bool
 param_walker(Node *node, ParamWalkerContext *context)
 {
 	if (node == NULL)
@@ -1667,7 +1678,7 @@ param_walker(Node *node, ParamWalkerContext *context)
 			return false;
 		}
 	}
-	return plan_tree_walker(node, param_walker, context, true);
+	return plan_tree_walker(node, param_walker_adapter, context, true);
 }
 
 /*

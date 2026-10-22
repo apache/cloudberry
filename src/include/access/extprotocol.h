@@ -89,7 +89,7 @@ typedef ExtProtocolValidatorData *ExtProtocolValidator;
 #define EXTPROTOCOL_VALIDATOR_GET_URL_LIST(fcinfo)	(((ExtProtocolValidatorData*) fcinfo->context)->url_list)
 #define EXTPROTOCOL_VALIDATOR_GET_NUM_URLS(fcinfo)	(list_length(((ExtProtocolValidatorData*) fcinfo->context)->url_list))
 
-#define EXTPROTOCOL_VALIDATOR_GET_NTH_URL(fcinfo, n) (((Value *)(list_nth(EXTPROTOCOL_VALIDATOR_GET_URL_LIST(fcinfo),(n - 1))))->val.str)
+#define EXTPROTOCOL_VALIDATOR_GET_NTH_URL(fcinfo, n) (((String *)(list_nth(EXTPROTOCOL_VALIDATOR_GET_URL_LIST(fcinfo),(n - 1))))->sval)
 #define EXTPROTOCOL_VALIDATOR_GET_DIRECTION(fcinfo) (((ExtProtocolValidatorData*) fcinfo->context)->direction)
 
 

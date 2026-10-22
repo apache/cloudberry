@@ -178,10 +178,51 @@ fi
 
 # Run rpmbuild with the provided options
 echo "Building RPM with Version: $VERSION, Release: $RELEASE$([ "$DEBUG_BUILD" = true ] && echo ", Debug: enabled")..."
+
+# Relax rpm's check-rpaths QA check.
+#
+# Cloudberry ships shared objects (e.g. PL/Python's _pg*.so) whose RUNPATH
+# points at the product's install prefix (/usr/local/cloudberry-db/lib).
+# This is intentional, but check-rpaths classifies such absolute,
+# non-standard rpaths as "invalid" (0x0002) and, on the el10 toolchain,
+# turns it into a fatal "%install" error. Setting QA_RPATHS downgrades the
+# standard (0x0001), invalid (0x0002) and empty (0x0010) rpath findings to
+# warnings so packaging succeeds. This is a no-op relaxation on el8/el9.
+export QA_RPATHS=$(( 0x0001 | 0x0002 | 0x0010 ))
+
 if ! eval "$RPMBUILD_CMD"; then
   echo "Error: rpmbuild failed."
   exit 1
 fi
+
+# Normalize published artifact file names.
+#
+# The RPM's Name metadata embeds the major version
+# (apache-cloudberry-db-incubating-<major>) so that different major versions
+# can be installed side by side. rpmbuild therefore emits files named
+# apache-cloudberry-db-incubating-<major>-<version>-<release>....rpm.
+#
+# For published artifacts we keep the historical file name that omits the
+# "-<major>" segment (e.g. apache-cloudberry-db-incubating-2.1.0-1.el8.x86_64.rpm),
+# matching the distribution naming used by Greenplum. Renaming the file does
+# NOT change the package identity: RPM reads Name/Version/Release from the
+# package header, not from the file name, so install/upgrade/coexistence and
+# `dnf`/`rpm` queries are unaffected.
+MAJOR_VERSION="${VERSION%%.*}"
+RPMS_DIR="$(rpm --eval '%{_rpmdir}')"
+
+shopt -s nullglob
+for rpm_path in "${RPMS_DIR}"/*/apache-cloudberry-db-incubating-"${MAJOR_VERSION}"-*"${VERSION}"-*.rpm; do
+  rpm_dir="$(dirname "$rpm_path")"
+  rpm_base="$(basename "$rpm_path")"
+  # Drop the "-<major>" that immediately follows the fixed name prefix.
+  new_base="${rpm_base/apache-cloudberry-db-incubating-${MAJOR_VERSION}-/apache-cloudberry-db-incubating-}"
+  if [ "$new_base" != "$rpm_base" ]; then
+    mv -f "$rpm_path" "${rpm_dir}/${new_base}"
+    echo "Renamed published artifact: ${rpm_base} -> ${new_base}"
+  fi
+done
+shopt -u nullglob
 
 # Print completion message
 echo "RPM build completed successfully with Version: $VERSION, Release: $RELEASE"

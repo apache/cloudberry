@@ -1,5 +1,6 @@
 #include "postgres.h"
 
+#include "fmgr.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "nodes/plannodes.h"

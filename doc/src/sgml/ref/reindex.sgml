@@ -21,7 +21,8 @@ PostgreSQL documentation
 
  <refsynopsisdiv>
 <synopsis>
-REINDEX [ ( <replaceable class="parameter">option</replaceable> [, ...] ) ] { INDEX | TABLE | SCHEMA | DATABASE | SYSTEM } [ CONCURRENTLY ] <replaceable class="parameter">name</replaceable>
+REINDEX [ ( <replaceable class="parameter">option</replaceable> [, ...] ) ] { INDEX | TABLE | SCHEMA } [ CONCURRENTLY ] <replaceable class="parameter">name</replaceable>
+REINDEX [ ( <replaceable class="parameter">option</replaceable> [, ...] ) ] { DATABASE | SYSTEM } [ CONCURRENTLY ] [ <replaceable class="parameter">name</replaceable> ]
 
 <phrase>where <replaceable class="parameter">option</replaceable> can be one of:</phrase>
 
@@ -126,8 +127,9 @@ REINDEX [ ( <replaceable class="parameter">option</replaceable> [, ...] ) ] { IN
     <term><literal>DATABASE</literal></term>
     <listitem>
      <para>
-      Recreate all indexes within the current database.
-      Indexes on shared system catalogs are also processed.
+      Recreate all indexes within the current database, except system
+      catalogs.
+      Indexes on system catalogs are not processed.
       This form of <command>REINDEX</command> cannot be executed inside a
       transaction block.
      </para>
@@ -154,8 +156,8 @@ REINDEX [ ( <replaceable class="parameter">option</replaceable> [, ...] ) ] { IN
       The name of the specific index, table, or database to be
       reindexed.  Index and table names can be schema-qualified.
       Presently, <command>REINDEX DATABASE</command> and <command>REINDEX SYSTEM</command>
-      can only reindex the current database, so their parameter must match
-      the current database's name.
+      can only reindex the current database. Their parameter is optional,
+      and it must match the current database's name.
      </para>
     </listitem>
    </varlistentry>
@@ -275,7 +277,12 @@ REINDEX [ ( <replaceable class="parameter">option</replaceable> [, ...] ) ] { IN
    considerations are rather different.  <command>REINDEX</command> locks out writes
    but not reads of the index's parent table.  It also takes an
    <literal>ACCESS EXCLUSIVE</literal> lock on the specific index being processed,
-   which will block reads that attempt to use that index.  In contrast,
+   which will block reads that attempt to use that index. In particular,
+   the query planner tries to take an <literal>ACCESS SHARE</literal>
+   lock on every index of the table, regardless of the query, and so
+   <command>REINDEX</command> blocks virtually any queries except for some
+   prepared queries whose plan has been cached and which don't use this very
+   index. In contrast,
    <command>DROP INDEX</command> momentarily takes an
    <literal>ACCESS EXCLUSIVE</literal> lock on the parent table, blocking both
    writes and reads.  The subsequent <command>CREATE INDEX</command> locks out
@@ -304,7 +311,7 @@ REINDEX [ ( <replaceable class="parameter">option</replaceable> [, ...] ) ] { IN
    reindexed in a separate transaction. Those commands cannot be used inside
    a transaction block when working on a partitioned table or index.
   </para>
-  
+
   <para>
    When using the <literal>TABLESPACE</literal> clause with
    <command>REINDEX</command> on a partitioned index or table, only the
@@ -324,7 +331,7 @@ REINDEX [ ( <replaceable class="parameter">option</replaceable> [, ...] ) ] { IN
    will be generated. Indexes on TOAST tables are rebuilt, but not moved
    to the new tablespace.
   </para>
-   
+
   <refsect2 id="sql-reindex-concurrently" xreflabel="Rebuilding Indexes Concurrently">
    <title>Rebuilding Indexes Concurrently</title>
 

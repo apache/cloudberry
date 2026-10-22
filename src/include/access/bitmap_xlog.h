@@ -49,7 +49,7 @@
  */
 typedef struct xl_bm_bitmapwords
 {
-	RelFileNode 	bm_node;
+	RelFileLocator 	bm_node;
 	int32			bm_num_pages;
 
 	/*
@@ -105,7 +105,7 @@ typedef struct xl_bm_bitmapwords_perpage
 
 typedef struct xl_bm_updatewords
 {
-	RelFileNode		bm_node;
+	RelFileLocator		bm_node;
 
 	BlockNumber		bm_lov_blkno;
 	OffsetNumber	bm_lov_offset;
@@ -134,7 +134,7 @@ typedef struct xl_bm_updatewords
 
 typedef struct xl_bm_updateword
 {
-	RelFileNode		bm_node;
+	RelFileLocator		bm_node;
 
 	BlockNumber		bm_blkno;
 	int				bm_word_no;
@@ -145,7 +145,7 @@ typedef struct xl_bm_updateword
 /* The information about inserting a new lovitem into the LOV list. */
 typedef struct xl_bm_lovitem
 {
-	RelFileNode 	bm_node;
+	RelFileLocator 	bm_node;
 	ForkNumber		bm_fork;
 
 	BlockNumber		bm_lov_blkno;
@@ -157,7 +157,7 @@ typedef struct xl_bm_lovitem
 /* The information about adding a new page */
 typedef struct xl_bm_newpage
 {
-	RelFileNode 	bm_node;
+	RelFileLocator 	bm_node;
 	BlockNumber		bm_new_blkno;
 } xl_bm_newpage;
 
@@ -167,7 +167,7 @@ typedef struct xl_bm_newpage
  */
 typedef struct xl_bm_bitmappage
 {
-	RelFileNode 	bm_node;
+	RelFileLocator 	bm_node;
 
 	BlockNumber		bm_bitmap_blkno;
 
@@ -185,7 +185,7 @@ typedef struct xl_bm_bitmappage
 /* The information about changes to the last 2 words in a bitmap vector */
 typedef struct xl_bm_bitmap_lastwords
 {
-	RelFileNode 	bm_node;
+	RelFileLocator 	bm_node;
 
 	BM_HRL_WORD		bm_last_compword;
 	BM_HRL_WORD		bm_last_word;
@@ -200,7 +200,7 @@ typedef struct xl_bm_bitmap_lastwords
 /* The information about the changes in the metapage. */
 typedef struct xl_bm_metapage
 {
-	RelFileNode 	bm_node;
+	RelFileLocator 	bm_node;
 	ForkNumber		bm_fork;
 	Oid				bm_lov_heapId;		/* the relation id for the heap */
 	Oid				bm_lov_indexId;		/* the relation id for the index */

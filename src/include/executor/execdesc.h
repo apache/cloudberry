@@ -7,7 +7,7 @@
  *
  * Portions Copyright (c) 2005-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/executor/execdesc.h
@@ -65,6 +65,8 @@ typedef struct SerializedParamExecData
 
 typedef struct SerializedParams
 {
+	pg_node_attr(custom_read_write, no_copy, no_equal)
+	
 	NodeTag		type;
 
 	int			nExternParams;
@@ -163,6 +165,8 @@ typedef struct ExecSlice
  */
 typedef struct SliceTable
 {
+	pg_node_attr(custom_read_write, custom_copy_equal)
+	
 	NodeTag		type;
 
 	int			localSlice;		/* Index of the slice to execute. */
@@ -181,6 +185,8 @@ typedef struct SliceTable
  */
 typedef struct CursorPosInfo
 {
+	pg_node_attr(no_equal)
+	
 	NodeTag type;
 
 	char	   *cursor_name;
@@ -201,6 +207,8 @@ typedef struct CursorPosInfo
  */
 typedef struct QueryDispatchDesc
 {
+	pg_node_attr(no_copy, no_equal)
+
 	NodeTag		type;
 
 	/*
@@ -267,8 +275,10 @@ typedef struct QueryDispatchDesc
  * When a CREATE command is dispatched to segments, the OIDs used for the
  * new objects are sent in a list of OidAssignments.
  */
-typedef struct
+typedef struct OidAssignment
 {
+	pg_node_attr(no_equal, custom_read_write)
+	
 	NodeTag		type;
 
 	/*
@@ -323,7 +333,7 @@ typedef struct QueryDesc
 	EState	   *estate;			/* executor's query-wide state */
 	PlanState  *planstate;		/* tree of per-plan-node state */
 
-	/* This field is set by ExecutorRun */
+	/* This field is set by ExecutePlan */
 	bool		already_executed;	/* true if previously executed */
 
 	/* This field is set by ExecutorEnd after collecting cdbdisp results */

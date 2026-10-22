@@ -432,7 +432,7 @@ ANALYZE;
 SET optimizer TO on;
 SET gp_enable_runtime_filter_pushdown TO off;
 EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT t1.c3 FROM t1, t2 WHERE t1.c1 = t2.c1;
-                                        QUERY PLAN                                         
+                                        QUERY PLAN
 -------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=32 loops=1)
    ->  Hash Join (actual rows=32 loops=1)
@@ -443,12 +443,12 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT t1.c3 FROM t1, t2 W
          ->  Hash (actual rows=6 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
                ->  Seq Scan on t2 (actual rows=6 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SET gp_enable_runtime_filter_pushdown TO on;
 EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT t1.c3 FROM t1, t2 WHERE t1.c1 = t2.c1;
-                                        QUERY PLAN                                         
+                                        QUERY PLAN
 -------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=32 loops=1)
    ->  Hash Join (actual rows=32 loops=1)
@@ -460,7 +460,7 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT t1.c3 FROM t1, t2 W
          ->  Hash (actual rows=6 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
                ->  Seq Scan on t2 (actual rows=6 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (11 rows)
 
 RESET gp_enable_runtime_filter_pushdown;

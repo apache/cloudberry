@@ -27,8 +27,11 @@
 
 #include "storage/pax.h"
 
+#include <algorithm>
+#include <iterator>
 #include <map>
 #include <utility>
+#include <vector>
 
 #include "access/pax_visimap.h"
 #include "access/paxc_rel_options.h"
@@ -73,7 +76,8 @@ class IndexUpdaterInternal {
     Assert(slot == slot_);
     Assert(HasIndex());
     auto recheck_index =
-        ExecInsertIndexTuples(relinfo_, slot_, estate_, true, false, NULL, NIL);
+        ExecInsertIndexTuples(relinfo_, slot_, estate_, true, false, NULL, NIL,
+							  false);
     list_free(recheck_index);
   }
 
@@ -193,7 +197,7 @@ std::unique_ptr<MicroPartitionWriter> TableWriter::CreateMicroPartitionWriter(
   toast_file_path = GenToastFilePath(file_path);
 
   options.rel_oid = relation_->rd_id;
-  options.node = relation_->rd_node;
+  options.node = relation_->rd_locator;
   // only permanent table should write wal
   options.need_wal =
       relation_->rd_rel->relpersistence == RELPERSISTENCE_PERMANENT;
@@ -261,8 +265,8 @@ void TableWriter::InitOptionsCaches() {
 }
 
 void TableWriter::Open() {
-  rel_path_ =
-      cbdb::BuildPaxDirectoryPath(relation_->rd_node, relation_->rd_backend);
+  rel_path_ = cbdb::BuildPaxDirectoryPath(
+      relation_->rd_locator, relation_->rd_backend);
 
   InitOptionsCaches();
 
@@ -595,14 +599,24 @@ void TableDeleter::DeleteWithVisibilityMap(
     return;
   }
   std::vector<int> min_max_col_idxs;
+  std::vector<int> bf_col_idxs;
+  std::vector<int> stats_proj_col_idxs;
   auto stats_updater_projection = std::make_shared<PaxFilter>();
 
   std::unique_ptr<Bitmap8> visi_bitmap;
   auto catalog_update = pax::PaxCatalogUpdater::Begin(rel_);
-  auto rel_path = cbdb::BuildPaxDirectoryPath(rel_->rd_node, rel_->rd_backend);
+  auto rel_path = cbdb::BuildPaxDirectoryPath(
+      rel_->rd_locator, rel_->rd_backend);
 
   min_max_col_idxs = cbdb::GetMinMaxColumnIndexes(rel_);
-  stats_updater_projection->SetColumnProjection(min_max_col_idxs,
+  bf_col_idxs = cbdb::GetBloomFilterColumnIndexes(rel_);
+
+  // Projection must cover minmax ∪ bloomfilter columns; otherwise
+  // AddRow reads uninitialized slot values for bf columns (issue #1749).
+  std::set_union(min_max_col_idxs.begin(), min_max_col_idxs.end(),
+                 bf_col_idxs.begin(), bf_col_idxs.end(),
+                 std::back_inserter(stats_proj_col_idxs));
+  stats_updater_projection->SetColumnProjection(stats_proj_col_idxs,
                                                 rel_->rd_att->natts);
   do {
     auto it = iterator->Next();
@@ -663,7 +677,7 @@ void TableDeleter::DeleteWithVisibilityMap(
                                              file_system_options_);
       visimap_file->WriteN(raw.bitmap, raw.size);
       if (need_wal_) {
-        cbdb::XLogPaxInsert(rel_->rd_node, visimap_file_name, 0, raw.bitmap,
+        cbdb::XLogPaxInsert(rel_->rd_locator, visimap_file_name, 0, raw.bitmap,
                             raw.size);
       }
       visimap_file->Close();
@@ -675,7 +689,7 @@ void TableDeleter::DeleteWithVisibilityMap(
     UpdateStatsInAuxTable(
         catalog_update, micro_partition_metadata,
         std::make_shared<Bitmap8>(visi_bitmap->Raw()), min_max_col_idxs,
-        cbdb::GetBloomFilterColumnIndexes(rel_), stats_updater_projection);
+        bf_col_idxs, stats_updater_projection);
 
     // write pg_pax_blocks_oid
     catalog_update.UpdateVisimap(block_id, visimap_file_name);

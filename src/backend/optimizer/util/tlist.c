@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2007-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -31,6 +31,17 @@ typedef struct maxSortGroupRef_context
 
 static
 bool maxSortGroupRef_walker(Node *node, maxSortGroupRef_context *cxt);
+
+/*
+ * Test if an expression node represents a SRF call.  Beware multiple eval!
+ *
+ * Please note that this is only meant for use in split_pathtarget_at_srfs();
+ * if you use it anywhere else, your code is almost certainly wrong for SRFs
+ * nested within expressions.  Use expression_returns_set() instead.
+ */
+#define IS_SRF_CALL(node) \
+	((IsA(node, FuncExpr) && ((FuncExpr *) (node))->funcretset) || \
+	 (IsA(node, OpExpr) && ((OpExpr *) (node))->opretset))
 
 /*
  * Data structures for split_pathtarget_at_srfs().  To preserve the identity
@@ -1097,7 +1108,7 @@ apply_pathtarget_labeling_to_tlist(List *tlist, PathTarget *target)
  *
  * The outputs of this function are two parallel lists, one a list of
  * PathTargets and the other an integer list of bool flags indicating
- * whether the corresponding PathTarget contains any evaluatable SRFs.
+ * whether the corresponding PathTarget contains any evaluable SRFs.
  * The lists are given in the order they'd need to be evaluated in, with
  * the "lowest" PathTarget first.  So the last list entry is always the
  * originally given PathTarget, and any entries before it indicate evaluation

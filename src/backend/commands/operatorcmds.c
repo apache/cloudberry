@@ -4,7 +4,7 @@
  *
  *	  Routines for operator manipulation commands
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -37,7 +37,9 @@
 #include "catalog/indexing.h"
 #include "catalog/oid_dispatch.h"
 #include "catalog/objectaccess.h"
+#include "catalog/pg_namespace.h"
 #include "catalog/pg_operator.h"
+#include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/alter.h"
 #include "commands/defrem.h"
@@ -106,7 +108,7 @@ DefineOperator(List *names, List *parameters)
 				 errdetail("This name may be disallowed altogether in future versions of PostgreSQL.")));
 
 	/* Check we have creation rights in target namespace */
-	aclresult = pg_namespace_aclcheck(oprNamespace, GetUserId(), ACL_CREATE);
+	aclresult = object_aclcheck(NamespaceRelationId, oprNamespace, GetUserId(), ACL_CREATE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error(aclresult, OBJECT_SCHEMA,
 					   get_namespace_name(oprNamespace));
@@ -203,14 +205,14 @@ DefineOperator(List *names, List *parameters)
 
 	if (typeName1)
 	{
-		aclresult = pg_type_aclcheck(typeId1, GetUserId(), ACL_USAGE);
+		aclresult = object_aclcheck(TypeRelationId, typeId1, GetUserId(), ACL_USAGE);
 		if (aclresult != ACLCHECK_OK)
 			aclcheck_error_type(aclresult, typeId1);
 	}
 
 	if (typeName2)
 	{
-		aclresult = pg_type_aclcheck(typeId2, GetUserId(), ACL_USAGE);
+		aclresult = object_aclcheck(TypeRelationId, typeId2, GetUserId(), ACL_USAGE);
 		if (aclresult != ACLCHECK_OK)
 			aclcheck_error_type(aclresult, typeId2);
 	}
@@ -241,13 +243,13 @@ DefineOperator(List *names, List *parameters)
 	 * necessary, since EXECUTE will be checked at any attempted use of the
 	 * operator, but it seems like a good idea anyway.
 	 */
-	aclresult = pg_proc_aclcheck(functionOid, GetUserId(), ACL_EXECUTE);
+	aclresult = object_aclcheck(ProcedureRelationId, functionOid, GetUserId(), ACL_EXECUTE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error(aclresult, OBJECT_FUNCTION,
 					   NameListToString(functionName));
 
 	rettype = get_func_rettype(functionOid);
-	aclresult = pg_type_aclcheck(rettype, GetUserId(), ACL_USAGE);
+	aclresult = object_aclcheck(TypeRelationId, rettype, GetUserId(), ACL_USAGE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error_type(aclresult, rettype);
 
@@ -307,7 +309,6 @@ ValidateRestrictionEstimator(List *restrictionName)
 {
 	Oid			typeId[4];
 	Oid			restrictionOid;
-	AclResult	aclresult;
 
 	typeId[0] = INTERNALOID;	/* PlannerInfo */
 	typeId[1] = OIDOID;			/* operator OID */
@@ -323,11 +324,33 @@ ValidateRestrictionEstimator(List *restrictionName)
 				 errmsg("restriction estimator function %s must return type %s",
 						NameListToString(restrictionName), "float8")));
 
-	/* Require EXECUTE rights for the estimator */
-	aclresult = pg_proc_aclcheck(restrictionOid, GetUserId(), ACL_EXECUTE);
-	if (aclresult != ACLCHECK_OK)
-		aclcheck_error(aclresult, OBJECT_FUNCTION,
-					   NameListToString(restrictionName));
+	/*
+	 * If the estimator is not a built-in function, require superuser
+	 * privilege to install it.  This protects against using something that is
+	 * not a restriction estimator or has hard-wired assumptions about what
+	 * data types it is working with.  (Built-in estimators are required to
+	 * defend themselves adequately against unexpected data type choices, but
+	 * it seems impractical to expect that of extensions' estimators.)
+	 *
+	 * If it is built-in, only require EXECUTE rights.
+	 */
+	if (restrictionOid >= FirstGenbkiObjectId)
+	{
+		if (!superuser())
+			ereport(ERROR,
+					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+					 errmsg("must be superuser to specify a non-built-in restriction estimator function")));
+	}
+	else
+	{
+		AclResult	aclresult;
+
+		aclresult = object_aclcheck(ProcedureRelationId, restrictionOid,
+									GetUserId(), ACL_EXECUTE);
+		if (aclresult != ACLCHECK_OK)
+			aclcheck_error(aclresult, OBJECT_FUNCTION,
+						   NameListToString(restrictionName));
+	}
 
 	return restrictionOid;
 }
@@ -343,7 +366,6 @@ ValidateJoinEstimator(List *joinName)
 	Oid			typeId[5];
 	Oid			joinOid;
 	Oid			joinOid2;
-	AclResult	aclresult;
 
 	typeId[0] = INTERNALOID;	/* PlannerInfo */
 	typeId[1] = OIDOID;			/* operator OID */
@@ -381,11 +403,24 @@ ValidateJoinEstimator(List *joinName)
 				 errmsg("join estimator function %s must return type %s",
 						NameListToString(joinName), "float8")));
 
-	/* Require EXECUTE rights for the estimator */
-	aclresult = pg_proc_aclcheck(joinOid, GetUserId(), ACL_EXECUTE);
-	if (aclresult != ACLCHECK_OK)
-		aclcheck_error(aclresult, OBJECT_FUNCTION,
-					   NameListToString(joinName));
+	/* privilege checks are the same as in ValidateRestrictionEstimator */
+	if (joinOid >= FirstGenbkiObjectId)
+	{
+		if (!superuser())
+			ereport(ERROR,
+					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+					 errmsg("must be superuser to specify a non-built-in join estimator function")));
+	}
+	else
+	{
+		AclResult	aclresult;
+
+		aclresult = object_aclcheck(ProcedureRelationId, joinOid,
+									GetUserId(), ACL_EXECUTE);
+		if (aclresult != ACLCHECK_OK)
+			aclcheck_error(aclresult, OBJECT_FUNCTION,
+						   NameListToString(joinName));
+	}
 
 	return joinOid;
 }
@@ -514,7 +549,7 @@ AlterOperator(AlterOperatorStmt *stmt)
 	}
 
 	/* Check permissions. Must be owner. */
-	if (!pg_oper_ownercheck(oprId, GetUserId()))
+	if (!object_ownercheck(OperatorRelationId, oprId, GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_OPERATOR,
 					   NameStr(oprForm->oprname));
 

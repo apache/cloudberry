@@ -131,4 +131,4 @@ SELECT gp_inject_fault('drop_tablespace_after_acquire_lock', 'reset', dbid) FROM
 DROP
 -- fail
 2<:  <... completed>
-ERROR:  could not create directory "pg_tblspc/33175/GPDB_1_302501601/32799": No such file or directory
+ERROR:  could not create directory "pg_tblspc/164378/GPDB_2_302512051/17018": No such file or directory

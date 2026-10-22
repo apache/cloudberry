@@ -3,7 +3,7 @@
  * dict_xsyn.c
  *	  Extended synonym dictionary
  *
- * Copyright (c) 2007-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2007-2023, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  contrib/dict_xsyn/dict_xsyn.c
@@ -48,15 +48,15 @@ find_word(char *in, char **end)
 	char	   *start;
 
 	*end = NULL;
-	while (*in && t_isspace(in))
-		in += pg_mblen(in);
+	while (*in && t_isspace_cstr(in))
+		in += pg_mblen_cstr(in);
 
 	if (!*in || *in == '#')
 		return NULL;
 	start = in;
 
-	while (*in && !t_isspace(in))
-		in += pg_mblen(in);
+	while (*in && !t_isspace_cstr(in))
+		in += pg_mblen_cstr(in);
 
 	*end = in;
 

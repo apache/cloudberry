@@ -23,7 +23,7 @@ CREATE LANGUAGE plpython3u;
 ! gpconfig -c gp_resource_manager -v group-v2;
 ! gpconfig -c max_connections -v 250 -m 25;
 ! gpconfig -c runaway_detector_activation_percent -v 100;
-! gpstop -rai;
+! gpstop -raf;
 -- end_ignore
 
 -- after the restart we need a new connection to run the queries

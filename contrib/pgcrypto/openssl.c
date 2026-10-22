@@ -252,13 +252,13 @@ px_find_digest(const char *name, PX_MD **res)
 	if (!ctx)
 	{
 		pfree(digest);
-		return -1;
+		return PXE_CIPHER_INIT;
 	}
 	if (EVP_DigestInit_ex(ctx, md, NULL) == 0)
 	{
 		EVP_MD_CTX_destroy(ctx);
 		pfree(digest);
-		return -1;
+		return PXE_CIPHER_INIT;
 	}
 
 	digest->algo = md;
@@ -412,17 +412,18 @@ gen_ossl_free(PX_Cipher *c)
 }
 
 static int
-gen_ossl_decrypt(PX_Cipher *c, const uint8 *data, unsigned dlen,
-				 uint8 *res)
+gen_ossl_decrypt(PX_Cipher *c, int padding, const uint8 *data, unsigned dlen,
+				 uint8 *res, unsigned *rlen)
 {
 	OSSLCipher *od = c->ptr;
-	int			outlen;
+	int			outlen,
+				outlen2;
 
 	if (!od->init)
 	{
 		if (!EVP_DecryptInit_ex(od->evp_ctx, od->evp_ciph, NULL, NULL, NULL))
 			return PXE_CIPHER_INIT;
-		if (!EVP_CIPHER_CTX_set_padding(od->evp_ctx, 0))
+		if (!EVP_CIPHER_CTX_set_padding(od->evp_ctx, padding))
 			return PXE_CIPHER_INIT;
 		if (!EVP_CIPHER_CTX_set_key_length(od->evp_ctx, od->klen))
 			return PXE_CIPHER_INIT;
@@ -433,22 +434,26 @@ gen_ossl_decrypt(PX_Cipher *c, const uint8 *data, unsigned dlen,
 
 	if (!EVP_DecryptUpdate(od->evp_ctx, res, &outlen, data, dlen))
 		return PXE_DECRYPT_FAILED;
+	if (!EVP_DecryptFinal_ex(od->evp_ctx, res + outlen, &outlen2))
+		return PXE_DECRYPT_FAILED;
+	*rlen = outlen + outlen2;
 
 	return 0;
 }
 
 static int
-gen_ossl_encrypt(PX_Cipher *c, const uint8 *data, unsigned dlen,
-				 uint8 *res)
+gen_ossl_encrypt(PX_Cipher *c, int padding, const uint8 *data, unsigned dlen,
+				 uint8 *res, unsigned *rlen)
 {
 	OSSLCipher *od = c->ptr;
-	int			outlen;
+	int			outlen,
+				outlen2;
 
 	if (!od->init)
 	{
 		if (!EVP_EncryptInit_ex(od->evp_ctx, od->evp_ciph, NULL, NULL, NULL))
 			return PXE_CIPHER_INIT;
-		if (!EVP_CIPHER_CTX_set_padding(od->evp_ctx, 0))
+		if (!EVP_CIPHER_CTX_set_padding(od->evp_ctx, padding))
 			return PXE_CIPHER_INIT;
 		if (!EVP_CIPHER_CTX_set_key_length(od->evp_ctx, od->klen))
 			return PXE_CIPHER_INIT;
@@ -459,6 +464,9 @@ gen_ossl_encrypt(PX_Cipher *c, const uint8 *data, unsigned dlen,
 
 	if (!EVP_EncryptUpdate(od->evp_ctx, res, &outlen, data, dlen))
 		return PXE_ENCRYPT_FAILED;
+	if (!EVP_EncryptFinal_ex(od->evp_ctx, res + outlen, &outlen2))
+		return PXE_ENCRYPT_FAILED;
+	*rlen = outlen + outlen2;
 
 	return 0;
 }

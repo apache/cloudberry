@@ -17,13 +17,15 @@ fi
 if test -z "$SCRIPT_PATH"; then
     echo "The shell cannot be identified. \$GPHOME may not be set correctly." >&2
 fi
-SCRIPT_DIR="$(cd "$(dirname "${SCRIPT_PATH}")" >/dev/null 2>&1 && pwd)"
 
-if [ ! -L "${SCRIPT_DIR}" ]; then
-    GPHOME=${SCRIPT_DIR}
-else
-    GPHOME=$(readlink "${SCRIPT_DIR}")
-fi
+# downstream PATH / PYTHONPATH / LD_LIBRARY_PATH derivations stay valid
+# even when GPHOME is reached via a symlink whose target is a relative
+# path (e.g. /opt/database -> database-2.1.0).  `pwd -P` resolves every
+# symlink component, returning the physical absolute path.  This replaces
+# an earlier branch that ran bare `readlink` on the script's directory,
+# which would return the symlink target verbatim and break with relative
+# targets (PYTHONPATH became relative, gppylib import failed).
+GPHOME="$(cd "$(dirname "${SCRIPT_PATH}")" >/dev/null 2>&1 && pwd -P)"
 EOF
 
 cat <<"EOF"

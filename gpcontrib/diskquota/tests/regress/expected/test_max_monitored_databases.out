@@ -1,7 +1,6 @@
 --start_ignore
-\! gpconfig -c diskquota.max_monitored_databases -v 3
-20230905:12:39:55:332748 gpconfig:zhrt:zhrt-[INFO]:-completed successfully with parameters '-c diskquota.max_monitored_databases -v 3'
-\! gpstop -ari
+\! gpconfig -c diskquota.max_monitored_databases -v 3 > /dev/null
+\! gpstop -arf > /dev/null
 --end_ignore
 \c
 DROP DATABASE IF EXISTS test_db1;
@@ -68,37 +67,6 @@ DROP DATABASE test_db1;
 DROP DATABASE test_db2;
 DROP DATABASE test_db3;
 -- start_ignore
-\! gpconfig -r diskquota.max_monitored_databases
-20230905:12:40:29:350921 gpconfig:zhrt:zhrt-[INFO]:-completed successfully with parameters '-r diskquota.max_monitored_databases'
-\! gpstop -ari
-20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Starting gpstop with args: -ari
-20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Gathering information and validating the environment...
-20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Obtaining Greenplum Master catalog information
-20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Obtaining Segment details from master...
-20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.24.4+dev.45.gad3671f087 build dev'
-20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Commencing Master instance shutdown with mode='immediate'
-20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Master segment instance directory=/home/zhrt/workspace/gpdb6/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
-20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Attempting forceful termination of any leftover master process
-20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Terminating processes for segment /home/zhrt/workspace/gpdb6/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
-20230905:12:40:37:352551 gpstop:zhrt:zhrt-[INFO]:-Stopping master standby host zhrt mode=immediate
-20230905:12:40:38:352551 gpstop:zhrt:zhrt-[INFO]:-Successfully shutdown standby process on zhrt
-20230905:12:40:38:352551 gpstop:zhrt:zhrt-[INFO]:-Targeting dbid [2, 5, 3, 6, 4, 7] for shutdown
-20230905:12:40:38:352551 gpstop:zhrt:zhrt-[INFO]:-Commencing parallel primary segment instance shutdown, please wait...
-20230905:12:40:38:352551 gpstop:zhrt:zhrt-[INFO]:-0.00% of jobs completed
-20230905:12:40:43:352551 gpstop:zhrt:zhrt-[INFO]:-100.00% of jobs completed
-20230905:12:40:43:352551 gpstop:zhrt:zhrt-[INFO]:-Commencing parallel mirror segment instance shutdown, please wait...
-20230905:12:40:43:352551 gpstop:zhrt:zhrt-[INFO]:-0.00% of jobs completed
-20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-100.00% of jobs completed
-20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-----------------------------------------------------
-20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-   Segments stopped successfully      = 6
-20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-   Segments with errors during stop   = 0
-20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-----------------------------------------------------
-20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-Successfully shutdown 6 of 6 segment instances 
-20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-Database successfully shutdown with no errors reported
-20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-Cleaning up leftover gpmmon process
-20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-No leftover gpmmon process found
-20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-Cleaning up leftover gpsmon processes
-20230905:12:40:47:352551 gpstop:zhrt:zhrt-[INFO]:-No leftover gpsmon processes on some hosts. not attempting forceful termination on these hosts
-20230905:12:40:47:352551 gpstop:zhrt:zhrt-[INFO]:-Cleaning up leftover shared memory
-20230905:12:40:48:352551 gpstop:zhrt:zhrt-[INFO]:-Restarting System...
+\! gpconfig -r diskquota.max_monitored_databases > /dev/null
+\! gpstop -arf > /dev/null
 -- end_ignore

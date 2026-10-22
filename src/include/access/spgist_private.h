@@ -4,7 +4,7 @@
  *	  Private declarations for SP-GiST access method.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/access/spgist_private.h
@@ -421,7 +421,8 @@ typedef struct SpGistLeafTupleData
  * field, to satisfy some Asserts that we make when replacing a leaf tuple
  * with a dead tuple.
  * We don't use t_info, but it's needed to align the pointer field.
- * pointer and xid are only valid when tupstate = REDIRECT.
+ * pointer and xid are only valid when tupstate = REDIRECT, and in some
+ * cases xid can be InvalidTransactionId even then; see initSpGistState.
  */
 typedef struct SpGistDeadTupleData
 {

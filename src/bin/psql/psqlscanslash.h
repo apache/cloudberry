@@ -1,7 +1,7 @@
 /*
  * psql - the PostgreSQL interactive terminal
  *
- * Copyright (c) 2000-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2000-2023, PostgreSQL Global Development Group
  *
  * src/bin/psql/psqlscanslash.h
  */
@@ -30,6 +30,11 @@ extern char *psql_scan_slash_option(PsqlScanState state,
 					   bool semicolon);
 
 extern void psql_scan_slash_command_end(PsqlScanState state);
+
+extern PsqlScanStateSave *psql_scan_get_lex_state(PsqlScanState state);
+
+extern void psql_scan_set_lex_state(PsqlScanState state,
+									const PsqlScanStateSave *lex_state);
 
 extern int	psql_scan_get_paren_depth(PsqlScanState state);
 

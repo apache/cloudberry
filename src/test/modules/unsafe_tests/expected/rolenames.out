@@ -1078,7 +1078,8 @@ SHOW session_preload_libraries;
 SET SESSION AUTHORIZATION regress_role_nopriv;
 -- fails with role not member of pg_read_all_settings
 SHOW session_preload_libraries;
-ERROR:  must be superuser or a member of pg_read_all_settings to examine "session_preload_libraries"
+ERROR:  permission denied to examine "session_preload_libraries"
+DETAIL:  Only roles with privileges of the "pg_read_all_settings" role may examine this parameter.
 RESET SESSION AUTHORIZATION;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;

@@ -40,7 +40,6 @@
 #include "utils/faultinjector.h"
 #include "utils/fmgroids.h"
 #include "utils/guc.h"
-#include "utils/int8.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 
@@ -139,7 +138,7 @@ LockSegnoForWrite(Relation rel, int segno)
 	 * The algorithm below for choosing a target segment is not concurrent-safe.
 	 * Grab a lock to serialize.
 	 */
-	LockDatabaseObject(rel->rd_node.dbNode, (Oid)rel->rd_node.relNode, 0, ExclusiveLock);
+	LockDatabaseObject(rel->rd_locator.dbOid, (Oid)rel->rd_locator.relNumber, 0, ExclusiveLock);
 
 	appendOnlyMetaDataSnapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
 	GetAppendOnlyEntryAuxOids(rel,
@@ -244,7 +243,7 @@ LockSegnoForWrite(Relation rel, int segno)
 	/* OK, we have the aoseg tuple locked for us. */
 	systable_endscan(aoscan);
 
-	UnlockDatabaseObject(rel->rd_node.dbNode, (Oid)rel->rd_node.relNode, 0, ExclusiveLock);
+	UnlockDatabaseObject(rel->rd_locator.dbOid, (Oid)rel->rd_locator.relNumber, 0, ExclusiveLock);
 
 	heap_close(pg_aoseg_rel, AccessShareLock);
 
@@ -412,7 +411,7 @@ choose_segno_internal(Relation rel, List *avoid_segnos, choose_segno_mode mode)
 	 * The algorithm below for choosing a target segment is not concurrent-safe.
 	 * Grab a lock to serialize.
 	 */
-	LockDatabaseObject(rel->rd_node.dbNode, (Oid)rel->rd_node.relNode, 0, ExclusiveLock);
+	LockDatabaseObject(rel->rd_locator.dbOid, (Oid)rel->rd_locator.relNumber, 0, ExclusiveLock);
 
 	/*
 	 * Obtain the snapshot that is taken at the beginning of the transaction.
@@ -621,7 +620,7 @@ choose_segno_internal(Relation rel, List *avoid_segnos, choose_segno_mode mode)
 	}
 
 cleanup:
-	UnlockDatabaseObject(rel->rd_node.dbNode, (Oid)rel->rd_node.relNode, 0, ExclusiveLock);
+	UnlockDatabaseObject(rel->rd_locator.dbOid, (Oid)rel->rd_locator.relNumber, 0, ExclusiveLock);
 
 	if (Debug_appendonly_print_segfile_choice && chosen_segno != -1)
 		ereport(LOG,

@@ -5,7 +5,7 @@
  *	  Routines for CREATE and DROP FUNCTION commands and CREATE and DROP
  *	  CAST commands.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -58,6 +58,7 @@
 #include "executor/functions.h"
 #include "funcapi.h"
 #include "miscadmin.h"
+#include "nodes/nodeFuncs.h"
 #include "optimizer/optimizer.h"
 #include "parser/analyze.h"
 #include "parser/parse_coerce.h"
@@ -133,7 +134,6 @@ compute_return_type(TypeName *returnType, Oid languageOid,
 	{
 		char	   *typnam = TypeNameToString(returnType);
 		Oid			namespaceId;
-		AclResult	aclresult;
 		char	   *typname;
 		ObjectAddress address;
 
@@ -173,8 +173,8 @@ compute_return_type(TypeName *returnType, Oid languageOid,
 		}
 		namespaceId = QualifiedNameGetCreationNamespace(returnType->names,
 														&typname);
-		aclresult = pg_namespace_aclcheck(namespaceId, GetUserId(),
-										  ACL_CREATE);
+		aclresult = object_aclcheck(NamespaceRelationId, namespaceId, GetUserId(),
+									ACL_CREATE);
 		if (aclresult != ACLCHECK_OK)
 			aclcheck_error(aclresult, OBJECT_SCHEMA,
 						   get_namespace_name(namespaceId));
@@ -183,7 +183,7 @@ compute_return_type(TypeName *returnType, Oid languageOid,
 		Assert(OidIsValid(rettype));
 	}
 
-	aclresult = pg_type_aclcheck(rettype, GetUserId(), ACL_USAGE);
+	aclresult = object_aclcheck(TypeRelationId, rettype, GetUserId(), ACL_USAGE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error_type(aclresult, rettype);
 
@@ -296,7 +296,7 @@ interpret_function_parameter_list(ParseState *pstate,
 			toid = InvalidOid;	/* keep compiler quiet */
 		}
 
-		aclresult = pg_type_aclcheck(toid, GetUserId(), ACL_USAGE);
+		aclresult = object_aclcheck(TypeRelationId, toid, GetUserId(), ACL_USAGE);
 		if (aclresult != ACLCHECK_OK)
 			aclcheck_error_type(aclresult, toid);
 
@@ -459,7 +459,7 @@ interpret_function_parameter_list(ParseState *pstate,
 			 * Make sure no variables are referred to (this is probably dead
 			 * code now that add_missing_from is history).
 			 */
-			if (list_length(pstate->p_rtable) != 0 ||
+			if (pstate->p_rtable != NIL ||
 				contain_var_clause(def))
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_COLUMN_REFERENCE),
@@ -516,10 +516,8 @@ interpret_function_parameter_list(ParseState *pstate,
 
 	if (outCount > 0 || varCount > 0)
 	{
-		*allParameterTypes = construct_array(allTypes, parameterCount, OIDOID,
-											 sizeof(Oid), true, TYPALIGN_INT);
-		*parameterModes = construct_array(paramModes, parameterCount, CHAROID,
-										  1, true, TYPALIGN_CHAR);
+		*allParameterTypes = construct_array_builtin(allTypes, parameterCount, OIDOID);
+		*parameterModes = construct_array_builtin(paramModes, parameterCount, CHAROID);
 		if (outCount > 1)
 			*requiredResultType = RECORDOID;
 		/* otherwise we set requiredResultType correctly above */
@@ -537,8 +535,7 @@ interpret_function_parameter_list(ParseState *pstate,
 			if (paramNames[i] == PointerGetDatum(NULL))
 				paramNames[i] = CStringGetTextDatum("");
 		}
-		*parameterNames = construct_array(paramNames, parameterCount, TEXTOID,
-										  -1, false, TYPALIGN_INT);
+		*parameterNames = construct_array_builtin(paramNames, parameterCount, TEXTOID);
 	}
 	else
 		*parameterNames = NULL;
@@ -575,7 +572,7 @@ compute_common_attribute(ParseState *pstate,
 		if (is_procedure)
 			goto procedure_error;
 		if (*volatility_item)
-			goto duplicate_error;
+			errorConflictingDefElem(defel, pstate);
 
 		*volatility_item = defel;
 	}
@@ -584,14 +581,14 @@ compute_common_attribute(ParseState *pstate,
 		if (is_procedure)
 			goto procedure_error;
 		if (*strict_item)
-			goto duplicate_error;
+			errorConflictingDefElem(defel, pstate);
 
 		*strict_item = defel;
 	}
 	else if (strcmp(defel->defname, "security") == 0)
 	{
 		if (*security_item)
-			goto duplicate_error;
+			errorConflictingDefElem(defel, pstate);
 
 		*security_item = defel;
 	}
@@ -600,7 +597,7 @@ compute_common_attribute(ParseState *pstate,
 		if (is_procedure)
 			goto procedure_error;
 		if (*leakproof_item)
-			goto duplicate_error;
+			errorConflictingDefElem(defel, pstate);
 
 		*leakproof_item = defel;
 	}
@@ -613,7 +610,7 @@ compute_common_attribute(ParseState *pstate,
 		if (is_procedure)
 			goto procedure_error;
 		if (*cost_item)
-			goto duplicate_error;
+			errorConflictingDefElem(defel, pstate);
 
 		*cost_item = defel;
 	}
@@ -622,7 +619,7 @@ compute_common_attribute(ParseState *pstate,
 		if (is_procedure)
 			goto procedure_error;
 		if (*rows_item)
-			goto duplicate_error;
+			errorConflictingDefElem(defel, pstate);
 
 		*rows_item = defel;
 	}
@@ -631,7 +628,7 @@ compute_common_attribute(ParseState *pstate,
 		if (is_procedure)
 			goto procedure_error;
 		if (*support_item)
-			goto duplicate_error;
+			errorConflictingDefElem(defel, pstate);
 
 		*support_item = defel;
 	}
@@ -640,7 +637,7 @@ compute_common_attribute(ParseState *pstate,
 		if (is_procedure)
 			goto procedure_error;
 		if (*parallel_item)
-			goto duplicate_error;
+			errorConflictingDefElem(defel, pstate);
 
 		*parallel_item = defel;
 	}
@@ -675,7 +672,7 @@ duplicate_error:
 	ereport(ERROR,
 			(errcode(ERRCODE_SYNTAX_ERROR),
 			 errmsg("conflicting or redundant options"),
-			 parser_errposition(pstate, defel->location)));
+					 parser_errposition(pstate, defel->location)));
 	return false;				/* keep compiler quiet */
 
 procedure_error:
@@ -960,37 +957,25 @@ compute_function_attributes(ParseState *pstate,
 		if (strcmp(defel->defname, "as") == 0)
 		{
 			if (as_item)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options"),
-						 parser_errposition(pstate, defel->location)));
+				errorConflictingDefElem(defel, pstate);
 			as_item = defel;
 		}
 		else if (strcmp(defel->defname, "language") == 0)
 		{
 			if (language_item)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options"),
-						 parser_errposition(pstate, defel->location)));
+				errorConflictingDefElem(defel, pstate);
 			language_item = defel;
 		}
 		else if (strcmp(defel->defname, "transform") == 0)
 		{
 			if (transform_item)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options"),
-						 parser_errposition(pstate, defel->location)));
+				errorConflictingDefElem(defel, pstate);
 			transform_item = defel;
 		}
 		else if (strcmp(defel->defname, "window") == 0)
 		{
 			if (windowfunc_item)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options"),
-						 parser_errposition(pstate, defel->location)));
+				errorConflictingDefElem(defel, pstate);
 			if (is_procedure)
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
@@ -1029,15 +1014,15 @@ compute_function_attributes(ParseState *pstate,
 	if (transform_item)
 		*transform = transform_item->arg;
 	if (windowfunc_item)
-		*windowfunc_p = intVal(windowfunc_item->arg);
+		*windowfunc_p = boolVal(windowfunc_item->arg);
 	if (volatility_item)
 		*volatility_p = interpret_func_volatility(volatility_item);
 	if (strict_item)
-		*strict_p = intVal(strict_item->arg);
+		*strict_p = boolVal(strict_item->arg);
 	if (security_item)
-		*security_definer = intVal(security_item->arg);
+		*security_definer = boolVal(security_item->arg);
 	if (leakproof_item)
-		*leakproof_p = intVal(leakproof_item->arg);
+		*leakproof_p = boolVal(leakproof_item->arg);
 	if (set_items)
 		*proconfig = update_proconfig_value(NULL, set_items);
 	if (cost_item)
@@ -1363,7 +1348,7 @@ validate_describe_callback(List *describeQualName,
 				 errmsg("describe function cannot be variadic")));
 
 	/* Check that the creator has permission to call the function */
-	aclresult = pg_proc_aclcheck(describeFuncOid, GetUserId(), ACL_EXECUTE);
+	aclresult = object_aclcheck(ProcedureRelationId, describeFuncOid, GetUserId(), ACL_EXECUTE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error(aclresult, OBJECT_PROCEDURE, get_func_name(describeFuncOid));
 
@@ -1428,7 +1413,7 @@ CreateFunction(ParseState *pstate, CreateFunctionStmt *stmt)
 													&funcname);
 
 	/* Check we have creation rights in target namespace */
-	aclresult = pg_namespace_aclcheck(namespaceId, GetUserId(), ACL_CREATE);
+	aclresult = object_aclcheck(NamespaceRelationId, namespaceId, GetUserId(), ACL_CREATE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error(aclresult, OBJECT_SCHEMA,
 					   get_namespace_name(namespaceId));
@@ -1494,9 +1479,7 @@ CreateFunction(ParseState *pstate, CreateFunctionStmt *stmt)
 	if (languageStruct->lanpltrusted)
 	{
 		/* if trusted language, need USAGE privilege */
-		AclResult	aclresult;
-
-		aclresult = pg_language_aclcheck(languageOid, GetUserId(), ACL_USAGE);
+		aclresult = object_aclcheck(LanguageRelationId, languageOid, GetUserId(), ACL_USAGE);
 		if (aclresult != ACLCHECK_OK)
 			aclcheck_error(aclresult, OBJECT_LANGUAGE,
 						   NameStr(languageStruct->lanname));
@@ -1603,7 +1586,7 @@ CreateFunction(ParseState *pstate, CreateFunctionStmt *stmt)
 
 	validate_sql_exec_location(execLocation, returnsSet);
 
-	if (list_length(trftypes_list) > 0)
+	if (trftypes_list != NIL)
 	{
 		ListCell   *lc;
 		Datum	   *arr;
@@ -1613,8 +1596,7 @@ CreateFunction(ParseState *pstate, CreateFunctionStmt *stmt)
 		i = 0;
 		foreach(lc, trftypes_list)
 			arr[i++] = ObjectIdGetDatum(lfirst_oid(lc));
-		trftypes = construct_array(arr, list_length(trftypes_list),
-								   OIDOID, sizeof(Oid), true, TYPALIGN_INT);
+		trftypes = construct_array_builtin(arr, list_length(trftypes_list), OIDOID);
 	}
 	else
 	{
@@ -1744,6 +1726,7 @@ RemoveFunctionById(Oid funcOid)
 
 	/* Remove anything in pg_proc_callback for this function */
 	deleteProcCallbacks(funcOid);
+	pgstat_drop_function(funcOid);
 
 	/*
 	 * If there's a pg_aggregate tuple, delete that too.
@@ -1808,7 +1791,7 @@ AlterFunction(ParseState *pstate, AlterFunctionStmt *stmt)
 	procForm = (Form_pg_proc) GETSTRUCT(tup);
 
 	/* Permission check: must own function */
-	if (!pg_proc_ownercheck(funcOid, GetUserId()))
+	if (!object_ownercheck(ProcedureRelationId, funcOid, GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, stmt->objtype,
 					   NameListToString(stmt->func->objname));
 
@@ -1849,12 +1832,12 @@ AlterFunction(ParseState *pstate, AlterFunctionStmt *stmt)
 	if (volatility_item)
 		procForm->provolatile = interpret_func_volatility(volatility_item);
 	if (strict_item)
-		procForm->proisstrict = intVal(strict_item->arg);
+		procForm->proisstrict = boolVal(strict_item->arg);
 	if (security_def_item)
-		procForm->prosecdef = intVal(security_def_item->arg);
+		procForm->prosecdef = boolVal(security_def_item->arg);
 	if (leakproof_item)
 	{
-		procForm->proleakproof = intVal(leakproof_item->arg);
+		procForm->proleakproof = boolVal(leakproof_item->arg);
 		if (procForm->proleakproof && !superuser())
 		{
 			Oid role = get_role_oid("mdb_admin", true /*if nodoby created mdb_admin role in this database*/);
@@ -2035,6 +2018,8 @@ CreateCast(CreateCastStmt *stmt)
 	char		sourcetyptype;
 	char		targettyptype;
 	Oid			funcid;
+	Oid			incastid = InvalidOid;
+	Oid			outcastid = InvalidOid;
 	int			nargs;
 	char		castcontext;
 	char		castmethod;
@@ -2061,19 +2046,19 @@ CreateCast(CreateCastStmt *stmt)
 						TypeNameToString(stmt->targettype))));
 
 	/* Permission check */
-	if (!pg_type_ownercheck(sourcetypeid, GetUserId())
-		&& !pg_type_ownercheck(targettypeid, GetUserId()))
+	if (!object_ownercheck(TypeRelationId, sourcetypeid, GetUserId())
+		&& !object_ownercheck(TypeRelationId, targettypeid, GetUserId()))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("must be owner of type %s or type %s",
 						format_type_be(sourcetypeid),
 						format_type_be(targettypeid))));
 
-	aclresult = pg_type_aclcheck(sourcetypeid, GetUserId(), ACL_USAGE);
+	aclresult = object_aclcheck(TypeRelationId, sourcetypeid, GetUserId(), ACL_USAGE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error_type(aclresult, sourcetypeid);
 
-	aclresult = pg_type_aclcheck(targettypeid, GetUserId(), ACL_USAGE);
+	aclresult = object_aclcheck(TypeRelationId, targettypeid, GetUserId(), ACL_USAGE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error_type(aclresult, targettypeid);
 
@@ -2112,7 +2097,9 @@ CreateCast(CreateCastStmt *stmt)
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 					 errmsg("cast function must take one to three arguments")));
-		if (!IsBinaryCoercible(sourcetypeid, procstruct->proargtypes.values[0]))
+		if (!IsBinaryCoercibleWithCast(sourcetypeid,
+									   procstruct->proargtypes.values[0],
+									   &incastid))
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 					 errmsg("argument of cast function must match or be binary-coercible from source data type")));
@@ -2126,7 +2113,9 @@ CreateCast(CreateCastStmt *stmt)
 					(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 					 errmsg("third argument of cast function must be type %s",
 							"boolean")));
-		if (!IsBinaryCoercible(procstruct->prorettype, targettypeid))
+		if (!IsBinaryCoercibleWithCast(procstruct->prorettype,
+									   targettypeid,
+									   &outcastid))
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 					 errmsg("return data type of cast function must match or be binary-coercible to target data type")));
@@ -2265,8 +2254,8 @@ CreateCast(CreateCastStmt *stmt)
 			break;
 	}
 
-	myself = CastCreate(sourcetypeid, targettypeid, funcid, castcontext,
-						castmethod, DEPENDENCY_NORMAL);
+	myself = CastCreate(sourcetypeid, targettypeid, funcid, incastid, outcastid,
+						castcontext, castmethod, DEPENDENCY_NORMAL);
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
@@ -2323,8 +2312,8 @@ CreateTransform(CreateTransformStmt *stmt)
 	AclResult	aclresult;
 	Form_pg_proc procstruct;
 	Datum		values[Natts_pg_transform];
-	bool		nulls[Natts_pg_transform];
-	bool		replaces[Natts_pg_transform];
+	bool		nulls[Natts_pg_transform] = {0};
+	bool		replaces[Natts_pg_transform] = {0};
 	Oid			transformid;
 	HeapTuple	tuple;
 	HeapTuple	newtuple;
@@ -2352,10 +2341,10 @@ CreateTransform(CreateTransformStmt *stmt)
 				 errmsg("data type %s is a domain",
 						TypeNameToString(stmt->type_name))));
 
-	if (!pg_type_ownercheck(typeid, GetUserId()))
+	if (!object_ownercheck(TypeRelationId, typeid, GetUserId()))
 		aclcheck_error_type(ACLCHECK_NOT_OWNER, typeid);
 
-	aclresult = pg_type_aclcheck(typeid, GetUserId(), ACL_USAGE);
+	aclresult = object_aclcheck(TypeRelationId, typeid, GetUserId(), ACL_USAGE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error_type(aclresult, typeid);
 
@@ -2364,7 +2353,7 @@ CreateTransform(CreateTransformStmt *stmt)
 	 */
 	langid = get_language_oid(stmt->lang, false);
 
-	aclresult = pg_language_aclcheck(langid, GetUserId(), ACL_USAGE);
+	aclresult = object_aclcheck(LanguageRelationId, langid, GetUserId(), ACL_USAGE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error(aclresult, OBJECT_LANGUAGE, stmt->lang);
 
@@ -2375,10 +2364,10 @@ CreateTransform(CreateTransformStmt *stmt)
 	{
 		fromsqlfuncid = LookupFuncWithArgs(OBJECT_FUNCTION, stmt->fromsql, false);
 
-		if (!pg_proc_ownercheck(fromsqlfuncid, GetUserId()))
+		if (!object_ownercheck(ProcedureRelationId, fromsqlfuncid, GetUserId()))
 			aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_FUNCTION, NameListToString(stmt->fromsql->objname));
 
-		aclresult = pg_proc_aclcheck(fromsqlfuncid, GetUserId(), ACL_EXECUTE);
+		aclresult = object_aclcheck(ProcedureRelationId, fromsqlfuncid, GetUserId(), ACL_EXECUTE);
 		if (aclresult != ACLCHECK_OK)
 			aclcheck_error(aclresult, OBJECT_FUNCTION, NameListToString(stmt->fromsql->objname));
 
@@ -2401,10 +2390,10 @@ CreateTransform(CreateTransformStmt *stmt)
 	{
 		tosqlfuncid = LookupFuncWithArgs(OBJECT_FUNCTION, stmt->tosql, false);
 
-		if (!pg_proc_ownercheck(tosqlfuncid, GetUserId()))
+		if (!object_ownercheck(ProcedureRelationId, tosqlfuncid, GetUserId()))
 			aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_FUNCTION, NameListToString(stmt->tosql->objname));
 
-		aclresult = pg_proc_aclcheck(tosqlfuncid, GetUserId(), ACL_EXECUTE);
+		aclresult = object_aclcheck(ProcedureRelationId, tosqlfuncid, GetUserId(), ACL_EXECUTE);
 		if (aclresult != ACLCHECK_OK)
 			aclcheck_error(aclresult, OBJECT_FUNCTION, NameListToString(stmt->tosql->objname));
 
@@ -2430,8 +2419,6 @@ CreateTransform(CreateTransformStmt *stmt)
 	values[Anum_pg_transform_trffromsql - 1] = ObjectIdGetDatum(fromsqlfuncid);
 	values[Anum_pg_transform_trftosql - 1] = ObjectIdGetDatum(tosqlfuncid);
 
-	MemSet(nulls, false, sizeof(nulls));
-
 	relation = table_open(TransformRelationId, RowExclusiveLock);
 
 	tuple = SearchSysCache2(TRFTYPELANG,
@@ -2448,7 +2435,6 @@ CreateTransform(CreateTransformStmt *stmt)
 							format_type_be(typeid),
 							stmt->lang)));
 
-		MemSet(replaces, false, sizeof(replaces));
 		replaces[Anum_pg_transform_trffromsql - 1] = true;
 		replaces[Anum_pg_transform_trftosql - 1] = true;
 
@@ -2594,7 +2580,7 @@ IsThereFunctionInNamespace(const char *proname, int pronargs,
  * See at ExecuteCallStmt() about the atomic argument.
  */
 void
-ExecuteDoStmt(DoStmt *stmt, bool atomic)
+ExecuteDoStmt(ParseState *pstate, DoStmt *stmt, bool atomic)
 {
 	InlineCodeBlock *codeblock = makeNode(InlineCodeBlock);
 	ListCell   *arg;
@@ -2613,17 +2599,13 @@ ExecuteDoStmt(DoStmt *stmt, bool atomic)
 		if (strcmp(defel->defname, "as") == 0)
 		{
 			if (as_item)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			as_item = defel;
 		}
 		else if (strcmp(defel->defname, "language") == 0)
 		{
 			if (language_item)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
+				errorConflictingDefElem(defel, pstate);
 			language_item = defel;
 		}
 		else
@@ -2663,8 +2645,8 @@ ExecuteDoStmt(DoStmt *stmt, bool atomic)
 		/* if trusted language, need USAGE privilege */
 		AclResult	aclresult;
 
-		aclresult = pg_language_aclcheck(codeblock->langOid, GetUserId(),
-										 ACL_USAGE);
+		aclresult = object_aclcheck(LanguageRelationId, codeblock->langOid, GetUserId(),
+									ACL_USAGE);
 		if (aclresult != ACLCHECK_OK)
 			aclcheck_error(aclresult, OBJECT_LANGUAGE,
 						   NameStr(languageStruct->lanname));
@@ -2694,7 +2676,7 @@ ExecuteDoStmt(DoStmt *stmt, bool atomic)
 static void
 CheckForModifySystemFunc(Oid funcOid, List *funcName)
 {
-	if (!allowSystemTableMods && funcOid < FirstBootstrapObjectId)
+	if (!allowSystemTableMods && funcOid < FirstUnpinnedObjectId)
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("permission defined: \"%s\" is a system function",
@@ -2750,7 +2732,7 @@ ExecuteCallStmt(CallStmt *stmt, ParamListInfo params, bool atomic, DestReceiver 
 	Assert(fexpr);
 	Assert(IsA(fexpr, FuncExpr));
 
-	aclresult = pg_proc_aclcheck(fexpr->funcid, GetUserId(), ACL_EXECUTE);
+	aclresult = object_aclcheck(ProcedureRelationId, fexpr->funcid, GetUserId(), ACL_EXECUTE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error(aclresult, OBJECT_PROCEDURE, get_func_name(fexpr->funcid));
 
@@ -2922,6 +2904,33 @@ CallStmtResultDesc(CallStmt *stmt)
 	tupdesc = build_function_result_tupdesc_t(tuple);
 
 	ReleaseSysCache(tuple);
+
+	/*
+	 * The result of build_function_result_tupdesc_t has the right column
+	 * names, but it just has the declared output argument types, which is the
+	 * wrong thing in polymorphic cases.  Get the correct types by examining
+	 * stmt->outargs.  We intentionally keep the atttypmod as -1 and the
+	 * attcollation as the type's default, since that's always the appropriate
+	 * thing for function outputs; there's no point in considering any
+	 * additional info available from outargs.  Note that tupdesc is null if
+	 * there are no outargs.
+	 */
+	if (tupdesc)
+	{
+		Assert(tupdesc->natts == list_length(stmt->outargs));
+		for (int i = 0; i < tupdesc->natts; i++)
+		{
+			Form_pg_attribute att = TupleDescAttr(tupdesc, i);
+			Node	   *outarg = (Node *) list_nth(stmt->outargs, i);
+
+			TupleDescInitEntry(tupdesc,
+							   i + 1,
+							   NameStr(att->attname),
+							   exprType(outarg),
+							   -1,
+							   0);
+		}
+	}
 
 	return tupdesc;
 }

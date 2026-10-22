@@ -16,6 +16,18 @@
 -- but 'g' (the 2nd rule is needed to include the 'postgresql' FDW used in the
 -- test).
 \set NO_BUILTINS ([a-fh-z]?*)|(g[a-oq-z]?*)
+
+-- directory paths and dlsuffix are passed to us in environment variables
+\getenv libdir PG_LIBDIR
+\getenv dlsuffix PG_DLSUFFIX
+
+\set regresslib :libdir '/regress' :dlsuffix
+
+CREATE FUNCTION test_fdw_handler()
+    RETURNS fdw_handler
+    AS :'regresslib', 'test_fdw_handler'
+    LANGUAGE C;
+
 -- Clean up in case a prior regression run failed
 
 -- Suppress NOTICE messages when roles don't exist
@@ -73,6 +85,8 @@ CREATE FOREIGN DATA WRAPPER test_fdw HANDLER test_fdw_handler;
 DROP FOREIGN DATA WRAPPER test_fdw;
 
 -- ALTER FOREIGN DATA WRAPPER
+ALTER FOREIGN DATA WRAPPER foo OPTIONS (nonexistent 'fdw');         -- ERROR
+
 ALTER FOREIGN DATA WRAPPER foo;                             -- ERROR
 ALTER FOREIGN DATA WRAPPER foo VALIDATOR bar;               -- ERROR
 ALTER FOREIGN DATA WRAPPER foo NO VALIDATOR;
@@ -420,9 +434,10 @@ ALTER FOREIGN TABLE ft1 OPTIONS (DROP delimiter, SET quote '~', ADD escape '@');
 ALTER FOREIGN TABLE ft1 DROP COLUMN no_column;                  -- ERROR
 ALTER FOREIGN TABLE ft1 DROP COLUMN IF EXISTS no_column;
 ALTER FOREIGN TABLE ft1 DROP COLUMN c9;
+ALTER FOREIGN TABLE ft1 ADD COLUMN c11 serial;
 ALTER FOREIGN TABLE ft1 SET SCHEMA foreign_schema;
 ALTER FOREIGN TABLE ft1 SET TABLESPACE ts;                      -- ERROR
-ALTER FOREIGN TABLE foreign_schema.ft1 SET TABLESPACE ts;       -- ERROR
+ALTER SEQUENCE foreign_schema.ft1_c11_seq SET SCHEMA public;    -- ERROR
 ALTER FOREIGN TABLE foreign_schema.ft1 RENAME c1 TO foreign_column_1;
 ALTER FOREIGN TABLE foreign_schema.ft1 RENAME TO foreign_table_1;
 \d foreign_schema.foreign_table_1
@@ -761,10 +776,6 @@ ALTER TABLE fd_pt1 RENAME CONSTRAINT fd_pt1chk3 TO f2_check;
 \d+ fd_pt1
 \d+ ft2
 
--- TRUNCATE doesn't work on foreign tables, either directly or recursively
-TRUNCATE ft2;  -- ERROR
-TRUNCATE fd_pt1;  -- ERROR
-
 DROP TABLE fd_pt1 CASCADE;
 
 -- IMPORT FOREIGN SCHEMA
@@ -847,10 +858,6 @@ ALTER TABLE fd_pt2 ADD CONSTRAINT fd_pt2chk1 CHECK (c1 > 0);
 ALTER TABLE fd_pt2 ATTACH PARTITION fd_pt2_1 FOR VALUES IN (1);       -- ERROR
 ALTER FOREIGN TABLE fd_pt2_1 ADD CONSTRAINT fd_pt2chk1 CHECK (c1 > 0);
 ALTER TABLE fd_pt2 ATTACH PARTITION fd_pt2_1 FOR VALUES IN (1);
-
--- TRUNCATE doesn't work on foreign tables, either directly or recursively
-TRUNCATE fd_pt2_1;  -- ERROR
-TRUNCATE fd_pt2;  -- ERROR
 
 DROP FOREIGN TABLE fd_pt2_1;
 DROP TABLE fd_pt2;

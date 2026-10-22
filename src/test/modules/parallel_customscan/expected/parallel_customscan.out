@@ -1,0 +1,212 @@
+-- start_matchsubs
+-- m/\(actual rows=[^)]*\)/
+-- s/\(actual rows=[^)]*\)/(actual rows=...)/
+-- end_matchsubs
+-- start_matchignore
+-- m/^\s*Buckets: \d+  Batches: \d+  Memory Usage: \d+kB/
+-- end_matchignore
+CREATE EXTENSION parallel_customscan;
+-- Set up data BEFORE enabling our hook so ANALYZE doesn't traverse it.
+CREATE TABLE pcs_t (a int)
+    WITH (parallel_workers = 2)
+    DISTRIBUTED BY (a);
+INSERT INTO pcs_t SELECT generate_series(1, 1000);
+ANALYZE pcs_t;
+SET optimizer = off;
+SET enable_parallel = on;
+SET enable_seqscan = off;
+SET min_parallel_table_scan_size = 0;
+SET parallel_setup_cost = 0;
+SET parallel_tuple_cost = 0;
+SET max_parallel_workers_per_gather = 2;
+-- (1) Enabling the hook replaces the Parallel Seq Scan with a Custom Scan.
+EXPLAIN (COSTS OFF) SELECT count(*) FROM pcs_t;
+                   QUERY PLAN                   
+------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on pcs_t
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+SET parallel_customscan.enabled = on;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM pcs_t;
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         ->  Partial Aggregate
+               ->  Parallel Custom Scan (ParallelCustomScan)
+                     ->  Parallel Seq Scan on pcs_t
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+-- (2) Correctness: results match only if every parallel worker runs our scan.
+SELECT count(*) FROM pcs_t;
+ count 
+-------
+  1000
+(1 row)
+
+SELECT sum(a) FROM pcs_t;
+  sum   
+--------
+ 500500
+(1 row)
+
+-- (3) Scan-level qualifier and projection through the custom scan.
+EXPLAIN (COSTS OFF) SELECT a FROM pcs_t WHERE a > 990;
+                   QUERY PLAN                    
+-------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   ->  Parallel Custom Scan (ParallelCustomScan)
+         ->  Parallel Seq Scan on pcs_t
+               Filter: (a > 990)
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+SELECT a FROM pcs_t WHERE a > 990 ORDER BY a;
+  a   
+------
+  991
+  992
+  993
+  994
+  995
+  996
+  997
+  998
+  999
+ 1000
+(10 rows)
+
+SELECT count(*) FROM pcs_t WHERE a % 2 = 0;
+ count 
+-------
+   500
+(1 row)
+
+-- (4) Join with both inputs scanned by the custom scan, plus a scan-level qual.
+CREATE TABLE pcs_t2 (a int)
+    WITH (parallel_workers = 2)
+    DISTRIBUTED BY (a);
+INSERT INTO pcs_t2 SELECT generate_series(1, 500);
+ANALYZE pcs_t2;
+EXPLAIN (COSTS OFF)
+    SELECT count(*) FROM pcs_t x JOIN pcs_t2 y ON x.a = y.a WHERE x.a <= 100;
+                               QUERY PLAN                                
+-------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         ->  Partial Aggregate
+               ->  Parallel Hash Join
+                     Hash Cond: (x.a = y.a)
+                     ->  Parallel Custom Scan (ParallelCustomScan)
+                           ->  Parallel Seq Scan on pcs_t x
+                                 Filter: (a <= 100)
+                     ->  Parallel Hash
+                           ->  Parallel Custom Scan (ParallelCustomScan)
+                                 ->  Parallel Seq Scan on pcs_t2 y
+                                       Filter: (a <= 100)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+SELECT count(*) FROM pcs_t x JOIN pcs_t2 y ON x.a = y.a WHERE x.a <= 100;
+ count 
+-------
+   100
+(1 row)
+
+-- (5) Empty relation: the custom scan must handle an immediate end-of-scan.
+CREATE TABLE pcs_empty (a int)
+    WITH (parallel_workers = 2)
+    DISTRIBUTED BY (a);
+ANALYZE pcs_empty;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM pcs_empty;
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Custom Scan (ParallelCustomScan)
+               ->  Seq Scan on pcs_empty
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+SELECT count(*) FROM pcs_empty;
+ count 
+-------
+     0
+(1 row)
+
+SELECT * FROM pcs_empty;
+ a 
+---
+(0 rows)
+
+-- (6) Serial path: with no workers, a non-parallel Custom Scan is used.
+SET max_parallel_workers_per_gather = 0;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM pcs_t;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Custom Scan (ParallelCustomScan)
+                     ->  Seq Scan on pcs_t
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+SELECT count(*) FROM pcs_t;
+ count 
+-------
+  1000
+(1 row)
+
+SELECT a FROM pcs_t WHERE a > 995 ORDER BY a;
+  a   
+------
+  996
+  997
+  998
+  999
+ 1000
+(5 rows)
+
+SET max_parallel_workers_per_gather = 2;
+-- (7) EXPLAIN ANALYZE: exercises planstate_walk_kids' custom_ps recursion.
+EXPLAIN (ANALYZE, TIMING OFF, COSTS OFF, SUMMARY OFF)
+    SELECT count(*) FROM pcs_t;
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
+ Finalize Aggregate (actual rows=1 loops=1)
+   ->  Gather Motion 6:1  (slice1; segments: 6) (actual rows=6 loops=1)
+         ->  Partial Aggregate (actual rows=1 loops=1)
+               ->  Parallel Custom Scan (ParallelCustomScan) (actual rows=340 loops=1)
+                     ->  Parallel Seq Scan on pcs_t (actual rows=340 loops=1)
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+EXPLAIN (ANALYZE, TIMING OFF, COSTS OFF, SUMMARY OFF)
+    SELECT count(*) FROM pcs_t x JOIN pcs_t2 y ON x.a = y.a;
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
+ Finalize Aggregate (actual rows=1 loops=1)
+   ->  Gather Motion 6:1  (slice1; segments: 6) (actual rows=6 loops=1)
+         ->  Partial Aggregate (actual rows=1 loops=1)
+               ->  Parallel Hash Join (actual rows=0 loops=1)
+                     Hash Cond: (x.a = y.a)
+                     ->  Parallel Custom Scan (ParallelCustomScan) (actual rows=340 loops=1)
+                           ->  Parallel Seq Scan on pcs_t x (actual rows=340 loops=1)
+                     ->  Parallel Hash (actual rows=0 loops=1)
+                           Buckets: 524288  Batches: 1  Memory Usage: 4128kB
+                           ->  Parallel Custom Scan (ParallelCustomScan) (actual rows=0 loops=1)
+                                 ->  Parallel Seq Scan on pcs_t2 y (actual rows=0 loops=1)
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+-- cleanup
+DROP TABLE pcs_t2;
+DROP TABLE pcs_empty;
+DROP TABLE pcs_t;
+DROP EXTENSION parallel_customscan;

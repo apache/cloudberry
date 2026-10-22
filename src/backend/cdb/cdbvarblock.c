@@ -358,7 +358,7 @@ VarBlockMakerFinish(
 		int encryptDataOffset = VARBLOCK_HEADER_LEN;
 		EncryptAOBLock(buffer + encryptDataOffset,
 						bufferLen - encryptDataOffset,
-						&storageWrite->relFileNode.node);
+						&storageWrite->relFileNode.locator);
 	}
 
 	return bufferLen;
@@ -648,7 +648,7 @@ VarBlockReaderInit(
 				   uint8 *buffer,
 				   VarBlockByteLen bufferLen,
 				   bool   needDecrypt,
-				   RelFileNode *file_node)
+				   RelFileLocator *file_node)
 {
 	VarBlockHeader *header;
 	VarBlockByteLen itemLenSum;
@@ -872,7 +872,7 @@ VarBlockCollapseToSingleItem(
 					   source,
 					   sourceLen,
 					   	false,
-					   &storageWrite->relFileNode.node);
+					   &storageWrite->relFileNode.locator);
 
 	Assert(VarBlockReaderItemCount(&varBlockReader) == 1);
 
@@ -896,7 +896,7 @@ VarBlockCollapseToSingleItem(
 	if (FileEncryptionEnabled)
 		EncryptAOBLock(target, 
 						itemLen, 
-						&storageWrite->relFileNode.node);
+						&storageWrite->relFileNode.locator);
 
 	return itemLen;
 }

@@ -375,12 +375,25 @@ CXformSplitWindowFunc::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	CExpression *pexprLocalSelect =
 		GPOS_NEW(mp) CExpression(mp, pSelectCopy, pexprLocal, pexprScalarCmp);
 
+	// the global SequenceProject below takes ownership of one reference each to
+	// pds, pdrgpos and pdrgpwf, just like the local SequenceProject above. Only
+	// a single AddRef() was issued for each of them, so add the matching
+	// references here; otherwise the reference count underflows, these objects
+	// are freed while still in use, and the dangling memory later crashes the
+	// DXL-to-PlStmt translation (use-after-free)
+	pds->AddRef();
+	pdrgpos->AddRef();
+	pdrgpwf->AddRef();
+
 	CExpression *pexprGlobal = GPOS_NEW(mp)
 		CExpression(mp,
 					GPOS_NEW(mp) CLogicalSequenceProject(
 						mp, COperator::ESPType::EsptypeGlobalTwoStep, pds,
 						pdrgpos, pdrgpwf),
 					pexprLocalSelect, pexprProjectListGlobal);
+
+	pexpr->Pop()->AddRef();
+	pexprScalarCmp->AddRef();
 
 	CExpression *pexprGlobalSelect =
 		GPOS_NEW(mp) CExpression(mp, pexpr->Pop(), pexprGlobal, pexprScalarCmp);

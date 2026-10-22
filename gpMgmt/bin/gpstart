@@ -7,6 +7,7 @@
 #
 # import mainUtils FIRST to get python version check
 import sys
+import time
 from optparse import OptionGroup, SUPPRESS_HELP
 
 from gppylib.mainUtils import *
@@ -55,7 +56,8 @@ class GpStart:
                  skip_heap_checksum_validation=False,
                  fts_hosts=None,
                  etcd_hosts=None,
-                 is_external_fts=False
+                 is_external_fts=False,
+                 recovery_wait_timeout=300
                  ):
         assert (specialMode in [None, 'maintenance'])
         self.specialMode = specialMode
@@ -77,6 +79,7 @@ class GpStart:
         self.fts_hosts = fts_hosts
         self.etcd_hosts = etcd_hosts
         self.is_external_fts = is_external_fts
+        self.recovery_wait_timeout = recovery_wait_timeout
         self.singlenodemode = False
 
         #
@@ -486,6 +489,50 @@ class GpStart:
         return "%-" + str(host_len) + "s  %-" + str(dir_len) + "s  %-" + str(port_len) + "s  %s"
 
     ######
+    def _waitForCoordinatorRecovery(self, dburl, utility=False):
+        """ Poll dbconn.connect until the coordinator accepts connections.
+
+            With hot_standby=off, pg_ctl -w returns success as soon as recovery
+            *begins* (pidfile status "standby"), before the cluster can accept
+            connections.  dbconn.connect only retries "timeout expired" errors,
+            so a "the database system is not accepting connections" / "Hot standby
+            mode is disabled" / "still starting up" FATAL would otherwise fail
+            gpstart immediately.  Poll for recovery to finish instead.
+
+            Returns None on success or an error message string on failure.
+        """
+        recovery_wait_timeout = self.recovery_wait_timeout
+        recovery_poll_interval = 5
+        waited = 0
+        msg = None
+        while True:
+            try:
+                dburl.retries = 4
+                dburl.timeout = 15
+                conn = dbconn.connect(dburl, utility=utility)
+                conn.close()
+                return None
+            except Exception as e:
+                # MPP-14016.  While certain fts scenarios will trigger initial
+                # connection failures we still need watch for PANIC events.
+                msg = str(e)
+                if 'PANIC' in msg:
+                    logger.critical(msg)
+                    return msg
+                if not ('not accepting connections' in msg or
+                        'not yet accepting connections' in msg or
+                        'still starting up' in msg or
+                        'Hot standby mode is disabled' in msg):
+                    logger.warning(msg)
+                    return msg
+                if waited >= recovery_wait_timeout:
+                    logger.warning("Timed out after %d seconds waiting for coordinator to finish recovery: %s" % (waited, msg))
+                    return msg
+                logger.info("Coordinator still recovering, waiting %d seconds (waited %d/%d): %s" % (recovery_poll_interval, waited, recovery_wait_timeout, msg))
+                time.sleep(recovery_poll_interval)
+                waited += recovery_poll_interval
+
+    ######
     def _startCoordinator(self):
         if self.restricted:
             logger.info("Starting Coordinator instance in admin and RESTRICTED mode")
@@ -510,6 +557,11 @@ class GpStart:
 
         logger.info("Obtaining Segment details from coordinator...")
         self.dburl = dbconn.DbURL(port=self.port, dbname='template1')
+        err = self._waitForCoordinatorRecovery(self.dburl, utility=True)
+        if err is not None:
+            if 'PANIC' in err:
+                raise Exception("PANIC during coordinator startup: %s" % err)
+            logger.warning("Coordinator not accepting connections after wait: %s" % err)
         self.gparray = GpArray.initFromCatalog(self.dburl, utility=True)
 
         logger.info("Setting new coordinator era")
@@ -789,21 +841,9 @@ class GpStart:
 
         logger.info("Command pg_ctl reports Coordinator %s instance active" % self.gparray.coordinator.hostname)
 
-        msg = None
-        try:
-            self.dburl.retries = 4
-            self.dburl.timeout = 15
-            coordinatorconn = dbconn.connect(self.dburl)
-            coordinatorconn.close()
-
-        except Exception as e:
-            # MPP-14016.  While certain fts scenarios will trigger initial connection failures
-            # we still need watch for PANIC events.
-            msg = str(e)
-            if 'PANIC' in msg:
-                logger.critical(msg)
-                return False
-            logger.warning(msg)
+        msg = self._waitForCoordinatorRecovery(self.dburl)
+        if msg is not None and 'PANIC' in msg:
+            return False
 
         # set the era we used when starting the segments
         e = GpEraFile(self.coordinator_datadir, logger=get_logger_if_verbose())
@@ -876,6 +916,9 @@ class GpStart:
         addTo.add_option('-E', dest='etcd_hosts', type='string',default=None ,
                          help='specify the file that contains all etcd hosts.If this argument is set, `gpstart` will attempt'
                                 'to start all etcd in the specified hosts')
+        addTo.add_option('', '--recovery-wait-timeout', dest='recovery_wait_timeout', type='int', default=300,
+                         help='seconds to wait for the coordinator to finish crash/standby recovery before '
+                              'failing (default 300). Useful for large clusters where recovery may take longer.')
 
         parser.set_defaults(verbose=False, filters=[], slice=(None, None))
 
@@ -920,7 +963,8 @@ class GpStart:
                        skip_heap_checksum_validation=options.skip_heap_checksum_validation,
                        fts_hosts=options.fts_hosts,
                        etcd_hosts=options.etcd_hosts,
-                       is_external_fts=external_fts
+                       is_external_fts=external_fts,
+                       recovery_wait_timeout=options.recovery_wait_timeout
                        )
 
 

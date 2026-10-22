@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2006-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/optimizer/plancat.h
@@ -94,6 +94,9 @@ extern double get_function_rows(PlannerInfo *root, Oid funcid, Node *node);
 extern bool has_row_triggers(PlannerInfo *root, Index rti, CmdType event);
 
 extern bool has_stored_generated_columns(PlannerInfo *root, Index rti);
+
+extern Bitmapset *get_dependent_generated_columns(PlannerInfo *root, Index rti,
+												  Bitmapset *target_cols);
 
 #define DEFAULT_EXTERNAL_TABLE_PAGES 1000
 #define DEFAULT_EXTERNAL_TABLE_TUPLES 1000000

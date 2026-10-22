@@ -2692,11 +2692,14 @@ CTranslatorRelcacheToDXL::RetrievePartKeysAndTypes(CMemoryPool *mp,
 				   GPOS_WSZ_LIT("partitioning by expression"));
 	}
 
-	if (PARTITION_STRATEGY_HASH == part_type)
-	{
-		GPOS_RAISE(gpdxl::ExmaMD, gpdxl::ExmiMDObjUnsupported,
-				   GPOS_WSZ_LIT("hash partitioning"));
-	}
+	// Hash-partitioned tables are supported for scanning only. ORCA cannot
+	// express a hash partition's membership rule (the satisfies_hash_partition
+	// call, i.e. hash(key) mod modulus = remainder) as a btree interval
+	// constraint, so it does no static partition pruning for hash partitions
+	// and simply scans every leaf partition. Range and list partitions keep
+	// full pruning support. Letting the strategy flow through here (instead of
+	// raising ExmiMDObjUnsupported) keeps such queries inside ORCA rather than
+	// falling back to the Postgres planner.
 
 	(*part_keys)->Append(GPOS_NEW(mp) ULONG(attno - 1));
 	(*part_types)->Append(GPOS_NEW(mp) CHAR(part_type));

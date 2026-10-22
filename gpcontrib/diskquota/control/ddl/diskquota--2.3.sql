@@ -99,19 +99,23 @@ CREATE FUNCTION diskquota.relation_size_local(reltablespace oid, relfilenode oid
 CREATE FUNCTION diskquota.pull_all_table_size(OUT tableid oid, OUT size bigint, OUT segid smallint) RETURNS SETOF RECORD AS '$libdir/diskquota-2.3.so', 'pull_all_table_size' LANGUAGE C;
 
 CREATE FUNCTION diskquota.relation_size(relation regclass) RETURNS bigint STRICT AS $$
-       SELECT SUM(size)::bigint FROM (
+DECLARE
+       result bigint;
+BEGIN
+       SELECT SUM(size)::bigint INTO result FROM (
                SELECT diskquota.relation_size_local(reltablespace, relfilenode, relpersistence,
-		CASE WHEN EXISTS
-	(SELECT FROM pg_catalog.pg_attribute WHERE attrelid = 'pg_class'::regclass AND attname = 'relstorage') THEN relstorage::"char" ELSE ''::"char" END,
+		''::"char",
 		relam) AS size
-               FROM gp_dist_random('pg_class') as relstorage WHERE oid = relation
+               FROM gp_dist_random('pg_class') as c WHERE oid = relation
                UNION ALL
                SELECT diskquota.relation_size_local(reltablespace, relfilenode, relpersistence,
-		CASE WHEN EXISTS
-	(SELECT FROM pg_catalog.pg_attribute WHERE attrelid = 'pg_class'::regclass AND attname = 'relstorage') THEN relstorage::"char" ELSE ''::"char" END,
+		''::"char",
 		relam) AS size
-               FROM pg_class as relstorage WHERE oid = relation
-       ) AS t $$ LANGUAGE SQL;
+               FROM pg_class as c WHERE oid = relation
+       ) AS t;
+       RETURN result;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE FUNCTION diskquota.show_relation_cache_all_seg() RETURNS setof diskquota.relation_cache_detail AS $$
 	WITH relation_cache AS (

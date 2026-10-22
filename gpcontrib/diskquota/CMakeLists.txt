@@ -1,5 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
-# cmake_path requires 3.20
+cmake_minimum_required(VERSION 3.16)
 
 project(diskquota)
 
@@ -90,6 +89,9 @@ TARGET_LINK_LIBRARIES(diskquota ${PG_LIB_DIR}/libpq.so)
 # packing part, move to a separate file if this part is too large
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Distro.cmake)
 
+# NOTE: file(ARCHIVE_EXTRACT) below requires CMake 3.18. This branch is only
+# taken when DISKQUOTA_LAST_RELEASE_PATH is set explicitly, which the in-tree
+# build never does, so it does not affect the 3.16 minimum declared above.
 if(DEFINED DISKQUOTA_LAST_RELEASE_PATH)
   message(STATUS "Copy pervious installer from ${DISKQUOTA_LAST_RELEASE_PATH}")
   file(ARCHIVE_EXTRACT INPUT ${DISKQUOTA_LAST_RELEASE_PATH} PATTERNS "*.so")

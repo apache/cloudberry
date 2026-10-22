@@ -91,11 +91,6 @@ RESET enable_bitmapscan;
 RESET enable_sort;
 RESET optimizer_enable_tablescan;
 
-
-SELECT two, stringu1, ten, string4
-   INTO TABLE tmp
-   FROM onek;
-
 --
 -- awk '{print $1,$2;}' person.data |
 -- awk '{if(NF!=2){print $3,$2;}else{print;}}' - emp.data |

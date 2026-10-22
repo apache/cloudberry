@@ -1,0 +1,5 @@
+# parallel_customscan extension
+comment = 'Exercise parallel-aware CustomScan dispatch (Cloudberry MPP walkers)'
+default_version = '1.0'
+module_pathname = '$libdir/parallel_customscan'
+relocatable = true

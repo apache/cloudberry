@@ -16,21 +16,21 @@ SELECT gp_segment_id, count(dist) FROM test_tablesample GROUP BY 1 ORDER BY 1;
 SELECT t.id FROM test_tablesample AS t TABLESAMPLE SYSTEM (50) REPEATABLE (0);
  id 
 ----
- 21
- 22
- 24
- 28
- 29
- 11
- 12
- 14
- 18
- 19
   1
   2
   4
   8
   9
+ 11
+ 12
+ 14
+ 18
+ 19
+ 21
+ 22
+ 24
+ 28
+ 29
 (15 rows)
 
 SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (100.0/11) REPEATABLE (0);
@@ -41,11 +41,6 @@ SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (100.0/11) REPEATABLE (0);
 SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (50) REPEATABLE (0);
  id 
 ----
- 11
- 12
- 14
- 18
- 19
   1
   2
   4
@@ -56,21 +51,26 @@ SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (50) REPEATABLE (0);
  24
  28
  29
-(15 rows)
-
-SELECT id FROM test_tablesample TABLESAMPLE BERNOULLI (50) REPEATABLE (0);
- id 
-----
  11
  12
  14
  18
  19
+(15 rows)
+
+SELECT id FROM test_tablesample TABLESAMPLE BERNOULLI (50) REPEATABLE (0);
+ id 
+----
   1
   2
   4
   8
   9
+ 11
+ 12
+ 14
+ 18
+ 19
  21
  22
  24
@@ -112,7 +112,7 @@ CREATE VIEW test_tablesample_v2 AS
 --------+---------+-----------+----------+---------+---------+-------------
  id     | integer |           |          |         | plain   | 
 View definition:
- SELECT test_tablesample.id
+ SELECT id
    FROM test_tablesample TABLESAMPLE system ((10 * 2)) REPEATABLE (2);
 
 \d+ test_tablesample_v2
@@ -121,7 +121,7 @@ View definition:
 --------+---------+-----------+----------+---------+---------+-------------
  id     | integer |           |          |         | plain   | 
 View definition:
- SELECT test_tablesample.id
+ SELECT id
    FROM test_tablesample TABLESAMPLE system (99);
 
 -- check a sampled query doesn't affect cursor in progress
@@ -149,6 +149,11 @@ FETCH NEXT FROM tablesample_cur;
 SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (50) REPEATABLE (0);
  id 
 ----
+  1
+  2
+  4
+  8
+  9
  21
  22
  24
@@ -159,11 +164,6 @@ SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (50) REPEATABLE (0);
  14
  18
  19
-  1
-  2
-  4
-  8
-  9
 (15 rows)
 
 FETCH NEXT FROM tablesample_cur;
@@ -343,12 +343,12 @@ RESET enable_nestloop;
 select * from
   (values (0),(100)) v(pct),
   lateral (select count(*) from tenk1 tablesample bernoulli (pct)) ss;
-ERROR:  illegal rescan of motion node: invalid plan (nodeMotion.c:1275)
+ERROR:  illegal rescan of motion node: invalid plan (nodeMotion.c:1367)
 HINT:  Likely caused by bad NL-join, try setting enable_nestloop to off
 select * from
   (values (0),(100)) v(pct),
   lateral (select count(*) from tenk1 tablesample system (pct)) ss;
-ERROR:  illegal rescan of motion node: invalid plan (nodeMotion.c:1275)
+ERROR:  illegal rescan of motion node: invalid plan (nodeMotion.c:1367)
 HINT:  Likely caused by bad NL-join, try setting enable_nestloop to off
 explain (costs off)
 select pct, count(unique1) from
@@ -378,7 +378,8 @@ select pct, count(unique1) from
   group by pct;
  pct | count 
 -----+-------
-(0 rows)
+ 100 | 10000
+(1 row)
 
 select pct, count(unique1) from
   (values (0),(100)) v(pct),
@@ -386,7 +387,8 @@ select pct, count(unique1) from
   group by pct;
  pct | count 
 -----+-------
-(0 rows)
+ 100 | 10000
+(1 row)
 
 -- end_ignore
 -- Cloudberry: we do have to test min/max pct tests though

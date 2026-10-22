@@ -4,7 +4,7 @@
  *	  prototypes for catalog/index.c.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/index.h
@@ -97,31 +97,12 @@ typedef Oid (*index_create_hook_type)(Relation heapRelation,
         Oid *constraintId);
 extern PGDLLIMPORT index_create_hook_type index_create_hook;
 
-extern Oid index_create(Relation heapRelation,
-						const char *indexRelationName,
-						Oid indexRelationId,
-						Oid parentIndexRelid,
-						Oid parentConstraintId,
-						Oid relFileNode,
-						IndexInfo *indexInfo,
-						List *indexColNames,
-						Oid accessMethodObjectId,
-						Oid tableSpaceId,
-						Oid *collationObjectId,
-						Oid *classObjectId,
-						int16 *coloptions,
-						Datum reloptions,
-						bits16 flags,
-						bits16 constr_flags,
-						bool allow_system_table_mods,
-						bool is_internal,
-						Oid *constraintId);
 extern Oid index_create_internal(Relation heapRelation,
                                  const char *indexRelationName,
                                  Oid indexRelationId,
                                  Oid parentIndexRelid,
                                  Oid parentConstraintId,
-                                 Oid relFileNode,
+                                 Oid relFileNumber,
                                  IndexInfo *indexInfo,
                                  List *indexColNames,
                                  Oid accessMethodObjectId,
@@ -137,6 +118,26 @@ extern Oid index_create_internal(Relation heapRelation,
                                  Oid *constraintId);
 
 extern PGDLLIMPORT ambuild_function index_build_hook;
+
+extern Oid	index_create(Relation heapRelation,
+						 const char *indexRelationName,
+						 Oid indexRelationId,
+						 Oid parentIndexRelid,
+						 Oid parentConstraintId,
+						 RelFileNumber relFileNumber,
+						 IndexInfo *indexInfo,
+						 List *indexColNames,
+						 Oid accessMethodObjectId,
+						 Oid tableSpaceId,
+						 Oid *collationObjectId,
+						 Oid *classObjectId,
+						 int16 *coloptions,
+						 Datum reloptions,
+						 bits16 flags,
+						 bits16 constr_flags,
+						 bool allow_system_table_mods,
+						 bool is_internal,
+						 Oid *constraintId);
 
 #define	INDEX_CONSTR_CREATE_MARK_AS_PRIMARY	(1 << 0)
 #define	INDEX_CONSTR_CREATE_DEFERRABLE		(1 << 1)
@@ -203,7 +204,7 @@ extern void index_set_state_flags(Oid indexId, IndexStateFlagsAction action);
 extern Oid	IndexGetRelation(Oid indexId, bool missing_ok);
 
 extern void reindex_index(Oid indexId, bool skip_constraint_checks,
-						  char relpersistence, ReindexParams *params);
+						  char persistence, ReindexParams *params);
 
 /* Flag bits for reindex_relation(): */
 #define REINDEX_REL_PROCESS_TOAST			0x01
@@ -226,9 +227,9 @@ extern Size EstimateReindexStateSpace(void);
 extern void SerializeReindexState(Size maxsize, char *start_address);
 extern void RestoreReindexState(void *reindexstate);
 
-extern void IndexSetParentIndex(Relation idx, Oid parentOid);
 extern bool check_default_index_access_method(char **newval, void **extra,
                                               GucSource source);
+extern void IndexSetParentIndex(Relation partitionIdx, Oid parentOid);
 
 
 /*

@@ -33,19 +33,15 @@ DATA = plpgsql.control plpgsql--1.0.sql
 REGRESS_OPTS = --dbname=$(PL_TESTDB)
 REGRESS_OPTS += --init-file=init_file
 
-REGRESS = plpgsql_array plpgsql_call plpgsql_control plpgsql_copy plpgsql_domain \
-	plpgsql_record plpgsql_cache plpgsql_simple plpgsql_transaction \
+REGRESS = plpgsql_array plpgsql_cache plpgsql_call plpgsql_control \
+	plpgsql_copy plpgsql_domain plpgsql_misc \
+	plpgsql_record plpgsql_simple plpgsql_transaction \
 	plpgsql_trap plpgsql_trigger plpgsql_varprops
 
 # where to find gen_keywordlist.pl and subsidiary files
 TOOLSDIR = $(top_srcdir)/src/tools
 GEN_KEYWORDLIST = $(PERL) -I $(TOOLSDIR) $(TOOLSDIR)/gen_keywordlist.pl
 GEN_KEYWORDLIST_DEPS = $(TOOLSDIR)/gen_keywordlist.pl $(TOOLSDIR)/PerfectHash.pm
-
-# Test input and expected files.  These are created by pg_regress itself, so we
-# don't have a rule to create them.  We do need rules to clean them however.
-input_files = $(patsubst $(srcdir)/input/%.source,sql/%.sql, $(wildcard $(srcdir)/input/*.source))
-output_files := $(patsubst $(srcdir)/output/%.source,expected/%.out, $(wildcard $(srcdir)/output/*.source))
 
 all: all-lib
 
@@ -76,6 +72,12 @@ uninstall-headers:
 
 .PHONY: install-data install-headers uninstall-data uninstall-headers
 
+
+# Suppress false-positive array-bounds warning from GCC 13+ at -O3 when
+# inlining varatt.h macros (VARATT_IS_EXTERNAL_NON_EXPANDED) in assign_simple_var.
+ifeq ($(GCC),yes)
+pl_exec.o: CFLAGS += -Wno-array-bounds
+endif
 
 # Force these dependencies to be known even without dependency info built:
 pl_gram.o pl_handler.o pl_comp.o pl_exec.o pl_funcs.o pl_scanner.o: plpgsql.h pl_gram.h plerrcodes.h
@@ -117,7 +119,6 @@ distprep: pl_gram.h pl_gram.c plerrcodes.h pl_reserved_kwlist_d.h pl_unreserved_
 # are not cleaned here.
 clean distclean: clean-lib
 	rm -f $(OBJS)
-	rm -f $(output_files) $(input_files)
 	rm -rf $(pg_regress_clean_files)
 
 maintainer-clean: distclean

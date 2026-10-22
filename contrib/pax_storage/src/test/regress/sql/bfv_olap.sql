@@ -333,11 +333,28 @@ where g in (
   select rank() over (order by x) from generate_series(1,5) x
 );
 
+--
+-- Test to check the query plan for a ROLLUP query.
+--
+explain (costs off) select cn, vn, pn, sum(qty*prc) from sale group by rollup(cn,vn,pn);
+select cn, vn, pn, sum(qty*prc) from sale group by rollup(cn,vn,pn);
 
 --
 -- This caused a crash in ROLLUP planning at one point.
 --
+EXPLAIN (costs off)
 SELECT sale.vn
+FROM sale,vendor
+WHERE sale.vn=vendor.vn
+GROUP BY ROLLUP( (sale.dt,sale.cn),(sale.pn),(sale.vn));
+
+SELECT sale.vn
+FROM sale,vendor
+WHERE sale.vn=vendor.vn
+GROUP BY ROLLUP( (sale.dt,sale.cn),(sale.pn),(sale.vn));
+
+EXPLAIN (costs off)
+SELECT DISTINCT sale.vn
 FROM sale,vendor
 WHERE sale.vn=vendor.vn
 GROUP BY ROLLUP( (sale.dt,sale.cn),(sale.pn),(sale.vn));
@@ -416,6 +433,7 @@ insert into t2_github_issue_10143 values ('b', 'bdong', 'bcode', 1100);
 analyze t1_github_issue_10143;
 analyze t2_github_issue_10143;
 
+set optimizer_trace_fallback = on;
 
 explain select (select name from t1_github_issue_10143 where code = a.code limit 1) as dongnm
 ,sum(sum(a.salary)) over()
@@ -431,7 +449,6 @@ select * from (select sum(a.salary) over(), count(*)
                from t2_github_issue_10143 a
                group by a.salary) T;
 
--- this query currently falls back, needs to be fixed
 select (select rn from (select row_number() over () as rn, name
                         from t1_github_issue_10143
                         where code = a.code
@@ -450,6 +467,7 @@ group by name
 union all
 select * from cte;
 
+reset optimizer_trace_fallback;
 
 -- CLEANUP
 -- start_ignore

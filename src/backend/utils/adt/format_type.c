@@ -4,7 +4,7 @@
  *	  Display type names "nicely".
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -444,10 +444,14 @@ oidvectortypes(PG_FUNCTION_ARGS)
 {
 	oidvector  *oidArray = (oidvector *) PG_GETARG_POINTER(0);
 	char	   *result;
-	int			numargs = oidArray->dim1;
+	int			numargs;
 	int			num;
 	size_t		total;
 	size_t		left;
+
+	/* validate input before fetching dim1 */
+	check_valid_oidvector(oidArray);
+	numargs = oidArray->dim1;
 
 	total = 20 * numargs + 1;
 	result = palloc(total);

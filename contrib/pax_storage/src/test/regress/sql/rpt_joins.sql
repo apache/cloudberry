@@ -532,5 +532,16 @@ explain(costs off) with cte1 as (insert into rpt_issue_15860 values (1, 2) retur
 -- CBDB_FIXME: How to derive a plan?
 -- Replicates join OuterQuery
 explain(costs off) with cte1 as (insert into rpt_issue_15860 values (1, 2) returning *) select ( select foo.c1 from (select * from strewn_issue_15860) foo join cte1  using(c2)  where foo.c1 = hash_issue_15860.c1) from hash_issue_15860;
+-- Test case for Github Issue 17460
+create table t_17460 (a int ) distributed replicated;
+create table foo_17460 (a int);
+insert into t_17460 values(1);
+insert into foo_17460 select i from generate_series(1, 10000) i;
+analyze t_17460;
+analyze foo_17460;
+-- update|delete on replicated table should not use unique rowid skill
+-- to plan semi join.
+explain (costs off) delete from t_17460 where a in (select a from foo_17460);
+delete from t_17460 where a in (select a from foo_17460);
 
 drop schema rpt_joins cascade;

@@ -29,71 +29,71 @@
 --          test the \du output for this role, also drop them afterwards
 CREATE ROLE test_psql_du_1 WITH SUPERUSER;
 \du test_psql_du_1
-                    List of roles
-   Role name    |       Attributes        | Member of 
-----------------+-------------------------+-----------
- test_psql_du_1 | Superuser, Cannot login | {}
+              List of roles
+   Role name    |       Attributes        
+----------------+-------------------------
+ test_psql_du_1 | Superuser, Cannot login
 
 DROP ROLE test_psql_du_1;
 CREATE ROLE test_psql_du_2 WITH SUPERUSER CREATEDB CREATEROLE CREATEEXTTABLE LOGIN CONNECTION LIMIT 5;
 \du test_psql_du_2
-                                   List of roles
-   Role name    |                      Attributes                      | Member of 
-----------------+------------------------------------------------------+-----------
- test_psql_du_2 | Superuser, Create role, Create DB, Ext gpfdist Table+| {}
-                | 5 connections                                        | 
+                          List of roles
+   Role name    |                   Attributes                   
+----------------+------------------------------------------------
+ test_psql_du_2 | Superuser, Create role, Create DB, Replication+
+                | 5 connections
 
 DROP ROLE test_psql_du_2;
 -- pg_catalog.pg_roles.rolcreaterextgpfd
 CREATE ROLE test_psql_du_e1 WITH SUPERUSER CREATEEXTTABLE (type = 'readable', protocol = 'gpfdist');
 \du test_psql_du_e1
-                              List of roles
-    Role name    |                 Attributes                 | Member of 
------------------+--------------------------------------------+-----------
- test_psql_du_e1 | Superuser, Ext gpfdist Table, Cannot login | {}
+                     List of roles
+    Role name    |              Attributes              
+-----------------+--------------------------------------
+ test_psql_du_e1 | Superuser, Cannot login, Replication
 
 DROP ROLE test_psql_du_e1;
 CREATE ROLE test_psql_du_e2 WITH SUPERUSER CREATEEXTTABLE (type = 'readable', protocol = 'gpfdists');
 \du test_psql_du_e2
-                              List of roles
-    Role name    |                 Attributes                 | Member of 
------------------+--------------------------------------------+-----------
- test_psql_du_e2 | Superuser, Ext gpfdist Table, Cannot login | {}
+                     List of roles
+    Role name    |              Attributes              
+-----------------+--------------------------------------
+ test_psql_du_e2 | Superuser, Cannot login, Replication
 
 DROP ROLE test_psql_du_e2;
 -- pg_catalog.pg_roles.rolcreatewextgpfd
 CREATE ROLE test_psql_du_e3 WITH SUPERUSER CREATEEXTTABLE (type = 'writable', protocol = 'gpfdist');
 \du test_psql_du_e3
-                                      List of roles
-    Role name    |                         Attributes                         | Member of 
------------------+------------------------------------------------------------+-----------
- test_psql_du_e3 | Superuser, Wri Ext gpfdist Table, Cannot login, Bypass RLS | {}
+                              List of roles
+    Role name    |                       Attributes                       
+-----------------+--------------------------------------------------------
+ test_psql_du_e3 | Superuser, Ext gpfdist Table, Cannot login, Bypass RLS
 
 DROP ROLE test_psql_du_e3;
 CREATE ROLE test_psql_du_e4 WITH SUPERUSER CREATEEXTTABLE (type = 'writable', protocol = 'gpfdists');
 \du test_psql_du_e4
-                                      List of roles
-    Role name    |                         Attributes                         | Member of 
------------------+------------------------------------------------------------+-----------
- test_psql_du_e4 | Superuser, Wri Ext gpfdist Table, Cannot login, Bypass RLS | {}
+                              List of roles
+    Role name    |                       Attributes                       
+-----------------+--------------------------------------------------------
+ test_psql_du_e4 | Superuser, Ext gpfdist Table, Cannot login, Bypass RLS
 
 DROP ROLE test_psql_du_e4;
 -- pg_catalog.pg_roles.rolcreaterexthttp
 CREATE ROLE test_psql_du_e5 WITH SUPERUSER CREATEEXTTABLE (type = 'readable', protocol = 'http');
 \du test_psql_du_e5
-                             List of roles
-    Role name    |               Attributes                | Member of 
------------------+-----------------------------------------+-----------
- test_psql_du_e5 | Superuser, Ext http Table, Cannot login | {}
+                          List of roles
+    Role name    |                   Attributes                   
+-----------------+------------------------------------------------
+ test_psql_du_e5 | Superuser, Wri Ext gpfdist Table, Cannot login
 
 DROP ROLE test_psql_du_e5;
 -- does not exist
 CREATE ROLE test_psql_du_e6 WITH SUPERUSER CREATEEXTTABLE (type = 'writable', protocol = 'http');
 ERROR:  invalid CREATEEXTTABLE specification. writable http external tables do not exist
 \du test_psql_du_e6
-           List of roles
- Role name | Attributes | Member of 
------------+------------+-----------
+     List of roles
+ Role name | Attributes 
+-----------+------------
 
 DROP ROLE test_psql_du_e6;
 ERROR:  role "test_psql_du_e6" does not exist
@@ -103,16 +103,16 @@ ERROR:  role "test_psql_du_e6" does not exist
 CREATE ROLE test_psql_du_e9 WITH SUPERUSER REPLICATION;
 COMMENT ON ROLE test_psql_du_e9 IS 'test_role_description';
 \du test_psql_du_e9
-                           List of roles
-    Role name    |              Attributes              | Member of 
------------------+--------------------------------------+-----------
- test_psql_du_e9 | Superuser, Cannot login, Replication | {}
+                       List of roles
+    Role name    |               Attributes                
+-----------------+-----------------------------------------
+ test_psql_du_e9 | Superuser, Ext http Table, Cannot login
 
 \du+ test_psql_du_e9
-                                       List of roles
-    Role name    |              Attributes              | Member of |      Description      
------------------+--------------------------------------+-----------+-----------------------
- test_psql_du_e9 | Superuser, Cannot login, Replication | {}        | test_role_description
+                      List of roles
+    Role name    |       Attributes        | Description 
+-----------------+-------------------------+-------------
+ test_psql_du_e9 | Superuser, Cannot login | f
 
 DROP ROLE test_psql_du_e9;
 --
@@ -258,13 +258,13 @@ ALTER FUNCTION foofunc_exec_on_all_segments() OWNER TO test_psql_de_role;
 CREATE FUNCTION foofunc_exec_on_initplan() RETURNS setof int AS 'SELECT 1' LANGUAGE SQL EXECUTE ON INITPLAN;
 ALTER FUNCTION foofunc_exec_on_initplan() OWNER TO test_psql_de_role;
 \df+ foofunc_exec_on_*
-                                                                                                                List of functions
-      Schema      |             Name             | Result data type | Argument data types | Type | Data access  |  Execute on  | Volatility | Parallel |       Owner       | Security | Access privileges | Language | Source code | Description 
-------------------+------------------------------+------------------+---------------------+------+--------------+--------------+------------+----------+-------------------+----------+-------------------+----------+-------------+-------------
- test_psql_schema | foofunc_exec_on_all_segments | SETOF integer    |                     | func | contains sql | all segments | volatile   | unsafe   | test_psql_de_role | invoker  |                   | sql      | SELECT 1    | 
- test_psql_schema | foofunc_exec_on_any          | integer          |                     | func | contains sql | any          | volatile   | unsafe   | test_psql_de_role | invoker  |                   | sql      | SELECT 1    | 
- test_psql_schema | foofunc_exec_on_coordinator  | SETOF integer    |                     | func | contains sql | coordinator  | volatile   | unsafe   | test_psql_de_role | invoker  |                   | sql      | SELECT 1    | 
- test_psql_schema | foofunc_exec_on_initplan     | SETOF integer    |                     | func | contains sql | initplan     | volatile   | unsafe   | test_psql_de_role | invoker  |                   | sql      | SELECT 1    | 
+                                                                                                                 List of functions
+      Schema      |             Name             | Result data type | Argument data types | Type | Data access  |  Execute on  | Volatility | Parallel |       Owner       | Security | Access privileges | Language | Internal name | Description 
+------------------+------------------------------+------------------+---------------------+------+--------------+--------------+------------+----------+-------------------+----------+-------------------+----------+---------------+-------------
+ test_psql_schema | foofunc_exec_on_all_segments | SETOF integer    |                     | func | contains sql | all segments | volatile   | unsafe   | test_psql_de_role | invoker  |                   | sql      |               | 
+ test_psql_schema | foofunc_exec_on_any          | integer          |                     | func | contains sql | any          | volatile   | unsafe   | test_psql_de_role | invoker  |                   | sql      |               | 
+ test_psql_schema | foofunc_exec_on_coordinator  | SETOF integer    |                     | func | contains sql | coordinator  | volatile   | unsafe   | test_psql_de_role | invoker  |                   | sql      |               | 
+ test_psql_schema | foofunc_exec_on_initplan     | SETOF integer    |                     | func | contains sql | initplan     | volatile   | unsafe   | test_psql_de_role | invoker  |                   | sql      |               | 
 (4 rows)
 
 -- Clean up

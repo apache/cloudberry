@@ -98,8 +98,8 @@ chooseTableSpace(CreateDirectoryTableStmt *stmt)
 	{
 		AclResult	aclresult;
 
-		aclresult = pg_tablespace_aclcheck(tablespaceId, GetUserId(),
-									 		ACL_CREATE);
+		aclresult = object_aclcheck(TableSpaceRelationId, tablespaceId, GetUserId(),
+									ACL_CREATE);
 		if (aclresult != ACLCHECK_OK)
 			aclcheck_error(aclresult, OBJECT_TABLESPACE,
 				  			get_tablespace_name(tablespaceId));
@@ -136,10 +136,10 @@ CreateDirectoryTable(CreateDirectoryTableStmt *stmt, Oid relId)
 	}
 	else
 	{
-		RelFileNode relFileNode = {0};
+		RelFileLocator relFileNode = {0};
 
-		relFileNode.spcNode = spcId;
-		relFileNode.dbNode = MyDatabaseId;
+		relFileNode.spcOid = spcId;
+		relFileNode.dbOid = MyDatabaseId;
 
 		dirTablePath = UFileFormatPathName(relId, &relFileNode);
 	}

@@ -137,6 +137,7 @@ ssize_t LocalFile::PWrite(const void *ptr, size_t n, off_t offset) {
 void LocalFile::ReadBatch(const std::vector<IORequest> &requests) const {
   if (unlikely(requests.empty())) return;
 
+#ifdef __linux__
   if (IOUringFastIO::available()) {
     IOUringFastIO fast_io(requests.size());
     std::vector<bool> result(requests.size(), false);
@@ -144,14 +145,17 @@ void LocalFile::ReadBatch(const std::vector<IORequest> &requests) const {
     CBDB_CHECK(res.first == 0, cbdb::CException::ExType::kExTypeIOError,
                fmt("Fail to ReadBatch with io_uring [successful=%d, total=%lu], %s",
                    res.second, requests.size(), DebugString().c_str()));
-  } else {
-    SyncFastIO fast_io;
-    std::vector<bool> result(requests.size(), false);
-    auto res = fast_io.read(fd_, const_cast<std::vector<IORequest>&>(requests), result);
-    CBDB_CHECK(res.first == 0, cbdb::CException::ExType::kExTypeIOError,
-               fmt("Fail to ReadBatch with sync read [successful=%d, total=%lu], %s",
-                   res.second, requests.size(), DebugString().c_str()));
+    return;
   }
+#endif
+
+  // Fallback: pread-based sync IO (non-Linux, or older kernel without io_uring).
+  SyncFastIO fast_io;
+  std::vector<bool> result(requests.size(), false);
+  auto res = fast_io.read(fd_, const_cast<std::vector<IORequest>&>(requests), result);
+  CBDB_CHECK(res.first == 0, cbdb::CException::ExType::kExTypeIOError,
+             fmt("Fail to ReadBatch with sync read [successful=%d, total=%lu], %s",
+                 res.second, requests.size(), DebugString().c_str()));
 }
 
 size_t LocalFile::FileLength() const {

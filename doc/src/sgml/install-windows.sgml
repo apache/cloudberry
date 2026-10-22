@@ -22,7 +22,7 @@
   <productname>Windows</productname>. The simplest way to build with
   Microsoft tools is to install <productname>Visual Studio 2022</productname>
   and use the included compiler. It is also possible to build with the full
-  <productname>Microsoft Visual C++ 2013 to 2022</productname>.
+  <productname>Microsoft Visual C++ 2015 to 2022</productname>.
   In some cases that requires the installation of the
   <productname>Windows SDK</productname> in addition to the compiler.
  </para>
@@ -77,19 +77,13 @@
  <para>
   Both 32-bit and 64-bit builds are possible with the Microsoft Compiler suite.
   32-bit PostgreSQL builds are possible with
-  <productname>Visual Studio 2013</productname> to
+  <productname>Visual Studio 2015</productname> to
   <productname>Visual Studio 2022</productname>,
-  as well as standalone Windows SDK releases 8.1a to 10.
+  as well as standalone Windows SDK releases 10 and above.
   64-bit PostgreSQL builds are supported with
-  <productname>Microsoft Windows SDK</productname> version 8.1a to 10 or
-  <productname>Visual Studio 2013</productname> and above. Compilation
-  is supported down to <productname>Windows 7</productname> and
-  <productname>Windows Server 2008 R2 SP1</productname> when building with
-  <productname>Visual Studio 2013</productname> to
-  <productname>Visual Studio 2022</productname>.
+  <productname>Microsoft Windows SDK</productname> version 10 and above or
+  <productname>Visual Studio 2015</productname> and above.
    <!--
-       For 2013 requirements:
-       https://docs.microsoft.com/en-us/visualstudio/productinfo/vs2013-sysrequirements-vs
        For 2015 requirements:
        https://docs.microsoft.com/en-us/visualstudio/productinfo/vs2015-sysrequirements-vs
        For 2017 requirements:
@@ -128,7 +122,7 @@
  </para>
 
  <para>
-  Before you build, you may need to edit the file <filename>config.pl</filename>
+  Before you build, you can create the file <filename>config.pl</filename>
   to reflect any configuration options you want to change, or the paths to
   any third party libraries to use. The complete configuration is determined
   by first reading and parsing the file <filename>config_default.pl</filename>,
@@ -136,7 +130,7 @@
   to specify the location of your <productname>Python</productname> installation,
   put the following in <filename>config.pl</filename>:
 <programlisting>
-$config->{python} = 'c:\python26';
+$config->{python} = 'c:\python310';
 </programlisting>
   You only need to specify those parameters that are different from what's in
   <filename>config_default.pl</filename>.
@@ -160,7 +154,7 @@ $ENV{MSBFLAGS}="/m";
 </programlisting>
  </para>
 
- <sect2>
+ <sect2 id="install-windows-full-requirements">
   <title>Requirements</title>
   <para>
    The following additional products are required to build
@@ -190,14 +184,12 @@ $ENV{MSBFLAGS}="/m";
     </varlistentry>
 
     <varlistentry>
-     <term><productname>ActiveState Perl</productname></term>
+     <term><productname>Strawberry Perl</productname></term>
      <listitem><para>
-      ActiveState Perl is required to run the build generation scripts. MinGW
+      Strawberry Perl is required to run the build generation scripts. MinGW
       or Cygwin Perl will not work. It must also be present in the PATH.
       Binaries can be downloaded from
-      <ulink url="https://www.activestate.com"></ulink>
-      (Note: version 5.8.3 or later is required,
-      the free Standard Distribution is sufficient).
+      <ulink url="https://strawberryperl.com"></ulink>.
      </para></listitem>
     </varlistentry>
 
@@ -211,10 +203,11 @@ $ENV{MSBFLAGS}="/m";
 
    <variablelist>
     <varlistentry>
-     <term><productname>ActiveState TCL</productname></term>
+     <term><productname>Magicsplat Tcl</productname></term>
      <listitem><para>
-      Required for building <application>PL/Tcl</application> (Note: version
-      8.4 is required, the free Standard Distribution is sufficient).
+      Required for building <application>PL/Tcl</application>.
+      Binaries can be downloaded from
+      <ulink url="https://www.magicsplat.com/tcl-installer/index.html"></ulink>.
      </para></listitem>
     </varlistentry>
 
@@ -225,8 +218,8 @@ $ENV{MSBFLAGS}="/m";
      <para>
       <productname>Bison</productname> and <productname>Flex</productname> are
       required to build from Git, but not required when building from a release
-      file. Only <productname>Bison</productname> 1.875 or versions 2.2 and later
-      will work. <productname>Flex</productname> must be version 2.5.31 or later.
+      file. Only <productname>Bison</productname> versions 2.3 and later
+      will work. <productname>Flex</productname> must be version 2.5.35 or later.
      </para>
 
      <para>
@@ -300,10 +293,18 @@ $ENV{MSBFLAGS}="/m";
     <varlistentry>
      <term><productname>LZ4</productname></term>
      <listitem><para>
-      Required for supporting <productname>LZ4</productname> compression
-      method for compressing the table data. Binaries and source can be
-      downloaded from
+      Required for supporting <productname>LZ4</productname> compression.
+      Binaries and source can be downloaded from
       <ulink url="https://github.com/lz4/lz4/releases"></ulink>.
+     </para></listitem>
+    </varlistentry>
+
+    <varlistentry>
+     <term><productname>Zstandard</productname></term>
+     <listitem><para>
+      Required for supporting <productname>Zstandard</productname> compression.
+      Binaries and source can be downloaded from
+      <ulink url="https://github.com/facebook/zstd/releases"></ulink>.
      </para></listitem>
     </varlistentry>
 
@@ -346,12 +347,11 @@ $ENV{MSBFLAGS}="/m";
   </para>
  </sect2>
 
- <sect2>
+ <sect2 id="install-windows-full-64-bit">
   <title>Special Considerations for 64-Bit Windows</title>
 
   <para>
-   PostgreSQL will only build for the x64 architecture on 64-bit Windows, there
-   is no support for Itanium processors.
+   PostgreSQL will only build for the x64 architecture on 64-bit Windows.
   </para>
 
   <para>
@@ -362,7 +362,7 @@ $ENV{MSBFLAGS}="/m";
   </para>
 
   <para>
-   To use a server-side third party library such as <productname>python</productname> or
+   To use a server-side third party library such as <productname>Python</productname> or
    <productname>OpenSSL</productname>, this library <emphasis>must</emphasis> also be
    64-bit. There is no support for loading a 32-bit library in a 64-bit
    server. Several of the third party libraries that PostgreSQL supports may
@@ -371,7 +371,7 @@ $ENV{MSBFLAGS}="/m";
   </para>
  </sect2>
 
- <sect2>
+ <sect2 id="install-windows-full-build">
   <title>Building</title>
 
   <para>
@@ -408,7 +408,7 @@ $ENV{CONFIG}="Debug";
   </para>
  </sect2>
 
- <sect2>
+ <sect2 id="install-windows-full-clean-inst">
   <title>Cleaning and Installing</title>
 
   <para>
@@ -441,7 +441,7 @@ $ENV{CONFIG}="Debug";
   </para>
  </sect2>
 
- <sect2>
+ <sect2 id="install-windows-full-reg-tests">
   <title>Running the Regression Tests</title>
 
   <para>
@@ -462,7 +462,7 @@ $ENV{CONFIG}="Debug";
 <userinput>vcregress isolationcheck</userinput>
 <userinput>vcregress bincheck</userinput>
 <userinput>vcregress recoverycheck</userinput>
-<userinput>vcregress upgradecheck</userinput>
+<userinput>vcregress taptest</userinput>
 </screen>
 
    To change the schedule used (default is parallel), append it to the
@@ -471,14 +471,21 @@ $ENV{CONFIG}="Debug";
 <userinput>vcregress check serial</userinput>
 </screen>
 
+   <command>vcregress taptest</command> can be used to run the TAP tests
+   of a target directory, like:
+<screen>
+<userinput>vcregress taptest src\bin\initdb\</userinput>
+</screen>
+
    For more information about the regression tests, see
    <xref linkend="regress"/>.
   </para>
 
   <para>
-   Running the regression tests on client programs, with
-   <command>vcregress bincheck</command>, or on recovery tests, with
-   <command>vcregress recoverycheck</command>, requires an additional Perl module
+   Running the regression tests on client programs with
+   <command>vcregress bincheck</command>, on recovery tests with
+   <command>vcregress recoverycheck</command>, or TAP tests specified with
+   <command>vcregress taptest</command> requires an additional Perl module
    to be installed:
    <variablelist>
     <varlistentry>
@@ -487,8 +494,9 @@ $ENV{CONFIG}="Debug";
       As of this writing, <literal>IPC::Run</literal> is not included in the
       ActiveState Perl installation, nor in the ActiveState Perl Package
       Manager (PPM) library. To install, download the
-      <filename>IPC-Run-&lt;version&gt;.tar.gz</filename> source archive from CPAN,
-      at <ulink url="https://metacpan.org/release/IPC-Run"></ulink>, and
+      <filename>IPC-Run-&lt;version&gt;.tar.gz</filename> source archive from
+      <acronym>CPAN</acronym>,
+      at <ulink url="https://metacpan.org/dist/IPC-Run"></ulink>, and
       uncompress. Edit the <filename>buildenv.pl</filename> file, and add a PERL5LIB
       variable to point to the <filename>lib</filename> subdirectory from the
       extracted archive. For example:
@@ -519,6 +527,11 @@ $ENV{PROVE_TESTS}='t/020*.pl t/010*.pl'
   </para>
 
   <para>
+    Additionally, the behavior of TAP tests can be controlled by a set of
+    environment variables, see <xref linkend="regress-tap-vars" />.
+  </para>
+
+  <para>
    Some of the TAP tests depend on a set of external commands that would
    optionally trigger tests related to them. Each one of those variables
    can be set or unset in <filename>buildenv.pl</filename>:
@@ -526,9 +539,9 @@ $ENV{PROVE_TESTS}='t/020*.pl t/010*.pl'
     <varlistentry>
      <term><varname>GZIP_PROGRAM</varname></term>
      <listitem><para>
-       Path to a <application>gzip</application> command. The default is
-       <literal>gzip</literal>, that would be the command found in
-      <varname>PATH</varname>.
+      Path to a <application>gzip</application> command. The default is
+      <literal>gzip</literal>, which will search for a command by that
+      name in the configured <envar>PATH</envar>.
      </para></listitem>
     </varlistentry>
 
@@ -536,8 +549,17 @@ $ENV{PROVE_TESTS}='t/020*.pl t/010*.pl'
      <term><varname>LZ4</varname></term>
      <listitem><para>
       Path to a <application>lz4</application> command. The default is
-      <literal>lz4</literal>, that would be the command found in
-      <varname>PATH</varname>.
+      <literal>lz4</literal>, which will search for a command by that
+      name in the configured <envar>PATH</envar>.
+     </para></listitem>
+    </varlistentry>
+
+    <varlistentry>
+     <term><varname>OPENSSL</varname></term>
+     <listitem><para>
+      Path to an <application>openssl</application> command. The default is
+      <literal>openssl</literal>, which will search for a command by that
+      name in the configured <envar>PATH</envar>.
      </para></listitem>
     </varlistentry>
 
@@ -545,8 +567,17 @@ $ENV{PROVE_TESTS}='t/020*.pl t/010*.pl'
      <term><varname>TAR</varname></term>
      <listitem><para>
       Path to a <application>tar</application> command. The default is
-      <literal>tar</literal>, that would be the command found in
-      <varname>PATH</varname>.
+      <literal>tar</literal>, which will search for a command by that
+      name in the configured <envar>PATH</envar>.
+     </para></listitem>
+    </varlistentry>
+
+    <varlistentry>
+     <term><varname>ZSTD</varname></term>
+     <listitem><para>
+      Path to a <application>zstd</application> command. The default is
+      <literal>zstd</literal>, which will search for a command by that
+      name in the configured <envar>PATH</envar>.
      </para></listitem>
     </varlistentry>
    </variablelist>

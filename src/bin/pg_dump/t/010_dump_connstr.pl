@@ -1,25 +1,21 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 use strict;
 use warnings;
 
-use PostgresNode;
-use TestLib;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
 use Test::More;
 
-if ($TestLib::is_msys2)
+if ($PostgreSQL::Test::Utils::is_msys2)
 {
 	plan skip_all => 'High bit name tests fail on Msys2';
-}
-else
-{
-	plan tests => 14;
 }
 
 # We're going to use byte sequences that aren't valid UTF-8 strings.  Use
 # LATIN1, which accepts any byte and has a conversion from each byte to UTF-8.
-$ENV{LC_ALL}           = 'C';
+$ENV{LC_ALL} = 'C';
 $ENV{PGCLIENTENCODING} = 'LATIN1';
 
 # Create database and user names covering the range of LATIN1
@@ -30,15 +26,18 @@ $ENV{PGCLIENTENCODING} = 'LATIN1';
 # The odds of finding something interesting by testing all ASCII letters
 # seem too small to justify the cycles of testing a fifth name.
 my $dbname1 =
-    'regression'
-  . generate_ascii_string(1,  9)
+	'regression'
+  . generate_ascii_string(1, 9)
   . generate_ascii_string(11, 12)
   . generate_ascii_string(14, 33)
-  . ($TestLib::windows_os ? '' : '"x"')   # IPC::Run mishandles '"' on Windows
-  . generate_ascii_string(35, 43)         # skip ','
+  . (
+	$PostgreSQL::Test::Utils::windows_os
+	? ''
+	: '"x"')    # IPC::Run mishandles '"' on Windows
+  . generate_ascii_string(35, 43)    # skip ','
   . generate_ascii_string(45, 54);
 my $dbname2 = 'regression' . generate_ascii_string(55, 65)    # skip 'B'-'W'
-  . generate_ascii_string(88,  99)                            # skip 'd'-'w'
+  . generate_ascii_string(88, 99)                             # skip 'd'-'w'
   . generate_ascii_string(120, 149);
 my $dbname3 = 'regression' . generate_ascii_string(150, 202);
 my $dbname4 = 'regression' . generate_ascii_string(203, 255);
@@ -51,24 +50,24 @@ my $dbname4 = 'regression' . generate_ascii_string(203, 255);
 my $src_bootstrap_super = 'regress_postgres';
 my $dst_bootstrap_super = 'boot';
 
-my $node = get_new_node('main');
+my $node = PostgreSQL::Test::Cluster->new('main');
 $node->init(extra =>
 	  [ '-U', $src_bootstrap_super, '--locale=C', '--encoding=LATIN1' ]);
 
 # prep pg_hba.conf and pg_ident.conf
 $node->run_log(
 	[
-		$ENV{PG_REGRESS},     '--config-auth',
-		$node->data_dir,      '--user',
+		$ENV{PG_REGRESS}, '--config-auth',
+		$node->data_dir, '--user',
 		$src_bootstrap_super, '--create-role',
 		"$username1,$username2,$username3,$username4"
 	]);
 $node->start;
 
 my $backupdir = $node->backup_dir;
-my $discard   = "$backupdir/discard.sql";
-my $plain     = "$backupdir/plain.sql";
-my $dirfmt    = "$backupdir/dirfmt";
+my $discard = "$backupdir/discard.sql";
+my $plain = "$backupdir/plain.sql";
+my $dirfmt = "$backupdir/dirfmt";
 
 $node->run_log([ 'createdb', '-U', $src_bootstrap_super, $dbname1 ]);
 $node->run_log(
@@ -116,7 +115,7 @@ $node->command_ok(
 	'pg_dumpall with long ASCII name 4');
 $node->command_ok(
 	[
-		'pg_dumpall',         '-U',
+		'pg_dumpall', '-U',
 		$src_bootstrap_super, '--no-sync',
 		'--roles-only',       '-l',
 		'dbname=template1'
@@ -147,13 +146,13 @@ $node->command_ok(
 	'parallel dump');
 
 # recreate $dbname1 for restore test
-$node->run_log([ 'dropdb',   '-U', $src_bootstrap_super, $dbname1 ]);
+$node->run_log([ 'dropdb', '-U', $src_bootstrap_super, $dbname1 ]);
 $node->run_log([ 'createdb', '-U', $src_bootstrap_super, $dbname1 ]);
 
 $node->command_ok(
 	[
-		'pg_restore', '-v', '-d',       'template1',
-		'-j2',        '-U', $username1, $dirfmt
+		'pg_restore', '-v', '-d', 'template1',
+		'-j2', '-U', $username1, $dirfmt
 	],
 	'parallel restore');
 
@@ -161,8 +160,8 @@ $node->run_log([ 'dropdb', '-U', $src_bootstrap_super, $dbname1 ]);
 
 $node->command_ok(
 	[
-		'pg_restore', '-C',  '-v', '-d',
-		'template1',  '-j2', '-U', $username1,
+		'pg_restore', '-C', '-v', '-d',
+		'template1', '-j2', '-U', $username1,
 		$dirfmt
 	],
 	'parallel restore with create');
@@ -175,13 +174,14 @@ system_log('cat', $plain);
 my ($stderr, $result);
 my $restore_super = qq{regress_a'b\\c=d\\ne"f};
 $restore_super =~ s/"//g
-  if $TestLib::windows_os;    # IPC::Run mishandles '"' on Windows
+  if
+  $PostgreSQL::Test::Utils::windows_os;   # IPC::Run mishandles '"' on Windows
 
 
 # Restore full dump through psql using environment variables for
 # dbname/user connection parameters
 
-my $envar_node = get_new_node('destination_envar');
+my $envar_node = PostgreSQL::Test::Cluster->new('destination_envar');
 $envar_node->init(
 	extra =>
 	  [ '-U', $dst_bootstrap_super, '--locale=C', '--encoding=LATIN1' ],
@@ -208,7 +208,7 @@ is($stderr, '', 'no dump errors');
 # dbname/user connection parameters.  "\connect dbname=" forgets
 # user/port from command line.
 
-my $cmdline_node = get_new_node('destination_cmdline');
+my $cmdline_node = PostgreSQL::Test::Cluster->new('destination_cmdline');
 $cmdline_node->init(
 	extra =>
 	  [ '-U', $dst_bootstrap_super, '--locale=C', '--encoding=LATIN1' ],
@@ -220,8 +220,8 @@ $cmdline_node->run_log(
 {
 	$result = run_log(
 		[
-			'psql',         '-p', $cmdline_node->port, '-U',
-			$restore_super, '-X', '-f',                $plain
+			'psql', '-p', $cmdline_node->port, '-U',
+			$restore_super, '-X', '-f', $plain
 		],
 		'2>',
 		\$stderr);
@@ -229,3 +229,5 @@ $cmdline_node->run_log(
 ok($result,
 	'restore full dump with command-line options for connection parameters');
 is($stderr, '', 'no dump errors');
+
+done_testing();

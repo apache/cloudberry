@@ -24,8 +24,16 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Base CXX flags
 # Note: -Wpessimizing-move is enabled by default in GCC 9+ and will be caught by -Werror
 # No need to explicitly add -Werror=pessimizing-move (which breaks GCC 8.x compatibility)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror -Wno-unused-function -Wno-error=ignored-qualifiers -Wno-error=array-bounds -Wuninitialized -Winit-self -Wstrict-aliasing -Wno-missing-field-initializers -Wno-unused-parameter -Wno-clobbered -Wno-sized-deallocation -g")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wno-unused-parameter -Wno-parameter-name")
+# -Wno-clobbered / -Wno-sized-deallocation / -Wno-parameter-name are GCC-only.
+# Clang on macOS errors out via -Werror,-Wunknown-warning-option, and is
+# stricter on virtual-override / overloaded-virtual / sometimes-uninitialized.
+if(APPLE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror -Wno-unused-function -Wno-error=ignored-qualifiers -Wno-error=array-bounds -Wuninitialized -Winit-self -Wstrict-aliasing -Wno-missing-field-initializers -Wno-unused-parameter -Wno-unknown-warning-option -Wno-error=inconsistent-missing-override -Wno-error=overloaded-virtual -Wno-error=sometimes-uninitialized -Wno-error=unused-private-field -Wno-error=format -Wno-error=mismatched-tags -Wno-error=pessimizing-move -Wno-error=unused-but-set-variable -Wno-error=deprecated-copy -Wno-error=unused-result -g")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wno-unused-parameter -Wno-unknown-warning-option")
+else()
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror -Wno-unused-function -Wno-error=ignored-qualifiers -Wno-error=array-bounds -Wuninitialized -Winit-self -Wstrict-aliasing -Wno-missing-field-initializers -Wno-unused-parameter -Wno-clobbered -Wno-sized-deallocation -g")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wno-unused-parameter -Wno-parameter-name")
+endif()
 
 option(USE_MANIFEST_API "Use manifest API" OFF)
 option(USE_PAX_CATALOG "Use manifest API, by pax impl" ON)
@@ -76,8 +84,16 @@ if(BUILD_GBENCH)
 endif(BUILD_GBENCH)
 
 if (BUILD_GTEST)
-  SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -no-pie -fno-stack-protector -Wall -Wno-unused-function  -Wno-unused-variable")
-  SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-access-control -fno-inline -Wno-pmf-conversions -Wl,--allow-multiple-definition -no-pie -fno-stack-protector")
+  if(APPLE)
+    # macOS clang/ld lacks several gcc/GNU-ld-only flags used below
+    # (-no-pie, -Wl,--allow-multiple-definition, -fno-access-control,
+    # -Wno-pmf-conversions). Use a clang-safe subset.
+    SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fno-stack-protector -Wall -Wno-unused-function -Wno-unused-variable")
+    SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-inline -fno-stack-protector")
+  else()
+    SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -no-pie -fno-stack-protector -Wall -Wno-unused-function  -Wno-unused-variable")
+    SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-access-control -fno-inline -Wno-pmf-conversions -Wl,--allow-multiple-definition -no-pie -fno-stack-protector")
+  endif()
 endif(BUILD_GTEST)
 
 # Vec options
@@ -102,13 +118,30 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/")
 include(FindDependencies)
 add_subdirectory(src/cpp)
 
+# yyjson is only needed by the manifest API implementation, which is off by
+# default.  It is fetched from its upstream release at configure time rather
+# than vendored as a submodule, so that it stays out of the source release
+# for builds that do not use it.
+set(YYJSON_VERSION "0.12.0" CACHE STRING "yyjson release to fetch for the manifest API")
+
 if(USE_MANIFEST_API AND NOT USE_PAX_CATALOG)
+    include(FetchContent)
+
+    message(STATUS "Fetching yyjson ${YYJSON_VERSION} for the manifest API")
+    FetchContent_Declare(
+        yyjson
+        GIT_REPOSITORY https://github.com/ibireme/yyjson.git
+        GIT_TAG ${YYJSON_VERSION}
+        GIT_SHALLOW TRUE
+    )
+
     set(SAVED_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
     set(SAVED_CMAKE_INSTALL_SO_NO_EXE ${CMAKE_INSTALL_SO_NO_EXE})
 
     set(BUILD_SHARED_LIBS ON)
     set(CMAKE_INSTALL_SO_NO_EXE OFF)
-    add_subdirectory(${CMAKE_SOURCE_DIR}/../../dependency/yyjson ${CMAKE_BINARY_DIR}/yyjson_build)
+
+    FetchContent_MakeAvailable(yyjson)
 
     set(BUILD_SHARED_LIBS ${SAVED_BUILD_SHARED_LIBS})
     set(CMAKE_INSTALL_SO_NO_EXE ${SAVED_CMAKE_INSTALL_SO_NO_EXE})

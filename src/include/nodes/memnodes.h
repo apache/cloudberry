@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2007-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/nodes/memnodes.h
@@ -61,11 +61,12 @@ typedef struct MemoryContextMethods
 {
 	void	   *(*alloc) (MemoryContext context, Size size);
 	/* call this free_p in case someone #define's free() */
-	void		(*free_p) (MemoryContext context, void *pointer);
-	void	   *(*realloc) (MemoryContext context, void *pointer, Size size);
+	void		(*free_p) (void *pointer);
+	void	   *(*realloc) (void *pointer, Size size);
 	void		(*reset) (MemoryContext context);
 	void		(*delete_context) (MemoryContext context, MemoryContext parent);
-	Size		(*get_chunk_space) (MemoryContext context, void *pointer);
+	MemoryContext (*get_chunk_context) (void *pointer);
+	Size		(*get_chunk_space) (void *pointer);
 	bool		(*is_empty) (MemoryContext context);
 	void		(*stats) (MemoryContext context,
 						  MemoryStatsPrintFunc printfunc, void *passthru,
@@ -84,6 +85,8 @@ typedef struct MemoryContextMethods
 
 typedef struct MemoryContextData
 {
+	pg_node_attr(abstract)		/* there are no nodes of this type */
+
 	NodeTag		type;			/* identifies exact kind of context */
 	/* these two fields are placed here to minimize alignment wastage: */
 	bool		isReset;		/* T = no space alloced since last reset */

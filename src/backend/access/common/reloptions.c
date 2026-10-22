@@ -3,7 +3,7 @@
  * reloptions.c
  *	  Core support for relation options (pg_class.reloptions)
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -142,6 +142,15 @@ static relopt_bool boolRelOpts[] =
 		{
 			"security_barrier",
 			"View acts as a row security barrier",
+			RELOPT_KIND_VIEW,
+			AccessExclusiveLock
+		},
+		false
+	},
+	{
+		{
+			"security_invoker",
+			"Privileges on underlying relations are checked as the invoking user, not the view owner",
 			RELOPT_KIND_VIEW,
 			AccessExclusiveLock
 		},
@@ -482,7 +491,7 @@ static relopt_real realRelOpts[] =
 };
 
 /* values from StdRdOptIndexCleanup */
-relopt_enum_elt_def StdRdOptIndexCleanupValues[] =
+static relopt_enum_elt_def StdRdOptIndexCleanupValues[] =
 {
 	{"auto", STDRD_OPTION_VACUUM_INDEX_CLEANUP_AUTO},
 	{"on", STDRD_OPTION_VACUUM_INDEX_CLEANUP_ON},
@@ -497,7 +506,7 @@ relopt_enum_elt_def StdRdOptIndexCleanupValues[] =
 };
 
 /* values from GistOptBufferingMode */
-relopt_enum_elt_def gistBufferingOptValues[] =
+static relopt_enum_elt_def gistBufferingOptValues[] =
 {
 	{"auto", GIST_OPTION_BUFFERING_AUTO},
 	{"on", GIST_OPTION_BUFFERING_ON},
@@ -506,7 +515,7 @@ relopt_enum_elt_def gistBufferingOptValues[] =
 };
 
 /* values from ViewOptCheckOption */
-relopt_enum_elt_def viewCheckOptValues[] =
+static relopt_enum_elt_def viewCheckOptValues[] =
 {
 	/* no value for NOT_SET */
 	{"local", VIEW_OPTION_CHECK_OPTION_LOCAL},
@@ -760,11 +769,11 @@ add_reloption(relopt_gen *newoption)
  * 		'relopt_struct_size'.
  */
 void
-init_local_reloptions(local_relopts *opts, Size relopt_struct_size)
+init_local_reloptions(local_relopts *relopts, Size relopt_struct_size)
 {
-	opts->options = NIL;
-	opts->validators = NIL;
-	opts->relopt_struct_size = relopt_struct_size;
+	relopts->options = NIL;
+	relopts->validators = NIL;
+	relopts->relopt_struct_size = relopt_struct_size;
 }
 
 /*
@@ -773,9 +782,9 @@ init_local_reloptions(local_relopts *opts, Size relopt_struct_size)
  *		build_local_reloptions().
  */
 void
-register_reloptions_validator(local_relopts *opts, relopts_validator validator)
+register_reloptions_validator(local_relopts *relopts, relopts_validator validator)
 {
-	opts->validators = lappend(opts->validators, validator);
+	relopts->validators = lappend(relopts->validators, validator);
 }
 
 /*
@@ -1204,8 +1213,7 @@ transformRelOptions(Datum oldOptions, List *defList, const char *namspace,
 		int			noldoptions;
 		int			i;
 
-		deconstruct_array(array, TEXTOID, -1, false, TYPALIGN_INT,
-						  &oldoptions, NULL, &noldoptions);
+		deconstruct_array_builtin(array, TEXTOID, &oldoptions, NULL, &noldoptions);
 
 		for (i = 0; i < noldoptions; i++)
 		{
@@ -1372,8 +1380,7 @@ untransformRelOptions(Datum options)
 
 	array = DatumGetArrayTypeP(options);
 
-	deconstruct_array(array, TEXTOID, -1, false, TYPALIGN_INT,
-					  &optiondatums, NULL, &noptions);
+	deconstruct_array_builtin(array, TEXTOID, &optiondatums, NULL, &noptions);
 
 	for (i = 0; i < noptions; i++)
 	{
@@ -1386,9 +1393,9 @@ untransformRelOptions(Datum options)
 		if (p)
 		{
 			*p++ = '\0';
-			val = (Node *) makeString(pstrdup(p));
+			val = (Node *) makeString(p);
 		}
-		result = lappend(result, makeDefElem(pstrdup(s), val, -1));
+		result = lappend(result, makeDefElem(s, val, -1));
 	}
 
 	return result;
@@ -1464,8 +1471,7 @@ parseRelOptionsInternal(Datum options, bool validate,
 	int			noptions;
 	int			i;
 
-	deconstruct_array(array, TEXTOID, -1, false, TYPALIGN_INT,
-					  &optiondatums, NULL, &noptions);
+	deconstruct_array_builtin(array, TEXTOID, &optiondatums, NULL, &noptions);
 
 	for (i = 0; i < noptions; i++)
 	{
@@ -1748,7 +1754,7 @@ allocateReloptStruct(Size base, relopt_value *options, int numoptions)
 			if (optstr->fill_cb)
 			{
 				const char *val = optval->isset ? optval->values.string_val :
-				optstr->default_isnull ? NULL : optstr->default_val;
+					optstr->default_isnull ? NULL : optstr->default_val;
 
 				size += optstr->fill_cb(val, NULL);
 			}
@@ -1827,8 +1833,8 @@ fillRelOptions(void *rdopts, Size basesize,
 						if (optstring->fill_cb)
 						{
 							Size		size =
-							optstring->fill_cb(string_val,
-											   (char *) rdopts + offset);
+								optstring->fill_cb(string_val,
+												   (char *) rdopts + offset);
 
 							if (size)
 							{
@@ -2009,8 +2015,9 @@ build_local_reloptions(local_relopts *relopts, Datum options, bool validate)
 	fillRelOptions(opts, relopts->relopt_struct_size, vals, noptions, validate,
 				   elems, noptions);
 
-	foreach(lc, relopts->validators)
-		((relopts_validator) lfirst(lc)) (opts, vals, noptions);
+	if (validate)
+		foreach(lc, relopts->validators)
+			((relopts_validator) lfirst(lc)) (opts, vals, noptions);
 
 	if (elems)
 		pfree(elems);
@@ -2042,6 +2049,8 @@ view_reloptions(Datum reloptions, bool validate)
 	static const relopt_parse_elt tab[] = {
 		{"security_barrier", RELOPT_TYPE_BOOL,
 		offsetof(ViewOptions, security_barrier)},
+		{"security_invoker", RELOPT_TYPE_BOOL,
+		offsetof(ViewOptions, security_invoker)},
 		{"check_option", RELOPT_TYPE_ENUM,
 		offsetof(ViewOptions, check_option)}
 	};

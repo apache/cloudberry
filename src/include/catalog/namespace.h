@@ -4,7 +4,7 @@
  *	  prototypes for functions in backend/catalog/namespace.c
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/namespace.h
@@ -84,7 +84,7 @@ extern Oid	RangeVarGetRelidExtended(const RangeVar *relation,
 									 RangeVarGetRelidCallback callback,
 									 void *callback_arg);
 extern Oid	RangeVarGetCreationNamespace(const RangeVar *newRelation);
-extern Oid	RangeVarGetAndCheckCreationNamespace(RangeVar *newRelation,
+extern Oid	RangeVarGetAndCheckCreationNamespace(RangeVar *relation,
 												 LOCKMODE lockmode,
 												 Oid *existing_relation_id);
 extern void RangeVarAdjustRelationPersistence(RangeVar *newRelation, Oid nspid);
@@ -190,7 +190,7 @@ extern void AtEOSubXact_Namespace(bool isCommit, SubTransactionId mySubid,
 								  SubTransactionId parentSubid);
 
 /* stuff for search_path GUC variable */
-extern char *namespace_search_path;
+extern PGDLLIMPORT char *namespace_search_path;
 
 extern List *fetch_search_path(bool includeImplicit);
 extern int	fetch_search_path_array(Oid *sarray, int sarray_len);

@@ -19,7 +19,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -91,7 +91,8 @@ static List *generate_setop_tlist(List *colTypes, List *colCollations,
 								  Index varno,
 								  bool hack_constants,
 								  List *input_tlist,
-								  List *refnames_tlist);
+								  List *refnames_tlist,
+								  bool *trivial_tlist);
 static List *generate_append_tlist(List *colTypes, List *colCollations,
 								   bool flag,
 								   List *input_tlists,
@@ -238,6 +239,7 @@ recurse_set_operations(Node *setOp, PlannerInfo *root,
 		Path	   *subpath;
 		Path	   *path;
 		List	   *tlist;
+		bool		trivial_tlist;
 
 		Assert(subquery != NULL);
 
@@ -269,7 +271,8 @@ recurse_set_operations(Node *setOp, PlannerInfo *root,
 									 rtr->rtindex,
 									 true,
 									 subroot->processed_tlist,
-									 refnames_tlist);
+									 refnames_tlist,
+									 &trivial_tlist);
 		rel->reltarget = create_pathtarget(root, tlist);
 
 		/* Return the fully-fledged tlist to caller, too */
@@ -306,6 +309,7 @@ recurse_set_operations(Node *setOp, PlannerInfo *root,
 		 * soon too, likely.)
 		 */
 		path = (Path *) create_subqueryscan_path(root, rel, subpath,
+												 trivial_tlist,
 												 NIL, cdbpathlocus_from_subquery(root, rel, subpath), NULL);
 
 		add_path(rel, path, root);
@@ -324,6 +328,7 @@ recurse_set_operations(Node *setOp, PlannerInfo *root,
 			partial_subpath = linitial(final_rel->partial_pathlist);
 			partial_path = (Path *)
 				create_subqueryscan_path(root, rel, partial_subpath,
+										 trivial_tlist,
 										 NIL, cdbpathlocus_from_subquery(root, rel, partial_subpath), NULL);
 			add_partial_path(rel, partial_path);
 		}
@@ -392,6 +397,7 @@ recurse_set_operations(Node *setOp, PlannerInfo *root,
 			!tlist_same_collations(*pTargetList, colCollations, junkOK))
 		{
 			PathTarget *target;
+			bool		trivial_tlist;
 			ListCell   *lc;
 
 			*pTargetList = generate_setop_tlist(colTypes, colCollations,
@@ -399,7 +405,8 @@ recurse_set_operations(Node *setOp, PlannerInfo *root,
 												0,
 												false,
 												*pTargetList,
-												refnames_tlist);
+												refnames_tlist,
+												&trivial_tlist);
 			target = create_pathtarget(root, *pTargetList);
 
 			/* Apply projection to each path */
@@ -619,9 +626,9 @@ generate_union_paths(SetOperationStmt *op, PlannerInfo *root,
 
 	/*
 	 * If any of my children are identical UNION nodes (same op, all-flag, and
-	 * colTypes) then they can be merged into this node so that we generate
-	 * only one Append and unique-ification for the lot.  Recurse to find such
-	 * nodes and compute their children's paths.
+	 * colTypes/colCollations) then they can be merged into this node so that
+	 * we generate only one Append and unique-ification for the lot.  Recurse
+	 * to find such nodes and compute their children's paths.
 	 */
 	rellist = plan_union_children(root, op, refnames_tlist, &tlist_list);
 	/*
@@ -700,15 +707,15 @@ generate_union_paths(SetOperationStmt *op, PlannerInfo *root,
 	if (partial_paths_valid)
 	{
 		Path	   *ppath;
-		ListCell   *lc;
 		int			parallel_workers = 0;
 
 		/* Find the highest number of workers requested for any subpath. */
 		foreach(lc, partial_pathlist)
 		{
-			Path	   *path = lfirst(lc);
+			Path	   *subpath = lfirst(lc);
 
-			parallel_workers = Max(parallel_workers, path->parallel_workers);
+			parallel_workers = Max(parallel_workers,
+								   subpath->parallel_workers);
 		}
 #if 0
 		/*
@@ -731,7 +738,7 @@ generate_union_paths(SetOperationStmt *op, PlannerInfo *root,
 		if (enable_parallel_append)
 		{
 			parallel_workers = Max(parallel_workers,
-								   fls(list_length(partial_pathlist)));
+								   pg_leftmost_one_pos32(list_length(partial_pathlist)) + 1);
 			parallel_workers = Min(parallel_workers,
 								   max_parallel_workers_per_gather);
 		}
@@ -959,17 +966,15 @@ generate_nonunion_paths(SetOperationStmt *op, PlannerInfo *root,
 }
 
 /*
- * Pull up children of a UNION node that are identically-propertied UNIONs.
+ * Pull up children of a UNION node that are identically-propertied UNIONs,
+ * and perform planning of the queries underneath the N-way UNION.
+ *
+ * The result is a list of RelOptInfos containing Paths for sub-nodes, with
+ * one entry for each descendant that is a leaf query or non-identical setop.
+ * We also return a parallel list of the childrens' targetlists.
  *
  * NOTE: we can also pull a UNION ALL up into a UNION, since the distinct
  * output rows will be lost anyway.
- *
- * NOTE: currently, we ignore collations while determining if a child has
- * the same properties.  This is semantically sound only so long as all
- * collations have the same notion of equality.  It is valid from an
- * implementation standpoint because we don't care about the ordering of
- * a UNION child's result: UNION ALL results are always unordered, and
- * generate_union_paths will force a fresh sort if the top level is a UNION.
  */
 static List *
 plan_union_children(PlannerInfo *root,
@@ -995,7 +1000,8 @@ plan_union_children(PlannerInfo *root,
 
 			if (op->op == top_union->op &&
 				(op->all == top_union->all || op->all) &&
-				equal(op->colTypes, top_union->colTypes))
+				equal(op->colTypes, top_union->colTypes) &&
+				equal(op->colCollations, top_union->colCollations))
 			{
 				/* Same UNION, so fold children into parent */
 				pending_rels = lcons(op->rarg, pending_rels);
@@ -1216,6 +1222,7 @@ choose_hashed_setop(PlannerInfo *root, List *groupClauses,
  * hack_constants: true to copy up constants (see comments in code)
  * input_tlist: targetlist of this node's input node
  * refnames_tlist: targetlist to take column names from
+ * trivial_tlist: output parameter, set to true if targetlist is trivial
  */
 static List *
 generate_setop_tlist(List *colTypes, List *colCollations,
@@ -1223,7 +1230,8 @@ generate_setop_tlist(List *colTypes, List *colCollations,
 					 Index varno,
 					 bool hack_constants,
 					 List *input_tlist,
-					 List *refnames_tlist)
+					 List *refnames_tlist,
+					 bool *trivial_tlist)
 {
 	List	   *tlist = NIL;
 	int			resno = 1;
@@ -1233,6 +1241,8 @@ generate_setop_tlist(List *colTypes, List *colCollations,
 			   *rtlc;
 	TargetEntry *tle;
 	Node	   *expr;
+
+	*trivial_tlist = true;		/* until proven differently */
 
 	forfour(ctlc, colTypes, cclc, colCollations,
 			itlc, input_tlist, rtlc, refnames_tlist)
@@ -1259,6 +1269,9 @@ generate_setop_tlist(List *colTypes, List *colCollations,
 		 * this only at the first level of subquery-scan plans; we don't want
 		 * phony constants appearing in the output tlists of upper-level
 		 * nodes!
+		 *
+		 * Note that copying a constant doesn't in itself require us to mark
+		 * the tlist nontrivial; see trivial_subqueryscan() in setrefs.c.
 		 */
 		if (hack_constants && inputtle->expr && IsA(inputtle->expr, Const))
 			expr = (Node *) inputtle->expr;
@@ -1284,6 +1297,7 @@ generate_setop_tlist(List *colTypes, List *colCollations,
 										 expr,
 										 colType,
 										 "UNION/INTERSECT/EXCEPT");
+			*trivial_tlist = false; /* the coercion makes it not trivial */
 		}
 
 		/*
@@ -1298,9 +1312,12 @@ generate_setop_tlist(List *colTypes, List *colCollations,
 		 * will reach the executor without any further processing.
 		 */
 		if (exprCollation(expr) != colColl)
+		{
 			expr = applyRelabelType(expr,
 									exprType(expr), exprTypmod(expr), colColl,
 									COERCE_IMPLICIT_CAST, -1, false);
+			*trivial_tlist = false; /* the relabel makes it not trivial */
+		}
 
 		tle = makeTargetEntry((Expr *) expr,
 							  (AttrNumber) resno++,
@@ -1333,6 +1350,7 @@ generate_setop_tlist(List *colTypes, List *colCollations,
 							  pstrdup("flag"),
 							  true);
 		tlist = lappend(tlist, tle);
+		*trivial_tlist = false; /* the extra entry makes it not trivial */
 	}
 
 	return tlist;

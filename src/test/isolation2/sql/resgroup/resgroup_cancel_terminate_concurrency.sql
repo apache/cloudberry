@@ -138,6 +138,8 @@ SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE wait_event_type='Re
 SELECT * FROM rg_concurrency_view;
 1q:
 2q:
+-- Sleep briefly to allow terminated session to fully clean up temp objects
+SELECT pg_sleep(0.5);
 DROP ROLE role_concurrency_test;
 DROP RESOURCE GROUP rg_concurrency_test;
 

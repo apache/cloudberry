@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -26,6 +26,7 @@
 #include "catalog/objectaccess.h"
 #include "catalog/oid_dispatch.h"
 #include "catalog/pg_authid.h"
+#include "catalog/pg_database.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_tag.h"
 #include "commands/dbcommands.h"
@@ -73,7 +74,7 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString,
 	AclResult	aclresult;
 	ObjectAddress address;
 	StringInfoData pathbuf;
-	bool		shouldDispatch = (Gp_role == GP_ROLE_DISPATCH && 
+	bool		shouldDispatch = (Gp_role == GP_ROLE_DISPATCH &&
 								  !IsBootstrapProcessingMode());
 
 	/*
@@ -135,12 +136,12 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString,
 	 * The latter provision guards against "giveaway" attacks.  Note that a
 	 * superuser will always have both of these privileges a fortiori.
 	 */
-	aclresult = pg_database_aclcheck(MyDatabaseId, saved_uid, ACL_CREATE);
+	aclresult = object_aclcheck(DatabaseRelationId, MyDatabaseId, saved_uid, ACL_CREATE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error(aclresult, OBJECT_DATABASE,
 					   get_database_name(MyDatabaseId));
 
-	check_is_member_of_role(saved_uid, owner_uid);
+	check_can_set_role(saved_uid, owner_uid);
 
 	/* Additional check to protect reserved schema names */
 	if (!allowSystemTableMods && (IsReservedName(schemaName) || IsReservedGpName(schemaName)))
@@ -296,12 +297,13 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString,
 	 * we cannot, in general, run parse analysis on one statement until we
 	 * have actually executed the prior ones.
 	 */
-	parsetree_list = transformCreateSchemaStmt(stmt);
+	parsetree_list = transformCreateSchemaStmtElements(stmt->schemaElts,
+													   schemaName);
 
 	/*
 	 * Execute each command contained in the CREATE SCHEMA.  Since the grammar
 	 * allows only utility commands in CREATE SCHEMA, there is no need to pass
-	 * them through parse_analyze() or the rewriter; we can just hand them
+	 * them through parse_analyze_*() or the rewriter; we can just hand them
 	 * straight to ProcessUtility.
 	 */
 	foreach(parsetree_item, parsetree_list)
@@ -461,12 +463,12 @@ RenameSchema(const char *oldname, const char *newname)
 				 errmsg("schema \"%s\" already exists", newname)));
 
 	/* must be owner */
-	if (!pg_namespace_ownercheck(nspOid, GetUserId()))
+	if (!object_ownercheck(NamespaceRelationId, nspOid, GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_SCHEMA,
 					   oldname);
 
 	/* must have CREATE privilege on database */
-	aclresult = pg_database_aclcheck(MyDatabaseId, GetUserId(), ACL_CREATE);
+	aclresult = object_aclcheck(DatabaseRelationId, MyDatabaseId, GetUserId(), ACL_CREATE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error(aclresult, OBJECT_DATABASE,
 					   get_database_name(MyDatabaseId));
@@ -511,16 +513,16 @@ RenameSchema(const char *oldname, const char *newname)
 }
 
 void
-AlterSchemaOwner_oid(Oid oid, Oid newOwnerId)
+AlterSchemaOwner_oid(Oid schemaoid, Oid newOwnerId)
 {
 	HeapTuple	tup;
 	Relation	rel;
 
 	rel = table_open(NamespaceRelationId, RowExclusiveLock);
 
-	tup = SearchSysCache1(NAMESPACEOID, ObjectIdGetDatum(oid));
+	tup = SearchSysCache1(NAMESPACEOID, ObjectIdGetDatum(schemaoid));
 	if (!HeapTupleIsValid(tup))
-		elog(ERROR, "cache lookup failed for schema %u", oid);
+		elog(ERROR, "cache lookup failed for schema %u", schemaoid);
 
 	AlterSchemaOwner_internal(tup, rel, newOwnerId);
 
@@ -599,7 +601,7 @@ AlterSchemaOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId)
 
 		/* Otherwise, must be owner of the existing object */
 		if (!mdb_admin_allow_bypass_owner_checks(GetUserId(), nspForm->nspowner)
-		 && !pg_namespace_ownercheck(nspForm->oid, GetUserId()))
+		 && !object_ownercheck(NamespaceRelationId, nspForm->oid, GetUserId()))
 			aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_SCHEMA,
 						   NameStr(nspForm->nspname));
 
@@ -617,8 +619,8 @@ AlterSchemaOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId)
 		if (mdb_admin_allow_bypass_owner_checks(GetUserId(), nspForm->nspowner)) {
 			aclresult = ACLCHECK_OK;
 		} else {
-			aclresult = pg_database_aclcheck(MyDatabaseId, GetUserId(),
-										 ACL_CREATE);
+			aclresult = object_aclcheck(DatabaseRelationId, MyDatabaseId, GetUserId(),
+										ACL_CREATE);
 		}
 
 		if (aclresult != ACLCHECK_OK)

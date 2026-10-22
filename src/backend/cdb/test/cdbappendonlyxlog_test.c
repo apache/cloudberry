@@ -12,11 +12,11 @@
 #include "catalog/pg_tablespace.h"
 
 static int
-check_relfilenode_function(const LargestIntegralType arg1, const LargestIntegralType arg2)
+check_relfilelocator_function(const LargestIntegralType arg1, const LargestIntegralType arg2)
 {
-	const RelFileNode *value = (const RelFileNode *) arg1;
-	const RelFileNode *check_value = (const RelFileNode *) arg2;
-	return RelFileNodeEquals(*value, *check_value);
+	const RelFileLocator *value = (const RelFileLocator *) arg1;
+	const RelFileLocator *check_value = (const RelFileLocator *) arg2;
+	return RelFileLocatorEquals(*value, *check_value);
 }
 
 /*
@@ -26,36 +26,33 @@ check_relfilenode_function(const LargestIntegralType arg1, const LargestIntegral
 static void
 ao_invalid_segment_file_test(uint8 xl_info)
 {
-	RelFileNode relfilenode;
-	XLogRecord record;
+	RelFileLocator relfilelocator;
 	XLogReaderState *mockrecord;
 	xl_ao_target xlaotarget;
 	xl_ao_insert xlaoinsert;
 	xl_ao_truncate xlaotruncate;
 
 	/* create mock transaction log */
-	relfilenode.spcNode = DEFAULTTABLESPACE_OID;
-	relfilenode.dbNode = 12087 /* postgres database */;
-	relfilenode.relNode = FirstNormalObjectId;
+	relfilelocator.spcOid = DEFAULTTABLESPACE_OID;
+	relfilelocator.dbOid = 12087 /* postgres database */;
+	relfilelocator.relNumber = FirstNormalObjectId;
 
-	xlaotarget.node = relfilenode;
+	xlaotarget.node = relfilelocator;
 	xlaotarget.segment_filenum = 2;
 	xlaotarget.offset = 12345;
 
-	record.xl_info = xl_info;
-	record.xl_rmid = RM_APPEND_ONLY_ID;
-
 	mockrecord = XLogReaderAllocate(DEFAULT_XLOG_SEG_SIZE, NULL, XL_ROUTINE(), NULL);
+	mockrecord->record = palloc0(sizeof(DecodedXLogRecord));
 
 	if (xl_info == XLOG_APPENDONLY_INSERT)
 	{
 		xlaoinsert.target = xlaotarget;
-		mockrecord->main_data = (char *) &xlaoinsert;
+		XLogRecGetData(mockrecord) = (char *) &xlaoinsert;
 	}
 	else if (xl_info == XLOG_APPENDONLY_TRUNCATE)
 	{
 		xlaotruncate.target = xlaotarget;
-		mockrecord->main_data = (char *) &xlaotruncate;
+		XLogRecGetData(mockrecord) = (char *) &xlaotruncate;
 	}
 
 	/* mock to not find AO segment file */
@@ -63,8 +60,8 @@ ao_invalid_segment_file_test(uint8 xl_info)
 	expect_any(PathNameOpenFile, fileFlags);
 	will_return(PathNameOpenFile, -1);
 
-	/* XLogAOSegmentFile should be called with our mock relfilenode and segment file number */
-	expect_check(XLogAOSegmentFile, &rnode, check_relfilenode_function, &relfilenode);
+	/* XLogAOSegmentFile should be called with our mock relfilelocator and segment file number */
+	expect_check(XLogAOSegmentFile, &rnode, check_relfilelocator_function, &relfilelocator);
 	expect_value(XLogAOSegmentFile, segmentFileNum, xlaotarget.segment_filenum);
 	will_be_called(XLogAOSegmentFile);
 

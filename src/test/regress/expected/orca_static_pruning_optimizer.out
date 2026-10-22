@@ -160,21 +160,18 @@ WHERE b = 42
 $query$ AS qry \gset
 EXPLAIN (COSTS OFF, VERBOSE)
 :qry ;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: hash partitioning
                   QUERY PLAN                  
 ----------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: hp.a, hp.b
-   ->  Seq Scan on orca_static_pruning.hp0 hp
-         Output: hp.a, hp.b
+   Output: a, b
+   ->  Dynamic Seq Scan on orca_static_pruning.hp
+         Output: a, b
+         Number of partitions to scan: 1 (out of 2)
          Filter: (hp.b = 42)
- Optimizer: Postgres query optimizer
-(6 rows)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(8 rows)
 
 :qry ;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: hash partitioning
  a | b  
 ---+----
  0 | 42

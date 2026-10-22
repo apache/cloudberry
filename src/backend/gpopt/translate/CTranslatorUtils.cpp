@@ -114,6 +114,7 @@ CDXLTableDescr *
 CTranslatorUtils::GetTableDescr(CMemoryPool *mp, CMDAccessor *md_accessor,
 								CIdGenerator *id_generator,
 								const RangeTblEntry *rte,
+								const RTEPermissionInfo *perminfo,
 								ULONG assigned_query_id_for_target_rel,
 								BOOL *is_distributed_table	// output
 )
@@ -131,9 +132,9 @@ CTranslatorUtils::GetTableDescr(CMemoryPool *mp, CMDAccessor *md_accessor,
 				  GPOS_NEW(mp) CWStringConst(mp, rte->alias->aliasname), true)
 			: GPOS_NEW(mp) CMDName(mp, rel->Mdname().GetMDName());
 
-	ULONG required_perms = static_cast<ULONG>(rte->requiredPerms);
+	ULONG required_perms = static_cast<ULONG>(perminfo->requiredPerms);
 	CDXLTableDescr *table_descr = GPOS_NEW(mp) CDXLTableDescr(
-		mp, mdid, table_mdname, rte->checkAsUser, rte->rellockmode,
+		mp, mdid, table_mdname, perminfo->checkAsUser, rte->rellockmode,
 		required_perms, assigned_query_id_for_target_rel);
 
 	const ULONG len = rel->ColumnCount();
@@ -484,11 +485,10 @@ CTranslatorUtils::GetColumnDescriptorsFromRecord(CMemoryPool *mp,
 	ForThree(col_name, col_names, col_type, col_types, col_type_modifier,
 			 col_type_modifiers)
 	{
-		Value *value = (Value *) lfirst(col_name);
 		Oid coltype = lfirst_oid(col_type);
 		INT type_modifier = lfirst_int(col_type_modifier);
 
-		CHAR *col_name_char_array = strVal(value);
+		CHAR *col_name_char_array = strVal(lfirst(col_name));
 		CWStringDynamic *column_name =
 			CDXLUtils::CreateDynamicStringFromCharArray(mp,
 														col_name_char_array);
@@ -530,9 +530,7 @@ CTranslatorUtils::GetColumnDescriptorsFromRecord(CMemoryPool *mp,
 
 	ForEach(col_name, col_names)
 	{
-		Value *value = (Value *) lfirst(col_name);
-
-		CHAR *col_name_char_array = strVal(value);
+		CHAR *col_name_char_array = strVal(lfirst(col_name));
 		CWStringDynamic *column_name =
 			CDXLUtils::CreateDynamicStringFromCharArray(mp,
 														col_name_char_array);
@@ -918,7 +916,7 @@ CTranslatorUtils::GetColumnAttnosForGroupBy(
 			case GROUPING_SET_EMPTY:
 			{
 				col_attnos_arr_current = GPOS_NEW(mp) CBitSetArray(mp);
-				CBitSet *bset = GPOS_NEW(mp) CBitSet(mp);
+				CBitSet *bset = GPOS_NEW(mp) CBitSet(mp, num_cols);
 				col_attnos_arr_current->Append(bset);
 				break;
 			}
@@ -1113,11 +1111,12 @@ CTranslatorUtils::CreateGroupingSetsForRollup(CMemoryPool *mp,
 	GPOS_ASSERT(grouping_set->kind == GROUPING_SET_ROLLUP);
 	CBitSetArray *col_attnos_arr = GPOS_NEW(mp) CBitSetArray(mp);
 	ListCell *lc = nullptr;
-	CBitSet *current_result = GPOS_NEW(mp) CBitSet(mp);
+
+	CBitSet *current_result = GPOS_NEW(mp) CBitSet(mp, num_cols);
 	// Maintaining the order of grouping sets is essential because the
 	// UnionAll operator matches each child's distribution with the
 	// distribution of the first child
-	col_attnos_arr->Append(GPOS_NEW(mp) CBitSet(mp));
+	col_attnos_arr->Append(GPOS_NEW(mp) CBitSet(mp, num_cols));
 	ForEach(lc, grouping_set->content)
 	{
 		GroupingSet *gs_current = (GroupingSet *) lfirst(lc);
@@ -1152,8 +1151,9 @@ CTranslatorUtils::CreateGroupingSetsForCube(CMemoryPool *mp,
 	GPOS_ASSERT(grouping_set->kind == GROUPING_SET_CUBE);
 	CBitSetArray *col_attnos_arr = GPOS_NEW(mp) CBitSetArray(mp);
 
-	// add an empty set
-	col_attnos_arr->Append(GPOS_NEW(mp) CBitSet(mp));
+	// add an empty set — vec_size must match what CreateAttnoSetForGroupingSet
+	// produces (num_cols), otherwise Union below leaves misaligned links.
+	col_attnos_arr->Append(GPOS_NEW(mp) CBitSet(mp, num_cols));
 
 	ListCell *lc = nullptr;
 	ForEach(lc, grouping_set->content)
@@ -2173,9 +2173,9 @@ CTranslatorUtils::CreateDXLProjElemConstNULL(CMemoryPool *mp,
 //
 //---------------------------------------------------------------------------
 void
-CTranslatorUtils::CheckRTEPermissions(List *range_table_list)
+CTranslatorUtils::CheckRTEPermissions(List *range_table_list, List *rteperminfos)
 {
-	gpdb::CheckRTPermissions(range_table_list);
+	gpdb::CheckRTPermissions(range_table_list, rteperminfos);
 }
 
 

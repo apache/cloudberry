@@ -1270,7 +1270,7 @@ insert into qp_misc_jiras.tbl7286_test select i%10, '2009/01/01'::date + (i || '
 
 set gp_enable_agg_distinct=off;
 set gp_enable_agg_distinct_pruning=off;
-set statement_mem='1000kB';
+set statement_mem='2000kB';
 set optimizer_force_three_stage_scalar_dqa=off;
 
 select count(distinct d) from qp_misc_jiras.tbl7286_test;

@@ -18,7 +18,6 @@
 #include "access/xlogreader.h"
 #include "lib/stringinfo.h"
 #include "storage/fd.h"
-#include "storage/relfilenode.h"
 #include "storage/smgr.h"
 
 
@@ -28,7 +27,7 @@
 
 typedef struct
 {
-	RelFileNode node;
+	RelFileLocator node;
 	uint32		segment_filenum;
 	int64		offset;
 } xl_ao_target;
@@ -50,9 +49,9 @@ typedef struct
 	xl_ao_target target;
 } xl_ao_truncate;
 
-extern void xlog_ao_insert(RelFileNode relFileNode, int32 segmentFileNum,
+extern void xlog_ao_insert(RelFileLocator relFileNode, int32 segmentFileNum,
 			   int64 offset, void *buffer, int32 bufferLen);
-extern void xlog_ao_truncate(RelFileNode relFileNode, int32 segmentFileNum, int64 offset);
+extern void xlog_ao_truncate(RelFileLocator relFileNode, int32 segmentFileNum, int64 offset);
 
 
 extern void appendonly_redo(XLogReaderState *record);

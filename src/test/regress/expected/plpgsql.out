@@ -2485,6 +2485,33 @@ select refcursor_test2(20000, 20000) as "Should be false",
  f               | t
 (1 row)
 
+-- should fail
+create function constant_refcursor() returns refcursor as $$
+declare
+    rc constant refcursor;
+begin
+    open rc for select a from rc_test;
+    return rc;
+end
+$$ language plpgsql;
+select constant_refcursor();
+ERROR:  variable "rc" is declared CONSTANT
+CONTEXT:  PL/pgSQL function constant_refcursor() line 5 at OPEN
+-- but it's okay like this
+create or replace function constant_refcursor() returns refcursor as $$
+declare
+    rc constant refcursor := 'my_cursor_name';
+begin
+    open rc for select a from rc_test;
+    return rc;
+end
+$$ language plpgsql;
+select constant_refcursor();
+ constant_refcursor 
+--------------------
+ my_cursor_name
+(1 row)
+
 --
 -- tests for cursors with named parameter arguments
 --
@@ -2592,11 +2619,9 @@ select namedparmcursor_test7();
 ERROR:  division by zero
 CONTEXT:  SQL expression "42/0 AS p1, 77 AS p2"
 PL/pgSQL function namedparmcursor_test7() line 6 at OPEN
--- check that line comments work correctly within the argument list (there
--- is some special handling of this case in the code: the newline after the
--- comment must be preserved when the argument-evaluating query is
--- constructed, otherwise the comment effectively comments out the next
--- argument, too)
+-- check that line comments work correctly within the argument list
+-- (this used to require a special hack in the code; it no longer does,
+-- but let's keep the test anyway)
 create function namedparmcursor_test8() returns int4 as $$
 declare
   c1 cursor (p1 int, p2 int) for
@@ -3579,22 +3604,22 @@ select * from ret_query1();
 create type record_type as (x text, y int, z boolean);
 create or replace function ret_query2(lim int) returns setof record_type as $$
 begin
-    return query select md5(s.x::text), s.x, s.x > 0
+    return query select fipshash(s.x::text), s.x, s.x > 0
                  from generate_series(-8, lim) s (x) where s.x % 2 = 0;
 end;
 $$ language plpgsql;
 select * from ret_query2(8);
                 x                 | y  | z 
 ----------------------------------+----+---
- a8d2ec85eaf98407310b72eb73dda247 | -8 | f
- 596a3d04481816330f07e4f97510c28f | -6 | f
- 0267aaf632e87a63288a08331f22c7c3 | -4 | f
- 5d7b9adcbe1c629ec722529dd12e5129 | -2 | f
- cfcd208495d565ef66e7dff9f98764da |  0 | f
- c81e728d9d4c2f636f067f89cc14862c |  2 | t
- a87ff679a2f3e71d9181a67b7542122c |  4 | t
- 1679091c5a880faf6fb5e6087eb1b2dc |  6 | t
- c9f0f895fb98ab9159f51fd0297e236d |  8 | t
+ e91592205d3881e3ea35d66973bb4898 | -8 | f
+ 03b26944890929ff751653acb2f2af79 | -6 | f
+ e5e0093f285a4fb94c3fcc2ad7fd04ed | -4 | f
+ cf3bae39dd692048a8bf961182e6a34d | -2 | f
+ 5feceb66ffc86f38d952786c6d696c79 |  0 | f
+ d4735e3a265e16eee03f59718b9b5d03 |  2 | t
+ 4b227777d4dd1fc61c6f884f48641d02 |  4 | t
+ e7f6c011776e8db7cd330b54174fd76f |  6 | t
+ 2c624232cdd221771294dfbb310aca00 |  8 | t
 (9 rows)
 
 -- test EXECUTE USING
@@ -3657,6 +3682,9 @@ declare
   c2 cursor
        for select * from generate_series(41,43) i;
 begin
+  -- assign portal names to cursors to get stable output
+  c := 'c';
+  c2 := 'c2';
   for r in c(5,7) loop
     raise notice '% from %', r.i, c;
   end loop;
@@ -3799,6 +3827,22 @@ select i, j from forc_test;
 (10 rows)
 
 drop function forc01();
+-- it's okay to re-use a cursor variable name, even when bound
+do $$
+declare cnt int := 0;
+  c1 cursor for select * from forc_test;
+begin
+  for r1 in c1 loop
+    declare c1 cursor for select * from forc_test;
+    begin
+      for r2 in c1 loop
+        cnt := cnt + 1;
+      end loop;
+    end;
+  end loop;
+  raise notice 'cnt = %', cnt;
+end $$;
+NOTICE:  cnt = 100
 -- fail because cursor has no query bound to it
 create or replace function forc_bad() returns void as $$
 declare
@@ -4839,24 +4883,50 @@ NOTICE:  caught division by zero
 NOTICE:  caught division by zero
 NOTICE:  caught division by zero
 -- Check variable scoping -- a var is not available in its own or prior
--- default expressions.
-create function scope_test() returns int as $$
+-- default expressions, but it is available in later ones.
+do $$
+declare x int := x + 1;  -- error
+begin
+  raise notice 'x = %', x;
+end;
+$$;
+ERROR:  column "x" does not exist
+LINE 1: x + 1
+        ^
+QUERY:  x + 1
+CONTEXT:  PL/pgSQL function inline_code_block line 2 during statement block local variable initialization
+do $$
+declare y int := x + 1;  -- error
+        x int := 42;
+begin
+  raise notice 'x = %, y = %', x, y;
+end;
+$$;
+ERROR:  column "x" does not exist
+LINE 1: x + 1
+        ^
+QUERY:  x + 1
+CONTEXT:  PL/pgSQL function inline_code_block line 2 during statement block local variable initialization
+do $$
+declare x int := 42;
+        y int := x + 1;
+begin
+  raise notice 'x = %, y = %', x, y;
+end;
+$$;
+NOTICE:  x = 42, y = 43
+do $$
 declare x int := 42;
 begin
   declare y int := x + 1;
           x int := x + 2;
+          z int := x * 10;
   begin
-    return x * 100 + y;
+    raise notice 'x = %, y = %, z = %', x, y, z;
   end;
 end;
-$$ language plpgsql;
-select scope_test();
- scope_test 
-------------
-       4443
-(1 row)
-
-drop function scope_test();
+$$;
+NOTICE:  x = 44, y = 43, z = 440
 -- Check handling of conflicts between plpgsql vars and table columns.
 set plpgsql.variable_conflict = error;
 create function conflict_test() returns setof int8_tbl as $$
@@ -5364,7 +5434,7 @@ NOTICE:  outer_func() done
                20
 (1 row)
 
--- repeated call should to work
+-- repeated call should work
 select outer_outer_func(20);
 NOTICE:  calling down into outer_func()
 NOTICE:  calling down into inner_func()
@@ -5446,7 +5516,7 @@ NOTICE:  outer_func() done
                20
 (1 row)
 
--- repeated call should to work
+-- repeated call should work
 select outer_outer_func(20);
 NOTICE:  calling down into outer_func()
 NOTICE:  calling down into inner_func()
@@ -5467,6 +5537,33 @@ NOTICE:  outer_func() done
 drop function outer_outer_func(int);
 drop function outer_func(int);
 drop function inner_func(int);
+-- Test pg_routine_oid
+create function current_function(text)
+returns regprocedure as $$
+declare
+  fn_oid regprocedure;
+begin
+  get diagnostics fn_oid = pg_routine_oid;
+  return fn_oid;
+end;
+$$ language plpgsql;
+select current_function('foo');
+    current_function    
+------------------------
+ current_function(text)
+(1 row)
+
+drop function current_function(text);
+-- shouldn't fail in DO, even though there's no useful data
+do $$
+declare
+  fn_oid oid;
+begin
+  get diagnostics fn_oid = pg_routine_oid;
+  raise notice 'pg_routine_oid = %', fn_oid;
+end;
+$$;
+NOTICE:  pg_routine_oid = 0
 --
 -- Test ASSERT
 --

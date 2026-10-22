@@ -4,4 +4,5 @@ PREPARE TRANSACTION 'foo_prep_xact';
 ERROR:  PREPARE TRANSACTION is not yet supported in Apache Cloudberry
 -- PREPARE TRANSACTION should not work in utility-mode connections either
 \! PGOPTIONS='-c gp_role=utility' psql -X regression -c "BEGIN; PREPARE TRANSACTION 'foo_prep_xact';"
+BEGIN
 ERROR:  PREPARE TRANSACTION is not supported in utility mode

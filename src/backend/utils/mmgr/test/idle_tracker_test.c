@@ -11,7 +11,6 @@
  */
 #define EXPECT_EXCEPTION()     \
 	expect_any(ExceptionalCondition,conditionName); \
-	expect_any(ExceptionalCondition,errorType); \
 	expect_any(ExceptionalCondition,fileName); \
 	expect_any(ExceptionalCondition,lineNumber); \
     will_be_called_with_sideeffect(ExceptionalCondition, &_ExceptionalCondition, NULL);\
@@ -44,7 +43,7 @@ InitFakeSessionState(int activeProcessCount, int cleanupCountdown, RunawayStatus
  * back to the next available PG_CATCH();
  */
 static void
-_ExceptionalCondition()
+_ExceptionalCondition(void *arg)
 {
      PG_RE_THROW();
 }

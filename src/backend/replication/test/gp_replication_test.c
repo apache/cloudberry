@@ -32,7 +32,7 @@ expect_lwlock(LWLockMode lockmode, int count)
 		will_return(LWLockAcquire, true);
 
 #ifdef USE_ASSERT_CHECKING
-		expect_value_count(LWLockHeldByMe, l, FTSReplicationStatusLock, count);
+		expect_value_count(LWLockHeldByMe, lock, FTSReplicationStatusLock, count);
 		will_return_count(LWLockHeldByMe, true, count);
 #endif
 

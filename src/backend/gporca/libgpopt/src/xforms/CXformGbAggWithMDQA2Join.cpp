@@ -98,10 +98,21 @@ CXformGbAggWithMDQA2Join::PexprMDQAs2Join(CMemoryPool *mp, CExpression *pexpr)
 	GPOS_ASSERT((*pexpr)[1]->DeriveHasMultipleDistinctAggs());
 
 	// extract components
+	CLogicalGbAgg *popGbAgg = CLogicalGbAgg::PopConvert(pexpr->Pop());
 	CExpression *pexprChild = (*pexpr)[0];
+	CExpression *pexprAggList = (*pexpr)[1];	// GbAgg's scalar child
 
+	// Compute the columns actually needed by the GbAgg:
+	//		group-by keys + aggregate-argument references
+	// Clip to what the child can provide.
 	CColRefSet *pcrsChildOutput = pexprChild->DeriveOutputColumns();
-	CColRefArray *pdrgpcrChildOutput = pcrsChildOutput->Pdrgpcr(mp);
+	CColRefSet *pcrsAggListRefs = pexprAggList->DeriveUsedColumns();	// cols read by aggregate args
+	CColRefSet *pcrsUsed = GPOS_NEW(mp) CColRefSet(mp);
+	pcrsUsed->Include(popGbAgg->Pdrgpcr());		// group-by keys
+	pcrsUsed->Union(pcrsAggListRefs);			// agg-list refs
+	pcrsUsed->Intersection(pcrsChildOutput);	// clip to producible
+	CColRefArray *pdrgpcrChildOutput = pcrsUsed->Pdrgpcr(mp);
+	pcrsUsed->Release();
 
 	// create a CTE producer based on child expression
 	CCTEInfo *pcteinfo = COptCtxt::PoctxtFromTLS()->Pcteinfo();

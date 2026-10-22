@@ -4872,30 +4872,29 @@ analyze bar;
 set optimizer_segments = 3;
 set optimizer_nestloop_factor = 1.0;
 explain select foo_p.b, foo_p.t from foo_p left outer join bar on foo_p.a = bar.k  where foo_p.t is not null and foo_p.a = (array[1])[1];
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=10.28..366.35 rows=13416 width=31)
-   ->  Hash Right Join  (cost=10.28..187.47 rows=4472 width=31)
-         Hash Cond: (bar.k = foo_p.a)
-         ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..126.56 rows=2236 width=4)
-               ->  Seq Scan on bar  (cost=0.00..96.75 rows=745 width=4)
-                     Filter: (k = 1)
-         ->  Hash  (cost=10.21..10.21 rows=6 width=35)
-               ->  Append  (cost=0.00..10.21 rows=6 width=35)
-                     ->  Seq Scan on foo_p_1_prt_2 foo_p_1  (cost=0.00..1.83 rows=1 width=34)
-                           Filter: ((t IS NOT NULL) AND (a = 1))
-                     ->  Seq Scan on foo_p_1_prt_3 foo_p_2  (cost=0.00..1.83 rows=1 width=34)
-                           Filter: ((t IS NOT NULL) AND (a = 1))
-                     ->  Seq Scan on foo_p_1_prt_4 foo_p_3  (cost=0.00..1.83 rows=1 width=34)
-                           Filter: ((t IS NOT NULL) AND (a = 1))
-                     ->  Seq Scan on foo_p_1_prt_5 foo_p_4  (cost=0.00..1.83 rows=1 width=34)
-                           Filter: ((t IS NOT NULL) AND (a = 1))
-                     ->  Seq Scan on foo_p_1_prt_6 foo_p_5  (cost=0.00..1.83 rows=1 width=34)
-                           Filter: ((t IS NOT NULL) AND (a = 1))
-                     ->  Seq Scan on foo_p_1_prt_other foo_p_6  (cost=0.00..1.01 rows=1 width=40)
-                           Filter: ((t IS NOT NULL) AND (a = 1))
+                                              QUERY PLAN                                              
+------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10000001082.63 rows=13416 width=31)
+   ->  Nested Loop Left Join  (cost=10000000000.00..10000000903.75 rows=4472 width=31)
+         ->  Append  (cost=0.00..10.21 rows=6 width=35)
+               ->  Seq Scan on foo_p_1_prt_2 foo_p_1  (cost=0.00..1.83 rows=1 width=34)
+                     Filter: ((t IS NOT NULL) AND (a = 1))
+               ->  Seq Scan on foo_p_1_prt_3 foo_p_2  (cost=0.00..1.83 rows=1 width=34)
+                     Filter: ((t IS NOT NULL) AND (a = 1))
+               ->  Seq Scan on foo_p_1_prt_4 foo_p_3  (cost=0.00..1.83 rows=1 width=34)
+                     Filter: ((t IS NOT NULL) AND (a = 1))
+               ->  Seq Scan on foo_p_1_prt_5 foo_p_4  (cost=0.00..1.83 rows=1 width=34)
+                     Filter: ((t IS NOT NULL) AND (a = 1))
+               ->  Seq Scan on foo_p_1_prt_6 foo_p_5  (cost=0.00..1.83 rows=1 width=34)
+                     Filter: ((t IS NOT NULL) AND (a = 1))
+               ->  Seq Scan on foo_p_1_prt_other foo_p_6  (cost=0.00..1.01 rows=1 width=40)
+                     Filter: ((t IS NOT NULL) AND (a = 1))
+         ->  Materialize  (cost=0.00..137.74 rows=2236 width=4)
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..126.56 rows=2236 width=4)
+                     ->  Seq Scan on bar  (cost=0.00..96.75 rows=745 width=4)
+                           Filter: (k = 1)
  Optimizer: Postgres query optimizer
-(21 rows)
+(20 rows)
 
 reset optimizer_segments;
 drop table if exists foo_p;

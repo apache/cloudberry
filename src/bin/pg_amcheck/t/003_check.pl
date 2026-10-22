@@ -1,13 +1,13 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 use strict;
 use warnings;
 
-use PostgresNode;
-use TestLib;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
 
-use Test::More tests => 63;
+use Test::More;
 
 my ($node, $port, %corrupt_page, %remove_relation);
 
@@ -119,7 +119,7 @@ sub perform_all_corruptions()
 }
 
 # Test set-up
-$node = get_new_node('test');
+$node = PostgreSQL::Test::Cluster->new('test');
 $node->init;
 $node->append_conf('postgresql.conf', 'autovacuum=off');
 $node->start;
@@ -315,11 +315,11 @@ plan_to_remove_relation_file('db2', 's1.t1_btree');
 # Leave 'db3' uncorrupted
 #
 
-# Standard first arguments to TestLib functions
+# Standard first arguments to PostgreSQL::Test::Utils functions
 my @cmd = ('pg_amcheck', '-p', $port);
 
 # Regular expressions to match various expected output
-my $no_output_re               = qr/^$/;
+my $no_output_re = qr/^$/;
 my $line_pointer_corruption_re = qr/line pointer/;
 my $missing_file_re = qr/could not open file ".*": No such file or directory/;
 my $index_missing_relation_fork_re =
@@ -516,3 +516,5 @@ $node->command_checks_all(
 	[ @cmd, '-d', 'db1', '-d', 'db2', '-d', 'db3', '-S', 's*' ],
 	0, [$no_output_re], [$no_output_re],
 	'pg_amcheck excluding all corrupt schemas');
+
+done_testing();

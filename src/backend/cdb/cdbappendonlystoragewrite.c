@@ -262,7 +262,7 @@ AppendOnlyStorageWrite_FinishSession(AppendOnlyStorageWrite *storageWrite)
  */
 void
 AppendOnlyStorageWrite_TransactionCreateFile(AppendOnlyStorageWrite *storageWrite,
-											 RelFileNodeBackend *relFileNode,
+											 RelFileLocatorBackend *relFileNode,
 											 int32 segmentFileNum)
 {
 	Assert(segmentFileNum > 0);
@@ -281,7 +281,7 @@ AppendOnlyStorageWrite_TransactionCreateFile(AppendOnlyStorageWrite *storageWrit
 	 * a file exists in master but not in mirror, even if it's empty.
 	 */
 	if (storageWrite->needsWAL)
-		xlog_ao_insert(relFileNode->node, segmentFileNum, 0, NULL, 0);
+		xlog_ao_insert(relFileNode->locator, segmentFileNum, 0, NULL, 0);
 }
 
 /*
@@ -301,7 +301,7 @@ AppendOnlyStorageWrite_OpenFile(AppendOnlyStorageWrite *storageWrite,
 								int version,
 								int64 logicalEof,
 								int64 fileLen_uncompressed,
-								RelFileNodeBackend *relFileNode,
+								RelFileLocatorBackend *relFileNode,
 								int32 segmentFileNum)
 {
 	File		file;
@@ -409,7 +409,7 @@ AppendOnlyStorageWrite_FlushAndCloseFile(
 	 * is not enqueued for an AO segment file that is written to disk on
 	 * primary.  Temp tables are not crash safe, no need to fsync them.
 	 */
-	if (!RelFileNodeBackendIsTemp(storageWrite->relFileNode) &&
+	if (!RelFileLocatorBackendIsTemp(storageWrite->relFileNode) &&
 		storageWrite->smgrAO->smgr_FileSync(storageWrite->file, WAIT_EVENT_DATA_FILE_SYNC) != 0)
 		ereport(ERROR,
 				(errcode_for_file_access(),
@@ -422,7 +422,7 @@ AppendOnlyStorageWrite_FlushAndCloseFile(
 	storageWrite->file = -1;
 	storageWrite->formatVersion = -1;
 
-	MemSet(&storageWrite->relFileNode, 0, sizeof(RelFileNode));
+	MemSet(&storageWrite->relFileNode, 0, sizeof(RelFileLocator));
 	storageWrite->segmentFileNum = 0;
 }
 

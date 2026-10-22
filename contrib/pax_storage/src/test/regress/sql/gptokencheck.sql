@@ -1,0 +1,13 @@
+-- start
+--
+-- abs_srcdir     #is_transformed_to# @abs_srcdir@
+-- abs_builddir   #is_transformed_to# @abs_builddir@
+-- testtablespace #is_transformed_to# @testtablespace@
+-- DLSUFFIX       #is_transformed_to# @DLSUFFIX@
+-- hostname       #is_transformed_to# @hostname@
+-- curusername #is_transformed_to# @curusername@
+-- gp_syslocale      #is_transformed_to# @gp_syslocale@
+
+--
+-- 
+-- end

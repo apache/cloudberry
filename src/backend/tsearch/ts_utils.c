@@ -3,7 +3,7 @@
  * ts_utils.c
  *		various support functions
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  *
  *
  * IDENTIFICATION
@@ -88,8 +88,8 @@ readstoplist(const char *fname, StopList *s, char *(*wordop) (const char *))
 			char	   *pbuf = line;
 
 			/* Trim trailing space */
-			while (*pbuf && !t_isspace(pbuf))
-				pbuf += pg_mblen(pbuf);
+			while (*pbuf && !t_isspace_cstr(pbuf))
+				pbuf += pg_mblen_cstr(pbuf);
 			*pbuf = '\0';
 
 			/* Skip empty lines */
@@ -109,8 +109,7 @@ readstoplist(const char *fname, StopList *s, char *(*wordop) (const char *))
 				else
 				{
 					reallen *= 2;
-					stop = (char **) repalloc((void *) stop,
-											  sizeof(char *) * reallen);
+					stop = (char **) repalloc(stop, sizeof(char *) * reallen);
 				}
 			}
 
@@ -142,5 +141,5 @@ searchstoplist(StopList *s, char *key)
 {
 	return (s->stop && s->len > 0 &&
 			bsearch(&key, s->stop, s->len,
-					sizeof(char *), pg_qsort_strcmp)) ? true : false;
+					sizeof(char *), pg_qsort_strcmp));
 }

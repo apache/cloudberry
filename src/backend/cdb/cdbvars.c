@@ -13,7 +13,7 @@
  *
  *
  * NOTES
- *	  See src/backend/utils/misc/guc.c for variable external specification.
+ *	  See src/backend/utils/misc/guc.c for variable external specification
  *
  *-------------------------------------------------------------------------
  */
@@ -431,8 +431,8 @@ check_gp_role(char **newval, void **extra, GucSource source)
 	/* Force utility mode in a stand-alone backend. */
 	if (!IsPostmasterEnvironment && newrole != GP_ROLE_UTILITY)
 	{
-		elog(LOG, "gp_role forced to 'utility' in single-user mode");
-		*newval = strdup("utility");
+		elog(DEBUG1, "gp_role forced to 'utility' in single-user mode");
+		*newval = guc_strdup(ERROR, "utility");
 		return true;
 	}
 

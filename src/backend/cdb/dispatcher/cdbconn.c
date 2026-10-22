@@ -849,7 +849,7 @@ forwardQENotices(void)
 				if (notice->message)
 					appendStringInfoString(&buf, notice->message);
 				else
-					appendStringInfoString(&buf, _("missing error text"));
+					appendStringInfoString(&buf, ("missing error text"));
 
 				appendStringInfoChar(&buf, '\n');
 

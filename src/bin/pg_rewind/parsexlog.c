@@ -3,7 +3,7 @@
  * parsexlog.c
  *	  Functions for reading Write-Ahead-Log
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *-------------------------------------------------------------------------
@@ -44,7 +44,7 @@ static const char *RmgrNames[RM_MAX_ID + 1] = {
 static void extractPageInfo(XLogReaderState *record);
 
 static int	xlogreadfd = -1;
-static XLogSegNo xlogreadsegno = -1;
+static XLogSegNo xlogreadsegno = 0;
 static char xlogfpath[MAXPGPATH];
 
 typedef struct XLogPageReadPrivate
@@ -80,7 +80,7 @@ extractPageMap(const char *datadir, XLogRecPtr startpoint, int tliIndex,
 									XL_ROUTINE(.page_read = &SimpleXLogPageRead),
 									&private);
 	if (xlogreader == NULL)
-		pg_fatal("out of memory");
+		pg_fatal("out of memory while allocating a WAL reading processor");
 
 	XLogBeginRead(xlogreader, startpoint);
 	do
@@ -101,7 +101,6 @@ extractPageMap(const char *datadir, XLogRecPtr startpoint, int tliIndex,
 		}
 
 		extractPageInfo(xlogreader);
-
 	} while (xlogreader->EndRecPtr < endpoint);
 
 	/*
@@ -140,7 +139,7 @@ readOneRecord(const char *datadir, XLogRecPtr ptr, int tliIndex,
 									XL_ROUTINE(.page_read = &SimpleXLogPageRead),
 									&private);
 	if (xlogreader == NULL)
-		pg_fatal("out of memory");
+		pg_fatal("out of memory while allocating a WAL reading processor");
 
 	XLogBeginRead(xlogreader, ptr);
 	record = XLogReadRecord(xlogreader, &errormsg);
@@ -179,6 +178,8 @@ findLastCheckpoint(const char *datadir, XLogRecPtr forkptr, int tliIndex,
 	XLogReaderState *xlogreader;
 	char	   *errormsg;
 	XLogPageReadPrivate private;
+	XLogSegNo	current_segno = 0;
+	TimeLineID	current_tli = 0;
 
 	/*
 	 * The given fork pointer points to the end of the last common record,
@@ -200,7 +201,7 @@ findLastCheckpoint(const char *datadir, XLogRecPtr forkptr, int tliIndex,
 									XL_ROUTINE(.page_read = &SimpleXLogPageRead),
 									&private);
 	if (xlogreader == NULL)
-		pg_fatal("out of memory");
+		pg_fatal("out of memory while allocating a WAL reading processor");
 
 	searchptr = forkptr;
 	for (;;)
@@ -219,6 +220,25 @@ findLastCheckpoint(const char *datadir, XLogRecPtr forkptr, int tliIndex,
 			else
 				pg_fatal("could not find previous WAL record at %X/%X",
 						 LSN_FORMAT_ARGS(searchptr));
+		}
+
+		/* Detect if a new WAL file has been opened */
+		if (xlogreader->seg.ws_tli != current_tli ||
+			xlogreader->seg.ws_segno != current_segno)
+		{
+			char		xlogfname[MAXFNAMELEN];
+
+			snprintf(xlogfname, MAXFNAMELEN, XLOGDIR "/");
+
+			/* update curent values */
+			current_tli = xlogreader->seg.ws_tli;
+			current_segno = xlogreader->seg.ws_segno;
+
+			XLogFileName(xlogfname + sizeof(XLOGDIR),
+						 current_tli, current_segno, WalSegSz);
+
+			/* Track this filename as one to not remove */
+			keepwal_add_entry(xlogfname);
 		}
 
 		/*
@@ -378,7 +398,7 @@ extractPageInfo(XLogReaderState *record)
 
 	/* Is this a special record type that I recognize? */
 
-	if (rmid == RM_DBASE_ID && rminfo == XLOG_DBASE_CREATE)
+	if (rmid == RM_DBASE_ID && rminfo == XLOG_DBASE_CREATE_FILE_COPY)
 	{
 		/*
 		 * New databases can be safely ignored. It won't be present in the
@@ -388,6 +408,13 @@ extractPageInfo(XLogReaderState *record)
 		 * That's OK, though; WAL replay of creating the new database, from
 		 * the source systems's WAL, will re-copy the new database,
 		 * overwriting the database created in the target system.
+		 */
+	}
+	else if (rmid == RM_DBASE_ID && rminfo == XLOG_DBASE_CREATE_WAL_LOG)
+	{
+		/*
+		 * New databases can be safely ignored. It won't be present in the
+		 * source system, so it will be deleted.
 		 */
 	}
 	else if (rmid == RM_DBASE_ID && rminfo == XLOG_DBASE_DROP)
@@ -458,19 +485,20 @@ extractPageInfo(XLogReaderState *record)
 		}
 	}
 
-	for (block_id = 0; block_id <= record->max_block_id; block_id++)
+	for (block_id = 0; block_id <= XLogRecMaxBlockId(record); block_id++)
 	{
-		RelFileNode rnode;
+		RelFileLocator rlocator;
 		ForkNumber	forknum;
 		BlockNumber blkno;
 
-		if (!XLogRecGetBlockTag(record, block_id, &rnode, &forknum, &blkno))
+		if (!XLogRecGetBlockTagExtended(record, block_id,
+										&rlocator, &forknum, &blkno, NULL))
 			continue;
 
 		/* We only care about the main fork; others are copied in toto */
 		if (forknum != MAIN_FORKNUM)
 			continue;
 
-		process_target_wal_block_change(forknum, rnode, blkno);
+		process_target_wal_block_change(forknum, rlocator, blkno);
 	}
 }

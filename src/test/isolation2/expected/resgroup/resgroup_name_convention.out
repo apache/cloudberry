@@ -388,7 +388,7 @@ LINE 1: CREATE RESOURCE GROUP 'must_fail' WITH (cpu_max_percent=10);
 
 -- does not support leading numbers
 CREATE RESOURCE GROUP 0_must_fail WITH (cpu_max_percent=10);
-ERROR:  syntax error at or near "0"
+ERROR:  trailing junk after numeric literal at or near "0_must_fail"
 LINE 1: CREATE RESOURCE GROUP 0_must_fail WITH (cpu_max_percent=10);
                               ^
 

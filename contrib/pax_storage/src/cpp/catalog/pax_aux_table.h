@@ -96,18 +96,18 @@ class CCPaxAuxTable final {
   ~CCPaxAuxTable() = delete;
 
   static void PaxAuxRelationSetNewFilenode(Relation rel,
-                                           const RelFileNode *newrnode,
+                                           const RelFileLocator *newrnode,
                                            char persistence);
 
   static void PaxAuxRelationNontransactionalTruncate(Relation rel);
 
-  static void PaxAuxRelationCopyData(Relation rel, const RelFileNode *newrnode,
+  static void PaxAuxRelationCopyData(Relation rel, const RelFileLocator *newrnode,
                                      bool createnewpath = true);
 
   static void PaxAuxRelationCopyDataForCluster(Relation old_rel,
                                                Relation new_rel);
 
-  static void PaxAuxRelationFileUnlink(RelFileNode node, BackendId backend,
+  static void PaxAuxRelationFileUnlink(RelFileLocator node, BackendId backend,
                                        bool delete_topleveldir, bool need_wal);
 };
 

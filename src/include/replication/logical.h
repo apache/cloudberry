@@ -2,7 +2,7 @@
  * logical.h
  *	   PostgreSQL logical decoding coordination
  *
- * Copyright (c) 2012-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2012-2023, PostgreSQL Global Development Group
  *
  *-------------------------------------------------------------------------
  */
@@ -26,7 +26,8 @@ typedef LogicalOutputPluginWriterWrite LogicalOutputPluginWriterPrepareWrite;
 
 typedef void (*LogicalOutputPluginWriterUpdateProgress) (struct LogicalDecodingContext *lr,
 														 XLogRecPtr Ptr,
-														 TransactionId xid
+														 TransactionId xid,
+														 bool skipped_xact
 );
 
 typedef struct LogicalDecodingContext
@@ -93,12 +94,28 @@ typedef struct LogicalDecodingContext
 	bool		twophase;
 
 	/*
+	 * Is two-phase option given by output plugin?
+	 *
+	 * This flag indicates that the plugin passed in the two-phase option as
+	 * part of the START_STREAMING command. We can't rely solely on the
+	 * twophase flag which only tells whether the plugin provided all the
+	 * necessary two-phase callbacks.
+	 */
+	bool		twophase_opt_given;
+
+	/*
 	 * State for writing output.
 	 */
 	bool		accept_writes;
 	bool		prepared_write;
 	XLogRecPtr	write_location;
 	TransactionId write_xid;
+
+	/*
+	 * True if the logical decoding context being used for the creation
+	 * of a logical replication slot.
+	 */
+	bool		in_create;
 } LogicalDecodingContext;
 
 
@@ -123,7 +140,8 @@ extern void DecodingContextFindStartpoint(LogicalDecodingContext *ctx);
 extern bool DecodingContextReady(LogicalDecodingContext *ctx);
 extern void FreeDecodingContext(LogicalDecodingContext *ctx);
 
-extern void LogicalIncreaseXminForSlot(XLogRecPtr lsn, TransactionId xmin);
+extern void LogicalIncreaseXminForSlot(XLogRecPtr current_lsn,
+									   TransactionId xmin);
 extern void LogicalIncreaseRestartDecodingForSlot(XLogRecPtr current_lsn,
 												  XLogRecPtr restart_lsn);
 extern void LogicalConfirmReceivedLocation(XLogRecPtr lsn);

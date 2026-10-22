@@ -255,6 +255,50 @@ SELECT comp();
 
 DROP TABLE T;
 
+-- Test domains with default value for table rewrite.
+CREATE DOMAIN domain1 AS int DEFAULT 11;  -- constant
+CREATE DOMAIN domain2 AS int DEFAULT 10 + (random() * 10)::int;  -- volatile
+CREATE DOMAIN domain3 AS text DEFAULT foo(4);  -- stable
+CREATE DOMAIN domain4 AS text[]
+  DEFAULT ('{"This", "is", "' || foo(4) || '","the", "real", "world"}')::TEXT[];
+
+CREATE TABLE t2 (a domain1);
+INSERT INTO t2 VALUES (1),(2);
+
+-- no table rewrite
+ALTER TABLE t2 ADD COLUMN b domain1 default 3;
+
+SELECT attnum, attname, atthasmissing, atthasdef, attmissingval
+FROM pg_attribute
+WHERE attnum > 0 AND attrelid = 't2'::regclass
+ORDER BY attnum;
+
+-- table rewrite should happen
+ALTER TABLE t2 ADD COLUMN c domain3 default left(random()::text,3);
+
+-- no table rewrite
+ALTER TABLE t2 ADD COLUMN d domain4;
+
+SELECT attnum, attname, atthasmissing, atthasdef, attmissingval
+FROM pg_attribute
+WHERE attnum > 0 AND attrelid = 't2'::regclass
+ORDER BY attnum;
+
+-- table rewrite should happen
+ALTER TABLE t2 ADD COLUMN e domain2;
+
+SELECT attnum, attname, atthasmissing, atthasdef, attmissingval
+FROM pg_attribute
+WHERE attnum > 0 AND attrelid = 't2'::regclass
+ORDER BY attnum;
+
+SELECT a, b, length(c) = 3 as c_ok, d, e >= 10 as e_ok FROM t2;
+
+DROP TABLE t2;
+DROP DOMAIN domain1;
+DROP DOMAIN domain2;
+DROP DOMAIN domain3;
+DROP DOMAIN domain4;
 DROP FUNCTION foo(INT);
 
 -- Fall back to full rewrite for volatile expressions
@@ -274,7 +318,20 @@ ALTER TABLE T ADD COLUMN c2 TIMESTAMP DEFAULT clock_timestamp();
 
 SELECT comp();
 
+-- check that we notice insertion of a volatile default argument
+CREATE FUNCTION foolme(timestamptz DEFAULT clock_timestamp())
+  RETURNS timestamptz
+  IMMUTABLE AS 'select $1' LANGUAGE sql;
+ALTER TABLE T ADD COLUMN c3 timestamptz DEFAULT foolme();
+
+-- start_ignore
+SELECT attname, atthasmissing, attmissingval FROM pg_attribute
+  WHERE attrelid = 't'::regclass AND attnum > 0
+  ORDER BY attnum;
+-- end_ignore
+
 DROP TABLE T;
+DROP FUNCTION foolme(timestamptz);
 
 -- Simple querie
 CREATE TABLE T (pk INT NOT NULL PRIMARY KEY);
@@ -327,8 +384,7 @@ EXPLAIN (VERBOSE TRUE, COSTS FALSE)
 SELECT * FROM T WHERE c_bigint > -1 ORDER BY c_bigint, c_text, pk LIMIT 10;
 
 --  DELETE with RETURNING
--- pax not support delete returning
--- DELETE FROM T WHERE pk BETWEEN 10 AND 20 RETURNING *;
+DELETE FROM T WHERE pk BETWEEN 10 AND 20 RETURNING *;
 EXPLAIN (VERBOSE TRUE, COSTS FALSE)
 DELETE FROM T WHERE pk BETWEEN 10 AND 20 RETURNING *;
 
@@ -414,8 +470,7 @@ CREATE TABLE t (id serial PRIMARY KEY, a int, b int, c int);
 INSERT INTO t (a,b,c) VALUES (1,2,3);
 ALTER TABLE t ADD COLUMN x int NOT NULL DEFAULT 4;
 ALTER TABLE t ADD COLUMN y int NOT NULL DEFAULT 5;
--- no support update trigger in pax
--- CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
+CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
 SELECT * FROM t;
 UPDATE t SET y = 2;
 SELECT * FROM t;
@@ -426,7 +481,7 @@ CREATE TABLE t (id serial PRIMARY KEY, a int, b int, c int);
 INSERT INTO t (a,b,c) VALUES (1,2,3);
 ALTER TABLE t ADD COLUMN x int NOT NULL DEFAULT 4;
 ALTER TABLE t ADD COLUMN y int;
--- CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
+CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
 SELECT * FROM t;
 UPDATE t SET y = 2;
 SELECT * FROM t;
@@ -437,7 +492,7 @@ CREATE TABLE t (id serial PRIMARY KEY, a int, b int, c int);
 INSERT INTO t (a,b,c) VALUES (1,2,3);
 ALTER TABLE t ADD COLUMN x int;
 ALTER TABLE t ADD COLUMN y int NOT NULL DEFAULT 5;
--- CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
+CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
 SELECT * FROM t;
 UPDATE t SET y = 2;
 SELECT * FROM t;
@@ -448,7 +503,7 @@ CREATE TABLE t (id serial PRIMARY KEY, a int, b int, c int);
 INSERT INTO t (a,b,c) VALUES (1,2,3);
 ALTER TABLE t ADD COLUMN x int;
 ALTER TABLE t ADD COLUMN y int;
--- CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
+CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
 SELECT * FROM t;
 UPDATE t SET y = 2;
 SELECT * FROM t;
@@ -460,7 +515,7 @@ CREATE TABLE t (id serial PRIMARY KEY, a int, b int, c int);
 INSERT INTO t (a,b,c) VALUES (1,2,NULL);
 ALTER TABLE t ADD COLUMN x int NOT NULL DEFAULT 4;
 ALTER TABLE t ADD COLUMN y int NOT NULL DEFAULT 5;
--- CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
+CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
 SELECT * FROM t;
 UPDATE t SET y = 2;
 SELECT * FROM t;
@@ -471,7 +526,7 @@ CREATE TABLE t (id serial PRIMARY KEY, a int, b int, c int);
 INSERT INTO t (a,b,c) VALUES (1,2,NULL);
 ALTER TABLE t ADD COLUMN x int NOT NULL DEFAULT 4;
 ALTER TABLE t ADD COLUMN y int;
--- CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
+CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
 SELECT * FROM t;
 UPDATE t SET y = 2;
 SELECT * FROM t;
@@ -482,7 +537,7 @@ CREATE TABLE t (id serial PRIMARY KEY, a int, b int, c int);
 INSERT INTO t (a,b,c) VALUES (1,2,NULL);
 ALTER TABLE t ADD COLUMN x int;
 ALTER TABLE t ADD COLUMN y int NOT NULL DEFAULT 5;
--- CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
+CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
 SELECT * FROM t;
 UPDATE t SET y = 2;
 SELECT * FROM t;
@@ -493,7 +548,7 @@ CREATE TABLE t (id serial PRIMARY KEY, a int, b int, c int);
 INSERT INTO t (a,b,c) VALUES (1,2,NULL);
 ALTER TABLE t ADD COLUMN x int;
 ALTER TABLE t ADD COLUMN y int;
--- CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
+CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
 SELECT * FROM t;
 UPDATE t SET y = 2;
 SELECT * FROM t;

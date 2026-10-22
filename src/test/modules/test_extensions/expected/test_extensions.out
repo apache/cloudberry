@@ -277,7 +277,6 @@ ERROR:  table ext_cine_tab1 is not a member of extension "test_ext_cine"
 DETAIL:  An extension may only use CREATE ... IF NOT EXISTS to skip object creation if the conflicting object is one that it already owns.
 DROP TABLE ext_cine_tab1;
 CREATE TABLE ext_cine_tab2 AS SELECT 42 AS y;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 CREATE EXTENSION test_ext_cine;  -- fail
 ERROR:  table ext_cine_tab2 is not a member of extension "test_ext_cine"
 DETAIL:  An extension may only use CREATE ... IF NOT EXISTS to skip object creation if the conflicting object is one that it already owns.
@@ -320,3 +319,128 @@ CREATE SCHEMA "has space";
 CREATE EXTENSION test_ext_extschema SCHEMA has$dollar;
 ERROR:  invalid character in extension "test_ext_extschema" schema: must not contain any of ""$'\"
 CREATE EXTENSION test_ext_extschema SCHEMA "has space";
+--
+-- Test extension with objects outside the extension's schema.
+--
+CREATE SCHEMA test_func_dep1;
+CREATE SCHEMA test_func_dep2;
+CREATE SCHEMA test_func_dep3;
+CREATE EXTENSION test_ext_req_schema1 SCHEMA test_func_dep1;
+ALTER FUNCTION test_func_dep1.dep_req1() SET SCHEMA test_func_dep2;
+SELECT pg_describe_object(classid, objid, objsubid) as obj,
+       pg_describe_object(refclassid, refobjid, refobjsubid) as objref,
+       deptype
+  FROM pg_depend
+  WHERE classid = 'pg_extension'::regclass AND
+        objid = (SELECT oid FROM pg_extension WHERE extname = 'test_ext_req_schema1')
+  ORDER BY 1, 2;
+              obj               |        objref         | deptype 
+--------------------------------+-----------------------+---------
+ extension test_ext_req_schema1 | schema test_func_dep1 | n
+(1 row)
+
+-- fails, as function dep_req1 is not in the same schema as the extension.
+ALTER EXTENSION test_ext_req_schema1 SET SCHEMA test_func_dep3;
+ERROR:  extension "test_ext_req_schema1" does not support SET SCHEMA
+DETAIL:  function test_func_dep2.dep_req1() is not in the extension's schema "test_func_dep1"
+-- Move back the function, and the extension can be moved.
+ALTER FUNCTION test_func_dep2.dep_req1() SET SCHEMA test_func_dep1;
+ALTER EXTENSION test_ext_req_schema1 SET SCHEMA test_func_dep3;
+SELECT pg_describe_object(classid, objid, objsubid) as obj,
+       pg_describe_object(refclassid, refobjid, refobjsubid) as objref,
+       deptype
+  FROM pg_depend
+  WHERE classid = 'pg_extension'::regclass AND
+        objid = (SELECT oid FROM pg_extension WHERE extname = 'test_ext_req_schema1')
+  ORDER BY 1, 2;
+              obj               |        objref         | deptype 
+--------------------------------+-----------------------+---------
+ extension test_ext_req_schema1 | schema test_func_dep3 | n
+(1 row)
+
+DROP EXTENSION test_ext_req_schema1 CASCADE;
+DROP SCHEMA test_func_dep1;
+DROP SCHEMA test_func_dep2;
+DROP SCHEMA test_func_dep3;
+--
+-- Test @extschema:extname@ syntax and no_relocate option
+--
+CREATE EXTENSION test_ext_req_schema1 SCHEMA has$dollar;
+CREATE EXTENSION test_ext_req_schema3 CASCADE;
+NOTICE:  installing required extension "test_ext_req_schema2"
+ERROR:  invalid character in extension "test_ext_req_schema1" schema: must not contain any of ""$'\"
+DROP EXTENSION test_ext_req_schema1;
+CREATE SCHEMA test_s_dep;
+CREATE EXTENSION test_ext_req_schema1 SCHEMA test_s_dep;
+CREATE EXTENSION test_ext_req_schema3 CASCADE;
+NOTICE:  installing required extension "test_ext_req_schema2"
+SELECT test_s_dep.dep_req1();
+ dep_req1 
+----------
+ req1
+(1 row)
+
+SELECT dep_req2();
+ dep_req2  
+-----------
+ req1 req2
+(1 row)
+
+SELECT dep_req3();
+ dep_req3  
+-----------
+ req1 req3
+(1 row)
+
+SELECT dep_req3b();
+    dep_req3b    
+-----------------
+ req1 req2 req3b
+(1 row)
+
+CREATE SCHEMA test_s_dep2;
+ALTER EXTENSION test_ext_req_schema1 SET SCHEMA test_s_dep2;  -- fails
+ERROR:  cannot SET SCHEMA of extension "test_ext_req_schema1" because other extensions prevent it
+DETAIL:  Extension "test_ext_req_schema3" requests no relocation of extension "test_ext_req_schema1".
+ALTER EXTENSION test_ext_req_schema2 SET SCHEMA test_s_dep;  -- allowed
+SELECT test_s_dep.dep_req1();
+ dep_req1 
+----------
+ req1
+(1 row)
+
+SELECT test_s_dep.dep_req2();
+ dep_req2  
+-----------
+ req1 req2
+(1 row)
+
+SELECT dep_req3();
+ dep_req3  
+-----------
+ req1 req3
+(1 row)
+
+SELECT dep_req3b();  -- fails
+ERROR:  function public.dep_req2() does not exist
+LINE 1:  SELECT public.dep_req2() || ' req3b' 
+                ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+QUERY:   SELECT public.dep_req2() || ' req3b' 
+CONTEXT:  SQL function "dep_req3b" during startup
+DROP EXTENSION test_ext_req_schema3;
+ALTER EXTENSION test_ext_req_schema1 SET SCHEMA test_s_dep2;  -- now ok
+SELECT test_s_dep2.dep_req1();
+ dep_req1 
+----------
+ req1
+(1 row)
+
+SELECT test_s_dep.dep_req2();
+ dep_req2  
+-----------
+ req1 req2
+(1 row)
+
+DROP EXTENSION test_ext_req_schema1 CASCADE;
+NOTICE:  drop cascades to extension test_ext_req_schema2

@@ -53,7 +53,7 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
                        ->  Result  (cost=0.00..0.01 rows=1 width=32)
                        ->  Result  (cost=0.00..0.01 rows=1 width=32)
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..2.12 rows=4 width=36)
-         ->  Split  (cost=0.00..2.04 rows=4 width=36)
+         ->  Split Update  (cost=0.00..2.04 rows=4 width=36)
                ->  Append  (cost=0.00..2.04 rows=2 width=36)
                      ->  Seq Scan on dml_14027_union_s_1_prt_2 dml_14027_union_s_1  (cost=0.00..1.02 rows=1 width=36)
                      ->  Seq Scan on dml_14027_union_s_1_prt_def dml_14027_union_s_2  (cost=0.00..1.02 rows=1 width=36)

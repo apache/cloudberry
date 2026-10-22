@@ -454,7 +454,15 @@ size_t PaxDeltaDecoder<T>::Decoding() {
 
     if (remaining < mini_blocks_per_block_) break;
 
+    // VLA-with-initializer is a GCC extension; clang rejects it. Keep
+    // the (zero-overhead) stack VLA on gcc and only fall back to a
+    // heap std::vector under clang so Linux gcc performance is
+    // unchanged.
+#if defined(__clang__)
+    std::vector<uint8_t> bit_widths(mini_blocks_per_block_, 0);
+#else
     uint8_t bit_widths[mini_blocks_per_block_] = {0};
+#endif
     for (uint32_t i = 0; i < mini_blocks_per_block_; ++i) {
       bit_widths[i] = *p++;
       --remaining;

@@ -305,8 +305,8 @@ AlterResqueueCapabilityEntry(Oid queueid,
 		Oid		 resTypeOid = InvalidOid;
 		int		 resTypeInt = 0;
 		List	*pentry		= NIL;
-		Value	*pKeyVal	= NULL;
-		Value	*pStrVal	= NULL;
+		String 	*pKeyVal	= NULL;
+		String	*pStrVal	= NULL;
 
 		if (!bWithout && (strcmp(defel->defname, "withoutliststart") == 0))
 		{
@@ -462,7 +462,7 @@ AlterResqueueCapabilityEntry(Oid queueid,
 		while (HeapTupleIsValid(tuple = systable_getnext(sscan)))
 		{
 			List	   *pentry;
-			Value	   *pResnameVal;
+			String 	   *pResnameVal;
 			char	   *default_str;
 			Datum		default_datum;
 			bool		isnull = false;

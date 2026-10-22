@@ -1,20 +1,20 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 use strict;
 use warnings;
-use TestLib;
-use Test::More tests => 42;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 program_help_ok('pg_archivecleanup');
 program_version_ok('pg_archivecleanup');
 program_options_handling_ok('pg_archivecleanup');
 
-my $tempdir = TestLib::tempdir;
+my $tempdir = PostgreSQL::Test::Utils::tempdir;
 
 my @walfiles = (
 	'00000001000000370000000C.gz', '00000001000000370000000D',
-	'00000001000000370000000E',    '00000001000000370000000F.partial',);
+	'00000001000000370000000E', '00000001000000370000000F.partial',);
 
 sub create_files
 {
@@ -57,8 +57,10 @@ command_fails_like(
 {
 	# like command_like but checking stderr
 	my $stderr;
-	my $result = IPC::Run::run [ 'pg_archivecleanup', '-d', '-n', $tempdir,
-		$walfiles[2] ], '2>', \$stderr;
+	my $result =
+	  IPC::Run::run [ 'pg_archivecleanup', '-d', '-n', $tempdir,
+		$walfiles[2] ],
+	  '2>', \$stderr;
 	ok($result, "pg_archivecleanup dry run: exit code 0");
 	like(
 		$stderr,
@@ -98,6 +100,8 @@ sub run_check
 	return;
 }
 
-run_check('',                 'pg_archivecleanup');
-run_check('.partial',         'pg_archivecleanup with .partial file');
+run_check('', 'pg_archivecleanup');
+run_check('.partial', 'pg_archivecleanup with .partial file');
 run_check('.00000020.backup', 'pg_archivecleanup with .backup file');
+
+done_testing();

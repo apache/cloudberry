@@ -24,6 +24,7 @@
 #include "storage/lock.h"
 #include "storage/lwlock.h"
 #include "storage/relfilenode.h"
+#include "storage/relfilelocator.h"
 #include "postmaster/bgworker.h"
 
 #include "utils/hsearch.h"
@@ -268,7 +269,7 @@ extern void init_disk_quota_shmem(void);
 extern void init_disk_quota_model(uint32 id);
 extern void refresh_disk_quota_model(bool force);
 extern bool check_diskquota_state_is_ready(void);
-extern bool quota_check_common(Oid reloid, RelFileNode *relfilenode);
+extern bool quota_check_common(Oid reloid, RelFileLocator *relfilenode);
 
 /* quotaspi interface */
 extern void init_disk_quota_hook(void);
@@ -282,7 +283,7 @@ extern int      SEGCOUNT;
 extern int      worker_spi_get_extension_version(int *major, int *minor);
 extern void     truncateStringInfo(StringInfo str, int nchars);
 extern List    *get_rel_oid_list(bool is_init);
-extern int64    calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage, Oid relam);
+extern int64    calculate_relation_size_all_forks(RelFileLocatorBackend *rnode, char relstorage, Oid relam);
 extern Relation diskquota_relation_open(Oid relid);
 extern bool     get_rel_name_namespace(Oid relid, Oid *nsOid, char *relname);
 extern List    *diskquota_get_index_list(Oid relid);

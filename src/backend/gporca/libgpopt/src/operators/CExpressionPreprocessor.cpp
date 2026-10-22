@@ -22,6 +22,7 @@
 #include "gpopt/base/CConstraintInterval.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/base/CUtils.h"
+#include "gpopt/eval/IConstExprEvaluator.h"
 #include "gpopt/exception.h"
 #include "gpopt/mdcache/CMDAccessor.h"
 #include "gpopt/operators/CDedupSupersetPreprocessor.h"
@@ -49,6 +50,9 @@
 #include "gpopt/operators/COrderedAggPreprocessor.h"
 #include "gpopt/operators/CPredicateUtils.h"
 #include "gpopt/operators/CScalarCmp.h"
+#include "gpopt/operators/CScalarConst.h"
+#include "gpopt/operators/CScalarFunc.h"
+#include "gpopt/operators/CScalarIdent.h"
 #include "gpopt/operators/CScalarNAryJoinPredList.h"
 #include "gpopt/operators/CScalarProjectElement.h"
 #include "gpopt/operators/CScalarProjectList.h"
@@ -59,6 +63,7 @@
 #include "gpopt/optimizer/COptimizerConfig.h"
 #include "gpopt/translate/CTranslatorDXLToExpr.h"
 #include "gpopt/xforms/CXform.h"
+#include "naucrates/base/IDatumBool.h"
 #include "naucrates/md/IMDScalarOp.h"
 #include "naucrates/md/IMDType.h"
 #include "naucrates/statistics/CStatistics.h"
@@ -2848,12 +2853,28 @@ CExpressionPreprocessor::PrunePartitions(CMemoryPool *mp, CExpression *expr)
 			CLogicalDynamicGet::PopConvert((*expr)[0]->Pop());
 
 		CColRefSetArray *pdrgpcrsChild = nullptr;
-		// As of now, partition's default opfamily is btree
-		// ORCA doesn't support hash partition yet
+		// pred_cnstr captures predicates on the partition key as a btree interval
+		// constraint, used to statically prune range/list partitions. Hash
+		// partitions have no btree-interval form and are pruned separately below
+		// via FHashPartitionPruned().
 		CConstraint *pred_cnstr = CConstraint::PcnstrFromScalarExpr(
 			mp, filter_pred, &pdrgpcrsChild, false /* infer_nulls_as*/,
 			IMDIndex::EmdindBtree);
 		CRefCount::SafeRelease(pdrgpcrsChild);
+
+		// For hash-partitioned tables ORCA cannot build btree interval
+		// constraints, so static pruning is done separately by evaluating each
+		// leaf's satisfies_hash_partition() qual against the query's equality
+		// predicates (see FHashPartitionPruned).
+		const IMDRelation *root_rel =
+			mda->RetrieveRel(dyn_get->Ptabdesc()->MDId());
+		BOOL fHashPartitioned =
+			root_rel->IsPartitioned() &&
+			IMDRelation::ErelpartitionHash == root_rel->PartTypeAtLevel(0);
+		CExpressionArray *pdrgpexprConjuncts =
+			fHashPartitioned
+				? CPredicateUtils::PdrgpexprConjuncts(mp, filter_pred)
+				: nullptr;
 
 		IMdIdArray *selected_partition_mdids = GPOS_NEW(mp) IMdIdArray(mp);
 		CConstraintArray *selected_partition_cnstrs =
@@ -2866,9 +2887,26 @@ CExpressionPreprocessor::PrunePartitions(CMemoryPool *mp, CExpression *expr)
 			IMDId *part_mdid = (*all_partition_mdids)[ul];
 			const IMDRelation *partrel = mda->RetrieveRel(part_mdid);
 
-			CConstraint *rel_cnstr = PcnstrFromChildPartition(
-				partrel, dyn_get->PdrgpcrOutput(),
-				(*dyn_get->GetRootColMappingPerPart())[ul]);
+			if (fHashPartitioned &&
+				FHashPartitionPruned(
+					mp, partrel, dyn_get->PdrgpcrOutput(),
+					(*dyn_get->GetRootColMappingPerPart())[ul],
+					pdrgpexprConjuncts))
+			{
+				// this hash leaf cannot match the equality predicates: prune it
+				continue;
+			}
+
+			// For hash partitions PcnstrFromChildPartition always returns a null
+			// btree constraint (the qual is satisfies_hash_partition()), so skip
+			// the wasted DXL translation and keep rel_cnstr null.
+			CConstraint *rel_cnstr = nullptr;
+			if (!fHashPartitioned)
+			{
+				rel_cnstr = PcnstrFromChildPartition(
+					partrel, dyn_get->PdrgpcrOutput(),
+					(*dyn_get->GetRootColMappingPerPart())[ul]);
+			}
 
 			CConstraint *pcnstr = nullptr;
 			{
@@ -2895,9 +2933,12 @@ CExpressionPreprocessor::PrunePartitions(CMemoryPool *mp, CExpression *expr)
 				foreign_server_mdids->Append(foreign_server_mdid);
 				part_mdid->AddRef();
 				selected_partition_mdids->Append(part_mdid);
-				rel_cnstr = PcnstrFromChildPartition(
-					partrel, dyn_get->PdrgpcrOutput(),
-					(*dyn_get->GetRootColMappingPerPart())[ul]);
+				if (!fHashPartitioned)
+				{
+					rel_cnstr = PcnstrFromChildPartition(
+						partrel, dyn_get->PdrgpcrOutput(),
+						(*dyn_get->GetRootColMappingPerPart())[ul]);
+				}
 				if (rel_cnstr)
 				{
 					selected_partition_cnstrs->Append(rel_cnstr);
@@ -2906,6 +2947,7 @@ CExpressionPreprocessor::PrunePartitions(CMemoryPool *mp, CExpression *expr)
 			CRefCount::SafeRelease(pcnstr);
 		}
 		CRefCount::SafeRelease(pred_cnstr);
+		CRefCount::SafeRelease(pdrgpexprConjuncts);
 
 		if (selected_partition_mdids->Size() == 0)
 		{
@@ -2958,21 +3000,18 @@ CExpressionPreprocessor::PrunePartitions(CMemoryPool *mp, CExpression *expr)
 	return GPOS_NEW(mp) CExpression(mp, pop, children);
 }
 
-// Translate the part constraint of a child partition into an ORCA expr using
-// corresponding colrefs of the root table, instead of those from the child
-// partition.
-CConstraint *
-CExpressionPreprocessor::PcnstrFromChildPartition(
-	const IMDRelation *partrel, CColRefArray *pdrgpcrOutput,
+// Translate a child partition's stored part-constraint DXL into an ORCA
+// CExpression using the corresponding colrefs of the root table, instead of
+// those from the child partition. Returns NULL if the child has no stored
+// constraint (e.g. a default partition).
+CExpression *
+CExpressionPreprocessor::PexprPartConstraintFromChild(
+	CMemoryPool *mp, const IMDRelation *partrel, CColRefArray *pdrgpcrOutput,
 	ColRefToUlongMap *root_col_mapping)
 {
 	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
-	CMemoryPool *mp = COptCtxt::PoctxtFromTLS()->Pmp();
-
-	CExpression *part_constraint_expr = nullptr;
 
 	CDXLNode *dxlnode = partrel->MDPartConstraint();
-
 	if (nullptr == dxlnode)
 	{
 		return nullptr;
@@ -2995,23 +3034,214 @@ CExpressionPreprocessor::PcnstrFromChildPartition(
 	}
 
 	CTranslatorDXLToExpr dxltr(mp, md_accessor);
-	part_constraint_expr =
+	CExpression *part_constraint_expr =
 		dxltr.PexprTranslateScalar(dxlnode, pdrgpcrOutput, mapped_colids);
 	mapped_colids->Release();
+
+	return part_constraint_expr;
+}
+
+// Build a CConstraint from a child partition's part constraint, used for static
+// pruning of range/list partitions.
+CConstraint *
+CExpressionPreprocessor::PcnstrFromChildPartition(
+	const IMDRelation *partrel, CColRefArray *pdrgpcrOutput,
+	ColRefToUlongMap *root_col_mapping)
+{
+	CMemoryPool *mp = COptCtxt::PoctxtFromTLS()->Pmp();
+
+	CExpression *part_constraint_expr = PexprPartConstraintFromChild(
+		mp, partrel, pdrgpcrOutput, root_col_mapping);
+	if (nullptr == part_constraint_expr)
+	{
+		return nullptr;
+	}
 
 	GPOS_ASSERT(CUtils::FPredicate(part_constraint_expr));
 
 	CColRefSetArray *pdrgpcrsChild = nullptr;
 	CConstraint *cnstr;
-	// As of now, partition's default opfamily is btree
-	// ORCA doesn't support hash partition yet
+	// Partition constraints are extracted using the btree opfamily, which
+	// covers range and list partitions (their bounds are btree comparison
+	// predicates). A hash partition's constraint is a satisfies_hash_partition()
+	// function call that has no btree-interval representation, so
+	// PcnstrFromScalarExpr returns null for it; such partitions are pruned (when
+	// possible) by FHashPartitionPruned() instead.
 	cnstr = CConstraint::PcnstrFromScalarExpr(
 		mp, part_constraint_expr, &pdrgpcrsChild, true /* infer_nulls_as */,
 		IMDIndex::EmdindBtree);
 	CRefCount::SafeRelease(part_constraint_expr);
 	CRefCount::SafeRelease(pdrgpcrsChild);
-	GPOS_ASSERT(cnstr);
 	return cnstr;
+}
+
+// Return the const subexpression of a "colref = const" equality found among the
+// given conjuncts (NULL if none). The returned expression is owned by the
+// conjunct array; the caller must AddRef it before reusing it.
+CExpression *
+CExpressionPreprocessor::PexprColumnEqualityConst(
+	CExpressionArray *pdrgpexprConjuncts, const CColRef *colref)
+{
+	const ULONG size = pdrgpexprConjuncts->Size();
+	for (ULONG ul = 0; ul < size; ++ul)
+	{
+		CExpression *pexpr = (*pdrgpexprConjuncts)[ul];
+		if (!CPredicateUtils::FPlainEqualityIdentConstWithoutCast(pexpr))
+		{
+			continue;
+		}
+
+		CExpression *pexprLeft = (*pexpr)[0];
+		CExpression *pexprRight = (*pexpr)[1];
+		CExpression *pexprIdent = nullptr;
+		CExpression *pexprConst = nullptr;
+		if (COperator::EopScalarIdent == pexprLeft->Pop()->Eopid() &&
+			COperator::EopScalarConst == pexprRight->Pop()->Eopid())
+		{
+			pexprIdent = pexprLeft;
+			pexprConst = pexprRight;
+		}
+		else if (COperator::EopScalarIdent == pexprRight->Pop()->Eopid() &&
+				 COperator::EopScalarConst == pexprLeft->Pop()->Eopid())
+		{
+			pexprIdent = pexprRight;
+			pexprConst = pexprLeft;
+		}
+		else
+		{
+			// ident = ident or const = const: not useful here
+			continue;
+		}
+
+		// Skip a NULL constant: "col = NULL" never matches a row, so it must not
+		// drive pruning (substituting NULL into satisfies_hash_partition does not
+		// correspond to an equality match on a concrete key value).
+		if (colref == CScalarIdent::PopConvert(pexprIdent->Pop())->Pcr() &&
+			!CScalarConst::PopConvert(pexprConst->Pop())->GetDatum()->IsNull())
+		{
+			return pexprConst;
+		}
+	}
+
+	return nullptr;
+}
+
+// Static pruning of a single HASH partition leaf, mirroring PostgreSQL hash
+// pruning by reusing satisfies_hash_partition(). The leaf's part constraint is
+// satisfies_hash_partition(parentoid, modulus, remainder, key...). We substitute
+// the equality constants for the partition-key columns (taken from the query
+// predicates) into that call and evaluate it with the constant-expression
+// evaluator. If the call evaluates to false, no row with those key values can
+// live in this leaf, so it is pruned. Any uncertainty (no equality on some key,
+// non-foldable constant, evaluator unavailable, non-bool result) keeps the leaf,
+// so pruning is always safe.
+BOOL
+CExpressionPreprocessor::FHashPartitionPruned(
+	CMemoryPool *mp, const IMDRelation *partrel, CColRefArray *pdrgpcrOutput,
+	ColRefToUlongMap *root_col_mapping, CExpressionArray *pdrgpexprConjuncts)
+{
+	IConstExprEvaluator *pceeval = COptCtxt::PoctxtFromTLS()->Pceeval();
+	if (nullptr == pceeval || !pceeval->FCanEvalExpressions())
+	{
+		return false;
+	}
+
+	CExpression *pexprCnstr = PexprPartConstraintFromChild(
+		mp, partrel, pdrgpcrOutput, root_col_mapping);
+	if (nullptr == pexprCnstr)
+	{
+		return false;
+	}
+
+	// The hash partition qual must be a satisfies_hash_partition() call with at
+	// least the (parentoid, modulus, remainder, key) arguments.
+	if (COperator::EopScalarFunc != pexprCnstr->Pop()->Eopid() ||
+		pexprCnstr->Arity() < 4)
+	{
+		pexprCnstr->Release();
+		return false;
+	}
+
+	// Rebuild the call, replacing each partition-key argument (a column ident)
+	// with the constant from a matching "key = const" predicate. If any key
+	// column lacks such an equality we cannot prune (PostgreSQL likewise needs
+	// equality on all hash key columns).
+	CExpressionArray *pdrgpexprArgs = GPOS_NEW(mp) CExpressionArray(mp);
+	BOOL fAllKeysBound = true;
+	const ULONG arity = pexprCnstr->Arity();
+	for (ULONG ul = 0; ul < arity; ++ul)
+	{
+		CExpression *pexprArg = (*pexprCnstr)[ul];
+		if (ul < 3)
+		{
+			// parentoid, modulus, remainder: carry over unchanged
+			pexprArg->AddRef();
+			pdrgpexprArgs->Append(pexprArg);
+			continue;
+		}
+
+		if (COperator::EopScalarIdent != pexprArg->Pop()->Eopid())
+		{
+			fAllKeysBound = false;
+			break;
+		}
+		const CColRef *colref = CScalarIdent::PopConvert(pexprArg->Pop())->Pcr();
+		CExpression *pexprConst =
+			PexprColumnEqualityConst(pdrgpexprConjuncts, colref);
+		if (nullptr == pexprConst)
+		{
+			fAllKeysBound = false;
+			break;
+		}
+		pexprConst->AddRef();
+		pdrgpexprArgs->Append(pexprConst);
+	}
+
+	if (!fAllKeysBound)
+	{
+		pdrgpexprArgs->Release();
+		pexprCnstr->Release();
+		return false;
+	}
+
+	COperator *popFunc = pexprCnstr->Pop();
+	popFunc->AddRef();
+	CExpression *pexprTest = GPOS_NEW(mp) CExpression(mp, popFunc, pdrgpexprArgs);
+	pexprCnstr->Release();
+
+	// satisfies_hash_partition() over constants should always fold to a boolean,
+	// but if evaluation fails for any reason we must not abort optimization for
+	// the whole query: reset the error and conservatively keep the partition
+	// (pexprResult stays null, so we fall through to return false).
+	CExpression *pexprResult = nullptr;
+	GPOS_TRY
+	{
+		pexprResult = pceeval->PexprEval(pexprTest);
+	}
+	GPOS_CATCH_EX(ex)
+	{
+		GPOS_RESET_EX;
+	}
+	GPOS_CATCH_END;
+	pexprTest->Release();
+
+	BOOL fPruned = false;
+	if (nullptr != pexprResult &&
+		COperator::EopScalarConst == pexprResult->Pop()->Eopid())
+	{
+		IDatum *datum = CScalarConst::PopConvert(pexprResult->Pop())->GetDatum();
+		IDatumBool *pdatumBool = dynamic_cast<IDatumBool *>(datum);
+		if (nullptr != pdatumBool && !pdatumBool->IsNull() &&
+			!pdatumBool->GetValue())
+		{
+			// satisfies_hash_partition() is false => this leaf cannot hold any
+			// row with the given key values => prune it.
+			fPruned = true;
+		}
+	}
+	CRefCount::SafeRelease(pexprResult);
+
+	return fPruned;
 }
 
 // Transpose a select over a project

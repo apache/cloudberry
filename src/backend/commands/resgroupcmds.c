@@ -34,6 +34,7 @@
 #include "commands/resgroupcmds.h"
 #include "miscadmin.h"
 #include "nodes/pg_list.h"
+#include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/datetime.h"
 #include "utils/fmgroids.h"
@@ -103,11 +104,15 @@ CreateResourceGroup(CreateResourceGroupStmt *stmt)
 	int			nResGroups;
 	MemoryContext oldContext;
 
-	/* Permission check - only superuser can create groups. */
-	if (!superuser())
+	/*
+	 * Permission check - superusers and members of the predefined role
+	 * pg_manage_resource_groups can create resource groups.
+	 */
+	if (!has_privs_of_role(GetUserId(), ROLE_PG_MANAGE_RESOURCE_GROUPS))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("must be superuser to create resource groups")));
+				 errmsg("permission denied to create resource group"),
+				 errhint("Must be superuser or have privileges of the pg_manage_resource_groups role.")));
 
 	/*
 	 * Check for an illegal name ('none' is used to signify no group in ALTER ROLE).
@@ -269,11 +274,15 @@ DropResourceGroup(DropResourceGroupStmt *stmt)
 	Oid			 groupid;
 	ResourceGroupCallbackContext	*callbackCtx;
 
-	/* Permission check - only superuser can drop resource groups. */
-	if (!superuser())
+	/*
+	 * Permission check - superusers and members of the predefined role
+	 * pg_manage_resource_groups can drop resource groups.
+	 */
+	if (!has_privs_of_role(GetUserId(), ROLE_PG_MANAGE_RESOURCE_GROUPS))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("must be superuser to drop resource groups")));
+				 errmsg("permission denied to drop resource group \"%s\"", stmt->name),
+				 errhint("Must be superuser or have privileges of the pg_manage_resource_groups role.")));
 
 	/*
 	 * Check the pg_resgroup relation to be certain the resource group already
@@ -375,11 +384,15 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 	ResourceGroupCallbackContext	*callbackCtx;
 	MemoryContext oldContext;
 
-	/* Permission check - only superuser can alter resource groups. */
-	if (!superuser())
+	/*
+	 * Permission check - superusers and members of the predefined role
+	 * pg_manage_resource_groups can alter resource groups.
+	 */
+	if (!has_privs_of_role(GetUserId(), ROLE_PG_MANAGE_RESOURCE_GROUPS))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("must be superuser to alter resource groups")));
+				 errmsg("permission denied to alter resource group \"%s\"", stmt->name),
+				 errhint("Must be superuser or have privileges of the pg_manage_resource_groups role.")));
 
 	/* Currently we only support to ALTER one limit at one time */
 	Assert(list_length(stmt->options) == 1);
@@ -411,6 +424,18 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 	 * exists.
 	 */
 	groupid = get_resgroup_oid(stmt->name, false);
+
+	/*
+	 * The built-in system resource groups may only be altered by a real
+	 * superuser, never by a member of pg_manage_resource_groups
+	 */
+	if (!superuser() &&
+		(groupid == ADMINRESGROUP_OID ||
+		 groupid == SYSTEMRESGROUP_OID))
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("permission denied to alter resource group \"%s\"", stmt->name),
+				 errhint("Must be superuser to alter a system resource group.")));
 
 	if (limitType == RESGROUP_LIMIT_TYPE_CONCURRENCY &&
 		value == 0 &&
@@ -500,7 +525,7 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 									  RESGROUP_DEFAULT_CPU_WEIGHT, "");
 
 		updateResgroupCapabilityEntry(pg_resgroupcapability_rel,
-									  groupid, RESGROUP_LIMIT_TYPE_CPUSET, 
+									  groupid, RESGROUP_LIMIT_TYPE_CPUSET,
 									  0, caps.cpuset);
 	}
 	else if (limitType == RESGROUP_LIMIT_TYPE_CPU)
@@ -1007,7 +1032,7 @@ parseStmtOptions(CreateResourceGroupStmt *stmt, ResGroupCaps *caps)
 		else
 			mask |= 1 << type;
 
-		if (type == RESGROUP_LIMIT_TYPE_CPUSET) 
+		if (type == RESGROUP_LIMIT_TYPE_CPUSET)
 		{
 			const char *cpuset = defGetString(defel);
 			strlcpy(caps->cpuset, cpuset, sizeof(caps->cpuset));
@@ -1567,8 +1592,8 @@ checkCpusetSyntax(const char *cpuset)
 extern void
 checkCpuSetByRole(const char *cpuset)
 {
-	char *first = NULL;
-	char *last = NULL;
+	const char *first = NULL;
+	const char *last = NULL;
 
 	if (cpuset == NULL)
 	{
@@ -1611,7 +1636,7 @@ checkCpuSetByRole(const char *cpuset)
  * ex:
  * cpuset = "1;4"
  * then we should assign '1' to corrdinator and '4' to segment
- * 
+ *
  * cpuset = "1"
  * assign '1' to both coordinator and segment
  */
@@ -1627,24 +1652,28 @@ getCpuSetByRole(const char *cpuset)
 				errmsg("Unexpected cpuset invalid in getCpuSetByRole")));
 	}
 
-	char *first = strchr(cpuset, ';');
+	const char *first = strchr(cpuset, ';');
 	if (first == NULL)
 		splitcpuset = (char *)cpuset;
 	else
 	{
-		char *scpu = first + 1;
+		char *second = (char*)first + 1;
 
 		/* Get result cpuset by IS_QUERY_DISPATCHER(), on master or segment */
 		if (IS_QUERY_DISPATCHER())
-			splitcpuset = scpu;
-		else
 		{
 			char *mcpu = (char *)palloc0(sizeof(char) * MaxCpuSetLength);
 			strncpy(mcpu, cpuset, first - cpuset);
 			splitcpuset = mcpu;
 		}
+		else
+		{
+			char *scpu = (char *)palloc0(sizeof(char) * MaxCpuSetLength);
+			strlcpy(scpu, second, MaxCpuSetLength);
+			splitcpuset = scpu;
+		}
 	}
 
-	return splitcpuset;
+	return (char *)splitcpuset;
 }
 

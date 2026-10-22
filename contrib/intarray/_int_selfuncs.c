@@ -3,7 +3,7 @@
  * _int_selfuncs.c
  *	  Functions for selectivity estimation of intarray operators
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -19,6 +19,7 @@
 #include "catalog/pg_operator.h"
 #include "catalog/pg_statistic.h"
 #include "catalog/pg_type.h"
+#include "commands/extension.h"
 #include "miscadmin.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -34,8 +35,8 @@ PG_FUNCTION_INFO_V1(_int_contained_joinsel);
 PG_FUNCTION_INFO_V1(_int_matchsel);
 
 
-static Selectivity int_query_opr_selec(ITEM *item, Datum *values, float4 *freqs,
-									   int nmncelems, float4 minfreq);
+static Selectivity int_query_opr_selec(ITEM *item, Datum *mcelems, float4 *mcefreqs,
+									   int nmcelems, float4 minfreq);
 static int	compare_val_int4(const void *a, const void *b);
 
 /*
@@ -171,7 +172,18 @@ _int_matchsel(PG_FUNCTION_ARGS)
 		PG_RETURN_FLOAT8(0.0);
 	}
 
-	/* The caller made sure the const is a query, so get it now */
+	/*
+	 * Verify that the Const is a query_int, else return a default estimate.
+	 * (This could only fail if someone attached this estimator to the wrong
+	 * operator.)
+	 */
+	if (((Const *) other)->consttype !=
+		get_function_sibling_type(fcinfo->flinfo->fn_oid, "query_int"))
+	{
+		ReleaseVariableStats(vardata);
+		PG_RETURN_FLOAT8(DEFAULT_EQ_SEL);
+	}
+
 	query = DatumGetQueryTypeP(((Const *) other)->constvalue);
 
 	/* Empty query matches nothing */

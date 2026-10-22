@@ -669,20 +669,22 @@ create temporary table a as select generate_series(1, 5) as i distributed by (i)
 create temporary table b as select generate_series(2, 6) as i distributed by (i);
 create temporary table c as select generate_series(3, 7) as i distributed by (i);
 explain (costs off) select * from a full join b on (a.i=b.i) full join c on (b.i=c.i);
-                QUERY PLAN                
-------------------------------------------
+                         QUERY PLAN                         
+------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Full Join
          Hash Cond: (b.i = c.i)
-         ->  Hash Full Join
-               Hash Cond: (a.i = b.i)
-               ->  Seq Scan on a
-               ->  Hash
-                     ->  Seq Scan on b
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: b.i
+               ->  Hash Full Join
+                     Hash Cond: (a.i = b.i)
+                     ->  Seq Scan on a
+                     ->  Hash
+                           ->  Seq Scan on b
          ->  Hash
                ->  Seq Scan on c
  Optimizer: Postgres query optimizer
-(11 rows)
+(13 rows)
 
 select * from a full join b on (a.i=b.i) full join c on (b.i=c.i);
  i | i | i 

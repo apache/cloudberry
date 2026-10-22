@@ -24,6 +24,8 @@
 #include "gpopt/operators/CExpression.h"
 #include "gpopt/operators/CPredicateUtils.h"
 
+#include "naucrates/md/IMDFunction.h"
+
 using namespace gpdxl;
 using namespace gpmd;
 using namespace gpopt;
@@ -72,7 +74,15 @@ CConstExprEvaluatorDXL::PexprEval(CExpression *pexpr)
 {
 	GPOS_ASSERT(nullptr != pexpr);
 
-	if (!CPredicateUtils::FCompareConstToConstIgnoreCast(pexpr))
+	// We can evaluate (a) the (const cmp const) expressions used by the
+	// comparator, and (b) any column-free IMMUTABLE expression (e.g.
+	// satisfies_hash_partition() over constants, used for hash partition
+	// pruning). We must not fold expressions that reference columns, nor
+	// volatile/stable ones, since their value is not fixed at plan time.
+	if (!(CPredicateUtils::FCompareConstToConstIgnoreCast(pexpr) ||
+		  (0 == pexpr->DeriveUsedColumns()->Size() &&
+		   IMDFunction::EfsImmutable ==
+			   pexpr->DeriveScalarFunctionProperties()->Efs())))
 	{
 		GPOS_RAISE(gpopt::ExmaGPOPT, gpopt::ExmiEvalUnsupportedScalarExpr);
 	}

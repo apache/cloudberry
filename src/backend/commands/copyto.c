@@ -3,7 +3,7 @@
  * copyto.c
  *		COPY <table> TO file/program/client
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -200,14 +200,19 @@ void CopySendEndOfRow(CopyToState cstate)
 			(void) pq_putmessage('d', fe_msgbuf->data, fe_msgbuf->len);
 			break;
 		case COPY_CALLBACK:
-			/* we don't actually do the write here, we let the caller do it */
+			if (cstate->data_dest_cb)
+				cstate->data_dest_cb(fe_msgbuf->data, fe_msgbuf->len);
+			else
+			{
+				/* we don't actually do the write here, we let the caller do it */
 #ifndef WIN32
-			CopySendChar(cstate, '\n');
+				CopySendChar(cstate, '\n');
 #else
-			CopySendString(cstate, "\r\n");
+				CopySendString(cstate, "\r\n");
 #endif
-			return; /* don't want to reset msgbuf quite yet */
-
+				return; /* don't want to reset msgbuf quite yet */
+			}
+			break;
 	}
 
 	/* Update the progress */
@@ -247,6 +252,17 @@ CopySendInt16(CopyToState cstate, int16 val)
 
 /*
  * Setup CopyToState to read tuples from a table or a query for COPY TO.
+ *
+ * 'rel': Relation to be copied
+ * 'raw_query': Query whose results are to be copied
+ * 'queryRelId': OID of base relation to convert to a query (for RLS)
+ * 'filename': Name of server-local file to write, NULL for STDOUT
+ * 'is_program': true if 'filename' is program to execute
+ * 'data_dest_cb': Callback that processes the output data
+ * 'attnamelist': List of char *, columns to include. NIL selects all cols.
+ * 'options': List of DefElem. See copy_opt_item in gram.y for selections.
+ *
+ * Returns a CopyToState, to be passed to DoCopyTo() and related functions.
  */
 CopyToState
 BeginCopyTo(ParseState *pstate,
@@ -255,6 +271,7 @@ BeginCopyTo(ParseState *pstate,
 			Oid queryRelId,
 			const char *filename,
 			bool is_program,
+			copy_data_dest_cb data_dest_cb,
 			List *attnamelist,
 			List *options)
 {
@@ -331,6 +348,12 @@ BeginCopyTo(ParseState *pstate,
 			ereport(ERROR,
 					(errcode(ERRCODE_SYNTAX_ERROR),
 					 errmsg("STDOUT is not supported by 'COPY ON SEGMENT'")));
+	}
+	else if (data_dest_cb)
+	{
+		progress_vals[1] = PROGRESS_COPY_TYPE_CALLBACK;
+		cstate->copy_dest = COPY_CALLBACK;
+		cstate->data_dest_cb = data_dest_cb;
 	}
 	else if (pipe)
 	{
@@ -460,7 +483,7 @@ EndCopyTo(CopyToState cstate, uint64 *processed)
 uint64
 DoCopyTo(CopyToState cstate)
 {
-	bool		pipe = (cstate->filename == NULL);
+	bool		pipe = (cstate->filename == NULL && cstate->data_dest_cb == NULL);
 	bool		fe_copy = (pipe && whereToSendOutput == DestRemote);
 	uint64		processed;
 
@@ -1147,9 +1170,9 @@ BeginCopy(ParseState *pstate,
 		 * function and is executed repeatedly.  (See also the same hack in
 		 * DECLARE CURSOR and PREPARE.)  XXX FIXME someday.
 		 */
-		rewritten = pg_analyze_and_rewrite(copyObject(raw_query),
-										   pstate->p_sourcetext, NULL, 0,
-										   NULL);
+		rewritten = pg_analyze_and_rewrite_fixedparams(copyObject(raw_query),
+													   pstate->p_sourcetext, NULL, 0,
+													   NULL);
 
 		/* check that we got back something we can work with */
 		if (rewritten == NIL)
@@ -1174,7 +1197,7 @@ BeginCopy(ParseState *pstate,
 				if (q->querySource == QSRC_NON_INSTEAD_RULE)
 					ereport(ERROR,
 							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							 errmsg("DO ALSO rules are not supported for the COPY")));
+							 errmsg("DO ALSO rules are not supported for COPY")));
 			}
 
 			ereport(ERROR,
@@ -1196,7 +1219,11 @@ BeginCopy(ParseState *pstate,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("COPY (SELECT INTO) is not supported")));
 
-		Assert(query->utilityStmt == NULL);
+		/* The only other utility command we could see is NOTIFY */
+		if (query->utilityStmt != NULL)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("COPY query must not be a utility command")));
 
 		/*
 		 * Similarly the grammar doesn't enforce the presence of a RETURNING
@@ -1226,8 +1253,8 @@ BeginCopy(ParseState *pstate,
 		/*
 		 * With row level security and a user using "COPY relation TO", we
 		 * have to convert the "COPY relation TO" to a query-based COPY (eg:
-		 * "COPY (SELECT * FROM relation) TO"), to allow the rewriter to add
-		 * in any RLS clauses.
+		 * "COPY (SELECT * FROM ONLY relation) TO"), to allow the rewriter to
+		 * add in any RLS clauses.
 		 *
 		 * When this happens, we are passed in the relid of the originally
 		 * found relation (which we have locked).  As the planner will look up
@@ -1316,52 +1343,6 @@ BeginCopy(ParseState *pstate,
 						 errmsg("FORCE_QUOTE column \"%s\" not referenced by COPY",
 								NameStr(attr->attname))));
 			cstate->opts.force_quote_flags[attnum - 1] = true;
-		}
-	}
-
-	/* Convert FORCE_NOT_NULL name list to per-column flags, check validity */
-	cstate->opts.force_notnull_flags = (bool *) palloc0(num_phys_attrs * sizeof(bool));
-	if (cstate->opts.force_notnull)
-	{
-		List	   *attnums;
-		ListCell   *cur;
-
-		attnums = CopyGetAttnums(tupDesc, cstate->rel, cstate->opts.force_notnull);
-
-		foreach(cur, attnums)
-		{
-			int			attnum = lfirst_int(cur);
-			Form_pg_attribute attr = TupleDescAttr(tupDesc, attnum - 1);
-
-			if (!list_member_int(cstate->attnumlist, attnum))
-				ereport(ERROR,
-						(errcode(ERRCODE_INVALID_COLUMN_REFERENCE),
-						 errmsg("FORCE_NOT_NULL column \"%s\" not referenced by COPY",
-								NameStr(attr->attname))));
-			cstate->opts.force_notnull_flags[attnum - 1] = true;
-		}
-	}
-
-	/* Convert FORCE_NULL name list to per-column flags, check validity */
-	cstate->opts.force_null_flags = (bool *) palloc0(num_phys_attrs * sizeof(bool));
-	if (cstate->opts.force_null)
-	{
-		List	   *attnums;
-		ListCell   *cur;
-
-		attnums = CopyGetAttnums(tupDesc, cstate->rel, cstate->opts.force_null);
-
-		foreach(cur, attnums)
-		{
-			int			attnum = lfirst_int(cur);
-			Form_pg_attribute attr = TupleDescAttr(tupDesc, attnum - 1);
-
-			if (!list_member_int(cstate->attnumlist, attnum))
-				ereport(ERROR,
-						(errcode(ERRCODE_INVALID_COLUMN_REFERENCE),
-						 errmsg("FORCE_NULL column \"%s\" not referenced by COPY",
-								NameStr(attr->attname))));
-			cstate->opts.force_null_flags[attnum - 1] = true;
 		}
 	}
 
@@ -1885,6 +1866,8 @@ CopyToDispatchDirectoryTable(CopyToState cstate)
 
 /*
  * Copy from relation or query TO file.
+ *
+ * Returns the number of rows processed.
  */
 static uint64
 CopyTo(CopyToState cstate)
@@ -1984,8 +1967,11 @@ CopyTo(CopyToState cstate)
 
 				colname = NameStr(TupleDescAttr(tupDesc, attnum - 1)->attname);
 
-				CopyAttributeOutCSV(cstate, colname, false,
-									list_length(cstate->attnumlist) == 1);
+				if (cstate->opts.csv_mode)
+					CopyAttributeOutCSV(cstate, colname, false,
+										list_length(cstate->attnumlist) == 1);
+				else
+					CopyAttributeOutText(cstate, colname);
 			}
 
 			CopySendEndOfRow(cstate);
@@ -2027,7 +2013,7 @@ CopyTo(CopyToState cstate)
 		Assert(Gp_role != GP_ROLE_EXECUTE);
 
 		/* run the plan --- the dest receiver will send tuples */
-		ExecutorRun(cstate->queryDesc, ForwardScanDirection, 0L, true);
+		ExecutorRun(cstate->queryDesc, ForwardScanDirection, 0, true);
 		processed = ((DR_copy *) cstate->queryDesc->dest)->processed;
 	}
 
@@ -2413,3 +2399,11 @@ BeginCopyToDirectoryTable(ParseState *pstate,
 	return cstate;
 }
 
+/*
+ * Send text representation of one attribute, with conversion and escaping
+ */
+#define DUMPSOFAR() \
+	do { \
+		if (ptr > start) \
+			CopySendData(cstate, start, ptr - start); \
+	} while (0)

@@ -305,6 +305,7 @@ tuples_only              off
 unicode_border_linestyle single
 unicode_column_linestyle single
 unicode_header_linestyle single
+xheader_width            full
 -- test multi-line headers, wrapping, and newline indicators
 -- in aligned, unaligned, and wrapped formats
 prepare q as select array_to_string(array_agg(repeat('x',2*n)),E'\n') as "ab
@@ -5708,9 +5709,9 @@ List of text search templates
 (0 rows)
 
 \dg "no.such.role"
-           List of roles
- Role name | Attributes | Member of 
------------+------------+-----------
+     List of roles
+ Role name | Attributes 
+-----------+------------
 
 \dL "no.such.language"
           List of languages
@@ -5731,9 +5732,9 @@ List of schemas
 (0 rows)
 
 \dO "no.such.collation"
-                     List of collations
- Schema | Name | Collate | Ctype | Provider | Deterministic? 
---------+------+---------+-------+----------+----------------
+                                  List of collations
+ Schema | Name | Provider | Collate | Ctype | ICU Locale | ICU Rules | Deterministic? 
+--------+------+----------+---------+-------+------------+-----------+----------------
 (0 rows)
 
 \dp "no.such.access.privilege"
@@ -5920,9 +5921,9 @@ cross-database references are not implemented: "no.such.schema"."no.such.languag
 (0 rows)
 
 \dO "no.such.schema"."no.such.collation"
-                     List of collations
- Schema | Name | Collate | Ctype | Provider | Deterministic? 
---------+------+---------+-------+----------+----------------
+                                  List of collations
+ Schema | Name | Provider | Collate | Ctype | ICU Locale | ICU Rules | Deterministic? 
+--------+------+----------+---------+-------+------------+-----------+----------------
 (0 rows)
 
 \dp "no.such.schema"."no.such.access.privilege"
@@ -6063,9 +6064,9 @@ List of text search templates
 (0 rows)
 
 \dO regression."no.such.schema"."no.such.collation"
-                     List of collations
- Schema | Name | Collate | Ctype | Provider | Deterministic? 
---------+------+---------+-------+----------+----------------
+                                  List of collations
+ Schema | Name | Provider | Collate | Ctype | ICU Locale | ICU Rules | Deterministic? 
+--------+------+----------+---------+-------+------------+-----------+----------------
 (0 rows)
 
 \dp regression."no.such.schema"."no.such.access.privilege"

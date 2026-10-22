@@ -1,0 +1,4 @@
+comment = 'Cummulative statistics from UDPIFC interconnect protocol'
+default_version = '1.0'
+relocatable = false
+schema = public

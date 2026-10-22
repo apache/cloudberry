@@ -38,7 +38,7 @@ def validate_args(options):
 
 def lineToCanonical(s):
     s = s.strip()
-    s = re.sub("\s+", " ", s) # reduce whitespace runs to single space
+    s = re.sub(r"\s+", " ", s) # reduce whitespace runs to single space
     return s
 
 def read_from_hba_file_and_get_empty_tempfile(hba_filename):

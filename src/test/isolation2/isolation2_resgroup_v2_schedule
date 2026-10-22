@@ -35,6 +35,7 @@ test: resgroup/resgroup_io_limit
 # regression tests
 test: resgroup/resgroup_recreate
 test: resgroup/resgroup_functions
+test: resgroup/resgroup_pg_manage_resource_groups
 
 # parallel tests
 #test: resgroup/restore_default_resgroup

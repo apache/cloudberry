@@ -36,6 +36,7 @@ Fixes #ISSUE_Number
 - [ ] Followed [contribution guide](https://cloudberry.apache.org/contribute/code)
 - [ ] Added/updated documentation
 - [ ] Reviewed code for security implications
+- [ ] This PR contains AI-assisted code generation
 - [ ] Requested review from [cloudberry committers](https://github.com/orgs/apache/teams/cloudberry-committers)
 
 ### Additional Context

@@ -34,7 +34,7 @@
  * in the file to be read or written while holding only shared lock.
  *
  *
- * Copyright (c) 2008-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2008-2023, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  contrib/pg_stat_statements/pg_stat_statements.c
@@ -53,6 +53,7 @@
 #include "common/hashfn.h"
 #include "executor/instrument.h"
 #include "funcapi.h"
+#include "jit/jit.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "optimizer/planner.h"
@@ -69,7 +70,6 @@
 #include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
-#include "utils/queryjumble.h"
 #include "utils/memutils.h"
 #include "utils/timestamp.h"
 
@@ -79,17 +79,12 @@ PG_MODULE_MAGIC;
 #define PGSS_DUMP_FILE	PGSTAT_STAT_PERMANENT_DIRECTORY "/pg_stat_statements.stat"
 
 /*
- * Location of external query text file.  We don't keep it in the core
- * system's stats_temp_directory.  The core system can safely use that GUC
- * setting, because the statistics collector temp file paths are set only once
- * as part of changing the GUC, but pg_stat_statements has no way of avoiding
- * race conditions.  Besides, we only expect modest, infrequent I/O for query
- * strings, so placing the file on a faster filesystem is not compelling.
+ * Location of external query text file.
  */
 #define PGSS_TEXT_FILE	PG_STAT_TMP_DIR "/pgss_query_texts.stat"
 
 /* Magic number identifying the stats file format */
-static const uint32 PGSS_FILE_HEADER = 0x20201227;
+static const uint32 PGSS_FILE_HEADER = 0x20220408;
 
 /* PostgreSQL major version number, changes in which invalidate all entries */
 static const uint32 PGSS_PG_MAJOR_VERSION = PG_VERSION_NUM / 100;
@@ -122,7 +117,8 @@ typedef enum pgssVersion
 	PGSS_V1_2,
 	PGSS_V1_3,
 	PGSS_V1_8,
-	PGSS_V1_9
+	PGSS_V1_9,
+	PGSS_V1_10
 } pgssVersion;
 
 typedef enum pgssStoreKind
@@ -184,12 +180,26 @@ typedef struct Counters
 	int64		local_blks_written; /* # of local disk blocks written */
 	int64		temp_blks_read; /* # of temp blocks read */
 	int64		temp_blks_written;	/* # of temp blocks written */
-	double		blk_read_time;	/* time spent reading, in msec */
-	double		blk_write_time; /* time spent writing, in msec */
+	double		blk_read_time;	/* time spent reading blocks, in msec */
+	double		blk_write_time; /* time spent writing blocks, in msec */
+	double		temp_blk_read_time; /* time spent reading temp blocks, in msec */
+	double		temp_blk_write_time;	/* time spent writing temp blocks, in
+										 * msec */
 	double		usage;			/* usage factor */
 	int64		wal_records;	/* # of WAL records generated */
 	int64		wal_fpi;		/* # of WAL full page images generated */
 	uint64		wal_bytes;		/* total amount of WAL generated in bytes */
+	int64		jit_functions;	/* total number of JIT functions emitted */
+	double		jit_generation_time;	/* total time to generate jit code */
+	int64		jit_inlining_count; /* number of times inlining time has been
+									 * > 0 */
+	double		jit_inlining_time;	/* total time to inline jit code */
+	int64		jit_optimization_count; /* number of times optimization time
+										 * has been > 0 */
+	double		jit_optimization_time;	/* total time to optimize jit code */
+	int64		jit_emission_count; /* number of times emission time has been
+									 * > 0 */
+	double		jit_emission_time;	/* total time to emit jit code */
 } Counters;
 
 /*
@@ -242,6 +252,7 @@ static int	exec_nested_level = 0;
 static int	plan_nested_level = 0;
 
 /* Saved hook values in case of unload */
+static shmem_request_hook_type prev_shmem_request_hook = NULL;
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static post_parse_analyze_hook_type prev_post_parse_analyze_hook = NULL;
 static planner_hook_type prev_planner_hook = NULL;
@@ -272,11 +283,12 @@ static const struct config_enum_entry track_options[] =
 	{NULL, 0, false}
 };
 
-static int	pgss_max;			/* max # statements to track */
-static int	pgss_track;			/* tracking level */
-static bool pgss_track_utility; /* whether to track utility commands */
-static bool pgss_track_planning;	/* whether to track planning duration */
-static bool pgss_save;			/* whether to save stats across shutdown */
+static int	pgss_max = 5000;	/* max # statements to track */
+static int	pgss_track = PGSS_TRACK_TOP;	/* tracking level */
+static bool pgss_track_utility = true;	/* whether to track utility commands */
+static bool pgss_track_planning = false;	/* whether to track planning
+											 * duration */
+static bool pgss_save = true;	/* whether to save stats across shutdown */
 
 
 #define pgss_enabled(level) \
@@ -294,18 +306,17 @@ static bool pgss_save;			/* whether to save stats across shutdown */
 
 /*---- Function declarations ----*/
 
-void		_PG_init(void);
-void		_PG_fini(void);
-
 PG_FUNCTION_INFO_V1(pg_stat_statements_reset);
 PG_FUNCTION_INFO_V1(pg_stat_statements_reset_1_7);
 PG_FUNCTION_INFO_V1(pg_stat_statements_1_2);
 PG_FUNCTION_INFO_V1(pg_stat_statements_1_3);
 PG_FUNCTION_INFO_V1(pg_stat_statements_1_8);
 PG_FUNCTION_INFO_V1(pg_stat_statements_1_9);
+PG_FUNCTION_INFO_V1(pg_stat_statements_1_10);
 PG_FUNCTION_INFO_V1(pg_stat_statements);
 PG_FUNCTION_INFO_V1(pg_stat_statements_info);
 
+static void pgss_shmem_request(void);
 static void pgss_shmem_startup(void);
 static void pgss_shmem_shutdown(int code, Datum arg);
 static void pgss_post_parse_analyze(ParseState *pstate, Query *query,
@@ -332,6 +343,7 @@ static void pgss_store(const char *query, uint64 queryId,
 					   double total_time, uint64 rows,
 					   const BufferUsage *bufusage,
 					   const WalUsage *walusage,
+					   const struct JitInstrumentation *jitusage,
 					   JumbleState *jstate);
 static void pg_stat_statements_internal(FunctionCallInfo fcinfo,
 										pgssVersion api_version,
@@ -439,19 +451,13 @@ _PG_init(void)
 							 NULL,
 							 NULL);
 
-	EmitWarningsOnPlaceholders("pg_stat_statements");
-
-	/*
-	 * Request additional shared resources.  (These are no-ops if we're not in
-	 * the postmaster process.)  We'll allocate or attach to the shared
-	 * resources in pgss_shmem_startup().
-	 */
-	RequestAddinShmemSpace(pgss_memsize());
-	RequestNamedLWLockTranche("pg_stat_statements", 1);
+	MarkGUCPrefixReserved("pg_stat_statements");
 
 	/*
 	 * Install hooks.
 	 */
+	prev_shmem_request_hook = shmem_request_hook;
+	shmem_request_hook = pgss_shmem_request;
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = pgss_shmem_startup;
 	prev_post_parse_analyze_hook = post_parse_analyze_hook;
@@ -471,20 +477,17 @@ _PG_init(void)
 }
 
 /*
- * Module unload callback
+ * shmem_request hook: request additional shared resources.  We'll allocate or
+ * attach to the shared resources in pgss_shmem_startup().
  */
-void
-_PG_fini(void)
+static void
+pgss_shmem_request(void)
 {
-	/* Uninstall hooks. */
-	shmem_startup_hook = prev_shmem_startup_hook;
-	post_parse_analyze_hook = prev_post_parse_analyze_hook;
-	planner_hook = prev_planner_hook;
-	ExecutorStart_hook = prev_ExecutorStart;
-	ExecutorRun_hook = prev_ExecutorRun;
-	ExecutorFinish_hook = prev_ExecutorFinish;
-	ExecutorEnd_hook = prev_ExecutorEnd;
-	ProcessUtility_hook = prev_ProcessUtility;
+	if (prev_shmem_request_hook)
+		prev_shmem_request_hook();
+
+	RequestAddinShmemSpace(pgss_memsize());
+	RequestNamedLWLockTranche("pg_stat_statements", 1);
 }
 
 /*
@@ -806,8 +809,7 @@ error:
 			(errcode_for_file_access(),
 			 errmsg("could not write file \"%s\": %m",
 					PGSS_DUMP_FILE ".tmp")));
-	if (qbuffer)
-		free(qbuffer);
+	free(qbuffer);
 	if (file)
 		FreeFile(file);
 	unlink(PGSS_DUMP_FILE ".tmp");
@@ -835,8 +837,10 @@ pgss_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jstate)
 	if (query->utilityStmt)
 	{
 		if (pgss_track_utility && !PGSS_HANDLED_UTILITY(query->utilityStmt))
+		{
 			query->queryId = UINT64CONST(0);
-		return;
+			return;
+		}
 	}
 
 	/*
@@ -854,6 +858,7 @@ pgss_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jstate)
 				   PGSS_INVALID,
 				   0,
 				   0,
+				   NULL,
 				   NULL,
 				   NULL,
 				   jstate);
@@ -941,6 +946,7 @@ pgss_planner(Query *parse,
 				   0,
 				   &bufusage,
 				   &walusage,
+				   NULL,
 				   NULL);
 	}
 	else
@@ -1056,9 +1062,10 @@ pgss_ExecutorEnd(QueryDesc *queryDesc)
 				   queryDesc->plannedstmt->stmt_len,
 				   PGSS_EXEC,
 				   queryDesc->totaltime->total * 1000.0,	/* convert to msec */
-				   queryDesc->estate->es_processed,
+				   queryDesc->estate->es_total_processed,
 				   &queryDesc->totaltime->bufusage,
 				   &queryDesc->totaltime->walusage,
+				   queryDesc->estate->es_jit ? &queryDesc->estate->es_jit->instr : NULL,
 				   NULL);
 	}
 
@@ -1080,6 +1087,8 @@ pgss_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 {
 	Node	   *parsetree = pstmt->utilityStmt;
 	uint64		saved_queryId = pstmt->queryId;
+	int			saved_stmt_location = pstmt->stmt_location;
+	int			saved_stmt_len = pstmt->stmt_len;
 
 	/*
 	 * Force utility statements to get queryId zero.  We do this even in cases
@@ -1145,6 +1154,16 @@ pgss_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 		}
 		PG_END_TRY();
 
+		/*
+		 * CAUTION: do not access the *pstmt data structure again below here.
+		 * If it was a ROLLBACK or similar, that data structure may have been
+		 * freed.  We must copy everything we still need into local variables,
+		 * which we did above.
+		 *
+		 * For the same reason, we can't risk restoring pstmt->queryId to its
+		 * former value, which'd otherwise be a good idea.
+		 */
+
 		INSTR_TIME_SET_CURRENT(duration);
 		INSTR_TIME_SUBTRACT(duration, start);
 
@@ -1170,13 +1189,14 @@ pgss_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 
 		pgss_store(queryString,
 				   saved_queryId,
-				   pstmt->stmt_location,
-				   pstmt->stmt_len,
+				   saved_stmt_location,
+				   saved_stmt_len,
 				   PGSS_EXEC,
 				   INSTR_TIME_GET_MILLISEC(duration),
 				   rows,
 				   &bufusage,
 				   &walusage,
+				   NULL,
 				   NULL);
 	}
 	else
@@ -1210,6 +1230,7 @@ pgss_store(const char *query, uint64 queryId,
 		   double total_time, uint64 rows,
 		   const BufferUsage *bufusage,
 		   const WalUsage *walusage,
+		   const struct JitInstrumentation *jitusage,
 		   JumbleState *jstate)
 {
 	pgssHashKey key;
@@ -1246,7 +1267,7 @@ pgss_store(const char *query, uint64 queryId,
 
 	/* Set up key for hashtable search */
 
-	/* memset() is required when pgssHashKey is without padding only */
+	/* clear padding */
 	memset(&key, 0, sizeof(pgssHashKey));
 
 	key.userid = GetUserId();
@@ -1380,10 +1401,29 @@ pgss_store(const char *query, uint64 queryId,
 		e->counters.temp_blks_written += bufusage->temp_blks_written;
 		e->counters.blk_read_time += INSTR_TIME_GET_MILLISEC(bufusage->blk_read_time);
 		e->counters.blk_write_time += INSTR_TIME_GET_MILLISEC(bufusage->blk_write_time);
+		e->counters.temp_blk_read_time += INSTR_TIME_GET_MILLISEC(bufusage->temp_blk_read_time);
+		e->counters.temp_blk_write_time += INSTR_TIME_GET_MILLISEC(bufusage->temp_blk_write_time);
 		e->counters.usage += USAGE_EXEC(total_time);
 		e->counters.wal_records += walusage->wal_records;
 		e->counters.wal_fpi += walusage->wal_fpi;
 		e->counters.wal_bytes += walusage->wal_bytes;
+		if (jitusage)
+		{
+			e->counters.jit_functions += jitusage->created_functions;
+			e->counters.jit_generation_time += INSTR_TIME_GET_MILLISEC(jitusage->generation_counter);
+
+			if (INSTR_TIME_GET_MILLISEC(jitusage->inlining_counter))
+				e->counters.jit_inlining_count++;
+			e->counters.jit_inlining_time += INSTR_TIME_GET_MILLISEC(jitusage->inlining_counter);
+
+			if (INSTR_TIME_GET_MILLISEC(jitusage->optimization_counter))
+				e->counters.jit_optimization_count++;
+			e->counters.jit_optimization_time += INSTR_TIME_GET_MILLISEC(jitusage->optimization_counter);
+
+			if (INSTR_TIME_GET_MILLISEC(jitusage->emission_counter))
+				e->counters.jit_emission_count++;
+			e->counters.jit_emission_time += INSTR_TIME_GET_MILLISEC(jitusage->emission_counter);
+		}
 
 		SpinLockRelease(&e->mutex);
 	}
@@ -1433,7 +1473,8 @@ pg_stat_statements_reset(PG_FUNCTION_ARGS)
 #define PG_STAT_STATEMENTS_COLS_V1_3	23
 #define PG_STAT_STATEMENTS_COLS_V1_8	32
 #define PG_STAT_STATEMENTS_COLS_V1_9	33
-#define PG_STAT_STATEMENTS_COLS			33	/* maximum of above */
+#define PG_STAT_STATEMENTS_COLS_V1_10	43
+#define PG_STAT_STATEMENTS_COLS			43	/* maximum of above */
 
 /*
  * Retrieve statement statistics.
@@ -1445,6 +1486,16 @@ pg_stat_statements_reset(PG_FUNCTION_ARGS)
  * expected API version is identified by embedding it in the C name of the
  * function.  Unfortunately we weren't bright enough to do that for 1.1.
  */
+Datum
+pg_stat_statements_1_10(PG_FUNCTION_ARGS)
+{
+	bool		showtext = PG_GETARG_BOOL(0);
+
+	pg_stat_statements_internal(fcinfo, PGSS_V1_10, showtext);
+
+	return (Datum) 0;
+}
+
 Datum
 pg_stat_statements_1_9(PG_FUNCTION_ARGS)
 {
@@ -1505,10 +1556,6 @@ pg_stat_statements_internal(FunctionCallInfo fcinfo,
 							bool showtext)
 {
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
-	TupleDesc	tupdesc;
-	Tuplestorestate *tupstore;
-	MemoryContext per_query_ctx;
-	MemoryContext oldcontext;
 	Oid			userid = GetUserId();
 	bool		is_allowed_role = false;
 	char	   *qbuffer = NULL;
@@ -1518,8 +1565,11 @@ pg_stat_statements_internal(FunctionCallInfo fcinfo,
 	HASH_SEQ_STATUS hash_seq;
 	pgssEntry  *entry;
 
-	/* Superusers or members of pg_read_all_stats members are allowed */
-	is_allowed_role = is_member_of_role(GetUserId(), ROLE_PG_READ_ALL_STATS);
+	/*
+	 * Superusers or roles with the privileges of pg_read_all_stats members
+	 * are allowed
+	 */
+	is_allowed_role = has_privs_of_role(userid, ROLE_PG_READ_ALL_STATS);
 
 	/* hash table must exist already */
 	if (!pgss || !pgss_hash)
@@ -1527,30 +1577,14 @@ pg_stat_statements_internal(FunctionCallInfo fcinfo,
 				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 				 errmsg("pg_stat_statements must be loaded via shared_preload_libraries")));
 
-	/* check to see if caller supports us returning a tuplestore */
-	if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo))
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("set-valued function called in context that cannot accept a set")));
-	if (!(rsinfo->allowedModes & SFRM_Materialize))
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("materialize mode required, but it is not allowed in this context")));
-
-	/* Switch into long-lived context to construct returned data structures */
-	per_query_ctx = rsinfo->econtext->ecxt_per_query_memory;
-	oldcontext = MemoryContextSwitchTo(per_query_ctx);
-
-	/* Build a tuple descriptor for our result type */
-	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
-		elog(ERROR, "return type must be a row type");
+	InitMaterializedSRF(fcinfo, 0);
 
 	/*
 	 * Check we have the expected number of output arguments.  Aside from
 	 * being a good safety check, we need a kluge here to detect API version
 	 * 1.1, which was wedged into the code in an ill-considered way.
 	 */
-	switch (tupdesc->natts)
+	switch (rsinfo->setDesc->natts)
 	{
 		case PG_STAT_STATEMENTS_COLS_V1_0:
 			if (api_version != PGSS_V1_0)
@@ -1578,16 +1612,13 @@ pg_stat_statements_internal(FunctionCallInfo fcinfo,
 			if (api_version != PGSS_V1_9)
 				elog(ERROR, "incorrect number of output arguments");
 			break;
+		case PG_STAT_STATEMENTS_COLS_V1_10:
+			if (api_version != PGSS_V1_10)
+				elog(ERROR, "incorrect number of output arguments");
+			break;
 		default:
 			elog(ERROR, "incorrect number of output arguments");
 	}
-
-	tupstore = tuplestore_begin_heap(true, false, work_mem);
-	rsinfo->returnMode = SFRM_Materialize;
-	rsinfo->setResult = tupstore;
-	rsinfo->setDesc = tupdesc;
-
-	MemoryContextSwitchTo(oldcontext);
 
 	/*
 	 * We'd like to load the query text file (if needed) while not holding any
@@ -1648,8 +1679,7 @@ pg_stat_statements_internal(FunctionCallInfo fcinfo,
 			pgss->extent != extent ||
 			pgss->gc_count != gc_count)
 		{
-			if (qbuffer)
-				free(qbuffer);
+			free(qbuffer);
 			qbuffer = qtext_load_file(&qbuffer_size);
 		}
 	}
@@ -1785,6 +1815,11 @@ pg_stat_statements_internal(FunctionCallInfo fcinfo,
 			values[i++] = Float8GetDatumFast(tmp.blk_read_time);
 			values[i++] = Float8GetDatumFast(tmp.blk_write_time);
 		}
+		if (api_version >= PGSS_V1_10)
+		{
+			values[i++] = Float8GetDatumFast(tmp.temp_blk_read_time);
+			values[i++] = Float8GetDatumFast(tmp.temp_blk_write_time);
+		}
 		if (api_version >= PGSS_V1_8)
 		{
 			char		buf[256];
@@ -1802,6 +1837,17 @@ pg_stat_statements_internal(FunctionCallInfo fcinfo,
 											Int32GetDatum(-1));
 			values[i++] = wal_bytes;
 		}
+		if (api_version >= PGSS_V1_10)
+		{
+			values[i++] = Int64GetDatumFast(tmp.jit_functions);
+			values[i++] = Float8GetDatumFast(tmp.jit_generation_time);
+			values[i++] = Int64GetDatumFast(tmp.jit_inlining_count);
+			values[i++] = Float8GetDatumFast(tmp.jit_inlining_time);
+			values[i++] = Int64GetDatumFast(tmp.jit_optimization_count);
+			values[i++] = Float8GetDatumFast(tmp.jit_optimization_time);
+			values[i++] = Int64GetDatumFast(tmp.jit_emission_count);
+			values[i++] = Float8GetDatumFast(tmp.jit_emission_time);
+		}
 
 		Assert(i == (api_version == PGSS_V1_0 ? PG_STAT_STATEMENTS_COLS_V1_0 :
 					 api_version == PGSS_V1_1 ? PG_STAT_STATEMENTS_COLS_V1_1 :
@@ -1809,18 +1855,15 @@ pg_stat_statements_internal(FunctionCallInfo fcinfo,
 					 api_version == PGSS_V1_3 ? PG_STAT_STATEMENTS_COLS_V1_3 :
 					 api_version == PGSS_V1_8 ? PG_STAT_STATEMENTS_COLS_V1_8 :
 					 api_version == PGSS_V1_9 ? PG_STAT_STATEMENTS_COLS_V1_9 :
+					 api_version == PGSS_V1_10 ? PG_STAT_STATEMENTS_COLS_V1_10 :
 					 -1 /* fail if you forget to update this assert */ ));
 
-		tuplestore_putvalues(tupstore, tupdesc, values, nulls);
+		tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc, values, nulls);
 	}
 
-	/* clean up and return the tuplestore */
 	LWLockRelease(pgss->lock);
 
-	if (qbuffer)
-		free(qbuffer);
-
-	tuplestore_donestoring(tupstore);
+	free(qbuffer);
 }
 
 /* Number of output arguments (columns) for pg_stat_statements_info */
@@ -1834,8 +1877,8 @@ pg_stat_statements_info(PG_FUNCTION_ARGS)
 {
 	pgssGlobalStats stats;
 	TupleDesc	tupdesc;
-	Datum		values[PG_STAT_STATEMENTS_INFO_COLS];
-	bool		nulls[PG_STAT_STATEMENTS_INFO_COLS];
+	Datum		values[PG_STAT_STATEMENTS_INFO_COLS] = {0};
+	bool		nulls[PG_STAT_STATEMENTS_INFO_COLS] = {0};
 
 	if (!pgss || !pgss_hash)
 		ereport(ERROR,
@@ -1845,9 +1888,6 @@ pg_stat_statements_info(PG_FUNCTION_ARGS)
 	/* Build a tuple descriptor for our result type */
 	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
 		elog(ERROR, "return type must be a row type");
-
-	MemSet(values, 0, sizeof(values));
-	MemSet(nulls, 0, sizeof(nulls));
 
 	/* Read global statistics for pg_stat_statements */
 	{
@@ -2441,8 +2481,7 @@ gc_fail:
 	/* clean up resources */
 	if (qfile)
 		FreeFile(qfile);
-	if (qbuffer)
-		free(qbuffer);
+	free(qbuffer);
 
 	/*
 	 * Since the contents of the external file are now uncertain, mark all
@@ -2517,16 +2556,16 @@ entry_reset(Oid userid, Oid dbid, uint64 queryid)
 		key.dbid = dbid;
 		key.queryid = queryid;
 
-		/* Remove the key if it exists, starting with the top-level entry  */
+		/*
+		 * Remove the key if it exists, starting with the non-top-level entry.
+		 */
 		key.toplevel = false;
 		entry = (pgssEntry *) hash_search(pgss_hash, &key, HASH_REMOVE, NULL);
 		if (entry)				/* found */
 			num_remove++;
 
-		/* Also remove entries for top level statements */
+		/* Also remove the top-level entry if it exists. */
 		key.toplevel = true;
-
-		/* Remove the key if exists */
 		entry = (pgssEntry *) hash_search(pgss_hash, &key, HASH_REMOVE, NULL);
 		if (entry)				/* found */
 			num_remove++;

@@ -31,6 +31,8 @@ typedef struct TwoPhaseFileHeader
 	int32		nabortrels;		/* number of delete-on-abort rels */
 	int32		ncommitdbs;		/* number of delete-on-commit dbs */
 	int32		nabortdbs;		/* number of delete-on-abort dbs */
+	int32		ncommitstats;	/* number of stats to drop on commit */
+	int32		nabortstats;	/* number of stats to drop on abort */
 	int32		ninvalmsgs;		/* number of cache invalidation messages */
 	bool		initfileinval;	/* does relcache init file need invalidation? */
 	Oid			tablespace_oid_to_delete_on_abort;

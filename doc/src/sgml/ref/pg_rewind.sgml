@@ -103,6 +103,7 @@ PostgreSQL documentation
   </para>
 
   <warning>
+   <title>Warning: Failures While Rewinding</title>
    <para>
     If <application>pg_rewind</application> fails while processing, then
     the data folder of the target is likely not in a state that can be
@@ -211,7 +212,7 @@ PostgreSQL documentation
         <command>pg_rewind</command> to return without waiting, which is
         faster, but means that a subsequent operating system crash can leave
         the data directory corrupt.  Generally, this option is useful for
-        testing but should not be used when creating a production
+        testing but should not be used on a production
         installation.
        </para>
       </listitem>
@@ -237,6 +238,21 @@ PostgreSQL documentation
         configuration to retrieve WAL files from the WAL archive if these
         files are no longer available in the <filename>pg_wal</filename>
         directory.
+       </para>
+      </listitem>
+     </varlistentry>
+
+     <varlistentry>
+      <term><option>--config-file=<replaceable class="parameter">filename</replaceable></option></term>
+      <listitem>
+       <para>
+        Use the specified main server configuration file for the target
+        cluster. This affects <application>pg_rewind</application> when
+        it uses internally the <application>postgres</application> command
+        for the rewind operation on this cluster (when retrieving
+        <varname>restore_command</varname> with the option
+        <option>-c/--restore-target-wal</option> and when forcing a
+        completion of crash recovery).
        </para>
       </listitem>
      </varlistentry>
@@ -319,15 +335,6 @@ GRANT EXECUTE ON function pg_catalog.pg_read_binary_file(text, bigint, bigint, b
 </programlisting>
   </para>
 
-  <para>
-   When executing <application>pg_rewind</application> using an online
-   cluster as source which has been recently promoted, it is necessary
-   to execute a <command>CHECKPOINT</command> after promotion such that its
-   control file reflects up-to-date timeline information, which is used by
-   <application>pg_rewind</application> to check if the target cluster
-   can be rewound using the designated source cluster.
-  </para>
-
   <refsect2>
    <title>How It Works</title>
 
@@ -374,8 +381,9 @@ GRANT EXECUTE ON function pg_catalog.pg_read_binary_file(text, bigint, bigint, b
       <filename>backup_label</filename>,
       <filename>tablespace_map</filename>,
       <filename>pg_internal.init</filename>,
-      <filename>postmaster.opts</filename>, and
-      <filename>postmaster.pid</filename>, as well as any file or directory
+      <filename>postmaster.opts</filename>,
+      <filename>postmaster.pid</filename> and
+      <filename>.DS_Store</filename> as well as any file or directory
       beginning with <filename>pgsql_tmp</filename>, are omitted.
      </para>
     </step>

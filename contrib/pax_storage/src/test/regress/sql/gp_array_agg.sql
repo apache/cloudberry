@@ -4,6 +4,7 @@
 
 create schema test_gp_array_agg;
 set search_path=test_gp_array_agg;
+set optimizer_trace_fallback = on;
 
 -- Test array_agg(anynonarray)
 create table perct as select a, a / 10 as b from generate_series(1, 100)a distributed by (a);
@@ -141,3 +142,4 @@ EXPLAIN (COSTS OFF, VERBOSE)
 
 -- CLEANUP
 drop schema test_gp_array_agg cascade;
+reset optimizer_trace_fallback;

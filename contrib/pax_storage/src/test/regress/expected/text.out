@@ -1,6 +1,7 @@
 --
 -- TEXT
 --
+set optimizer_trace_fallback to on;
 SELECT text 'this is a text string' = text 'this is a text string' AS true;
  true 
 ------
@@ -13,10 +14,7 @@ SELECT text 'this is a text string' = text 'this is a text strin' AS false;
  f
 (1 row)
 
-CREATE TABLE TEXT_TBL (f1 text);
-INSERT INTO TEXT_TBL VALUES ('doh!');
-ANALYZE TEXT_TBL;
-INSERT INTO TEXT_TBL VALUES ('hi de ho neighbor');
+-- text_tbl was already created and filled in test_setup.sql.
 SELECT * FROM TEXT_TBL;
         f1         
 -------------------
@@ -467,3 +465,4 @@ select format('>>%2$*1$L<<', 0, 'Hello');
  >>'Hello'<<
 (1 row)
 
+set optimizer_trace_fallback to off;

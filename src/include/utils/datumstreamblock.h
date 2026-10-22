@@ -16,7 +16,6 @@
 #define DATUMSTREAMBLOCK_H
 
 #include "catalog/pg_attribute.h"
-#include "storage/relfilenode.h"
 #include "utils/guc.h"
 
 typedef enum DatumStreamVersion
@@ -2073,7 +2072,7 @@ extern void DatumStreamBlockRead_GetReadyOrig(
 								  int32 rowCount,
 								  bool *hadToAdjustRowCount,
 								  int32 * adjustedRowCount,
-								  RelFileNode *node);
+								  RelFileLocator *node);
 extern void DatumStreamBlockRead_GetReadyDense(
 								   DatumStreamBlockRead * dsr,
 								   uint8 * buffer,
@@ -2082,7 +2081,7 @@ extern void DatumStreamBlockRead_GetReadyDense(
 								   int32 rowCount,
 								   bool *hadToAdjustRowCount,
 								   int32 * adjustedRowCount,
-								   RelFileNode *node);
+								   RelFileLocator *node);
 
 inline static void
 DatumStreamBlockRead_GetReady(
@@ -2093,7 +2092,7 @@ DatumStreamBlockRead_GetReady(
 							  int32 rowCount,
 							  bool *hadToAdjustRowCount,
 							  int32 * adjustedRowCount,
-							  RelFileNode *node)
+							  RelFileLocator *node)
 {
 	if (dsr->datumStreamVersion == DatumStreamVersion_Original)
 	{
@@ -2167,7 +2166,7 @@ extern void DatumStreamBlockWrite_Init(
 						   void *errdetailArg,
 						   int (*errcontextCallback) (void *errcontextArg),
 						   void *errcontextArg,
-						   RelFileNode *relFileNode);
+						   RelFileLocator *relFileNode);
 extern void DatumStreamBlockWrite_Finish(
 							 DatumStreamBlockWrite * dsw);
 
@@ -2182,6 +2181,6 @@ extern void DatumStreamBlockWrite_GetReady(
 extern int64 DatumStreamBlockWrite_Block(
 							DatumStreamBlockWrite * dsw,
 							uint8 * buffer,
-							RelFileNode *node);
+							RelFileLocator *node);
 
 #endif   /* DATUMSTREAMBLOCK_H */

@@ -3,3 +3,5 @@ DROP DATABASE IF EXISTS partition_append;
 NOTICE:  database "partition_append" does not exist, skipping
 -- end_ignore
 create database partition_append;
+\c partition_append
+GRANT ALL ON SCHEMA public TO public;

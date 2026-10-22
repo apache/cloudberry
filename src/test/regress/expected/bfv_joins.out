@@ -1,3 +1,9 @@
+-- start_matchsubs
+-- m/\(runaway_cleaner\.c:\d+\)/
+-- s/\(runaway_cleaner\.c:\d+\)/(runaway_cleaner.c:XXX)/
+-- m/Used: \d+MB, available \d+MB, red zone: \d+MB/
+-- s/Used: \d+MB, available \d+MB, red zone: \d+MB/Used: XXXMB, available XXXMB, red zone: XXXMB/
+-- end_matchsubs
 --
 -- Set up
 --
@@ -3511,6 +3517,7 @@ explain (costs off) select * from b, lateral (select * from a, c where b.i = a.i
 ---------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
+         Join Filter: ((a.i + b.i) = c.j)
          ->  Broadcast Motion 3:3  (slice2; segments: 3)
                ->  Seq Scan on b
          ->  Materialize
@@ -4220,10 +4227,7 @@ from tj1
   join tj18 on tj17.id = tj18.id
   join tj19 on tj18.id = tj19.id
   join tj20 on tj19.id = tj20.id;
- id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id 
-----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
-(0 rows)
-
+ERROR:  Canceling query because of high VMEM usage. Used: XXXMB, available XXXMB, red zone: XXXMB (runaway_cleaner.c:XXX)
 select (trunc(extract(epoch from now())) - :unix_time1) < 100 is_ok;
  is_ok 
 -------
@@ -4231,6 +4235,36 @@ select (trunc(extract(epoch from now())) - :unix_time1) < 100 is_ok;
 (1 row)
 
 reset optimizer;
+-- ORCA bug: a boolean ON-clause of a LEFT JOIN must not be pushed down as a
+-- scan filter on the outer relation. When the same outer relation feeds
+-- multiple LEFT JOINs whose ON-clauses use the same boolean column AND there
+-- is a WHERE on top, the normalizer used to push the ON-pred onto the LOJ's
+-- own outer child, discarding outer rows that should be null-padded.
+create table loj_bool_x(c1 boolean);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table loj_bool_y1(c1 boolean);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table loj_bool_y2(c1 boolean);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into loj_bool_x values (true), (false), (false);
+insert into loj_bool_y1 values (true);
+insert into loj_bool_y2 values (true);
+-- Expect 2 rows: the two FALSE rows in loj_bool_x, with NULL from loj_bool_y2.
+-- The plan must NOT contain "Filter: c1" on Seq Scan of loj_bool_x.
+select loj_bool_x.c1, loj_bool_y2.c1 as y2c1
+  from loj_bool_x left join loj_bool_y1 on loj_bool_x.c1
+                  left join loj_bool_y2 on loj_bool_x.c1
+ where loj_bool_y2.c1 is null
+ order by 1, 2;
+ c1 | y2c1 
+----+------
+ f  | 
+ f  | 
+(2 rows)
+
 -- Clean up. None of the objects we create are very interesting to keep around.
 reset search_path;
 set client_min_messages='warning';

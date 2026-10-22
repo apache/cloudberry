@@ -3,7 +3,7 @@
  * parse_func.c
  *		handle function calls in parser
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -680,6 +680,32 @@ ParseFuncOrColumn(ParseState *pstate, List *funcname, List *fargs,
 											   rettype,
 											   false);
 
+	/*
+	 * Reject any attempt to call a function that takes or returns type
+	 * internal from SQL.  (The FUNCDETAIL_COERCION case does not reach this
+	 * check because of the early return above, but that's okay because we
+	 * disallow coercions to or from type internal.)  Note that we are
+	 * checking the resolved argument and result types, so this will reject
+	 * calls to polymorphic functions that pass internal-type arguments.  The
+	 * casting rules should prevent that anyway, since we won't cast internal
+	 * to any polymorphic type, but no harm in being doubly sure.
+	 */
+	for (int i = 0; i < nargsplusdefs; i++)
+	{
+		if (declared_arg_types[i] == INTERNALOID)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("functions accepting type \"%s\" cannot be called explicitly",
+							"internal"),
+					 parser_errposition(pstate, location)));
+	}
+	if (rettype == INTERNALOID)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("functions returning type \"%s\" cannot be called explicitly",
+						"internal"),
+				 parser_errposition(pstate, location)));
+
 	/* perform the necessary typecasting of arguments */
 	make_fn_arguments(pstate, fargs, actual_arg_types, declared_arg_types);
 
@@ -782,11 +808,28 @@ ParseFuncOrColumn(ParseState *pstate, List *funcname, List *fargs,
 		aggref->aggstar = agg_star;
 		aggref->aggvariadic = func_variadic;
 		aggref->aggkind = aggkind;
+		aggref->aggpresorted = false;
 		/* agglevelsup will be set by transformAggregateCall */
 		aggref->aggsplit = AGGSPLIT_SIMPLE; /* planner might change this */
 		aggref->aggno = -1;		/* planner will set aggno and aggtransno */
 		aggref->aggtransno = -1;
 		aggref->location = location;
+
+		/*
+		 * The argument-count limit for aggregates is one less than for other
+		 * kinds of functions (cf. AggregateCreate).  Now that we know it's an
+		 * aggregate, apply the stricter limit.  We need an explicit check
+		 * because hypothetical-set aggregates don't have a fixed number of
+		 * arguments, so having matched the pg_proc entry proves nothing.
+		 */
+		if (list_length(fargs) > FUNC_MAX_ARGS - 1)
+			ereport(ERROR,
+					(errcode(ERRCODE_TOO_MANY_ARGUMENTS),
+					 errmsg_plural("aggregates cannot have more than %d argument",
+								   "aggregates cannot have more than %d arguments",
+								   FUNC_MAX_ARGS - 1,
+								   FUNC_MAX_ARGS - 1),
+					 parser_errposition(pstate, location)));
 
 		/*
 		 * Reject attempt to call a parameterless aggregate without (*)
@@ -867,6 +910,19 @@ ParseFuncOrColumn(ParseState *pstate, List *funcname, List *fargs,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("DISTINCT is supported only for single-argument window aggregates")));
 		}
+
+		/*
+		 * As above, enforce the correct argument-count limit if it's really
+		 * an aggregate.
+		 */
+		if (wfunc->winagg && list_length(fargs) > FUNC_MAX_ARGS - 1)
+			ereport(ERROR,
+					(errcode(ERRCODE_TOO_MANY_ARGUMENTS),
+					 errmsg_plural("aggregates cannot have more than %d argument",
+								   "aggregates cannot have more than %d arguments",
+								   FUNC_MAX_ARGS - 1,
+								   FUNC_MAX_ARGS - 1),
+					 parser_errposition(pstate, location)));
 
 		/*
 		 * Reject attempt to call a parameterless aggregate without (*)
@@ -1685,7 +1741,6 @@ func_get_detail(List *funcname,
 		if (argdefaults && best_candidate->ndargs > 0)
 		{
 			Datum		proargdefaults;
-			bool		isnull;
 			char	   *str;
 			List	   *defaults;
 
@@ -1693,10 +1748,8 @@ func_get_detail(List *funcname,
 			if (best_candidate->ndargs > pform->pronargdefaults)
 				elog(ERROR, "not enough default arguments");
 
-			proargdefaults = SysCacheGetAttr(PROCOID, ftup,
-											 Anum_pg_proc_proargdefaults,
-											 &isnull);
-			Assert(!isnull);
+			proargdefaults = SysCacheGetAttrNotNull(PROCOID, ftup,
+													Anum_pg_proc_proargdefaults);
 			str = TextDatumGetCString(proargdefaults);
 			defaults = castNode(List, stringToNode(str));
 			pfree(str);
@@ -2664,6 +2717,9 @@ check_srf_call_placement(ParseState *pstate, Node *last_srf, int location)
 		case EXPR_KIND_VALUES_SINGLE:
 			/* okay, since we process this like a SELECT tlist */
 			pstate->p_hasTargetSRFs = true;
+			break;
+		case EXPR_KIND_MERGE_WHEN:
+			err = _("set-returning functions are not allowed in MERGE WHEN conditions");
 			break;
 		case EXPR_KIND_CHECK_CONSTRAINT:
 		case EXPR_KIND_DOMAIN_CHECK:

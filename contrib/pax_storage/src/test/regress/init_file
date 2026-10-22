@@ -129,6 +129,11 @@ s/ERROR:  could not find hash function for hash operator.*/ERROR:  could not fin
 m/ERROR:  could not devise a plan.*/
 s/ERROR:  could not devise a plan.*/ERROR:  could not devise a plan (cdbpath.c:XXX)/
 
+# Mask out attribute numbers in ORCA fallback messages (changed in PG16)
+m/Attribute number \d+ not found in project list/
+s/Attribute number \d+ not found in project list/Attribute number ### not found in project list/
+
+
 m/nodename nor servname provided, or not known/
 s/nodename nor servname provided, or not known/Name or service not known/
 

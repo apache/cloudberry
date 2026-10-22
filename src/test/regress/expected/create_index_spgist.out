@@ -922,6 +922,24 @@ SELECT count(*) FROM radix_text_tbl WHERE t ^@	 'Worth';
      2
 (1 row)
 
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM radix_text_tbl WHERE starts_with(t, 'Worth');
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Index Only Scan using sp_radix_ind on radix_text_tbl
+               Index Cond: (t ^@ 'Worth'::text)
+               Filter: starts_with(t, 'Worth'::text)
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+SELECT count(*) FROM radix_text_tbl WHERE starts_with(t, 'Worth');
+ count 
+-------
+     2
+(1 row)
+
 -- Now check the results from bitmap indexscan
 SET enable_seqscan = OFF;
 SET enable_indexscan = OFF;
@@ -1533,6 +1551,25 @@ SELECT count(*) FROM radix_text_tbl WHERE t ^@	 'Worth';
 (7 rows)
 
 SELECT count(*) FROM radix_text_tbl WHERE t ^@	 'Worth';
+ count 
+-------
+     2
+(1 row)
+
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM radix_text_tbl WHERE starts_with(t, 'Worth');
+                      QUERY PLAN                      
+------------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Bitmap Heap Scan on radix_text_tbl
+               Filter: starts_with(t, 'Worth'::text)
+               ->  Bitmap Index Scan on sp_radix_ind
+                     Index Cond: (t ^@ 'Worth'::text)
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+SELECT count(*) FROM radix_text_tbl WHERE starts_with(t, 'Worth');
  count 
 -------
      2

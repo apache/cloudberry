@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2007-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -35,6 +35,7 @@
 #include "catalog/pg_proc.h"
 #include "catalog/pg_range.h"
 #include "catalog/pg_statistic.h"
+#include "catalog/pg_subscription.h"
 #include "catalog/pg_transform.h"
 #include "catalog/pg_type.h"
 #include "miscadmin.h"
@@ -3853,6 +3854,10 @@ get_attnullfrac(Oid relid, AttrNumber attnum)
  *
  * If it's desirable to call free_attstatsslot when get_attstatsslot might
  * not have been called, memset'ing sslot to zeroes will allow that.
+ *
+ * Passing flags=0 can be useful to quickly check if the requested slot type
+ * exists.  In this case no arrays are extracted, so free_attstatsslot need
+ * not be called.
  */
 bool
 get_attstatsslot(AttStatsSlot *sslot, HeapTuple statstuple,
@@ -3861,7 +3866,6 @@ get_attstatsslot(AttStatsSlot *sslot, HeapTuple statstuple,
 	Form_pg_statistic stats = (Form_pg_statistic) GETSTRUCT(statstuple);
 	int			i;
 	Datum		val;
-	bool		isnull;
 	ArrayType  *statarray;
 	Oid			arrayelemtype;
 	int			narrayelem;
@@ -3885,11 +3889,8 @@ get_attstatsslot(AttStatsSlot *sslot, HeapTuple statstuple,
 
 	if (flags & ATTSTATSSLOT_VALUES)
 	{
-		val = SysCacheGetAttr(STATRELATTINH, statstuple,
-							  Anum_pg_statistic_stavalues1 + i,
-							  &isnull);
-		if (isnull)
-			elog(ERROR, "stavalues is null");
+		val = SysCacheGetAttrNotNull(STATRELATTINH, statstuple,
+									 Anum_pg_statistic_stavalues1 + i);
 
 		/*
 		 * Detoast the array if needed, and in any case make a copy that's
@@ -3933,11 +3934,8 @@ get_attstatsslot(AttStatsSlot *sslot, HeapTuple statstuple,
 
 	if (flags & ATTSTATSSLOT_NUMBERS)
 	{
-		val = SysCacheGetAttr(STATRELATTINH, statstuple,
-							  Anum_pg_statistic_stanumbers1 + i,
-							  &isnull);
-		if (isnull)
-			elog(ERROR, "stanumbers is null");
+		val = SysCacheGetAttrNotNull(STATRELATTINH, statstuple,
+									 Anum_pg_statistic_stanumbers1 + i);
 
 		/*
 		 * Detoast the array if needed, and in any case make a copy that's
@@ -4045,7 +4043,7 @@ char *
 get_namespace_name_or_temp(Oid nspid)
 {
 	if (isTempNamespace(nspid))
-		return "pg_temp";
+		return pstrdup("pg_temp");
 	else
 		return get_namespace_name(nspid);
 }
@@ -4776,9 +4774,8 @@ Oid
 get_index_column_opclass(Oid index_oid, int attno)
 {
 	HeapTuple	tuple;
-	Form_pg_index rd_index PG_USED_FOR_ASSERTS_ONLY;
+	Form_pg_index rd_index;
 	Datum		datum;
-	bool		isnull;
 	oidvector  *indclass;
 	Oid			opclass;
 
@@ -4800,10 +4797,7 @@ get_index_column_opclass(Oid index_oid, int attno)
 		return InvalidOid;
 	}
 
-	datum = SysCacheGetAttr(INDEXRELID, tuple,
-							Anum_pg_index_indclass, &isnull);
-	Assert(!isnull);
-
+	datum = SysCacheGetAttrNotNull(INDEXRELID, tuple, Anum_pg_index_indclass);
 	indclass = ((oidvector *) DatumGetPointer(datum));
 
 	Assert(attno <= indclass->dim1);
@@ -4881,4 +4875,104 @@ get_index_isclustered(Oid index_oid)
 	ReleaseSysCache(tuple);
 
 	return isclustered;
+}
+
+/*
+ * get_publication_oid - given a publication name, look up the OID
+ *
+ * If missing_ok is false, throw an error if name not found.  If true, just
+ * return InvalidOid.
+ */
+Oid
+get_publication_oid(const char *pubname, bool missing_ok)
+{
+	Oid			oid;
+
+	oid = GetSysCacheOid1(PUBLICATIONNAME, Anum_pg_publication_oid,
+						  CStringGetDatum(pubname));
+	if (!OidIsValid(oid) && !missing_ok)
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("publication \"%s\" does not exist", pubname)));
+	return oid;
+}
+
+/*
+ * get_publication_name - given a publication Oid, look up the name
+ *
+ * If missing_ok is false, throw an error if name not found.  If true, just
+ * return NULL.
+ */
+char *
+get_publication_name(Oid pubid, bool missing_ok)
+{
+	HeapTuple	tup;
+	char	   *pubname;
+	Form_pg_publication pubform;
+
+	tup = SearchSysCache1(PUBLICATIONOID, ObjectIdGetDatum(pubid));
+
+	if (!HeapTupleIsValid(tup))
+	{
+		if (!missing_ok)
+			elog(ERROR, "cache lookup failed for publication %u", pubid);
+		return NULL;
+	}
+
+	pubform = (Form_pg_publication) GETSTRUCT(tup);
+	pubname = pstrdup(NameStr(pubform->pubname));
+
+	ReleaseSysCache(tup);
+
+	return pubname;
+}
+
+/*
+ * get_subscription_oid - given a subscription name, look up the OID
+ *
+ * If missing_ok is false, throw an error if name not found.  If true, just
+ * return InvalidOid.
+ */
+Oid
+get_subscription_oid(const char *subname, bool missing_ok)
+{
+	Oid			oid;
+
+	oid = GetSysCacheOid2(SUBSCRIPTIONNAME, Anum_pg_subscription_oid,
+						  MyDatabaseId, CStringGetDatum(subname));
+	if (!OidIsValid(oid) && !missing_ok)
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("subscription \"%s\" does not exist", subname)));
+	return oid;
+}
+
+/*
+ * get_subscription_name - given a subscription OID, look up the name
+ *
+ * If missing_ok is false, throw an error if name not found.  If true, just
+ * return NULL.
+ */
+char *
+get_subscription_name(Oid subid, bool missing_ok)
+{
+	HeapTuple	tup;
+	char	   *subname;
+	Form_pg_subscription subform;
+
+	tup = SearchSysCache1(SUBSCRIPTIONOID, ObjectIdGetDatum(subid));
+
+	if (!HeapTupleIsValid(tup))
+	{
+		if (!missing_ok)
+			elog(ERROR, "cache lookup failed for subscription %u", subid);
+		return NULL;
+	}
+
+	subform = (Form_pg_subscription) GETSTRUCT(tup);
+	subname = pstrdup(NameStr(subform->subname));
+
+	ReleaseSysCache(tup);
+
+	return subname;
 }

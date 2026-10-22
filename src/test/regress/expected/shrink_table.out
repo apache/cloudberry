@@ -807,15 +807,15 @@ CREATE TABLE shrink_table2(a int) distributed by (a);
 CREATE VIEW shrink_view AS select * from shrink_table1;
 CREATE rule "_RETURN" AS ON SELECT TO shrink_table2
     DO INSTEAD SELECT * FROM shrink_table1;
+ERROR:  relation "shrink_table2" cannot have ON SELECT rules
+DETAIL:  This operation is not supported for tables.
 ALTER TABLE shrink_table2 shrink TABLE to 2;
-ERROR:  "shrink_table2" is not a table, materialized view, or foreign table
 ALTER TABLE shrink_view shrink TABLE to 2;
-ERROR:  "shrink_view" is not a table, materialized view, or foreign table
+ERROR:  ALTER action ALTER COLUMN ... SHRINK TABLE cannot be performed on relation "shrink_view"
+DETAIL:  This operation is not supported for views.
 ALTER TABLE shrink_table1 shrink TABLE to 2;
 drop table shrink_table1 cascade;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to view shrink_view
-drop cascades to view shrink_table2
+NOTICE:  drop cascades to view shrink_view
 --
 -- Test shrinking a table with a domain type as distribution key.
 --

@@ -4,7 +4,7 @@
  *	  Tuple conversion support.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/access/tupconvert.h
@@ -41,11 +41,15 @@ extern TupleConversionMap *convert_tuples_by_name(TupleDesc indesc,
 												  TupleDesc outdesc);
 extern AttrMap *convert_tuples_by_name_map_missing_ok(TupleDesc indesc,
 											  TupleDesc outdesc);
+extern TupleConversionMap *convert_tuples_by_name_attrmap(TupleDesc indesc,
+														  TupleDesc outdesc,
+														  AttrMap *attrMap);
+
 extern HeapTuple execute_attr_map_tuple(HeapTuple tuple, TupleConversionMap *map);
 extern TupleTableSlot *execute_attr_map_slot(AttrMap *attrMap,
 											 TupleTableSlot *in_slot,
 											 TupleTableSlot *out_slot);
-extern Bitmapset *execute_attr_map_cols(AttrMap *attrMap, Bitmapset *inbitmap);
+extern Bitmapset *execute_attr_map_cols(AttrMap *attrMap, Bitmapset *in_cols);
 
 extern void free_conversion_map(TupleConversionMap *map);
 

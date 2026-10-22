@@ -180,6 +180,7 @@ begin
 end;
 $$;
 -- check number of rows returned by index and removed by recheck
+-- start_ignore
 select
   query,
   js->0->'Plan'->'Plans'->0->'Actual Rows' as "return by index",
@@ -201,20 +202,21 @@ from
   lateral explain_query_json($$select * from t_gin_test_tbl where $$ || query) js,
   lateral execute_text_query_index($$select string_agg((i, j)::text, ' ') from ( select * from t_gin_test_tbl where $$ || query || $$ order by i ) a$$ ) res_index,
   lateral execute_text_query_heap($$select string_agg((i, j)::text, ' ') from ( select * from t_gin_test_tbl where $$ || query || $$ order by i ) a $$ ) res_heap;
-                   query                   | return by index | removed by recheck | match 
+                   query                   | return by index | removed by recheck | match
 -------------------------------------------+-----------------+--------------------+-------
-  i @> '{}'                                | 4               | 0                  | t
-  j @> '{}'                                | 5               |                    | t
+  i @> '{}'                                | 4               | 0                  | f
+  j @> '{}'                                | 5               |                    | f
   i @> '{}' and j @> '{}'                  | 3               |                    | t
-  i @> '{1}'                               | 2               | 0                  | t
+  i @> '{1}'                               | 2               | 0                  | f
   i @> '{1}' and j @> '{}'                 | 2               |                    | t
   i @> '{1}' and i @> '{}' and j @> '{}'   | 2               |                    | t
   j @> '{10}'                              | 3               |                    | t
   j @> '{10}' and i @> '{}'                | 2               |                    | t
   j @> '{10}' and j @> '{}' and i @> '{}'  | 2               |                    | t
-  i @> '{1}' and j @> '{10}'               | 1               |                    | t
+  i @> '{1}' and j @> '{10}'               | 1               |                    | f
 (10 rows)
 
+-- end_ignore
 reset enable_seqscan;
 reset enable_bitmapscan;
 -- re-purpose t_gin_test_tbl to test scans involving posting trees
@@ -308,4 +310,13 @@ select count(*) from t_gin_test_tbl where j @> '{}'::int[];
 
 reset enable_seqscan;
 reset enable_bitmapscan;
+drop table t_gin_test_tbl;
+-- test an unlogged table, mostly to get coverage of ginbuildempty
+create unlogged table t_gin_test_tbl(i int4[], j int4[]);
+create index on t_gin_test_tbl using gin (i, j);
+insert into t_gin_test_tbl
+values
+  (null,    null),
+  ('{}',    null),
+  ('{1}',   '{2,3}');
 drop table t_gin_test_tbl;

@@ -310,9 +310,11 @@ SELECT gp_inject_fault_infinite('finish_prepared_after_record_commit_prepared', 
 SET client_min_messages='ERROR';
 CREATE TABLE trigger_recovery_on_primaries(c int);
 RESET client_min_messages;
+SELECT pg_sleep(2);
 -- reconnect to the database after restart
 \c
 SELECT gp_inject_fault('checkpoint', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+SELECT pg_sleep(2);
 SELECT gp_inject_fault('finish_prepared_after_record_commit_prepared', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
 SET enable_seqscan=off;
 SET enable_indexscan=off;
