@@ -43,6 +43,8 @@
 #ifndef DL_ERR_H
 #define DL_ERR_H
 
+#include <stddef.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -126,6 +128,15 @@ extern const char *dl_err_message(DlErrCode code);
  * record is not left behind for the next one to inherit.
  */
 extern void dl_error_report(int elevel, DlErrCode code, const char *prefix);
+
+/*
+ * Take the PostgreSQL error that DL_WRAP_END caught off PostgreSQL's error
+ * stack, copying its message into `message` for the C++ exception that carries
+ * it on.  `context` is the memory context the wrapped code ran in, and is
+ * current again afterwards.  Never raises.
+ */
+extern void dl_error_take_pg_error(void *context, char *message,
+								   size_t message_size);
 
 /*
  * An argument that was not what it had to be.  A caller reporting the code

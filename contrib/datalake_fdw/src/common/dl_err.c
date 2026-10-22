@@ -223,6 +223,40 @@ dl_error_copy_scrubbed(char *dest, Size dest_size, const char *src)
 	dest[out] = '\0';
 }
 
+/*
+ * What a PG_CATCH block that does not rethrow has to do, done once for every
+ * DL_WRAP.  errfinish() leaves ErrorContext current when it longjmps, so
+ * without switching back, whatever the caller allocates next lives in a
+ * context the next error resets.  And an error left on the stack is still
+ * there when the next one is raised: its message is lost, and enough of them
+ * overflow the stack.
+ *
+ * Copying the message can itself fail -- running out of memory is the likely
+ * reason to be here at all -- and then the generic text stands.
+ */
+void
+dl_error_take_pg_error(void *context, char *message, size_t message_size)
+{
+	MemoryContextSwitchTo((MemoryContext) context);
+	strlcpy(message, "PostgreSQL error", message_size);
+
+	PG_TRY();
+	{
+		ErrorData  *edata = CopyErrorData();
+
+		if (edata->message != NULL)
+			strlcpy(message, edata->message, message_size);
+		FreeErrorData(edata);
+	}
+	PG_CATCH();
+	{
+		MemoryContextSwitchTo((MemoryContext) context);
+	}
+	PG_END_TRY();
+
+	FlushErrorState();
+}
+
 void
 dl_error_reset(void)
 {
