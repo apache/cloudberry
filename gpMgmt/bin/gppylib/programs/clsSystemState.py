@@ -1033,6 +1033,24 @@ class GpSystemStateProgram:
         return unsync_segs
 
     @staticmethod
+    def _is_in_recovery(segment):
+        """
+        Ask a segment whether it is still in recovery.  Returns False if it
+        cannot be asked, so that a caller treats an unanswered question as
+        "not in recovery".
+        """
+        try:
+            url = dbconn.DbURL(hostname=segment.hostname, port=segment.port,
+                               dbname='template1', timeout=10, retries=1)
+            with closing(dbconn.connect(url, utility=True, logConn=False)) as conn:
+                return bool(dbconn.querySingleton(conn, "SELECT pg_is_in_recovery()"))
+        except (pgdb.DatabaseError, dbconn.ConnectionError):
+            logger.warning('could not query segment {} ({}:{})'.format(
+                    segment.dbid, segment.hostname, segment.port
+            ))
+            return False
+
+    @staticmethod
     def _add_replication_info(data, primary, mirror):
         """
         Adds WAL replication information for a segment to GpStateData.
@@ -1294,15 +1312,16 @@ class GpSystemStateProgram:
             else:
                 databaseStatus = segmentData[gp.SEGMENT_STATUS__GET_MIRROR_STATUS]["databaseStatus"]
                 # With hot_standby=on, a mirror in recovery returns PQPING_OK, causing
-                # gpgetstatususingtransition to report "Acting as Primary". Correct this
-                # by checking pg_stat_replication on the primary: if the mirror has an
-                # active WAL receiver connection (streaming/catchup), it is a legitimate
-                # hot standby and should be reported as "Up".  A hot standby whose WAL
-                # receiver has not reached streaming yet (e.g. still in "startup") is
-                # still reported as "Acting as Primary" until it does.
+                # gpgetstatususingtransition to report "Acting as Primary". An active
+                # WAL receiver connection (streaming/catchup) on the primary proves the
+                # mirror is a hot standby.  Its absence proves nothing -- the receiver
+                # may be starting up or disconnected -- so in that case ask the mirror
+                # itself.  Only a mirror that answers and is out of recovery is still
+                # reported as "Acting as Primary".
                 if (databaseStatus == "Acting as Primary"
                         and seg.isSegmentMirror(current_role=True)
-                        and mirrorReplState.get(seg.getSegmentDbId()) in ('streaming', 'catchup')):
+                        and (mirrorReplState.get(seg.getSegmentDbId()) in ('streaming', 'catchup')
+                             or self._is_in_recovery(seg))):
                     databaseStatus = "Up"
                 databaseStatusIsWarning = databaseStatus != "Up"
 
