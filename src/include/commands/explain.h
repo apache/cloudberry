@@ -52,6 +52,8 @@ typedef struct ExplainState
 	bool		settings;		/* print modified settings */
 	bool		generic;		/* generate a generic plan */
 	ExplainFormat format;		/* output format */
+	bool		runtime;		/* print intermediate state of query execution,
+								   not after completion */
 	/* state for output formatting --- not reset for each new plan tree */
 	int			indent;			/* current indentation level */
 	List	   *grouping_stack; /* format-specific grouping state */
