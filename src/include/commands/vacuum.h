@@ -475,6 +475,10 @@ extern bool vacuum_get_cutoffs(Relation rel, const VacuumParams *params,
 							   struct VacuumCutoffs *cutoffs);
 extern bool vacuum_xid_failsafe_check(const struct VacuumCutoffs *cutoffs);
 extern void vac_update_datfrozenxid(void);
+extern void vacuum_report_index_stats(Relation indrel,
+									  const IndexBulkDeleteResult *istat,
+									  double prev_tuples_removed,
+									  BlockNumber prev_pages_newly_deleted, bool cleanup);
 extern void vacuum_delay_point(void);
 extern bool vacuum_is_relation_owner(Oid relid, Form_pg_class reltuple,
 									 bits32 options);
@@ -517,7 +521,8 @@ extern void analyze_rel(Oid relid, RangeVar *relation,
 /* in commands/vacuumlazy.c */
 extern void lazy_vacuum_rel_heap(Relation onerel,
 							VacuumParams *params, BufferAccessStrategy bstrategy);
-extern void scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy bstrategy);
+extern void scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy bstrategy,
+					   IndexBulkDeleteResult *result);
 
 /* in commands/vacuum_ao.c */
 extern void ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy);
