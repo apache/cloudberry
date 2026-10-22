@@ -185,6 +185,11 @@ iceberg_volume_resolve(const char *server_name, Oid userid,
 	Assert(location_out != NULL && kv_out != NULL && nkv_out != NULL);
 
 	server = GetForeignServerByName(server_name, false);
+	if (server->fdwid != pg_iceberg_volume_fdw_oid(false))
+		ereport(ERROR,
+				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				 errmsg("server \"%s\" is not an iceberg volume server",
+						server->servername)));
 
 	aclresult = object_aclcheck(ForeignServerRelationId, server->serverid,
 								userid, ACL_USAGE);

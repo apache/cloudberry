@@ -11,6 +11,7 @@ COPY (SELECT 1) TO PROGRAM
 
 DROP SERVER IF EXISTS dlvol CASCADE;
 DROP SERVER IF EXISTS dlvol_other CASCADE;
+DROP FOREIGN DATA WRAPPER IF EXISTS dlvol_not_volume CASCADE;
 DROP ROLE IF EXISTS dlvol_user;
 CREATE ROLE dlvol_user LOGIN;
 
@@ -127,6 +128,15 @@ CREATE SERVER dlvol_root FOREIGN DATA WRAPPER iceberg_volume_fdw
 SELECT datalake_parquet_write('file:///tmp/datalake_fdw_volume/inside/root.parquet',
 							  'SELECT 9 AS id', 0, '', 'dlvol_root') AS rows_written;
 DROP SERVER dlvol_root CASCADE;
+
+-- A server of another wrapper is not a volume, whatever options it carries.
+CREATE FOREIGN DATA WRAPPER dlvol_not_volume;
+CREATE SERVER dlvol_foreign FOREIGN DATA WRAPPER dlvol_not_volume
+	OPTIONS (base_path 'file:///tmp/datalake_fdw_volume/inside');
+SELECT id FROM datalake_parquet_read(
+	'file:///tmp/datalake_fdw_volume/inside/a.parquet', 0, 0, '{}',
+	'dlvol_foreign') AS t(id int);
+DROP FOREIGN DATA WRAPPER dlvol_not_volume CASCADE;
 
 DROP SERVER dlvol CASCADE;
 DROP SERVER dlvol_other CASCADE;

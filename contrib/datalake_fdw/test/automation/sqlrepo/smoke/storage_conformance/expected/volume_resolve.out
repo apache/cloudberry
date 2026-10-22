@@ -11,6 +11,8 @@ DROP SERVER IF EXISTS dlvol CASCADE;
 NOTICE:  server "dlvol" does not exist, skipping
 DROP SERVER IF EXISTS dlvol_other CASCADE;
 NOTICE:  server "dlvol_other" does not exist, skipping
+DROP FOREIGN DATA WRAPPER IF EXISTS dlvol_not_volume CASCADE;
+NOTICE:  foreign-data wrapper "dlvol_not_volume" does not exist, skipping
 DROP ROLE IF EXISTS dlvol_user;
 CREATE ROLE dlvol_user LOGIN;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
@@ -174,6 +176,16 @@ SELECT datalake_parquet_write('file:///tmp/datalake_fdw_volume/inside/root.parqu
 (1 row)
 
 DROP SERVER dlvol_root CASCADE;
+-- A server of another wrapper is not a volume, whatever options it carries.
+CREATE FOREIGN DATA WRAPPER dlvol_not_volume;
+CREATE SERVER dlvol_foreign FOREIGN DATA WRAPPER dlvol_not_volume
+	OPTIONS (base_path 'file:///tmp/datalake_fdw_volume/inside');
+SELECT id FROM datalake_parquet_read(
+	'file:///tmp/datalake_fdw_volume/inside/a.parquet', 0, 0, '{}',
+	'dlvol_foreign') AS t(id int);
+ERROR:  server "dlvol_foreign" is not an iceberg volume server
+DROP FOREIGN DATA WRAPPER dlvol_not_volume CASCADE;
+NOTICE:  drop cascades to server dlvol_foreign
 DROP SERVER dlvol CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to user mapping for public on server dlvol
