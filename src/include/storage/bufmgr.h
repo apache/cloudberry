@@ -401,7 +401,8 @@ RelationGuessNumberOfBlocksFromSize(uint64 szbytes)
 	RelationGetNumberOfBlocksInFork(reln, MAIN_FORKNUM)
 
 extern BlockNumber AcquireNumberOfBlocks(Relation onerel);
-extern BlockNumber AcquireNumberOfAllVisibleBlocks(Relation onerel);
+extern void AcquireVisibilityMapCounts(Relation onerel, BlockNumber *all_visible,
+									   BlockNumber *all_frozen);
 
 extern bool BufferIsPermanent(Buffer buffer);
 extern XLogRecPtr BufferGetLSNAtomic(Buffer buffer);

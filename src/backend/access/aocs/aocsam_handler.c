@@ -1661,7 +1661,7 @@ aoco_acquire_sample_rows(Relation onerel, int elevel, HeapTuple *rows,
 	{
 		aocoscan->targrow = RowSampler_Next(&rs);
 
-		vacuum_delay_point();
+		vacuum_delay_point(true);
 
 		if (aocs_get_target_tuple(aocoscan, aocoscan->targrow, slot))
 		{
