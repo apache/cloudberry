@@ -1617,6 +1617,7 @@ code or new licensing patterns.
                 they carry no license header of their own.
             -->
             <exclude>licenses/LICENSE-amalgamate.txt</exclude>
+            <exclude>licenses/LICENSE-beerware-crypt-md5.txt</exclude>
             <exclude>licenses/LICENSE-boost.txt</exclude>
             <exclude>licenses/LICENSE-geqo.txt</exclude>
             <exclude>licenses/LICENSE-pg_dump.txt</exclude>

@@ -480,6 +480,17 @@ The PostgreSQL software includes:
       notices; they are reproduced in:
       see licenses/LICENSE-dmetaphone.txt
 
+----------------------------
+   Beer-ware License (Revision 42)
+
+      MD5-based crypt() from FreeBSD, written by Poul-Henning Kamp:
+      contrib/pgcrypto/crypt-md5.c
+      The file keeps only a note that it was imported from FreeBSD.  The
+      notice that FreeBSD's copy carried is reproduced in:
+      see licenses/LICENSE-beerware-crypt-md5.txt
+      FreeBSD's version of the file was later re-released under the
+      2-clause BSD license.
+
 ================================================================================
 This product contains significant parts that were originally based on software
 from VMware, Inc. or its affiliates.
