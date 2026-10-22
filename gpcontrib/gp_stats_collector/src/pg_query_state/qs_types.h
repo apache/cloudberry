@@ -61,6 +61,100 @@ typedef enum QsNodeStatus
 	QS_NODE_STATUS_FINISHED    = 3   /* at least one full loop completed */
 } QsNodeStatus;
 
+/*
+ * Type of a single plan node, as reported in a per-node sample.
+ *
+ * These values belong to the wire protocol (yagpcc::PlanNodeType in
+ * protos/yagpcc_plan.proto) and are deliberately NOT PostgreSQL NodeTag
+ * values.  NodeTag numbering is internal and unstable across major versions:
+ * PG16 generates it with gen_node_support.pl (src/include/nodes/nodetags.h)
+ * and renumbered every tag relative to PG14 -- T_SeqScan moved from 27 to 395
+ * -- so shipping nodeTag(plan) raw made every node resolve to "unknown" on a
+ * receiver carrying a table for the other version.  qs_map_node_type()
+ * translates.
+ *
+ * This enum must stay numerically identical on every branch, so that one
+ * receiver can serve them all.  SPLIT_MERGE has no PostgreSQL 14 equivalent
+ * and is never emitted here, but its value stays reserved.
+ *
+ * Append new members; never renumber, and keep in step with PlanNodeType and
+ * with map_node_type() in PlanNodeEmitter.cpp.
+ */
+typedef enum QsPlanNodeType
+{
+	QS_PLAN_NODE_TYPE_UNSPECIFIED               = 0,
+
+	/* control nodes */
+	QS_PLAN_NODE_TYPE_RESULT                    = 1,
+	QS_PLAN_NODE_TYPE_PROJECT_SET               = 2,
+	QS_PLAN_NODE_TYPE_MODIFY_TABLE              = 3,
+	QS_PLAN_NODE_TYPE_APPEND                    = 4,
+	QS_PLAN_NODE_TYPE_MERGE_APPEND              = 5,
+	QS_PLAN_NODE_TYPE_RECURSIVE_UNION           = 6,
+	QS_PLAN_NODE_TYPE_BITMAP_AND                = 7,
+	QS_PLAN_NODE_TYPE_BITMAP_OR                 = 8,
+
+	/* scans */
+	QS_PLAN_NODE_TYPE_SEQ_SCAN                  = 9,
+	QS_PLAN_NODE_TYPE_SAMPLE_SCAN               = 10,
+	QS_PLAN_NODE_TYPE_INDEX_SCAN                = 11,
+	QS_PLAN_NODE_TYPE_INDEX_ONLY_SCAN           = 12,
+	QS_PLAN_NODE_TYPE_BITMAP_INDEX_SCAN         = 13,
+	QS_PLAN_NODE_TYPE_BITMAP_HEAP_SCAN          = 14,
+	QS_PLAN_NODE_TYPE_TID_SCAN                  = 15,
+	QS_PLAN_NODE_TYPE_TID_RANGE_SCAN            = 16,
+	QS_PLAN_NODE_TYPE_SUBQUERY_SCAN             = 17,
+	QS_PLAN_NODE_TYPE_FUNCTION_SCAN             = 18,
+	QS_PLAN_NODE_TYPE_TABLE_FUNC_SCAN           = 19,
+	QS_PLAN_NODE_TYPE_VALUES_SCAN               = 20,
+	QS_PLAN_NODE_TYPE_CTE_SCAN                  = 21,
+	QS_PLAN_NODE_TYPE_NAMED_TUPLESTORE_SCAN     = 22,
+	QS_PLAN_NODE_TYPE_WORK_TABLE_SCAN           = 23,
+	QS_PLAN_NODE_TYPE_FOREIGN_SCAN              = 24,
+	QS_PLAN_NODE_TYPE_CUSTOM_SCAN               = 25,
+
+	/* joins */
+	QS_PLAN_NODE_TYPE_NEST_LOOP                 = 26,
+	QS_PLAN_NODE_TYPE_MERGE_JOIN                = 27,
+	QS_PLAN_NODE_TYPE_HASH_JOIN                 = 28,
+
+	/* materialization, ordering, grouping */
+	QS_PLAN_NODE_TYPE_MATERIAL                  = 29,
+	QS_PLAN_NODE_TYPE_MEMOIZE                   = 30,
+	QS_PLAN_NODE_TYPE_SORT                      = 31,
+	QS_PLAN_NODE_TYPE_INCREMENTAL_SORT          = 32,
+	QS_PLAN_NODE_TYPE_GROUP                     = 33,
+	QS_PLAN_NODE_TYPE_AGG                       = 34,
+	QS_PLAN_NODE_TYPE_WINDOW_AGG                = 35,
+	QS_PLAN_NODE_TYPE_UNIQUE                    = 36,
+	QS_PLAN_NODE_TYPE_HASH                      = 37,
+	QS_PLAN_NODE_TYPE_SET_OP                    = 38,
+	QS_PLAN_NODE_TYPE_LOCK_ROWS                 = 39,
+	QS_PLAN_NODE_TYPE_LIMIT                     = 40,
+
+	/* intra-node parallelism */
+	QS_PLAN_NODE_TYPE_GATHER                    = 41,
+	QS_PLAN_NODE_TYPE_GATHER_MERGE              = 42,
+
+	/* Cloudberry MPP nodes */
+	QS_PLAN_NODE_TYPE_MOTION                    = 43,
+	QS_PLAN_NODE_TYPE_SEQUENCE                  = 44,
+	QS_PLAN_NODE_TYPE_SHARE_INPUT_SCAN          = 45,
+	QS_PLAN_NODE_TYPE_SPLIT_UPDATE              = 46,
+	QS_PLAN_NODE_TYPE_SPLIT_MERGE               = 47,
+	QS_PLAN_NODE_TYPE_ASSERT_OP                 = 48,
+	QS_PLAN_NODE_TYPE_PARTITION_SELECTOR        = 49,
+	QS_PLAN_NODE_TYPE_RUNTIME_FILTER            = 50,
+	QS_PLAN_NODE_TYPE_TUPLE_SPLIT               = 51,
+	QS_PLAN_NODE_TYPE_TABLE_FUNCTION_SCAN       = 52,
+	QS_PLAN_NODE_TYPE_DYNAMIC_SEQ_SCAN          = 53,
+	QS_PLAN_NODE_TYPE_DYNAMIC_INDEX_SCAN        = 54,
+	QS_PLAN_NODE_TYPE_DYNAMIC_INDEX_ONLY_SCAN   = 55,
+	QS_PLAN_NODE_TYPE_DYNAMIC_BITMAP_INDEX_SCAN = 56,
+	QS_PLAN_NODE_TYPE_DYNAMIC_BITMAP_HEAP_SCAN  = 57,
+	QS_PLAN_NODE_TYPE_DYNAMIC_FOREIGN_SCAN      = 58
+} QsPlanNodeType;
+
 typedef struct GpscNodeSample
 {
 	int32_t tmid;                    /* transaction/time id (gp_gettmid) */
@@ -69,7 +163,8 @@ typedef struct GpscNodeSample
 	int32_t plan_node_id;            /* Plan.plan_node_id */
 	int32_t parent_plan_node_id;     /* parent's plan_node_id, or
 									  * GPSC_NO_PARENT_PLAN_NODE_ID at the root */
-	int32_t node_tag;                /* nodeTag(plan) */
+	QsPlanNodeType node_type;        /* qs_map_node_type(nodeTag(plan)); a
+									  * protocol value, not a raw NodeTag */
 	int32_t slice_id;                /* currentSliceId */
 	int32_t segindex;                /* GpIdentity.segindex */
 	int32_t pid;                     /* MyProcPid of the sampled backend */

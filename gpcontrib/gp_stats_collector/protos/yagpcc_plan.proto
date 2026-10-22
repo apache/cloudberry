@@ -47,12 +47,107 @@ enum PlanNodeStatus {
 }
 
 /*
+ * Type of a single plan node.
+ *
+ * Mirrors QsPlanNodeType from qs_types.h.  These values are defined by this
+ * protocol and are deliberately NOT PostgreSQL NodeTag values: NodeTag is an
+ * internal enum whose numbering is not stable across major versions.  PG16
+ * generates it with gen_node_support.pl (src/include/nodes/nodetags.h) and
+ * renumbered every tag relative to PG14 -- T_SeqScan moved from 27 to 395 --
+ * so a receiver holding a NodeTag->name table silently resolved every node to
+ * "unknown" there.  Map through qs_map_node_type() instead, and append new
+ * members here rather than renumbering.
+ *
+ * This enum must stay numerically identical on every branch, so that one
+ * receiver can serve them all.  SPLIT_MERGE has no PostgreSQL 14 equivalent
+ * and is never emitted here, but its value stays reserved.
+ */
+enum PlanNodeType {
+    PLAN_NODE_TYPE_UNSPECIFIED               = 0;
+
+    /* control nodes */
+    PLAN_NODE_TYPE_RESULT                    = 1;
+    PLAN_NODE_TYPE_PROJECT_SET               = 2;
+    PLAN_NODE_TYPE_MODIFY_TABLE              = 3;
+    PLAN_NODE_TYPE_APPEND                    = 4;
+    PLAN_NODE_TYPE_MERGE_APPEND              = 5;
+    PLAN_NODE_TYPE_RECURSIVE_UNION           = 6;
+    PLAN_NODE_TYPE_BITMAP_AND                = 7;
+    PLAN_NODE_TYPE_BITMAP_OR                 = 8;
+
+    /* scans */
+    PLAN_NODE_TYPE_SEQ_SCAN                  = 9;
+    PLAN_NODE_TYPE_SAMPLE_SCAN               = 10;
+    PLAN_NODE_TYPE_INDEX_SCAN                = 11;
+    PLAN_NODE_TYPE_INDEX_ONLY_SCAN           = 12;
+    PLAN_NODE_TYPE_BITMAP_INDEX_SCAN         = 13;
+    PLAN_NODE_TYPE_BITMAP_HEAP_SCAN          = 14;
+    PLAN_NODE_TYPE_TID_SCAN                  = 15;
+    PLAN_NODE_TYPE_TID_RANGE_SCAN            = 16;
+    PLAN_NODE_TYPE_SUBQUERY_SCAN             = 17;
+    PLAN_NODE_TYPE_FUNCTION_SCAN             = 18;
+    PLAN_NODE_TYPE_TABLE_FUNC_SCAN           = 19;
+    PLAN_NODE_TYPE_VALUES_SCAN               = 20;
+    PLAN_NODE_TYPE_CTE_SCAN                  = 21;
+    PLAN_NODE_TYPE_NAMED_TUPLESTORE_SCAN     = 22;
+    PLAN_NODE_TYPE_WORK_TABLE_SCAN           = 23;
+    PLAN_NODE_TYPE_FOREIGN_SCAN              = 24;
+    PLAN_NODE_TYPE_CUSTOM_SCAN               = 25;
+
+    /* joins */
+    PLAN_NODE_TYPE_NEST_LOOP                 = 26;
+    PLAN_NODE_TYPE_MERGE_JOIN                = 27;
+    PLAN_NODE_TYPE_HASH_JOIN                 = 28;
+
+    /* materialization, ordering, grouping */
+    PLAN_NODE_TYPE_MATERIAL                  = 29;
+    PLAN_NODE_TYPE_MEMOIZE                   = 30;
+    PLAN_NODE_TYPE_SORT                      = 31;
+    PLAN_NODE_TYPE_INCREMENTAL_SORT          = 32;
+    PLAN_NODE_TYPE_GROUP                     = 33;
+    PLAN_NODE_TYPE_AGG                       = 34;
+    PLAN_NODE_TYPE_WINDOW_AGG                = 35;
+    PLAN_NODE_TYPE_UNIQUE                    = 36;
+    PLAN_NODE_TYPE_HASH                      = 37;
+    PLAN_NODE_TYPE_SET_OP                    = 38;
+    PLAN_NODE_TYPE_LOCK_ROWS                 = 39;
+    PLAN_NODE_TYPE_LIMIT                     = 40;
+
+    /* intra-node parallelism */
+    PLAN_NODE_TYPE_GATHER                    = 41;
+    PLAN_NODE_TYPE_GATHER_MERGE              = 42;
+
+    /* Cloudberry MPP nodes */
+    PLAN_NODE_TYPE_MOTION                    = 43;
+    PLAN_NODE_TYPE_SEQUENCE                  = 44;
+    PLAN_NODE_TYPE_SHARE_INPUT_SCAN          = 45;
+    PLAN_NODE_TYPE_SPLIT_UPDATE              = 46;
+    PLAN_NODE_TYPE_SPLIT_MERGE               = 47;
+    PLAN_NODE_TYPE_ASSERT_OP                 = 48;
+    PLAN_NODE_TYPE_PARTITION_SELECTOR        = 49;
+    PLAN_NODE_TYPE_RUNTIME_FILTER            = 50;
+    PLAN_NODE_TYPE_TUPLE_SPLIT               = 51;
+    PLAN_NODE_TYPE_TABLE_FUNCTION_SCAN       = 52;
+    PLAN_NODE_TYPE_DYNAMIC_SEQ_SCAN          = 53;
+    PLAN_NODE_TYPE_DYNAMIC_INDEX_SCAN        = 54;
+    PLAN_NODE_TYPE_DYNAMIC_INDEX_ONLY_SCAN   = 55;
+    PLAN_NODE_TYPE_DYNAMIC_BITMAP_INDEX_SCAN = 56;
+    PLAN_NODE_TYPE_DYNAMIC_BITMAP_HEAP_SCAN  = 57;
+    PLAN_NODE_TYPE_DYNAMIC_FOREIGN_SCAN      = 58;
+}
+
+/*
  * Identifying information for a single plan node within a query plan tree.
  *
  * Fields:
  *   plan_node_id        -- unique node id within the plan (Plan.plan_node_id)
  *   parent_plan_node_id -- plan_node_id of the logical parent node, or 0
- *   node_type           -- PostgreSQL NodeTag value (nodeTag(plan))
+ *   node_type           -- PostgreSQL NodeTag value (nodeTag(plan)).  NOTE:
+ *                          unlike BatchNode.node_type this is still a raw
+ *                          NodeTag, which is not stable across major versions
+ *                          (see PlanNodeType).  This message is currently
+ *                          unused by the extension; switch it to PlanNodeType
+ *                          before putting it on the wire.
  *   slice_id            -- CDB slice index (currentSliceId)
  *   plan_rows           -- optimizer row-count estimate (Plan.plan_rows)
  *   relation_oid        -- OID of the scanned relation for scan nodes, or 0
