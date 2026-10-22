@@ -1589,7 +1589,8 @@ pgstat_report_autovac(Oid dboid)
  */
 void
 pgstat_report_vacuum(Oid tableoid, bool shared,
-					 PgStat_Counter livetuples, PgStat_Counter deadtuples)
+					 PgStat_Counter livetuples, PgStat_Counter deadtuples,
+					 TimestampTz starttime, PgStat_Counter delaytime)
 {
 	PgStat_MsgVacuum msg;
 
@@ -1600,9 +1601,33 @@ pgstat_report_vacuum(Oid tableoid, bool shared,
 	msg.m_databaseid = shared ? InvalidOid : MyDatabaseId;
 	msg.m_tableoid = tableoid;
 	msg.m_autovacuum = IsAutoVacuumWorkerProcess();
+	msg.m_isindex = false;
+	msg.m_delaytime = delaytime;
 	msg.m_vacuumtime = GetCurrentTimestamp();
+	msg.m_elapsedtime = Max(msg.m_vacuumtime - starttime, 0);
 	msg.m_live_tuples = livetuples;
 	msg.m_dead_tuples = deadtuples;
+	pgstat_send(&msg, sizeof(msg));
+}
+
+/* Report an index pass without changing table estimates or vacuum counts. */
+void
+pgstat_report_index_vacuum_time(Relation rel, PgStat_Counter elapsedtime,
+								PgStat_Counter delaytime, bool is_autovacuum)
+{
+	PgStat_MsgVacuum msg;
+
+	if (pgStatSock == PGINVALID_SOCKET || !pgstat_track_counts)
+		return;
+
+	MemSet(&msg, 0, sizeof(msg));
+	pgstat_setheader(&msg.m_hdr, PGSTAT_MTYPE_VACUUM);
+	msg.m_databaseid = rel->rd_rel->relisshared ? InvalidOid : MyDatabaseId;
+	msg.m_tableoid = RelationGetRelid(rel);
+	msg.m_autovacuum = is_autovacuum;
+	msg.m_isindex = true;
+	msg.m_elapsedtime = elapsedtime;
+	msg.m_delaytime = delaytime;
 	pgstat_send(&msg, sizeof(msg));
 }
 
@@ -1618,7 +1643,7 @@ pgstat_report_vacuum(Oid tableoid, bool shared,
 void
 pgstat_report_analyze(Relation rel,
 					  PgStat_Counter livetuples, PgStat_Counter deadtuples,
-					  bool resetcounter)
+					  bool resetcounter, TimestampTz starttime)
 {
 	PgStat_MsgAnalyze msg;
 
@@ -1660,6 +1685,7 @@ pgstat_report_analyze(Relation rel,
 	msg.m_autovacuum = IsAutoVacuumWorkerProcess();
 	msg.m_resetcounter = resetcounter;
 	msg.m_analyzetime = GetCurrentTimestamp();
+	msg.m_elapsedtime = Max(msg.m_analyzetime - starttime, 0);
 	msg.m_live_tuples = livetuples;
 	msg.m_dead_tuples = deadtuples;
 	pgstat_send(&msg, sizeof(msg));
@@ -3820,6 +3846,13 @@ reset_dbentry_counters(PgStat_StatDBEntry *dbentry)
 	dbentry->n_sessions_abandoned = 0;
 	dbentry->n_sessions_fatal = 0;
 	dbentry->n_sessions_killed = 0;
+	dbentry->total_vacuum_time = 0;
+	dbentry->total_autovacuum_time = 0;
+	dbentry->total_vacuum_delay_time = 0;
+	dbentry->total_autovacuum_delay_time = 0;
+	dbentry->n_frozen_page_marks_cleared = 0;
+	dbentry->n_visible_page_marks_cleared = 0;
+
 
 	dbentry->stat_reset_timestamp = GetCurrentTimestamp();
 	dbentry->stats_timestamp = 0;
@@ -3914,6 +3947,14 @@ pgstat_get_tab_entry(PgStat_StatDBEntry *dbentry, Oid tableoid, bool create)
 		result->analyze_count = 0;
 		result->autovac_analyze_timestamp = 0;
 		result->autovac_analyze_count = 0;
+		result->frozen_page_marks_cleared = 0;
+		result->visible_page_marks_cleared = 0;
+		result->total_vacuum_time = 0;
+		result->total_autovacuum_time = 0;
+		result->total_analyze_time = 0;
+		result->total_autoanalyze_time = 0;
+		result->total_vacuum_delay_time = 0;
+		result->total_autovacuum_delay_time = 0;
 	}
 
 	return result;
@@ -5275,6 +5316,14 @@ pgstat_recv_tabstat(PgStat_MsgTabstat *msg, int len)
 			tabentry->analyze_count = 0;
 			tabentry->autovac_analyze_timestamp = 0;
 			tabentry->autovac_analyze_count = 0;
+			tabentry->frozen_page_marks_cleared = 0;
+			tabentry->visible_page_marks_cleared = 0;
+			tabentry->total_vacuum_time = 0;
+			tabentry->total_autovacuum_time = 0;
+			tabentry->total_analyze_time = 0;
+			tabentry->total_autoanalyze_time = 0;
+			tabentry->total_vacuum_delay_time = 0;
+			tabentry->total_autovacuum_delay_time = 0;
 		}
 		else
 		{
@@ -5318,6 +5367,14 @@ pgstat_recv_tabstat(PgStat_MsgTabstat *msg, int len)
 		dbentry->n_tuples_deleted += tabmsg->t_counts.t_tuples_deleted;
 		dbentry->n_blocks_fetched += tabmsg->t_counts.t_blocks_fetched;
 		dbentry->n_blocks_hit += tabmsg->t_counts.t_blocks_hit;
+		tabentry->frozen_page_marks_cleared +=
+			tabmsg->t_counts.t_frozen_page_marks_cleared;
+		tabentry->visible_page_marks_cleared +=
+			tabmsg->t_counts.t_visible_page_marks_cleared;
+		dbentry->n_frozen_page_marks_cleared +=
+			tabmsg->t_counts.t_frozen_page_marks_cleared;
+		dbentry->n_visible_page_marks_cleared +=
+			tabmsg->t_counts.t_visible_page_marks_cleared;
 	}
 }
 
@@ -5605,6 +5662,32 @@ pgstat_recv_vacuum(PgStat_MsgVacuum *msg, int len)
 
 	tabentry = pgstat_get_tab_entry(dbentry, msg->m_tableoid, true);
 
+	if (msg->m_autovacuum)
+	{
+		tabentry->total_autovacuum_time += msg->m_elapsedtime;
+		tabentry->total_autovacuum_delay_time += msg->m_delaytime;
+	}
+	else
+	{
+		tabentry->total_vacuum_time += msg->m_elapsedtime;
+		tabentry->total_vacuum_delay_time += msg->m_delaytime;
+	}
+
+	/* Index passes are already included in the owning table's elapsed time. */
+	if (msg->m_isindex)
+		return;
+
+	if (msg->m_autovacuum)
+	{
+		dbentry->total_autovacuum_time += msg->m_elapsedtime;
+		dbentry->total_autovacuum_delay_time += msg->m_delaytime;
+	}
+	else
+	{
+		dbentry->total_vacuum_time += msg->m_elapsedtime;
+		dbentry->total_vacuum_delay_time += msg->m_delaytime;
+	}
+
 	tabentry->n_live_tuples = msg->m_live_tuples;
 	tabentry->n_dead_tuples = msg->m_dead_tuples;
 
@@ -5666,11 +5749,13 @@ pgstat_recv_analyze(PgStat_MsgAnalyze *msg, int len)
 	{
 		tabentry->autovac_analyze_timestamp = msg->m_analyzetime;
 		tabentry->autovac_analyze_count++;
+		tabentry->total_autoanalyze_time += msg->m_elapsedtime;
 	}
 	else
 	{
 		tabentry->analyze_timestamp = msg->m_analyzetime;
 		tabentry->analyze_count++;
+		tabentry->total_analyze_time += msg->m_elapsedtime;
 	}
 }
 
