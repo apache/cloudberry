@@ -1905,15 +1905,41 @@ table_relation_copy_data(Relation rel, const RelFileLocator *newrlocator)
 	rel->rd_tableam->relation_copy_data(rel, newrlocator);
 }
 
+/*
+ * Add new columns, or rewrite existing ones, in place -- without rewriting the
+ * rest of the relation.  Only ao_column implements these; every other access
+ * method (heap, ao_row and PAX among them) leaves the callbacks NULL and has
+ * to rewrite the whole table instead.
+ *
+ * Callers select this path by setting AT_REWRITE_NEW_COLUMNS_ONLY or
+ * AT_REWRITE_REWRITE_COLUMNS_ONLY, which they only do under
+ * RelationIsAoCols().  Check again here rather than calling through a NULL
+ * pointer: getting that guard wrong in any one of those places would
+ * otherwise crash the backend instead of reporting an unsupported operation.
+ */
 static inline void
 table_relation_add_columns(Relation rel, List *newvals, List *constraints, TupleDesc oldDesc)
 {
+	if (rel->rd_tableam->relation_add_columns == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot add columns to relation \"%s\" in place",
+						RelationGetRelationName(rel)),
+				 errdetail("Its access method does not support adding columns without rewriting the relation.")));
+
 	rel->rd_tableam->relation_add_columns(rel, newvals, constraints, oldDesc);
 }
 
 static inline void
 table_relation_rewrite_columns(Relation rel, List *newvals, TupleDesc oldDesc)
 {
+	if (rel->rd_tableam->relation_rewrite_columns == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot rewrite columns of relation \"%s\" in place",
+						RelationGetRelationName(rel)),
+				 errdetail("Its access method does not support rewriting columns without rewriting the relation.")));
+
 	rel->rd_tableam->relation_rewrite_columns(rel, newvals, oldDesc);
 }
 
