@@ -12,6 +12,7 @@
 #define GPOPT_CKeyCollection_H
 
 #include "gpos/base.h"
+#include "gpos/common/CBitSet.h"
 #include "gpos/common/CDynamicPtrArray.h"
 #include "gpos/common/CRefCount.h"
 
@@ -36,6 +37,11 @@ private:
 	// array of key sets
 	CColRefSetArray *m_pdrgpcrs;
 
+	// positions of the keys that permit multiple NULLs, i.e. the keys of a
+	// UNIQUE constraint with nullable columns; any other key is unique
+	// including NULLs
+	CBitSet *m_pbsNullsDistinct;
+
 public:
 	CKeyCollection(const CKeyCollection &) = delete;
 
@@ -48,10 +54,17 @@ public:
 	~CKeyCollection() override;
 
 	// add individual set -- takes ownership
-	void Add(CColRefSet *pcrs);
+	void Add(CColRefSet *pcrs, BOOL fNullsDistinct = false);
 
 	// check if set forms a key
 	BOOL FKey(const CColRefSet *pcrs, BOOL fExactMatch = true) const;
+
+	// check if the key at given position permits multiple NULLs
+	BOOL
+	FNullsDistinct(ULONG ul) const
+	{
+		return m_pbsNullsDistinct->Get(ul);
+	}
 
 	// check if an array of columns constitutes a key
 	BOOL FKey(CMemoryPool *mp, const CColRefArray *colref_array) const;
