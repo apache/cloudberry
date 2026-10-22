@@ -1297,7 +1297,9 @@ class GpSystemStateProgram:
                 # gpgetstatususingtransition to report "Acting as Primary". Correct this
                 # by checking pg_stat_replication on the primary: if the mirror has an
                 # active WAL receiver connection (streaming/catchup), it is a legitimate
-                # hot standby and should be reported as "Up".
+                # hot standby and should be reported as "Up".  A hot standby whose WAL
+                # receiver has not reached streaming yet (e.g. still in "startup") is
+                # still reported as "Acting as Primary" until it does.
                 if (databaseStatus == "Acting as Primary"
                         and seg.isSegmentMirror(current_role=True)
                         and mirrorReplState.get(seg.getSegmentDbId()) in ('streaming', 'catchup')):
