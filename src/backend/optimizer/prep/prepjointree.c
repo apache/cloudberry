@@ -758,11 +758,39 @@ pull_up_sublinks_qual_recurse(PlannerInfo *root, Node *node,
 
 			if (IsA(rarg, SubLink))
 			{
+				/*
+				 * The pulled-up join is spliced in at *jtlink1, and in the
+				 * LEFT-join case the comparison itself moves there too, so
+				 * every Var of this query level used by the clause must be
+				 * available at that attach point.  Otherwise (e.g. an outer
+				 * join's ON clause referencing the non-nullable side) leave
+				 * the sublink to be planned as a SubPlan.
+				 */
+				if (!bms_is_subset(pull_varnos(root, node), available_rels1))
+					return node;
+
 				j = convert_EXPR_to_join(root, opexp);
 				if (j)
 				{
 					/* Yes, insert the new join node into the join tree */
 					j->larg = *jtlink1;
+
+					if (j->jointype == JOIN_LEFT)
+					{
+						/*
+						 * COUNT-preserving pull-up (see convert_EXPR_to_join).
+						 * opexp must run ABOVE the LEFT JOIN, not as its join
+						 * condition: as a join qual a matched row that fails it
+						 * would be treated as unmatched, null-extended, and let
+						 * back in by the no-match default of the CASE built by
+						 * convert_EXPR_to_join. Wrap the join in a FromExpr so
+						 * opexp stays a post-join filter.
+						 */
+						*jtlink1 = (Node *) makeFromExpr(list_make1(j), node);
+						return NULL;
+					}
+
+					/* Inner-join case: opexp stays as an ordinary qual. */
 					*jtlink1 = (Node *) j;
 				}
 				return node;
