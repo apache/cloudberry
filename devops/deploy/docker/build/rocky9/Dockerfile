@@ -173,6 +173,26 @@ RUN dnf makecache && \
     echo 'export PATH=$PATH:/usr/local/go/bin' | tee -a /etc/profile.d/go.sh > /dev/null
 
 # --------------------------------------------------------------------
+# Install Apache Arrow and Parquet C++ for contrib/datalake_fdw
+# --------------------------------------------------------------------
+# From the Arrow project's own repository, pinned: datalake_fdw shares
+# its ABI with Arrow, so the version moves only with a change here.
+# EPEL and CRB carry what the packages depend on (re2, thrift, ...).
+# The repository is left disabled afterwards, as EPEL is.
+# The release package needs nothing from a repository, so it goes in
+# with them all disabled: loading their metadata under QEMU took eight
+# minutes of an arm64 build.
+# --------------------------------------------------------------------
+ARG ARROW_VERSION=26.0.0
+RUN dnf install -y --disablerepo='*' \
+        https://packages.apache.org/artifactory/arrow/almalinux/9/apache-arrow-release-latest.rpm && \
+    dnf install -y --enablerepo=epel --enablerepo=crb \
+        arrow-devel-${ARROW_VERSION}-1.el9 \
+        parquet-devel-${ARROW_VERSION}-1.el9 && \
+    dnf config-manager --disable 'apache-arrow-*' && \
+    dnf clean all
+
+# --------------------------------------------------------------------
 # Copy Configuration Files and Setup the Environment
 # --------------------------------------------------------------------
 # - Copy custom configuration files from the build context to /tmp/.

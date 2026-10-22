@@ -892,9 +892,6 @@
 /* Define to 1 to build with MDB locales. (--with-mdblocales) */
 #undef USE_MDBLOCALES
 
-/* Define to 1 to build with Mapreduce capabilities (--enable-mapreduce) */
-#undef USE_MAPREDUCE
-
 /* Define to select named POSIX semaphores. */
 #undef USE_NAMED_POSIX_SEMAPHORES
 

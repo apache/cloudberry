@@ -1526,37 +1526,9 @@ jobs:
           fi
 
           # datalake_fdw needs the Arrow and Parquet C++ libraries, which the
-          # build image does not carry -- nothing in the RPM uses them, so they
-          # would be weight every other job paid for.
-          if [[ "${PGXS_EXTENSION}" == "contrib/datalake_fdw" ]]; then
-            . /etc/os-release
-            if [[ "${VERSION_ID%%.*}" == "8" ]]; then
-              # EPEL 8 has them, but its libarrow-devel needs a utf8proc-devel
-              # that modular filtering keeps out of PowerTools, so it cannot be
-              # installed.  The Arrow project's own repository can.  Pinned to
-              # 22.0.0, the last release whose headers are C++17: from 23 on
-              # they need C++20, which Rocky 8's gcc 8 does not have.
-              # EPEL as well, and not only for Arrow itself: arrow-devel needs
-              # re2-devel and parquet-devel needs thrift-devel, and on EL8 both
-              # of those live in EPEL.
-              dnf install -y \
-                https://apache.jfrog.io/artifactory/arrow/almalinux/8/apache-arrow-release-latest.rpm
-              dnf install -y --enablerepo=epel --enablerepo=powertools \
-                arrow-devel-22.0.0-1.el8 parquet-devel-22.0.0-1.el8
-            else
-              # Apache's own repository rather than EPEL, and pinned.  EPEL's
-              # Arrow moves when EPEL moves, so a version change there would
-              # arrive in this job with no commit of ours behind it -- and
-              # Arrow is the library this extension's ABI is shared with.
-              # 26.0.0 here and 22.0.0 on Rocky 8 means the C++20 build and
-              # the C++17 one are both tested.
-              arrow_version=26.0.0-1.el${VERSION_ID%%.*}
-              dnf install -y \
-                https://apache.jfrog.io/artifactory/arrow/almalinux/${VERSION_ID%%.*}/apache-arrow-release-latest.rpm
-              dnf install -y --enablerepo=epel --enablerepo=crb \
-                "arrow-devel-${arrow_version}" "parquet-devel-${arrow_version}"
-            fi
-          fi
+          # build images carry, pinned: 22.0.0 on Rocky 8, the last release
+          # whose headers are C++17, and 26.0.0 on Rocky 9 and 10.  Nothing is
+          # installed here, so the version under test is the image's own.
 
           # The RPM installs as root; the build runs as gpadmin, as everywhere
           # else in this job.  -H follows the command-line symlink.
