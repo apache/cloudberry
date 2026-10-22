@@ -114,6 +114,13 @@ dl_storage_host_pool(const DatalakeStorageHost *host)
  *
  * Instances are borrowed by the registry and therefore need static lifetime.
  * struct_size is prefix-compatible: future versions may append fields.
+ *
+ * mount, initialize and finalize report failure through what they return and
+ * must never raise a PostgreSQL error.  They are called from C++ frames, which
+ * an ereport(ERROR) would longjmp past, skipping their destructors; and
+ * finalize runs while the process exits, where an ERROR becomes FATAL and the
+ * backends after this one are never finalized.  A backend that calls into
+ * PostgreSQL catches what it raises before returning.
  */
 struct DatalakeStorageBackend
 {

@@ -102,8 +102,8 @@ extern void dl_error_set_remote_code(int remote_code);
 /*
  * Remember a value that must never be shown.  Every error recorded afterwards
  * has it replaced with "***", whichever layer produced the text -- a backend,
- * an SDK, or an exception nobody expected.  Values shorter than six characters
- * are ignored, because masking those would eat words out of ordinary messages.
+ * an SDK, or an exception nobody expected.  NULL and empty values are ignored;
+ * there is no minimum length.
  */
 extern void dl_error_add_secret(const char *value);
 
