@@ -53,6 +53,7 @@ datalake_storage_register(const DatalakeStorageBackend *backend)
 {
 	typedef DlErrCode (*dl_register_fn) (const DatalakeStorageBackend *);
 	volatile DlErrCode rc = DL_ERR_INTERNAL;
+	MemoryContext context = CurrentMemoryContext;
 
 	PG_TRY();
 	{
@@ -65,12 +66,41 @@ datalake_storage_register(const DatalakeStorageBackend *backend)
 	}
 	PG_CATCH();
 	{
+		char		reason[256];
+
 		/*
 		 * The caller is a plugin's _PG_init, which is entitled to decide for
 		 * itself whether it can carry on; what it must not get is an unwind
-		 * through its own frames.
+		 * through its own frames.  Nor the state an error leaves behind:
+		 * errfinish() made ErrorContext current, and what the plugin allocated
+		 * next would live there until the next error reset it.
+		 *
+		 * The reason is logged because nothing else will say it: the code
+		 * returned only says that loading failed, not why -- a library that
+		 * is missing, or a symbol that is.  Copying it allocates, and a
+		 * failure there must not unwind either, so it is copied under a
+		 * PG_TRY of its own and falls back to saying nothing more.
 		 */
+		MemoryContextSwitchTo(context);
+		strlcpy(reason, "reason unavailable", sizeof(reason));
+		PG_TRY();
+		{
+			ErrorData  *edata = CopyErrorData();
+
+			if (edata->message != NULL)
+				strlcpy(reason, edata->message, sizeof(reason));
+			FreeErrorData(edata);
+		}
+		PG_CATCH();
+		{
+			MemoryContextSwitchTo(context);
+		}
+		PG_END_TRY();
 		FlushErrorState();
+		ereport(LOG,
+				(errmsg("could not register storage backend \"%s\" with datalake_fdw: %s",
+						backend != NULL && backend->uri_scheme != NULL ?
+						backend->uri_scheme : "(null)", reason)));
 		rc = DL_ERR_NOT_SUPPORTED;
 	}
 	PG_END_TRY();
