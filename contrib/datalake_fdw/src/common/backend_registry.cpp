@@ -97,15 +97,12 @@ storage_backends_finalize(int code, Datum arg)
 	(void) code;
 	(void) arg;
 
-	try
+	/* Process exit is a cleanup boundary: never throw or ereport here. */
+	DL_CLEANUP_GUARD_BEGIN
 	{
 		registry = storage_registry(false);
 	}
-	catch (...)
-	{
-		/* Process exit is a cleanup boundary: never throw or ereport here. */
-		return;
-	}
+	DL_CLEANUP_GUARD_END;
 
 	if (registry == NULL)
 		return;
@@ -114,7 +111,7 @@ storage_backends_finalize(int code, Datum arg)
 	{
 		if (entry->initialized && entry->backend->finalize != NULL)
 		{
-			try
+			DL_CLEANUP_GUARD_BEGIN
 			{
 				DL_WRAP_START;
 				{
@@ -124,10 +121,8 @@ storage_backends_finalize(int code, Datum arg)
 				DL_WRAP_END;
 				entry->backend->finalize();
 			}
-			catch (...)
-			{
-				/* One plugin must not prevent the remaining finalizers. */
-			}
+			/* One plugin must not prevent the remaining finalizers. */
+			DL_CLEANUP_GUARD_END;
 		}
 		entry->initialized = false;
 	}
@@ -299,18 +294,15 @@ datalake_initialize_storage_backend(const DatalakeStorageBackend *backend)
 extern "C" bool
 datalake_storage_scheme_registered(const char *scheme)
 {
-	bool		found = false;
-
 	/* Asked from C, on a path that must not throw. */
 	try
 	{
-		found = datalake_lookup_storage_backend(scheme) != NULL;
+		return datalake_lookup_storage_backend(scheme) != NULL;
 	}
 	catch (...)
 	{
-		found = false;
+		return false;
 	}
-	return found;
 }
 
 extern "C" void
