@@ -1,4 +1,3 @@
-import imp
 import os
 import sys
 
@@ -6,7 +5,7 @@ from mock import Mock, patch, call
 
 from gppylib.gparray import Segment, GpArray
 from gppylib.operations.startSegments import StartSegmentsResult
-from gppylib.test.unit.gp_unittest import GpTestCase, run_tests
+from gppylib.test.unit.gp_unittest import GpTestCase, load_source, run_tests
 from gppylib.commands import gp
 from gppylib.commands.base import ExecutionError
 from gppylib.mainUtils import ExceptionNoStackTraceNeeded, UserAbortedException
@@ -20,7 +19,7 @@ class GpStart(GpTestCase):
         #   import gpstart
         #   self.subject = gpstart
         gpstart_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpstart")
-        self.subject = imp.load_source('gpstart', gpstart_file)
+        self.subject = load_source('gpstart', gpstart_file)
         self.subject.logger = Mock(
             spec=['log', 'warn', 'info', 'debug', 'error', 'warning', 'fatal', 'warning_to_file_only'])
 
