@@ -6938,6 +6938,14 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 		 */
 		if (tab->rewrite & AT_REWRITE_NEW_COLUMNS_ONLY || tab->rewrite & AT_REWRITE_REWRITE_COLUMNS_ONLY)
 		{
+			/*
+			 * Both flags are only ever set under RelationIsAoCols(); no other
+			 * access method implements the two callbacks below.  table_relation_
+			 * add_columns() rejects the rest at runtime, this just pins the
+			 * assumption down in assert-enabled builds.
+			 */
+			Assert(RelationIsAoCols(OldHeap));
+
 			if (tab->rewrite & AT_REWRITE_NEW_COLUMNS_ONLY)
 			{
 				table_relation_add_columns(OldHeap, tab->newvals, tab->constraints, tab->oldDesc);
