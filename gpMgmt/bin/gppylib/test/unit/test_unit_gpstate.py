@@ -321,6 +321,24 @@ class ReplicationInfoTestCase(unittest.TestCase):
 
             self.assertIsNone(GpSystemStateProgram._add_replication_info(self.data, self.primary, self.mirror))
 
+    @mock.patch('gppylib.db.dbconn.querySingleton', autospec=True)
+    @mock.patch('gppylib.db.dbconn.connect', autospec=True)
+    def test_is_in_recovery_reports_what_the_segment_says(self, mock_connect, mock_query):
+        for in_recovery in (True, False):
+            mock_query.return_value = in_recovery
+            self.assertIs(in_recovery, GpSystemStateProgram._is_in_recovery(self.mirror))
+
+        mock_query.assert_called_with(mock.ANY, "SELECT pg_is_in_recovery()")
+        self.assertTrue(mock_connect.call_args[1]['utility'])
+
+    @mock.patch('gppylib.db.dbconn.connect', autospec=True)
+    def test_is_in_recovery_is_false_if_segment_cannot_be_asked(self, mock_connect):
+        for error in (pgdb.InternalError('connection failure forced by unit test'),
+                      pgdb.OperationalError('connection failure forced by unit test'),
+                      dbconn.ConnectionError('connection failure forced by unit test')):
+            mock_connect.side_effect = error
+            self.assertIs(False, GpSystemStateProgram._is_in_recovery(self.mirror))
+
     @mock.patch('gppylib.db.dbconn.query', autospec=True)
     @mock.patch('gppylib.db.dbconn.connect', autospec=True)
     def test_add_replication_info_omits_lag_info_if_WAL_locations_are_identical(self, mock_connect, mock_query):
