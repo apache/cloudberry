@@ -113,7 +113,7 @@ for cast in extension_casts:
     if cast[2] != 'WITH INOUT' and cast[2] != 'WITHOUT FUNCTION':
         sql_func_name = cast[2]
 
-        m = re.match('(\w+)\(', sql_func_name)
+        m = re.match('(\\w+)\\(', sql_func_name)
         if m is not None:
             sql_func_name = m[1]
 
@@ -211,11 +211,11 @@ for name, return_type, args, body in safe_functions:
     if re.search(r'bool', return_type) is None:
         print(f'    WARNING: safe function {name} returns result not bool')
     
-    m = re.match('(\w+)Safe', name)
+    m = re.match('(\\w+)Safe', name)
     if m is not None:
         loaded_null_functions[m[1]] = 1
 
-    m = re.match('(\w+)_safe', name)
+    m = re.match('(\\w+)_safe', name)
     if m is not None:
         loaded_null_functions[m[1]] = 1
 
@@ -233,14 +233,14 @@ loaded_functions = dict(list(loaded_convert_functions.items()) + list(loaded_saf
 
 from find_calls import get_all_functions_with
 
-ereport_functions = get_all_functions_with('ereport\(ERROR,')
+ereport_functions = get_all_functions_with('ereport\\(ERROR,')
 
 unsafe_convert_functions = {}
 
 for func_name in loaded_functions:
     body = loaded_functions[func_name]
 
-    pattern_call = '(\w+)\s*\(([\s\S]*?)\)'
+    pattern_call = '(\\w+)\\s*\\(([\\s\\S]*?)\\)'
 
     for token_match in re.finditer(pattern_call, body):
 
@@ -276,7 +276,7 @@ wrong_wrap_usage_count = 0
 for func_name in loaded_functions:
     body = loaded_functions[func_name]
 
-    pattern_call = '\w+'
+    pattern_call = '\\w+'
 
     for token_match in re.finditer(pattern_call, body):
 

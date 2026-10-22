@@ -64,7 +64,7 @@ for i in range(1, len(lines)):
     preline = lines[i-1]
     line = lines[i]
     if len(line) > 0 and len(preline) > 0 and (line[0] == '-' or line[0] == '+') and (preline[0] != '-' and preline[0] != '+'):
-        words = re.split('::|\*|;|\n| |\(|\)|,|\.|\".*\"|\'.*\'|<.*>', preline)
+        words = re.split('::|\\*|;|\n| |\\(|\\)|,|\\.|\".*\"|\'.*\'|<.*>', preline)
         ans = []
         is_prining = False
         for word in words:

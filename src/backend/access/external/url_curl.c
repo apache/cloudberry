@@ -1473,7 +1473,7 @@ url_curl_fopen(char *url, bool forwrite, extvar_t *ev, CopyFormatOptions *opts)
 	{
 		/* use empty message */
 		CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDS, "");
-		CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDSIZE, 0);
+		CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDSIZE, 0L);
 
 		/* post away and check response, retry if failed (timeout or * connect error) */
 		gp_perform_backoff_and_check_response(file, easy_perform_work);
@@ -1932,7 +1932,7 @@ gp_proto0_write_done(URL_CURL_FILE *file)
 
 	/* use empty message */
 	CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDS, "");
-	CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDSIZE, 0);
+	CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDSIZE, 0L);
 
 	/* post away! */
 	gp_perform_backoff_and_check_response(file, easy_perform_work);

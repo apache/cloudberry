@@ -229,10 +229,16 @@ installcheck-hot-standby: submake-generated-headers
 # be part of [install]check-world, but we treat them more like part of
 # compilation than regression testing, in the CI. But they are too heavy-weight
 # to put into "make all", either.
+#
+# CFLAGS is replaced here, but keep the -std option that configure may have
+# chosen (-std=gnu17 with a compiler that defaults to C23), or the code does
+# not compile.
+UNITTEST_CFLAGS = -DUNITTEST $(filter -std=%,$(CFLAGS))
+
 .PHONY : unittest-check
 unittest-check:
-	$(MAKE) CFLAGS=-DUNITTEST -C src/backend unittest-check
-	$(MAKE) CFLAGS=-DUNITTEST -C src/bin unittest-check
+	$(MAKE) CFLAGS="$(UNITTEST_CFLAGS)" -C src/backend unittest-check
+	$(MAKE) CFLAGS="$(UNITTEST_CFLAGS)" -C src/bin unittest-check
 
 GNUmakefile: GNUmakefile.in $(top_builddir)/config.status
 	./config.status $@
