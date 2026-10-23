@@ -280,6 +280,14 @@ typedef struct AOCSScanDescData
 		/* attnum to rownum mapping, used in reading missing column value */
 		int64 			   *attnum_to_rownum;
 
+		/*
+		 * Does any column of this relation have a missing region at all?  If
+		 * not -- which is the usual case -- the per-row missing-value check
+		 * can be skipped outright instead of probing attnum_to_rownum once
+		 * per row per column.
+		 */
+		bool 				has_missing_cols;
+
 		struct DatumStreamRead **ds;
 	} columnScanInfo;
 
