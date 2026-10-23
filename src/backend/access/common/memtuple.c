@@ -935,11 +935,31 @@ memtuple_copy(MemTuple mtup)
 	return dest;
 }
 
-static void memtuple_get_values(MemTuple mtup, MemTupleBinding *pbind, Datum *datum, bool *isnull, bool use_null_saves_aligned)
+static void memtuple_get_values_range(MemTuple mtup, MemTupleBinding *pbind, int start, int natts,
+									  Datum *datum, bool *isnull, bool use_null_saves_aligned)
 {
 	int i;
-	for(i=0; i<pbind->tupdesc->natts; ++i)
+	for(i=start; i<natts; ++i)
 		datum[i] = memtuple_getattr_by_alignment(mtup, pbind, i+1, &isnull[i], use_null_saves_aligned);
+}
+
+static void memtuple_get_values(MemTuple mtup, MemTupleBinding *pbind, Datum *datum, bool *isnull, bool use_null_saves_aligned)
+{
+	memtuple_get_values_range(mtup, pbind, 0, pbind->tupdesc->natts, datum, isnull, use_null_saves_aligned);
+}
+
+/*
+ * Deform attributes [start, natts) of a memtuple, leaving the rest untouched.
+ *
+ * Attribute offsets are precomputed in the binding, so an arbitrary range can
+ * be extracted without touching the attributes that precede it.  This lets a
+ * scan expand only the columns a query actually reads.
+ */
+void memtuple_deform_range(MemTuple mtup, MemTupleBinding *pbind, int start, int natts,
+						   Datum *datum, bool *isnull)
+{
+	Assert(start >= 0 && start <= natts && natts <= pbind->tupdesc->natts);
+	memtuple_get_values_range(mtup, pbind, start, natts, datum, isnull, true /* aligned */);
 }
 
 void memtuple_deform(MemTuple mtup, MemTupleBinding *pbind, Datum *datum, bool *isnull)

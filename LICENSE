@@ -232,15 +232,95 @@ The PostgreSQL software includes:
       src/common/sha2_int.h
       see licenses/LICENSE-bsd3-sha2.txt
 
+      src/timezone/strftime.c
+      see licenses/LICENSE-bsd3-strftime.txt
+
+      Snowball stemmers and stop word lists (https://snowballstem.org):
+      src/backend/snowball/libstemmer
+      src/backend/snowball/stopwords
+      src/include/snowball/libstemmer
+      see licenses/LICENSE-bsd3-snowball.txt
+
+      pg_bsd_indent, derived from FreeBSD indent(1); indent.h is under
+      the 2-clause variant also reproduced in the license file:
+      src/tools/pg_bsd_indent
+      see licenses/LICENSE-bsd-indent.txt
+
+      Code from the BSD C library, each file under its own University of
+      California copyright notice and the 3-clause BSD terms (in some
+      files the rescinded advertising clause is left as a numbered gap):
+      src/include/lib/sort_template.h
+      src/port/bsearch_arg.c
+      src/port/getopt.c
+      src/port/getopt_long.c
+      src/port/mkdtemp.c
+      src/port/pgmkdirp.c
+      see licenses/LICENSE-bsd3-regents.txt
+
+      Headers derived from BSD getopt, which carry only a "Portions
+      Copyright (c) 1987, 1993, 1994 The Regents of the University of
+      California" line:
+      src/include/getopt_long.h
+      src/include/pg_getopt.h
+      see licenses/LICENSE-bsd3-regents.txt
+
+      MD5 and SHA-1 implementations from the KAME project:
+      src/common/md5.c
+      src/common/md5_int.h
+      src/common/sha1.c
+      src/common/sha1_int.h
+      see licenses/LICENSE-bsd3-wide.txt
+
+      contrib/pgcrypto/crypt-des.c
+      see licenses/LICENSE-bsd3-crypt-des.txt
+
+----------------------------
+   BSD 2 Clause License
+
+      pgcrypto, copyright Marko Kreen:
+      contrib/pgcrypto/internal-sha2.c
+      contrib/pgcrypto/internal.c
+      contrib/pgcrypto/mbuf.c
+      contrib/pgcrypto/mbuf.h
+      contrib/pgcrypto/openssl.c
+      contrib/pgcrypto/pgcrypto.c
+      contrib/pgcrypto/pgcrypto.h
+      contrib/pgcrypto/pgp-armor.c
+      contrib/pgcrypto/pgp-cfb.c
+      contrib/pgcrypto/pgp-compress.c
+      contrib/pgcrypto/pgp-decrypt.c
+      contrib/pgcrypto/pgp-encrypt.c
+      contrib/pgcrypto/pgp-info.c
+      contrib/pgcrypto/pgp-mpi-openssl.c
+      contrib/pgcrypto/pgp-mpi.c
+      contrib/pgcrypto/pgp-pgsql.c
+      contrib/pgcrypto/pgp-pubdec.c
+      contrib/pgcrypto/pgp-pubenc.c
+      contrib/pgcrypto/pgp-pubkey.c
+      contrib/pgcrypto/pgp-s2k.c
+      contrib/pgcrypto/pgp.c
+      contrib/pgcrypto/pgp.h
+      contrib/pgcrypto/px-crypt.c
+      contrib/pgcrypto/px-crypt.h
+      contrib/pgcrypto/px-hmac.c
+      contrib/pgcrypto/px.c
+      contrib/pgcrypto/px.h
+      see licenses/LICENSE-bsd2-pgcrypto.txt
+
 ----------------------------
    Internet Systems Consortium/Internet Software Consortium (ISC) LICENSE
       
+      src/port/strlcat.c
       src/port/strlcpy.c
       see licenses/LICENSE-strlcpy.txt
       
       src/backend/utils/adt/inet_cidr_ntop.c
       src/backend/utils/adt/inet_net_pton.c
+      src/port/inet_net_ntop.c
       see licenses/LICENSE-isc.txt
+
+      src/port/timingsafe_bcmp.c
+      see licenses/LICENSE-isc-timingsafe_bcmp.txt
 
 ----------------------------
    Perl Artistic License 2.0 (exception)
@@ -269,7 +349,9 @@ The PostgreSQL software includes:
 ----------------------------
    regex LICENSE
       
-      src/backend/regex 
+      src/backend/regex
+      src/include/regex
+      src/test/modules/test_regex (tests based on Tcl's tests/reg.test)
       see licenses/LICENSE-regex.txt
 
 ----------------------------
@@ -277,6 +359,12 @@ The PostgreSQL software includes:
 
       src/port/win32gettimeofday.c
       see licenses/LICENSE-gettimeofday.txt
+
+      contrib/pageinspect/btreefuncs.c
+      contrib/pgrowlocks/pgrowlocks.c
+      contrib/pgstattuple/pgstatindex.c
+      contrib/pgstattuple/pgstattuple.c
+      see licenses/LICENSE-pgstattuple.txt
 
 ----------------------------
    Boost Software License - Version 1.0
@@ -295,6 +383,103 @@ The PostgreSQL software includes:
       src/include/common/shortest_dec.h
       see licenses/LICENSE-boost.txt
 
+----------------------------
+   MIT License
+
+      HyperLogLog, based on Hideaki Ohno's C++ implementation:
+      src/backend/lib/hyperloglog.c
+      src/include/lib/hyperloglog.h
+      see licenses/LICENSE-hyperloglog.txt
+
+      contrib/pgcrypto/imath.c
+      see licenses/LICENSE-imath.txt
+
+----------------------------
+   Apache License v2.0 with LLVM Exceptions
+
+      A modified copy of LLVM's SectionMemoryManager:
+      src/backend/jit/llvm/SectionMemoryManager.cpp
+      src/include/jit/SectionMemoryManager.h
+      see licenses/LICENSE-llvm.txt
+      (also shipped in-tree as
+       src/backend/jit/llvm/SectionMemoryManager.LICENSE)
+
+----------------------------
+   Public Domain
+
+      IANA time zone code and data (https://www.iana.org/time-zones):
+      src/timezone/localtime.c
+      src/timezone/private.h
+      src/timezone/tzfile.h
+      src/timezone/zic.c
+      src/timezone/data/tzdata.zi
+
+      bcrypt, written by Solar Designer:
+      contrib/pgcrypto/crypt-blowfish.c
+      contrib/pgcrypto/crypt-gensalt.c
+
+      Message translations whose headers place them in the public domain:
+      src/bin/initdb/po/zh_CN.po
+      src/bin/pg_config/po/zh_CN.po
+      src/bin/pg_controldata/po/sv.po
+      src/bin/pg_ctl/po/zh_CN.po
+      src/bin/scripts/po/zh_CN.po
+
+----------------------------
+   Project X0213 License
+
+      JIS X 0213 mapping tables from Project X0213 (http://x0213.org):
+      src/backend/utils/mb/Unicode/euc-jis-2004-std.txt
+      src/backend/utils/mb/Unicode/sjis-0213-2004-std.txt
+      see licenses/LICENSE-x0213.txt
+
+----------------------------
+   ICU License
+
+      GB 18030 mapping table from the ICU project's charset data
+      (https://github.com/unicode-org/icu-data):
+      src/backend/utils/mb/Unicode/gb-18030-2000.xml
+      see licenses/LICENSE-icu-data.txt
+
+----------------------------
+   Other permissive licenses
+
+      Genetic query optimizer recombination operators, adopted from
+      Genitor, copyright Darrell L. Whitley:
+      src/backend/optimizer/geqo/geqo_copy.c
+      src/backend/optimizer/geqo/geqo_cx.c
+      src/backend/optimizer/geqo/geqo_erx.c
+      src/backend/optimizer/geqo/geqo_ox1.c
+      src/backend/optimizer/geqo/geqo_ox2.c
+      src/backend/optimizer/geqo/geqo_pmx.c
+      src/backend/optimizer/geqo/geqo_px.c
+      src/backend/optimizer/geqo/geqo_selection.c
+      see licenses/LICENSE-geqo.txt
+
+      pg_dump archiver, copyright Philip Warner:
+      src/bin/pg_dump/pg_backup.h
+      src/bin/pg_dump/pg_backup_archiver.c
+      src/bin/pg_dump/pg_backup_archiver.h
+      src/bin/pg_dump/pg_backup_custom.c
+      src/bin/pg_dump/pg_backup_directory.c
+      src/bin/pg_dump/pg_backup_null.c
+      src/bin/pg_dump/pg_backup_tar.c
+      src/bin/pg_dump/pg_restore.c
+      see licenses/LICENSE-pg_dump.txt
+
+----------------------------
+   Perl License, and a PostgreSQL-style License
+
+      Double Metaphone, ported from the Text::DoubleMetaphone Perl module:
+      contrib/fuzzystrmatch/dmetaphone.c
+
+      The portions from Text::DoubleMetaphone, copyright Maurice Aubrey,
+      may be redistributed and/or modified under the same terms as Perl
+      itself.  The remaining code, copyright North Carolina State Highway
+      Patrol, is under a PostgreSQL-style license.  The file carries both
+      notices; they are reproduced in:
+      see licenses/LICENSE-dmetaphone.txt
+
 ================================================================================
 This product contains significant parts that were originally based on software
 from VMware, Inc. or its affiliates.
@@ -303,12 +488,47 @@ Greenplum Database
 
 Copyright (c) 2004-2020 VMware, Inc. or its affiliates. All Rights Reserved.
 
-All Rights Reserved.
+Greenplum Database is licensed under the Apache License Version 2.0 (see
+the top of this file) and is based on the PostgreSQL Database Management
+System.
 
-Greenplum Database is licensed under the Apache License Version 2.0
-(see LICENSE) and is based on the PostgreSQL Database Management System.
+Files that came from Greenplum Database carry the copyright notice of
+whoever owned the code when they were written: Greenplum, Inc., EMC
+Corporation, Pivotal Software, VMware, Inc., or, for some ORCA query
+optimizer files added in 2024, "Copyright (C) 2024 Broadcom" or
+"Copyright (C) 2024 VMware by Broadcom".  Three management scripts carry
+a legacy "Copyright (c) Metapa 2005" notice; Metapa was one of the two
+companies that merged to form Greenplum:
+
+   gpMgmt/bin/gpinitsystem
+   gpMgmt/bin/lib/gp_bash_functions.sh
+   gpMgmt/bin/lib/gpcreateseg.sh
 
 The Greenplum Database software includes:
+
+----------------------------
+   Apache License - Version 2.0
+
+      cmockery unit testing framework, copyright 2008 Google Inc.:
+      src/test/unit/cmockery
+      (see the Apache License above; also shipped in-tree as
+       src/test/unit/cmockery/LICENSE.txt)
+
+      googlemock's class generator, copyright 2007-2009 Google Inc. and
+      Neal Norwitz, bundled with the googletest copy below but under the
+      Apache License rather than googletest's BSD license:
+      gpcontrib/gpcloud/test/googletest/googlemock/scripts/generator
+      (see the Apache License above; also shipped in-tree as
+       gpcontrib/gpcloud/test/googletest/googlemock/scripts/generator/LICENSE)
+
+----------------------------
+   BSD 2 Clause License
+
+      HyperLogLog extension, copyright Tomas Vondra, Conversant, Inc. and
+      VMware, Inc.:
+      src/backend/utils/hyperloglog/gp_hyperloglog.c
+      src/include/utils/hyperloglog/gp_hyperloglog.h
+      see licenses/LICENSE-gp-hyperloglog.txt
 
 ----------------------------
    Stream License
@@ -329,6 +549,8 @@ The Greenplum Database software includes:
       see licenses/LICENSE-googletest.txt
 
       gpcontrib/pg_hint_plan/*
+      src/include/optimizer/hints.h (duplicates structures from
+      pg_hint_plan.c so the hint parser can be used outside the extension)
       see licenses/LICENSE-pg-hint-plan.txt
 
 ----------------------------
@@ -369,6 +591,21 @@ Apache Cloudberry includes codes from
       /src/backend/task/pg_cron.c
 
       see licenses/LICENSE-citusdata.txt
+
+   pg_cron's copy of Vixie cron, under Paul Vixie's license:
+
+      /src/backend/task/entry.c
+      /src/backend/task/misc.c
+      /src/include/task/cron.h
+
+      see licenses/LICENSE-vixie-cron.txt
+
+   Berkeley's bitstring.h, as found in FreeBSD, under the 3-clause
+   BSD license:
+
+      /src/include/task/bitstring.h
+
+      see licenses/LICENSE-bitstring.txt
 
 ----------------------------
    Apache License - Version 2.0
@@ -454,3 +691,72 @@ Apache Cloudberry includes codes from
       see licenses/LICENSE-amalgamate.txt
       (also shipped in-tree as
        contrib/pax_storage/src/cpp/contrib/tabulate/utils/amalgamate/LICENSE.md)
+
+================================================================================
+Build system files
+
+The files under config/ come from the GNU Autotools (Autoconf and
+Automake), pkg-config and the Autoconf Archive.  The GPL-licensed ones
+carry an exception for use in configure scripts generated by Autoconf,
+which is the basis on which the ASF allows such build-tool files in its
+distributions (https://www.apache.org/legal/resolved.html#build-tools;
+see also LEGAL-290).  Each file carries its full license notice.  The
+top-level configure script is generated by Autoconf, includes expansions
+of these macros, and carries its own notice; it is listed below.
+
+----------------------------
+   GNU General Public License, with an exception for use in configure
+   scripts generated by Autoconf
+
+      config/config.guess
+         Copyright 1992-2023 Free Software Foundation, Inc.
+      config/config.sub
+         Copyright 1992-2023 Free Software Foundation, Inc.
+      (GPL-3.0-or-later)
+
+      config/check_decls.m4
+         (no copyright line of its own: based on commit
+          82ef7805faffa151e724aa76c245ec590d174580 of Autoconf and
+          distributed under Autoconf's license, GPL-3.0-or-later with
+          the Autoconf Configure Script Exception 3.0)
+
+      config/pkg.m4
+         Copyright © 2004 Scott James Remnant <scott@netsplit.com>.
+         Copyright © 2012-2015 Dan Nicholson <dbn.lists@gmail.com>
+      (GPL-2.0-or-later)
+
+      config/ax_pthread.m4, from the Autoconf Archive
+         Copyright (c) 2008 Steven G. Johnson <stevenj@alum.mit.edu>
+         Copyright (c) 2011 Daniel Richard G. <skunk@iSKUNK.ORG>
+      (GPL-3.0-or-later with the Autoconf Macro exception)
+
+----------------------------
+   FSF All-Permissive License
+
+      configure, generated by GNU Autoconf 2.69
+         Copyright (C) 1992-1996, 1998-2012 Free Software Foundation, Inc.
+
+      Macros from the Autoconf Archive:
+
+      config/ax_compare_version.m4
+         Copyright (c) 2008 Tim Toolan <toolan@ele.uri.edu>
+
+      config/ax_cxx_compile_stdcxx.m4
+         Copyright (c) 2008 Benjamin Kosnik <bkoz@redhat.com>
+         Copyright (c) 2012 Zack Weinberg <zackw@panix.com>
+         Copyright (c) 2013 Roy Stogner <roystgnr@ices.utexas.edu>
+         Copyright (c) 2014, 2015 Google Inc.; contributed by Alexey Sokolov <sokolov@google.com>
+         Copyright (c) 2015 Paul Norman <penorman@mac.com>
+         Copyright (c) 2015 Moritz Klammler <moritz@klammler.eu>
+         Copyright (c) 2016, 2018 Krzesimir Nowak <qdlacz@gmail.com>
+         Copyright (c) 2019 Enji Cooper <yaneurabeya@gmail.com>
+
+      config/ax_python_module.m4
+         Copyright (c) 2008 Andrew Collier
+
+----------------------------
+   X11 License
+
+      config/install-sh
+         Copyright (C) 1994 X Consortium
+      (the Free Software Foundation's changes to it are in the public domain)

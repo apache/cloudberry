@@ -48,6 +48,8 @@ class PaxVecBitPackedColumn final : public PaxVecEncodingColumn<int8> {
 
   void Append(char *buffer, size_t size) override;
 
+  // Do not hide the base class GetBuffer() overload.
+  using PaxVecEncodingColumn<int8>::GetBuffer;
   std::pair<char *, size_t> GetBuffer(size_t position) override;
 
   Datum GetDatum(size_t position) override;

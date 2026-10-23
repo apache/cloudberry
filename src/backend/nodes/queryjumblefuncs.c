@@ -97,6 +97,41 @@ CleanQuerytext(const char *query, int *location, int *len)
 }
 
 JumbleState *
+JumbleQueryDirect(Query *query) 
+{
+	JumbleState *jstate = NULL;
+
+	Assert(IsA(query, Query));
+	Assert(query->utilityStmt == NULL);
+
+	jstate = (JumbleState *) palloc(sizeof(JumbleState));
+
+	/* Set up workspace for query jumbling */
+	jstate->jumble = (unsigned char *) palloc(JUMBLE_SIZE);
+	jstate->jumble_len = 0;
+	jstate->clocations_buf_size = 32;
+	jstate->clocations = (LocationLen *)
+		palloc(jstate->clocations_buf_size * sizeof(LocationLen));
+	jstate->clocations_count = 0;
+	jstate->highest_extern_param_id = 0;
+
+	/* Compute query ID and mark the Query node with it */
+	_jumbleNode(jstate, (Node *) query);
+	query->queryId = DatumGetUInt64(hash_any_extended(jstate->jumble,
+													  jstate->jumble_len,
+													  0));
+
+	/*
+	 * If we are unlucky enough to get a hash of zero, use 1 instead, to
+	 * prevent confusion with the utility-statement case.
+	 */
+	if (query->queryId == UINT64CONST(0))
+		query->queryId = UINT64CONST(1);
+
+	return jstate;
+}
+
+JumbleState *
 JumbleQuery(Query *query)
 {
 	JumbleState *jstate = NULL;

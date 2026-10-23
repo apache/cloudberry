@@ -747,6 +747,15 @@ REVOKE EXECUTE ON FUNCTION pg_ls_replslotdir(text) FROM PUBLIC;
 
 REVOKE EXECUTE ON FUNCTION pg_log_backend_memory_contexts(integer) FROM PUBLIC;
 
+-- gp_log_backend_memory_contexts() makes the segments call
+-- pg_log_backend_memory_contexts() for the backends of another session, so it
+-- is revoked from PUBLIC like that function.  It also checks the caller's
+-- EXECUTE privilege on pg_log_backend_memory_contexts() at call time, which
+-- covers clusters that were not initdb'd with this REVOKE.
+REVOKE EXECUTE ON FUNCTION gp_log_backend_memory_contexts(bigint) FROM PUBLIC;
+
+REVOKE EXECUTE ON FUNCTION gp_log_backend_memory_contexts(bigint, bigint) FROM PUBLIC;
+
 -- pg_file_write/pg_file_rename/pg_file_unlink have proacl NULL (PUBLIC
 -- EXECUTE) because their _v1_1 bodies were copied in-core from adminpack
 -- without adminpack's matching REVOKE.  genfile.c now also checks for
@@ -764,6 +773,21 @@ REVOKE EXECUTE ON FUNCTION pg_file_unlink(text) FROM public;
 -- privilege check): it's a read-side listing, so gate it like the other
 -- read-side functions above (pg_read_server_files) rather than write.
 REVOKE EXECUTE ON FUNCTION pg_logdir_ls() FROM public;
+
+-- The catalog lock and the version bump used by gpexpand are reserved to
+-- superusers.  The functions enforce that themselves as well; this is defense
+-- in depth for new initdbs.
+REVOKE EXECUTE ON FUNCTION gp_expand_lock_catalog() FROM public;
+
+REVOKE EXECUTE ON FUNCTION gp_expand_bump_version() FROM public;
+
+-- Adding a standby coordinator is reserved to superusers, like every other
+-- change to the segment configuration made by the management tools.  The
+-- function enforces that itself as well; this is defense in depth for new
+-- initdbs.
+REVOKE EXECUTE ON FUNCTION gp_add_master_standby(text, text, text) FROM public;
+
+REVOKE EXECUTE ON FUNCTION gp_add_master_standby(text, text, text, integer) FROM public;
 
 
 --

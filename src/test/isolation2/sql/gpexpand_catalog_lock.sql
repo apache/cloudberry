@@ -152,3 +152,28 @@ create table t30 (c1 int, c2 int) distributed by (c1);
 30: rollback;
 
 10: end;
+
+--
+-- the catalog lock and the version bump are reserved to superusers
+--
+
+create role regress_gpexpand_user;
+
+-- a regular role is denied at the privilege layer ...
+40: set session authorization regress_gpexpand_user;
+40: select gp_expand_lock_catalog();
+40: select gp_expand_bump_version();
+40: reset session authorization;
+
+-- ... and, with EXECUTE granted as on a cluster upgraded without initdb,
+-- by the functions themselves
+grant execute on function gp_expand_lock_catalog() to regress_gpexpand_user;
+grant execute on function gp_expand_bump_version() to regress_gpexpand_user;
+40: set session authorization regress_gpexpand_user;
+40: select gp_expand_lock_catalog();
+40: select gp_expand_bump_version();
+40q:
+
+revoke execute on function gp_expand_lock_catalog() from regress_gpexpand_user;
+revoke execute on function gp_expand_bump_version() from regress_gpexpand_user;
+drop role regress_gpexpand_user;

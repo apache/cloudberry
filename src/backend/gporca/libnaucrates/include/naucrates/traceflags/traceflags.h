@@ -188,6 +188,9 @@ enum EOptTraceFlag
 	// Eager Agg
 	EopttraceEnableEagerAgg = 103030,
 
+	// Enable parallel append scan
+	EopttraceEnableParallelAppendScan = 103031,
+
 	// ExpandFullJoin
 	EopttraceExpandFullJoin = 103032,
 

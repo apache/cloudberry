@@ -22,14 +22,14 @@ import os, glob
 
 from general import source_filenames
 
-p_any = '(?:\S| |\t|\n+\t|\n+ |\n+#|\n+/|\n+\$)+?'
-p_spaces = '\s*'
-p_space = '\s+'
+p_any = '(?:\\S| |\t|\n+\t|\n+ |\n+#|\n+/|\n+\\$)+?'
+p_spaces = '\\s*'
+p_space = '\\s+'
 
 
 def remove_comments(body):
     body = re.sub('".*?"', '""', body)
-    body = re.sub('/\*[\s\S]*?\*/', '/* */', body)
+    body = re.sub('/\\*[\\s\\S]*?\\*/', '/* */', body)
     return body
 
 def find_functions(func_names, text):
@@ -37,7 +37,7 @@ def find_functions(func_names, text):
     func_names_pattern_list = '|'.join(func_names)
     func_names_pattern = f'((?:{func_names_pattern_list}))'
 
-    func_pattern = '\n(\w+)\s+?' + func_names_pattern + p_spaces + '\((' + p_any + ')\)' + p_spaces + '(\n\{' + '(' + p_any + ')' + '\n+\})'
+    func_pattern = '\n(\\w+)\\s+?' + func_names_pattern + p_spaces + '\\((' + p_any + ')\\)' + p_spaces + '(\n\\{' + '(' + p_any + ')' + '\n+\\})'
 
     funcs = []
 
@@ -50,7 +50,7 @@ def find_functions(func_names, text):
 
 def find_safe_functions(text):
 
-    func_pattern = '\n((?:\w+\s+)+)(\w+)' + p_spaces + '\((' + p_any + 'Node' + p_spaces + '\*' + p_spaces + 'escontext' + ')\)' + p_spaces + '(\n\{' + '(' + p_any + ')' + '\n+\})'
+    func_pattern = '\n((?:\\w+\\s+)+)(\\w+)' + p_spaces + '\\((' + p_any + 'Node' + p_spaces + '\\*' + p_spaces + 'escontext' + ')\\)' + p_spaces + '(\n\\{' + '(' + p_any + ')' + '\n+\\})'
 
     funcs = []
 
@@ -62,7 +62,7 @@ def find_safe_functions(text):
     return funcs
 
 def create_pattern(funcCall):
-    return '\n((?:\w+\s+)+)(\w+)' + p_spaces + '\((' + p_any + ')\)' + p_spaces + '(\n\{' + '(' + p_any + ')'  + '\W' + f'({funcCall})' + '\W' + '(' + p_any + ')' + '\n+\})'
+    return '\n((?:\\w+\\s+)+)(\\w+)' + p_spaces + '\\((' + p_any + ')\\)' + p_spaces + '(\n\\{' + '(' + p_any + ')'  + '\\W' + f'({funcCall})' + '\\W' + '(' + p_any + ')' + '\n+\\})'
 
 
 def find_functions_with_call(functions):
