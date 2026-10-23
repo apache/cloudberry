@@ -608,7 +608,10 @@ SELECT brin_summarize_range('aoco_partial_scan5_j_idx', 33554432);
 1U: SELECT * FROM brin_page_items(get_raw_page('aoco_partial_scan5_i_j_idx', 2), 'aoco_partial_scan5_i_j_idx');
 1U: SELECT * FROM brin_page_items(get_raw_page('aoco_partial_scan5_j_idx', 2), 'aoco_partial_scan5_j_idx');
 
-DROP EXTENSION pageinspect;
+-- GPDB_PORT: upstream drops pageinspect here.  cbdb must not: the extension
+-- is created above with IF NOT EXISTS, so this test is not necessarily the
+-- one that created it, and brin_heap and uao/brin_chain_* come later in
+-- isolation2_schedule and use get_raw_page() without creating it themselves.
 
 --------------------------------------------------------------------------------
 -- GPDB_PORT: count(*) on a CO table projects the anchor column
@@ -658,3 +661,58 @@ SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'status', 
 SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'reset', dbid)
   FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
 DROP TABLE count_proj;
+
+-- Scenario 6: predicate pushdown must not reorder the anchor column away.
+--
+-- reorder_qual_col() sorts the projection's predicate columns by how
+-- selective they turned out to be over the first gp_predicate_pushdown_
+-- sample_rows rows.  Projection position 0 is not an ordinary slot though --
+-- it holds the anchor column, whose row numbers every other column's
+-- missing-value check is made against.  Sorting a column added in missing
+-- mode into that slot skips its own check and makes the scan take row
+-- numbers from a stream that begins at lastrownum + 1, which returns rows
+-- built from mismatched columns: the right number of rows with the wrong
+-- values in them.
+--
+-- Needs two segfiles.  The reorder fires once, part way through the first
+-- one, and the order then stands for the rest of the scan -- including the
+-- second segfile's own missing region, which the scan has not reached yet.
+CREATE TABLE anchor_reorder (
+	a int,
+	big text ENCODING (compresstype=none),
+	small int2 ENCODING (compresstype=zstd, compresslevel=9)
+) USING ao_column DISTRIBUTED BY (a);
+
+INSERT INTO anchor_reorder SELECT i, repeat('p', 200), 1 FROM generate_series(1, 3000) i;
+SET gp_appendonly_insert_files = 2;
+SET gp_appendonly_insert_files_tuples_range = 1000;
+INSERT INTO anchor_reorder SELECT i, repeat('p', 200), 1 FROM generate_series(3001, 93000) i;
+RESET gp_appendonly_insert_files;
+RESET gp_appendonly_insert_files_tuples_range;
+
+-- 'small' is constant and zstd-9 compressed, so it has the smallest eof of
+-- the complete columns and is the anchor.  'c' is added in missing mode and
+-- is the column that used to displace it.
+ALTER TABLE anchor_reorder ADD COLUMN c int DEFAULT 7;
+INSERT INTO anchor_reorder SELECT i, repeat('q', 200), 1, CASE WHEN i % 100 = 0 THEN 99 ELSE i END
+  FROM generate_series(93001, 193000) i;
+
+-- More than one segfile, and the second one has a missing region of its own.
+SELECT count(DISTINCT physical_segno) > 1 AS multiple_segfiles
+  FROM gp_toolkit.__gp_aocsseg('anchor_reorder') WHERE column_num = 0;
+
+-- c = 99 matches nothing in the sampled rows, so it sorts ahead of small = 1.
+-- Both answers must agree with the no-pushdown one; before the fix the
+-- counts matched but the sums did not.
+SET gp_enable_predicate_pushdown = off;
+SELECT count(*), sum(a) FROM anchor_reorder WHERE small = 1 AND c = 99;
+SET gp_enable_predicate_pushdown = on;
+SELECT count(*), sum(a) FROM anchor_reorder WHERE small = 1 AND c = 99;
+-- and with the reorder forced to happen almost immediately
+SET gp_predicate_pushdown_sample_rows = 100;
+SELECT count(*), sum(a) FROM anchor_reorder WHERE small = 1 AND c = 99;
+SELECT count(*), sum(a) FROM anchor_reorder WHERE small = 1 AND c = 99 AND a > 100000;
+RESET gp_predicate_pushdown_sample_rows;
+RESET gp_enable_predicate_pushdown;
+
+DROP TABLE anchor_reorder;

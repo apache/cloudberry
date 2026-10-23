@@ -3578,24 +3578,41 @@ reorder_qual_col(AOCSScanDesc scan)
 {
 	struct qual_sort_item *items;
 	int i, n;
-	n = scan->aos_qual_col_num;
+
+	/*
+	 * Projection position ANCHOR_COL_IN_PROJ holds the anchor column, and it
+	 * has to stay there however selective the other predicates turn out to
+	 * be: it is the column the scan takes the row number from, and the row
+	 * number is what every other column's missing-value check is made
+	 * against.  Letting a column added in missing mode sort into that slot
+	 * both skips its own check and makes the scan read row numbers from a
+	 * stream that starts at lastrownum + 1 instead of 1, which silently
+	 * returns rows built from mismatched columns.
+	 *
+	 * So reorder only what follows the anchor.
+	 */
+	n = scan->aos_qual_col_num - (ANCHOR_COL_IN_PROJ + 1);
 	if (n < 2)
 		return;
 
-	items = palloc(sizeof(struct qual_sort_item) * scan->aos_qual_col_num);
+	items = palloc(sizeof(struct qual_sort_item) * n);
 
 	for (i = 0; i < n; i++)
 	{
-		items[i].aos_qual_rows = scan->aos_qual_rows[i];
-		items[i].proj_atts = scan->columnScanInfo.proj_atts[i];
-		items[i].aos_pushdown_qual = scan->aos_pushdown_qual[i];
+		int			pos = ANCHOR_COL_IN_PROJ + 1 + i;
+
+		items[i].aos_qual_rows = scan->aos_qual_rows[pos];
+		items[i].proj_atts = scan->columnScanInfo.proj_atts[pos];
+		items[i].aos_pushdown_qual = scan->aos_pushdown_qual[pos];
 	}
 	qsort(items, n, sizeof(struct qual_sort_item), compare_qual_item);
 	for (i = 0; i < n; i++)
 	{
-		scan->aos_qual_rows[i] = items[i].aos_qual_rows;
-		scan->columnScanInfo.proj_atts[i] = items[i].proj_atts;
-		scan->aos_pushdown_qual[i] = items[i].aos_pushdown_qual;
+		int			pos = ANCHOR_COL_IN_PROJ + 1 + i;
+
+		scan->aos_qual_rows[pos] = items[i].aos_qual_rows;
+		scan->columnScanInfo.proj_atts[pos] = items[i].proj_atts;
+		scan->aos_pushdown_qual[pos] = items[i].aos_pushdown_qual;
 	}
 	pfree(items);
 }
