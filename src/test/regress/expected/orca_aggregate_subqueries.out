@@ -1,0 +1,602 @@
+-- Preserve the row produced by a scalar aggregate on empty input, before
+-- evaluating its projections, HAVING, or the surrounding scalar expression.
+SET optimizer = on;
+SET optimizer_trace_fallback = on;
+CREATE SCHEMA agg_sq;
+SET search_path = agg_sq, public;
+CREATE TABLE o(a int, d int) DISTRIBUTED BY (d);
+CREATE TABLE i(a int, b int) DISTRIBUTED BY (a);
+INSERT INTO o VALUES (0,0), (2,1), (1,2), (3,3), (NULL,0), (0,NULL);
+INSERT INTO i VALUES (1,10), (1,20), (2,NULL);
+ANALYZE o;
+ANALYZE i;
+SELECT a, d,
+    (SELECT sum(b)+1 FROM i WHERE i.a=o.d) AS sum_plus_one,
+    (SELECT coalesce(sum(b),0)+1 FROM i WHERE i.a=o.d) AS coalesce_sum,
+    (SELECT count(*)+coalesce(sum(b),0) FROM i WHERE i.a=o.d) AS multiple_aggs,
+    (SELECT sum(b) IS NULL FROM i WHERE i.a=o.d) AS null_sum
+FROM o ORDER BY d,a;
+ a | d | sum_plus_one | coalesce_sum | multiple_aggs | null_sum 
+---+---+--------------+--------------+---------------+----------
+ 0 | 0 |              |            1 |             0 | t
+   | 0 |              |            1 |             0 | t
+ 2 | 1 |           31 |           31 |            32 | f
+ 1 | 2 |              |            1 |             1 | t
+ 3 | 3 |              |            1 |             0 | t
+ 0 |   |              |            1 |             0 | t
+(6 rows)
+
+-- HAVING can remove either a real group or the scalar aggregate's empty row.
+SELECT a, d,
+    (SELECT count(*) FROM i WHERE i.a=o.d HAVING count(*)>0) AS nonempty,
+    (SELECT count(*) FROM i WHERE i.a=o.d HAVING count(*)<2) AS small,
+    (SELECT coalesce(sum(b),0) FROM i WHERE i.a=o.d HAVING count(*)<2) AS projected
+FROM o ORDER BY d,a;
+ a | d | nonempty | small | projected 
+---+---+----------+-------+-----------
+ 0 | 0 |          |     0 |         0
+   | 0 |          |     0 |         0
+ 2 | 1 |        2 |       |          
+ 1 | 2 |        1 |     1 |         0
+ 3 | 3 |          |     0 |         0
+ 0 |   |          |     0 |         0
+(6 rows)
+
+-- Pull HAVING above the aggregate join. An absent input group supplies zero
+-- to COUNT, but a false or NULL HAVING removes the scalar row altogether.
+SELECT a, d,
+    (SELECT count(*) FROM i WHERE i.a=o.d HAVING NULL::bool) AS unknown,
+    (SELECT count(*)+1 FROM i WHERE i.a=o.d HAVING count(*)<2) AS small_expr,
+    (SELECT count(b) FROM i WHERE i.a=o.d HAVING count(b)<2) AS nonnull_count,
+    (SELECT count(*) FROM i WHERE i.a=o.d HAVING count(*)<o.a) AS outer_limit
+FROM o ORDER BY d,a;
+ a | d | unknown | small_expr | nonnull_count | outer_limit 
+---+---+---------+------------+---------------+-------------
+ 0 | 0 |         |          1 |             0 |            
+   | 0 |         |          1 |             0 |            
+ 2 | 1 |         |            |               |            
+ 1 | 2 |         |          2 |             0 |            
+ 3 | 3 |         |          1 |             0 |           0
+ 0 |   |         |          1 |             0 |            
+(6 rows)
+
+SELECT a,d FROM o WHERE
+    0=(SELECT count(*) FROM i WHERE i.a=o.d HAVING count(*)>0)
+ORDER BY d,a;
+ a | d 
+---+---
+(0 rows)
+
+-- Projections above HAVING must not run for the rows it rejects.
+SELECT a,d,
+    (SELECT 100/count(*) FROM i WHERE i.a=o.d HAVING count(*)>0) AS positive,
+    (SELECT 100/(count(*)-2) FROM i WHERE i.a=o.d HAVING count(*)<2) AS small
+FROM o ORDER BY d,a;
+ a | d | positive | small 
+---+---+----------+-------
+ 0 | 0 |          |   -50
+   | 0 |          |   -50
+ 2 | 1 |       50 |      
+ 1 | 2 |      100 |  -100
+ 3 | 3 |          |   -50
+ 0 |   |          |   -50
+(6 rows)
+
+SELECT (SELECT count(*) FROM i HAVING count(*)>10) AS rejected,
+       (SELECT count(*) FROM i GROUP BY a HAVING count(*)>10) AS grouped;
+ rejected | grouped 
+----------+---------
+          |        
+(1 row)
+
+SELECT a,d,(SELECT coalesce(sum(b),0) FROM i WHERE i.a<o.d) AS inequality
+FROM o ORDER BY d,a;
+ a | d | inequality 
+---+---+------------
+ 0 | 0 |          0
+   | 0 |          0
+ 2 | 1 |          0
+ 1 | 2 |         30
+ 3 | 3 |         30
+ 0 |   |          0
+(6 rows)
+
+-- MIN/MAX need no empty-input SubPlan. Keep the inner join predicate and
+-- distinguish an absent group from an existing all-NULL group in projections.
+CREATE TABLE j(a int) DISTRIBUTED BY (a);
+INSERT INTO j VALUES (1),(1),(3);
+ANALYZE j;
+SELECT a,d,
+    (SELECT max(b) FROM i JOIN j ON i.a=j.a WHERE i.a=o.d) AS joined_max,
+    (SELECT coalesce(min(b),0)+1 FROM i WHERE i.a=o.d) AS min_expr,
+    (SELECT max(b) FROM i WHERE i.a=o.d HAVING count(*)<2) AS max_having
+FROM o ORDER BY d,a;
+ a | d | joined_max | min_expr | max_having 
+---+---+------------+----------+------------
+ 0 | 0 |            |        1 |           
+   | 0 |            |        1 |           
+ 2 | 1 |         20 |       11 |           
+ 1 | 2 |            |        1 |           
+ 3 | 3 |            |        1 |           
+ 0 |   |            |        1 |           
+(6 rows)
+
+SELECT a,d FROM o
+WHERE 20=(SELECT max(b) FROM i JOIN j ON i.a=j.a WHERE i.a=o.d)
+ORDER BY d,a;
+ a | d 
+---+---
+ 2 | 1
+(1 row)
+
+DROP TABLE j;
+-- A user aggregate named max need not return NULL on empty input. Type
+-- metadata must not identify it as the built-in MIN/MAX optimization.
+CREATE TYPE agg_state AS ENUM ('empty','a');
+CREATE FUNCTION take_state(agg_state,agg_state) RETURNS agg_state
+LANGUAGE sql IMMUTABLE STRICT AS 'SELECT $2';
+CREATE AGGREGATE max(agg_state)
+    (SFUNC=take_state,STYPE=agg_state,INITCOND='empty');
+SELECT a,d,(SELECT max('a'::agg_state) FROM i WHERE i.a=o.d) AS custom_max
+FROM o ORDER BY d,a;
+ a | d | custom_max 
+---+---+------------
+ 0 | 0 | empty
+   | 0 | empty
+ 2 | 1 | a
+ 1 | 2 | a
+ 3 | 3 | empty
+ 0 |   | empty
+(6 rows)
+
+DROP AGGREGATE max(agg_state);
+DROP FUNCTION take_state(agg_state,agg_state);
+DROP TYPE agg_state;
+-- Only catalog-identified built-ins may use the NULL-on-empty shortcut.
+-- User aggregates with the same names and argument types can return a value.
+CREATE AGGREGATE agg_sq.sum(int) (SFUNC=int4pl, STYPE=int4, INITCOND='7');
+CREATE AGGREGATE agg_sq.avg(int) (SFUNC=int4pl, STYPE=int4, INITCOND='9');
+SELECT a,d,
+    (SELECT agg_sq.sum(b) FROM i WHERE i.a=o.d) AS custom_sum,
+    (SELECT agg_sq.avg(b) FROM i WHERE i.a=o.d) AS custom_avg
+FROM o ORDER BY d,a;
+ a | d | custom_sum | custom_avg 
+---+---+------------+------------
+ 0 | 0 |          7 |          9
+   | 0 |          7 |          9
+ 2 | 1 |         37 |         39
+ 1 | 2 |          7 |          9
+ 3 | 3 |          7 |          9
+ 0 |   |          7 |          9
+(6 rows)
+
+DROP AGGREGATE agg_sq.sum(int);
+DROP AGGREGATE agg_sq.avg(int);
+-- Non-count aggregates also have non-NULL empty-input results.
+CREATE FUNCTION zero_final(int) RETURNS int LANGUAGE sql IMMUTABLE
+AS 'SELECT coalesce($1,0)';
+CREATE AGGREGATE sum_zero(int) (SFUNC=int4pl, STYPE=int4, FINALFUNC=zero_final);
+SELECT a, d,
+    (SELECT regr_count(a,b) FROM i WHERE i.a=o.d) AS regr,
+    (SELECT rank(5) WITHIN GROUP (ORDER BY b) FROM i WHERE i.a=o.d) AS rank,
+    (SELECT cume_dist(5) WITHIN GROUP (ORDER BY b) FROM i WHERE i.a=o.d) AS cume,
+    (SELECT sum_zero(b)+1 FROM i WHERE i.a=o.d) AS custom
+FROM o ORDER BY d,a;
+ a | d | regr | rank |        cume        | custom 
+---+---+------+------+--------------------+--------
+ 0 | 0 |    0 |    1 |                  1 |      1
+   | 0 |    0 |    1 |                  1 |      1
+ 2 | 1 |    2 |    1 | 0.3333333333333333 |     31
+ 1 | 2 |    0 |    1 |                0.5 |      1
+ 3 | 3 |    0 |    1 |                  1 |      1
+ 0 |   |    0 |    1 |                  1 |      1
+(6 rows)
+
+-- Projection expressions must not run for unrelated groups or an empty outer.
+SELECT d, (SELECT 100/coalesce(sum(b),0) FROM i WHERE i.a=o.d)
+FROM o WHERE d=1;
+ d | ?column? 
+---+----------
+ 1 |        3
+(1 row)
+
+CREATE TABLE empty_o (d int) DISTRIBUTED BY (d);
+SELECT d, (SELECT 100/coalesce(sum(b),0) FROM i WHERE i.a=empty_o.d)
+FROM empty_o;
+ d | ?column? 
+---+----------
+(0 rows)
+
+-- The original aggregate finalizes before evaluating HAVING.
+CREATE FUNCTION throw_empty(int) RETURNS int LANGUAGE plpgsql STABLE AS $$
+BEGIN
+    IF $1 IS NULL THEN RAISE EXCEPTION 'empty aggregate state'; END IF;
+    RETURN $1;
+END
+$$;
+CREATE AGGREGATE sum_throw(int) (SFUNC=int4pl, STYPE=int4, FINALFUNC=throw_empty);
+SELECT d, (SELECT sum_throw(b) FROM i WHERE i.a=o.d HAVING count(*)>0)
+FROM o WHERE a=0 AND d=0;
+ERROR:  empty aggregate state  (seg1 slice1 127.0.0.1:21402 pid=83871)
+CONTEXT:  PL/pgSQL function throw_empty(integer) line 3 at RAISE
+SELECT d, (SELECT sum_throw(b) FROM i WHERE i.a=empty_o.d) FROM empty_o;
+ d | sum_throw 
+---+-----------
+(0 rows)
+
+-- Enough rows for decorrelation, including a missing key and an unrelated
+-- all-NULL group whose projection would throw if evaluated before the join.
+CREATE TABLE many_o (d int) DISTRIBUTED BY (d);
+CREATE TABLE many_i (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO many_o SELECT g%1001 FROM generate_series(0,2001) g;
+INSERT INTO many_i SELECT g%1000,1 FROM generate_series(1,10000) g;
+INSERT INTO many_i VALUES (1001,NULL);
+ANALYZE many_o;
+ANALYZE many_i;
+EXPLAIN (COSTS OFF)
+SELECT d FROM many_o o
+WHERE 1=(SELECT count(*) FROM many_i i WHERE i.a=o.d HAVING count(*)<10);
+                                                                                  QUERY PLAN                                                                                  
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Result
+         Filter: (1 = CASE WHEN (true) THEN CASE WHEN ((count(*)) < 10) THEN (count(*)) ELSE NULL::bigint END WHEN ('0'::bigint < 10) THEN '0'::bigint ELSE NULL::bigint END)
+         ->  Hash Left Join
+               Hash Cond: (o.d = i.a)
+               ->  Seq Scan on many_o o
+               ->  Hash
+                     ->  HashAggregate
+                           Group Key: i.a
+                           ->  Seq Scan on many_i i
+ Optimizer: GPORCA
+(11 rows)
+
+SELECT count(*) FROM many_o o
+WHERE 10=(SELECT count(*) FROM many_i i WHERE i.a=o.d HAVING count(*)<11);
+ count 
+-------
+  2000
+(1 row)
+
+SELECT count(*) FROM many_o o
+WHERE 0=(SELECT count(*) FROM many_i i WHERE i.a=o.d HAVING count(*)<10);
+ count 
+-------
+     2
+(1 row)
+
+EXPLAIN (COSTS OFF)
+SELECT d,(SELECT coalesce(sum(b),0)+1 FROM many_i i WHERE i.a=o.d)
+FROM many_o o;
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Left Join
+         Hash Cond: (o.d = i.a)
+         ->  Seq Scan on many_o o
+         ->  Hash
+               ->  HashAggregate
+                     Group Key: i.a
+                     ->  Seq Scan on many_i i
+         SubPlan 1
+           ->  Result
+                 ->  Result
+                       One-Time Filter: ((true) IS NULL)
+                       ->  Aggregate
+                             ->  Result
+                                   One-Time Filter: false
+ Optimizer: GPORCA
+(16 rows)
+
+SELECT count(*) AS rows, sum(v) AS total FROM (
+    SELECT (SELECT coalesce(sum(b),0)+1 FROM many_i i WHERE i.a=o.d) AS v
+    FROM many_o o
+) q;
+ rows | total 
+------+-------
+ 2002 | 22002
+(1 row)
+
+SELECT count(*) AS rows, sum(v) AS total FROM (
+    SELECT (SELECT sum_zero(b)+1 FROM many_i i WHERE i.a=o.d) AS v
+    FROM many_o o
+) q;
+ rows | total 
+------+-------
+ 2002 | 22002
+(1 row)
+
+SELECT count(*) AS rows, sum(v) AS total FROM (
+    SELECT (SELECT 100/coalesce(sum(b),0) FROM many_i i WHERE i.a=o.d) AS v
+    FROM many_o o WHERE d<1000
+) q;
+ rows | total 
+------+-------
+ 2000 | 20000
+(1 row)
+
+-- ANY over a scalar aggregate compares with its single result, including a
+-- NULL result. A missing input group is not an empty ANY result set.
+SELECT a,d,
+    31 IN (SELECT sum(b)+1 FROM i WHERE i.a=o.d) AS sum_match,
+    a IN (SELECT avg(b) FROM i WHERE i.a=o.d) AS avg_match,
+    1 IN (SELECT coalesce(sum(b),0)+1 FROM i WHERE i.a=o.d) AS coalesce_match,
+    0 IN (SELECT regr_count(a,b) FROM i WHERE i.a=o.d) AS regr_match,
+    0 IN (SELECT sum_zero(b) FROM i WHERE i.a=o.d) AS custom_match,
+    a NOT IN (SELECT sum(b) FROM i WHERE i.a=o.d) AS sum_differs
+FROM o ORDER BY d,a;
+ a | d | sum_match | avg_match | coalesce_match | regr_match | custom_match | sum_differs 
+---+---+-----------+-----------+----------------+------------+--------------+-------------
+ 0 | 0 |           |           | t              | t          | t            | 
+   | 0 |           |           | t              | t          | t            | 
+ 2 | 1 | t         | f         | f              | f          | f            | t
+ 1 | 2 |           |           | t              | t          | t            | 
+ 3 | 3 |           |           | t              | t          | t            | 
+ 0 |   |           |           | t              | t          | t            | 
+(6 rows)
+
+SELECT a,d FROM o
+WHERE 1 IN (SELECT coalesce(sum(b),0)+1 FROM i WHERE i.a=o.d)
+ORDER BY d,a;
+ a | d 
+---+---
+ 0 | 0
+   | 0
+ 1 | 2
+ 3 | 3
+ 0 |  
+(5 rows)
+
+SELECT a,d FROM o
+WHERE 0 IN (SELECT sum_zero(b) FROM i WHERE i.a=o.d) OR a=2
+ORDER BY d,a;
+ a | d 
+---+---
+ 0 | 0
+   | 0
+ 2 | 1
+ 1 | 2
+ 3 | 3
+ 0 |  
+(6 rows)
+
+SELECT a,d,
+    (SELECT o.a) < ANY (SELECT coalesce(sum(b),0) FROM i WHERE i.a=o.d) AS less
+FROM o ORDER BY d,a;
+ a | d | less 
+---+---+------
+ 0 | 0 | f
+   | 0 | 
+ 2 | 1 | t
+ 1 | 2 | f
+ 3 | 3 | f
+ 0 |   | f
+(6 rows)
+
+-- These forms can return no rows: in particular, NULL IN (empty) is false.
+SELECT a,d,
+    NULL::int IN (SELECT sum(b) FROM i WHERE i.a=o.d HAVING count(*)>0) AS having,
+    0 IN (SELECT sum_zero(b) FROM i WHERE i.a=o.d HAVING count(*)<2) AS custom_having,
+    0 IN (SELECT sum_zero(b) FROM i WHERE i.a=o.d GROUP BY i.a) AS grouped,
+    0 IN (SELECT sum_zero(b) FROM i WHERE i.a=o.d LIMIT 0) AS limited,
+    0 IN (SELECT sum_zero(b) FROM i WHERE i.a=o.d OFFSET 1) AS skipped
+FROM o ORDER BY d,a;
+ a | d | having | custom_having | grouped | limited | skipped 
+---+---+--------+---------------+---------+---------+---------
+ 0 | 0 | f      | t             | f       | f       | f
+   | 0 | f      | t             | f       | f       | f
+ 2 | 1 |        | f             | f       | f       | f
+ 1 | 2 |        | t             | t       | f       | f
+ 3 | 3 | f      | t             | f       | f       | f
+ 0 |   | f      | t             | f       | f       | f
+(6 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT d FROM many_o o
+WHERE 1 IN (SELECT coalesce(sum(b),0)+1 FROM many_i i WHERE i.a=o.d);
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Result
+         Filter: (1 = CASE WHEN (true) THEN (COALESCE((sum(i.b)), '0'::bigint) + 1) ELSE (SubPlan 1) END)
+         ->  Hash Left Join
+               Hash Cond: (o.d = i.a)
+               ->  Seq Scan on many_o o
+               ->  Hash
+                     ->  HashAggregate
+                           Group Key: i.a
+                           ->  Seq Scan on many_i i
+         SubPlan 1
+           ->  Result
+                 One-Time Filter: ((true) IS NULL)
+                 ->  Aggregate
+                       ->  Result
+                             One-Time Filter: false
+ Optimizer: GPORCA
+(17 rows)
+
+SELECT count(*) FROM many_o o
+WHERE 1 IN (SELECT coalesce(sum(b),0)+1 FROM many_i i WHERE i.a=o.d);
+ count 
+-------
+     2
+(1 row)
+
+-- A constant ANY operand still needs NULL rows in the native SubPlan.
+SELECT a,d,
+    10 IN (SELECT b FROM i WHERE i.a=o.d) AS any_value,
+    NULL::int IN (SELECT b FROM i WHERE i.a=o.d) AS any_null,
+    10 <> ALL (SELECT b FROM i WHERE i.a=o.d) AS all_value,
+    NULL::int = ALL (SELECT sum(b) FROM i WHERE i.a=o.d
+                    HAVING count(*)>0) AS all_having
+FROM o ORDER BY d,a;
+ a | d | any_value | any_null | all_value | all_having 
+---+---+-----------+----------+-----------+------------
+ 0 | 0 | f         | f        | t         | t
+   | 0 | f         | f        | t         | t
+ 2 | 1 | t         |          | f         | 
+ 1 | 2 |           |          |           | 
+ 3 | 3 | f         | f        | t         | t
+ 0 |   | f         | f        | t         | t
+(6 rows)
+
+-- Filter context may discard a missing scalar row only when the predicate
+-- rejects NULL. Test aggregates and ordinary scalar subqueries alike.
+SELECT a,d FROM o WHERE
+    (SELECT sum(b)+1 FROM i WHERE i.a=o.d) IS NULL ORDER BY d,a;
+ a | d 
+---+---
+ 0 | 0
+   | 0
+ 1 | 2
+ 3 | 3
+ 0 |  
+(5 rows)
+
+SELECT a,d FROM o WHERE
+    (SELECT count(*) FROM i WHERE i.a=o.d HAVING count(*)>0) IS NULL
+ORDER BY d,a;
+ a | d 
+---+---
+ 0 | 0
+   | 0
+ 3 | 3
+ 0 |  
+(4 rows)
+
+SELECT a,d FROM o WHERE
+    (SELECT sum(b) FROM i WHERE i.a=o.d GROUP BY i.a) IS NULL ORDER BY d,a;
+ a | d 
+---+---
+ 0 | 0
+   | 0
+ 1 | 2
+ 3 | 3
+ 0 |  
+(5 rows)
+
+SELECT a,d FROM o WHERE
+    (SELECT b FROM i WHERE i.a=o.d AND b=10) IS NULL ORDER BY d,a;
+ a | d 
+---+---
+ 0 | 0
+   | 0
+ 1 | 2
+ 3 | 3
+ 0 |  
+(5 rows)
+
+SELECT a,d FROM o WHERE
+    coalesce((SELECT b FROM i WHERE i.a=o.d AND b=10),0)=0 ORDER BY d,a;
+ a | d 
+---+---
+ 0 | 0
+   | 0
+ 1 | 2
+ 3 | 3
+ 0 |  
+(5 rows)
+
+SELECT a,d FROM o WHERE
+    (SELECT b FROM i WHERE i.a=o.d AND b=10) IS NOT DISTINCT FROM NULL
+ORDER BY d,a;
+ a | d 
+---+---
+ 0 | 0
+   | 0
+ 1 | 2
+ 3 | 3
+ 0 |  
+(5 rows)
+
+-- Replacing all subqueries by NULL at once is insufficient: either operand
+-- can supply the COALESCE result when the other one returns no rows.
+SELECT a,d FROM o WHERE coalesce(
+    (SELECT b FROM i WHERE i.a=o.d AND b=999),
+    (SELECT b FROM i WHERE i.a=o.d AND b=10))=10 ORDER BY d,a;
+ a | d 
+---+---
+ 2 | 1
+(1 row)
+
+SELECT a,d FROM o WHERE coalesce(
+    (SELECT b FROM i WHERE i.a=o.d AND b=10),
+    (SELECT b FROM i WHERE i.a=o.d AND b=999))=10 ORDER BY d,a;
+ a | d 
+---+---
+ 2 | 1
+(1 row)
+
+SELECT a,d FROM o WHERE
+    coalesce((SELECT b FROM i WHERE i.a=o.d AND b=10),(SELECT 0))=0
+ORDER BY d,a;
+ a | d 
+---+---
+ 0 | 0
+   | 0
+ 1 | 2
+ 3 | 3
+ 0 |  
+(5 rows)
+
+SELECT a,d FROM o WHERE
+    (SELECT b FROM i WHERE i.a=o.d AND b=10)=10 AND d=1 ORDER BY d,a;
+ a | d 
+---+---
+ 2 | 1
+(1 row)
+
+-- Fractional estimates below the correlated aggregate must not make a join
+-- scale factor smaller than one and force a fallback while planning HAVING.
+CREATE TABLE k(x int) DISTRIBUTED BY (x);
+INSERT INTO k VALUES (0),(2);
+ANALYZE k;
+EXPLAIN (COSTS OFF)
+SELECT d,(SELECT count(*) FROM i WHERE i.a=o.d
+          HAVING count(*)>(SELECT max(x) FROM k)) AS v FROM o ORDER BY d;
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Sort
+   Sort Key: o.d
+   ->  Result
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               ->  Seq Scan on o
+         SubPlan 2
+           ->  Result
+                 Filter: ((count(*)) > (SubPlan 1))
+                 ->  Aggregate
+                       ->  Result
+                             Filter: (i.a = o.d)
+                             ->  Materialize
+                                   ->  Gather Motion 3:1  (slice2; segments: 3)
+                                         ->  Seq Scan on i
+                 SubPlan 1
+                   ->  Materialize
+                         ->  Finalize Aggregate
+                               ->  Gather Motion 3:1  (slice3; segments: 3)
+                                     ->  Partial Aggregate
+                                           ->  Seq Scan on k
+ Optimizer: GPORCA
+(21 rows)
+
+SELECT d,(SELECT count(*) FROM i WHERE i.a=o.d
+          HAVING count(*)>(SELECT max(x) FROM k)) AS v FROM o ORDER BY d;
+ d | v 
+---+---
+ 0 |  
+ 0 |  
+ 1 |  
+ 2 |  
+ 3 |  
+   |  
+(6 rows)
+
+DROP TABLE k, many_i, many_o, empty_o, i, o;
+DROP AGGREGATE sum_throw(int);
+DROP AGGREGATE sum_zero(int);
+DROP FUNCTION throw_empty(int);
+DROP FUNCTION zero_final(int);
+RESET search_path;
+DROP SCHEMA agg_sq;
+RESET optimizer_trace_fallback;
+RESET optimizer;

@@ -61,6 +61,9 @@ public:
 
 	// is aggregate replicate slice execution safe
 	virtual BOOL IsAggRepSafe() const = 0;
+
+	// A volatile final function must not be shared between outer rows.
+	virtual BOOL IsFinalFuncVolatile() const = 0;
 };
 }  // namespace gpmd
 

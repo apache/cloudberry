@@ -78,6 +78,15 @@ CXformSimplifySubquery::FSimplifyQuantified(CMemoryPool *mp,
 {
 	GPOS_ASSERT(CUtils::FQuantifiedSubquery(pexprScalar->Pop()));
 
+	// Keep correlated scalar aggregates visible to CSubqueryHandler. Wrapping
+	// them in another aggregate hides the empty-input row that must be
+	// restored before evaluating the quantified comparison.
+	CExpression *pexprInner = (*pexprScalar)[0];
+	if (pexprInner->HasOuterRefs() && CUtils::FHasScalarAgg(pexprInner))
+	{
+		return false;
+	}
+
 	CExpression *pexprNewSubquery = nullptr;
 	CExpression *pexprCmp = nullptr;
 	CXformUtils::QuantifiedToAgg(mp, pexprScalar, &pexprNewSubquery, &pexprCmp);
