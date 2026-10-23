@@ -703,9 +703,12 @@ jobs:
           # leaves belongs to a scenario that passed. Only treat a SIGABRT core
           # as expected when gpstop said in this job's own log that it sent the
           # signal; without that line a SIGABRT core is still a failure.
+          # gpstop writes that line to its own log under gpAdminLogs; behave
+          # does not copy a passing step's output into the make log.
           gpstop_sent_sigabrt=no
           if grep -rqs "Sending SIGABRT signal" \
-               "${SRC_DIR}"/build-logs/details/ 2>/dev/null; then
+               "${SRC_DIR}"/build-logs/details/ \
+               /home/gpadmin/gpAdminLogs/ 2>/dev/null; then
             gpstop_sent_sigabrt=yes
           fi
 
