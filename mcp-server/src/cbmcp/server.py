@@ -24,13 +24,15 @@ A Model Communication Protocol server for Apache Cloudberry database interaction
 providing resources, tools, and prompts for database management.
 """
 
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
 import logging
 from fastmcp import FastMCP
-from pydantic import Field
+from fastmcp.exceptions import ToolError
+from pydantic import Field, StrictInt
 
-from .config import DatabaseConfig, ServerConfig
+from .config import DatabaseConfig, ServerConfig, WriteConfig
 from .database import DatabaseManager
+from .writeback import ResultWriter, WriteError, public_error
 from .search import SearchFilter, SearchMetric, TextMatchMode, TextQueryMode
 from .prompt import (
     ANALYZE_QUERY_PERFORMANCE_PROMPT,
@@ -40,17 +42,36 @@ from .prompt import (
 
 logger = logging.getLogger(__name__)
 
+# MCP tool annotation for the tools that run only fixed SQL and read the
+# catalog, statistics views or user tables.  execute_query and explain_query
+# do not get it: a query the agent writes can call a function that writes,
+# and EXPLAIN ANALYZE runs the statement.
+READ_ONLY = {"readOnlyHint": True}
+
 class CloudberryMCPServer:
     """Apache Cloudberry MCP Server implementation"""
     
-    def __init__(self, server_config: ServerConfig, db_config: DatabaseConfig):
+    def __init__(
+        self,
+        server_config: ServerConfig,
+        db_config: DatabaseConfig,
+        write_config: Optional[WriteConfig] = None,
+    ):
         self.server_config = server_config
         self.db_config = db_config
+        # Read here rather than by every caller, so that an invalid write
+        # setting stops the server whichever way it is started.
+        self.write_config = (
+            write_config if write_config is not None
+            else WriteConfig.from_env(db_config.query_timeout)
+        )
         self.mcp = FastMCP("Apache Cloudberry MCP Server")
         self.db_manager = DatabaseManager(db_config)
         
         self._setup_resources()
         self._setup_tools()
+        if self.write_config.enabled:
+            self._setup_write_tools()
         self._setup_prompts()
 
     
@@ -79,18 +100,21 @@ class CloudberryMCPServer:
     def _setup_tools(self):
         """Setup MCP tools for database operations"""
         
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def list_tables(
-            schema: Annotated[str, Field(description="The schema name to list tables from")]
+            schema: Annotated[str, Field(description="The schema name to list tables from")],
+            table_type: Annotated[Optional[str], Field(description="'base' for ordinary tables, 'foreign' for foreign tables such as Lance datasets; omit for both")] = None
         ) -> List[str]:
-            """List tables in a specific schema"""
+            """List tables in a specific schema, foreign tables included"""
             logger.info(f"Listing tables in schema: {schema}")
             try:
-                return await self.db_manager.list_tables(schema)
+                return await self.db_manager.list_tables(schema, table_type)
             except Exception as e:
-                return f"Error listing tables: {str(e)}"
+                # Raised rather than returned: a string is not a List[str], and
+                # the client rejects a result that breaks the output schema.
+                raise ToolError(f"Error listing tables: {str(e)}") from e
         
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def list_views(
             schema: Annotated[str, Field(description="The schema name to list views from")]
         ) -> List[str]:
@@ -101,7 +125,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error listing views: {str(e)}"
         
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def list_indexes(
             schema: Annotated[str, Field(description="The schema name")],
             table: Annotated[str, Field(description="The table name to list indexes for")]
@@ -114,30 +138,40 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error listing indexes: {str(e)}"
         
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def list_columns(
             schema: Annotated[str, Field(description="The schema name")],
             table: Annotated[str, Field(description="The table name to list columns for")]
         ) -> List[Dict[str, Any]]:
-            """List columns for a specific table"""
+            """List columns for a specific table.
+
+            data_type is the information_schema name; type is the full
+            declared type, such as real[] or numeric(10,2).
+            """
             logger.info(f"Listing columns for table: {schema}.{table}")
             try:
                 return await self.db_manager.list_columns(schema, table)
             except Exception as e:
-                return f"Error listing columns: {str(e)}"
+                raise ToolError(f"Error listing columns: {str(e)}") from e
         
         @self.mcp.tool()
         async def execute_query(
             query: Annotated[str, Field(description="The SQL query to execute")],
             params: Annotated[Optional[List[Any]], Field(description="Values bound to $1, $2, ... in the query, in order")] = None,
-            readonly: Annotated[bool, Field(description="Whether the query is read-only")] = True
+            readonly: Annotated[bool, Field(description="Whether the query is read-only")] = True,
+            max_rows: Annotated[Optional[StrictInt], Field(description="Return at most this many rows; defaults to, and cannot exceed, the server's MCP_MAX_ROWS")] = None
         ) -> Dict[str, Any]:
             """
-            Execute a safe SQL query with parameters
+            Execute a safe SQL query with parameters.
+
+            "truncated" is true when the query had more rows than were
+            returned; page with ORDER BY and LIMIT/OFFSET to read the rest.
+            A value longer than the server's MCP_MAX_VALUE_LENGTH is cut, and
+            "truncated_columns" names the columns where that happened.
             """
             logger.info(f"Executing query: {query}")
             try:
-                return await self.db_manager.execute_query(query, params, readonly)
+                return await self.db_manager.execute_query(query, params, readonly, max_rows)
             except Exception as e:
                 return {"error": f"Error executing query: {str(e)}"}
         
@@ -155,7 +189,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error explaining query: {str(e)}"
         
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def get_table_stats(
             schema: Annotated[str, Field(description="The schema name")],
             table: Annotated[str, Field(description="The table name")],
@@ -172,7 +206,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error getting table stats: {str(e)}"
         
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def list_large_tables(limit: Annotated[int, Field(description="Number of tables to return")] = 10) -> List[Dict[str, Any]]:
             """
             List the largest tables in the database
@@ -183,7 +217,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error listing large tables: {str(e)}"
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def get_database_schemas() -> List[str]:
             """Get database schemas"""
             logger.info("Getting database schemas")
@@ -192,7 +226,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error getting schemas: {str(e)}"
         
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def get_database_information() -> Dict[str, str]:
             """Get general database information"""
             logger.info("Getting database information")
@@ -201,7 +235,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error getting database info: {str(e)}"
         
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def get_database_summary() -> Dict[str, dict]:
             """Get detailed database summary"""
             logger.info("Getting database summary")
@@ -210,7 +244,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error getting database summary: {str(e)}"
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def list_users() -> List[str]:
             """List all database users"""
             logger.info("Listing database users")
@@ -219,7 +253,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error listing users: {str(e)}"
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def list_user_permissions(
             username: Annotated[str, Field(description="The username to check permissions for")]
         ) -> List[Dict[str, Any]]:
@@ -230,7 +264,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error listing user permissions: {str(e)}"
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def list_table_privileges(
             schema: Annotated[str, Field(description="The schema name")],
             table: Annotated[str, Field(description="The table name")]
@@ -242,7 +276,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error listing table privileges: {str(e)}"
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def list_constraints(
             schema: Annotated[str, Field(description="The schema name")],
             table: Annotated[str, Field(description="The table name")]
@@ -254,7 +288,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error listing constraints: {str(e)}"
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def list_foreign_keys(
             schema: Annotated[str, Field(description="The schema name")],
             table: Annotated[str, Field(description="The table name")]
@@ -266,7 +300,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error listing foreign keys: {str(e)}"
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def list_referenced_tables(
             schema: Annotated[str, Field(description="The schema name")],
             table: Annotated[str, Field(description="The table name")]
@@ -278,7 +312,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error listing referenced tables: {str(e)}"
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def get_slow_queries(
             limit: Annotated[int, Field(description="Number of slow queries to return")] = 10
         ) -> List[Dict[str, Any]]:
@@ -289,7 +323,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error getting slow queries: {str(e)}"
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def get_index_usage() -> List[Dict[str, Any]]:
             """Get index usage statistics"""
             logger.info("Getting index usage statistics")
@@ -298,7 +332,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error getting index usage: {str(e)}"
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def get_table_bloat_info() -> List[Dict[str, Any]]:
             """Get table bloat information"""
             logger.info("Getting table bloat information")
@@ -307,7 +341,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error getting table bloat info: {str(e)}"
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def get_database_activity() -> List[Dict[str, Any]]:
             """Get current database activity"""
             logger.info("Getting database activity")
@@ -316,7 +350,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error getting database activity: {str(e)}"
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def list_functions(
             schema: Annotated[str, Field(description="The schema name")]
         ) -> List[Dict[str, Any]]:
@@ -327,7 +361,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error listing functions: {str(e)}"
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def get_function_definition(
             schema: Annotated[str, Field(description="The schema name")],
             function_name: Annotated[str, Field(description="The function name")]
@@ -339,7 +373,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error getting function definition: {str(e)}"
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def list_triggers(
             schema: Annotated[str, Field(description="The schema name")],
             table: Annotated[str, Field(description="The table name")]
@@ -351,7 +385,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error listing triggers: {str(e)}"
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def get_table_ddl(
             schema: Annotated[str, Field(description="The schema name")],
             table: Annotated[str, Field(description="The table name")]
@@ -363,7 +397,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error getting table DDL: {str(e)}"
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def list_materialized_views(
             schema: Annotated[str, Field(description="The schema name")]
         ) -> List[str]:
@@ -374,7 +408,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error listing materialized views: {str(e)}"
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def get_vacuum_info(
             schema: Annotated[str, Field(description="The schema name")],
             table: Annotated[str, Field(description="The table name")]
@@ -386,7 +420,7 @@ class CloudberryMCPServer:
             except Exception as e:
                 return f"Error getting vacuum info: {str(e)}"
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def list_active_connections() -> List[Dict[str, Any]]:
             """List active database connections"""
             logger.info("Listing active connections")
@@ -399,7 +433,7 @@ class CloudberryMCPServer:
         # Retrieval tools: what an agent needs to search, not just query
         # --------------------------------------------------------------
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def list_searchable_columns(
             schema: Annotated[Optional[str], Field(description="Restrict the result to one schema")] = None,
             table: Annotated[Optional[str], Field(description="Restrict the result to one table")] = None,
@@ -409,7 +443,10 @@ class CloudberryMCPServer:
 
             Reports embedding columns with their dimension, tsvector columns,
             and text columns carrying a full-text index, each with the indexes
-            defined on it. Call this before vector_search, fulltext_search or
+            defined on it. "embedding" says whose operators rank a vector
+            column: "pgvector", or "lance" for a real[] column of a lance_fdw
+            foreign table, whose index lives in the Lance dataset and whose
+            dimension is checked when the search runs. Call this before vector_search, fulltext_search or
             hybrid_search to choose a target instead of guessing from names.
             """
             logger.info(f"Listing searchable columns in schema: {schema}, table: {table}")
@@ -418,9 +455,9 @@ class CloudberryMCPServer:
                     schema, table, include_unindexed_text
                 )
             except Exception as e:
-                return f"Error listing searchable columns: {str(e)}"
+                raise ToolError(f"Error listing searchable columns: {str(e)}") from e
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def vector_search(
             schema: Annotated[str, Field(description="The schema name")],
             table: Annotated[str, Field(description="The table name")],
@@ -439,6 +476,11 @@ class CloudberryMCPServer:
             index, so this is a pre-filtered nearest neighbour search, not a
             filter over an already truncated result. The generated SQL is
             returned alongside the rows.
+
+            Works on pgvector columns and on real[] columns of lance_fdw
+            foreign tables, where lance_fdw hands the filter and the search to
+            Lance. A Lance column supports l2, cosine and inner_product, and
+            takes neither probes nor ef_search.
             """
             logger.info(f"Vector search on {schema}.{table}.{vector_column}, limit: {limit}")
             try:
@@ -455,9 +497,9 @@ class CloudberryMCPServer:
                     ef_search=ef_search,
                 )
             except Exception as e:
-                return {"error": f"Error running vector search: {str(e)}"}
+                return {"error": f"Error running vector search: {self.db_manager.describe_error(e)}"}
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def fulltext_search(
             schema: Annotated[str, Field(description="The schema name")],
             table: Annotated[str, Field(description="The table name")],
@@ -491,9 +533,9 @@ class CloudberryMCPServer:
                     match_mode=match_mode,
                 )
             except Exception as e:
-                return {"error": f"Error running full-text search: {str(e)}"}
+                return {"error": f"Error running full-text search: {self.db_manager.describe_error(e)}"}
 
-        @self.mcp.tool()
+        @self.mcp.tool(annotations=READ_ONLY)
         async def hybrid_search(
             schema: Annotated[str, Field(description="The schema name")],
             table: Annotated[str, Field(description="The table name")],
@@ -543,7 +585,92 @@ class CloudberryMCPServer:
                     ef_search=ef_search,
                 )
             except Exception as e:
-                return {"error": f"Error running hybrid search: {str(e)}"}
+                return {"error": f"Error running hybrid search: {self.db_manager.describe_error(e)}"}
+
+    def _setup_write_tools(self):
+        """Register the write-back tools; only called with MCP_ENABLE_WRITE on.
+
+        Without the switch the tools do not exist at all, so an agent never
+        sees them and cannot try them.
+        """
+        writer = ResultWriter(self.db_manager, self.write_config)
+
+        @self.mcp.tool(annotations=READ_ONLY)
+        async def describe_result_table(
+            schema: Annotated[str, Field(description="The schema name, exactly as stored in the catalog")],
+            table: Annotated[str, Field(description="The table name, exactly as stored in the catalog")],
+        ) -> Dict[str, Any]:
+            """Describe a table that write_results can write extraction results to.
+
+            Reports, per mode, whether the table can be written and why not;
+            which columns can serve as source_id for an upsert; every column
+            with its type, nullability, default and privileges; whether the
+            model and extracted_at provenance columns exist; the user triggers
+            on the table and its partitions; and the distribution key. Only
+            tables listed in MCP_WRITE_TABLES can be described.
+            """
+            logger.info(f"Describing result table {schema}.{table}")
+            try:
+                return await writer.describe(schema, table)
+            except WriteError as e:
+                raise ToolError(str(e)) from e
+            except Exception as e:
+                raise ToolError(
+                    f"Error describing result table: "
+                    f"{public_error(e, self.db_manager.describe_error)}"
+                ) from e
+
+        @self.mcp.tool(annotations={
+            "readOnlyHint": False,
+            # upsert overwrites values already in the table.
+            "destructiveHint": True,
+            # Repeating an append inserts the rows again.
+            "idempotentHint": False,
+        })
+        async def write_results(
+            schema: Annotated[str, Field(description="The schema name, exactly as stored in the catalog")],
+            table: Annotated[str, Field(description="The table name, exactly as stored in the catalog")],
+            source_id_column: Annotated[str, Field(description="The table column that identifies the source record; for upsert it must be one of upsert_keys from describe_result_table")],
+            fields: Annotated[List[str], Field(description="The field names every row carries, e.g. [\"doc_id\", \"summary\"]")],
+            rows: Annotated[List[Any], Field(description="The results: one object per source record, with exactly the keys in fields")],
+            mode: Annotated[Literal["upsert", "append"], Field(description="upsert inserts or updates by source_id and changes only the given columns; append only inserts")] = "upsert",
+            field_mapping: Annotated[Optional[Dict[str, str]], Field(description="Field name to column name, for fields whose name differs from the column; the rest map to the column of the same name")] = None,
+            model: Annotated[Optional[str], Field(description="The model that produced this batch; required when the table has a model column")] = None,
+        ) -> Dict[str, Any]:
+            """Write a batch of extraction results to a whitelisted table.
+
+            Values are converted to each column's type by the database. A
+            row with a value of the wrong type, a violated constraint, a null
+            or repeated source_id, or fields other than those in fields is
+            reported in failed, with its index and the reason, and the other
+            rows are still written. Anything that concerns the whole call -
+            the table, the mapping, privileges, a lock wait - writes nothing
+            and raises. When the table has model and extracted_at columns
+            they are filled on every write. Exact numerics, integers
+            beyond 2^53, and NaN or Infinity (which JSON cannot hold) should
+            be passed as strings. A table with an enabled trigger (of any
+            timing or level) or a rule on INSERT or UPDATE is refused, since
+            either can change or silently drop the rows written.
+            """
+            logger.info(f"Writing {len(rows) if isinstance(rows, list) else '?'} results to {schema}.{table} ({mode})")
+            try:
+                return await writer.write(
+                    schema=schema,
+                    table=table,
+                    source_id_column=source_id_column,
+                    fields=fields,
+                    rows=rows,
+                    mode=mode,
+                    field_mapping=field_mapping,
+                    model=model,
+                )
+            except WriteError as e:
+                raise ToolError(str(e)) from e
+            except Exception as e:
+                raise ToolError(
+                    f"Error writing results, nothing was written: "
+                    f"{public_error(e, self.db_manager.describe_error)}"
+                ) from e
 
     def _setup_prompts(self):
         """Setup MCP prompts for common database tasks"""
