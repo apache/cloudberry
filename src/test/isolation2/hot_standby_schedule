@@ -3,4 +3,7 @@ test: hot_standby/basic
 test: hot_standby/transaction_isolation
 test: hot_standby/query_conflict
 test: hot_standby/faults
+test: hot_standby/dlog_truncation
+test: hot_standby/dlog_truncation_replay
+test: hot_standby/dlog_truncation_conflict
 test: hot_standby/teardown
