@@ -75,6 +75,14 @@ extern void DistributedLog_InitOldestXmin(void);
 #define DISTRIBUTEDLOG_ZEROPAGE		0x00
 #define DISTRIBUTEDLOG_TRUNCATE		0x10
 
+typedef struct xl_distributedlog_truncate
+{
+	int			page;
+	/* gxid bound of the truncated range; InvalidDistributedTransactionId in pre-bound records */
+	DistributedTransactionId	truncGXid;
+} xl_distributedlog_truncate;
+#define SizeOfDistributedLogTruncate	(sizeof(xl_distributedlog_truncate))
+
 extern void DistributedLog_redo(XLogReaderState *record);
 extern void DistributedLog_desc(StringInfo buf, XLogReaderState *record);
 extern const char *DistributedLog_identify(uint8 info);

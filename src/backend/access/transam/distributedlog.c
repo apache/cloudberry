@@ -31,6 +31,7 @@
 #include "access/distributedlog.h"
 #include "access/slru.h"
 #include "access/transam.h"
+#include "access/xlog.h"
 #include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
 #include "port/atomics.h"
@@ -91,6 +92,18 @@ typedef struct DistributedLogShmem
 	 */
 	volatile TransactionId	oldestXmin;
 
+	/*
+	 * Every distributed log entry whose local xid is below oldestXmin has
+	 * distribXid < truncGXidBound.  Maintained as a monotonic max of the
+	 * xminAllDistributedSnapshots values that backed each oldestXmin
+	 * advance (or, in recovery, the bound carried by a TRUNCATE WAL
+	 * record).  A distributed snapshot with
+	 * xminAllDistributedSnapshots < truncGXidBound may need entries that
+	 * the primary already trimmed, which readers cannot resolve
+	 * correctly: see DistributedLog_AdvanceOldestXmin().
+	 */
+	volatile DistributedTransactionId	truncGXidBound;
+
 } DistributedLogShmem;
 
 static DistributedLogShmem *DistributedLogShared = NULL;
@@ -100,6 +113,7 @@ static bool DistributedLog_PagePrecedes(int page1, int page2);
 static void DistributedLog_WriteZeroPageXlogRec(int page);
 static void DistributedLog_WriteTruncateXlogRec(int page);
 static void DistributedLog_Truncate(TransactionId oldestXmin);
+static void DistributedLog_RaiseTruncGXidBound(DistributedTransactionId gbound);
 
 /*
  * Initialize the value for oldest local XID that might still be visible
@@ -199,6 +213,26 @@ DistributedLog_AdvanceOldestXmin(TransactionId oldestLocalXmin,
 	Assert(!IS_QUERY_DISPATCHER());
 	Assert(TransactionIdIsNormal(oldestLocalXmin));
 
+	/*
+	 * A distributed snapshot dispatched to a mirror/standby may be
+	 * older than the distributed log horizon the primary enforced when
+	 * it issued a DISTRIBUTEDLOG_TRUNCATE: standby snapshots are not
+	 * accounted for by the primary's AdvanceOldestXmin bookkeeping, so
+	 * entries below the replayed horizon can still carry a gxid this
+	 * snapshot must resolve.  Falling back to local visibility then
+	 * would show rows committed after the snapshot.  Fail the query
+	 * with a recovery conflict instead.
+	 */
+	if (RecoveryInProgress() &&
+		xminAllDistributedSnapshots <
+		pg_atomic_read_u64((pg_atomic_uint64 *) &DistributedLogShared->truncGXidBound))
+		ereport(ERROR,
+				(errcode(ERRCODE_T_R_DEADLOCK_DETECTED),
+				 errmsg("canceling statement due to conflict with recovery"),
+				 errdetail("The distributed snapshot needed by this query is no longer "
+						   "available because the distributed log has been truncated "
+						   "on the primary.")));
+
 #ifdef FAULT_INJECTOR
 	const char *dbname = NULL;
 	if (MyProcPort)
@@ -284,9 +318,17 @@ DistributedLog_AdvanceOldestXmin(TransactionId oldestLocalXmin,
 
 		while (1)
 		{
-			if (pg_atomic_compare_exchange_u32((pg_atomic_uint32 *)&DistributedLogShared->oldestXmin, 
+			if (pg_atomic_compare_exchange_u32((pg_atomic_uint32 *)&DistributedLogShared->oldestXmin,
 											&expected, (uint32)oldestXmin))
+			{
+				/*
+				 * This scan moved the shared horizon past entries whose
+				 * distribXid it verified to be < xminAllDistributedSnapshots,
+				 * so raise the recorded truncation bound accordingly.
+				 */
+				DistributedLog_RaiseTruncGXidBound(xminAllDistributedSnapshots);
 				break;
+			}
 
 			if (TransactionIdPrecedesOrEquals(oldestXmin, expected))
 			{
@@ -469,8 +511,24 @@ DistributedLog_GetDistributedXid(
 	int			entryno = TransactionIdToEntry(localXid);
 	int			slotno;
 	DistributedLogEntry *ptr;
+	TransactionId oldestXmin;
 
 	Assert(!IS_QUERY_DISPATCHER());
+
+	/*
+	 * If the requested xid is below the truncation horizon, its entry
+	 * has already been trimmed: return "not found" cleanly instead of
+	 * attempting an SLRU read of a removed page.
+	 */
+	oldestXmin = (TransactionId)pg_atomic_read_u32((pg_atomic_uint32 *)&DistributedLogShared->oldestXmin);
+	if (oldestXmin == InvalidTransactionId)
+		elog(PANIC, "DistributedLog's OldestXmin not initialized yet");
+
+	if (TransactionIdPrecedes(localXid, oldestXmin))
+	{
+		*distribXid = 0;
+		return;
+	}
 
 	slotno = SimpleLruReadPage_ReadOnly(DistributedLogCtl, page, localXid);
 	ptr = (DistributedLogEntry *) DistributedLogCtl->shared->page_buffer[slotno];
@@ -691,6 +749,27 @@ DistributedLog_ShmemInit(void)
 	if (!found)
 	{
 		DistributedLogShared->oldestXmin = InvalidTransactionId;
+		DistributedLogShared->truncGXidBound = FirstDistributedTransactionId;
+	}
+}
+
+/*
+ * Monotonic advance of the truncation gxid bound.  The bound is only
+ * ever raised, so a plain CAS retry loop suffices; callers pass the
+ * gxid whose respecting scan just let the shared oldestXmin advance.
+ */
+static void
+DistributedLog_RaiseTruncGXidBound(DistributedTransactionId gbound)
+{
+	DistributedTransactionId cur =
+		pg_atomic_read_u64((pg_atomic_uint64 *) &DistributedLogShared->truncGXidBound);
+
+	while (cur < gbound)
+	{
+		if (pg_atomic_compare_exchange_u64(
+				(pg_atomic_uint64 *) &DistributedLogShared->truncGXidBound,
+				&cur, gbound))
+			break;
 	}
 }
 
@@ -1020,10 +1099,15 @@ DistributedLog_WriteZeroPageXlogRec(int page)
 static void
 DistributedLog_WriteTruncateXlogRec(int page)
 {
+	xl_distributedlog_truncate	rec;
 	XLogRecPtr	recptr;
 
+	rec.page = page;
+	rec.truncGXid = pg_atomic_read_u64(
+		(pg_atomic_uint64 *) &DistributedLogShared->truncGXidBound);
+
 	XLogBeginInsert();
-	XLogRegisterData((char *) (&page), sizeof(int));
+	XLogRegisterData((char *) &rec, SizeOfDistributedLogTruncate);
 	recptr = XLogInsert(RM_DISTRIBUTEDLOG_ID, DISTRIBUTEDLOG_TRUNCATE);
 	XLogFlush(recptr);
 }
@@ -1063,8 +1147,63 @@ DistributedLog_redo(XLogReaderState *record)
 	else if (info == DISTRIBUTEDLOG_TRUNCATE)
 	{
 		int			page;
+		TransactionId cutoffXid;
+		TransactionId curOldestXmin;
+		xl_distributedlog_truncate xlrec;
 
 		memcpy(&page, XLogRecGetData(record), sizeof(int));
+		if (XLogRecGetDataLen(record) >= SizeOfDistributedLogTruncate)
+		{
+			memcpy(&xlrec, XLogRecGetData(record), SizeOfDistributedLogTruncate);
+		}
+		else
+		{
+			/* Pre-bound record: the truncated gxid range is unknown. */
+			xlrec.page = page;
+			xlrec.truncGXid = InvalidDistributedTransactionId;
+		}
+
+		/*
+		 * The primary already removed all DistributedLog pages older
+		 * than the cutoff page.  Advance our oldestXmin to the first
+		 * xid on the cutoff page, so that standby/mirror readers
+		 * resolving pre-truncation gxids take the soft "below
+		 * oldestXmin => not found" path in
+		 * DistributedLog_CommittedCheck() /
+		 * DistributedLog_GetDistributedXid() instead of erroring out
+		 * when the SLRU read fails on a truncated segment.
+		 *
+		 * The loop also covers a replay that runs before the first
+		 * DistributedLog_AdvanceOldestXmin() call, where the shared
+		 * oldestXmin still holds its InvalidTransactionId initial
+		 * value: nothing better has been written yet, and the cutoff
+		 * is a valid lower bound, so CAS from 0 installs it.
+		 */
+		cutoffXid = ((TransactionId) page) * ENTRIES_PER_PAGE;
+		if (cutoffXid < FirstNormalTransactionId)
+			cutoffXid = FirstNormalTransactionId;
+
+		curOldestXmin = (TransactionId) pg_atomic_read_u32(
+			(pg_atomic_uint32 *) &DistributedLogShared->oldestXmin);
+		while (TransactionIdPrecedes(curOldestXmin, cutoffXid))
+		{
+			uint32		expected = (uint32) curOldestXmin;
+
+			if (pg_atomic_compare_exchange_u32(
+					(pg_atomic_uint32 *) &DistributedLogShared->oldestXmin,
+					&expected, (uint32) cutoffXid))
+				break;
+			curOldestXmin = expected;
+		}
+
+		/*
+		 * All entries below the cutoff were verified on the primary to
+		 * carry a gxid older than every distributed snapshot it knew of,
+		 * i.e. gxid < truncGXid as logged in the record.  Record the
+		 * bound so that mirrors can detect snapshots that predate it.
+		 */
+		if (xlrec.truncGXid != InvalidDistributedTransactionId)
+			DistributedLog_RaiseTruncGXidBound(xlrec.truncGXid);
 
 		elog((Debug_print_full_dtm ? LOG : DEBUG5),
 			 "Redo DISTRIBUTEDLOG_TRUNCATE page %d",
