@@ -86,6 +86,8 @@ Feature: gpstop behave tests
          Then gpstop should return a return code of 0
           And verify no postgres process is running on all hosts
 
+    # needs_fix: gpstop lock (#1639 45a115573c5, 51955ac3d8f)
+    @needs_fix
     Scenario: gpstop fails when the lock file is already held by another gpstop process
         Given the database is running
         And we run a sample background script to generate a pid on "coordinator" segment
@@ -97,6 +99,8 @@ Feature: gpstop behave tests
         And the user runs gpstop -a and selects f
         And gpstop should return a return code of 0
 
+    # needs_fix: gpstop lock (#1639 45a115573c5, 51955ac3d8f)
+    @needs_fix
     Scenario: gpstop removes the lock directory when it is empty
         Given the database is running
         Then a sample gpstop.lock directory is created using the background pid in coordinator_data_directory

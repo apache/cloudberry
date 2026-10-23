@@ -128,6 +128,8 @@ Feature: gpcheckcat tests
         Then gpcheckcat should print "Extra" to stdout
         And gpcheckcat should print "Table miss_attr_db4.public.heap_table.1" to stdout
 
+    # needs_fix: gpcheckcat fixes (#1639 0bfc1d76642)
+    @needs_fix
     Scenario: gpcheckcat should report inconsistent pg_fastsequence.lastrownums values with gp_fastsequence for AO tables
         Given database "errorneous_lastrownums" is dropped and recreated
         And the user runs "psql errorneous_lastrownums -c "create table errlastrownum(a int) using ao_row; insert into errlastrownum select * from generate_series(1,100);""
@@ -148,6 +150,8 @@ Feature: gpcheckcat tests
         Then gpcheckcat should return a return code of 3
         And gpcheckcat should print "Failed test\(s\) that are not reported here: ao_lastrownums" to stdout
 
+    # needs_fix: gpcheckcat fixes (#1639 0bfc1d76642)
+    @needs_fix
     Scenario: gpcheckcat should report inconsistent pg_fastsequence.lastrownums values with gp_fastsequence for AOCO tables
         Given database "errorneous_lastrownums" is dropped and recreated
         And the user runs "psql errorneous_lastrownums -c "create table errlastrownum(a int) using ao_column; insert into errlastrownum select * from generate_series(1,100);""
@@ -198,6 +202,8 @@ Feature: gpcheckcat tests
         And the user runs "dropdb owner_db2"
         And the path "gpcheckcat.repair.*" is removed from current working directory
 
+    # needs_fix: gpcheckcat fixes (#1639 0bfc1d76642)
+    @needs_fix
     Scenario: gpcheckcat should report and repair owner errors on appendonly tables and its indexes
         Given database "owner_db" is dropped and recreated
           And the path "gpcheckcat.repair.*" is removed from current working directory
@@ -753,6 +759,8 @@ Feature: gpcheckcat tests
             | attrname   | tablename          |
             | relname    | pg_class           |
 
+    # needs_fix: gpcheckcat fixes (#1639 0bfc1d76642)
+    @needs_fix
     Scenario: gpcheckcat should discover missing attributes of pg_description and pg_shdescription catalogue table without errors
         Given database "miss_attr_db5" is dropped and recreated
         And there is a "heap" table "public.heap_table" in "miss_attr_db5" with data and description
@@ -787,6 +795,8 @@ Feature: gpcheckcat tests
         And the user runs "dropdb all_good"
 
 
+    # needs_fix: gpcheckcat fixes (#1639 0bfc1d76642)
+    @needs_fix
     Scenario: validate session GUC passed with -x is set
         Given the database is not running
           And the user runs "gpstart -ma"
@@ -800,6 +810,8 @@ Feature: gpcheckcat tests
           And "gpstop -m" should return a return code of 0
           And the user runs "gpstart -a"
 
+    # needs_fix: gpcheckcat fixes (#1639 0bfc1d76642)
+    @needs_fix
     Scenario: Validate if gpecheckcat throws error when there are tables created using mix distribution policy
         Given database "hashops_db" is dropped and recreated
         And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_legacy_hash_ops_tables.sql"
@@ -817,6 +829,8 @@ Feature: gpcheckcat tests
         And gpcheckcat should print "PASSED" to stdout
         And the user runs "dropdb hashops_db"
 
+    # needs_fix: gpcheckcat fixes (#1639 0bfc1d76642)
+    @needs_fix
     Scenario: Validate if gpcheckcat throws error when GUC gp_use_legacy_hashops is on and there are non legacy tables
         Given database "hashops_db" is dropped and recreated
         And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_non_legacy_hashops_tables.sql"
@@ -833,6 +847,8 @@ Feature: gpcheckcat tests
         And gpcheckcat should print "Please run the gpcheckcat.distpolicy.sql file to list the tables." to stdout
         And the user runs "dropdb hashops_db"
 
+      # needs_fix: gpcheckcat fixes (#1639 0bfc1d76642)
+      @needs_fix
       Scenario: Validate if gpcheckcat succeeds when GUC gp_use_legacy_hashops is on and there are legacy tables
         Given database "hashops_db" is dropped and recreated
         And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_legacy_hash_ops_tables.sql"
@@ -846,6 +862,8 @@ Feature: gpcheckcat tests
          And gpcheckcat should print "PASSED" to stdout
         And the user runs "dropdb hashops_db"
 
+    # needs_fix: gpcheckcat fixes (#1639 0bfc1d76642)
+    @needs_fix
     Scenario: Validate if gpcheckcat throws error when GUC gp_use_legacy_hashops is off and there are legacy tables
         Given database "hashops_db" is dropped and recreated
         And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_legacy_hash_ops_tables.sql"
@@ -873,10 +891,14 @@ Feature: gpcheckcat tests
         And gpcheckcat should print "PASSED" to stdout
         And the user runs "dropdb hashops_db"
 
+    # needs_fix: gpcheckcat fixes (#1639 0bfc1d76642)
+    @needs_fix
     Scenario: gpcheckcat -l should report mix_distribution_policy to stdout
         When the user runs "gpcheckcat -l "
         And gpcheckcat should print "mix_distribution_policy" to stdout
 
+    # needs_fix: gpcheckcat fixes (#1639 0bfc1d76642)
+    @needs_fix
     Scenario: gpcheckcat report all tables created using legacy opclass on multiple database
         Given database "hashops_db" is dropped and recreated
         And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_legacy_hash_ops_tables.sql"

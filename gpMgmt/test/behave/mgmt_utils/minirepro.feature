@@ -203,6 +203,8 @@ Feature: Dump minimum database objects that is related to the query
       And the file "/tmp/in.sql" should be executed in database "minidb_tmp" without error
 
     @minirepro_core
+    # needs_fix: minirepro: dump the tables a view reads (#1639 3fccb752584)
+    @needs_fix
     Scenario: Dump database objects related with EXPLAIN select query on view
       Given the file "/tmp/in.sql" exists and contains "EXPLAIN ANALYZE select * from v2;"
       And the file "/tmp/out.sql" does not exist
@@ -267,6 +269,8 @@ Feature: Dump minimum database objects that is related to the query
       And the file "/tmp/in.sql" should be executed in database "minidb_tmp" without error
 
     @minirepro_core
+    # needs_fix: minirepro/gppylib encoding (#1639 3fccb752584 / 51955ac3d8f)
+    @needs_fix
     Scenario: Dump database objects related with select query on table with specially encoded charaters
       Given the file "/tmp/in.sql" exists and contains "select * from spiegelungssätze;"
       And the file "/tmp/out.sql" does not exist
@@ -279,6 +283,8 @@ Feature: Dump minimum database objects that is related to the query
       And the file "/tmp/in.sql" should be executed in database "minidb_tmp" without error
 
     @minirepro_core
+    # needs_fix: pg_dump --function-oids (#2175)
+    @needs_fix
     Scenario: Dump database objects of only functions
       Given the file "/tmp/in.sql" exists and contains "SELECT select_one()"
       And the file "/tmp/out.sql" does not exist

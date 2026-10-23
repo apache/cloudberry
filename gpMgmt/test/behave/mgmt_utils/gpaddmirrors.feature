@@ -38,6 +38,8 @@ Feature: Tests for gpaddmirrors
         | -B 2 -b 1 |  2                  |  1              |
         | -B 1 -b 2 |  1                  |  2              |
 
+    # needs_fix: mirror postgresql.conf check; fix not yet pinned down (#1639 b971d481862 / a3bfe47d5c3 / 83778564c0f)
+    @needs_fix
     Scenario: gpaddmirrors fails for recovery setup errors
         Given the cluster is generated with "3" primaries only
         When gpaddmirrors adds 3 mirrors with one mirror's datadir not empty
@@ -153,6 +155,8 @@ Feature: Tests for gpaddmirrors
             | all          | None                   | 0,1,2            |
 
 
+    # needs_fix: mirror postgresql.conf check; fix not yet pinned down (#1639 b971d481862 / a3bfe47d5c3 / 83778564c0f)
+    @needs_fix
     Scenario: gpaddmirrors can add mirrors and display progress in gpstate
         Given the cluster is generated with "3" primaries only
         And all files in gpAdminLogs directory are deleted

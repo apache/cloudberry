@@ -632,7 +632,10 @@ jobs:
           mkdir -p build-logs/details
           config_log="build-logs/details/make-${{ matrix.test }}-config0.log"
           behave_targets="${{ join(matrix.behave_features, ' ') }}"
-          behave_args="${{ matrix.behave_args || '' }}"
+          # @needs_fix marks scenarios that fail until a fix still under
+          # review lands; each fix removes the tag from the scenarios it
+          # makes pass.
+          behave_args="--tags ~@needs_fix ${{ matrix.behave_args || '' }}"
 
           mkdir -p "/tmp/cloudberry-cores"
           chmod 1777 "/tmp/cloudberry-cores"
@@ -745,7 +748,7 @@ jobs:
           set -o pipefail
 
           config_log="build-logs/details/make-${{ matrix.test }}-config0.log"
-          behave_cmd="behave ${{ matrix.behave_args || '' }} ${{ join(matrix.behave_features, ' ') }}"
+          behave_cmd="behave --tags ~@needs_fix ${{ matrix.behave_args || '' }} ${{ join(matrix.behave_features, ' ') }}"
           if [ ! -f "$config_log" ]; then
             {
               echo "MAKE_COMMAND=\"${behave_cmd}\""

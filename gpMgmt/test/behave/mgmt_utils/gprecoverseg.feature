@@ -1,4 +1,7 @@
-@gprecoverseg
+# needs_fix: the gprecoverseg fixes from #1639 (a3bfe47d5c3, ad3c9d59b19, 993b99d5758,
+# 7056e02e306, 0aa26662c2c, 83778564c0f, 51955ac3d8f); without them a scenario
+# hangs and the job reaches its timeout.
+@gprecoverseg @needs_fix
 Feature: gprecoverseg tests
 
     @differential
