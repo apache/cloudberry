@@ -229,6 +229,10 @@ CREATE INDEX nametbl_c1_c2_idx ON nametbl (c2, c1) INCLUDE (c3);
 INSERT INTO nametbl VALUES(1, 'two', 3.0);
 VACUUM nametbl;
 SET enable_seqscan = 0;
+-- GPORCA costs Index Only Scan below Index Scan only when VACUUM managed to
+-- mark the page all-visible, which a concurrent snapshot anywhere in the
+-- cluster can prevent.  Disable plain index scans so the plan is stable.
+SET optimizer_enable_indexscan = off;
 
 -- Ensure we get an index only scan plan
 EXPLAIN (COSTS OFF) SELECT c2, c1, c3 FROM nametbl WHERE c2 = 'two' AND c1 = 1;
@@ -237,5 +241,6 @@ EXPLAIN (COSTS OFF) SELECT c2, c1, c3 FROM nametbl WHERE c2 = 'two' AND c1 = 1;
 SELECT c2, c1, c3 FROM nametbl WHERE c2 = 'two' AND c1 = 1;
 
 RESET enable_seqscan;
+RESET optimizer_enable_indexscan;
 
 DROP TABLE nametbl;
