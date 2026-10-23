@@ -1,0 +1,4 @@
+{"id":0,"note":"three bytes","c_blob_v2":{"kind":0,"position":0,"size":3,"blob_id":0,"blob_uri":""}}
+{"id":1,"note":"empty","c_blob_v2":{"kind":0,"position":64,"size":0,"blob_id":0,"blob_uri":""}}
+{"id":2,"note":null,"c_blob_v2":null}
+{"id":3,"note":"sixty-four bytes","c_blob_v2":{"kind":0,"position":0,"size":64,"blob_id":0,"blob_uri":""}}

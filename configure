@@ -752,6 +752,7 @@ ICU_CFLAGS
 with_icu
 enable_thread_safety
 INCLUDES
+with_lance
 enable_datalake_fdw
 enable_pax
 CMAKE
@@ -917,6 +918,7 @@ enable_ic_proxy
 enable_preload_ic_module
 enable_pax
 enable_datalake_fdw
+with_lance
 enable_thread_safety
 with_icu
 with_tcl
@@ -1667,6 +1669,7 @@ Optional Packages:
   --with-CC=CMD           set compiler (deprecated)
   --with-llvm             build with LLVM based JIT support
   --without-copy-program  build without COPY TO/FROM PROGRAM support
+  --with-lance            build contrib/lance_fdw, which reads Lance datasets
   --without-icu           build without ICU support
   --with-tcl              build Tcl modules (PL/Tcl)
   --with-tclconfig=DIR    tclConfig.sh is in DIR
@@ -10059,6 +10062,42 @@ $as_echo "checking whether to build with datalake_fdw support ... $enable_datala
 
 
 #
+# Lance support (contrib/lance_fdw)
+#
+# lance_fdw links liblance_c, the C binding of the Lance columnar format.  It
+# is written in Rust and is not part of this source tree: build or install it
+# separately and point --with-includes and --with-libraries at it.  Nothing
+# but contrib/lance_fdw links it, so it is not added to LIBS.
+#
+
+
+
+# Check whether --with-lance was given.
+if test "${with_lance+set}" = set; then :
+  withval=$with_lance;
+  case $withval in
+    yes)
+      :
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --with-lance option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  with_lance=no
+
+fi
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build with Lance support ... $with_lance" >&5
+$as_echo "checking whether to build with Lance support ... $with_lance" >&6; }
+
+
+#
 # Include directories
 #
 ac_save_IFS=$IFS
@@ -15973,6 +16012,51 @@ fi
 
 fi
 
+if test "$with_lance" = yes ; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for lance_dataset_open in -llance_c" >&5
+$as_echo_n "checking for lance_dataset_open in -llance_c... " >&6; }
+if ${ac_cv_lib_lance_c_lance_dataset_open+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-llance_c -lpthread -ldl -lm $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char lance_dataset_open ();
+int
+main ()
+{
+return lance_dataset_open ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_lance_c_lance_dataset_open=yes
+else
+  ac_cv_lib_lance_c_lance_dataset_open=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_lance_c_lance_dataset_open" >&5
+$as_echo "$ac_cv_lib_lance_c_lance_dataset_open" >&6; }
+if test "x$ac_cv_lib_lance_c_lance_dataset_open" = xyes; then :
+  :
+else
+  as_fn_error $? "library 'lance_c' is required for Lance support" "$LINENO" 5
+fi
+
+fi
+
 #
 # enable redirect openssl interface to internal implements if not implements in openssl
 #
@@ -17478,6 +17562,17 @@ if test "x$ac_cv_header_libxml_parser_h" = xyes; then :
 
 else
   as_fn_error $? "header file <libxml/parser.h> is required for XML support" "$LINENO" 5
+fi
+
+
+fi
+
+if test "$with_lance" = yes ; then
+  ac_fn_c_check_header_mongrel "$LINENO" "lance/lance.h" "ac_cv_header_lance_lance_h" "$ac_includes_default"
+if test "x$ac_cv_header_lance_lance_h" = xyes; then :
+
+else
+  as_fn_error $? "header file <lance/lance.h> is required for Lance support" "$LINENO" 5
 fi
 
 
