@@ -160,6 +160,17 @@ CDistributionSpecWorkerRandom::FSatisfies(const CDistributionSpec *pds) const
 				 m_pdsSegmentBase->FSatisfies(pdsWorkerRandom->m_pdsSegmentBase)) &&
 				(IsDuplicateSensitive() || !pdsWorkerRandom->IsDuplicateSensitive()));
 	}
+	else if (EdtHashed == pds->Edt())
+	{
+		if (nullptr == m_pdsSegmentBase ||
+			EdtHashed != m_pdsSegmentBase->Edt())
+		{
+			return false;
+		}
+
+		return CDistributionSpecHashed::PdsConvert(m_pdsSegmentBase)
+			->FSatisfies(pds);
+	}
 	else if (EdtRandom == pds->Edt())
 	{
 		// Note: This ensures semantic consistency with Random::FSatisfies(WorkerRandom),
