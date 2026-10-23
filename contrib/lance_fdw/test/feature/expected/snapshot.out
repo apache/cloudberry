@@ -1,0 +1,125 @@
+-- snapshot: which version of a dataset a statement reads.
+--
+-- The versions fixture was appended to twice, so it has 10, 20 and 35 rows at
+-- versions 1, 2 and 3 - and one, two and three fragments.  Pinning a version
+-- therefore shows up twice: in the rows and in the fragment count EXPLAIN
+-- ANALYZE reports.
+\pset format unaligned
+DO $$
+BEGIN
+  EXECUTE format('CREATE SERVER snap_files FOREIGN DATA WRAPPER lance_fdw OPTIONS (base_uri %L)',
+                 current_setting('regress.fixture_dir'));
+END
+$$;
+CREATE FOREIGN TABLE lance_feature.snap_v1 (id integer, v text, n bigint)
+  SERVER snap_files OPTIONS (uri 'versions.lance', version '1');
+CREATE FOREIGN TABLE lance_feature.snap_v2 (id integer, v text, n bigint)
+  SERVER snap_files OPTIONS (uri 'versions.lance', version '2');
+CREATE FOREIGN TABLE lance_feature.snap_latest (id integer, v text, n bigint)
+  SERVER snap_files OPTIONS (uri 'versions.lance');
+-- version 0 is how the option spells "whatever is newest".
+CREATE FOREIGN TABLE lance_feature.snap_v0 (id integer, v text, n bigint)
+  SERVER snap_files OPTIONS (uri 'versions.lance', version '0');
+SELECT count(*) AS rows, min(id) AS min_id, max(id) AS max_id, sum(n) AS sum_n
+  FROM lance_feature.snap_v1;
+rows|min_id|max_id|sum_n
+10|0|9|285
+(1 row)
+SELECT count(*) AS rows, min(id) AS min_id, max(id) AS max_id, sum(n) AS sum_n
+  FROM lance_feature.snap_v2;
+rows|min_id|max_id|sum_n
+20|0|19|2470
+(1 row)
+SELECT count(*) AS rows, min(id) AS min_id, max(id) AS max_id, sum(n) AS sum_n
+  FROM lance_feature.snap_latest;
+rows|min_id|max_id|sum_n
+35|0|34|13685
+(1 row)
+SELECT count(*) AS rows, min(id) AS min_id, max(id) AS max_id, sum(n) AS sum_n
+  FROM lance_feature.snap_v0;
+rows|min_id|max_id|sum_n
+35|0|34|13685
+(1 row)
+-- An older version is a prefix of the newest one, not a different reading of
+-- the same rows.
+SELECT count(*) AS v1_not_in_latest FROM (
+  SELECT * FROM lance_feature.snap_v1 EXCEPT SELECT * FROM lance_feature.snap_latest) d;
+v1_not_in_latest
+0
+(1 row)
+-- What the plan says it will read.
+SELECT * FROM lance_feature.explain_lance('SELECT count(*) FROM lance_feature.snap_v1');
+explain_lance
+Lance URI: <redacted>
+Lance Version: 1
+Lance Columns: (none)
+(3 rows)
+SELECT * FROM lance_feature.explain_lance('SELECT count(*) FROM lance_feature.snap_v2');
+explain_lance
+Lance URI: <redacted>
+Lance Version: 2
+Lance Columns: (none)
+(3 rows)
+SELECT * FROM lance_feature.explain_lance('SELECT count(*) FROM lance_feature.snap_latest');
+explain_lance
+Lance URI: <redacted>
+Lance Version: latest
+Lance Columns: (none)
+(3 rows)
+SELECT * FROM lance_feature.explain_lance('SELECT count(*) FROM lance_feature.snap_v0');
+explain_lance
+Lance URI: <redacted>
+Lance Version: latest
+Lance Columns: (none)
+(3 rows)
+-- And what it actually opened: the fragment count is the version, seen from
+-- the other side.
+SELECT * FROM lance_feature.explain_lance('SELECT count(*) FROM lance_feature.snap_v1',
+                                          'ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF');
+explain_lance
+Lance URI: <redacted>
+Lance Version: 1
+Lance Columns: (none)
+Lance Fragments: 1
+(4 rows)
+SELECT * FROM lance_feature.explain_lance('SELECT count(*) FROM lance_feature.snap_v2',
+                                          'ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF');
+explain_lance
+Lance URI: <redacted>
+Lance Version: 2
+Lance Columns: (none)
+Lance Fragments: 2
+(4 rows)
+SELECT * FROM lance_feature.explain_lance('SELECT count(*) FROM lance_feature.snap_latest',
+                                          'ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF');
+explain_lance
+Lance URI: <redacted>
+Lance Version: latest
+Lance Columns: (none)
+Lance Fragments: 3
+(4 rows)
+-- Pinning has to hold on the segments too, and an append-only history cannot
+-- tell: a segment that opened the latest version but read only the fragment
+-- ids the coordinator published would still return version 1's rows.
+-- deleted.lance changes the contents of existing fragments between its two
+-- versions (deletion files on three of the four), so here the difference is
+-- in the rows themselves: 20 at version 1, 16 at the latest.
+CREATE FOREIGN TABLE lance_feature.snap_del_v1 (id integer, v text, n bigint)
+  SERVER snap_files OPTIONS (uri 'deleted.lance', version '1');
+CREATE FOREIGN TABLE lance_feature.snap_del_latest (id integer, v text, n bigint)
+  SERVER snap_files OPTIONS (uri 'deleted.lance');
+SELECT count(*) AS rows, min(id) AS min_id, max(id) AS max_id, sum(n) AS sum_n
+  FROM lance_feature.snap_del_v1;
+rows|min_id|max_id|sum_n
+20|0|19|2470
+(1 row)
+SELECT count(*) AS rows, min(id) AS min_id, max(id) AS max_id, sum(n) AS sum_n
+  FROM lance_feature.snap_del_latest;
+rows|min_id|max_id|sum_n
+16|1|18|1979
+(1 row)
+SELECT array_agg(id ORDER BY id) AS deleted_after_v1 FROM (
+  SELECT * FROM lance_feature.snap_del_v1 EXCEPT SELECT * FROM lance_feature.snap_del_latest) d;
+deleted_after_v1
+{0,3,11,19}
+(1 row)

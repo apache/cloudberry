@@ -1,0 +1,714 @@
+{
+  "manifest_format": 1,
+  "generated_by": {
+    "script": "test/fixtures/gen_fixtures.py",
+    "pylance": "11.0.0",
+    "pyarrow": "25.0.1",
+    "data_storage_version_requested": null
+  },
+  "expected_format": {
+    "layout": "one JSON object per row, keys in schema order",
+    "null": "null",
+    "int": "JSON number",
+    "float": "JSON number with Python repr; NaN/Infinity/-Infinity as strings",
+    "bool": "JSON true/false",
+    "text": "JSON string",
+    "hex": "lowercase hex string",
+    "date": "YYYY-MM-DD",
+    "timestamp": "ISO-8601; tz-aware values converted to UTC and suffixed Z",
+    "decimal-string": "decimal string, scale preserved",
+    "array": "JSON array of encoded elements",
+    "text-digest": "{chars, bytes, md5}",
+    "bytes-digest": "{bytes, md5}",
+    "json": "B-tier column, best-effort JSON; not read by the FDW"
+  },
+  "digest_threshold_bytes": 4096,
+  "datasets": {
+    "types_all": {
+      "name": "types_all",
+      "purpose": "Every A-tier Arrow type with NULLs in every column; 3 fragments of 8 rows so batch_size=3 straddles batch and fragment edges.",
+      "path": "data/types_all.lance",
+      "version": 1,
+      "rows": 24,
+      "fragments": 3,
+      "fragment_ids": [0, 1, 2],
+      "fragment_rows": [8, 8, 8],
+      "fragment_physical_rows": [8, 8, 8],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1, 1, 1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 24}
+      ],
+      "expected": "expected/types_all.jsonl",
+      "expected_rows": 24,
+      "notes": [
+        "timestamp values are microsecond-aligned: PG has microsecond precision, so an A-tier read of any unit must be exact",
+        "c_ts_us/c_ts_us_tz carry a non-UTC zone name (Asia/Shanghai) to cover the rule that the zone name is ignored and the epoch is UTC"
+      ],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "c_bool", "arrow_type": "bool", "arrow_format": "b", "nullable": true, "tier": "A", "pg_type": "boolean", "metadata": null, "expected_encoding": "bool"},
+        {"name": "c_int8", "arrow_type": "int8", "arrow_format": "c", "nullable": true, "tier": "A", "pg_type": "smallint", "metadata": null, "expected_encoding": "int"},
+        {"name": "c_int16", "arrow_type": "int16", "arrow_format": "s", "nullable": true, "tier": "A", "pg_type": "smallint", "metadata": null, "expected_encoding": "int"},
+        {"name": "c_int32", "arrow_type": "int32", "arrow_format": "i", "nullable": true, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "c_int64", "arrow_type": "int64", "arrow_format": "l", "nullable": true, "tier": "A", "pg_type": "bigint", "metadata": null, "expected_encoding": "int"},
+        {"name": "c_uint8", "arrow_type": "uint8", "arrow_format": "C", "nullable": true, "tier": "A", "pg_type": "smallint", "metadata": null, "expected_encoding": "int"},
+        {"name": "c_uint16", "arrow_type": "uint16", "arrow_format": "S", "nullable": true, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "c_uint32", "arrow_type": "uint32", "arrow_format": "I", "nullable": true, "tier": "A", "pg_type": "bigint", "metadata": null, "expected_encoding": "int"},
+        {"name": "c_float16", "arrow_type": "halffloat", "arrow_format": "e", "nullable": true, "tier": "A", "pg_type": "real", "metadata": null, "expected_encoding": "float"},
+        {"name": "c_float32", "arrow_type": "float", "arrow_format": "f", "nullable": true, "tier": "A", "pg_type": "real", "metadata": null, "expected_encoding": "float"},
+        {"name": "c_float64", "arrow_type": "double", "arrow_format": "g", "nullable": true, "tier": "A", "pg_type": "double precision", "metadata": null, "expected_encoding": "float"},
+        {"name": "c_utf8", "arrow_type": "string", "arrow_format": "u", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text"},
+        {"name": "c_large_utf8", "arrow_type": "large_string", "arrow_format": "U", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text"},
+        {"name": "c_binary", "arrow_type": "binary", "arrow_format": "z", "nullable": true, "tier": "A", "pg_type": "bytea", "metadata": null, "expected_encoding": "hex"},
+        {"name": "c_large_binary", "arrow_type": "large_binary", "arrow_format": "Z", "nullable": true, "tier": "A", "pg_type": "bytea", "metadata": null, "expected_encoding": "hex"},
+        {"name": "c_date32", "arrow_type": "date32[day]", "arrow_format": "tdD", "nullable": true, "tier": "A", "pg_type": "date", "metadata": null, "expected_encoding": "date"},
+        {"name": "c_ts_s", "arrow_type": "timestamp[s]", "arrow_format": "tss:", "nullable": true, "tier": "A", "pg_type": "timestamp(6)", "metadata": null, "expected_encoding": "timestamp"},
+        {"name": "c_ts_s_tz", "arrow_type": "timestamp[s, tz=UTC]", "arrow_format": "tss:UTC", "nullable": true, "tier": "A", "pg_type": "timestamptz(6)", "metadata": null, "expected_encoding": "timestamp"},
+        {"name": "c_ts_ms", "arrow_type": "timestamp[ms]", "arrow_format": "tsm:", "nullable": true, "tier": "A", "pg_type": "timestamp(6)", "metadata": null, "expected_encoding": "timestamp"},
+        {"name": "c_ts_ms_tz", "arrow_type": "timestamp[ms, tz=UTC]", "arrow_format": "tsm:UTC", "nullable": true, "tier": "A", "pg_type": "timestamptz(6)", "metadata": null, "expected_encoding": "timestamp"},
+        {"name": "c_ts_us", "arrow_type": "timestamp[us]", "arrow_format": "tsu:", "nullable": true, "tier": "A", "pg_type": "timestamp(6)", "metadata": null, "expected_encoding": "timestamp"},
+        {"name": "c_ts_us_tz", "arrow_type": "timestamp[us, tz=Asia/Shanghai]", "arrow_format": "tsu:Asia/Shanghai", "nullable": true, "tier": "A", "pg_type": "timestamptz(6)", "metadata": null, "expected_encoding": "timestamp"},
+        {"name": "c_ts_ns", "arrow_type": "timestamp[ns]", "arrow_format": "tsn:", "nullable": true, "tier": "A", "pg_type": "timestamp(6)", "metadata": null, "expected_encoding": "timestamp"},
+        {"name": "c_ts_ns_tz", "arrow_type": "timestamp[ns, tz=UTC]", "arrow_format": "tsn:UTC", "nullable": true, "tier": "A", "pg_type": "timestamptz(6)", "metadata": null, "expected_encoding": "timestamp"},
+        {"name": "c_dec128_38_10", "arrow_type": "decimal128(38, 10)", "arrow_format": "d:38,10", "nullable": true, "tier": "A", "pg_type": "numeric(38,10)", "metadata": null, "expected_encoding": "decimal-string"},
+        {"name": "c_dec128_10_2", "arrow_type": "decimal128(10, 2)", "arrow_format": "d:10,2", "nullable": true, "tier": "A", "pg_type": "numeric(10,2)", "metadata": null, "expected_encoding": "decimal-string"},
+        {"name": "c_fsl_f32_4", "arrow_type": "fixed_size_list<item: float>[4]", "arrow_format": "+w:4", "nullable": true, "tier": "A", "pg_type": "real[]", "metadata": null, "expected_encoding": "array"},
+        {"name": "c_fsl_f64_4", "arrow_type": "fixed_size_list<item: double>[4]", "arrow_format": "+w:4", "nullable": true, "tier": "A", "pg_type": "double precision[]", "metadata": null, "expected_encoding": "array"},
+        {"name": "c_list_i64", "arrow_type": "list<item: int64>", "arrow_format": "+l", "nullable": true, "tier": "A", "pg_type": "bigint[]", "metadata": null, "expected_encoding": "array"},
+        {"name": "c_list_utf8", "arrow_type": "list<item: string>", "arrow_format": "+l", "nullable": true, "tier": "A", "pg_type": "text[]", "metadata": null, "expected_encoding": "array"}
+      ]
+    },
+    "types_b": {
+      "name": "types_b",
+      "purpose": "B-tier Arrow types (struct, dictionary, uint64, nested list, list<struct>, duration) next to two A-tier columns, so IMPORT has something left to import after skipping them.",
+      "path": "data/types_b.lance",
+      "version": 1,
+      "rows": 12,
+      "fragments": 2,
+      "fragment_ids": [0, 1],
+      "fragment_rows": [6, 6],
+      "fragment_physical_rows": [6, 6],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1, 1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 12}
+      ],
+      "expected": "expected/types_b.jsonl",
+      "expected_rows": 12,
+      "notes": [
+        "no map column: pylance 11 refuses to write Arrow map into Lance file format 2.0 and 2.1 alike ('Map data type is not enabled by the selected file format'), so a map column is not representable here"
+      ],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "keep_utf8", "arrow_type": "string", "arrow_format": "u", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text"},
+        {"name": "c_uint64", "arrow_type": "uint64", "arrow_format": "L", "nullable": true, "tier": "B", "pg_type": null, "metadata": null, "expected_encoding": "json"},
+        {"name": "c_struct", "arrow_type": "struct<a: int32, b: string>", "arrow_format": "+s", "nullable": true, "tier": "A", "pg_type": "composite", "composite_fields": [["a", "integer"], ["b", "text"]], "metadata": null, "expected_encoding": "json"},
+        {"name": "c_dict", "arrow_type": "dictionary<values=string, indices=int32, ordered=0>", "arrow_format": "i", "nullable": true, "tier": "B", "pg_type": null, "metadata": null, "expected_encoding": "json"},
+        {"name": "c_list_list", "arrow_type": "list<item: list<item: int64>>", "arrow_format": "+l", "nullable": true, "tier": "B", "pg_type": null, "metadata": null, "expected_encoding": "json"},
+        {"name": "c_list_struct", "arrow_type": "list<item: struct<a: int32>>", "arrow_format": "+l", "nullable": true, "tier": "A", "pg_type": "composite[]", "composite_fields": [["a", "integer"]], "metadata": null, "expected_encoding": "array"},
+        {"name": "c_duration", "arrow_type": "duration[us]", "arrow_format": "tDu", "nullable": true, "tier": "B", "pg_type": null, "metadata": null, "expected_encoding": "json"}
+      ]
+    },
+    "deleted": {
+      "name": "deleted",
+      "purpose": "4 fragments of 5 rows with rows deleted from three of them: deletion files, and scan batches that start at a non-zero offset.",
+      "path": "data/deleted.lance",
+      "version": 2,
+      "rows": 16,
+      "fragments": 4,
+      "fragment_ids": [0, 1, 2, 3],
+      "fragment_rows": [3, 5, 4, 4],
+      "fragment_physical_rows": [5, 5, 5, 5],
+      "fragments_with_deletion_file": [0, 2, 3],
+      "data_files_per_fragment": [1, 1, 1, 1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 20},
+        {"version": 2, "rows": 16}
+      ],
+      "expected": "expected/deleted.jsonl",
+      "expected_rows": 16,
+      "notes": [
+        "ids 0, 3, 11, 19 are deleted; fragment 1 keeps all its rows"
+      ],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "v", "arrow_type": "string", "arrow_format": "u", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text"},
+        {"name": "n", "arrow_type": "int64", "arrow_format": "l", "nullable": true, "tier": "A", "pg_type": "bigint", "metadata": null, "expected_encoding": "int"}
+      ]
+    },
+    "empty": {
+      "name": "empty",
+      "purpose": "Zero rows and zero fragments: every QE gets an empty share.",
+      "path": "data/empty.lance",
+      "version": 1,
+      "rows": 0,
+      "fragments": 0,
+      "fragment_ids": [],
+      "fragment_rows": [],
+      "fragment_physical_rows": [],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [],
+      "data_storage_version": "2.1",
+      "file_format_versions": [],
+      "history": [
+        {"version": 1, "rows": 0}
+      ],
+      "expected": "expected/empty.jsonl",
+      "expected_rows": 0,
+      "notes": [
+        "pylance writes no fragment at all for an empty table"
+      ],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "v", "arrow_type": "string", "arrow_format": "u", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text"},
+        {"name": "n", "arrow_type": "int64", "arrow_format": "l", "nullable": true, "tier": "A", "pg_type": "bigint", "metadata": null, "expected_encoding": "int"}
+      ]
+    },
+    "empty_b": {
+      "name": "empty_b",
+      "purpose": "Zero rows with a B-tier column: an empty dataset whose projection still has to be refused.",
+      "path": "data/empty_b.lance",
+      "version": 1,
+      "rows": 0,
+      "fragments": 0,
+      "fragment_ids": [],
+      "fragment_rows": [],
+      "fragment_physical_rows": [],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [],
+      "data_storage_version": "2.1",
+      "file_format_versions": [],
+      "history": [
+        {"version": 1, "rows": 0}
+      ],
+      "expected": "expected/empty_b.jsonl",
+      "expected_rows": 0,
+      "notes": [
+        "pylance writes no fragment at all for an empty table, so this dataset has a schema and nothing else"
+      ],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "c_uint64", "arrow_type": "uint64", "arrow_format": "L", "nullable": true, "tier": "B", "pg_type": null, "metadata": null, "expected_encoding": "json"}
+      ]
+    },
+    "frag_1": {
+      "name": "frag_1",
+      "purpose": "1 fragment(s) of 5 rows: fragment-count coverage for the 3-segment modulo split.",
+      "path": "data/frag_1.lance",
+      "version": 1,
+      "rows": 5,
+      "fragments": 1,
+      "fragment_ids": [0],
+      "fragment_rows": [5],
+      "fragment_physical_rows": [5],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 5}
+      ],
+      "expected": "expected/frag_1.jsonl",
+      "expected_rows": 5,
+      "notes": [],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "v", "arrow_type": "string", "arrow_format": "u", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text"},
+        {"name": "n", "arrow_type": "int64", "arrow_format": "l", "nullable": true, "tier": "A", "pg_type": "bigint", "metadata": null, "expected_encoding": "int"}
+      ]
+    },
+    "frag_2": {
+      "name": "frag_2",
+      "purpose": "2 fragment(s) of 5 rows: fragment-count coverage for the 3-segment modulo split.",
+      "path": "data/frag_2.lance",
+      "version": 1,
+      "rows": 10,
+      "fragments": 2,
+      "fragment_ids": [0, 1],
+      "fragment_rows": [5, 5],
+      "fragment_physical_rows": [5, 5],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1, 1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 10}
+      ],
+      "expected": "expected/frag_2.jsonl",
+      "expected_rows": 10,
+      "notes": [],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "v", "arrow_type": "string", "arrow_format": "u", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text"},
+        {"name": "n", "arrow_type": "int64", "arrow_format": "l", "nullable": true, "tier": "A", "pg_type": "bigint", "metadata": null, "expected_encoding": "int"}
+      ]
+    },
+    "frag_3": {
+      "name": "frag_3",
+      "purpose": "3 fragment(s) of 5 rows: fragment-count coverage for the 3-segment modulo split.",
+      "path": "data/frag_3.lance",
+      "version": 1,
+      "rows": 15,
+      "fragments": 3,
+      "fragment_ids": [0, 1, 2],
+      "fragment_rows": [5, 5, 5],
+      "fragment_physical_rows": [5, 5, 5],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1, 1, 1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 15}
+      ],
+      "expected": "expected/frag_3.jsonl",
+      "expected_rows": 15,
+      "notes": [],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "v", "arrow_type": "string", "arrow_format": "u", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text"},
+        {"name": "n", "arrow_type": "int64", "arrow_format": "l", "nullable": true, "tier": "A", "pg_type": "bigint", "metadata": null, "expected_encoding": "int"}
+      ]
+    },
+    "frag_7": {
+      "name": "frag_7",
+      "purpose": "7 fragment(s) of 5 rows: fragment-count coverage for the 3-segment modulo split.",
+      "path": "data/frag_7.lance",
+      "version": 1,
+      "rows": 35,
+      "fragments": 7,
+      "fragment_ids": [0, 1, 2, 3, 4, 5, 6],
+      "fragment_rows": [5, 5, 5, 5, 5, 5, 5],
+      "fragment_physical_rows": [5, 5, 5, 5, 5, 5, 5],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1, 1, 1, 1, 1, 1, 1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 35}
+      ],
+      "expected": "expected/frag_7.jsonl",
+      "expected_rows": 35,
+      "notes": [],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "v", "arrow_type": "string", "arrow_format": "u", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text"},
+        {"name": "n", "arrow_type": "int64", "arrow_format": "l", "nullable": true, "tier": "A", "pg_type": "bigint", "metadata": null, "expected_encoding": "int"}
+      ]
+    },
+    "frag_100": {
+      "name": "frag_100",
+      "purpose": "100 fragment(s) of 1 rows: fragment-count coverage for the 3-segment modulo split.",
+      "path": "data/frag_100.lance",
+      "version": 1,
+      "rows": 100,
+      "fragments": 100,
+      "fragment_ids": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99],
+      "fragment_rows": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      "fragment_physical_rows": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 100}
+      ],
+      "expected": "expected/frag_100.jsonl",
+      "expected_rows": 100,
+      "notes": [],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "v", "arrow_type": "string", "arrow_format": "u", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text"},
+        {"name": "n", "arrow_type": "int64", "arrow_format": "l", "nullable": true, "tier": "A", "pg_type": "bigint", "metadata": null, "expected_encoding": "int"}
+      ]
+    },
+    "frag_gap": {
+      "name": "frag_gap",
+      "purpose": "Fragment ids with a hole in them: fragment 1 is deleted whole, so the surviving ids are 0, 2, 3 and nothing may assume 0..N-1.",
+      "path": "data/frag_gap.lance",
+      "version": 2,
+      "rows": 15,
+      "fragments": 3,
+      "fragment_ids": [0, 2, 3],
+      "fragment_rows": [5, 5, 5],
+      "fragment_physical_rows": [5, 5, 5],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1, 1, 1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 20},
+        {"version": 2, "rows": 15}
+      ],
+      "expected": "expected/frag_gap.jsonl",
+      "expected_rows": 15,
+      "notes": [
+        "pylance 11 drops a fragment once all of its rows are deleted, so the observable artifact is a gap in the id sequence rather than a retained zero-row fragment; LanceFragment.create() refuses empty input, so a truly empty fragment cannot be built from pylance"
+      ],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "v", "arrow_type": "string", "arrow_format": "u", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text"},
+        {"name": "n", "arrow_type": "int64", "arrow_format": "l", "nullable": true, "tier": "A", "pg_type": "bigint", "metadata": null, "expected_encoding": "int"}
+      ]
+    },
+    "evolved": {
+      "name": "evolved",
+      "purpose": "Schema evolution: two add_columns leave each fragment's columns spread over three data files.",
+      "path": "data/evolved.lance",
+      "version": 3,
+      "rows": 20,
+      "fragments": 4,
+      "fragment_ids": [0, 1, 2, 3],
+      "fragment_rows": [5, 5, 5, 5],
+      "fragment_physical_rows": [5, 5, 5, 5],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [3, 3, 3, 3],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 20},
+        {"version": 2, "rows": 20},
+        {"version": 3, "rows": 20}
+      ],
+      "expected": "expected/evolved.jsonl",
+      "expected_rows": 20,
+      "notes": [],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "v", "arrow_type": "string", "arrow_format": "u", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text"},
+        {"name": "n", "arrow_type": "int64", "arrow_format": "l", "nullable": true, "tier": "A", "pg_type": "bigint", "metadata": null, "expected_encoding": "int"},
+        {"name": "v10", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "vup", "arrow_type": "string", "arrow_format": "u", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text"}
+      ]
+    },
+    "blob": {
+      "name": "blob",
+      "purpose": "MiB-sized binary payloads, once as a plain large_binary column and once with Lance's lance-encoding:blob field metadata.",
+      "path": "data/blob.lance",
+      "version": 1,
+      "rows": 4,
+      "fragments": 2,
+      "fragment_ids": [0, 1],
+      "fragment_rows": [2, 2],
+      "fragment_physical_rows": [2, 2],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1, 1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 4}
+      ],
+      "expected": "expected/blob.jsonl",
+      "expected_rows": 4,
+      "notes": [
+        "pylance 11 returns the blob-encoded column inlined from to_table(), not as a position/size descriptor (as seen from the Python side)",
+        "both binary columns exceed the digest threshold, so the expected file carries {bytes, md5} instead of the literal bytes"
+      ],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "note", "arrow_type": "string", "arrow_format": "u", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text"},
+        {"name": "plain_lb", "arrow_type": "large_binary", "arrow_format": "Z", "nullable": true, "tier": "A", "pg_type": "bytea", "metadata": null, "expected_encoding": "bytes-digest"},
+        {"name": "blob", "arrow_type": "large_binary", "arrow_format": "Z", "nullable": true, "tier": "A", "pg_type": "bytea", "metadata": {"lance-encoding": "blob"}, "expected_encoding": "bytes-digest"}
+      ]
+    },
+    "large_text": {
+      "name": "large_text",
+      "purpose": "large_utf8 with values from empty to 1 MiB, including a multi-byte one so byte length and character length differ.",
+      "path": "data/large_text.lance",
+      "version": 1,
+      "rows": 8,
+      "fragments": 2,
+      "fragment_ids": [0, 1],
+      "fragment_rows": [4, 4],
+      "fragment_physical_rows": [4, 4],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1, 1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 8}
+      ],
+      "expected": "expected/large_text.jsonl",
+      "expected_rows": 8,
+      "notes": [
+        "'small' stays under the digest threshold and is written literally; 'txt' is written as {chars, bytes, md5}"
+      ],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "small", "arrow_type": "string", "arrow_format": "u", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text"},
+        {"name": "txt", "arrow_type": "large_string", "arrow_format": "U", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text-digest"}
+      ]
+    },
+    "versions": {
+      "name": "versions",
+      "purpose": "Three versions with 10, 20 and 35 rows: version pinning and snapshot consistency.",
+      "path": "data/versions.lance",
+      "version": 3,
+      "rows": 35,
+      "fragments": 3,
+      "fragment_ids": [0, 1, 2],
+      "fragment_rows": [10, 10, 15],
+      "fragment_physical_rows": [10, 10, 15],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1, 1, 1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 10},
+        {"version": 2, "rows": 20},
+        {"version": 3, "rows": 35}
+      ],
+      "expected": "expected/versions.jsonl",
+      "expected_rows": 35,
+      "notes": [
+        "append-only: version N's rows are the first N-th prefix of expected/versions.jsonl, which reflects the latest version"
+      ],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "v", "arrow_type": "string", "arrow_format": "u", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text"},
+        {"name": "n", "arrow_type": "int64", "arrow_format": "l", "nullable": true, "tier": "A", "pg_type": "bigint", "metadata": null, "expected_encoding": "int"}
+      ]
+    },
+    "strict": {
+      "name": "strict",
+      "purpose": "Per-value strictness: a nanosecond timestamp that is not a whole microsecond, and a string carrying a zero byte.",
+      "path": "data/strict.lance",
+      "version": 1,
+      "rows": 3,
+      "fragments": 1,
+      "fragment_ids": [0],
+      "fragment_rows": [3],
+      "fragment_physical_rows": [3],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 3}
+      ],
+      "expected": "expected/strict.jsonl",
+      "expected_rows": 3,
+      "notes": [
+        "ts_ns_odd row 0 is 1234567 ns and row 1 ends in 789 ns: neither is a whole microsecond",
+        "s_nul row 0 holds a zero byte, which a PostgreSQL text datum cannot contain at all"
+      ],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "ts_ns_aligned", "arrow_type": "timestamp[ns]", "arrow_format": "tsn:", "nullable": true, "tier": "A", "pg_type": "timestamp(6)", "metadata": null, "expected_encoding": "timestamp"},
+        {"name": "ts_ns_odd", "arrow_type": "timestamp[ns]", "arrow_format": "tsn:", "nullable": true, "tier": "A", "pg_type": "timestamp(6)", "metadata": null, "expected_encoding": "timestamp"},
+        {"name": "s_plain", "arrow_type": "string", "arrow_format": "u", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text"},
+        {"name": "s_nul", "arrow_type": "string", "arrow_format": "u", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text"}
+      ]
+    },
+    "nested": {
+      "name": "nested",
+      "purpose": "A-tier struct: flat, nested two deep, inside a list and holding a list, with NULLs at every level (whole value, subfield and list element).",
+      "path": "data/nested.lance",
+      "version": 1,
+      "rows": 6,
+      "fragments": 2,
+      "fragment_ids": [0, 1],
+      "fragment_rows": [3, 3],
+      "fragment_physical_rows": [3, 3],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1, 1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 6}
+      ],
+      "expected": "expected/nested.jsonl",
+      "expected_rows": 6,
+      "notes": [
+        "every column is A tier: each carries pg_type 'composite' (or 'composite[]') and an ordered composite_fields, which is what A2 builds the PostgreSQL composite from",
+        "row 1 is NULL in every column, row 2 is a struct whose subfields are all NULL: a reader must tell those two apart",
+        "c_list_struct row 5 holds a NULL element inside a non-NULL list, and c_struct_list row 5 a NULL list inside a non-NULL struct"
+      ],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "c_struct", "arrow_type": "struct<a: int32, b: string>", "arrow_format": "+s", "nullable": true, "tier": "A", "pg_type": "composite", "composite_fields": [["a", "integer"], ["b", "text"]], "metadata": null, "expected_encoding": "json"},
+        {"name": "c_nested", "arrow_type": "struct<inner: struct<x: int32, y: string>, z: int32>", "arrow_format": "+s", "nullable": true, "tier": "A", "pg_type": "composite", "composite_fields": [["inner", "composite", [["x", "integer"], ["y", "text"]]], ["z", "integer"]], "metadata": null, "expected_encoding": "json"},
+        {"name": "c_list_struct", "arrow_type": "list<item: struct<a: int32, b: string>>", "arrow_format": "+l", "nullable": true, "tier": "A", "pg_type": "composite[]", "composite_fields": [["a", "integer"], ["b", "text"]], "metadata": null, "expected_encoding": "array"},
+        {"name": "c_struct_list", "arrow_type": "struct<arr: list<item: int32>, name: string>", "arrow_format": "+s", "nullable": true, "tier": "A", "pg_type": "composite", "composite_fields": [["arr", "integer[]"], ["name", "text"]], "metadata": null, "expected_encoding": "json"}
+      ]
+    },
+    "nested_btier": {
+      "name": "nested_btier",
+      "purpose": "A struct whose subfields are one A-tier int32 and one B-tier uint64: the column must be B tier as a whole, because there is no partial projection of a struct.",
+      "path": "data/nested_btier.lance",
+      "version": 1,
+      "rows": 4,
+      "fragments": 1,
+      "fragment_ids": [0],
+      "fragment_rows": [4],
+      "fragment_physical_rows": [4],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 4}
+      ],
+      "expected": "expected/nested_btier.jsonl",
+      "expected_rows": 4,
+      "notes": [
+        "'ok' on its own would be A tier; the point of the fixture is that reading it anyway is not on offer",
+        "'bad' reaches uint64's maximum, which is exactly what no PG integer type can hold"
+      ],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "c_struct_b", "arrow_type": "struct<ok: int32, bad: uint64>", "arrow_format": "+s", "nullable": true, "tier": "B", "pg_type": null, "metadata": null, "expected_encoding": "json"}
+      ]
+    },
+    "maps": {
+      "name": "maps",
+      "purpose": "map<utf8,int32> (A tier, jsonb) beside map<int32,utf8> (B tier: a non-string key would have to be stringified to become a jsonb object, which is silent distortion).",
+      "path": "data/maps.lance",
+      "version": 1,
+      "rows": 5,
+      "fragments": 2,
+      "fragment_ids": [0, 1],
+      "fragment_rows": [3, 2],
+      "fragment_physical_rows": [3, 2],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1, 1],
+      "data_storage_version": "2.2",
+      "file_format_versions": ["2.2"],
+      "history": [
+        {"version": 1, "rows": 5}
+      ],
+      "expected": "expected/maps.jsonl",
+      "expected_rows": 5,
+      "notes": [
+        "written at 2.2 because pylance 11 writes Arrow map in no other Lance file format: 2.0 and 2.1 both refuse it",
+        "an empty map (row 1/2) and a NULL map are different values, as are a present key with a NULL value (row 3) and an absent key",
+        "expected/maps.jsonl spells each map as a list of [key, value] pairs, which is the only form that survives a non-string key"
+      ],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "c_map_utf8_i32", "arrow_type": "map<string, int32>", "arrow_format": "+m", "nullable": true, "tier": "A", "pg_type": "jsonb", "metadata": null, "expected_encoding": "json"},
+        {"name": "c_map_i32_utf8", "arrow_type": "map<int32, string>", "arrow_format": "+m", "nullable": true, "tier": "B", "pg_type": null, "metadata": null, "expected_encoding": "json"}
+      ]
+    },
+    "blobv2": {
+      "name": "blobv2",
+      "purpose": "A Blob v2 column beside two A-tier ones: the v2 descriptor must be refused even though all five of its children are A-tier scalars.",
+      "path": "data/blobv2.lance",
+      "version": 1,
+      "rows": 4,
+      "fragments": 2,
+      "fragment_ids": [0, 1],
+      "fragment_rows": [2, 2],
+      "fragment_physical_rows": [2, 2],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1, 1],
+      "data_storage_version": "2.2",
+      "file_format_versions": ["2.2"],
+      "history": [
+        {"version": 1, "rows": 4}
+      ],
+      "expected": "expected/blobv2.jsonl",
+      "expected_rows": 4,
+      "notes": [
+        "written at 2.2 because Blob v2 needs it: pylance 11 refuses the extension type below 2.2, and refuses the v1 lance-encoding:blob column from 2.2 on, so blob.lance and this one cannot share a storage version",
+        "reading lance registers the extension, so pyarrow resolves the field's arrow_type to extension<lance.blob.v2<BlobType>> and the ARROW:extension:name key is no longer in the field metadata; classify() accepts the tag in either place",
+        "to_table() returns {kind, position, size, blob_id, blob_uri}, not the bytes: kind 0 is inline, and size is the real payload size, so the expected file records offsets rather than data"
+      ],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "note", "arrow_type": "string", "arrow_format": "u", "nullable": true, "tier": "A", "pg_type": "text", "metadata": null, "expected_encoding": "text"},
+        {"name": "c_blob_v2", "arrow_type": "extension<lance.blob.v2<BlobType>>", "arrow_format": "+s", "nullable": true, "tier": "B", "pg_type": null, "metadata": {"lance-encoding:blob-inline-size-threshold": "65536"}, "expected_encoding": "json"}
+      ]
+    },
+    "vectors": {
+      "name": "vectors",
+      "purpose": "Vector Top-K without an index: 960 clustered 8-dimensional float32 embeddings over 4 fragments, cat = id % 5.  Lance searches it exhaustively, so the pushed-down result has to be the exact one.",
+      "path": "data/vectors.lance",
+      "version": 1,
+      "rows": 960,
+      "fragments": 4,
+      "fragment_ids": [0, 1, 2, 3],
+      "fragment_rows": [240, 240, 240, 240],
+      "fragment_physical_rows": [240, 240, 240, 240],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1, 1, 1, 1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 960}
+      ],
+      "expected": "expected/vectors.jsonl",
+      "expected_rows": 960,
+      "notes": [],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "cat", "arrow_type": "int32", "arrow_format": "i", "nullable": true, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "emb", "arrow_type": "fixed_size_list<item: float>[8]", "arrow_format": "+w:8", "nullable": true, "tier": "A", "pg_type": "real[]", "metadata": null, "expected_encoding": "array"}
+      ]
+    },
+    "vectors_idx": {
+      "name": "vectors_idx",
+      "purpose": "The rows of vectors.lance with an IVF_PQ index on emb, trained with the L2 metric: approximate search, recall, index use and the metric-mismatch fallback to an exhaustive search.",
+      "path": "data/vectors_idx.lance",
+      "version": 2,
+      "rows": 960,
+      "fragments": 4,
+      "fragment_ids": [0, 1, 2, 3],
+      "fragment_rows": [240, 240, 240, 240],
+      "fragment_physical_rows": [240, 240, 240, 240],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1, 1, 1, 1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 960},
+        {"version": 2, "rows": 960}
+      ],
+      "expected": null,
+      "expected_rows": null,
+      "notes": [
+        "same rows as vectors.lance, so no expected file of its own",
+        "IVF k-means training is not byte-reproducible; only the data and the manifest entry are, and the suites assert recall bounds, never which approximate rows come back"
+      ],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": null},
+        {"name": "cat", "arrow_type": "int32", "arrow_format": "i", "nullable": true, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": null},
+        {"name": "emb", "arrow_type": "fixed_size_list<item: float>[8]", "arrow_format": "+w:8", "nullable": true, "tier": "A", "pg_type": "real[]", "metadata": null, "expected_encoding": null}
+      ]
+    },
+    "vectors_nulls": {
+      "name": "vectors_nulls",
+      "purpose": "NULL and zero vectors: the NULL tail the exact path returns and a nearest-neighbour search does not, and a zero row that has no cosine distance.",
+      "path": "data/vectors_nulls.lance",
+      "version": 1,
+      "rows": 10,
+      "fragments": 2,
+      "fragment_ids": [0, 1],
+      "fragment_rows": [5, 5],
+      "fragment_physical_rows": [5, 5],
+      "fragments_with_deletion_file": [],
+      "data_files_per_fragment": [1, 1],
+      "data_storage_version": "2.1",
+      "file_format_versions": ["2.1"],
+      "history": [
+        {"version": 1, "rows": 10}
+      ],
+      "expected": "expected/vectors_nulls.jsonl",
+      "expected_rows": 10,
+      "notes": [
+        "ids 2, 4 and 8 have a NULL vector; id 5 is the zero vector"
+      ],
+      "schema": [
+        {"name": "id", "arrow_type": "int32", "arrow_format": "i", "nullable": false, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "cat", "arrow_type": "int32", "arrow_format": "i", "nullable": true, "tier": "A", "pg_type": "integer", "metadata": null, "expected_encoding": "int"},
+        {"name": "emb", "arrow_type": "fixed_size_list<item: float>[4]", "arrow_format": "+w:4", "nullable": true, "tier": "A", "pg_type": "real[]", "metadata": null, "expected_encoding": "array"}
+      ]
+    }
+  }
+}
