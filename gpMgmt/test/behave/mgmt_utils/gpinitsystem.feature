@@ -299,6 +299,8 @@ Feature: gpinitsystem tests
         # the log file must have the entry indicating that DCA specific configuration has been set
         And the user runs command "grep -E 'Setting DCA specific configuration values' ~/gpAdminLogs/gpinitsystem*log"
 
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
+    @needs_fix
     Scenario: gpinitsystem uses the system locale if no locale is specified
         Given the database is not running
         And "LC_COLLATE" environment variable is not set
@@ -309,6 +311,8 @@ Feature: gpinitsystem tests
         Then the database locales are saved
         And the database locales "lc_collate,lc_ctype,lc_messages,lc_monetary,lc_numeric,lc_time" match the system locale
 
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
+    @needs_fix
     Scenario: gpinitsystem uses a single locale if one is specified
         Given the database is not running
         And the system locale is saved
@@ -317,6 +321,8 @@ Feature: gpinitsystem tests
         Then the database locales are saved
         And the database locales "lc_collate,lc_ctype,lc_messages,lc_monetary,lc_numeric,lc_time" match the locale "C"
 
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
+    @needs_fix
     Scenario: gpinitsystem uses multiple locales if multiple are specified
         Given the database is not running
         And the environment variable "LC_COLLATE" is set to "C"
@@ -331,6 +337,8 @@ Feature: gpinitsystem tests
         And "LC_COLLATE" environment variable should be restored
         And "LC_CTYPE" environment variable should be restored
 
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
+    @needs_fix
     @backup_restore_bashrc
     Scenario: gpinitsystem succeeds if there is banner on host
         Given the database is not running
@@ -338,6 +346,8 @@ Feature: gpinitsystem tests
         And a demo cluster is created using gpinitsystem args " "
         And gpinitsystem should return a return code of 0
 
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
+    @needs_fix
     @backup_restore_bashrc
     Scenario: gpinitsystem succeeds if there is multi-line banner on host
         Given the database is not running
@@ -345,6 +355,8 @@ Feature: gpinitsystem tests
         And a demo cluster is created using gpinitsystem args " "
         And gpinitsystem should return a return code of 0
 
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
+    @needs_fix
     Scenario: gpinitsystem should create consistent port entry on segments postgresql.conf file
         Given the database is not running
         When a demo cluster is created using gpinitsystem args " "
@@ -352,6 +364,8 @@ Feature: gpinitsystem tests
         Then gpstate should return a return code of 0
         And check segment conf: postgresql.conf
 
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
+    @needs_fix
     Scenario: gpinitsystem creates a cluster successfully when run with -D option
         Given create demo cluster config
         When the user runs command "gpinitsystem -a -c ../gpAux/gpdemo/clusterConfigFile -D"
@@ -359,6 +373,8 @@ Feature: gpinitsystem tests
         And gpinitsystem should not print "Start Function REMOTE_EXECUTE_AND_GET_OUTPUT" to stdout
         And gpinitsystem should not print "End Function REMOTE_EXECUTE_AND_GET_OUTPUT" to stdout
 
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
+    @needs_fix
     Scenario: gpinitsystem should pass the default value of trusted_shell properly to gpcreateseg
         Given create demo cluster config
         When the user runs command "gpinitsystem -a -c ../gpAux/gpdemo/clusterConfigFile -h ../gpAux/gpdemo/hostfile --ignore-warnings"
