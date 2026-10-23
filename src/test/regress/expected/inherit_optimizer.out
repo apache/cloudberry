@@ -2109,7 +2109,7 @@ explain (costs off) select * from list_parted where a is not null;
 explain (costs off) select * from list_parted where a in ('ab', 'cd', 'ef');
                            QUERY PLAN                           
 ----------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    ->  Dynamic Seq Scan on list_parted
          Number of partitions to scan: 2 (out of 3)
          Filter: ((a)::text = ANY ('{ab,cd,ef}'::text[]))
@@ -2119,7 +2119,7 @@ explain (costs off) select * from list_parted where a in ('ab', 'cd', 'ef');
 explain (costs off) select * from list_parted where a = 'ab' or a in (null, 'cd');
                             QUERY PLAN                            
 ---------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    ->  Dynamic Seq Scan on list_parted
          Number of partitions to scan: 1 (out of 3)
          Filter: (((a)::text = 'ab'::text) OR ((a)::text = ANY ('{NULL,cd}'::text[])))
@@ -2569,7 +2569,7 @@ explain (costs off) select * from mclparted order by a;
 explain (costs off) select * from mclparted where a in(3,4,5) order by a;
                            QUERY PLAN                           
 ----------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    Merge Key: a
    ->  Sort
          Sort Key: a
@@ -2586,7 +2586,7 @@ create table mclparted_def partition of mclparted default;
 explain (costs off) select * from mclparted where a in(1,2,4) order by a;
                            QUERY PLAN                           
 ----------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    Merge Key: a
    ->  Sort
          Sort Key: a
@@ -2599,7 +2599,7 @@ explain (costs off) select * from mclparted where a in(1,2,4) order by a;
 explain (costs off) select * from mclparted where a in(1,2,4) or a is null order by a;
                                QUERY PLAN                                
 -------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    Merge Key: a
    ->  Sort
          Sort Key: a
@@ -2616,7 +2616,7 @@ create table mclparted_0_null partition of mclparted for values in(0,null);
 explain (costs off) select * from mclparted where a in(1,2,4) or a is null order by a;
                                QUERY PLAN                                
 -------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    Merge Key: a
    ->  Sort
          Sort Key: a
@@ -2629,7 +2629,7 @@ explain (costs off) select * from mclparted where a in(1,2,4) or a is null order
 explain (costs off) select * from mclparted where a in(0,1,2,4) order by a;
                            QUERY PLAN                           
 ----------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    Merge Key: a
    ->  Sort
          Sort Key: a
@@ -2643,7 +2643,7 @@ explain (costs off) select * from mclparted where a in(0,1,2,4) order by a;
 explain (costs off) select * from mclparted where a in(1,2,4) order by a;
                            QUERY PLAN                           
 ----------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    Merge Key: a
    ->  Sort
          Sort Key: a
