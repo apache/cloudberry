@@ -50,7 +50,8 @@ extern void DistributedLog_SetCommittedTree(TransactionId xid, int nxids, Transa
 								bool isRedo);
 extern bool DistributedLog_CommittedCheck(
 							  TransactionId localXid,
-							  DistributedTransactionId *distribXid);
+							  DistributedTransactionId *distribXid,
+							  DistributedTransactionId xminAllDistributedSnapshots);
 extern bool DistributedLog_ScanForPrevCommitted(
 									TransactionId *indexXid,
 									DistributedTransactionId *distribXid);

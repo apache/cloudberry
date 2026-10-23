@@ -11,16 +11,12 @@
 -- recovery conflict.
 --
 -- start_matchsubs
---
--- m/(seg\d+ slice\d+ [\d.]+:\d+ pid \d+)/
--- s/(seg\d+ slice\d+ [\d.]+:\d+ pid \d+)/seg<ID> slice<SID> <ADDRESS> pid <PID>/
---
--- m/(seg\d+ [\d.]+:\d+ pid \d+)/
--- s/(seg\d+ [\d.]+:\d+ pid \d+)/seg<ID> <ADDRESS> pid <PID>/
---
+-- m/^ERROR:  canceling statement due to conflict with recovery/
+-- s/^ERROR:  canceling statement due to conflict with recovery.*$/ERROR:  canceling statement due to conflict with recovery/
 -- end_matchsubs
 
-1: create table hs_dlog_conf(a int, b int);
+1: create table hs_dlog_conf(a int, b int) distributed by (a);
+1: create table hs_dlog_sync(a int) distributed by (a);
 
 -- Pause the standby QD after it took the distributed snapshot, before it
 -- dispatches the query to the mirrors.
@@ -36,36 +32,43 @@
 -- segment), so that the horizon advance below truncates the pages backing
 -- the rows inserted above and the bound recorded with the TRUNCATE record is
 -- far ahead of the paused snapshot.
-!\retcode sh -ec 'export PGDATABASE=postgres; F=$(mktemp); trap "rm -f $F" EXIT; printf "SELECT txid_current();\n" > $F; for p in $(psql -Atqc "select port from gp_segment_configuration where role = chr(112) and content >= 0 order by content"); do PGOPTIONS="-c gp_role=utility" pgbench -n -p $p -c 2 -j 2 -t 70000 -f $F > /dev/null; done';
+!\retcode sh -ec 'export PGDATABASE=postgres; F=$(mktemp); trap "rm -f $F" EXIT; printf "SELECT txid_current();\n" > $F; for p in $(psql -Atqc "select port from gp_segment_configuration where role = chr(112) and content >= 0 order by content"); do PGOPTIONS="-c gp_role=utility -c synchronous_commit=off" pgbench -n -p $p -c 2 -j 2 -t 70000 -f $F > /dev/null; done';
 
 -- Remember how many distributed-log segments each mirror currently holds, so
 -- that we can wait for the truncation below to be replayed (the segment count
 -- must shrink), regardless of the state left over by earlier tests.
-!\retcode sh -ec 'export PGDATABASE=postgres; : > /tmp/dlog_conflict_before; for d in $(psql -Atqc "select datadir from gp_segment_configuration where role = chr(109) and content >= 0 order by content"); do echo "$(ls $d/pg_distributedlog 2>/dev/null | wc -l)" >> /tmp/dlog_conflict_before; done';
+!\retcode sh -ec 'export PGDATABASE=postgres; : > $COORDINATOR_DATA_DIRECTORY/dlog_conflict_before; for d in $(psql -Atqc "select datadir from gp_segment_configuration where role = chr(109) and content >= 0 order by content"); do echo "$(ls $d/pg_distributedlog 2>/dev/null | wc -l)" >> $COORDINATOR_DATA_DIRECTORY/dlog_conflict_before; done';
 
 -- A dispatched statement advances the distributed log horizon on every
 -- primary and emits the TRUNCATE record, together with the truncation bound
 -- that backs the progressed horizon.
-1: create table hs_dlog_conf_dummy(a int);
-1: drop table hs_dlog_conf_dummy;
+1: insert into hs_dlog_sync select generate_series(1, 10);
 
 -- Wait until every mirror has replayed the truncation (each mirror's
 -- distributed-log segment count drops, because the burn above guarantees at
 -- least one segment below the new cutoff).  Without this the resumed query
 -- could race the replay.
-!\retcode sh -ec 'export PGDATABASE=postgres; for i in $(seq 1 120); do ok=1; n=0; for d in $(psql -Atqc "select datadir from gp_segment_configuration where role = chr(109) and content >= 0 order by content"); do n=$((n+1)); before=$(sed -n ${n}p /tmp/dlog_conflict_before); now=$(ls $d/pg_distributedlog 2>/dev/null | wc -l); [ "$now" -lt "$before" ] || ok=0; done; [ $ok -eq 1 ] && rm -f /tmp/dlog_conflict_before && exit 0; sleep 1; done; exit 1';
+!\retcode sh -ec 'export PGDATABASE=postgres; for i in $(seq 1 120); do ok=1; n=0; for d in $(psql -Atqc "select datadir from gp_segment_configuration where role = chr(109) and content >= 0 order by content"); do n=$((n+1)); before=$(sed -n ${n}p $COORDINATOR_DATA_DIRECTORY/dlog_conflict_before); now=$(ls $d/pg_distributedlog 2>/dev/null | wc -l); [ "$now" -lt "$before" ] || ok=0; done; [ $ok -eq 1 ] && rm -f $COORDINATOR_DATA_DIRECTORY/dlog_conflict_before && exit 0; sleep 1; done; exit 1';
+
+-- Checkpoint after TRUNCATE and restart the mirrors. The bound must survive
+-- even when recovery starts after the WAL record that originally supplied it.
+-- Use the pre-created table as a replay barrier to avoid catalog cleanup
+-- conflicts with the paused standby QD snapshot.
+1: checkpoint;
+1: do $$ begin perform force_mirrors_to_catch_up(); end $$;
+!\retcode sh -ec 'export PGDATABASE=postgres; for p in $(psql -Atqc "select port from gp_segment_configuration where role = chr(109) and content >= 0 order by content"); do PGOPTIONS="-c gp_role=utility" psql -X -p "$p" -c "checkpoint" > /dev/null; done';
+!\retcode sh -ec 'export PGDATABASE=postgres; for d in $(psql -Atqc "select datadir from gp_segment_configuration where role = chr(109) and content >= 0 order by content"); do pg_ctl -D "$d" restart -m fast -w -l "$d/dlog_restart.log" > /dev/null; done';
+1: insert into hs_dlog_sync select generate_series(1, 10);
 
 -- Resume the old standby distributed snapshot: the mirror must cancel the
 -- statement with a recovery conflict instead of returning rows committed
 -- after the snapshot.
 1: select gp_inject_fault('select_after_qd_create_snapshot', 'reset', dbid) from gp_segment_configuration where content = -1 and role = 'm';
--1S<:  <... completed>
+-1S<:
 
 -- A new standby distributed snapshot is unaffected: it sees the rows.
 -1S: select count(*) from hs_dlog_conf;
- count 
--------
- 10    
-(1 row)
 
+-1Sq:
 1: drop table hs_dlog_conf;
+1: drop table hs_dlog_sync;
