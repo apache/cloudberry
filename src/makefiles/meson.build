@@ -122,15 +122,23 @@ pgxs_kv = {
 if llvm.found()
   pgxs_kv += {
     'CLANG': clang.path(),
-    'CXX': ' '.join(cpp.cmd_array()),
     'LLVM_BINPATH': llvm_binpath,
   }
 else
   pgxs_kv += {
     'CLANG': '',
-    'CXX': '',
     'LLVM_BINPATH': '',
   }
+endif
+
+# C++ extensions build through PGXS whether or not LLVM is in use. configure
+# appends -std=c++14 to CXX itself (AX_CXX_COMPILE_STDCXX, for ORCA and
+# gpcloud), so that is the standard a PGXS extension gets by default; ORCA's
+# meson.build pins the same one as an option.
+if have_cpp
+  pgxs_kv += {'CXX': ' '.join(cpp.cmd_array() + ['-std=c++14'])}
+else
+  pgxs_kv += {'CXX': ''}
 endif
 
 pgxs_bins = {
@@ -260,3 +268,73 @@ endforeach
 foreach d, v : pgxs_deps
   pgxs_cdata.set('with_@0@'.format(d), v.found() ? 'yes' : 'no')
 endforeach
+
+###############################################################
+# Apache Cloudberry: PGXS variables
+###############################################################
+#
+# src/Makefile.global.in carries ~38 Cloudberry @variables@ that configure
+# fills in via AC_SUBST. They are consumed by recursive make (gpcontrib/Makefile
+# reads enable_gpcloud / with_diskquota / enable_debug_extensions,
+# src/bin/gpfdist/Makefile reads have_yaml / EVENT_LIBS / apr_*, and so on).
+#
+# The meson build does not use them itself -- it uses meson options instead --
+# but Makefile.global is installed as part of PGXS, so out-of-tree extensions
+# built with `make USE_PGXS=1` still read them. Leaving them empty would
+# silently change behaviour for those extensions, so fill them in here.
+
+pgxs_cdata.set('GP_MAJORVERSION', gp_majorversion)
+pgxs_cdata.set('GP_VERSION_SHORT', gp_version_short)
+pgxs_cdata.set('PG_PACKAGE_VERSION', pg_version)
+pgxs_cdata.set('BLD_ARCH', '')
+
+foreach k, v : {
+  'enable_orca': xerces.found(),
+  'enable_gpfdist': get_option('gpfdist').enabled(),
+  'enable_gpcloud': get_option('gpcloud').enabled(),
+  'enable_orafce': get_option('orafce').enabled(),
+  'enable_ic_proxy': get_option('ic_proxy').enabled(),
+  'enable_pax': get_option('pax').enabled(),
+  'enable_ic_udp2': get_option('ic_udp2'),
+  'enable_catalog_ext': get_option('catalog_ext'),
+  'enable_serverless': get_option('serverless'),
+  'enable_debug_extensions': get_option('debug_extensions'),
+  'enable_shared_postgres_backend': get_option('shared_postgres_backend'),
+  'enable_link_postgres_with_shared': get_option('link_postgres_with_shared'),
+  'with_diskquota': get_option('diskquota').enabled(),
+  'with_gp_stats_collector': get_option('gp_stats_collector').enabled(),
+  'with_libbz2': libbz2.found(),
+  'with_copy_program': get_option('copy_program').enabled(),
+  'have_yaml': libyaml.found(),
+  # legacy upstream toggles that are always on in a modern build
+  'enable_largefile': true,
+  'enable_shared': true,
+  'enable_strong_random': true,
+  # dropped in the meson build: the autoconf path downloads Python packages
+  # at build time, which has no honest meson equivalent
+  'with_pythonsrc_ext': false,
+  # --enable-datalake-fdw is off by default and the autoconf CI does not turn
+  # it on either: it builds contrib/datalake_fdw with PGXS against the
+  # installed server, because the module needs Arrow and Parquet and nothing
+  # else does. The meson build does not build it in tree, so say so here; it
+  # is built the same way, through this very Makefile.global.
+  'enable_datalake_fdw': false,
+}
+  pgxs_cdata.set(k, v ? 'yes' : 'no')
+endforeach
+
+pgxs_cdata.set('YAML_LIBS', libyaml.found() ? '-lyaml' : '')
+pgxs_cdata.set('EVENT_LIBS', libevent.found() ? '-levent' : '')
+pgxs_cdata.set('ZSTD_CFLAGS', '')
+pgxs_cdata.set('ZSTD_LIBS', zstd.found() ? '-lzstd' : '')
+
+# Empty where apr-1-config was not used: gpfdist off, or apr found through
+# pkg-config instead.
+foreach var : ['APR_1_CONFIG', 'apr_includes', 'apr_link_ld_libs',
+               'apr_cflags', 'apr_cppflags']
+  pgxs_cdata.set(var, apr_pgxs.get(var, ''))
+endforeach
+pgxs_cdata.set('with_apr_config', '')
+
+pgxs_cdata.set('libexecdir', dir_prefix / get_option('libexecdir'))
+pgxs_cdata.set('sbindir', dir_prefix / get_option('sbindir'))

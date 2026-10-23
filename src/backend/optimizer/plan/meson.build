@@ -9,4 +9,14 @@ backend_sources += files(
   'planner.c',
   'setrefs.c',
   'subselect.c',
+  'aqumv.c',
+  'joinpartprune.c',
+  'planshare.c',
+  'transform.c',
 )
+
+# orca.c is the entry point into the ORCA optimizer; built only with ORCA.
+# Mirrors: ifeq ($(enable_orca),yes) / OBJS += orca.o
+if xerces.found()
+  backend_sources += files('orca.c')
+endif

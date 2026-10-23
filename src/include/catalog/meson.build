@@ -65,7 +65,48 @@ catalog_headers = [
   'pg_publication_rel.h',
   'pg_subscription.h',
   'pg_subscription_rel.h',
+
+  # Apache Cloudberry catalogs
+  'pg_resqueue.h',
+  'pg_resqueuecapability.h',
+  'pg_resourcetype.h',
+  'pg_resgroup.h',
+  'pg_resgroupcapability.h',
+  'gp_configuration_history.h',
+  'gp_id.h',
+  'gp_distribution_policy.h',
+  'gp_version_at_initdb.h',
+  'gp_warehouse.h',
+  'pg_appendonly.h',
+  'gp_fastsequence.h',
+  'pg_extprotocol.h',
+  'pg_attribute_encoding.h',
+  'pg_auth_time_constraint.h',
+  'pg_compression.h',
+  'pg_proc_callback.h',
+  'pg_type_encoding.h',
+  'pg_stat_last_operation.h',
+  'pg_stat_last_shoperation.h',
+  'pg_foreign_table_seg.h',
+  'gp_partition_template.h',
+  'pg_task.h',
+  'pg_task_run_history.h',
+  'pg_profile.h',
+  'pg_password_history.h',
+  'pg_directory_table.h',
+  'gp_storage_server.h',
+  'gp_storage_user_mapping.h',
+  'pg_tag.h',
+  'pg_tag_description.h',
+  'gp_matview_aux.h',
+  'gp_matview_tables.h',
 ]
+
+# gp_segment_configuration is only a catalog when the internal FTS is used.
+# Mirrors: ifeq ($(USE_INTERNAL_FTS_FOUND), true) in ../../backend/catalog/Makefile
+if not get_option('external_fts')
+  catalog_headers += ['gp_segment_configuration.h']
+endif
 
 bki_data = [
   'pg_aggregate.dat',
@@ -92,8 +133,29 @@ bki_data = [
   'pg_ts_parser.dat',
   'pg_ts_template.dat',
   'pg_type.dat',
+
+  # Apache Cloudberry catalog data
+  'pg_profile.dat',
+  'pg_compression.dat',
+  'pg_resgroup.dat',
+  'pg_resgroupcapability.dat',
 ]
 bki_data_f = files(bki_data)
+
+# gp_version_at_initdb.dat is generated from a template (autoconf does this via
+# AC_CONFIG_FILES). genbki.pl derives each .dat path from its .h path, so the
+# generated .dat and its header must sit in the same directory -- copy the
+# header into the build dir next to the generated .dat.
+gp_version_at_initdb_dat = configure_file(
+  input: 'gp_version_at_initdb.dat.in',
+  output: 'gp_version_at_initdb.dat',
+  configuration: {'GP_VERSION_LONG': gp_version_long},
+)
+gp_version_at_initdb_h = configure_file(
+  input: 'gp_version_at_initdb.h',
+  output: 'gp_version_at_initdb.h',
+  copy: true,
+)
 
 
 input = []
@@ -102,16 +164,32 @@ output_install = [dir_data, dir_data, dir_include_server / 'catalog', dir_includ
 
 foreach h : catalog_headers
   fname = h.split('.h')[0] + '_d.h'
-  input += files(h)
+  if h == 'gp_version_at_initdb.h'
+    input += gp_version_at_initdb_h
+  else
+    input += files(h)
+  endif
   output_files += fname
   output_install += dir_include_server / 'catalog'
 endforeach
+
+# Extra BKI sources that are not catalogs themselves (no _d.h output).
+# Mirrors POSTGRES_BKI_SRCS += ... in ../../backend/catalog/Makefile
+input += files('gp_indexing.h')
+if not get_option('external_fts')
+  input += files('gp_segment_configuration_indexing.h')
+endif
+
+# gppylib's foreign-key JSON is built from this same set of headers, which is
+# why the Makefiles keep it in one variable. Export it rather than let
+# gpMgmt/bin/gppylib/data grow a second copy of the list that can drift.
+postgres_bki_srcs = input
 
 generated_catalog_headers = custom_target('generated_catalog_headers',
   output: output_files,
   install_dir: output_install,
   input: input,
-  depend_files: bki_data_f + catalog_pm,
+  depend_files: bki_data_f + catalog_pm + [gp_version_at_initdb_dat],
   build_by_default: true,
   install: true,
   command: [

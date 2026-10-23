@@ -42,7 +42,12 @@ export_file = custom_target('libpq.exports',
 
 # port needs to be in include path due to pthread-win32.h
 libpq_inc = include_directories('.', '../../port')
-libpq_c_args = ['-DSO_MAJOR_VERSION=5']
+# Cloudberry's libpq sources include "c.h" rather than "postgres_fe.h" because
+# the same files are also compiled into the backend (see src/backend/libpq/
+# Makefile) and switch on the FRONTEND macro. postgres_fe.h is what normally
+# defines FRONTEND, so the frontend build must define it explicitly.
+# Mirrors: override CPPFLAGS := -DFRONTEND ... in this directory's Makefile.
+libpq_c_args = ['-DSO_MAJOR_VERSION=5', '-DFRONTEND']
 
 # Not using both_libraries() here as
 # 1) resource files should only be in the shared library

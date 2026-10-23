@@ -127,8 +127,11 @@ class MockFile(object):
         self.outname = self.output_filename()
 
     def output_filename(self):
-        """outname is src/test/unit/mock/backend/{path}/{stem}_mock.c
+        """outname is src/test/unit/mock/backend/{path}/{stem}_mock.c,
+           unless --output names the file
         """
+        if self.options.output:
+            return self.options.output
         src_dir = self.options.src_dir
         relpath = os.path.relpath(self.cfile.path, src_dir)
         out_dir = self.options.out_dir
@@ -309,6 +312,9 @@ def main():
         parser.add_option('--src-dir',
                           dest='src_dir',
                           default=os.path.join(mydir, '../../..'))
+        parser.add_option('--output',
+                          dest='output',
+                          default=None)
         (options, args) = parser.parse_args()
 
         if len(args) < 1:

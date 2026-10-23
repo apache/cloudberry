@@ -37,12 +37,14 @@ common_sources = files(
 
 if ssl.found()
   common_sources += files(
+    'cipher_openssl.c',
     'cryptohash_openssl.c',
     'hmac_openssl.c',
     'protocol_openssl.c',
   )
 else
   common_sources += files(
+    'cipher.c',
     'cryptohash.c',
     'hmac.c',
     'md5.c',
@@ -50,6 +52,13 @@ else
     'sha2.c',
   )
 endif
+
+# Cloudberry additions built unconditionally (see OBJS_COMMON in ../common/Makefile)
+common_sources += files(
+  'etcdutils.c',
+  'kmgr_utils.c',
+  'sm3.c',
+)
 
 common_kwlist = custom_target('kwlist',
   input: files('../include/parser/kwlist.h'),

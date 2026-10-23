@@ -7,4 +7,7 @@ backend_sources += files(
   'fileset.c',
   'reinit.c',
   'sharedfileset.c',
+  'execute_pipe.c',
+  'gp_compress.c',
+  'ufile.c',
 )

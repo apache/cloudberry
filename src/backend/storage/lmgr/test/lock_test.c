@@ -52,8 +52,14 @@ test__RemoveLocalLock_Null(void **state)
 
 	assert_false(found);
 
-	/* Assume lockOwners is NULL and we go into cleanup */
-	locallock->lockOwners = NULL;
+	/*
+	 * hash_search() sets only the key. Clear the rest, as LockAcquireExtended()
+	 * does for a new entry: RemoveLocalLock() also reads numLockOwners and
+	 * holdsStrongLockCount, and with garbage in the former it walks the NULL
+	 * lockOwners array. Then go into cleanup with no owners.
+	 */
+	MemSet((char *) locallock + offsetof(LOCALLOCK, hashcode), 0,
+		   sizeof(LOCALLOCK) - offsetof(LOCALLOCK, hashcode));
 	RemoveLocalLock(locallock);
 }
 
