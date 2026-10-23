@@ -875,9 +875,15 @@ GetNextNAvailableFilenums(Oid relid, int n)
  * AppendOnlyExecutorReadBlock_BindingInit() for the usage of the mapping.
  *
  * Return a palloc'ed array based on the number of attributes.
+ *
+ * If has_missing is not NULL, *has_missing says whether any entry came out
+ * non-zero, i.e. whether this relation has a column that a fast ADD COLUMN
+ * left missing for part of some segfile.  For the great majority of relations
+ * it does not, and the caller can then skip the per-row missing-value check
+ * entirely rather than probing this array once per row per column.
  */
 int64 *
-GetAttnumToLastrownumMapping(Oid relid, int natts)
+GetAttnumToLastrownumMapping(Oid relid, int natts, bool *has_missing)
 {
 	int64 		*attnum_to_lastrownum = (int64*) palloc0(MAX_AOREL_CONCURRENCY * natts * sizeof(int64));
 	Relation    	rel;
@@ -887,6 +893,9 @@ GetAttnumToLastrownumMapping(Oid relid, int natts)
 	bool 		isnull;
 
 	Assert(OidIsValid(relid));
+
+	if (has_missing)
+		*has_missing = false;
 
 	rel = heap_open(AttributeEncodingRelationId, AccessShareLock);
 
@@ -928,7 +937,13 @@ GetAttnumToLastrownumMapping(Oid relid, int natts)
 		for (i = 0; i < MAX_AOREL_CONCURRENCY; i++)
 		{
 			if (i < n)
-				attnum_to_lastrownum[(attnum - 1) * MAX_AOREL_CONCURRENCY + i] = DatumGetInt64(rownums[i]);
+			{
+				int64		lastrownum = DatumGetInt64(rownums[i]);
+
+				attnum_to_lastrownum[(attnum - 1) * MAX_AOREL_CONCURRENCY + i] = lastrownum;
+				if (lastrownum > 0 && has_missing)
+					*has_missing = true;
+			}
 			else
 				attnum_to_lastrownum[(attnum - 1) * MAX_AOREL_CONCURRENCY + i] = 0;
 		}

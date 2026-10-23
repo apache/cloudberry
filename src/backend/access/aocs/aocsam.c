@@ -773,7 +773,8 @@ aocs_beginscan_internal(Relation relation,
 	scan->columnScanInfo.relationTupleDesc = NULL;
 
 	/* get the attnums info */
-	scan->columnScanInfo.attnum_to_rownum = GetAttnumToLastrownumMapping(RelationGetRelid(relation), RelationGetNumberOfAttributes(relation));
+	scan->columnScanInfo.attnum_to_rownum = GetAttnumToLastrownumMapping(RelationGetRelid(relation), RelationGetNumberOfAttributes(relation),
+																					  &scan->columnScanInfo.has_missing_cols);
 
 	natts = RelationGetNumberOfAttributes(relation);
 
@@ -1277,7 +1278,8 @@ aocs_gettuple(AOCSScanDesc scan, int64 targrow, TupleTableSlot *slot)
 		 * After scanning the anchor column, we check if the value is 
 		 * missing in this column, if so, we skip the scanning.
 		 */
-		if (attno != scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ])
+		if (scan->columnScanInfo.has_missing_cols &&
+			attno != scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ])
 		{
 			/* we should've got a valid phyrow when scanning the anchor column */
 			Assert(phyrow > 0);
@@ -1545,7 +1547,8 @@ ReadNext:
 			 * In fact, we cannot do that either because we don't have the
 			 * row number until we've scanned the anchor column.
 			 */
-			if (attno != scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ])
+			if (scan->columnScanInfo.has_missing_cols &&
+				attno != scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ])
 			{
 				Assert(rowNum > 0);
 				if (AO_ATTR_VAL_IS_MISSING(rowNum,
@@ -1727,7 +1730,8 @@ ReadNext:
 			 * In fact, we cannot do that either because we don't have the
 			 * row number until we've scanned the anchor column.
 			 */
-			if (attno != scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ])
+			if (scan->columnScanInfo.has_missing_cols &&
+				attno != scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ])
 			{
 				Assert(rowNum > 0);
 				if (AO_ATTR_VAL_IS_MISSING(rowNum,
@@ -2411,8 +2415,9 @@ aocs_fetch_init(Relation relation,
 	aocsFetchDesc->basepath = basePath;
 
 	/* lastrownums info */
+	/* NULL: the fetch path checks per fetched tuple, not per row of a scan */
 	aocsFetchDesc->attnum_to_rownum = GetAttnumToLastrownumMapping(
-		RelationGetRelid(relation),RelationGetNumberOfAttributes(relation));
+		RelationGetRelid(relation),RelationGetNumberOfAttributes(relation), NULL);
 
 	Assert(proj);
 
@@ -3684,7 +3689,8 @@ ReadNext:
 			 * In fact, we cannot do that either because we don't have the
 			 * row number until we've scanned the anchor column.
 			 */
-			if (attno != scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ])
+			if (scan->columnScanInfo.has_missing_cols &&
+				attno != scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ])
 			{
 				Assert(rowNum > 0);
 				if (AO_ATTR_VAL_IS_MISSING(rowNum,

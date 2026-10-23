@@ -786,8 +786,9 @@ AppendOnlyExecutorReadBlock_Init(AppendOnlyExecutorReadBlock *executorReadBlock,
 	executorReadBlock->memoryContext = memoryContext;
 
 	Assert(relation); /* should have a valid relation */
+	/* NULL: ao_row checks this once per block in BindingInit(), not per row */
 	executorReadBlock->attnum_to_rownum = GetAttnumToLastrownumMapping(RelationGetRelid(relation),
-												RelationGetNumberOfAttributes(relation));
+												RelationGetNumberOfAttributes(relation), NULL);
 
 	MemoryContextSwitchTo(oldcontext);
 }
