@@ -528,6 +528,10 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 
 	int ao_vacuum_phase = (params->options & VACUUM_AO_PHASE_MASK);
 
+	/* A pre-cleanup phase starts a new VACUUM; discard any aborted run's state. */
+	if (vacrelstats != NULL && ao_vacuum_phase == VACOPT_AO_PRE_CLEANUP_PHASE)
+		cleanup_vacrelstats(&vacrelstats);
+
 	if (!vacrelstats)
 	{
 		if (ao_vacuum_phase != VACOPT_AO_PRE_CLEANUP_PHASE && Gp_role == GP_ROLE_EXECUTE)
