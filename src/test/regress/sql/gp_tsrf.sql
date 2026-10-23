@@ -62,3 +62,43 @@ SELECT * FROM t_outer WHERE t_outer.b IN (SELECT generate_series(1, t_outer.b) F
 EXPLAIN (VERBOSE, COSTS OFF)
   SELECT * FROM t_outer WHERE t_outer.b IN (SELECT generate_series(1, t_outer.b)  FROM t_inner);
 DROP TABLE t_outer, t_inner;
+
+-- Correlated SRFs must be rescanned when their PARAM_EXEC inputs change.
+-- Keep the rows on one segment so successive invocations share executor state.
+BEGIN;
+CREATE TEMP TABLE projectset_outer(bucket int, id int, n int)
+    ON COMMIT DROP DISTRIBUTED BY (bucket);
+CREATE TEMP TABLE projectset_inner(bucket int, id int, vals bigint[])
+    ON COMMIT DROP DISTRIBUTED BY (bucket);
+INSERT INTO projectset_outer
+    SELECT 1, i, i % 4 FROM generate_series(1, 12) i;
+INSERT INTO projectset_inner VALUES
+    (1,1,ARRAY[401,578]), (1,3,ARRAY[999]), (1,4,ARRAY[]::bigint[]),
+    (1,5,ARRAY[578]), (1,6,NULL), (1,7,ARRAY[401,401,NULL]),
+    (1,8,ARRAY[NULL]::bigint[]), (1,9,ARRAY[578,401]),
+    (1,10,ARRAY[999,578]), (1,12,ARRAY[401]);
+ANALYZE projectset_outer;
+ANALYZE projectset_inner;
+
+SELECT a.id,
+       (SELECT string_agg(s.val::text, '-' ORDER BY s.val)
+        FROM (SELECT unnest(ARRAY[401,578]::bigint[]) AS val
+              INTERSECT SELECT unnest(b.vals)) s) AS facets
+FROM projectset_outer a
+LEFT JOIN projectset_inner b ON b.bucket = a.bucket AND b.id = a.id
+ORDER BY a.id;
+
+-- The upper ProjectSet references an OUTER_VAR; the parameter is below it.
+SELECT a.id,
+       (SELECT string_agg(v::text, ',' ORDER BY v)
+        FROM (SELECT generate_series(1, generate_series(1, a.n)) v) s) AS nested
+FROM projectset_outer a
+ORDER BY a.id;
+-- A Result's one-time filter must not hide parameters used by its child.
+SELECT a.id,
+       (SELECT sum(s.v + 1)
+        FROM (SELECT generate_series(1, a.n) AS v ORDER BY v LIMIT 2) s
+        WHERE a.id > 0) AS gated
+FROM projectset_outer a
+ORDER BY a.id;
+ROLLBACK;
