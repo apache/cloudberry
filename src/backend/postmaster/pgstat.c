@@ -1604,7 +1604,8 @@ pgstat_report_autovac(Oid dboid)
 void
 pgstat_report_vacuum(Oid tableoid, bool shared,
 					 PgStat_Counter livetuples, PgStat_Counter deadtuples,
-					 PgStat_Counter elapsedtime, PgStat_Counter delaytime, bool failsafe)
+					 PgStat_Counter elapsedtime, PgStat_Counter delaytime,
+					 bool failsafe)
 {
 	PgStat_MsgVacuum msg;
 
