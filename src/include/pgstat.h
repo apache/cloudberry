@@ -464,6 +464,7 @@ typedef struct PgStat_MsgVacstats
 	PgStat_MsgHdr m_hdr;
 	Oid			m_databaseid;
 	Oid			m_tableoid;
+	bool		m_timing_only; /* phase reports do not update estimates or counts */
 	bool		m_isindex;		/* counted apart from the database totals */
 	PgStat_VacuumStats m_stats;
 } PgStat_MsgVacstats;
@@ -1169,7 +1170,8 @@ extern void pgstat_report_connect(Oid dboid);
 extern void pgstat_report_autovac(Oid dboid);
 extern void pgstat_report_vacuum(Oid tableoid, bool shared,
 								 PgStat_Counter livetuples, PgStat_Counter deadtuples,
-								 PgStat_Counter elapsedtime, PgStat_Counter delaytime, bool failsafe);
+								 PgStat_Counter elapsedtime, PgStat_Counter delaytime,
+								 bool failsafe);
 extern void pgstat_count_vacuum_error(bool shared);
 extern void pgstat_report_vacuum_time(Relation rel,
 									  PgStat_Counter elapsedtime,

@@ -113,8 +113,11 @@ live rows as well as deleted rows, so its tuple count can exceed the table's.
 AO `pages_deleted` expresses truncated bytes in blocks, rounded up;
 `bytes_removed` preserves the exact byte count. Freed space can include live
 rows moved to new segment files, so this is not the net reduction in table size.
-AO elapsed time covers the interval from the first phase seen by the
-reporting worker to final cleanup, including gaps between those phases.
+AO elapsed and delay times are reported after each completed phase and summed
+by the collector, even when different workers execute successive phases.
+Elapsed time excludes gaps between phases, but includes waits within a phase.
+Completed phases remain counted if a later phase fails; tuple estimates and
+VACUUM counts are updated only by final cleanup.
 
 Heap page visibility, freezing and failsafe counters do not apply to the AO table
 itself. Its auxiliary heap relations have their own statistics. Indexes
