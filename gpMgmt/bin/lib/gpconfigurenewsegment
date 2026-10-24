@@ -134,45 +134,31 @@ class ConfExpSegCmd(Command):
                         self.progressFile = '%s/pg_basebackup.%s.dbid%s.out' % (gplog.get_logger_dir(),
                                                                                 datetime.datetime.today().strftime('%Y%m%d_%H%M%S'),
                                                                                 self.dbid)
-                    # Create a mirror based on the primary
-                    cmd = PgBaseBackup(target_datadir=self.datadir,
-                                       source_host=self.syncWithSegmentHostname,
-                                       source_port=str(self.syncWithSegmentPort),
-                                       create_slot = False,
-                                       replication_slot_name=self.replicationSlotName,
-                                       forceoverwrite=self.forceoverwrite,
-                                       target_gp_dbid=self.dbid,
-                                       logfile=self.progressFile)
+                    # Create a mirror based on the primary.
+                    #
+                    # Built inside the try: PgBaseBackup's constructor now asks
+                    # the source segment whether the replication slot exists, so
+                    # it can fail, and a failure out here would leave the command
+                    # with no result at all -- the pool then reports
+                    # "'NoneType' object has no attribute 'wasSuccessful'"
+                    # instead of saying what went wrong.
                     try:
+                        cmd = PgBaseBackup(target_datadir=self.datadir,
+                                           source_host=self.syncWithSegmentHostname,
+                                           source_port=str(self.syncWithSegmentPort),
+                                           create_slot=True,
+                                           replication_slot_name=self.replicationSlotName,
+                                           forceoverwrite=self.forceoverwrite,
+                                           target_gp_dbid=self.dbid,
+                                           progress_file=self.progressFile)
                         logger.info("Running pg_basebackup with progress output temporarily in %s" % self.progressFile)
                         cmd.run(validateAfter=True)
                         self.set_results(CommandResult(0, b'', b'', True, False))
                         if shouldDeleteProgressFile:
                             os.remove(self.progressFile)
-
                     except Exception as e:
-                        #  If the cluster never has mirrors, cmd will fail
-                        #  quickly because the internal slot doesn't exist.
-                        #  Re-run with `create_slot`.
-                        #  GPDB_12_MERGE_FIXME could we check it before? or let
-                        #  pg_basebackup create slot if not exists.
-                        cmd = PgBaseBackup(target_datadir=self.datadir,
-                                           source_host=self.syncWithSegmentHostname,
-                                           source_port=str(self.syncWithSegmentPort),
-                                           create_slot = True,
-                                           replication_slot_name=self.replicationSlotName,
-                                           forceoverwrite=True,
-                                           target_gp_dbid=self.dbid,
-                                           logfile=self.progressFile)
-                        try:
-                            logger.info("Re-running pg_basebackup, creating the slot this time")
-                            cmd.run(validateAfter=True)
-                            self.set_results(CommandResult(0, b'', b'', True, False))
-                            if shouldDeleteProgressFile:
-                                os.remove(self.progressFile)
-                        except Exception as e:
-                            self.set_results(CommandResult(1, b'', str(e).encode(), True, False))
-                            raise
+                        self.set_results(CommandResult(1, b'', str(e).encode(), True, False))
+                        raise
 
                     logger.info("Successfully ran pg_basebackup: %s" % cmd.cmdStr)
                     return
