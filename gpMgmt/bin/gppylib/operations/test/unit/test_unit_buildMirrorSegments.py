@@ -522,6 +522,24 @@ class BuildMirrorsTestCase(GpTestCase):
 
         self._assert_setup_recovery()
 
+    def test_remove_existing_progress_files(self):
+        self._setup_recovery_mocks()
+
+        recovery_info = OrderedDict()
+        recovery_info['host1'] = [self.recovery_info1]
+        recovery_info['host2'] = [self.recovery_info2, self.recovery_info3]
+
+        self.default_build_mirrors_obj.remove_existing_progress_files(recovery_info)
+
+        self.assertEqual([call(ANY, suppressErrorCheck=True)],
+                         self.default_build_mirrors_obj._GpMirrorListToBuild__runWaitAndCheckWorkerPoolForErrorsAndClear.call_args_list)
+        rm_progress_cmds = self.default_build_mirrors_obj._GpMirrorListToBuild__runWaitAndCheckWorkerPoolForErrorsAndClear.call_args_list[0][0][0]
+        self.assertEqual(['host1', 'host2', 'host2'], [cmd.remoteHost for cmd in rm_progress_cmds])
+        self.assertEqual(["find /tmp/logdir -name '*dbid2.out' -delete",
+                          "find /tmp/logdir -name '*dbid3.out' -delete",
+                          "find /tmp/logdir -name '*dbid4.out' -delete"],
+                         [cmd.cmdStr for cmd in rm_progress_cmds])
+
     def test_run_recovery_no_errors(self):
         self._setup_recovery_mocks()
 
@@ -531,12 +549,11 @@ class BuildMirrorsTestCase(GpTestCase):
 
         self.default_build_mirrors_obj._run_recovery(self.default_action_name, recovery_info, self.gpEnv)
 
-        self.assertEqual([call(ANY, progressCmds=ANY, suppressErrorCheck=True), call(ANY, suppressErrorCheck=False)],
+        self.assertEqual([call(ANY, progressCmds=ANY, suppressErrorCheck=True)],
                          self.default_build_mirrors_obj._GpMirrorListToBuild__runWaitAndCheckWorkerPoolForErrorsAndClear.call_args_list)
 
         seg_recovery_cmds = self.default_build_mirrors_obj._GpMirrorListToBuild__runWaitAndCheckWorkerPoolForErrorsAndClear.call_args_list[0][0][0]
         progress_cmds = self.default_build_mirrors_obj._GpMirrorListToBuild__runWaitAndCheckWorkerPoolForErrorsAndClear.call_args_list[0][1]['progressCmds']
-        rm_progress_cmds = self.default_build_mirrors_obj._GpMirrorListToBuild__runWaitAndCheckWorkerPoolForErrorsAndClear.call_args_list[1][0][0]
 
         #TODO fix formatting
         expected_recovery_cmd_strs = ["""$GPHOME/sbin/gpsegrecovery.py -c '[{"target_datadir": "/datadir2", "target_port": 7001, "target_segment_dbid": 2, "source_hostname": "source_host_for_dbid2", "source_port": 7002, "is_full_recovery": true, "progress_file": "/tmp/progress_file2"}]' -l /tmp/logdir -b 64 --era=dummy_era""", """$GPHOME/sbin/gpsegrecovery.py -c '[{"target_datadir": "/datadir3", "target_port": 7003, "target_segment_dbid": 3, "source_hostname": "source_host_for_dbid3", "source_port": 7004, "is_full_recovery": true, "progress_file": "/tmp/progress_file3"}, {"target_datadir": "/datadir4", "target_port": 7005, "target_segment_dbid": 4, "source_hostname": "source_host_for_dbid4", "source_port": 7006, "is_full_recovery": true, "progress_file": "/tmp/progress_file4"}]' -l /tmp/logdir -b 64 --era=dummy_era"""]
@@ -558,13 +575,6 @@ class BuildMirrorsTestCase(GpTestCase):
                          progress_cmds[2].cmdStr)
         self.assertEqual(1, self.mock_gp_era.call_count)
 
-        self.assertEqual(3, len(rm_progress_cmds))
-        self.assertEqual("host1", rm_progress_cmds[0].remoteHost)
-        self.assertEqual("rm -f /tmp/progress_file2", rm_progress_cmds[0].cmdStr)
-        self.assertEqual("host2", rm_progress_cmds[1].remoteHost)
-        self.assertEqual("rm -f /tmp/progress_file3", rm_progress_cmds[1].cmdStr)
-        self.assertEqual("host2", rm_progress_cmds[2].remoteHost)
-        self.assertEqual("rm -f /tmp/progress_file4", rm_progress_cmds[2].cmdStr)
 
         self._assert_run_recovery()
 
@@ -584,11 +594,9 @@ class BuildMirrorsTestCase(GpTestCase):
         self._setup_recovery_mocks([host1_error, host2_error])
 
         self.default_build_mirrors_obj._run_recovery(self.default_action_name, recovery_info, self.gpEnv)
-        self.assertEqual([call(ANY, progressCmds=ANY, suppressErrorCheck=True), call(ANY, suppressErrorCheck=False)],
+        self.assertEqual([call(ANY, progressCmds=ANY, suppressErrorCheck=True)],
                          self.default_build_mirrors_obj._GpMirrorListToBuild__runWaitAndCheckWorkerPoolForErrorsAndClear.call_args_list)
-        rm_progress_cmds = self.default_build_mirrors_obj._GpMirrorListToBuild__runWaitAndCheckWorkerPoolForErrorsAndClear.call_args_list[1][0][0]
 
-        self.assertEqual(0, len(rm_progress_cmds))
 
         self._assert_run_recovery()
 
@@ -599,13 +607,9 @@ class BuildMirrorsTestCase(GpTestCase):
         self._setup_recovery_mocks([host1_error, host2_error])
 
         self.default_build_mirrors_obj._run_recovery(self.default_action_name, recovery_info, self.gpEnv)
-        self.assertEqual([call(ANY, progressCmds=ANY, suppressErrorCheck=True), call(ANY, suppressErrorCheck=False)],
+        self.assertEqual([call(ANY, progressCmds=ANY, suppressErrorCheck=True)],
                          self.default_build_mirrors_obj._GpMirrorListToBuild__runWaitAndCheckWorkerPoolForErrorsAndClear.call_args_list)
-        rm_progress_cmds = self.default_build_mirrors_obj._GpMirrorListToBuild__runWaitAndCheckWorkerPoolForErrorsAndClear.call_args_list[1][0][0]
 
-        self.assertEqual(1, len(rm_progress_cmds))
-        self.assertEqual("host2", rm_progress_cmds[0].remoteHost)
-        self.assertEqual("rm -f /tmp/progress_file3", rm_progress_cmds[0].cmdStr)
 
         self._assert_run_recovery()
 
@@ -616,11 +620,8 @@ class BuildMirrorsTestCase(GpTestCase):
         host2_error = '[{"error_type": "start", "error_msg":"some error for dbid 4", "dbid": 4, "datadir": "/datadir4", "port": 7005, "progress_file": "/tmp/progress4"}]'
         self._setup_recovery_mocks([host1_error, host2_error])
         self.default_build_mirrors_obj._run_recovery(self.default_action_name, recovery_info, self.gpEnv)
-        self.assertEqual([call(ANY, progressCmds=ANY, suppressErrorCheck=True), call(ANY, suppressErrorCheck=False)],
+        self.assertEqual([call(ANY, progressCmds=ANY, suppressErrorCheck=True)],
                          self.default_build_mirrors_obj._GpMirrorListToBuild__runWaitAndCheckWorkerPoolForErrorsAndClear.call_args_list)
-        rm_cmds = self.default_build_mirrors_obj._GpMirrorListToBuild__runWaitAndCheckWorkerPoolForErrorsAndClear.call_args_list[1][0][0]
-
-        self.assertEqual(3, len(rm_cmds))
         self._assert_run_recovery()
 
     def test_run_recovery_some_dbids_fail_all_start_errors(self):
@@ -631,10 +632,8 @@ class BuildMirrorsTestCase(GpTestCase):
         self._setup_recovery_mocks([host1_error, host2_error])
 
         self.default_build_mirrors_obj._run_recovery(self.default_action_name, recovery_info, self.gpEnv)
-        self.assertEqual([call(ANY, progressCmds=ANY, suppressErrorCheck=True), call(ANY, suppressErrorCheck=False)],
+        self.assertEqual([call(ANY, progressCmds=ANY, suppressErrorCheck=True)],
                          self.default_build_mirrors_obj._GpMirrorListToBuild__runWaitAndCheckWorkerPoolForErrorsAndClear.call_args_list)
-        rm_progress_cmds = self.default_build_mirrors_obj._GpMirrorListToBuild__runWaitAndCheckWorkerPoolForErrorsAndClear.call_args_list[1][0][0]
-        self.assertEqual(3, len(rm_progress_cmds))
 
         self._assert_run_recovery()
 
@@ -647,14 +646,10 @@ class BuildMirrorsTestCase(GpTestCase):
 
         self.default_build_mirrors_obj._run_recovery(self.default_action_name, recovery_info, self.gpEnv)
 
-        self.assertEqual([call(ANY, progressCmds=ANY, suppressErrorCheck=True), call(ANY, suppressErrorCheck=False)],
+        self.assertEqual([call(ANY, progressCmds=ANY, suppressErrorCheck=True)],
                          self.default_build_mirrors_obj._GpMirrorListToBuild__runWaitAndCheckWorkerPoolForErrorsAndClear.call_args_list)
-        rm_progress_cmds = self.default_build_mirrors_obj._GpMirrorListToBuild__runWaitAndCheckWorkerPoolForErrorsAndClear.call_args_list[1][0][0]
 
         # Since start passed for dbid:3, we should have deleted it's progress file
-        self.assertEqual(1, len(rm_progress_cmds))
-        self.assertEqual("host1", rm_progress_cmds[0].remoteHost)
-        self.assertEqual("rm -f /tmp/progress_file3", rm_progress_cmds[0].cmdStr)
 
         self._assert_run_recovery()
 
@@ -671,15 +666,9 @@ class BuildMirrorsTestCase(GpTestCase):
 
         self.default_build_mirrors_obj._run_recovery(self.default_action_name, recovery_info, self.gpEnv)
 
-        self.assertEqual([call(ANY, progressCmds=ANY, suppressErrorCheck=True), call(ANY, suppressErrorCheck=False)],
+        self.assertEqual([call(ANY, progressCmds=ANY, suppressErrorCheck=True)],
                          self.default_build_mirrors_obj._GpMirrorListToBuild__runWaitAndCheckWorkerPoolForErrorsAndClear.call_args_list)
-        rm_progress_cmds = self.default_build_mirrors_obj._GpMirrorListToBuild__runWaitAndCheckWorkerPoolForErrorsAndClear.call_args_list[1][0][0]
 
-        self.assertEqual(2, len(rm_progress_cmds))
-        self.assertEqual("host1", rm_progress_cmds[0].remoteHost)
-        self.assertEqual("host2", rm_progress_cmds[1].remoteHost)
-        self.assertEqual("rm -f /tmp/progress_file2", rm_progress_cmds[0].cmdStr)
-        self.assertEqual("rm -f /tmp/progress_file3", rm_progress_cmds[1].cmdStr)
 
         self._assert_run_recovery()
 
