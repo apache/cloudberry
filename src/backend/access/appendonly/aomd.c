@@ -221,7 +221,8 @@ TruncateAOSegmentFile(File fd, Relation rel, int32 segFileNum, int64 offset, AOV
 		/* report heap-equivalent blocks vacuumed */
 		vacrelstats->nbytes_truncated += filesize_before - offset;
 		pgstat_progress_update_param(PROGRESS_VACUUM_HEAP_BLKS_VACUUMED,
-									 RelationGuessNumberOfBlocksFromSize(vacrelstats->nbytes_truncated));
+									 vacrelstats->nbytes_truncated / BLCKSZ +
+									 (vacrelstats->nbytes_truncated % BLCKSZ != 0));
 	}
 
 	if (XLogIsNeeded() && RelationNeedsWAL(rel))
