@@ -16,8 +16,6 @@ Feature: gpactivatestandby
         And verify that gpstart on original coordinator fails due to lower Timeline ID
         And clean up and revert back to original coordinator
 
-    # needs_fix: gpactivatestandby -f after a clean cluster shutdown (#1889)
-    @needs_fix
     Scenario: gpactivatestandby -f forces standby coordinator to start
         Given the database is running
         And the standby is not initialized
