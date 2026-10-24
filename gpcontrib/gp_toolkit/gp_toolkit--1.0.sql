@@ -252,7 +252,7 @@ CREATE EXTERNAL WEB TABLE gp_toolkit.__gp_log_master_ext
     logstack text
 )
 EXECUTE E'cat $GP_SEG_DATADIR/log/*.csv' ON COORDINATOR
-FORMAT 'CSV' (DELIMITER AS ',' NULL AS '' QUOTE AS '"');
+FORMAT 'CSV' (DELIMITER AS ',' NULL AS '' QUOTE AS '"' ESCAPE AS '\');
 
 REVOKE ALL ON TABLE gp_toolkit.__gp_log_master_ext FROM public;
 

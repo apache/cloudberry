@@ -33,6 +33,10 @@
 1Uq:
 1U:ALTER SYSTEM reset shared_buffers;
 2:SELECT pg_ctl(datadir, 'restart') from gp_segment_configuration where role = 'p' and content = 1;
+-- pg_ctl -w returns once crash recovery has started, not when seg1 accepts
+-- connections again. Gang creation retries while the segment is in recovery,
+-- so dispatch to it from a new session before connecting directly below.
+3:SELECT count(*) FROM bm;
 3:SELECT gp_inject_fault_infinite('checkpoint', 'reset', dbid) FROM gp_segment_configuration WHERE role='p';
 
 3:SELECT gp_inject_fault('fts_probe', 'reset', dbid) FROM gp_segment_configuration WHERE role='p' AND content=-1;

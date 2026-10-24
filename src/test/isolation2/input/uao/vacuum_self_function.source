@@ -9,13 +9,20 @@ DELETE FROM ao WHERE a <= 30;
 
 create or replace function myfunc() returns bigint as $$
 begin  /* inside a function */
-  perform pg_sleep(10); /* inside a function */
+  perform pg_advisory_xact_lock(4242); /* inside a function */
   return (select count(*) from ao);  /* inside a function */
 end;  /* inside a function */
 $$ stable language plpgsql;
 
+-- Session 2 holds an advisory lock that myfunc() waits for. The function's
+-- snapshot is taken when the query starts, before it blocks on the lock.
+2: DO $$ BEGIN PERFORM pg_advisory_lock(4242); END $$;
+
 -- Launch function into the background.
 1&: select myfunc();
+-- Wait until session 1 is blocked on the lock, so its snapshot is in place
+-- before we DELETE and VACUUM. Sleeping instead was racy.
+2: DO $$ BEGIN WHILE NOT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND objid = 4242 AND NOT granted) LOOP PERFORM pg_sleep(0.1); END LOOP; END $$;
 
 -- Meanwhile, DELETE some rows and VACUUM. VACUUM should not recycle the
 -- old tuple versions that are still needed by the function later. It will
@@ -30,6 +37,7 @@ $$ stable language plpgsql;
 -- start_ignore
 2: SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('ao');
 -- end_ignore
+2: SELECT pg_advisory_unlock(4242);
 1<:
 
 -- Now that the first transaction has finished, VACUUM can recycle.
