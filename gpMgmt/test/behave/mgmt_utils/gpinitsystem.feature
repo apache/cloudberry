@@ -355,7 +355,8 @@ Feature: gpinitsystem tests
         And a demo cluster is created using gpinitsystem args " "
         And gpinitsystem should return a return code of 0
 
-    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4), then
+    # the mirror port fix in gpinitsystem fixes (#1639 b971d481862)
     @needs_fix
     Scenario: gpinitsystem should create consistent port entry on segments postgresql.conf file
         Given the database is not running
