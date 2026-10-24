@@ -88,6 +88,7 @@ submit -> ExecutorStart() -> start -> ExecutorRun() -> ExecutorFinish() -> end -
 | `blk_write_time`             | double | E, D    | ABS      | +      | Node    |     +      |    +    | seconds | Time writing data blocks                            |
 | `inherited_calls`            | uint64 | E, D    | ABS      | -      | Node    |     +      |    +    | count   | Nested query count (GPSC-specific)                |
 | `inherited_time`             | double | E, D    | ABS      | -      | Node    |     +      |    +    | seconds | Nested query time (GPSC-specific)                 |
+| `cross_slice_wait_ms`        | double | E, D    | ABS      | +      | Node    |     +      |    +    | ms**    | Longest cross-slice ShareInputScan wait (GPSC-specific) |
 | **NetworkStat (sent)**       |        |         |          |        |         |            |         |         |                                                     |
 | `sent.total_bytes`           | uint32 | D       | ABS      | -      | Node    |     +      |    +    | bytes   | Bytes sent, including headers                       |
 | `sent.tuple_bytes`           | uint32 | D       | ABS      | -      | Node    |     +      |    +    | bytes   | Bytes of pure tuple-data sent                       |
@@ -140,6 +141,30 @@ submit -> ExecutorStart() -> start -> ExecutorRun() -> ExecutorFinish() -> end -
 | **SegmentKey**               |        |         |          |        |         |            |         |         |                                                     |
 | `dbid`                       | int32  | All     | ABS      | -      | Node    |     +      |    +    | id      | Database ID                                         |
 | `segment_index`              | int32  | All     | ABS      | -      | Node    |     +      |    +    | id      | Segment index (-1=coordinator)                      |
+
+**\*\* `cross_slice_wait_ms`** is the maximum accumulated consumer wait among
+cross-slice ShareInputScan nodes in the reporting process (one process per
+slice). It is not a sum across nodes, slices, or segments. It measures the
+elapsed time waiting for the producer's shared tuplestore using the local
+monotonic clock. No timestamps from different hosts are compared.
+
+The executor records it even without EXPLAIN or node instrumentation, including
+an interrupted wait before rethrowing ERROR. The collector emits a nonzero
+value in milliseconds. An in-progress wait is accounted when it completes or
+is interrupted, not periodically while blocked.
+
+EXPLAIN ANALYZE reports `Cross-slice wait` on consumer nodes when the maximum
+is at least 1 ms, including with TIMING OFF. The line shows the maximum, its
+segment, and the average and count of workers reporting a positive wait.
+JSON, XML and YAML expose the same values in `cross-slice-wait`. Compare the
+maximum with the average to investigate uneven producer completion, scheduling
+or contention; a large wait alone does not identify the cause.
+
+Cancellation errors include the share ID, local slice ID, elapsed milliseconds
+and whether the process was waiting for the producer or for consumers.
+Producer shutdown waits occur after execution statistics are collected, so
+only error context and DEBUG1 logs report those waits; they are excluded from
+the consumer metric and EXPLAIN aggregate.
 
 ---
 

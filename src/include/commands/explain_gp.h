@@ -53,6 +53,7 @@ typedef struct CdbExplain_StatInst
 	int			enotes;			/* Offset to end of node's extra text */
 	int 		nworkers_launched; /* Number of workers launched for this node */
 	WalUsage	walusage;		/* add WAL usage */
+	double		shareinputwait; /* consumer wait, in seconds */
 } CdbExplain_StatInst;
 
 
