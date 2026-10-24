@@ -61,6 +61,7 @@
 #include "port/atomics.h"
 #include "pgstat.h"
 #include "port/pg_lfind.h"
+#include "storage/lmgr.h"
 #include "storage/proc.h"
 #include "storage/procarray.h"
 #include "storage/spin.h"
@@ -75,6 +76,7 @@
 #include "access/xact.h"		/* setting the shared xid */
 #include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
+#include "postmaster/fts.h"
 #include "utils/faultinjector.h"
 #include "utils/sharedsnapshot.h"
 #include "libpq/libpq-be.h"
@@ -698,6 +700,7 @@ ProcArrayEndGxact(TMGXACT *tmGxact)
 	pg_atomic_init_u64(&(tmGxact->atomic_gxid), InvalidDistributedTransactionId);
 	tmGxact->xminDistributedSnapshot = InvalidDistributedTransactionId;
 	tmGxact->includeInCkpt = false;
+	tmGxact->commitInProgress = false;
 	tmGxact->sessionId = 0;
 
 	/*
@@ -2626,6 +2629,48 @@ DistributedSnapshotMappedEntry_Compare(const void *p1, const void *p2)
 }
 
 /*
+ * Wait for DTX commit notifications that have started before taking a QD
+ * distributed snapshot. The caller must not hold ProcArrayLock. On return the
+ * lock is held in shared mode, so the caller can build its snapshot from the
+ * same proc-array state that it checked here.
+ */
+static void
+WaitForDtxCommit(void)
+{
+	DistributedTransactionId waitGxid;
+
+	for (;;)
+	{
+		waitGxid = InvalidDistributedTransactionId;
+
+		LWLockAcquire(ProcArrayLock, LW_SHARED);
+
+		for (int i = 0; i < procArray->numProcs; i++)
+		{
+			int					 pgprocno = procArray->pgprocnos[i];
+			volatile TMGXACT *tmGxact = &allTmGxact[pgprocno];
+
+			DistributedTransactionId gxid =
+				pg_atomic_read_u64(&tmGxact->atomic_gxid);
+
+			if (tmGxact == MyTmGxact ||
+				gxid == InvalidDistributedTransactionId ||
+				!tmGxact->commitInProgress)
+				continue;
+
+			waitGxid = gxid;
+			break;
+		}
+
+		if (waitGxid == InvalidDistributedTransactionId)
+			break;
+
+		LWLockRelease(ProcArrayLock);
+		GxactLockTableWait(waitGxid);
+	}
+}
+
+/*
  * create distributed snapshot based on current visible distributed transaction
  */
 static bool
@@ -3020,9 +3065,22 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 
 	/*
 	 * It is sufficient to get shared lock on ProcArrayLock, even if we are
-	 * going to set MyProc->xmin.
+	 * going to set MyProc->xmin. A DTX whose QE commit notification has
+	 * started is different: wait until its QD cleanup completes before taking
+	 * the snapshot, otherwise some QEs can expose the commit while others do
+	 * not.
+	 *
+	 * FTS only reads coordinator configuration and probes segments through
+	 * libpq.  It must not wait for a user DTX here, because the probe can be
+	 * needed to resolve that DTX.
 	 */
-	LWLockAcquire(ProcArrayLock, LW_SHARED);
+	if (distributedTransactionContext == DTX_CONTEXT_QD_DISTRIBUTED_CAPABLE &&
+		Gp_role != GP_ROLE_UTILITY &&
+		!Debug_disable_distributed_snapshot && !am_ftsprobe &&
+		needDistributedSnapshot)
+		WaitForDtxCommit();
+	else
+		LWLockAcquire(ProcArrayLock, LW_SHARED);
 
 	/*
 	* GPDB_14_MERGE_FIXME:
@@ -3283,9 +3341,14 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 	if (!TransactionIdIsValid(MyProc->xmin))
 		MyProc->xmin = TransactionXmin = xmin;
 
-	/* GP: QD takes a distributed snapshot iff QD not in retry phase and the query needs distributed snapshot */
-	if (distributedTransactionContext == DTX_CONTEXT_QD_DISTRIBUTED_CAPABLE && !Debug_disable_distributed_snapshot 
-			&& needDistributedSnapshot)
+	/*
+	 * GP: A QD takes a distributed snapshot iff it is not in retry phase and
+	 * the query needs one.  FTS only reads coordinator configuration while it
+	 * probes segments, so it does not need a distributed snapshot.
+	 */
+	if (distributedTransactionContext == DTX_CONTEXT_QD_DISTRIBUTED_CAPABLE &&
+		!Debug_disable_distributed_snapshot && !am_ftsprobe &&
+		needDistributedSnapshot)
 	{
 		CreateDistributedSnapshot(ds);
 		snapshot->haveDistribSnapshot = true;
