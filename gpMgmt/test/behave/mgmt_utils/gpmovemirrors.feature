@@ -251,12 +251,8 @@ Feature: Tests for gpmovemirrors
   @demo_cluster
   @concourse_cluster
   @skip_cleanup
-  # gprecoverseg does not detect a pg_basebackup that is already running
-  # against a segment: get_segments_with_running_basebackup and the
-  # gp_stat_replication check around it were never carried over, so nothing
-  # here prints "Found pg_basebackup running for segments with contentIds".
-  # Kept aligned with upstream so they can be enabled with the feature.
-  @not_implemented
+  # needs_fix: skip segments that already have a recovery running (#1639 7056e02e306)
+  @needs_fix
   Scenario: gpmovemirrors gives warning if pg_basebackup is already running for one of the mirrors to be moved
     Given the database is running
     And all the segments are running
@@ -296,12 +292,8 @@ Feature: Tests for gpmovemirrors
   @demo_cluster
   @concourse_cluster
   @skip_cleanup
-  # gprecoverseg does not detect a pg_basebackup that is already running
-  # against a segment: get_segments_with_running_basebackup and the
-  # gp_stat_replication check around it were never carried over, so nothing
-  # here prints "Found pg_basebackup running for segments with contentIds".
-  # Kept aligned with upstream so they can be enabled with the feature.
-  @not_implemented
+  # needs_fix: skip segments that already have a recovery running (#1639 7056e02e306)
+  @needs_fix
   Scenario: gpmovemirrors gives warning if pg_basebackup is already running for some of the mirrors to be moved
     Given the database is running
     And all the segments are running
@@ -342,12 +334,8 @@ Feature: Tests for gpmovemirrors
   @demo_cluster
   @concourse_cluster
   @skip_cleanup
-  # gprecoverseg does not detect a pg_basebackup that is already running
-  # against a segment: get_segments_with_running_basebackup and the
-  # gp_stat_replication check around it were never carried over, so nothing
-  # here prints "Found pg_basebackup running for segments with contentIds".
-  # Kept aligned with upstream so they can be enabled with the feature.
-  @not_implemented
+  # needs_fix: skip segments that already have a recovery running (#1639 7056e02e306)
+  @needs_fix
   Scenario: gpmovemirrors gives warning if pg_basebackup is already running for all mirrors to be moved
     Given the database is running
     And all the segments are running
