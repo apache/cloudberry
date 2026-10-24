@@ -1,5 +1,8 @@
 # Copyright (c) 2026, PostgreSQL Global Development Group
 
+# Adapted from the PostgreSQL extended vacuum statistics test:
+# https://www.postgresql.org/message-id/attachment/204703/v44-0002-Track-vacuum-times-for-indexes-and-databases-and.patch
+
 # Test the total_vacuum_time counter of pg_stat_vacuum_indexes: the time vacuum
 # spent processing each index, accumulated over bulkdelete and cleanup passes,
 # mirroring the table-level counter in pg_stat_vacuum_tables.

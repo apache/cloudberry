@@ -1,5 +1,8 @@
 # Copyright (c) 2026, PostgreSQL Global Development Group
 
+# Adapted from the PostgreSQL extended vacuum statistics test:
+# https://www.postgresql.org/message-id/attachment/204704/v44-0003-Count-wraparound-failsafe-vacuums-in-pg_stat-vie.patch
+
 # Test that vacuums entering the wraparound failsafe mode are counted in
 # pg_stat_vacuum_tables.vacuum_failsafe_count and aggregated per database in
 # pg_stat_vacuum_database.vacuum_failsafe_count.

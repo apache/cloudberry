@@ -1,5 +1,8 @@
 # Copyright (c) 2026, PostgreSQL Global Development Group
 
+# Adapted from the PostgreSQL extended vacuum statistics test:
+# https://www.postgresql.org/message-id/attachment/204705/v44-0004-Count-vacuums-interrupted-by-errors-in-pg_stat_d.patch
+
 # Adapt v44-0004 to the PG14 collector: wait for heap processing before
 # canceling VACUUM, then wait for its deferred statistics report.
 use strict;
