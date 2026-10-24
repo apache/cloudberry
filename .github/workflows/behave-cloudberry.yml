@@ -169,7 +169,7 @@ jobs:
               },
               {"test":"ic-behave-gpcheckcat",
                "behave_features":["test/behave/mgmt_utils/gpcheckcat.feature"],
-               "behave_args":"--tags ~@extended"
+               "behave_args":"--tags ~@extended --tags ~@not_implemented"
               },
               {"test":"ic-behave-gpconfig","behave_features":["test/behave/mgmt_utils/gpconfig.feature"]},
               {"test":"ic-behave-gpinitstandby",

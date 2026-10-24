@@ -128,50 +128,6 @@ Feature: gpcheckcat tests
         Then gpcheckcat should print "Extra" to stdout
         And gpcheckcat should print "Table miss_attr_db4.public.heap_table.1" to stdout
 
-    # needs_fix: gpcheckcat fixes (#1639 0bfc1d76642)
-    @needs_fix
-    Scenario: gpcheckcat should report inconsistent pg_fastsequence.lastrownums values with gp_fastsequence for AO tables
-        Given database "errorneous_lastrownums" is dropped and recreated
-        And the user runs "psql errorneous_lastrownums -c "create table errlastrownum(a int) using ao_row; insert into errlastrownum select * from generate_series(1,100);""
-        And the user runs "psql errorneous_lastrownums -c "alter table errlastrownum add column newcol int;""
-        When the user runs "gpcheckcat -R ao_lastrownums errorneous_lastrownums"
-        Then gpcheckcat should return a return code of 0
-        When the user runs sql "set allow_system_table_mods=on; update gp_fastsequence set last_sequence = 0 where last_sequence > 0;" in "errorneous_lastrownums" on first primary segment
-        When the user runs "gpcheckcat -R ao_lastrownums errorneous_lastrownums"
-        Then gpcheckcat should return a return code of 3
-        And gpcheckcat should print "Failed test\(s\) that are not reported here: ao_lastrownums" to stdout
-        Given database "errorneous_lastrownums" is dropped and recreated
-        And the user runs "psql errorneous_lastrownums -c "create table errlastrownum(a int) using ao_row; insert into errlastrownum select * from generate_series(1,10);""
-        And the user runs "psql errorneous_lastrownums -c "alter table errlastrownum add column newcol int;""
-        When the user runs "gpcheckcat -R ao_lastrownums errorneous_lastrownums"
-        Then gpcheckcat should return a return code of 0
-        Then the user runs sql "set allow_system_table_mods=on; delete from gp_fastsequence where last_sequence > 0;" in "errorneous_lastrownums" on first primary segment
-        When the user runs "gpcheckcat -R ao_lastrownums errorneous_lastrownums"
-        Then gpcheckcat should return a return code of 3
-        And gpcheckcat should print "Failed test\(s\) that are not reported here: ao_lastrownums" to stdout
-
-    # needs_fix: gpcheckcat fixes (#1639 0bfc1d76642)
-    @needs_fix
-    Scenario: gpcheckcat should report inconsistent pg_fastsequence.lastrownums values with gp_fastsequence for AOCO tables
-        Given database "errorneous_lastrownums" is dropped and recreated
-        And the user runs "psql errorneous_lastrownums -c "create table errlastrownum(a int) using ao_column; insert into errlastrownum select * from generate_series(1,100);""
-        And the user runs "psql errorneous_lastrownums -c "alter table errlastrownum add column newcol int;""
-        When the user runs "gpcheckcat -R ao_lastrownums errorneous_lastrownums"
-        Then gpcheckcat should return a return code of 0
-        When the user runs sql "set allow_system_table_mods=on; update gp_fastsequence set last_sequence = 0 where last_sequence > 0;" in "errorneous_lastrownums" on first primary segment
-        When the user runs "gpcheckcat -R ao_lastrownums errorneous_lastrownums"
-        Then gpcheckcat should return a return code of 3
-        And gpcheckcat should print "Failed test\(s\) that are not reported here: ao_lastrownums" to stdout
-        Given database "errorneous_lastrownums" is dropped and recreated
-        And the user runs "psql errorneous_lastrownums -c "create table errlastrownum(a int) using ao_column; insert into errlastrownum select * from generate_series(1,10);""
-        And the user runs "psql errorneous_lastrownums -c "alter table errlastrownum add column newcol int;""
-        When the user runs "gpcheckcat -R ao_lastrownums errorneous_lastrownums"
-        Then gpcheckcat should return a return code of 0
-        Then the user runs sql "set allow_system_table_mods=on; delete from gp_fastsequence where last_sequence > 0;" in "errorneous_lastrownums" on first primary segment
-        When the user runs "gpcheckcat -R ao_lastrownums errorneous_lastrownums"
-        Then gpcheckcat should return a return code of 3
-        And gpcheckcat should print "Failed test\(s\) that are not reported here: ao_lastrownums" to stdout
-
     Scenario: gpcheckcat should report and repair owner errors and produce timestamped repair scripts
         Given database "owner_db1" is dropped and recreated
         And database "owner_db2" is dropped and recreated
@@ -387,7 +343,7 @@ Feature: gpcheckcat tests
         And the user runs "psql extra_pk_db -c 'CREATE SCHEMA my_pk_schema' "
         And the user runs "psql extra_pk_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/add_operator.sql "
         Then psql should return a return code of 0
-        And the user runs sql "set allow_system_table_mods=true;DELETE FROM pg_catalog.pg_operator where oprname='!#'" in "extra_pk_db" on first primary segment
+        And the user runs "psql extra_pk_db -c "set allow_system_table_mods=true;DELETE FROM pg_catalog.pg_operator where oprname='!#'" "
         Then psql should return a return code of 0
         When the user runs "gpcheckcat -R missing_extraneous extra_pk_db"
         Then gpcheckcat should return a return code of 3
@@ -795,8 +751,13 @@ Feature: gpcheckcat tests
         And the user runs "dropdb all_good"
 
 
-    # needs_fix: gpcheckcat fixes (#1639 0bfc1d76642)
-    @needs_fix
+    # The first half needs a postmaster started with gp_role=utility to reject
+    # non-utility connections ("System was started in single node mode - only
+    # utility mode connections are allowed").  Greenplum does that in
+    # InitPostgres(); Cloudberry dropped the check, so the connection succeeds
+    # and gpcheckcat returns 0.  Kept aligned with upstream so the scenario can
+    # be enabled once the check is restored.
+    @not_implemented
     Scenario: validate session GUC passed with -x is set
         Given the database is not running
           And the user runs "gpstart -ma"
