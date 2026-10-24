@@ -1389,6 +1389,11 @@ SELECT :io_sum_shared_after_reads > :io_sum_shared_before_reads;
  t
 (1 row)
 
+-- Analyze explicitly so the plan below does not depend on whether
+-- autovacuum has auto-analyzed the table yet: ORCA picks a one-stage
+-- aggregate without stats and a two-stage aggregate with them.
+ANALYZE test_io_shared;
+ANALYZE
 SELECT sum(hits) AS io_sum_shared_before_hits
   FROM gp_stat_io_summary WHERE context = 'normal' AND object = 'relation' \gset
 -- Select from the table again to count hits.
@@ -1402,15 +1407,16 @@ SET LOCAL enable_hashjoin TO off; SET LOCAL enable_material TO off;
 EXPLAIN (COSTS OFF) SELECT COUNT(*) FROM test_io_shared t1 INNER JOIN test_io_shared t2 USING (a);
                       QUERY PLAN                       
 -------------------------------------------------------
- Aggregate
+ Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Hash Join
-               Hash Cond: (t1.a = t2.a)
-               ->  Seq Scan on test_io_shared t1
-               ->  Hash
-                     ->  Seq Scan on test_io_shared t2
+         ->  Partial Aggregate
+               ->  Hash Join
+                     Hash Cond: (t1.a = t2.a)
+                     ->  Seq Scan on test_io_shared t1
+                     ->  Hash
+                           ->  Seq Scan on test_io_shared t2
  Optimizer: GPORCA
-(8 rows)
+(9 rows)
 
 SELECT COUNT(*) FROM test_io_shared t1 INNER JOIN test_io_shared t2 USING (a);
  count 
