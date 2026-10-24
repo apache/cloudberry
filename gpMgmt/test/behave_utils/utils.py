@@ -226,8 +226,8 @@ def stop_database(context):
             subprocess.check_call([
                 'bash', '-lc',
                 'source %s/cloudberry-env.sh && pg_ctl stop -m fast -D %s' % (
-                    pipes.quote(os.environ.get("GPHOME")),
-                    pipes.quote(coordinator_data_dir),
+                    shlex.quote(os.environ.get("GPHOME")),
+                    shlex.quote(coordinator_data_dir),
                 )
             ])
             context.exception = None
