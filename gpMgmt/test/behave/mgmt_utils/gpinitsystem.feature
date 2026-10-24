@@ -17,7 +17,7 @@ Feature: gpinitsystem tests
         And gpconfig should print "Coordinator value: off" to stdout
         And gpconfig should print "Segment     value: off" to stdout
 
-    # needs_fix: gpinitsystem fixes (#1639 b971d481862)
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
     @needs_fix
     Scenario: gpinitsystem creates a cluster when the user set LC_ALL env variable
         Given create demo cluster config
@@ -28,7 +28,7 @@ Feature: gpinitsystem tests
         Then gpstate should return a return code of 0
         And "LC_ALL" environment variable should be restored
 
-    # needs_fix: gpinitsystem fixes (#1639 b971d481862)
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
     @needs_fix
     Scenario: gpinitsystem creates a cluster when the user set -n or --locale parameter
         Given create demo cluster config
@@ -37,7 +37,7 @@ Feature: gpinitsystem tests
         Given the user runs "gpstate"
         Then gpstate should return a return code of 0
 
-	# needs_fix: gpinitsystem fixes (#1639 b971d481862)
+	# needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
 	@needs_fix
 	Scenario: gpinitsystem exits with status 0 when the user set locale variables
         Given create demo cluster config
@@ -48,7 +48,7 @@ Feature: gpinitsystem tests
         Then gpstate should return a return code of 0
         And "LC_MONETARY" environment variable should be restored
 
-    # needs_fix: gpinitsystem fixes (#1639 b971d481862)
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
     @needs_fix
     Scenario: gpinitsystem exits with status 0 when the user set locale parameters
         Given create demo cluster config
@@ -71,7 +71,7 @@ Feature: gpinitsystem tests
         Given the user runs "gpstate"
          Then gpstate should return a return code of 2
 
-    # needs_fix: gpinitsystem fixes (#1639 b971d481862)
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
     @needs_fix
     Scenario: gpinitsystem creates a cluster when the user confirms the dialog
         Given create demo cluster config
@@ -121,7 +121,7 @@ Feature: gpinitsystem tests
         And the user runs "gpinitsystem -a -c ../gpAux/gpdemo/clusterConfigFile"
         Then gpinitsystem should return a return code of 0
 
-    # needs_fix: gpinitsystem fixes (#1639 b971d481862)
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
     @needs_fix
     Scenario: gpinitsystem fails with exit code 1 when the functions file is not found
        Given create demo cluster config
@@ -131,7 +131,7 @@ Feature: gpinitsystem tests
         When the user runs "gpinitsystem -a -c ../gpAux/gpdemo/clusterConfigFile"
         Then gpinitsystem should return a return code of 0
 
-    # needs_fix: gpinitsystem fixes (#1639 b971d481862)
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
     @needs_fix
     Scenario: gpinitsystem continues running when gpinitstandby fails
        Given create demo cluster config
@@ -139,7 +139,7 @@ Feature: gpinitsystem tests
         When the user runs "gpinitsystem -a -c ../gpAux/gpdemo/clusterConfigFile -s localhost -S not-a-real-directory -P 21100 -h ../gpAux/gpdemo/hostfile"
         Then gpinitsystem should return a return code of 0
 
-    # needs_fix: gpinitsystem fixes (#1639 b971d481862)
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
     @needs_fix
     Scenario: after a failed run of gpinitsystem, a re-run should return exit status 0
        Given create demo cluster config
@@ -149,7 +149,7 @@ Feature: gpinitsystem tests
         When the user runs "gpinitsystem -a -c ../gpAux/gpdemo/clusterConfigFile"
         Then gpinitsystem should return a return code of 0
 
-    # needs_fix: gpinitsystem fixes (#1639 b971d481862)
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
     @needs_fix
     Scenario: after gpinitsystem logs a warning, a re-run should return exit status 0
       Given create demo cluster config
@@ -177,7 +177,7 @@ Feature: gpinitsystem tests
         And gpinitsystem should print "Cluster setup finished, but Standby Coordinator failed to initialize. Review contents of log files for errors." to stdout
         And sql "select * from gp_toolkit.__gp_user_namespaces" is executed in "postgres" db
 
-    # needs_fix: gpinitsystem fixes (#1639 b971d481862)
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
     @needs_fix
     Scenario: gpinitsystem generates an output configuration file and then starts cluster with data_checksums on
         Given the cluster config is generated with data_checksums "on"
@@ -193,7 +193,7 @@ Feature: gpinitsystem tests
         And gpconfig should print "Coordinator value: on" to stdout
         And gpconfig should print "Segment     value: on" to stdout
 
-    # needs_fix: gpinitsystem fixes (#1639 b971d481862)
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
     @needs_fix
     Scenario: gpinitsystem generates an output configuration file and then starts cluster with data_checksums off
         Given the cluster config is generated with data_checksums "off"
@@ -224,7 +224,7 @@ Feature: gpinitsystem tests
         And gpinitsystem should print "Log file scan check passed" to stdout
         And sql "select * from gp_toolkit.__gp_user_namespaces" is executed in "postgres" db
 
-    # needs_fix: gpinitsystem fixes (#1639 b971d481862)
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
     @needs_fix
     Scenario: gpinitsystem creates a cluster in default timezone
         Given the database is not running
@@ -237,7 +237,7 @@ Feature: gpinitsystem tests
         And the startup timezone is saved
         And the startup timezone matches the system timezone
 
-    # needs_fix: gpinitsystem fixes (#1639 b971d481862)
+    # needs_fix: gpdemo absolute TRUSTED_SHELL (#1639 767f12685a4)
     @needs_fix
     Scenario: gpinitsystem creates a cluster using TZ
         Given the database is not running
