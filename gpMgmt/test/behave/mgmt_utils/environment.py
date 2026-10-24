@@ -1,5 +1,7 @@
 import os
+import re
 import shutil
+from contextlib import closing
 
 import behave
 
@@ -11,6 +13,7 @@ from steps.gpconfig_mgmt_utils import GpConfigContext
 from steps.gpssh_exkeys_mgmt_utils import GpsshExkeysMgmtContext
 from steps.mgmt_utils import backup_bashrc, restore_bashrc
 from gppylib.db import dbconn
+from gppylib.commands.base import Command, REMOTE
 
 def before_all(context):
     if list(map(int, behave.__version__.split('.'))) < [1,2,6]:
@@ -62,18 +65,26 @@ def before_feature(context, feature):
         dbconn.execSQL(context.conn, 'create table t1(a integer, b integer)')
         dbconn.execSQL(context.conn, 'create table t2(c integer, d integer)')
         dbconn.execSQL(context.conn, 'create table t3(e integer, f integer)')
+        dbconn.execSQL(context.conn, 'create table spiegelungssätze(col_ä integer, 列2 integer)')
         dbconn.execSQL(context.conn, 'create view v1 as select a, b from t1, t3 where t1.a=t3.e')
         dbconn.execSQL(context.conn, 'create view v2 as select c, d from t2, t3 where t2.c=t3.f')
         dbconn.execSQL(context.conn, 'create view v3 as select a, d from v1, v2 where v1.a=v2.c')
         dbconn.execSQL(context.conn, 'insert into t1 values(1, 2)')
         dbconn.execSQL(context.conn, 'insert into t2 values(1, 3)')
         dbconn.execSQL(context.conn, 'insert into t3 values(1, 4)')
+        dbconn.execSQL(context.conn, 'insert into spiegelungssätze values(1, 5)')
+        # minirepro tests require statistical data about the contents of the database
+        # we should execute 'ANALYZE' to fill the pg_statistic catalog table.
+        dbconn.execSQL(context.conn, 'analyze t1')
+        dbconn.execSQL(context.conn, 'analyze t2')
+        dbconn.execSQL(context.conn, 'analyze t3')
+        dbconn.execSQL(context.conn, 'analyze spiegelungssätze')
+        dbconn.execSQL(context.conn, 'create or replace function select_one() returns integer as $$ select 1 $$ language sql')
         context.conn.commit()
 
     if 'gppkg' in feature.tags:
         run_command(context, 'bash demo/gppkg/generate_sample_gppkg.sh buildGppkg')
         run_command(context, 'cp -f /tmp/sample-gppkg/sample.gppkg test/behave/mgmt_utils/steps/data/')
-
 
 def after_feature(context, feature):
     if 'analyzedb' in feature.tags:
@@ -102,6 +113,9 @@ def before_scenario(context, scenario):
     if 'gprecoverseg' in context.feature.tags:
         context.mirror_context = MirrorMgmtContext()
 
+    if 'gprecoverseg_newhost' in context.feature.tags:
+        context.mirror_context = MirrorMgmtContext()
+
     if 'gpconfig' in context.feature.tags:
         context.gpconfig_context = GpConfigContext()
 
@@ -119,11 +133,57 @@ def before_scenario(context, scenario):
     if 'gp_bash_functions.sh' in context.feature.tags or 'backup_restore_bashrc' in scenario.effective_tags:
         backup_bashrc()
 
+def preserve_logs_for_failed_scenario(scenario):
+    """
+    Snapshot gpAdminLogs and every segment's postgresql.conf while they still
+    describe the failure. Scenarios routinely start by emptying gpAdminLogs, so
+    by the end of a feature the logs of the scenario that failed are long gone
+    and the CI artifact is useless for diagnosis.
+    """
+    # Behave runs from gpMgmt/; build-logs/ lives at the top of the source tree,
+    # which is what the CI job uploads.
+    src_dir = os.environ.get('SRC_DIR') or os.path.dirname(os.getcwd())
+    dest_root = os.path.join(src_dir, 'build-logs', 'failed-scenarios')
+    name = re.sub(r'[^A-Za-z0-9._-]+', '_', scenario.name)[:80]
+    dest = os.path.join(dest_root, '%s.%s' % (scenario.line, name))
+    try:
+        os.makedirs(dest, exist_ok=True)
+        admin_logs = os.path.join(os.path.expanduser('~'), 'gpAdminLogs')
+        if os.path.isdir(admin_logs):
+            log_dest = os.path.join(dest, 'gpAdminLogs')
+            os.makedirs(log_dest, exist_ok=True)
+            for entry in os.listdir(admin_logs):
+                path = os.path.join(admin_logs, entry)
+                if not os.path.isfile(path):
+                    continue
+                # Some of these are named gpsegstop.py_cdw:gpadmin_<date>.log,
+                # and upload-artifact refuses any path containing a colon.
+                shutil.copyfile(path, os.path.join(log_dest, entry.replace(':', '_')))
+        with closing(dbconn.connect(dbconn.DbURL(dbname='postgres'), unsetSearchPath=False)) as conn:
+            rows = dbconn.query(conn, "SELECT dbid, content, role, port, datadir "
+                                      "FROM gp_segment_configuration ORDER BY dbid").fetchall()
+        with open(os.path.join(dest, 'segment_configuration.txt'), 'w') as fh:
+            for row in rows:
+                fh.write('|'.join(str(c) for c in row) + '\n')
+        for dbid, _content, _role, _port, datadir in rows:
+            conf = os.path.join(datadir, 'postgresql.conf')
+            if os.path.isfile(conf):
+                shutil.copyfile(conf, os.path.join(dest, 'postgresql.conf.dbid%s' % dbid))
+    except Exception as e:
+        # Never let diagnostics turn a failure into a different failure.
+        print('could not preserve logs for %s: %s' % (scenario.name, e))
+
+
 def after_scenario(context, scenario):
     #TODO: you'd think that the scenario.skip() in before_scenario() would
     #  cause this to not be needed
     if "skip" in scenario.effective_tags:
         return
+
+    # behave hands back a Status enum here; compare on its name so this works
+    # whatever behave version is installed, and never let it raise.
+    if str(getattr(scenario, 'status', '')).split('.')[-1] == 'failed':
+        preserve_logs_for_failed_scenario(scenario)
 
     if 'tablespaces' in context:
         for tablespace in list(context.tablespaces.values()):
@@ -146,10 +206,16 @@ def after_scenario(context, scenario):
         return
 
     tags_to_cleanup = ['gpmovemirrors', 'gpssh-exkeys']
-    if set(context.feature.tags).intersection(tags_to_cleanup):
+    if set(context.feature.tags).intersection(tags_to_cleanup) and "skip_cleanup" not in scenario.effective_tags:
         if 'temp_base_dir' in context and os.path.exists(context.temp_base_dir):
             os.chmod(context.temp_base_dir, 0o700)
             shutil.rmtree(context.temp_base_dir)
+
+        if 'umount_required' in context and context.umount_required:
+            context.execute_steps('''
+                        # unmounting all mounter filesystem in concourse cluster
+                        Then umount all mounted filesystem
+                        ''')
 
     tags_to_not_restart_db = ['analyzedb', 'gpssh-exkeys']
     if not set(context.feature.tags).intersection(tags_to_not_restart_db):
@@ -182,3 +248,12 @@ def after_scenario(context, scenario):
         execute_sql('postgres', create_fault_query)
         reset_fault_query = "SELECT gp_inject_fault_infinite('all', 'reset', dbid) FROM gp_segment_configuration WHERE status='u';"
         execute_sql('postgres', reset_fault_query)
+
+    if os.getenv('SUSPEND_PG_REWIND') is not None:
+        del os.environ['SUSPEND_PG_REWIND']
+
+    if "remove_rsync_bash" in scenario.effective_tags:
+        for host in context.hosts_with_rsync_bash:
+            cmd = Command(name='remove /usr/local/bin/rsync', cmdStr="sudo rm /usr/local/bin/rsync", remoteHost=host,
+                          ctxt=REMOTE)
+            cmd.run(validateAfter=True)
