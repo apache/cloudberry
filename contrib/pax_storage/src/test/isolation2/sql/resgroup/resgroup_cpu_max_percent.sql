@@ -314,7 +314,11 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 -- end_ignore
 
 -- verify it
-1:SELECT verify_cpu_usage('rg1_cpu_test', 10, 2);
+-- Each sample covers only ~300ms, i.e. about three 100ms CFS periods, so a
+-- capped group's reported usage jumps by a whole quota burst (~1/3 of the
+-- cap) depending on where the window falls.  Averaging five samples damps
+-- this but does not remove it, so allow a 30% relative error.
+1:SELECT verify_cpu_usage('rg1_cpu_test', 10, 3);
 
 -- start_ignore
 1:SELECT * FROM cancel_all;
@@ -385,8 +389,12 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 1:SELECT pg_sleep(1.7);
 -- end_ignore
 
-1:SELECT verify_cpu_usage('rg1_cpu_test', 10, 2);
-1:SELECT verify_cpu_usage('rg2_cpu_test', 20, 2);
+-- Each sample covers only ~300ms, i.e. about three 100ms CFS periods, so a
+-- capped group's reported usage jumps by a whole quota burst (~1/3 of the
+-- cap) depending on where the window falls.  Averaging five samples damps
+-- this but does not remove it, so allow a 30% relative error.
+1:SELECT verify_cpu_usage('rg1_cpu_test', 10, 3);
+1:SELECT verify_cpu_usage('rg2_cpu_test', 20, 6);
 
 -- start_ignore
 1:SELECT * FROM cancel_all;

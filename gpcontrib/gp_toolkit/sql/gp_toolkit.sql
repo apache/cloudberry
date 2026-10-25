@@ -123,6 +123,26 @@ select bdirelid::regclass, bdinspname, bdirelname,
        bdidiag
 from gp_toolkit.gp_bloat_diag where bdirelid = 'toolkit_skew'::regclass;
 
+-- Vacuum can only remove the deleted rows, and so truncate the table, if no
+-- other backend holds a snapshot older than the delete, e.g. an auto-analyze
+-- started after the cluster restart in the previous test. Wait for those to
+-- finish. Plain autovacuum VACUUMs do not hold back the horizon.
+DO $$
+BEGIN
+     FOR i in 1..600 loop
+	      IF NOT EXISTS (SELECT 1 FROM pg_stat_activity
+	                     WHERE pid <> pg_backend_pid()
+	                       AND (backend_xmin IS NOT NULL OR backend_xid IS NOT NULL)
+	                       AND NOT (backend_type = 'autovacuum worker'
+	                                AND query LIKE 'autovacuum: VACUUM %'
+	                                AND query NOT LIKE '%ANALYZE%')) THEN
+	         RETURN;
+	      END IF;
+	      PERFORM pg_sleep(0.1);
+	      PERFORM pg_stat_clear_snapshot();
+     END LOOP;
+     raise notice 'other backends still hold a snapshot';
+END$$;
 -- After vacuum, bloat should be gone
 vacuum toolkit_skew;
 select btdrelpages > 0 as btdrelpages_over_0,
