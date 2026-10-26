@@ -1032,10 +1032,6 @@ _read${n}(void)
 ";
 		
 		# for read fast
-		my $macro =
-			(@{ $node_type_info{$n}->{fields} } > 0)
-				? 'READ_LOCALS'
-				: 'READ_LOCALS_NO_FIELDS';
 		print $rfaf "
 static $n *
 _read${n}(void)
