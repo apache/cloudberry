@@ -557,34 +557,6 @@ CTranslatorDXLToPlStmt::TranslateDXLOperatorToPlan(
 	return plan;
 }
 
-//---------------------------------------------------------------------------
-//	@function:
-//		CTranslatorDXLToPlStmt::SetParamIds
-//
-//	@doc:
-//		Set the bitmapset with the param_ids defined in the plan
-//
-//---------------------------------------------------------------------------
-void
-CTranslatorDXLToPlStmt::SetParamIds(Plan *plan)
-{
-	List *params_node_list = gpdb::ExtractNodesPlan(
-		plan, T_Param, true /* descend_into_subqueries */);
-
-	ListCell *lc = nullptr;
-
-	Bitmapset *bitmapset = nullptr;
-
-	ForEach(lc, params_node_list)
-	{
-		Param *param = (Param *) lfirst(lc);
-		bitmapset = gpdb::BmsAddMember(bitmapset, param->paramid);
-	}
-
-	plan->extParam = bitmapset;
-	plan->allParam = bitmapset;
-}
-
 List *
 CTranslatorDXLToPlStmt::TranslatePartOids(IMdIdArray *parts, INT lockmode)
 {
@@ -737,8 +709,6 @@ CTranslatorDXLToPlStmt::TranslateDXLTblScan(
 	// translate operator costs
 	TranslatePlanCosts(tbl_scan_dxlnode, plan);
 
-	SetParamIds(plan);
-
 	return plan_return;
 }
 
@@ -841,8 +811,6 @@ CTranslatorDXLToPlStmt::TranslateDXLParallelTblScan(
 	{
 		plan->plan_rows = ceil(plan->plan_rows / parallel_workers);
 	}
-
-	SetParamIds(plan);
 
 	return plan_return;
 }
@@ -1034,8 +1002,6 @@ CTranslatorDXLToPlStmt::TranslateDXLIndexScan(
 	 * As of 8.4, the indexstrategy and indexsubtype fields are no longer
 	 * available or needed in IndexScan. Ignore them.
 	 */
-	SetParamIds(plan);
-
 	return (Plan *) index_scan;
 }
 
@@ -1180,8 +1146,6 @@ CTranslatorDXLToPlStmt::TranslateDXLIndexOnlyScan(
 	}
 
 	index_scan->indexqual = index_cond;
-	SetParamIds(plan);
-
 	return (Plan *) index_scan;
 }
 
@@ -1520,8 +1484,6 @@ CTranslatorDXLToPlStmt::TranslateDXLLimit(
 		limit->limitOffset = limit_offset;
 	}
 
-	SetParamIds(plan);
-
 	// cleanup
 	child_contexts->Release();
 
@@ -1758,8 +1720,6 @@ CTranslatorDXLToPlStmt::TranslateDXLHashJoin(
 
 	plan->lefttree = left_plan;
 	plan->righttree = right_plan;
-	SetParamIds(plan);
-
 	// cleanup
 	translation_context_arr_with_siblings->Release();
 	child_contexts->Release();
@@ -1850,8 +1810,6 @@ CTranslatorDXLToPlStmt::TranslateDXLTvf(
 			gpdb::LAppendOid(rtfunc->funccolcollations, collation_type_oid);
 	}
 	func_scan->functions = ListMake1(rtfunc);
-
-	SetParamIds(plan);
 
 	return (Plan *) func_scan;
 }
@@ -2225,8 +2183,6 @@ CTranslatorDXLToPlStmt::TranslateDXLNLJoin(
 	}
 	plan->lefttree = left_plan;
 	plan->righttree = right_plan;
-	SetParamIds(plan);
-
 	// cleanup
 	translation_context_arr_with_siblings->Release();
 	child_contexts->Release();
@@ -2338,8 +2294,6 @@ CTranslatorDXLToPlStmt::TranslateDXLMergeJoin(
 
 	plan->lefttree = left_plan;
 	plan->righttree = right_plan;
-	SetParamIds(plan);
-
 	merge_join->mergeFamilies =
 		(Oid *) gpdb::GPDBAlloc(sizeof(Oid) * num_join_conds);
 	merge_join->mergeStrategies =
@@ -2444,8 +2398,6 @@ CTranslatorDXLToPlStmt::TranslateDXLHash(
 	plan->righttree = nullptr;
 	plan->qual = NIL;
 	hash->rescannable = false;
-
-	SetParamIds(plan);
 
 	return (Plan *) hash;
 }
@@ -2741,8 +2693,6 @@ CTranslatorDXLToPlStmt::TranslateDXLMotion(
 		plan->plan_rows = ceil(plan->plan_rows / sendslice->parallel_workers);
 	}
 
-	SetParamIds(plan);
-
 	return (Plan *) motion;
 }
 
@@ -2874,8 +2824,6 @@ CTranslatorDXLToPlStmt::TranslateDXLRedistributeMotionToResultHashFilters(
 
 	plan->lefttree = child_plan;
 
-	SetParamIds(plan);
-
 	Plan *child_result = (Plan *) result;
 
 	if (targetlist_modified)
@@ -2926,8 +2874,6 @@ CTranslatorDXLToPlStmt::TranslateDXLRedistributeMotionToResultHashFilters(
 
 		plan->qual = NIL;
 		plan->lefttree = child_result;
-
-		SetParamIds(plan);
 
 		return (Plan *) result;
 	}
@@ -3201,8 +3147,6 @@ CTranslatorDXLToPlStmt::TranslateDXLAgg(
 	}
 
 	m_dxl_to_plstmt_context->ResetAggInfosAndTransInfos();
-
-	SetParamIds(plan);
 
 	// cleanup
 	child_contexts->Release();
@@ -3532,8 +3476,6 @@ CTranslatorDXLToPlStmt::TranslateDXLWindowAgg(
 		}
 	}
 
-	SetParamIds(plan);
-
 	// cleanup
 	child_contexts->Release();
 
@@ -3736,8 +3678,6 @@ CTranslatorDXLToPlStmt::TranslateDXLWindowHashAgg(
 		}
 	}
 
-	SetParamIds(plan);
-
 	// cleanup
 	child_contexts->Release();
 
@@ -3809,8 +3749,6 @@ CTranslatorDXLToPlStmt::TranslateDXLSort(
 
 	TranslateSortCols(sort_col_list_dxl, &child_context, sort->sortColIdx,
 					  sort->sortOperators, sort->collations, sort->nullsFirst);
-
-	SetParamIds(plan);
 
 	// cleanup
 	child_contexts->Release();
@@ -3930,8 +3868,6 @@ CTranslatorDXLToPlStmt::TranslateDXLProjectSet(const CDXLNode *result_dxlnode)
 
 	// translate operator costs
 	TranslatePlanCosts(result_dxlnode, plan);
-
-	SetParamIds(plan);
 
 	return (Plan *) project_set;
 }
@@ -4279,8 +4215,6 @@ CTranslatorDXLToPlStmt::TranslateDXLResult(
 
 	plan->qual = quals_list;
 	result->resconstantqual = (Node *) one_time_quals_list;
-	SetParamIds(plan);
-
 	// Creating project set nodes plan tree
 	Plan *project_set_parent_plan = CreateProjectSetNodeTree(
 		result_dxlnode, plan, child_plan, project_set_child_plan,
@@ -4400,7 +4334,6 @@ CTranslatorDXLToPlStmt::TranslateDXLPartSelector(
 	partition_selector->part_prune_info = MakeNode(PartitionPruneInfo);
 	partition_selector->part_prune_info->prune_infos = prune_infos;
 
-	SetParamIds(plan);
 	// cleanup
 	child_contexts->Release();
 
@@ -4573,8 +4506,6 @@ CTranslatorDXLToPlStmt::TranslateDXLAppend(
 		nullptr,  // translate context for the base table
 		child_contexts, output_context);
 
-	SetParamIds(plan);
-
 	// cleanup
 	child_contexts->Release();
 
@@ -4709,8 +4640,6 @@ CTranslatorDXLToPlStmt::TranslateDXLParallelAppend(
 		nullptr,  // translate context for the base table
 		child_contexts, output_context);
 
-	SetParamIds(plan);
-
 	// cleanup
 	child_contexts->Release();
 
@@ -4740,8 +4669,6 @@ CTranslatorDXLToPlStmt::TranslateDXLMaterialize(
 		CDXLPhysicalMaterialize::Cast(materialize_dxlnode->GetOperator());
 
 	materialize->cdb_strict = materialize_dxlop->IsEager();
-	// ensure that executor actually materializes results
-	materialize->cdb_shield_child_from_rescans = true;
 
 	// translate operator costs
 	TranslatePlanCosts(materialize_dxlnode, plan);
@@ -4771,7 +4698,12 @@ CTranslatorDXLToPlStmt::TranslateDXLMaterialize(
 
 	plan->lefttree = child_plan;
 
-	SetParamIds(plan);
+	// Motions cannot be rescanned. Only shield a child that contains one;
+	// a Motion-free child must be rebuilt when correlated parameters change.
+	List *child_motions = gpdb::ExtractNodesPlan(
+		child_plan, T_Motion, true /* descend_into_subqueries */);
+	materialize->cdb_shield_child_from_rescans = (NIL != child_motions);
+	gpdb::ListFree(child_motions);
 
 	// cleanup
 	child_contexts->Release();
@@ -4831,8 +4763,6 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEProducerToSharedScan(
 
 	plan->lefttree = child_plan;
 	plan->qual = NIL;
-	SetParamIds(plan);
-
 	// cleanup
 	child_contexts->Release();
 
@@ -4924,8 +4854,6 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 
 	plan->qual = nullptr;
 
-	SetParamIds(plan);
-
 	// DON'T REMOVE, if current consumer need projection, then we can direct add it.
 	// we still keep the path of projection in consumer
 	
@@ -4989,8 +4917,6 @@ CTranslatorDXLToPlStmt::TranslateDXLSequence(
 		TranslateDXLProjList(project_list_dxlnode,
 							 nullptr,  // base table translation context
 							 child_contexts, output_context);
-
-	SetParamIds(plan);
 
 	// cleanup
 	child_contexts->Release();
@@ -5084,8 +5010,6 @@ CTranslatorDXLToPlStmt::TranslateDXLDynTblScan(
 	security_query_quals = gpdb::ListConcat(security_query_quals, query_quals);
 	plan->qual = security_query_quals;
 
-	SetParamIds(plan);
-
 	return plan;
 }
 
@@ -5170,8 +5094,6 @@ CTranslatorDXLToPlStmt::TranslateDXLDynIdxOnlyScan(
 
 	dyn_idx_only_scan->indexscan.indexqual = index_cond;
 
-	SetParamIds(plan);
-
 	return (Plan *) dyn_idx_only_scan;
 }
 
@@ -5250,8 +5172,6 @@ CTranslatorDXLToPlStmt::TranslateDXLDynIdxScan(
 
 	dyn_idx_only_scan->indexscan.indexqual = index_cond;
 	dyn_idx_only_scan->indexscan.indexqualorig = index_orig_cond;
-
-	SetParamIds(plan);
 
 	return (Plan *) dyn_idx_only_scan;
 }
@@ -5422,8 +5342,6 @@ CTranslatorDXLToPlStmt::TranslateDXLDynForeignScan(
 	// translate operator costs
 	TranslatePlanCosts(dyn_foreign_scan_dxlnode, plan);
 
-	SetParamIds(plan);
-
 	return plan;
 }
 
@@ -5579,8 +5497,6 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 	result_plan->lefttree = child_plan;
 
 	result_plan->targetlist = dml_target_list;
-	SetParamIds(result_plan);
-
 	if (m_cmd_type == CMD_UPDATE && isSplit)
 	{
 		Result *final_result = MakeNode(Result);
@@ -5591,8 +5507,6 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 		final_result_plan->targetlist = CreateDirectCopyTargetList(dml_target_list);
 		final_result->resconstantqual =
 			(Node *) gpdb::LAppend(NIL, gpdb::MakeBoolConst(true /*value*/, false /*isnull*/));
-
-		SetParamIds(final_result_plan);
 
 		result = final_result;
 		result_plan = final_result_plan;
@@ -5621,8 +5535,6 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 	plan->righttree = NULL;
 	plan->targetlist = NIL;
 	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
-
-	SetParamIds(plan);
 
 	if (m_is_tgt_tbl_distributed)
 	{
@@ -5869,8 +5781,6 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 	plan->lefttree = child_plan;
 	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
 
-	SetParamIds(plan);
-
 	// cleanup
 	child_contexts->Release();
 
@@ -5950,8 +5860,6 @@ CTranslatorDXLToPlStmt::TranslateDXLAssert(
 
 	GPOS_ASSERT(gpdb::ListLength(plan->qual) ==
 				gpdb::ListLength(assert_node->errmessage));
-	SetParamIds(plan);
-
 	// cleanup
 	child_contexts->Release();
 
@@ -6989,8 +6897,6 @@ CTranslatorDXLToPlStmt::TranslateDXLCtas(
 											 child_contexts, output_context);
 	SetVarTypMod(phy_ctas_dxlop, target_list);
 
-	SetParamIds(plan);
-
 	// cleanup
 	child_contexts->Release();
 
@@ -7013,8 +6919,6 @@ CTranslatorDXLToPlStmt::TranslateDXLCtas(
 	result_plan->lefttree = plan;
 
 	result_plan->targetlist = target_list;
-	SetParamIds(result_plan);
-
 	plan = (Plan *) result;
 
 	return (Plan *) plan;
@@ -7247,8 +7151,6 @@ CTranslatorDXLToPlStmt::TranslateDXLBitmapTblScan(
 	bitmap_tbl_scan->scan.plan.lefttree = TranslateDXLBitmapAccessPath(
 		bitmap_access_path_dxlnode, output_context, md_rel, table_descr,
 		&base_table_context, ctxt_translation_prev_siblings, bitmap_tbl_scan);
-	SetParamIds(plan);
-
 	if (is_dynamic)
 	{
 		return (Plan *) dscan;
@@ -7417,8 +7319,6 @@ CTranslatorDXLToPlStmt::TranslateDXLBitmapIndexProbe(
 	 * As of 8.4, the indexstrategy and indexsubtype fields are no longer
 	 * available or needed in IndexScan. Ignore them.
 	 */
-	SetParamIds(plan);
-
 	return plan;
 }
 
