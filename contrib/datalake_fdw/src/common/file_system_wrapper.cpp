@@ -50,7 +50,6 @@ struct DatalakeFileSystemData
 {
 	std::shared_ptr<arrow::fs::FileSystem> fs;
 	std::string root;
-	const DatalakeStorageBackend *backend;
 };
 
 struct DatalakeFileData
@@ -331,7 +330,6 @@ datalake_fs_open(const DatalakeLocation *location, const DlKeyValue *kv,
 
 						handle->fs = std::move(mounted->fs);
 						handle->root = std::move(mounted->root);
-						handle->backend = backend;
 						*fs_out = handle.release();
 						rc = DL_OK;
 					}
