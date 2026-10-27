@@ -562,6 +562,7 @@ static void ATExecSetTableSpaceNoStorage(Relation rel, Oid newTableSpace);
 static void ATExecSetRelOptions(Relation rel, List *defList,
 								AlterTableType operation,
 								bool *aoopt_changed,
+								Datum *newOptions_out,
 								Oid newAccessMethod,
 								LOCKMODE lockmode);
 static void ATExecEnableDisableTrigger(Relation rel, const char *trigname,
@@ -6427,7 +6428,7 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 			{
 				bool aoopt_changed = false;
 
-				ATExecSetRelOptions(rel, (List *) cmd->def, cmd->subtype, &aoopt_changed, tab->newAccessMethod, lockmode);
+				ATExecSetRelOptions(rel, (List *) cmd->def, cmd->subtype, &aoopt_changed, NULL, tab->newAccessMethod, lockmode);
 
 				/* 
 				 * When user sets the same access method as the existing one, the
@@ -6459,12 +6460,50 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 		case AT_ReplaceRelOptions:	/* replace entire option list */
 			{
 				bool 		aoopt_changed = false;
+				Datum		newOptions = (Datum) 0;
 
-				ATExecSetRelOptions(rel, (List *) cmd->def, cmd->subtype, &aoopt_changed, InvalidOid, lockmode);
+				ATExecSetRelOptions(rel, (List *) cmd->def, cmd->subtype,
+									&aoopt_changed, &newOptions, InvalidOid, lockmode);
 
 				/* Will rewrite table if there's a change to the AO reloptions. */
 				if (aoopt_changed)
 					tab->rewrite |= AT_REWRITE_ALTER_RELOPTS;
+
+				/*
+				 * A column with no ENCODING of its own only ever gets a codec
+				 * from the table-level default, so the rewrite the options
+				 * change triggers has to re-encode it with the new default
+				 * rather than just relabel pg_class.reloptions.  Columns
+				 * carrying an explicit override keep it, including one given
+				 * by an ALTER COLUMN ... SET ENCODING earlier in this same
+				 * command -- get_cols_for_new_reloption_defaults() sorts that
+				 * out by inspecting tab->new_crsds.
+				 *
+				 * GPDB_PORT: upstream reads the proposed options from
+				 * tab->newOptions, which cbdb's AlteredTableInfo does not
+				 * have -- ATExecSetRelOptions() writes pg_class itself -- so
+				 * they come from the out parameter added to it instead.
+				 * Upstream also handles a partitioned root here; cbdb cannot
+				 * reach that case, because partitioned_table_reloptions()
+				 * rejects AO storage options outright ("unrecognized
+				 * parameter \"compresstype\""), so that branch is left out.
+				 */
+				if (RelationIsAoCols(rel))
+				{
+					List	   *default_updates =
+						get_cols_for_new_reloption_defaults(rel, newOptions, tab->new_crsds);
+					ListCell   *lc2;
+
+					foreach(lc2, default_updates)
+					{
+						ColumnReferenceStorageDirective *c = lfirst(lc2);
+						bool		is_updated;
+
+						if (!tab->new_crsds)
+							tab->new_crsds = rel_get_column_encodings(rel);
+						tab->new_crsds = updateEncodingList(tab->new_crsds, c, &is_updated);
+					}
+				}
 			}
 			break;
 		case AT_EnableTrig:		/* ENABLE TRIGGER name */
@@ -17169,7 +17208,8 @@ ATPrepSetTableSpace(AlteredTableInfo *tab, Relation rel, const char *tablespacen
  */
 static void
 ATExecSetRelOptions(Relation rel, List *defList, AlterTableType operation,
-					bool *aoopt_changed, Oid newAccessMethod, LOCKMODE lockmode)
+					bool *aoopt_changed, Datum *newOptions_out,
+					Oid newAccessMethod, LOCKMODE lockmode)
 {
 	Oid			relid;
 	Relation	pgclass;
@@ -17246,6 +17286,13 @@ ATExecSetRelOptions(Relation rel, List *defList, AlterTableType operation,
 	newOptions = transformRelOptions(isnull ? (Datum) 0 : datum,
 									 defList, NULL, validnsps, false,
 									 operation == AT_ResetRelOptions);
+
+	/*
+	 * Hand the proposed options back: the AOCO caller needs them to work out
+	 * which columns were following the old table-level default.
+	 */
+	if (newOptions_out)
+		*newOptions_out = newOptions;
 
 	/* Validate */
 	switch (rel->rd_rel->relkind)

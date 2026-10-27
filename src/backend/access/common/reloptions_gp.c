@@ -1126,7 +1126,7 @@ setDefaultCompressionLevel(char *compresstype)
 		return 1;
 }
 
-void
+static void
 free_options_deep(relopt_value *options, int num_options)
 {
 	int			i;
@@ -1342,6 +1342,128 @@ default_column_encoding_clause(Relation rel)
 
 	/* keep the order in: compresstype, compresslevel, blocksize */
 	return list_make3(e1, e3, e2);
+}
+
+/*
+ * Does 'encoding' set compresstype/blocksize/compresslevel to the same
+ * values as 'reference'? Used to guess whether a column's stored encoding
+ * is just the table-level default rather than an explicit override.
+ */
+static bool
+encoding_clause_matches(List *encoding, List *reference)
+{
+	ListCell *lc;
+
+	foreach(lc, reference)
+	{
+		DefElem    *refel = (DefElem *) lfirst(lc);
+		DefElem    *matched = NULL;
+		ListCell   *lc2;
+
+		foreach(lc2, encoding)
+		{
+			DefElem *el = (DefElem *) lfirst(lc2);
+
+			if (pg_strcasecmp(el->defname, refel->defname) == 0)
+			{
+				matched = el;
+				break;
+			}
+		}
+
+		if (!matched || pg_strcasecmp(defGetString(matched), defGetString(refel)) != 0)
+			return false;
+	}
+
+	return true;
+}
+
+/*
+ * For an AOCO table whose table-level compresstype/compresslevel/blocksize
+ * are being changed by ALTER TABLE ... SET (...), decide which columns
+ * should be re-encoded to the new defaults once the resulting rewrite
+ * happens.
+ *
+ * A column that currently matches the table's OLD default encoding is
+ * assumed to never have had an explicit per-column ENCODING and is queued
+ * up here to receive the new default. A column whose stored encoding
+ * differs from the old default is assumed to carry an explicit override
+ * and is left alone. This mirrors what CREATE TABLE / ADD COLUMN already
+ * do when a column has no ENCODING clause of its own. Without this, the
+ * ALTER TABLE ... SET (...) rewrite paid for a full rewrite but every
+ * pre-existing column kept its old codec.
+ *
+ * This is a heuristic, not a stored fact: pg_attribute_encoding does not
+ * record whether a column's encoding came from the table default or from
+ * an explicit ENCODING that merely happens to equal it. A column declared
+ * with an explicit ENCODING identical to the table's default is therefore
+ * indistinguishable from an implicit one, and a later SET (...) will treat
+ * it as implicit and re-encode it. This matches CREATE TABLE / ADD COLUMN,
+ * which resolve the same way, but is worth knowing before relying on an
+ * explicit-but-matching ENCODING to "pin" a column against future SETs.
+ *
+ * 'current_new_crsds', if given, is the caller's (e.g. tab->new_crsds)
+ * in-progress list of per-column encoding directives for the same ALTER
+ * TABLE command. A column whose entry there has already been changed away
+ * from the OLD default (e.g. by an ALTER COLUMN ... SET ENCODING earlier
+ * in the same command) is excluded from the result, so its explicit new
+ * encoding isn't clobbered by the table-level default computed here.
+ *
+ * Must be called with 'rel' still reflecting the OLD reloptions/pg_appendonly
+ * row, since the OLD default is read live off 'rel'.
+ */
+List *
+get_cols_for_new_reloption_defaults(Relation rel, Datum newOptions,
+									 List *current_new_crsds)
+{
+	List	   *result = NIL;
+	List	   *old_encodings;
+	List	   *old_default;
+	List	   *new_default;
+	StdRdOptions *newopts;
+	ListCell   *lc;
+
+	if (!RelationIsAoCols(rel))
+		return NIL;
+
+	old_encodings = rel_get_column_encodings(rel);
+	if (old_encodings == NIL)
+		return NIL;
+
+	old_default = default_column_encoding_clause(rel);
+
+	newopts = (StdRdOptions *) default_reloptions(newOptions, true,
+												   RELOPT_KIND_APPENDOPTIMIZED);
+	new_default = list_make3(
+		makeDefElem("compresstype",
+					(Node *) makeString(pstrdup(newopts->compresstype[0] ?
+												 newopts->compresstype : "none")),
+					-1),
+		makeDefElem("compresslevel", (Node *) makeInteger(newopts->compresslevel), -1),
+		makeDefElem("blocksize", (Node *) makeInteger(newopts->blocksize), -1));
+
+	foreach(lc, old_encodings)
+	{
+		ColumnReferenceStorageDirective *c = (ColumnReferenceStorageDirective *) lfirst(lc);
+		ColumnReferenceStorageDirective *pending;
+
+		if (!encoding_clause_matches(c->encoding, old_default))
+			continue;
+
+		pending = current_new_crsds ? find_crsd(c->column, current_new_crsds) : NULL;
+		if (pending && !encoding_clause_matches(pending->encoding, old_default))
+			continue;
+
+		{
+			ColumnReferenceStorageDirective *n = makeNode(ColumnReferenceStorageDirective);
+
+			n->column = pstrdup(c->column);
+			n->encoding = copyObject(new_default);
+			result = lappend(result, n);
+		}
+	}
+
+	return result;
 }
 
 /*
