@@ -19,7 +19,7 @@
 -- m/.*ERROR:.*function cannot execute on a QE slice because it accesses relation.*/
 -- s/.*ERROR:.*/ERROR: error message might be different for CTE/
 --
--- m/.*ERROR:  query plan with multiple segworker groups is not supported.*/
+-- m/.*ERROR:  (spiexceptions\.FeatureNotSupported: )?query plan with multiple segworker groups is not supported.*/
 -- s/.*ERROR:.*/ERROR: error message might be different for CTE/
 --
 -- # This test file is included in the launcher script,
