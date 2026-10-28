@@ -45,6 +45,19 @@ begin
 end;
 $$ language plpgsql;
 
+-- Same, for EXPLAIN ANALYZE BUFFERS
+create or replace function get_explain_analyze_buffers_output(explain_query text) returns setof text as
+$$
+declare
+  explainrow text;
+begin
+  for explainrow in execute 'EXPLAIN (ANALYZE, BUFFERS) ' || explain_query
+  loop
+    return next explainrow;
+  end loop;
+end;
+$$ language plpgsql;
+
 -- Test explain wal option
 CREATE TABLE explainwal (id int4);
 
@@ -93,6 +106,29 @@ select
 CREATE TABLE explaintest (id int4);
 INSERT INTO explaintest SELECT generate_series(1, 10);
 ANALYZE explaintest;
+
+-- Exclude buffer usage reported for the planning stage. Check that buffer usage
+-- is reported for at least one executor node.
+WITH query_plan (et, line_number) AS
+(
+  SELECT *
+  FROM get_explain_analyze_buffers_output($$
+    SELECT * FROM explaintest;
+  $$) WITH ORDINALITY
+)
+SELECT EXISTS
+(
+  SELECT 1
+  FROM query_plan buffer_line
+  WHERE et LIKE '%Buffers:%'
+    AND NOT EXISTS
+    (
+      SELECT 1
+      FROM query_plan planning_line
+      WHERE btrim(planning_line.et) = 'Planning:'
+        AND planning_line.line_number < buffer_line.line_number
+    )
+) AS executor_buffers_reported;
 
 EXPLAIN ANALYZE SELECT * FROM explaintest;
 
