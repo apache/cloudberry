@@ -214,8 +214,6 @@ static void cdbexplain_collectSliceStats(PlanState *planstate,
 										 CdbExplain_SliceWorker *out_worker);
 static void cdbexplain_depositSliceStats(CdbExplain_StatHdr *hdr,
 										 CdbExplain_RecvStatCtx *recvstatctx);
-static void cdbexplain_bufferUsageAdd(BufferUsage *dst,
-									  const BufferUsage *add);
 static void cdbexplain_collectStatsFromNode(PlanState *planstate,
 											CdbExplain_SendStatCtx *ctx);
 static void cdbexplain_depositStatsToNode(PlanState *planstate,
@@ -956,26 +954,6 @@ cdbexplain_depStatAcc_saveText(CdbExplain_DepStatAcc *acc,
 	}
 }								/* cdbexplain_depStatAcc_saveText */
 
-static void
-cdbexplain_bufferUsageAdd(BufferUsage *dst, const BufferUsage *add)
-{
-	dst->shared_blks_hit += add->shared_blks_hit;
-	dst->shared_blks_read += add->shared_blks_read;
-	dst->shared_blks_dirtied += add->shared_blks_dirtied;
-	dst->shared_blks_written += add->shared_blks_written;
-	dst->local_blks_hit += add->local_blks_hit;
-	dst->local_blks_read += add->local_blks_read;
-	dst->local_blks_dirtied += add->local_blks_dirtied;
-	dst->local_blks_written += add->local_blks_written;
-	dst->temp_blks_read += add->temp_blks_read;
-	dst->temp_blks_written += add->temp_blks_written;
-	INSTR_TIME_ADD(dst->blk_read_time, add->blk_read_time);
-	INSTR_TIME_ADD(dst->blk_write_time, add->blk_write_time);
-	INSTR_TIME_ADD(dst->temp_blk_read_time, add->temp_blk_read_time);
-	INSTR_TIME_ADD(dst->temp_blk_write_time, add->temp_blk_write_time);
-}
-
-
 /*
  * cdbexplain_depositStatsToNode
  *
@@ -1087,7 +1065,7 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 		cdbexplain_depStatAcc_upd(&workmemwanted, rsi->workmemwanted, rsh, rsi, nsi);
 		cdbexplain_depStatAcc_upd(&totalWorkfileCreated, (rsi->workfileCreated ? 1 : 0), rsh, rsi, nsi);
 		cdbexplain_depStatAcc_upd(&totalPartTableScanned, rsi->numPartScanned, rsh, rsi, nsi);
-		cdbexplain_bufferUsageAdd(&bufusage, &rsi->bufusage);
+		BufferUsageAdd(&bufusage, &rsi->bufusage);
 		Assert(rsi->sortstats.sortMethod < NUM_SORT_METHOD);
 		Assert(rsi->sortstats.spaceType < NUM_SORT_SPACE_TYPE);
 		if (rsi->sortstats.sortMethod != SORT_TYPE_STILL_IN_PROGRESS)
