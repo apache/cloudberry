@@ -41,6 +41,18 @@ begin
   end loop;
 end;
 $$ language plpgsql;
+-- Same, for EXPLAIN ANALYZE BUFFERS
+create or replace function get_explain_analyze_buffers_output(explain_query text) returns setof text as
+$$
+declare
+  explainrow text;
+begin
+  for explainrow in execute 'EXPLAIN (ANALYZE, BUFFERS) ' || explain_query
+  loop
+    return next explainrow;
+  end loop;
+end;
+$$ language plpgsql;
 -- Test explain wal option
 CREATE TABLE explainwal (id int4);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
@@ -104,6 +116,33 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' a
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO explaintest SELECT generate_series(1, 10);
 ANALYZE explaintest;
+-- Exclude buffer usage reported for the planning stage. Check that buffer usage
+-- is reported for at least one executor node.
+WITH query_plan (et, line_number) AS
+(
+  SELECT *
+  FROM get_explain_analyze_buffers_output($$
+    SELECT * FROM explaintest;
+  $$) WITH ORDINALITY
+)
+SELECT EXISTS
+(
+  SELECT 1
+  FROM query_plan buffer_line
+  WHERE et LIKE '%Buffers:%'
+    AND NOT EXISTS
+    (
+      SELECT 1
+      FROM query_plan planning_line
+      WHERE btrim(planning_line.et) = 'Planning:'
+        AND planning_line.line_number < buffer_line.line_number
+    )
+) AS executor_buffers_reported;
+ executor_buffers_reported 
+---------------------------
+ t
+(1 row)
+
 EXPLAIN ANALYZE SELECT * FROM explaintest;
                                                         QUERY PLAN                                                        
 --------------------------------------------------------------------------------------------------------------------------
