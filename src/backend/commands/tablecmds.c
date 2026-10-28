@@ -6987,7 +6987,7 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 
 			if (tab->rewrite & AT_REWRITE_NEW_COLUMNS_ONLY)
 			{
-				table_relation_add_columns(OldHeap, tab->newvals, tab->constraints, tab->oldDesc);
+				table_relation_add_columns(OldHeap, tab->newvals, tab->oldDesc);
 				CommandCounterIncrement();
 			}
 			if (tab->rewrite & AT_REWRITE_REWRITE_COLUMNS_ONLY)
@@ -7002,7 +7002,9 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 				 * appended are left at the zero the slot was allocated with --
 				 * and marked not-null, so a CHECK over one of them reads a
 				 * datum of 0.  For "ADD COLUMN b text ... CHECK (length(b) >
-				 * 0)" that is a NULL pointer handed to the detoaster.
+				 * 0)" that is a NULL pointer handed to the detoaster.  Leave
+				 * the checking to the pass below, which reads whole tuples
+				 * back off disk.
 				 */
 				table_relation_rewrite_columns(OldHeap, tab->newvals,
 											   (tab->rewrite & AT_REWRITE_NEW_COLUMNS_ONLY) ?
@@ -7010,6 +7012,22 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 											   tab->oldDesc);
 			}
 			heap_close(OldHeap, NoLock);
+
+			/*
+			 * ADD COLUMN only writes the new columns; it never reads the
+			 * existing ones, so the access method cannot evaluate a CHECK that
+			 * references them.  Run the same validate-only scan the ordinary
+			 * no-rewrite path below performs, which reads the tuples as they
+			 * now stand on disk.  Passing InvalidOid is what makes it a
+			 * verification pass rather than a rebuild.
+			 *
+			 * This covers a combined ADD COLUMN + ALTER COLUMN TYPE as well,
+			 * the rewrite half having deferred its constraints to here.
+			 */
+			if (tab->rewrite & AT_REWRITE_NEW_COLUMNS_ONLY &&
+				(tab->constraints != NIL || tab->verify_new_notnull ||
+				 tab->partition_constraint != NULL))
+				ATRewriteTable(tab, InvalidOid, lockmode);
 			continue;
 		}
 		heap_close(OldHeap, NoLock);
@@ -7455,10 +7473,18 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode)
 		 * can't be evaluated.  Note that even when the tuple layout is the
 		 * same and no rewrite is required, the tupDescs might not be
 		 * (consider ADD COLUMN without a default).
+		 *
+		 * This tested tab->rewrite, under an Assert() that newrel was
+		 * non-NULL.  "OIDNewHeap is InvalidOid if we don't need to rewrite" is
+		 * this function's contract, so newrel is what says whether a rewrite is
+		 * happening; tab->rewrite only agreed with it because every rewrite
+		 * reason came with a new heap.  The AOCO column-only paths break that:
+		 * they ask for a verification pass over a table they have already
+		 * updated in place, and so arrive with a rewrite reason set and no new
+		 * heap.
 		 */
-		if (tab->rewrite)
+		if (newrel)
 		{
-			Assert(newrel != NULL);
 			oldslot = MakeSingleTupleTableSlot(oldTupDesc,
 											   table_slot_callbacks(oldrel));
 			newslot = MakeSingleTupleTableSlot(newTupDesc,
@@ -7512,7 +7538,8 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode)
 		{
 			TupleTableSlot *insertslot;
 
-			if (tab->rewrite > 0)
+			/* See the newrel comment above */
+			if (newrel)
 			{
 				/* Extract data from old tuple */
 				slot_getallattrs(oldslot);

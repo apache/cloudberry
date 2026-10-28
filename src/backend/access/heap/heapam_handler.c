@@ -706,7 +706,7 @@ heapam_relation_copy_data(Relation rel, const RelFileLocator *newrlocator)
 }
 
 static void
-heapam_relation_add_columns(Relation rel, List *newvals, List *constraints, TupleDesc oldDesc)
+heapam_relation_add_columns(Relation rel, List *newvals, TupleDesc oldDesc)
 {
 	elog(ERROR, "add columns-only not implemented for HEAP tables");
 }

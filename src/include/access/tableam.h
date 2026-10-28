@@ -709,7 +709,6 @@ typedef struct TableAmRoutine
 	/* See table_relation_add_columns(). */
 	void 		(*relation_add_columns) (Relation rel,
 									List *newvals,
-									List *constraints,
 									TupleDesc oldDesc);
 
 	/* See table_relation_rewrite_columns(). */
@@ -1919,7 +1918,7 @@ table_relation_copy_data(Relation rel, const RelFileLocator *newrlocator)
  * otherwise crash the backend instead of reporting an unsupported operation.
  */
 static inline void
-table_relation_add_columns(Relation rel, List *newvals, List *constraints, TupleDesc oldDesc)
+table_relation_add_columns(Relation rel, List *newvals, TupleDesc oldDesc)
 {
 	if (rel->rd_tableam->relation_add_columns == NULL)
 		ereport(ERROR,
@@ -1928,7 +1927,7 @@ table_relation_add_columns(Relation rel, List *newvals, List *constraints, Tuple
 						RelationGetRelationName(rel)),
 				 errdetail("Its access method does not support adding columns without rewriting the relation.")));
 
-	rel->rd_tableam->relation_add_columns(rel, newvals, constraints, oldDesc);
+	rel->rd_tableam->relation_add_columns(rel, newvals, oldDesc);
 }
 
 static inline void
