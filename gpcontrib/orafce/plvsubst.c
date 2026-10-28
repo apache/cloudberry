@@ -1,16 +1,16 @@
 /*
-  This code implements one part of functonality of
-  free available library PL/Vision. Please look www.quest.com
-
-  Original author: Steven Feuerstein, 1996 - 2002
-  PostgreSQL implementation author: Pavel Stehule, 2006-2023
-
-  This module is under BSD Licence
-
-  History:
-    1.0. first public version 22. September 2006
-
-*/
+ * This code implements one part of functonality of
+ * free available library PL/Vision. Please look www.quest.com
+ *
+ * Original author: Steven Feuerstein, 1996 - 2002
+ * PostgreSQL implementation author: Pavel Stehule, 2006-2026
+ *
+ * This module is under BSD Licence
+ *
+ * History:
+ * 1.0. first public version 22. September 2006
+ *
+ */
 
 #include "postgres.h"
 #include "utils/builtins.h"
@@ -40,7 +40,7 @@ PG_FUNCTION_INFO_V1(plvsubst_subst);
 #define C_SUBST  "%s"
 
 
-text *c_subst = NULL;
+static text *c_subst = NULL;
 
 static void
 init_c_subst()
@@ -68,30 +68,42 @@ set_c_subst(text *sc)
 	MemoryContextSwitchTo(oldctx);
 }
 
-static text*
+static text *
 plvsubst_string(text *template_in, ArrayType *vals_in, text *c_subst, FunctionCallInfo fcinfo)
 {
-	ArrayType	   *v = vals_in;
-	int				nitems,
-					ndims;
-	char		   *p;
-	int16			typlen;
-	bool			typbyval;
-	char			typalign;
-	char			typdelim;
-	Oid				typelem;
-	Oid				typiofunc;
-	FmgrInfo		proc;
-	int				i = 0, items = 0;
-	StringInfo		sinfo;
-	const char	   *template_str;
-	int				template_len;
-	char		   *sizes;
-	int			   *positions;
-	int				subst_mb_len;
-	int				subst_len;
-	const bits8	   *bitmap;
-	int				bitmask;
+	ArrayType  *v = vals_in;
+	int			nitems,
+				ndims;
+	char	   *p;
+	int16		typlen;
+	bool		typbyval;
+	char		typalign;
+	char		typdelim;
+	Oid			typelem;
+	Oid			typiofunc;
+	FmgrInfo	proc;
+	int			i = 0,
+				items = 0;
+	StringInfo	sinfo;
+	const char *template_str;
+	int			template_len;
+	int			template_blen;
+	char	   *sizes;
+	int		   *positions;
+	int			subst_len;
+	int			subst_blen;
+
+#if PG_VERSION_NUM >= 190000
+
+	const uint8 *bitmap;
+
+#else
+
+	const bits8 *bitmap;
+
+#endif
+
+	int			bitmask;
 
 	if (v != NULL && (ndims = ARR_NDIM(v)) > 0)
 	{
@@ -108,9 +120,9 @@ plvsubst_string(text *template_in, ArrayType *vals_in, text *c_subst, FunctionCa
 		nitems = ArrayGetNItems(ndims, dims);
 		bitmap = ARR_NULLBITMAP(v);
 		get_type_io_data(ARR_ELEMTYPE(v), IOFunc_output,
-							&typlen, &typbyval,
-							&typalign, &typdelim,
-							&typelem, &typiofunc);
+						 &typlen, &typbyval,
+						 &typalign, &typdelim,
+						 &typelem, &typiofunc);
 		fmgr_info_cxt(typiofunc, &proc, fcinfo->flinfo->fn_mcxt);
 	}
 	else
@@ -120,32 +132,34 @@ plvsubst_string(text *template_in, ArrayType *vals_in, text *c_subst, FunctionCa
 		bitmap = NULL;
 	}
 
-	template_str = VARDATA(template_in);
+	template_str = VARDATA_ANY(template_in);
 	template_len = ora_mb_strlen(template_in, &sizes, &positions);
-	subst_mb_len = ora_mb_strlen1(c_subst);
-	subst_len = VARSIZE_ANY_EXHDR(c_subst);
+	template_blen = VARSIZE_ANY_EXHDR(template_in);
+	subst_len = ora_text_mbstrlen(c_subst);
+	subst_blen = VARSIZE_ANY_EXHDR(c_subst);
 	sinfo = makeStringInfo();
 
 	bitmask = 1;
 	for (i = 0; i < template_len; i++)
 	{
-		if (strncmp(&template_str[positions[i]], VARDATA(c_subst), subst_len) == 0)
+		if (template_blen - positions[i] >= subst_blen &&
+			memcmp(&template_str[positions[i]], VARDATA_ANY(c_subst), subst_blen) == 0)
 		{
 			if (items++ < nitems)
 			{
-				char     *value;
+				char	   *value;
 
 				if (bitmap && (*bitmap & bitmask) == 0)
 					value = pstrdup("NULL");
 				else
 				{
-					Datum    itemvalue;
+					Datum		itemvalue;
 
 					itemvalue = fetch_att(p, typbyval, typlen);
 					value = DatumGetCString(FunctionCall3(&proc,
-								itemvalue,
-								ObjectIdGetDatum(typelem),
-								Int32GetDatum(-1)));
+														  itemvalue,
+														  ObjectIdGetDatum(typelem),
+														  Int32GetDatum(-1)));
 
 					p = att_addlength_pointer(p, typlen, p);
 					p = (char *) att_align_nominal(p, typalign);
@@ -168,7 +182,7 @@ plvsubst_string(text *template_in, ArrayType *vals_in, text *c_subst, FunctionCa
 						(errcode(ERRCODE_SYNTAX_ERROR),
 						 errmsg("too few parameters specified for template string")));
 
-			i += subst_mb_len - 1;
+			i += subst_len - 1;
 		}
 		else
 			appendBinaryStringInfo(sinfo, &template_str[positions[i]], sizes[i]);
@@ -198,18 +212,9 @@ plvsubst_string_string(PG_FUNCTION_ARGS)
 	Datum		r;
 	ArrayType  *array;
 
-#if PG_VERSION_NUM >= 120000
-
 	LOCAL_FCINFO(locfcinfo, 2);
 
-#else
-
-	FunctionCallInfoData locfcinfo_data;
-	FunctionCallInfo locfcinfo = &locfcinfo_data;
-
-#endif
-
-	Oid		collation = PG_GET_COLLATION();
+	Oid			collation = PG_GET_COLLATION();
 
 	init_c_subst();
 
@@ -222,21 +227,10 @@ plvsubst_string_string(PG_FUNCTION_ARGS)
 
 	InitFunctionCallInfoData(*locfcinfo, fcinfo->flinfo, 2, collation, NULL, NULL);
 
-#if PG_VERSION_NUM >= 120000
-
 	locfcinfo->args[0].value = PG_GETARG_DATUM(1);
 	locfcinfo->args[1].value = PG_GETARG_IF_EXISTS(2, DATUM, CStringGetTextDatum(","));
 	locfcinfo->args[0].isnull = false;
 	locfcinfo->args[1].isnull = false;
-
-#else
-
-	locfcinfo->arg[0] = PG_GETARG_DATUM(1);
-	locfcinfo->arg[1] = PG_GETARG_IF_EXISTS(2, DATUM, CStringGetTextDatum(","));
-	locfcinfo->argnull[0] = false;
-	locfcinfo->argnull[1] = false;
-
-#endif
 
 	r = text_to_array(locfcinfo);
 

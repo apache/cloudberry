@@ -27,6 +27,7 @@
 #include "miscadmin.h"
 #include "port.h"
 #include "storage/fd.h"
+#include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/memutils.h"
 
@@ -108,22 +109,96 @@ PG_FUNCTION_INFO_V1(utl_file_tmpdir);
 
 typedef struct FileSlot
 {
-	FILE   *file;
-	int		max_linesize;
-	int		encoding;
-	int32	id;
+	FILE	   *file;
+	int			max_linesize;
+	int			encoding;
+	int32		id;
 } FileSlot;
 
-#define MAX_SLOTS		50			/* Oracle 10g supports 50 files */
-#define INVALID_SLOTID	0			/* invalid slot id */
+#define MAX_SLOTS		50		/* Oracle 10g supports 50 files */
+#define INVALID_SLOTID	0		/* invalid slot id */
 
-static FileSlot	slots[MAX_SLOTS];	/* initilaized with zeros */
-static int32	slotid = 0;			/* next slot id */
+static FileSlot slots[MAX_SLOTS];	/* initilaized with zeros */
+static int32 slotid = 0;		/* next slot id */
 
 static void check_secure_locality(const char *path);
 static char *get_safe_path(text *location, text *filename);
-static int copy_text_file(FILE *srcfile, FILE *dstfile,
-						  int start_line, int end_line);
+static int	copy_text_file(FILE *srcfile, FILE *dstfile,
+						   int start_line, int end_line);
+
+static int	orafce_umask = 077;
+char	   *orafce_umask_str = NULL;
+
+static Oid	orafce_set_umask_roleid = InvalidOid;
+
+void
+orafce_umask_assign_hook(const char *newvalue, void *extra)
+{
+	orafce_umask = *((int *) extra);
+}
+
+bool
+orafce_umask_check_hook(char **newval, void **extra, GucSource source)
+{
+	int			digits = 0;
+	char	   *ptr = *newval;
+	int		   *myextra;
+
+	if (orafce_initialized && IsNormalProcessingMode() && IsTransactionState())
+	{
+		if (!superuser())
+		{
+			if (!OidIsValid(orafce_set_umask_roleid))
+				orafce_set_umask_roleid = get_role_oid("orafce_set_umask", false);
+
+			if (!has_privs_of_role(GetUserId(), orafce_set_umask_roleid))
+			{
+				GUC_check_errcode(ERRCODE_INSUFFICIENT_PRIVILEGE);
+				GUC_check_errmsg("permission denied to set \"orafce.umask\"");
+				GUC_check_errdetail("Only roles with privileges of the \"orafce_set_umask\" can set \"orafce.umask\".");
+
+				return false;
+			}
+		}
+	}
+
+	while (*ptr)
+	{
+		if (*ptr < '0' || *ptr > '7')
+		{
+			GUC_check_errdetail("invalid octal digit");
+			return false;
+		}
+
+		if (digits > 3)
+		{
+			GUC_check_errdetail("number is too big (only four digits are allowed");
+			return false;
+		}
+
+		ptr++;
+		digits++;
+	}
+
+#if PG_VERSION_NUM >=  160000
+
+	myextra = (int *) guc_malloc(LOG, sizeof(int));
+
+#else
+
+	myextra = (int *) malloc(sizeof(int));
+
+#endif
+
+	if (!myextra)
+		return false;
+
+	*myextra = (int) strtol(*newval, NULL, 8);
+	*extra = (void *) myextra;
+
+	return true;
+}
+
 
 /*
  * get_descriptor(FILE *file) find any free slot for FILE pointer.
@@ -133,7 +208,7 @@ static int copy_text_file(FILE *srcfile, FILE *dstfile,
 static int
 get_descriptor(FILE *file, int max_linesize, int encoding)
 {
-	int i;
+	int			i;
 
 	for (i = 0; i < MAX_SLOTS; i++)
 	{
@@ -141,7 +216,7 @@ get_descriptor(FILE *file, int max_linesize, int encoding)
 		{
 			slots[i].id = ++slotid;
 			if (slots[i].id == INVALID_SLOTID)
-				slots[i].id = ++slotid;	/* skip INVALID_SLOTID */
+				slots[i].id = ++slotid; /* skip INVALID_SLOTID */
 			slots[i].file = file;
 			slots[i].max_linesize = max_linesize;
 			slots[i].encoding = encoding;
@@ -156,7 +231,7 @@ get_descriptor(FILE *file, int max_linesize, int encoding)
 static FILE *
 get_stream(int d, size_t *max_linesize, int *encoding)
 {
-	int i;
+	int			i;
 
 	if (d == INVALID_SLOTID)
 		INVALID_FILEHANDLE_EXCEPTION();
@@ -174,10 +249,17 @@ get_stream(int d, size_t *max_linesize, int *encoding)
 	}
 
 	INVALID_FILEHANDLE_EXCEPTION();
-	return NULL;	/* keep compiler quiet */
+	return NULL;				/* keep compiler quiet */
 }
 
-static void
+/*
+ * Postgres 13 doesn't support pg_noreturn
+ */
+#ifndef pg_noreturn
+#define pg_noreturn
+#endif
+
+pg_noreturn static void
 IO_EXCEPTION(void)
 {
 	switch (errno)
@@ -203,11 +285,94 @@ IO_EXCEPTION(void)
  */
 #ifdef WIN32
 
+#if PG_VERSION_NUM >= 190000
+
+/*
+ * char2wchar --- convert multibyte characters to wide characters
+ *
+ * This has almost the API of mbstowcs_l(), except that *from need not be
+ * null-terminated; instead, the number of input bytes is specified as
+ * fromlen.  Also, we ereport() rather than returning -1 for invalid
+ * input encoding.  tolen is the maximum number of wchar_t's to store at *to.
+ * The output will be zero-terminated iff there is room.
+ */
+static size_t
+char2wchar(wchar_t *to, size_t tolen, const char *from, size_t fromlen,
+	   locale_t loc)
+{
+  size_t		result;
+
+  if (tolen == 0)
+	return 0;
+
+  /* See WIN32 "Unicode" comment above */
+  if (GetDatabaseEncoding() == PG_UTF8)
+  {
+	/* Win32 API does not work for zero-length input */
+	if (fromlen == 0)
+	  result = 0;
+	else
+	{
+	  result = MultiByteToWideChar(CP_UTF8, 0, from, fromlen, to, tolen - 1);
+	  /* A zero return is failure */
+	  if (result == 0)
+		result = -1;
+	}
+
+	if (result != -1)
+	{
+	  Assert(result < tolen);
+	  /* Append trailing null wchar (MultiByteToWideChar() does not) */
+	  to[result] = 0;
+	}
+  }
+  else
+  {
+	/* mbstowcs requires ending '\0' */
+	char	   *str = pnstrdup(from, fromlen);
+
+	if (loc == (locale_t) 0)
+	{
+	  /* Use mbstowcs directly for the default locale */
+	  result = mbstowcs(to, str, tolen);
+	}
+	else
+	{
+	  /* Use mbstowcs_l for nondefault locales */
+	  result = _mbstowcs_l(to, str, tolen, loc);
+	}
+
+	pfree(str);
+  }
+
+  if (result == -1)
+  {
+	/*
+	 * Invalid multibyte character encountered.  We try to give a useful
+	 * error message by letting pg_verifymbstr check the string.  But it's
+	 * possible that the string is OK to us, and not OK to mbstowcs ---
+	 * this suggests that the LC_CTYPE locale is different from the
+	 * database encoding.  Give a generic error message if pg_verifymbstr
+	 * can't find anything wrong.
+	 */
+	pg_verifymbstr(from, fromlen, false);	/* might not return */
+	/* but if it does ... */
+	ereport(ERROR,
+		(errcode(ERRCODE_CHARACTER_NOT_IN_REPERTOIRE),
+		 errmsg("invalid multibyte character for locale"),
+		 errhint("The server's LC_CTYPE locale is probably incompatible with the database encoding.")));
+  }
+
+  return result;
+}
+
+#endif
+
 static wchar_t *
 to_wchar(const char *str)
 {
 	size_t		nbytes;
-	wchar_t	   *buff;
+	wchar_t    *buff;
 
 	nbytes = strlen(str);
 
@@ -249,6 +414,7 @@ utl_file_fopen(PG_FUNCTION_ARGS)
 	FILE	   *file;
 	char	   *fullname;
 	int			d;
+	mode_t		oldmask;
 
 	NOT_NULL_ARG(0);
 	NOT_NULL_ARG(1);
@@ -265,19 +431,20 @@ utl_file_fopen(PG_FUNCTION_ARGS)
 	if (PG_NARGS() > 4 && !PG_ARGISNULL(4))
 	{
 		const char *encname = NameStr(*PG_GETARG_NAME(4));
+
 		encoding = pg_char_to_encoding(encname);
 		if (encoding < 0)
 			ereport(ERROR,
-				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("invalid encoding name \"%s\"", encname)));
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("invalid encoding name \"%s\"", encname)));
 	}
 	else
 		encoding = GetDatabaseEncoding();
 
-	if (VARSIZE(open_mode) - VARHDRSZ != 1)
+	if (VARSIZE_ANY_EXHDR(open_mode) != 1)
 		CUSTOM_EXCEPTION(INVALID_MODE, "open mode is different than [R,W,A]");
 
-	switch (*((char*)VARDATA(open_mode)))
+	switch (*((char *) VARDATA_ANY(open_mode)))
 	{
 		case 'a':
 		case 'A':
@@ -307,6 +474,8 @@ utl_file_fopen(PG_FUNCTION_ARGS)
 	 * for oracle compatibility.
 	 */
 
+	oldmask = umask((mode_t) orafce_umask);
+
 #ifndef WIN32
 
 	file = fopen(fullname, mode);
@@ -315,8 +484,8 @@ utl_file_fopen(PG_FUNCTION_ARGS)
 
 	if (pg_database_encoding_max_length() > 1)
 	{
-		wchar_t	   *_fullname = to_wchar(fullname);
-		wchar_t	   *_mode = to_wchar(mode);
+		wchar_t    *_fullname = to_wchar(fullname);
+		wchar_t    *_mode = to_wchar(mode);
 
 		file = _wfopen(_fullname, _mode);
 
@@ -328,6 +497,8 @@ utl_file_fopen(PG_FUNCTION_ARGS)
 
 #endif
 
+	umask(oldmask);
+
 	if (!file)
 		IO_EXCEPTION();
 
@@ -336,10 +507,10 @@ utl_file_fopen(PG_FUNCTION_ARGS)
 	{
 		fclose(file);
 		ereport(ERROR,
-		    (errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-		     errmsg("program limit exceeded"),
-		     errdetail("Too many files opened concurrently"),
-		     errhint("You can only open a maximum of ten files for each session")));
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				 errmsg("program limit exceeded"),
+				 errdetail("Too many files opened concurrently"),
+				 errhint("You can only open a maximum of ten files for each session")));
 	}
 
 	PG_RETURN_INT32(d);
@@ -350,8 +521,8 @@ utl_file_is_open(PG_FUNCTION_ARGS)
 {
 	if (!PG_ARGISNULL(0))
 	{
-		int	i;
-		int	d = PG_GETARG_INT32(0);
+		int			i;
+		int			d = PG_GETARG_INT32(0);
 
 		for (i = 0; i < MAX_SLOTS; i++)
 		{
@@ -372,12 +543,12 @@ utl_file_is_open(PG_FUNCTION_ARGS)
 static text *
 get_line(FILE *f, size_t max_linesize, int encoding, bool *iseof)
 {
-	int c;
-	char *buffer = NULL;
-	char *bpt;
-	size_t csize = 0;
-	text *result = NULL;
-	bool eof = true;
+	int			c;
+	char	   *buffer = NULL;
+	char	   *bpt;
+	size_t		csize = 0;
+	text	   *result = NULL;
+	bool		eof = true;
 
 	buffer = palloc(max_linesize + 2);
 	bpt = buffer;
@@ -386,13 +557,13 @@ get_line(FILE *f, size_t max_linesize, int encoding, bool *iseof)
 
 	while (csize < max_linesize && (c = fgetc(f)) != EOF)
 	{
-		eof = false; 	/* I was able read one char */
+		eof = false;			/* I was able read one char */
 
-		if (c == '\r')  /* lookin ahead \n */
+		if (c == '\r')			/* lookin ahead \n */
 		{
 			c = fgetc(f);
 			if (c == EOF)
-				break;  /* last char */
+				break;			/* last char */
 
 			if (c != '\n')
 				ungetc(c, f);
@@ -408,12 +579,12 @@ get_line(FILE *f, size_t max_linesize, int encoding, bool *iseof)
 
 	if (!eof)
 	{
-		char   *decoded;
+		char	   *decoded;
 		size_t		len;
 
 		pg_verify_mbstr(encoding, buffer, size2int(csize), false);
 		decoded = (char *) pg_do_encoding_conversion((unsigned char *) buffer,
-									 size2int(csize), encoding, GetDatabaseEncoding());
+													 size2int(csize), encoding, GetDatabaseEncoding());
 		len = (decoded == buffer ? csize : strlen(decoded));
 		result = palloc(len + VARHDRSZ);
 		memcpy(VARDATA(result), decoded, len);
@@ -457,11 +628,11 @@ get_line(FILE *f, size_t max_linesize, int encoding, bool *iseof)
 Datum
 utl_file_get_line(PG_FUNCTION_ARGS)
 {
-	size_t	max_linesize = 0;	/* keep compiler quiet */
-	int		encoding = 0;		/* keep compiler quiet */
-	FILE   *f;
-	text   *result;
-	bool	iseof;
+	size_t		max_linesize = 0;	/* keep compiler quiet */
+	int			encoding = 0;	/* keep compiler quiet */
+	FILE	   *f;
+	text	   *result;
+	bool		iseof;
 
 	CHECK_FILE_HANDLE();
 	f = get_stream(PG_GETARG_INT32(0), &max_linesize, &encoding);
@@ -469,7 +640,8 @@ utl_file_get_line(PG_FUNCTION_ARGS)
 	/* 'len' overwrites max_linesize, but must be smaller than max_linesize */
 	if (PG_NARGS() > 1 && !PG_ARGISNULL(1))
 	{
-		size_t	len = (size_t) PG_GETARG_INT32(1);
+		size_t		len = (size_t) PG_GETARG_INT32(1);
+
 		CHECK_LINESIZE(len);
 		if (max_linesize > len)
 			max_linesize = len;
@@ -478,9 +650,9 @@ utl_file_get_line(PG_FUNCTION_ARGS)
 	result = get_line(f, max_linesize, encoding, &iseof);
 
 	if (iseof)
-	    	ereport(ERROR,
+		ereport(ERROR,
 				(errcode(ERRCODE_NO_DATA_FOUND),
-		    		 errmsg("no data found")));
+				 errmsg("no data found")));
 
 	PG_RETURN_TEXT_P(result);
 }
@@ -498,11 +670,11 @@ utl_file_get_line(PG_FUNCTION_ARGS)
 Datum
 utl_file_get_nextline(PG_FUNCTION_ARGS)
 {
-	size_t	max_linesize = 0;		/* keep compiler quiet */
-	int		encoding = 0;			/* keep compiler quiet */
-	FILE   *f;
-	text   *result;
-	bool	iseof;
+	size_t		max_linesize = 0;	/* keep compiler quiet */
+	int			encoding = 0;	/* keep compiler quiet */
+	FILE	   *f;
+	text	   *result;
+	bool		iseof;
 
 	CHECK_FILE_HANDLE();
 	f = get_stream(PG_GETARG_INT32(0), &max_linesize, &encoding);
@@ -558,7 +730,7 @@ encode_text(int encoding, text *t, size_t *length)
 	char	   *encoded;
 
 	encoded = (char *) pg_do_encoding_conversion((unsigned char *) src,
-					VARSIZE_ANY_EXHDR(t), GetDatabaseEncoding(), encoding);
+												 VARSIZE_ANY_EXHDR(t), GetDatabaseEncoding(), encoding);
 
 	*length = (src == encoded ? VARSIZE_ANY_EXHDR(t) : strlen(encoded));
 	return encoded;
@@ -570,7 +742,7 @@ do_write(PG_FUNCTION_ARGS, int n, FILE *f, size_t max_linesize, int encoding)
 {
 	text	   *arg = PG_GETARG_TEXT_P(n);
 	char	   *str;
-	size_t			len;
+	size_t		len;
 
 	str = encode_text(encoding, arg, &len);
 	CHECK_LENGTH(len);
@@ -578,7 +750,7 @@ do_write(PG_FUNCTION_ARGS, int n, FILE *f, size_t max_linesize, int encoding)
 	if (fwrite(str, 1, len, f) != len)
 		CHECK_ERRNO_PUT();
 
-	if (VARDATA(arg) != str)
+	if (VARDATA_ANY(arg) != str)
 		pfree(str);
 	PG_FREE_IF_COPY(arg, n);
 
@@ -588,9 +760,9 @@ do_write(PG_FUNCTION_ARGS, int n, FILE *f, size_t max_linesize, int encoding)
 static FILE *
 do_put(PG_FUNCTION_ARGS)
 {
-	FILE   *f;
-	size_t	max_linesize = 0;		/* keep compiler quiet */
-	int		encoding = 0;			/* keep compiler quiet */
+	FILE	   *f;
+	size_t		max_linesize = 0;	/* keep compiler quiet */
+	int			encoding = 0;	/* keep compiler quiet */
 
 	CHECK_FILE_HANDLE();
 	f = get_stream(PG_GETARG_INT32(0), &max_linesize, &encoding);
@@ -610,15 +782,16 @@ utl_file_put(PG_FUNCTION_ARGS)
 static void
 do_new_line(FILE *f, int lines)
 {
-	int	i;
+	int			i;
+
 	for (i = 0; i < lines; i++)
 	{
 #ifndef WIN32
 		if (fputc('\n', f) == EOF)
-		    CHECK_ERRNO_PUT();
+			CHECK_ERRNO_PUT();
 #else
 		if (fputs("\r\n", f) == EOF)
-		    CHECK_ERRNO_PUT();
+			CHECK_ERRNO_PUT();
 #endif
 	}
 }
@@ -626,8 +799,8 @@ do_new_line(FILE *f, int lines)
 Datum
 utl_file_put_line(PG_FUNCTION_ARGS)
 {
-	FILE   *f;
-	bool	autoflush;
+	FILE	   *f;
+	bool		autoflush;
 
 	f = do_put(fcinfo);
 
@@ -644,8 +817,8 @@ utl_file_put_line(PG_FUNCTION_ARGS)
 Datum
 utl_file_new_line(PG_FUNCTION_ARGS)
 {
-	FILE   *f;
-	int		lines;
+	FILE	   *f;
+	int			lines;
 
 	CHECK_FILE_HANDLE();
 	f = get_stream(PG_GETARG_INT32(0), NULL, NULL);
@@ -674,14 +847,14 @@ utl_file_new_line(PG_FUNCTION_ARGS)
 Datum
 utl_file_putf(PG_FUNCTION_ARGS)
 {
-	FILE   *f;
-	char   *format;
-	size_t	max_linesize;
-	int		encoding;
-	size_t	format_length;
-	char   *fpt;
-	int		cur_par = 0;
-	size_t	cur_len = 0;
+	FILE	   *f;
+	char	   *format;
+	size_t		max_linesize;
+	int			encoding;
+	size_t		format_length;
+	char	   *fpt;
+	int			cur_par = 0;
+	size_t		cur_len = 0;
 
 	CHECK_FILE_HANDLE();
 	f = get_stream(PG_GETARG_INT32(0), &max_linesize, &encoding);
@@ -705,7 +878,8 @@ utl_file_putf(PG_FUNCTION_ARGS)
 			CHECK_LENGTH(++cur_len);
 			if (fputc('\n', f) == EOF)
 				CHECK_ERRNO_PUT();
-			fpt++; format_length--;
+			fpt++;
+			format_length--;
 			continue;
 		}
 		if (fpt[0] == '%')
@@ -720,7 +894,8 @@ utl_file_putf(PG_FUNCTION_ARGS)
 			{
 				cur_len += do_write(fcinfo, cur_par + 1, f, max_linesize - cur_len, encoding);
 			}
-			fpt++; format_length--;
+			fpt++;
+			format_length--;
 			continue;
 		}
 		CHECK_LENGTH(++cur_len);
@@ -744,7 +919,7 @@ utl_file_putf(PG_FUNCTION_ARGS)
 Datum
 utl_file_fflush(PG_FUNCTION_ARGS)
 {
-	FILE *f;
+	FILE	   *f;
 
 	CHECK_FILE_HANDLE();
 	f = get_stream(PG_GETARG_INT32(0), NULL, NULL);
@@ -768,22 +943,36 @@ utl_file_fflush(PG_FUNCTION_ARGS)
 Datum
 utl_file_fclose(PG_FUNCTION_ARGS)
 {
-	int i;
-	int	d = PG_GETARG_INT32(0);
+	int			i;
+	int			d;
+
+	CHECK_FILE_HANDLE();
+	d = PG_GETARG_INT32(0);
+
+	/*
+	 * A free slot stores the invalid slot id, so the loop below would report
+	 * success for a handle that was never open.
+	 */
+	if (d == INVALID_SLOTID)
+		INVALID_FILEHANDLE_EXCEPTION();
 
 	for (i = 0; i < MAX_SLOTS; i++)
 	{
 		if (slots[i].id == d)
 		{
-			if (slots[i].file && fclose(slots[i].file) != 0)
+			FILE	   *f = slots[i].file;
+
+			slots[i].file = NULL;
+			slots[i].id = INVALID_SLOTID;
+
+			if (f && fclose(f) != 0)
 			{
 				if (errno == EBADF)
 					CUSTOM_EXCEPTION(INVALID_FILEHANDLE, "File is not an opened");
 				else
 					STRERROR_EXCEPTION(WRITE_ERROR);
 			}
-			slots[i].file = NULL;
-			slots[i].id = INVALID_SLOTID;
+
 			PG_RETURN_NULL();
 		}
 	}
@@ -803,21 +992,24 @@ utl_file_fclose(PG_FUNCTION_ARGS)
 Datum
 utl_file_fclose_all(PG_FUNCTION_ARGS)
 {
-	int i;
+	int			i;
 
 	for (i = 0; i < MAX_SLOTS; i++)
 	{
 		if (slots[i].id != INVALID_SLOTID)
 		{
-			if (slots[i].file && fclose(slots[i].file) != 0)
+			FILE	   *f = slots[i].file;
+
+			slots[i].file = NULL;
+			slots[i].id = INVALID_SLOTID;
+
+			if (f && fclose(f) != 0)
 			{
 				if (errno == EBADF)
 					CUSTOM_EXCEPTION(INVALID_FILEHANDLE, "File is not an opened");
 				else
 					STRERROR_EXCEPTION(WRITE_ERROR);
 			}
-			slots[i].file = NULL;
-			slots[i].id = INVALID_SLOTID;
 		}
 	}
 
@@ -832,70 +1024,67 @@ utl_file_fclose_all(PG_FUNCTION_ARGS)
 static void
 check_secure_locality(const char *path)
 {
-	static SPIPlanPtr	plan = NULL;
+	static SPIPlanPtr plan = NULL;
 
-	Datum	values[1];
-	char	nulls[1] = {' '};
+	Datum		values[1];
+	char		nulls[1] = {' '};
 
 	values[0] = CStringGetTextDatum(path);
 
 	/*
-	 * SELECT 1 FROM utl_file.utl_file_dir
-	 *   WHERE CASE WHEN substring(dir from '.$') = '/' THEN
-	 *     substring($1, 1, length(dir)) = dir
-	 *   ELSE
-	 *     substring($1, 1, length(dir) + 1) = dir || '/'
-	 *   END
+	 * SELECT 1 FROM utl_file.utl_file_dir WHERE CASE WHEN substring(dir from
+	 * '.$') = '/' THEN substring($1, 1, length(dir)) = dir ELSE substring($1,
+	 * 1, length(dir) + 1) = dir || '/' END
 	 */
 
 	if (SPI_connect() < 0)
 		ereport(ERROR,
-			(errcode(ERRCODE_INTERNAL_ERROR),
-			 errmsg("SPI_connect failed")));
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("SPI_connect failed")));
 
 	if (!plan)
 	{
-		Oid		argtypes[] = {TEXTOID};
+		Oid			argtypes[] = {TEXTOID};
 
 		/* Don't use LIKE not to escape '_' and '%' */
-		SPIPlanPtr p = SPI_prepare(
-		    "SELECT 1 FROM utl_file.utl_file_dir"
-	 	        " WHERE CASE WHEN substring(dir from '.$') = '/' THEN"
-	 	        "  substring($1, 1, length(dir)) = dir"
-	 	        " ELSE"
-	 	        "  substring($1, 1, length(dir) + 1) = dir || '/'"
-	 	        " END",
-		    1, argtypes);
+		SPIPlanPtr	p = SPI_prepare(
+									"SELECT 1 FROM utl_file.utl_file_dir"
+									" WHERE CASE WHEN substring(dir from '.$') = '/' THEN"
+									"  substring($1, 1, length(dir)) = dir"
+									" ELSE"
+									"  substring($1, 1, length(dir) + 1) = dir || '/'"
+									" END",
+									1, argtypes);
 
 		if (p == NULL || (plan = SPI_saveplan(p)) == NULL)
 			ereport(ERROR,
-				(errcode(ERRCODE_INTERNAL_ERROR),
-				errmsg("SPI_prepare_failed")));
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("SPI_prepare_failed")));
 	}
 
 	if (SPI_OK_SELECT != SPI_execute_plan(plan, values, nulls, false, 1))
 		ereport(ERROR,
-			(errcode(ERRCODE_INTERNAL_ERROR),
-			 errmsg("can't execute sql")));
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("can't execute sql")));
 
 	if (SPI_processed == 0)
 		ereport(ERROR,
-			(errcode(ERRCODE_RAISE_EXCEPTION),
-			 errmsg(INVALID_PATH),
-			 errdetail("you cannot access locality"),
-			 errhint("locality is not found in utl_file_dir table")));
+				(errcode(ERRCODE_RAISE_EXCEPTION),
+				 errmsg(INVALID_PATH),
+				 errdetail("you cannot access locality"),
+				 errhint("locality is not found in utl_file_dir table")));
 	SPI_finish();
 }
 
 static char *
 safe_named_location(text *location)
 {
-	static SPIPlanPtr	plan = NULL;
-	MemoryContext		old_cxt;
+	static SPIPlanPtr plan = NULL;
+	MemoryContext old_cxt;
 
-	Datum	values[1];
-	char	nulls[1] = {' '};
-	char   *result;
+	Datum		values[1];
+	char		nulls[1] = {' '};
+	char	   *result;
 
 	old_cxt = CurrentMemoryContext;
 
@@ -903,33 +1092,34 @@ safe_named_location(text *location)
 
 	if (SPI_connect() < 0)
 		ereport(ERROR,
-			(errcode(ERRCODE_INTERNAL_ERROR),
-			 errmsg("SPI_connect failed")));
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("SPI_connect failed")));
 
 	if (!plan)
 	{
-		Oid		argtypes[] = {TEXTOID};
+		Oid			argtypes[] = {TEXTOID};
 
 		/* Don't use LIKE not to escape '_' and '%' */
-		SPIPlanPtr p = SPI_prepare(
-		    "SELECT dir FROM utl_file.utl_file_dir WHERE dirname = $1",
-		    1, argtypes);
+		SPIPlanPtr	p = SPI_prepare(
+									"SELECT dir FROM utl_file.utl_file_dir WHERE dirname = $1",
+									1, argtypes);
 
 		if (p == NULL || (plan = SPI_saveplan(p)) == NULL)
 			ereport(ERROR,
-				(errcode(ERRCODE_INTERNAL_ERROR),
-				errmsg("SPI_prepare_failed")));
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("SPI_prepare_failed")));
 	}
 
 	if (SPI_OK_SELECT != SPI_execute_plan(plan, values, nulls, false, 1))
 		ereport(ERROR,
-			(errcode(ERRCODE_INTERNAL_ERROR),
-			 errmsg("can't execute sql")));
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("can't execute sql")));
 
 	if (SPI_processed > 0)
 	{
 		char	   *loc = SPI_getvalue(SPI_tuptable->vals[0],
 									   SPI_tuptable->tupdesc, 1);
+
 		if (loc)
 			result = MemoryContextStrdup(old_cxt, loc);
 		else
@@ -951,50 +1141,47 @@ safe_named_location(text *location)
 static char *
 get_safe_path(text *location_or_dirname, text *filename)
 {
-	char	   *fullname;
+	char		abs_path[MAXPGPATH];
+	char	   *filename_cstr;
 	char	   *location;
-	bool		check_locality;
 
 	NON_EMPTY_TEXT(location_or_dirname);
 	NON_EMPTY_TEXT(filename);
 
 	location = safe_named_location(location_or_dirname);
+	filename_cstr = text_to_cstring(filename);
+
 	if (location)
 	{
-		int		aux_pos = size2int(strlen(location));
-		int		aux_len = VARSIZE_ANY_EXHDR(filename);
+		join_path_components(abs_path, location, filename_cstr);
 
-		fullname = palloc(aux_pos + 1 + aux_len + 1);
-		strcpy(fullname, location);
-		fullname[aux_pos] = '/';
-		memcpy(fullname + aux_pos + 1, VARDATA(filename), aux_len);
-		fullname[aux_pos + aux_len + 1] = '\0';
-
-		/* location is safe (ensured by dirname) */
-		check_locality = false;
 		pfree(location);
 	}
 	else
 	{
-		int aux_pos = VARSIZE_ANY_EXHDR(location_or_dirname);
-		int aux_len = VARSIZE_ANY_EXHDR(filename);
+		char	   *location_or_dirname_cstr;
 
-		fullname = palloc(aux_pos + 1 + aux_len + 1);
-		memcpy(fullname, VARDATA(location_or_dirname), aux_pos);
-		fullname[aux_pos] = '/';
-		memcpy(fullname + aux_pos + 1, VARDATA(filename), aux_len);
-		fullname[aux_pos + aux_len + 1] = '\0';
+		location_or_dirname_cstr = text_to_cstring(location_or_dirname);
 
-		check_locality = true;
+		join_path_components(abs_path, location_or_dirname_cstr, filename_cstr);
+
+		pfree(location_or_dirname_cstr);
 	}
 
+	canonicalize_path(abs_path);
+
+	/* Older PostgreSQL versions leave internal parent references untouched. */
+	if (path_contains_parent_reference(abs_path))
+		CUSTOM_EXCEPTION(INVALID_PATH, "Parent directory references are not allowed.");
+
 	/* check locality in canonizalized form of path */
-	canonicalize_path(fullname);
+	check_secure_locality(abs_path);
 
-	if (check_locality)
-		check_secure_locality(fullname);
+	make_native_path(abs_path);
 
-	return fullname;
+	pfree(filename_cstr);
+
+	return pstrdup(abs_path);
 }
 
 /*
@@ -1021,7 +1208,7 @@ utl_file_fremove(PG_FUNCTION_ARGS)
 
 	if (pg_database_encoding_max_length() > 1)
 	{
-		wchar_t	   *_fullname = to_wchar(fullname);
+		wchar_t    *_fullname = to_wchar(fullname);
 
 		if (_wunlink(_fullname) != 0)
 			IO_EXCEPTION();
@@ -1067,7 +1254,8 @@ utl_file_frename(PG_FUNCTION_ARGS)
 
 	if (!overwrite)
 	{
-		struct stat	st;
+		struct stat st;
+
 		if (stat(dstpath, &st) == 0)
 			CUSTOM_EXCEPTION(WRITE_ERROR, "File exists");
 		else if (errno != ENOENT)
@@ -1082,12 +1270,13 @@ utl_file_frename(PG_FUNCTION_ARGS)
 
 	if (pg_database_encoding_max_length() > 1)
 	{
-		wchar_t	   *_dstpath = to_wchar(dstpath);
-		wchar_t	   *_srcpath = to_wchar(srcpath);
+		wchar_t    *_dstpath = to_wchar(dstpath);
+		wchar_t    *_srcpath = to_wchar(srcpath);
 
 		if (!overwrite)
 		{
-			struct _stat  _st;
+			struct _stat _st;
+
 			if (_wstat(_dstpath, &_st) == 0)
 				CUSTOM_EXCEPTION(WRITE_ERROR, "File exists");
 			else if (errno != ENOENT)
@@ -1095,8 +1284,8 @@ utl_file_frename(PG_FUNCTION_ARGS)
 		}
 
 		/*
-		 * Originaly there was rename() function, but this cannot
-		 * to replace other existing file.
+		 * Originaly there was rename() function, but this cannot to replace
+		 * other existing file.
 		 */
 		if (!MoveFileExW(_srcpath, _dstpath, MOVEFILE_REPLACE_EXISTING))
 			IO_EXCEPTION();
@@ -1108,7 +1297,8 @@ utl_file_frename(PG_FUNCTION_ARGS)
 	{
 		if (!overwrite)
 		{
-			struct stat	st;
+			struct stat st;
+
 			if (stat(dstpath, &st) == 0)
 				CUSTOM_EXCEPTION(WRITE_ERROR, "File exists");
 			else if (errno != ENOENT)
@@ -1140,6 +1330,7 @@ utl_file_fcopy(PG_FUNCTION_ARGS)
 	char	   *dstpath;
 	int			start_line;
 	int			end_line;
+	int			result;
 	FILE	   *srcfile;
 	FILE	   *dstfile;
 
@@ -1155,13 +1346,13 @@ utl_file_fcopy(PG_FUNCTION_ARGS)
 	if (start_line <= 0)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				errmsg("start_line must be positive (%d passed)", start_line)));
+				 errmsg("start_line must be positive (%d passed)", start_line)));
 
 	end_line = PG_GETARG_IF_EXISTS(5, INT32, INT_MAX);
 	if (end_line <= 0)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				errmsg("end_line must be positive (%d passed)", end_line)));
+				 errmsg("end_line must be positive (%d passed)", end_line)));
 
 #ifndef WIN32
 
@@ -1171,8 +1362,8 @@ utl_file_fcopy(PG_FUNCTION_ARGS)
 
 	if (pg_database_encoding_max_length() > 1)
 	{
-		wchar_t	   *_srcpath = to_wchar(srcpath);
-		wchar_t	   *_mode = to_wchar("rt");
+		wchar_t    *_srcpath = to_wchar(srcpath);
+		wchar_t    *_mode = to_wchar("rt");
 
 		srcfile = _wfopen(_srcpath, _mode);
 
@@ -1188,6 +1379,7 @@ utl_file_fcopy(PG_FUNCTION_ARGS)
 	{
 		/* failed to open src file. */
 		IO_EXCEPTION();
+		return (Datum) 0;		/* keep cppcheck quiet */
 	}
 
 #ifndef WIN32
@@ -1198,8 +1390,8 @@ utl_file_fcopy(PG_FUNCTION_ARGS)
 
 	if (pg_database_encoding_max_length() > 1)
 	{
-		wchar_t	   *_dstpath = to_wchar(dstpath);
-		wchar_t	   *_mode = to_wchar("wt");
+		wchar_t    *_dstpath = to_wchar(dstpath);
+		wchar_t    *_mode = to_wchar("wt");
 
 		dstfile = _wfopen(_dstpath, _mode);
 
@@ -1216,13 +1408,30 @@ utl_file_fcopy(PG_FUNCTION_ARGS)
 		/* failed to open dst file. */
 		fclose(srcfile);
 		IO_EXCEPTION();
+		return (Datum) 0;		/* keep cppcheck quiet */
 	}
 
-	if (copy_text_file(srcfile, dstfile, start_line, end_line))
-		IO_EXCEPTION();
+	/*
+	 * copy_text_file can raise an error, and CHECK_FOR_INTERRUPTS in its loops
+	 * raises one whenever the query is cancelled.  Close both streams in any
+	 * case, the session has no other way to release them.
+	 */
+	PG_TRY();
+	{
+		result = copy_text_file(srcfile, dstfile, start_line, end_line);
+	}
+	PG_FINALLY();
+	{
+		fclose(srcfile);
+		fclose(dstfile);
+	}
+	PG_END_TRY();
 
-	fclose(srcfile);
-	fclose(dstfile);
+	if (result != 0)
+	{
+		errno = result;
+		IO_EXCEPTION();
+	}
 
 	PG_RETURN_VOID();
 }
@@ -1250,7 +1459,7 @@ copy_text_file(FILE *srcfile, FILE *dstfile, int start_line, int end_line)
 			if (fgets(buffer, MAX_LINESIZE, srcfile) == NULL)
 				return errno;
 			len = strlen(buffer);
-		} while(buffer[len - 1] != '\n');
+		} while (len == 0 || buffer[len - 1] != '\n');
 	}
 
 	/* copy until end_line. */
@@ -1264,7 +1473,7 @@ copy_text_file(FILE *srcfile, FILE *dstfile, int start_line, int end_line)
 			len = strlen(buffer);
 			if (fwrite(buffer, 1, len, dstfile) != len)
 				return errno;
-		} while(buffer[len - 1] != '\n');
+		} while (len == 0 || buffer[len - 1] != '\n');
 	}
 
 	pfree(buffer);
@@ -1285,12 +1494,12 @@ Datum
 utl_file_fgetattr(PG_FUNCTION_ARGS)
 {
 	char	   *fullname;
-	struct stat	st;
+	struct stat st;
 	TupleDesc	tupdesc;
 	Datum		result;
 	HeapTuple	tuple;
 	Datum		values[3];
-	bool		nulls[3] = { 0 };
+	bool		nulls[3] = {0};
 
 	NOT_NULL_ARG(0);
 	NOT_NULL_ARG(1);
@@ -1320,8 +1529,8 @@ utl_file_fgetattr(PG_FUNCTION_ARGS)
 
 	if (pg_database_encoding_max_length() > 1)
 	{
-		wchar_t	   *_fullname = to_wchar(fullname);
-		struct _stat  _st;
+		wchar_t    *_fullname = to_wchar(fullname);
+		struct _stat _st;
 
 		if (_wstat(_fullname, &_st) == 0)
 		{
@@ -1343,7 +1552,7 @@ utl_file_fgetattr(PG_FUNCTION_ARGS)
 	{
 		values[0] = BoolGetDatum(true);
 		values[1] = Int64GetDatum(st.st_size);
-		values[2] = 512;	/* NTFS block size */
+		values[2] = 512;		/* NTFS block size */
 	}
 	else
 	{
