@@ -286,3 +286,49 @@ RESET enable_seqscan;
 
 DROP TABLE at_wholerow CASCADE;
 DROP TABLE at_wholerow_pred CASCADE;
+
+--------------------------------------------------------------------------------
+-- ALTER COLUMN TYPE must still enforce NOT NULL and CHECK constraints
+--
+-- The column-only rewrite returns from ATRewriteTables() before the scan loop
+-- that would have validated them, so aocs_writecol_rewritesegfiles() checks
+-- them per row instead.  Letting a violation through is worse than it looks:
+-- the catalog still claims the constraint holds, so the planner refutes
+-- predicates with it ("One-Time Filter: false") and queries quietly return
+-- too few rows.
+--------------------------------------------------------------------------------
+CREATE TABLE at_con_notnull(k int, a int NOT NULL) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_con_notnull VALUES (1, 1);
+ALTER TABLE at_con_notnull ALTER COLUMN a TYPE bigint USING NULL::bigint;  -- fail
+SELECT count(*) FROM at_con_notnull WHERE a IS NULL;
+
+CREATE TABLE at_con_check(k int, a int CHECK (a > 0)) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_con_check VALUES (1, 1);
+ALTER TABLE at_con_check ALTER COLUMN a TYPE bigint USING -a::bigint;  -- fail
+SELECT count(*) FROM at_con_check WHERE a <= 0;
+
+-- A CHECK that references a column other than the rewritten one evaluates
+-- correctly too: the rewrite scan is opened with a NULL projection, so every
+-- column is read and the slot handed to ExecCheck() is a complete tuple.
+CREATE TABLE at_con_multicol(k int, a int, b int, CHECK (a < b))
+  USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_con_multicol VALUES (1, 1, 10);
+ALTER TABLE at_con_multicol ALTER COLUMN a TYPE bigint USING 100::bigint;  -- fail
+ALTER TABLE at_con_multicol ALTER COLUMN a TYPE bigint USING 5::bigint;
+SELECT * FROM at_con_multicol;
+
+-- A valid ALTER on a constrained column must still skip the table rewrite:
+-- validating is not a reason to give up the optimization.
+CREATE TABLE at_con_norewrite(k int, a int NOT NULL CHECK (a > 0))
+  USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_con_norewrite SELECT i, i FROM generate_series(1, 100) i;
+CREATE TEMP TABLE at_con_before AS
+SELECT pg_relation_filenode('at_con_norewrite') AS fn;
+
+ALTER TABLE at_con_norewrite ALTER COLUMN a TYPE bigint;
+
+SELECT pg_relation_filenode('at_con_norewrite') = fn AS not_rewritten
+  FROM at_con_before;
+SELECT count(*), sum(a) FROM at_con_norewrite;
+
+DROP TABLE at_con_notnull, at_con_check, at_con_multicol, at_con_norewrite;
