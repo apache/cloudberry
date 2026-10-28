@@ -4316,7 +4316,7 @@ aocs_writecol_add(Oid relid, List *newvals, List *constraints, TupleDesc oldDesc
  */
 static void
 aocs_writecol_rewritesegfiles(
-	AOCSWriteColumnDesc idesc, AOCSScanDesc scanDesc,
+	AOCSWriteColumnDesc idesc, AOCSScanDesc scanDesc, List *constraints,
 	ExprContext *econtext, TupleTableSlot *oldslot,
 	TupleTableSlot *newslot, int colno)
 {
@@ -4408,6 +4408,44 @@ aocs_writecol_rewritesegfiles(
 				= ExecEvalExprSwitchContext(ex->exprstate,
 											econtext,
 											&newslot->tts_isnull[ex->attnum-1]);
+		}
+
+		/*
+		 * Verify the rewritten tuple against the constraints the table rewrite
+		 * would otherwise have checked.  econtext->ecxt_scantuple already
+		 * points at newslot, and the scan projects every column
+		 * (aocs_beginrangescan() was given a NULL projection), so a CHECK that
+		 * references columns other than the rewritten one evaluates correctly
+		 * here.  Only the rewritten columns can newly become NULL -- the rest
+		 * were copied over verbatim -- so NOT NULL needs checking for those
+		 * only.
+		 */
+		foreach(l, idesc->newcolvals)
+		{
+			NewColumnValue    *ex = lfirst(l);
+			Form_pg_attribute  attr = TupleDescAttr(newslot->tts_tupleDescriptor,
+													ex->attnum - 1);
+
+			if (attr->attnotnull && newslot->tts_isnull[ex->attnum - 1])
+				ereport(ERROR,
+						(errcode(ERRCODE_NOT_NULL_VIOLATION),
+						 errmsg("column \"%s\" of relation \"%s\" contains null values",
+								NameStr(attr->attname),
+								RelationGetRelationName(idesc->rel))));
+		}
+
+		foreach(l, constraints)
+		{
+			NewConstraint *con = lfirst(l);
+
+			if (con->contype != CONSTR_CHECK)
+				continue;
+			if (!ExecCheck(con->qualstate, econtext))
+				ereport(ERROR,
+						(errcode(ERRCODE_CHECK_VIOLATION),
+						 errmsg("check constraint \"%s\" of relation \"%s\" is violated by some row",
+								con->name,
+								RelationGetRelationName(idesc->rel))));
 		}
 
 		aocs_writecol_insert_datum(idesc,
@@ -4525,7 +4563,8 @@ aocs_writecol_reindex(Oid relid, List *newvals)
  * given column and i <= MaxHeapAttributeNumber.
  */
 void
-aocs_writecol_rewrite(Oid relid, List *newvals, TupleDesc oldDesc)
+aocs_writecol_rewrite(Oid relid, List *newvals, List *constraints,
+					  TupleDesc oldDesc)
 {
 	Relation rel = relation_open(relid, NoLock);
 	Snapshot snapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
@@ -4551,6 +4590,36 @@ aocs_writecol_rewrite(Oid relid, List *newvals, TupleDesc oldDesc)
 			NewColumnValue *ex = lfirst(l);
 			/* expr already planned */
 			ex->exprstate = ExecInitExpr((Expr *) ex->expr, NULL);
+		}
+
+		/*
+		 * GPDB_PORT: prepare the CHECK constraints so that
+		 * aocs_writecol_rewritesegfiles() can verify them per row.  Skipping
+		 * the table rewrite also skips ATRewriteTable(), which is where the
+		 * constraints -- and the NOT NULL flags -- would otherwise have been
+		 * checked against the rewritten values.  Without this an
+		 * ALTER COLUMN TYPE ... USING that violates a CHECK, or writes a NULL
+		 * into a NOT NULL column, succeeds silently; worse, the planner then
+		 * refutes predicates with a constraint the data no longer satisfies,
+		 * so queries quietly return too few rows.  This mirrors what the
+		 * ADD COLUMN sibling already does in aocs_writecol_add().
+		 */
+		foreach(l, constraints)
+		{
+			NewConstraint *con = lfirst(l);
+
+			switch (con->contype)
+			{
+				case CONSTR_CHECK:
+					con->qualstate = ExecPrepareExpr((Expr *) con->qual, estate);
+					break;
+				case CONSTR_FOREIGN:
+					/* Nothing to do here */
+					break;
+				default:
+					elog(ERROR, "unrecognized constraint type: %d",
+						 (int) con->contype);
+			}
 		}
 		oldslot = MakeSingleTupleTableSlot(oldDesc, &TTSOpsVirtual);
 		newslot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtual);
@@ -4629,6 +4698,7 @@ aocs_writecol_rewrite(Oid relid, List *newvals, TupleDesc oldDesc)
 			 */
 			aocs_writecol_rewritesegfiles(idesc,
 										scanDesc,
+										constraints,
 										econtext,
 										oldslot,
 										newslot,

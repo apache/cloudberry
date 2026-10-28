@@ -6992,7 +6992,22 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 			}
 			if (tab->rewrite & AT_REWRITE_REWRITE_COLUMNS_ONLY)
 			{
-				table_relation_rewrite_columns(OldHeap, tab->newvals, tab->oldDesc);
+				/*
+				 * The rewrite checks the constraints itself, one tuple at a
+				 * time, which costs nothing extra because it is reading every
+				 * column anyway.  It can only do so when this is the whole
+				 * command, though.  Alongside ADD COLUMN its tuples are not
+				 * complete: it builds them from tab->oldDesc, the descriptor
+				 * from before the command, so the columns ADD COLUMN has just
+				 * appended are left at the zero the slot was allocated with --
+				 * and marked not-null, so a CHECK over one of them reads a
+				 * datum of 0.  For "ADD COLUMN b text ... CHECK (length(b) >
+				 * 0)" that is a NULL pointer handed to the detoaster.
+				 */
+				table_relation_rewrite_columns(OldHeap, tab->newvals,
+											   (tab->rewrite & AT_REWRITE_NEW_COLUMNS_ONLY) ?
+											   NIL : tab->constraints,
+											   tab->oldDesc);
 			}
 			heap_close(OldHeap, NoLock);
 			continue;
@@ -10777,7 +10792,9 @@ rewrite_column_on_drop(Relation rel, AttrNumber attnum, const char *colName)
 		newval->expr = (Expr *) transform;
 		newval->is_generated = false;
 		newval->op = AOCSREWRITECOLUMN;
-		table_relation_rewrite_columns(rel, lappend(NIL, newval), CreateTupleDescCopyConstr(RelationGetDescr(rel)));
+		/* identity transform of one column: no constraint can change meaning */
+		table_relation_rewrite_columns(rel, lappend(NIL, newval), NIL,
+									   CreateTupleDescCopyConstr(RelationGetDescr(rel)));
 	}
 }
 /*

@@ -715,6 +715,7 @@ typedef struct TableAmRoutine
 	/* See table_relation_rewrite_columns(). */
 	void 		(*relation_rewrite_columns) (Relation rel,
 									List *newvals,
+									List *constraints,
 									TupleDesc oldDesc);
 
 	/* See table_relation_copy_for_cluster() */
@@ -1931,7 +1932,8 @@ table_relation_add_columns(Relation rel, List *newvals, List *constraints, Tuple
 }
 
 static inline void
-table_relation_rewrite_columns(Relation rel, List *newvals, TupleDesc oldDesc)
+table_relation_rewrite_columns(Relation rel, List *newvals, List *constraints,
+							   TupleDesc oldDesc)
 {
 	if (rel->rd_tableam->relation_rewrite_columns == NULL)
 		ereport(ERROR,
@@ -1940,7 +1942,7 @@ table_relation_rewrite_columns(Relation rel, List *newvals, TupleDesc oldDesc)
 						RelationGetRelationName(rel)),
 				 errdetail("Its access method does not support rewriting columns without rewriting the relation.")));
 
-	rel->rd_tableam->relation_rewrite_columns(rel, newvals, oldDesc);
+	rel->rd_tableam->relation_rewrite_columns(rel, newvals, constraints, oldDesc);
 }
 
 /*

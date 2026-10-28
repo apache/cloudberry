@@ -1317,7 +1317,8 @@ appendonly_relation_add_columns(Relation rel, List *newvals, List *constraints, 
 }
 
 static void
-appendonly_relation_rewrite_columns(Relation rel, List *newvals, TupleDesc oldDesc)
+appendonly_relation_rewrite_columns(Relation rel, List *newvals, List *constraints,
+									TupleDesc oldDesc)
 {
 	elog(ERROR, "rewrite columns-only not implemented for AO_ROW tables");
 }

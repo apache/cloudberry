@@ -405,3 +405,71 @@ DROP TABLE at_wholerow CASCADE;
 NOTICE:  drop cascades to function at_wholerow_val(at_wholerow)
 DROP TABLE at_wholerow_pred CASCADE;
 NOTICE:  drop cascades to function at_wholerow_big(at_wholerow_pred)
+--------------------------------------------------------------------------------
+-- ALTER COLUMN TYPE must still enforce NOT NULL and CHECK constraints
+--
+-- The column-only rewrite returns from ATRewriteTables() before the scan loop
+-- that would have validated them, so aocs_writecol_rewritesegfiles() checks
+-- them per row instead.  Letting a violation through is worse than it looks:
+-- the catalog still claims the constraint holds, so the planner refutes
+-- predicates with it ("One-Time Filter: false") and queries quietly return
+-- too few rows.
+--------------------------------------------------------------------------------
+CREATE TABLE at_con_notnull(k int, a int NOT NULL) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_con_notnull VALUES (1, 1);
+ALTER TABLE at_con_notnull ALTER COLUMN a TYPE bigint USING NULL::bigint;  -- fail
+ERROR:  column "a" of relation "at_con_notnull" contains null values
+SELECT count(*) FROM at_con_notnull WHERE a IS NULL;
+ count 
+-------
+     0
+(1 row)
+
+CREATE TABLE at_con_check(k int, a int CHECK (a > 0)) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_con_check VALUES (1, 1);
+ALTER TABLE at_con_check ALTER COLUMN a TYPE bigint USING -a::bigint;  -- fail
+ERROR:  check constraint "at_con_check_a_check" of relation "at_con_check" is violated by some row
+SELECT count(*) FROM at_con_check WHERE a <= 0;
+ count 
+-------
+     0
+(1 row)
+
+-- A CHECK that references a column other than the rewritten one evaluates
+-- correctly too: the rewrite scan is opened with a NULL projection, so every
+-- column is read and the slot handed to ExecCheck() is a complete tuple.
+CREATE TABLE at_con_multicol(k int, a int, b int, CHECK (a < b))
+  USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_con_multicol VALUES (1, 1, 10);
+ALTER TABLE at_con_multicol ALTER COLUMN a TYPE bigint USING 100::bigint;  -- fail
+ERROR:  check constraint "at_con_multicol_check" of relation "at_con_multicol" is violated by some row
+ALTER TABLE at_con_multicol ALTER COLUMN a TYPE bigint USING 5::bigint;
+SELECT * FROM at_con_multicol;
+ k | a | b  
+---+---+----
+ 1 | 5 | 10
+(1 row)
+
+-- A valid ALTER on a constrained column must still skip the table rewrite:
+-- validating is not a reason to give up the optimization.
+CREATE TABLE at_con_norewrite(k int, a int NOT NULL CHECK (a > 0))
+  USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_con_norewrite SELECT i, i FROM generate_series(1, 100) i;
+CREATE TEMP TABLE at_con_before AS
+SELECT pg_relation_filenode('at_con_norewrite') AS fn;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+ALTER TABLE at_con_norewrite ALTER COLUMN a TYPE bigint;
+SELECT pg_relation_filenode('at_con_norewrite') = fn AS not_rewritten
+  FROM at_con_before;
+ not_rewritten 
+---------------
+ t
+(1 row)
+
+SELECT count(*), sum(a) FROM at_con_norewrite;
+ count | sum  
+-------+------
+   100 | 5050
+(1 row)
+
+DROP TABLE at_con_notnull, at_con_check, at_con_multicol, at_con_norewrite;
