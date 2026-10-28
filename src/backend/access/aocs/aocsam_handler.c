@@ -1459,9 +1459,10 @@ aoco_relation_add_columns(Relation rel, List *newvals, List *constraints, TupleD
 }
 
 static void
-aoco_relation_rewrite_columns(Relation rel, List *newvals, TupleDesc oldDesc)
+aoco_relation_rewrite_columns(Relation rel, List *newvals, List *constraints,
+							  TupleDesc oldDesc)
 {
-	aocs_writecol_rewrite(RelationGetRelid(rel), newvals, oldDesc);
+	aocs_writecol_rewrite(RelationGetRelid(rel), newvals, constraints, oldDesc);
 }
 
 static void
