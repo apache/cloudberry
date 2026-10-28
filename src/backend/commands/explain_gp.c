@@ -22,7 +22,7 @@
 #include "cdb/cdbconn.h"		/* SegmentDatabaseDescriptor */
 #include "cdb/cdbdisp.h"                /* CheckDispatchResult() */
 #include "cdb/cdbdispatchresult.h"	/* CdbDispatchResults */
-#include "cdb/cdbexplain.h"		/* me */
+#include "cdb/cdbexplain.h"
 #include "cdb/cdbpathlocus.h"
 #include "cdb/cdbutil.h"
 #include "cdb/cdbvars.h"		/* GpIdentity.segindex */
@@ -35,8 +35,6 @@
 #include "utils/tuplesort.h"
 #include "utils/memutils.h"		/* MemoryContextGetPeakSpace() */
 #include "utils/vmem_tracker.h"
-
-#include "cdb/cdbexplain.h"             /* cdbexplain_recvExecStats */
 
 /* Convert bytes into kilobytes */
 #define kb(x) (floor((x + 1023.0) / 1024.0))
