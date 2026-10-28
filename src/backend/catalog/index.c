@@ -2945,8 +2945,8 @@ FormIndexDatum(struct IndexInfo *indexInfo,
  * hasindex: set relhasindex to this value
  * reltuples: if >= 0, set reltuples to this value; else no change
  *
- * If reltuples >= 0, relpages and relallvisible are also updated (using
- * RelationGetNumberOfBlocks() and visibilitymap_count()).
+ * If reltuples >= 0, relpages, relallvisible, and relallfrozen are also
+ * updated (using RelationGetNumberOfBlocks() and visibilitymap_count()).
  *
  * NOTE: an important side-effect of this operation is that an SI invalidation
  * message is sent out to all backends --- including me --- causing relcache
@@ -2964,6 +2964,7 @@ index_update_stats(Relation rel,
 	bool		update_stats;
 	BlockNumber relpages = 0;	/* keep compiler quiet */
 	BlockNumber relallvisible = 0;
+	BlockNumber relallfrozen = 0;
 	Oid			relid = RelationGetRelid(rel);
 	Relation	pg_class;
 	ScanKeyData key[1];
@@ -2985,7 +2986,7 @@ index_update_stats(Relation rel,
 	if (reltuples == 0 && rel->rd_rel->reltuples < 0)
 		reltuples = -1;
 
-	update_stats = reltuples >= 0;
+	update_stats = reltuples >= 0 && Gp_role != GP_ROLE_DISPATCH;
 
 	/*
 	 * Finish I/O and visibility map buffer locks before
@@ -2998,8 +2999,8 @@ index_update_stats(Relation rel,
 	{
 		relpages = RelationGetNumberOfBlocks(rel);
 
-		if (rel->rd_rel->relkind != RELKIND_INDEX)
-			visibilitymap_count(rel, &relallvisible, NULL);
+		if (rel->rd_rel->relkind != RELKIND_INDEX && !RelationStorageIsAO(rel))
+			visibilitymap_count(rel, &relallvisible, &relallfrozen);
 	}
 
 	/*
@@ -3055,16 +3056,8 @@ index_update_stats(Relation rel,
 		dirty = true;
 	}
 
-	if (reltuples >= 0 && Gp_role != GP_ROLE_DISPATCH)
+	if (update_stats)
 	{
-		/*
-		 * GPDB: We don't maintain relallvisible for AO/CO tables.
-		 */
-		if (rd_rel->relkind != RELKIND_INDEX && !RelationStorageIsAO(rel))
-			visibilitymap_count(rel, &relallvisible, NULL);
-		else					/* don't bother for indexes */
-			relallvisible = 0;
-
 		if (rd_rel->relpages != (int32) relpages)
 		{
 			rd_rel->relpages = (int32) relpages;
@@ -3078,6 +3071,11 @@ index_update_stats(Relation rel,
 		if (rd_rel->relallvisible != (int32) relallvisible)
 		{
 			rd_rel->relallvisible = (int32) relallvisible;
+			dirty = true;
+		}
+		if (rd_rel->relallfrozen != (int32) relallfrozen)
+		{
+			rd_rel->relallfrozen = (int32) relallfrozen;
 			dirty = true;
 		}
 	}
