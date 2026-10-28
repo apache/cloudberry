@@ -21,9 +21,11 @@
 #include "access/aomd.h"
 #include "access/appendonlytid.h"
 #include "access/appendonlywriter.h"
+#include "access/genam.h"
 #include "access/heapam.h"
 #include "access/hio.h"
 #include "access/reloptions.h"
+#include "access/sysattr.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/gp_fastsequence.h"
@@ -43,6 +45,7 @@
 #include "fmgr.h"
 #include "miscadmin.h"
 #include "nodes/altertablenodes.h"
+#include "optimizer/optimizer.h"
 #include "pgstat.h"
 #include "storage/procarray.h"
 #include "storage/smgr.h"
@@ -4425,40 +4428,74 @@ aocs_writecol_reindex(Oid relid, List *newvals)
 {
 	ListCell       *lcindex;
 	ListCell       *lc;
-	NewColumnValue *newval;
+	Bitmapset      *rewritten = NULL;
 	Relation       OldHeap = relation_open(relid, NoLock);
 	char           oldRelPersistence = OldHeap->rd_rel->relpersistence;
 	List           *indexoidlist = RelationGetIndexList(OldHeap);
 
 	heap_close(OldHeap, NoLock);
+
+	/* The columns this command rewrites, as pull_varattnos() numbers them. */
+	foreach(lc, newvals)
+	{
+		NewColumnValue *newval = lfirst(lc);
+
+		if (newval->op == AOCSREWRITECOLUMN)
+			rewritten = bms_add_member(rewritten,
+									   newval->attnum - FirstLowInvalidHeapAttributeNumber);
+	}
+
 	foreach(lcindex, indexoidlist)
 	{
-		bool      reindex  = false;
-		Oid       indexoid = lfirst_oid(lcindex);
-		HeapTuple indexTuple;
+		bool       reindex;
+		Oid        indexoid = lfirst_oid(lcindex);
+		Relation   indexRel;
+		IndexInfo *indexInfo;
+		Bitmapset *indexattrs = NULL;
 
-		indexTuple = SearchSysCache1(INDEXRELID, ObjectIdGetDatum(indexoid));
-		if (!HeapTupleIsValid(indexTuple))	/* should not happen */
-			elog(ERROR, "cache lookup failed for index %u", indexoid);
-		int       indnatts = ((Form_pg_index) GETSTRUCT(indexTuple))->indnatts;
-		foreach (lc, newvals)
+		/*
+		 * Collect every column this index depends on.
+		 *
+		 * GPDB_PORT: upstream tested pg_index.indkey alone, which misses two
+		 * shapes.  An expression index stores InvalidAttrNumber in indkey and
+		 * keeps the column reference in indexprs; a partial index can
+		 * reference a column from its predicate only.  Either way the index
+		 * still has to be rebuilt when that column is rewritten: ATExecAddIndex()
+		 * skipped the build because tab->rewrite is set, expecting phase 3 to do
+		 * it, but the column-only rewrite returns before reindex_relation() and
+		 * this function is what stands in for it.  Missing an index therefore
+		 * leaves its freshly assigned relfilenode empty -- not even a btree
+		 * metapage -- and every later plan fails in _bt_getrootheight() with
+		 * "could not read block 0".
+		 */
+		indexRel = index_open(indexoid, AccessShareLock);
+		indexInfo = BuildIndexInfo(indexRel);
+
+		for (int i = 0; i < indexInfo->ii_NumIndexAttrs; ++i)
 		{
-			newval = lfirst(lc);
-			if (newval->op == AOCSADDCOLUMN || newval->op == AOCSADDCOLUMN_MISSINGMODE)
-				continue;
-			AttrNumber rewrittenattnum = newval->attnum;
-			for (int i = 0; i < indnatts; ++i)
-			{
-				if (rewrittenattnum == ((Form_pg_index) GETSTRUCT(indexTuple))->indkey.values[i])
-				{
-					reindex = true;
-					break;
-				}
-			}
-			if (reindex)
-				break;
+			AttrNumber attno = indexInfo->ii_IndexAttrNumbers[i];
+
+			if (attno != InvalidAttrNumber)
+				indexattrs = bms_add_member(indexattrs,
+											attno - FirstLowInvalidHeapAttributeNumber);
 		}
-		ReleaseSysCache(indexTuple);
+		pull_varattnos((Node *) indexInfo->ii_Expressions, 1, &indexattrs);
+		pull_varattnos((Node *) indexInfo->ii_Predicate, 1, &indexattrs);
+
+		index_close(indexRel, AccessShareLock);
+
+		/*
+		 * The index has to be rebuilt if it depends on any rewritten column.
+		 * A whole-row reference -- an expression or predicate taking the
+		 * table's row type, such as an index on f(tbl) -- shows up from
+		 * pull_varattnos() as attribute number 0 and depends on every column,
+		 * so any rewrite at all changes what it sees.
+		 */
+		reindex = bms_is_member(InvalidAttrNumber - FirstLowInvalidHeapAttributeNumber,
+								indexattrs) ||
+				  bms_overlap(indexattrs, rewritten);
+		bms_free(indexattrs);
+
 		if (reindex)
 		{
 			/*
@@ -4472,6 +4509,7 @@ aocs_writecol_reindex(Oid relid, List *newvals)
 		}
 	}
 
+	bms_free(rewritten);
 	list_free(indexoidlist);
 }
 
