@@ -712,7 +712,8 @@ heapam_relation_add_columns(Relation rel, List *newvals, List *constraints, Tupl
 }
 
 static void
-heapam_relation_rewrite_columns(Relation rel, List *newvals, TupleDesc oldDesc)
+heapam_relation_rewrite_columns(Relation rel, List *newvals, List *constraints,
+								TupleDesc oldDesc)
 {
 	elog(ERROR, "rewrite columns-only not implemented for HEAP tables");
 }
