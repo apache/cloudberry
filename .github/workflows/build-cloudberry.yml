@@ -374,6 +374,9 @@ jobs:
               {"test":"ic-recovery",
                "make_configs":["src/test/recovery:installcheck"],
                "enable_core_check":false
+              },
+              {"test":"ic-walrep",
+               "make_configs":["src/test/walrep:installcheck"]
               }
             ]
           }'
