@@ -1453,9 +1453,9 @@ aoco_vacuum_rel(Relation onerel, VacuumParams *params,
 }
 
 static void
-aoco_relation_add_columns(Relation rel, List *newvals, List *constraints, TupleDesc oldDesc)
+aoco_relation_add_columns(Relation rel, List *newvals, TupleDesc oldDesc)
 {
-	aocs_writecol_add(RelationGetRelid(rel), newvals, constraints, oldDesc);
+	aocs_writecol_add(RelationGetRelid(rel), newvals, oldDesc);
 }
 
 static void
