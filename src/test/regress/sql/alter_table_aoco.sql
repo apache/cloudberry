@@ -199,3 +199,90 @@ SELECT count(*) FROM atsr_part;
 
 DROP TABLE atsr_part;
 DEALLOCATE col_encoding;
+
+--------------------------------------------------------------------------------
+-- ALTER COLUMN TYPE must rebuild every index that depends on the column
+--
+-- The AOCO column-only rewrite returns before reindex_relation(), so
+-- aocs_writecol_reindex() stands in for it.  It used to decide which indexes
+-- to rebuild by testing pg_index.indkey alone, which misses an expression
+-- index (indkey holds InvalidAttrNumber, the reference lives in indexprs) and
+-- a partial index that names the column only in its predicate.  Those indexes
+-- were left with a freshly assigned but empty relfilenode -- not even a btree
+-- metapage -- so every later plan failed in _bt_getrootheight() with
+-- "could not read block 0".
+--------------------------------------------------------------------------------
+CREATE TABLE at_reidx_plain(k int, a int) USING ao_column DISTRIBUTED BY (k);
+CREATE TABLE at_reidx_expr(k int, a int) USING ao_column DISTRIBUTED BY (k);
+CREATE TABLE at_reidx_pred(k int, a int) USING ao_column DISTRIBUTED BY (k);
+CREATE TABLE at_reidx_other(k int, a int, b int) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_reidx_plain SELECT i, i FROM generate_series(1, 20) i;
+INSERT INTO at_reidx_expr  SELECT i, i FROM generate_series(1, 20) i;
+INSERT INTO at_reidx_pred  SELECT i, i FROM generate_series(1, 20) i;
+INSERT INTO at_reidx_other SELECT i, i, i FROM generate_series(1, 20) i;
+
+CREATE INDEX at_reidx_plain_i ON at_reidx_plain (a);
+CREATE INDEX at_reidx_expr_i  ON at_reidx_expr ((a + 1));
+CREATE INDEX at_reidx_pred_i  ON at_reidx_pred (k) WHERE a > 10;
+-- an expression index that does NOT reference the altered column: must keep
+-- working, and must not be needlessly rebuilt into something broken either
+CREATE INDEX at_reidx_other_i ON at_reidx_other ((b + 1));
+
+ALTER TABLE at_reidx_plain ALTER COLUMN a TYPE bigint;
+ALTER TABLE at_reidx_expr  ALTER COLUMN a TYPE bigint;
+ALTER TABLE at_reidx_pred  ALTER COLUMN a TYPE bigint;
+ALTER TABLE at_reidx_other ALTER COLUMN a TYPE bigint;
+
+-- A seqscan is enough to trip the unbuilt-index bug: the planner reads every
+-- btree's metapage through _bt_getrootheight() regardless of the plan it picks.
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT count(*) FROM at_reidx_plain WHERE a > 10;
+SELECT count(*) FROM at_reidx_expr  WHERE a + 1 > 11;
+SELECT count(*) FROM at_reidx_pred  WHERE a > 10;
+SELECT count(*) FROM at_reidx_other WHERE b + 1 > 11;
+RESET enable_indexscan;
+RESET enable_bitmapscan;
+
+-- and the index path must agree with the seqscan path
+SET enable_seqscan = off;
+SELECT count(*) FROM at_reidx_plain WHERE a > 10;
+SELECT count(*) FROM at_reidx_expr  WHERE a + 1 > 11;
+SELECT count(*) FROM at_reidx_pred  WHERE k > 10 AND a > 10;
+SELECT count(*) FROM at_reidx_other WHERE b + 1 > 11;
+RESET enable_seqscan;
+
+DROP TABLE at_reidx_plain, at_reidx_expr, at_reidx_pred, at_reidx_other;
+
+--------------------------------------------------------------------------------
+-- An index over a whole-row reference depends on every column
+--
+-- pull_varattnos() reports a whole-row Var as attribute number 0, so testing
+-- for the rewritten column's number alone never matched it: an index on
+-- f(tbl), or a partial index with f(tbl) in its predicate, was not rebuilt
+-- after ALTER COLUMN TYPE changed the values f() sees, and answered queries
+-- from the old ones.  Reported by Alena Rybakina.
+--------------------------------------------------------------------------------
+CREATE TABLE at_wholerow(k int, a int) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_wholerow VALUES (1, 10);
+CREATE FUNCTION at_wholerow_val(at_wholerow) RETURNS bigint LANGUAGE plpgsql IMMUTABLE
+  AS $$ BEGIN RETURN $1.a; END $$;
+CREATE INDEX at_wholerow_idx ON at_wholerow (at_wholerow_val(at_wholerow));
+ALTER TABLE at_wholerow ALTER COLUMN a TYPE int USING a + 1;
+SET enable_seqscan = off;
+SELECT * FROM at_wholerow WHERE at_wholerow_val(at_wholerow) = 11;
+SELECT * FROM at_wholerow WHERE at_wholerow_val(at_wholerow) = 10;
+RESET enable_seqscan;
+
+CREATE TABLE at_wholerow_pred(k int, a int) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_wholerow_pred VALUES (1, 10), (2, 5);
+CREATE FUNCTION at_wholerow_big(at_wholerow_pred) RETURNS bool LANGUAGE plpgsql IMMUTABLE
+  AS $$ BEGIN RETURN $1.a > 7; END $$;
+CREATE INDEX at_wholerow_pred_idx ON at_wholerow_pred (k) WHERE at_wholerow_big(at_wholerow_pred);
+ALTER TABLE at_wholerow_pred ALTER COLUMN a TYPE int USING a - 4;
+SET enable_seqscan = off;
+SELECT k, a FROM at_wholerow_pred WHERE at_wholerow_big(at_wholerow_pred) ORDER BY k;
+RESET enable_seqscan;
+
+DROP TABLE at_wholerow CASCADE;
+DROP TABLE at_wholerow_pred CASCADE;
