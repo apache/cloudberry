@@ -320,7 +320,7 @@ cat >> $CLUSTER_CONFIG <<-EOF
 	# a relative path. Resolve the directory holding lalshell -- the one this
 	# script lives in -- and quote it so a path containing whitespace survives
 	# being sourced.
-	TRUSTED_SHELL="$(cd "$(dirname "$0")" && pwd)/lalshell"
+	TRUSTED_SHELL="$(CDPATH= cd "$(dirname "$0")" && pwd)/lalshell"
 	
 	ENCODING=UNICODE
 EOF
