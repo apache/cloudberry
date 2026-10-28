@@ -3968,16 +3968,26 @@ aocs_unique_check_col(Relation aocsrel)
 	return checkcol;
 }
 
-/* 
- * A helper for aocs_writecol_writesegfiles(). It evaluates expression stored in 
+/*
+ * A helper for aocs_writecol_writesegfiles(). It evaluates expression stored in
  * the 'exprstate' field of the 'newvals', and store the values in 'slot'. In
- * addition, it performs NULL and check constraint checks of the values.
+ * addition, it performs NOT NULL checks of the values.
  *
  * The function is used only for ADD COLUMN so it expects one of the AOCSADDCOLUMN
  * and AOCSADDCOLUMN_MISSINGMODE. And it only performs the above for the indicated
  * operation.
+ *
+ * CHECK constraints are deliberately not evaluated here.  This path never
+ * reads the existing columns -- the slot arrives from ExecStoreAllNullTuple()
+ * and only the newly added columns are filled in -- so a CHECK that references
+ * any pre-existing column would see it as NULL.  That is wrong in both
+ * directions: "CHECK (new < old)" would always pass, and
+ * "CHECK (old IS NOT NULL)" would always fail.  ATRewriteTables() runs a
+ * validate-only scan after the columns are written instead, which sees the
+ * tuples as they stand on disk.  A NOT NULL flag on a newly added column is
+ * different: its value is right here in the slot.
  */
-static void eval_expr_and_check_constr(Relation rel, List *newvals, List *constraints, ExprContext *econtext, TupleTableSlot *slot, TupleDesc tupdesc, AOCSWriteColumnOperation op)
+static void eval_expr_and_check_notnull(Relation rel, List *newvals, ExprContext *econtext, TupleTableSlot *slot, TupleDesc tupdesc, AOCSWriteColumnOperation op)
 {
 	NewColumnValue 		*newval;
 	Form_pg_attribute 	attr;
@@ -4014,28 +4024,6 @@ static void eval_expr_and_check_constr(Relation rel, List *newvals, List *constr
 							   RelationGetRelationName(rel))));
 		}
 	}
-
-	foreach (l, constraints)
-	{
-		NewConstraint *con = lfirst(l);
-		switch(con->contype)
-		{
-			case CONSTR_CHECK:
-				if(!ExecCheck(con->qualstate, econtext))
-					ereport(ERROR,
-							(errcode(ERRCODE_CHECK_VIOLATION),
-								errmsg("check constraint \"%s\" of relation \"%s\" is violated by some row",
-									   con->name,
-									   RelationGetRelationName(rel))));
-				break;
-			case CONSTR_FOREIGN:
-				/* Nothing to do */
-				break;
-			default:
-				elog(ERROR, "Unrecognized constraint type: %d",
-					 (int) con->contype);
-		}
-	}
 }
 
 /*
@@ -4045,7 +4033,7 @@ static void eval_expr_and_check_constr(Relation rel, List *newvals, List *constr
 static void
 aocs_writecol_writesegfiles(
 	AOCSWriteColumnDesc idesc, AOCSHeaderScanDesc sdesc,
-	List *constraints, ExprContext *econtext, TupleTableSlot *slot)
+	ExprContext *econtext, TupleTableSlot *slot)
 {
 	NewColumnValue *newval;
 	TupleDesc tupdesc = RelationGetDescr(idesc->rel);
@@ -4060,7 +4048,7 @@ aocs_writecol_writesegfiles(
 	 * Although we do not need to fill the slot for missing-mode columns, we
 	 * still need to verify constraints for them.
 	 */
-	eval_expr_and_check_constr(idesc->rel, idesc->newcolvals, constraints, econtext, slot, tupdesc, AOCSADDCOLUMN_MISSINGMODE);
+	eval_expr_and_check_notnull(idesc->rel, idesc->newcolvals, econtext, slot, tupdesc, AOCSADDCOLUMN_MISSINGMODE);
 	ResetExprContext(econtext);
 
 	/*
@@ -4119,7 +4107,7 @@ aocs_writecol_writesegfiles(
 			}
 			for (i = 0; i < sdesc->ao_read.current.rowCount; ++i)
 			{
-				eval_expr_and_check_constr(idesc->rel, idesc->newcolvals, constraints, econtext, slot, tupdesc, AOCSADDCOLUMN);
+				eval_expr_and_check_notnull(idesc->rel, idesc->newcolvals, econtext, slot, tupdesc, AOCSADDCOLUMN);
 				aocs_writecol_insert_datum(idesc,
 										   values,
 										   isnull);
@@ -4141,13 +4129,12 @@ aocs_writecol_writesegfiles(
  * the default value for each row
  */
 void
-aocs_writecol_add(Oid relid, List *newvals, List *constraints, TupleDesc oldDesc)
+aocs_writecol_add(Oid relid, List *newvals, TupleDesc oldDesc)
 {
 	AOCSFileSegInfo **segInfos;
 	AOCSHeaderScanDesc  sdesc;
 	AOCSWriteColumnDesc idesc;
 	NewColumnValue      *newval;
-	NewConstraint *con;
 	TupleTableSlot *slot;
 	EState *estate;
 	ExprContext *econtext;
@@ -4163,22 +4150,6 @@ aocs_writecol_add(Oid relid, List *newvals, List *constraints, TupleDesc oldDesc
 	snapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
 
 	estate = CreateExecutorState();
-	foreach(l, constraints)
-	{
-		con = lfirst(l);
-		switch (con->contype)
-		{
-			case CONSTR_CHECK:
-				con->qualstate = ExecPrepareExpr((Expr *) con->qual, estate);
-				break;
-			case CONSTR_FOREIGN:
-				/* Nothing to do here */
-				break;
-			default:
-				elog(ERROR, "unrecognized constraint type: %d",
-					 (int) con->contype);
-		}
-	}
 	Assert(newvals);
 
 	foreach(l, newvals)
@@ -4294,7 +4265,7 @@ aocs_writecol_add(Oid relid, List *newvals, List *constraints, TupleDesc oldDesc
 
 			aocs_writecol_newsegfiles(idesc, segInfos[segi]);
 
-			aocs_writecol_writesegfiles(idesc, sdesc, constraints, econtext, slot);
+			aocs_writecol_writesegfiles(idesc, sdesc, econtext, slot);
 		}
 		aocs_end_headerscan(sdesc);
 		aocs_writecol_finish(idesc);
@@ -4601,8 +4572,11 @@ aocs_writecol_rewrite(Oid relid, List *newvals, List *constraints,
 		 * ALTER COLUMN TYPE ... USING that violates a CHECK, or writes a NULL
 		 * into a NOT NULL column, succeeds silently; worse, the planner then
 		 * refutes predicates with a constraint the data no longer satisfies,
-		 * so queries quietly return too few rows.  This mirrors what the
-		 * ADD COLUMN sibling already does in aocs_writecol_add().
+		 * so queries quietly return too few rows.
+		 *
+		 * Unlike the ADD COLUMN sibling, this path can do the checking itself:
+		 * its scan projects every column, so a CHECK naming columns other than
+		 * the rewritten one still evaluates correctly.
 		 */
 		foreach(l, constraints)
 		{

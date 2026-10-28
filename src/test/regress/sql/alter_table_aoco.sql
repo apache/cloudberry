@@ -332,3 +332,54 @@ SELECT pg_relation_filenode('at_con_norewrite') = fn AS not_rewritten
 SELECT count(*), sum(a) FROM at_con_norewrite;
 
 DROP TABLE at_con_notnull, at_con_check, at_con_multicol, at_con_norewrite;
+
+--------------------------------------------------------------------------------
+-- ADD COLUMN must enforce CHECK constraints against the existing rows
+--
+-- The column-only ADD COLUMN path never reads the existing columns -- that is
+-- the whole optimization -- so the access method cannot evaluate a CHECK that
+-- mentions them: the slot it works from is all-NULL apart from the new
+-- columns.  Evaluating constraints there was wrong in both directions, so
+-- ATRewriteTables() runs the ordinary validate-only scan afterwards instead,
+-- which sees the tuples as they stand on disk.  NOT NULL on a newly added
+-- column is still checked by the access method: that value is in the slot.
+--------------------------------------------------------------------------------
+CREATE TABLE at_add_fn(k int, a int) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_add_fn VALUES (1, 5);
+-- 100 < 5 is false; used to be accepted because "a" read as NULL
+ALTER TABLE at_add_fn ADD COLUMN c int DEFAULT 100 CHECK (c < a);  -- fail
+SELECT count(*) FROM at_add_fn;
+
+CREATE TABLE at_add_fp(k int, a int) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_add_fp VALUES (1, 5);
+-- every row satisfies this; used to be rejected because "a" read as NULL
+ALTER TABLE at_add_fp ADD COLUMN c int DEFAULT 1 CHECK (a IS NOT NULL);
+SELECT * FROM at_add_fp;
+
+CREATE TABLE at_add_ok(k int, a int) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_add_ok VALUES (1, 5);
+ALTER TABLE at_add_ok ADD COLUMN c int DEFAULT 1 CHECK (c < a);
+SELECT * FROM at_add_ok;
+
+-- a CHECK naming only pre-existing columns is validated too
+CREATE TABLE at_add_old(k int, a int) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_add_old VALUES (1, -3);
+ALTER TABLE at_add_old ADD COLUMN c int DEFAULT 1 CHECK (a > 0);  -- fail
+
+-- NOT NULL on the added column is still the access method's job
+CREATE TABLE at_add_nn(k int, a int) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_add_nn VALUES (1, 5);
+ALTER TABLE at_add_nn ADD COLUMN c int NOT NULL DEFAULT NULL;  -- fail
+
+-- and a plain ADD COLUMN must still skip the table rewrite
+CREATE TABLE at_add_norw(k int, a int) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_add_norw SELECT i, i FROM generate_series(1, 100) i;
+CREATE TEMP TABLE at_add_before AS
+SELECT pg_relation_filenode('at_add_norw') AS fn DISTRIBUTED BY (fn);
+
+ALTER TABLE at_add_norw ADD COLUMN c int DEFAULT 7;
+
+SELECT pg_relation_filenode('at_add_norw') = fn AS not_rewritten FROM at_add_before;
+SELECT count(*), sum(a), sum(c) FROM at_add_norw;
+
+DROP TABLE at_add_fn, at_add_fp, at_add_ok, at_add_old, at_add_nn, at_add_norw;

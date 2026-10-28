@@ -1311,7 +1311,7 @@ appendonly_vacuum_rel(Relation onerel, VacuumParams *params,
 }
 
 static void
-appendonly_relation_add_columns(Relation rel, List *newvals, List *constraints, TupleDesc oldDesc)
+appendonly_relation_add_columns(Relation rel, List *newvals, TupleDesc oldDesc)
 {
 	elog(ERROR, "add columns-only not implemented for AO_ROW tables");
 }
