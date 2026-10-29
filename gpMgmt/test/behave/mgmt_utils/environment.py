@@ -122,6 +122,11 @@ def before_scenario(context, scenario):
     if 'gpssh-exkeys' in context.feature.tags:
         context.gpssh_exkeys_context = GpsshExkeysMgmtContext(context)
 
+    # Back up .bashrc before skipping database setup: after_scenario()
+    # restores it for these tags even when this hook returns early.
+    if 'gp_bash_functions.sh' in context.feature.tags or 'backup_restore_bashrc' in scenario.effective_tags:
+        backup_bashrc()
+
     tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate', 'gpmovemirrors',
                     'gpconfig', 'gpssh-exkeys', 'gpstop', 'gpinitsystem', 'cross_subnet']
     if set(context.feature.tags).intersection(tags_to_skip):
@@ -130,8 +135,6 @@ def before_scenario(context, scenario):
     if 'analyzedb' not in context.feature.tags:
         start_database_if_not_started(context)
         drop_database_if_exists(context, 'testdb')
-    if 'gp_bash_functions.sh' in context.feature.tags or 'backup_restore_bashrc' in scenario.effective_tags:
-        backup_bashrc()
 
 def preserve_logs_for_failed_scenario(scenario):
     """
