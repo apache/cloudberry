@@ -1,0 +1,172 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+---
+# --- SSH passwordless setup (runs on coordinator) ---
+
+- name: Create .ssh directory for gpadmin
+  file:
+    path: "/home/{{ cloudberry_admin_user }}/.ssh"
+    state: directory
+    owner: "{{ cloudberry_admin_user }}"
+    group: "{{ cloudberry_admin_user }}"
+    mode: "0700"
+
+- name: Generate SSH key for gpadmin
+  openssh_keypair:
+    path: "/home/{{ cloudberry_admin_user }}/.ssh/id_rsa"
+    type: rsa
+    size: 4096
+    owner: "{{ cloudberry_admin_user }}"
+    group: "{{ cloudberry_admin_user }}"
+
+- name: Fetch gpadmin public key from coordinator
+  slurp:
+    src: "/home/{{ cloudberry_admin_user }}/.ssh/id_rsa.pub"
+  register: gpadmin_pubkey
+
+- name: Distribute SSH public key to all hosts
+  authorized_key:
+    user: "{{ cloudberry_admin_user }}"
+    key: "{{ gpadmin_pubkey.content | b64decode }}"
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['cloudberry'] }}"
+
+- name: Create hostfile_exkeys
+  copy:
+    content: "{{ groups['cloudberry'] | join('\n') }}\n"
+    dest: "/home/{{ cloudberry_admin_user }}/hostfile_exkeys"
+
+- name: Create hostfile_gpinitsystem
+  copy:
+    content: "{{ groups['segments'] | join('\n') }}\n"
+    dest: "/home/{{ cloudberry_admin_user }}/hostfile_gpinitsystem"
+
+- name: Scan host keys from all cluster nodes
+  shell: ssh-keyscan {{ groups['cloudberry'] | join(' ') }}
+  register: scanned_host_keys
+  changed_when: false
+  args:
+    executable: /bin/bash
+
+- name: Trust scanned host keys for gpadmin
+  known_hosts:
+    name: "{{ item.split()[0] }}"
+    key: "{{ item }}"
+    state: present
+    path: "/home/{{ cloudberry_admin_user }}/.ssh/known_hosts"
+  loop: "{{ scanned_host_keys.stdout_lines }}"
+  when: item | length > 0
+
+- name: Run gpssh-exkeys
+  shell: |
+    source /usr/local/cloudberry-db/cloudberry-env.sh
+    gpssh-exkeys -f /home/{{ cloudberry_admin_user }}/hostfile_exkeys
+  args:
+    executable: /bin/bash
+
+# --- Data directories on coordinator ---
+
+- name: Create data root directory as root
+  file:
+    path: "{{ coordinator_data_dir | dirname }}"
+    state: directory
+    owner: "{{ cloudberry_admin_user }}"
+    group: "{{ cloudberry_admin_user }}"
+    mode: "0755"
+  become: yes
+  become_user: root
+
+- name: Create coordinator data directory
+  file:
+    path: "{{ coordinator_data_dir }}"
+    state: directory
+    owner: "{{ cloudberry_admin_user }}"
+    group: "{{ cloudberry_admin_user }}"
+
+# --- Data directories on standby ---
+
+- name: Create data root directory on standby
+  file:
+    path: "{{ coordinator_data_dir | dirname }}"
+    state: directory
+    owner: "{{ cloudberry_admin_user }}"
+    group: "{{ cloudberry_admin_user }}"
+    mode: "0755"
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['standby'] }}"
+  become: yes
+  become_user: root
+
+- name: Create coordinator data directory on standby
+  file:
+    path: "{{ coordinator_data_dir }}"
+    state: directory
+    owner: "{{ cloudberry_admin_user }}"
+    group: "{{ cloudberry_admin_user }}"
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['standby'] }}"
+  become: yes
+  become_user: root
+
+- name: Create .ssh directory for gpadmin on standby
+  file:
+    path: "/home/{{ cloudberry_admin_user }}/.ssh"
+    state: directory
+    owner: "{{ cloudberry_admin_user }}"
+    group: "{{ cloudberry_admin_user }}"
+    mode: "0700"
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['standby'] }}"
+  become: yes
+  become_user: root
+
+# --- Data directories on segments ---
+
+- name: Create data root directory on segments
+  file:
+    path: "{{ primary_data_dir | dirname }}"
+    state: directory
+    owner: "{{ cloudberry_admin_user }}"
+    group: "{{ cloudberry_admin_user }}"
+    mode: "0755"
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['segments'] }}"
+  become: yes
+  become_user: root
+
+- name: Create primary data directory on segments
+  file:
+    path: "{{ primary_data_dir }}"
+    state: directory
+    owner: "{{ cloudberry_admin_user }}"
+    group: "{{ cloudberry_admin_user }}"
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['segments'] }}"
+  become: yes
+  become_user: root
+
+- name: Create mirror data directory on segments
+  file:
+    path: "{{ mirror_data_dir }}"
+    state: directory
+    owner: "{{ cloudberry_admin_user }}"
+    group: "{{ cloudberry_admin_user }}"
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['segments'] }}"
+  become: yes
+  become_user: root
