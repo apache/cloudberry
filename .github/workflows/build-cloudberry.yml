@@ -285,7 +285,9 @@ jobs:
                "shared_preload_libraries":"gp_relaccess_stats"
               },
               {"test":"gpcontrib-gp-stats-collector",
-               "make_configs":["gpcontrib/gp_stats_collector:installcheck"],
+               "make_configs":["gpcontrib/gp_stats_collector:installcheck",
+                               "gpcontrib/gp_stats_collector/test:installcheck",
+                               "gpcontrib/gp_stats_collector/test/isolation2:installcheck"],
                "extension":"gp_stats_collector"
               },
               {"test":"gpcontrib-gp-relsizes-stats",
