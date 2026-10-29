@@ -29,6 +29,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <utility>
@@ -50,6 +51,36 @@ namespace
 {
 
 /*
+ * A pathname may have been removed and reused while our descriptor stayed
+ * open.  Keep the descriptor open through this check and unlink so that its
+ * inode cannot be recycled.  lstat, rather than stat, also preserves a
+ * replacement symlink pointing at our file.
+ *
+ * POSIX has no conditional unlink-by-inode operation: callers must still
+ * serialize pathname changes during this check/unlink pair.
+ */
+static arrow::Status
+unlink_owned_file(const std::string &path, int fd)
+{
+	struct stat owned;
+	struct stat named;
+
+	if (fstat(fd, &owned) != 0)
+		return arrow::Status::IOError("could not stat output descriptor: ", strerror(errno));
+	if (lstat(path.c_str(), &named) != 0)
+	{
+		if (errno == ENOENT)
+			return arrow::Status::OK();
+		return arrow::Status::IOError("could not stat \"", path, "\": ", strerror(errno));
+	}
+	if (owned.st_dev != named.st_dev || owned.st_ino != named.st_ino)
+		return arrow::Status::OK();
+	if (unlink(path.c_str()) != 0 && errno != ENOENT)
+		return arrow::Status::IOError("could not remove \"", path, "\": ", strerror(errno));
+	return arrow::Status::OK();
+}
+
+/*
  * The descriptor between open() and the point where Arrow takes it over.  Any
  * error in between has to undo the creation, or an empty file is left behind
  * and every later attempt at the same path fails with ALREADY_EXISTS.
@@ -57,14 +88,14 @@ namespace
 class CreatedFile
 {
 public:
-	CreatedFile(int fd, std::string path) : fd_(fd), path_(std::move(path)) {}
+	CreatedFile(int fd, const std::string &path) : fd_(fd), path_(path) {}
 
 	~CreatedFile()
 	{
 		if (fd_ >= 0)
 		{
+			(void) unlink_owned_file(path_, fd_);
 			(void) close(fd_);
-			(void) unlink(path_.c_str());
 		}
 	}
 
@@ -76,19 +107,17 @@ public:
 
 private:
 	int			fd_;
-	std::string path_;
+	const std::string &path_;
 };
 
 /*
- * Wraps the Arrow stream so that giving up removes what this writer created
- * and nothing else.  Only the path this stream created with O_EXCL is ever
- * unlinked, which is what keeps a failed writer from destroying a file that
- * belongs to somebody else.
+ * Wraps the Arrow stream so that cleanup checks the identity of the file
+ * created with O_EXCL before unlinking its pathname.
  */
 class CreateOnlyOutputStream : public arrow::io::OutputStream
 {
 public:
-	CreateOnlyOutputStream(std::shared_ptr<arrow::io::OutputStream> file,
+	CreateOnlyOutputStream(std::shared_ptr<arrow::io::FileOutputStream> file,
 						   std::string path)
 		: file_(std::move(file)), path_(std::move(path))
 	{
@@ -109,19 +138,28 @@ public:
 	{
 		if (done_)
 			return arrow::Status::OK();
+
+		/* Pin the inode even if Arrow closes its descriptor before failing. */
+		int fd = dup(file_->file_descriptor());
+		if (fd < 0)
+			return arrow::Status::IOError("could not duplicate output descriptor: ", strerror(errno));
+		CreatedFile created(fd, path_);
 		done_ = true;
 
 		arrow::Status status = file_->Close();
 
-		/* A close that fails leaves a file nobody asked for. */
-		if (!status.ok())
-			(void) unlink(path_.c_str());
+		/* On failure the guard removes only the file we still own. */
+		if (status.ok())
+		{
+			created.release();
+			(void) close(fd);
+		}
 		return status;
 	}
 
 	/*
-	 * Abort is the caller saying "this object must not exist".  Close the
-	 * descriptor, then remove the file this stream created.
+	 * Remove our file before closing its descriptor, preserving a replacement
+	 * that another writer has already installed at the same pathname.
 	 */
 	arrow::Status Abort() override
 	{
@@ -129,12 +167,9 @@ public:
 			return arrow::Status::OK();
 		done_ = true;
 
-		arrow::Status status = file_->Close();
-
-		if (unlink(path_.c_str()) != 0 && errno != ENOENT)
-			return arrow::Status::IOError("could not remove \"", path_,
-										  "\": ", strerror(errno));
-		return status;
+		arrow::Status removed = unlink_owned_file(path_, file_->file_descriptor());
+		arrow::Status closed = file_->Close();
+		return removed.ok() ? closed : removed;
 	}
 
 	bool closed() const override { return done_ || file_->closed(); }
@@ -154,7 +189,7 @@ public:
 	arrow::Status Flush() override { return file_->Flush(); }
 
 private:
-	std::shared_ptr<arrow::io::OutputStream> file_;
+	std::shared_ptr<arrow::io::FileOutputStream> file_;
 	std::string path_;
 	bool		done_ = false;
 };
