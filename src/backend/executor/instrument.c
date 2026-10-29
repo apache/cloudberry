@@ -506,9 +506,7 @@ pickInstrFromShmem(const Plan *plan, int instrument_options)
 		MemoryContextSwitchTo(contextSave);
 	}
 
-	if (NULL != instr &&
-		instrument_options & (INSTRUMENT_BUFFERS | INSTRUMENT_TIMER |
-							  INSTRUMENT_CDB))
+	if (instr != NULL)
 	{
 		instr->need_bufusage = (instrument_options & INSTRUMENT_BUFFERS) != 0;
 		instr->need_timer = (instrument_options & INSTRUMENT_TIMER) != 0;

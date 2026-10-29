@@ -1136,6 +1136,8 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 		instr->workfileCreated = nodeAcc->nsimax->workfileCreated;
 		instr->firststart = nodeAcc->nsimax->firststart;
 	 }
+
+	/* Buffer usage is summed across all workers, not taken from the winner. */
 	instr->bufusage = bufusage;
 
 	/* Save extra message text for the most interesting winning qExecs. */
