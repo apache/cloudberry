@@ -93,8 +93,11 @@ written as an MDX component, which GitHub shows as literal markup.
 ## Conventions
 
 - **Code excerpts carry their origin.** 363 excerpts are fenced with
-  `title="path/to/file.c:LINE"`, naming 201 distinct files, so a reader can
-  go straight to the source they were read from. 199 of those paths are
+  `title="path/to/file.c — enclosing_function()"`, naming 201 distinct files,
+  so a reader can go straight to the source they were read from. Excerpts name
+  the function, struct or macro that encloses them rather than a line number:
+  a line number stops being true the moment a patch lands above it, while a
+  symbol name survives edits and is what a reader actually greps for. 199 of those paths are
   tracked in git; the remaining two — `src/include/pg_config.h` and
   `contrib/pax_storage/pax-cdbinit--1.0.sql` — are generated, by `configure`
   and by the PAX build respectively, and exist only in a configured tree.
@@ -129,13 +132,16 @@ written as an MDX component, which GitHub shows as literal markup.
 
 The chapters describe a specific point in the tree's history. File and line
 references drift as the code changes; the prose is the durable part and the
-line numbers are the perishable part. Two things follow:
+citations are the perishable part. Naming symbols instead of lines makes them
+a good deal less perishable, but a function can still be renamed or split.
+Two things follow:
 
 - Treat a chapter as documentation of a version, not of `main` forever.
-- The `title="file:line"` convention is machine-readable on purpose: a CI
-  job can check that every cited path still exists, which catches the worst
-  class of drift — a file that moved or was deleted — without needing to
-  re-read the prose. Such a job should resolve paths against `git ls-files`
+- The `title="file — symbol()"` convention is machine-readable on purpose: a
+  CI job can check that every cited path still exists *and* that the named
+  symbol is still defined in it, which catches the worst classes of drift — a
+  file that moved or was deleted, or a function that was renamed — without
+  needing to re-read the prose. Such a job should resolve paths against `git ls-files`
   and skip the two generated files named above, which are absent from a
   clean checkout.
 
