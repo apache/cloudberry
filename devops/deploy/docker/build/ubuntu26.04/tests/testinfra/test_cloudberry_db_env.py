@@ -126,3 +126,16 @@ def test_locale_generated(host):
     assert locale.exit_status == 0
     assert "en_US.utf8" in locale.stdout
 
+
+def test_meson_and_ninja(host):
+    """
+    Test if meson and ninja are installed, with a ninja new enough
+    (1.10 or later) for the build.ninja meson generates.
+    """
+    meson = host.run("meson --version")
+    assert meson.exit_status == 0
+    ninja = host.run("ninja --version")
+    assert ninja.exit_status == 0
+    version = tuple(int(n) for n in ninja.stdout.strip().split(".")[:2])
+    assert version >= (1, 10)
+

@@ -140,6 +140,8 @@ RUN dnf makecache && \
         liburing-devel \
         libuv-devel \
         libyaml-devel \
+        meson \
+        ninja-build \
         perl-IPC-Run \
         protobuf-devel && \
     dnf clean all && \
