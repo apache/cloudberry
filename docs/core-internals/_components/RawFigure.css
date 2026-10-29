@@ -20,41 +20,83 @@
 /* Layout for the HTML-and-CSS figures, lifted from the handbook's own
    stylesheet so the figures render identically here. */
 
-.book-figure { margin: 1.4rem 0; }
+/* These four come from the handbook's own stylesheet; a consuming site has no
+   such definitions, and an undefined custom property invalidates its whole
+   declaration. Define them here, scoped to the figure.
+
+   Deliberately NOT themed. The artwork below is light-only: band and tile
+   backgrounds are hard-coded pastels, and the injected markup carries some 800
+   more hard-coded light colours in inline styles. Giving --fg a dark-theme
+   value paints near-white text onto a near-white band -- measured at 1.08:1,
+   worse than the bug that replaced. The handbook's light values are correct in
+   both themes; what changes for dark mode is the surface underneath. */
+.book-figure {
+  --border: #d8dee4;
+  --soft:   #f6f8fa;
+  --fg:     #1f2328;
+  --muted:  #636c76;
+  margin: 1.4rem 0;
+}
+
+/* Light-only artwork needs a light ground AND a dark ink, or it bleeds into a
+   dark page. Setting only the ground is not enough: any text in these figures
+   without its own inline colour inherits the site's near-white body colour, so
+   it lands white-on-pastel -- measured at 1.03:1 across 184 text nodes. The
+   colour has to be restored at the same place the ground is. */
+[data-theme='dark'] .book-figure > div {
+  background: #ffffff;
+  color: #1f2328;
+  border-radius: 8px;
+  padding: 10px;
+}
+/* Descendants that inherit rather than carry an inline colour. */
+[data-theme='dark'] .book-figure > div :not([style*="color"]) {
+  color: inherit;
+}
 .book-figure figcaption {
   margin-top: .5rem;
   font-size: .9em;
+  /* --ifm-color-emphasis-600 resolves to rgb(141,148,158) in the light theme,
+     which is 3.06:1 on white -- below WCAG AA for the 37 figure captions.
+     (The dark theme's value is fine, so only light is overridden.) */
+  color: #636b75;
+}
+[data-theme='dark'] .book-figure figcaption {
   color: var(--ifm-color-emphasis-600);
 }
 
 /* Selective highlight: the handbook wraps a key token so it stands out.
-   Same three rules as the standalone edition. */
-.hl { border-radius: 2px; font-weight: 700; }
-figure.code .hl { background: #fff8c5; color: #1f2328; }
-figure.session pre code .hl { background: #bb800940; color: #ffea7f; }
-.book-figure .hl { background: #fff8c5; color: #1f2328; padding: 0 2px; }
+   Scoped to the component. The class name .hl is two letters and this file
+   lands in the consuming site's single global stylesheet, so an unscoped
+   rule would style every page of that site. The standalone edition's
+   figure.code / figure.session variants are dropped: those classes do not
+   occur anywhere in this tree. */
+.book-figure .hl { border-radius: 2px; font-weight: 700;
+                   background: #fff8c5; color: #1f2328; padding: 0 2px; }
 
 /* Layered module map and the banded brick figures. */
-.bricks { border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--soft) }
-.bk-band { display:flex;align-items:stretch;border-top:1px solid var(--border) }
-.bk-band:first-child { border-top:none }
-.bk-lbl { flex:0 0 116px;display:flex;flex-direction:column;justify-content:center;gap:2px;padding:10px 13px }
-.bk-lbl b { font-size:12.5px;font-weight:800;color:var(--fg);line-height:1.2 }
-.bk-lbl span { font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px }
-.bk-row { flex:1 1 auto;display:flex;flex-wrap:wrap;gap:7px;padding:9px 10px }
-.bk { flex:1 1 118px;min-width:104px;display:flex;flex-direction:column;justify-content:center;gap:2px; padding:8px 11px;border-radius:7px;border:1px solid;background:#fff;text-decoration:none;transition:.13s }
-.bk-t2 { font-size:12.5px;font-weight:700;line-height:1.25 }
-.bk-ch { font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;opacity:.8 }
-.bk:hover { transform:translateY(-2px);box-shadow:0 4px 12px #0000001f;text-decoration:none }
-.bk-q { background:#eef6ff }
-.bk-q .bk { border-color:#54aeff66;color:#0a3069;background:#ddf4ff }
-.bk-s { background:#eefcf2 }
-.bk-s .bk { border-color:#4ac26b80;color:#04260f;background:#dafbe1 }
-.bk-t { background:#fff6ef }
-.bk-t .bk { border-color:#fb8f4480;color:#5e2700;background:#fff1e5 }
-.bk-h { background:#fff4f3 }
-.bk-h .bk { border-color:#ff818280;color:#5c0011;background:#ffebe9 }
-.bk-r { background:#f3f5f8 }
-.bk-r .bk { border-color:#afb8c1;color:#1f2328;background:#eaeef2 }
-.bk-band { flex-direction:column }
-.bk-lbl { flex-basis:auto;border-bottom:1px solid var(--border) }
+.book-figure .bricks { border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--soft) }
+.book-figure .bk-band { display:flex;align-items:stretch;border-top:1px solid var(--border) }
+.book-figure .bk-band:first-child { border-top:none }
+.book-figure .bk-lbl { flex:0 0 116px;display:flex;flex-direction:column;justify-content:center;gap:2px;padding:10px 13px }
+.book-figure .bk-lbl b { font-size:12.5px;font-weight:800;color:var(--fg);line-height:1.2 }
+.book-figure .bk-lbl span { font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px }
+.book-figure .bk-row { flex:1 1 auto;display:flex;flex-wrap:wrap;gap:7px;padding:9px 10px }
+.book-figure .bk { flex:1 1 118px;min-width:104px;display:flex;flex-direction:column;justify-content:center;gap:2px; padding:8px 11px;border-radius:7px;border:1px solid;background:#fff;text-decoration:none;transition:.13s }
+.book-figure .bk-t2 { font-size:12.5px;font-weight:700;line-height:1.25 }
+.book-figure .bk-ch { font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;opacity:.8 }
+.book-figure a.bk:hover { transform:translateY(-2px);box-shadow:0 4px 12px #0000001f;text-decoration:none }
+.book-figure .bk-q { background:#eef6ff }
+.book-figure .bk-q .bk { border-color:#54aeff66;color:#0a3069;background:#ddf4ff }
+.book-figure .bk-s { background:#eefcf2 }
+.book-figure .bk-s .bk { border-color:#4ac26b80;color:#04260f;background:#dafbe1 }
+.book-figure .bk-t { background:#fff6ef }
+.book-figure .bk-t .bk { border-color:#fb8f4480;color:#5e2700;background:#fff1e5 }
+.book-figure .bk-h { background:#fff4f3 }
+.book-figure .bk-h .bk { border-color:#ff818280;color:#5c0011;background:#ffebe9 }
+.book-figure .bk-r { background:#f3f5f8 }
+.book-figure .bk-r .bk { border-color:#afb8c1;color:#1f2328;background:#eaeef2 }
+@media (max-width: 560px) {
+  .book-figure .bk-band { flex-direction:column }
+  .book-figure .bk-lbl { flex-basis:auto;border-bottom:1px solid var(--border) }
+}

@@ -25,8 +25,8 @@ import './RawFigure.css';
  *
  * The markup arrives as a string and is injected, instead of being written as
  * JSX in the page. That is deliberate: these figures carry inline style
- * attributes, void tags and — in two cases — unbalanced tags, none of which
- * MDX will accept as JSX. Passing the markup as a string keeps MDX out of it
+ * attributes and void tags written in HTML form, neither of which MDX
+ * accepts as JSX. Passing the markup as a string keeps MDX out of it
  * and leaves the rendering to the browser, so the figure looks the way it
  * looks in the standalone edition of the handbook.
  */

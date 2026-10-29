@@ -1,3 +1,4 @@
+<svg viewBox="0 0 1230 170" style="width:100%;min-width:820px;font-family:ui-monospace,monospace" xmlns="http://www.w3.org/2000/svg">
 <!--
   Licensed to the Apache Software Foundation (ASF) under one
   or more contributor license agreements.  See the NOTICE file
@@ -16,7 +17,7 @@
   specific language governing permissions and limitations
   under the License.
 -->
-<svg viewBox="0 0 1230 170" style="width:100%;min-width:820px;font-family:ui-monospace,monospace" xmlns="http://www.w3.org/2000/svg">
+<rect x="0" y="0" width="100%" height="100%" fill="#ffffff"/>
   <defs><marker id="c131ah" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#6b5b8a"/></marker></defs>
   <g font-size="13">
     <rect x="10" y="66" width="168" height="58" rx="8" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
@@ -25,9 +26,9 @@
     <rect x="228" y="66" width="168" height="58" rx="8" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
     <text x="312" y="92" text-anchor="middle" font-weight="700">RawStmt</text>
     <text x="312" y="110" text-anchor="middle" font-size="11" fill="#6b5b8a">raw parse tree</text>
-    <rect x="446" y="66" width="168" height="58" rx="8" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.5"/>
+    <rect x="446" y="66" width="168" height="58" rx="8" fill="#fff4d6" stroke="#735a16" stroke-width="1.5"/>
     <text x="530" y="92" text-anchor="middle" font-weight="700">Query</text>
-    <text x="530" y="110" text-anchor="middle" font-size="11" fill="#8a6d1a">semantic tree</text>
+    <text x="530" y="110" text-anchor="middle" font-size="11" fill="#735a16">semantic tree</text>
     <rect x="664" y="66" width="168" height="58" rx="8" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
     <text x="748" y="92" text-anchor="middle" font-weight="700">PlannedStmt</text>
     <text x="748" y="110" text-anchor="middle" font-size="11" fill="#6b5b8a">plan tree + slices</text>

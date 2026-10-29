@@ -26,7 +26,9 @@ sidebar_position: 0
 
 # Apache Cloudberry — Core Internals
 
-21 chapters, 104 sections.
+21 chapters, 104 sections, in an introduction plus five parts.
+
+The model is Egor Rogov's *PostgreSQL 14 Internals* (Postgres Professional, 2022-2023, ISBN 978-5-6045970-4-0) — not its table of contents, which is organised differently, but its method: explain a mechanism by reading the source that implements it and running the system that uses it. That book is copyrighted and carries no licence grant; nothing here is taken from it. A few chapters cite Rogov by surname where they follow his terminology or his way of setting up an experiment.
 
 ## Introduction
 
@@ -66,4 +68,3 @@ sidebar_position: 0
 ## Part V · Resource Management
 
 - [21. Resource Management](./part-6-resource-management/ch21.md) — 2 sections
-
