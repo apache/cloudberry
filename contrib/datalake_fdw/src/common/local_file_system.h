@@ -42,8 +42,9 @@
  * Arrow's own LocalFileSystem opens output with O_TRUNC, which would let a
  * failed write destroy an existing file; this keeps the O_EXCL rule the
  * Parquet writer has had since #1951.  The returned stream owns what it
- * created: Abort(), and a Close() that fails, unlink exactly the path this
- * stream created, and nothing else ever deletes on its behalf.
+ * created: Abort(), and a Close() that fails, check the file's identity before
+ * unlinking, preserving a replacement already installed at the same path.
+ * Pathname changes must be serialized with cleanup's identity check/unlink.
  *
  * The test backend mounts the same implementation through SubTreeFileSystem,
  * so the storage conformance cases exercise one implementation, not two.
