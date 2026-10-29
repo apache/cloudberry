@@ -428,6 +428,8 @@ diskquota_fetch_table_stat(PG_FUNCTION_ARGS)
 	DiskQuotaSetOFCache       *cache           = NULL;
 	DiskQuotaActiveTableEntry *results_entry   = NULL;
 
+	SIMPLE_FAULT_INJECTOR("diskquota_fetch_table_stat");
+
 #ifdef FAULT_INJECTOR
 	if (SIMPLE_FAULT_INJECTOR("ereport_warning_from_segment") == FaultInjectorTypeSkip)
 	{

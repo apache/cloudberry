@@ -98,6 +98,9 @@ SELECT DISTINCT gp_inject_fault('decrease_toast_max_chunk_size', 'skip', dbid)
 	   FROM pg_catalog.gp_segment_configuration
 	   WHERE role = 'p';
 INSERT INTO toast_chunk_test VALUES (repeat('abcdefghijklmnopqrstuvwxyz', 1000)::bytea);
+SELECT bool_or(gp_inject_fault('decrease_toast_max_chunk_size', 'status', dbid)
+               LIKE '%num times hit:''1''%') AS toast_chunk_fault_fired
+  FROM gp_segment_configuration WHERE role='p';
 SELECT DISTINCT gp_inject_fault('decrease_toast_max_chunk_size', 'reset', dbid)
 	   FROM pg_catalog.gp_segment_configuration
 	   WHERE role = 'p';
@@ -107,6 +110,14 @@ SELECT * FROM toast_chunk_test WHERE a <> repeat('abcdefghijklmnopqrstuvwxyz', 1
 
 -- Random access into the toast table should work equally well.
 SELECT encode(substring(a from 521*26+1 for 26), 'escape') FROM toast_chunk_test;
+
+-- Check prefixes, chunk boundaries, the final chunk, and slices past the end.
+SELECT bool_and(substring(a FROM pos FOR len) =
+                substring(repeat('abcdefghijklmnopqrstuvwxyz', 1000)::bytea FROM pos FOR len))
+       AS toast_slices_match
+  FROM toast_chunk_test,
+       (VALUES (1, 9000), (10, 16300), (1980, 30), (8130, 30),
+               (13000, 40), (25980, 40), (27000, 2)) AS slices(pos, len);
 
 -- Test for Github Issue 16906
 create table t_16906(a int, b text) distributed by(a);
