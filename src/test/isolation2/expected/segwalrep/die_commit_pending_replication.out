@@ -15,6 +15,9 @@ CREATE
 
 -- Suspend to hit commit-prepared point on segment (as we are
 -- interested in testing Commit here and not really Prepare)
+-- The following waits are test coordination, not snapshot coverage.
+SET debug_disable_distributed_snapshot = on;
+SET
 select gp_inject_fault_infinite('finish_prepared_start_of_function', 'suspend', dbid) from gp_segment_configuration where role='p' and content = 0;
  gp_inject_fault_infinite 
 --------------------------

@@ -78,6 +78,9 @@ installcheck-expandshrink: install
 installcheck-isolation2: install
 	$(pg_isolation2_regress_installcheck) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_isolation2 --schedule=$(srcdir)/isolation2_schedule
 
+installcheck-distributed-snapshot: install
+	$(pg_isolation2_regress_installcheck) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_isolation2 issue1465_distributed_snapshot
+
 installcheck-isolation2-crash: install
 	$(pg_isolation2_regress_installcheck) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_isolation2 --schedule=$(srcdir)/isolation2_crash_schedule
 
