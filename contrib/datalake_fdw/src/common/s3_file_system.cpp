@@ -78,6 +78,7 @@ extern "C"
 {
 #include "postgres.h"
 #include "miscadmin.h"
+#include "utils/faultinjector.h"
 }
 
 namespace
@@ -548,12 +549,22 @@ private:
 		request.SetKey(key_.c_str());
 		request.SetUploadId(upload_id_.c_str());
 
-		auto		outcome = client_->AbortMultipartUpload(request);
+		Aws::S3::Model::AbortMultipartUploadOutcome outcome =
+#ifdef FAULT_INJECTOR
+			SIMPLE_FAULT_INJECTOR("datalake_s3_abort_multipart_upload") ==
+				FaultInjectorTypeSkip ?
+			Aws::S3::Model::AbortMultipartUploadOutcome(Aws::S3::S3Error(
+				Aws::Client::AWSError<Aws::S3::S3Errors>(
+					Aws::S3::S3Errors::INTERNAL_FAILURE, "InternalError",
+					"injected AbortMultipartUpload failure", false))) :
+#endif
+			client_->AbortMultipartUpload(request);
 
-		upload_id_.clear();
 		if (!outcome.IsSuccess())
 			return status_from_aws("abandon the upload to", bucket_, key_,
 								   outcome.GetError());
+		/* A failed abort must remain retryable, including by the destructor. */
+		upload_id_.clear();
 		return arrow::Status::OK();
 	}
 
