@@ -543,3 +543,191 @@ SELECT count(*), sum(a), sum(c) FROM at_add_norw;
 (1 row)
 
 DROP TABLE at_add_fn, at_add_fp, at_add_ok, at_add_old, at_add_nn, at_add_norw;
+--------------------------------------------------------------------------------
+-- Constraint validation must ignore deleted rows
+--
+-- The column-only rewrite scans under SnapshotAny on purpose: every row has to
+-- be rewritten, visible or not, so that the new segfile's block structure --
+-- and therefore every row number -- still lines up with the columns that are
+-- not being rewritten.  Those dead rows are not part of the table's contents,
+-- though, so the per-row validation has to skip them.  Checking them rejected
+-- statements that are perfectly valid for the live data, which heap and ao_row
+-- accept: they rewrite under an MVCC snapshot and never see the dead rows.
+--------------------------------------------------------------------------------
+CREATE TABLE at_dead_nn(k int, a int NOT NULL) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_dead_nn VALUES (1, 1), (2, 2);
+DELETE FROM at_dead_nn WHERE k = 1;
+-- only the deleted row would become NULL
+ALTER TABLE at_dead_nn ALTER COLUMN a TYPE bigint USING nullif(a, 1)::bigint;
+SELECT * FROM at_dead_nn;
+ k | a 
+---+---
+ 2 | 2
+(1 row)
+
+CREATE TABLE at_dead_ck(k int, a int CHECK (a > 0)) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_dead_ck VALUES (1, 1), (2, 2);
+DELETE FROM at_dead_ck WHERE k = 1;
+-- only the deleted row would violate the CHECK
+ALTER TABLE at_dead_ck ALTER COLUMN a TYPE bigint USING (a - 1)::bigint;
+SELECT * FROM at_dead_ck;
+ k | a 
+---+---
+ 2 | 1
+(1 row)
+
+-- a live violating row is still caught when a dead one is dragged along
+CREATE TABLE at_dead_live(k int, a int NOT NULL) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_dead_live VALUES (1, 1), (2, 2);
+DELETE FROM at_dead_live WHERE k = 2;
+ALTER TABLE at_dead_live ALTER COLUMN a TYPE bigint USING nullif(a, 1)::bigint;  -- fail
+ERROR:  column "a" of relation "at_dead_live" contains null values
+-- a rolled back DELETE leaves the row live, so it must still be checked
+CREATE TABLE at_dead_abort(k int, a int NOT NULL) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_dead_abort VALUES (1, 1), (2, 2);
+BEGIN;
+DELETE FROM at_dead_abort WHERE k = 1;
+ROLLBACK;
+ALTER TABLE at_dead_abort ALTER COLUMN a TYPE bigint USING nullif(a, 1)::bigint;  -- fail
+ERROR:  column "a" of relation "at_dead_abort" contains null values
+-- the DELETE may be in the same transaction as the ALTER
+CREATE TABLE at_dead_samexact(k int, a int NOT NULL) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_dead_samexact VALUES (1, 1), (2, 2);
+BEGIN;
+DELETE FROM at_dead_samexact WHERE k = 1;
+ALTER TABLE at_dead_samexact ALTER COLUMN a TYPE bigint USING nullif(a, 1)::bigint;
+COMMIT;
+SELECT * FROM at_dead_samexact;
+ k | a 
+---+---
+ 2 | 2
+(1 row)
+
+-- the rewritten column must still read back correctly around the dead rows
+CREATE TABLE at_dead_rows(k int, a int NOT NULL, c int) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_dead_rows SELECT i, i, i * 10 FROM generate_series(1, 1000) i;
+DELETE FROM at_dead_rows WHERE a % 7 = 0;
+CREATE INDEX at_dead_rows_a ON at_dead_rows(a);
+ALTER TABLE at_dead_rows ALTER COLUMN a TYPE bigint USING nullif(a, 7)::bigint;
+SELECT count(*), sum(a), sum(c) FROM at_dead_rows;
+ count |  sum   |   sum   
+-------+--------+---------
+   858 | 429429 | 4294290
+(1 row)
+
+SELECT count(*) FROM at_dead_rows WHERE a BETWEEN 100 AND 200;
+ count 
+-------
+    87
+(1 row)
+
+VACUUM at_dead_rows;
+SELECT count(*), sum(a), sum(c) FROM at_dead_rows;
+ count |  sum   |   sum   
+-------+--------+---------
+   858 | 429429 | 4294290
+(1 row)
+
+-- ADD COLUMN validates through ATRewriteTables(), whose scan is an ordinary
+-- MVCC one, so the dead rows never reach it
+CREATE TABLE at_dead_add(k int, a int) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_dead_add VALUES (1, -1), (2, 5);
+DELETE FROM at_dead_add WHERE k = 1;
+ALTER TABLE at_dead_add ADD COLUMN b int DEFAULT 10, ADD CONSTRAINT positive_a CHECK (a > 0);
+SELECT * FROM at_dead_add;
+ k | a | b  
+---+---+----
+ 2 | 5 | 10
+(1 row)
+
+DROP TABLE at_dead_nn, at_dead_ck, at_dead_live, at_dead_abort, at_dead_samexact,
+           at_dead_rows, at_dead_add;
+--------------------------------------------------------------------------------
+-- ADD COLUMN combined with ALTER COLUMN TYPE in one command
+--
+-- Both column-only paths run, the rewrite first having nothing to say about
+-- the columns ADD COLUMN appends: it builds its tuples from the descriptor
+-- taken before the command, so those columns sit at the zero the slot was
+-- allocated with, marked not-null.  Checking a constraint over one of them
+-- there read a datum of 0 -- for a text column, a NULL pointer into the
+-- detoaster, which took the segment down.  The constraints are checked by the
+-- validate-only pass that follows instead, which reads whole tuples back off
+-- disk.
+--------------------------------------------------------------------------------
+CREATE TABLE at_both(k int, a int) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_both VALUES (1, 20);
+ALTER TABLE at_both ALTER COLUMN a TYPE bigint,
+  ADD COLUMN b text DEFAULT 'ok' CHECK (length(b) > 0);
+SELECT * FROM at_both;
+ k | a  | b  
+---+----+----
+ 1 | 20 | ok
+(1 row)
+
+-- the new column's CHECK must still be enforced, not merely survived
+CREATE TABLE at_both_newcol(k int, a int) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_both_newcol VALUES (1, 20);
+ALTER TABLE at_both_newcol ALTER COLUMN a TYPE bigint,
+  ADD COLUMN b text DEFAULT '' CHECK (length(b) > 0);  -- fail
+ERROR:  check constraint "at_both_newcol_b_check" of relation "at_both_newcol" is violated by some row
+-- and so must a CHECK on the column being rewritten, whose checking the
+-- rewrite defers to the same pass
+CREATE TABLE at_both_oldcol(k int, a int CHECK (a > 0)) USING ao_column
+  DISTRIBUTED BY (k);
+INSERT INTO at_both_oldcol VALUES (1, 20);
+ALTER TABLE at_both_oldcol ALTER COLUMN a TYPE bigint USING -a::bigint,
+  ADD COLUMN b text DEFAULT 'ok';  -- fail
+ERROR:  check constraint "at_both_oldcol_a_check" of relation "at_both_oldcol" is violated by some row
+-- NOT NULL on the added column, alongside a rewrite
+CREATE TABLE at_both_nn(k int, a int) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_both_nn VALUES (1, 20);
+ALTER TABLE at_both_nn ALTER COLUMN a TYPE bigint,
+  ADD COLUMN b int NOT NULL DEFAULT NULL;  -- fail
+ERROR:  column "b" of relation "at_both_nn" contains null values
+DROP TABLE at_both, at_both_newcol, at_both_oldcol, at_both_nn;
+--------------------------------------------------------------------------------
+-- Deleted rows must not be fed to the rewrite's expression either
+--
+-- The rewrite scans under SnapshotAny, so it sees rows a DELETE has already
+-- taken out of the table.  Exempting those from the constraint checks is not
+-- enough: the expression is evaluated before any check runs, and a cast fails
+-- on a value that is no longer part of the table.  The visibility map also has
+-- to be opened for that case, which the old condition -- something to check --
+-- did not cover, a plain ALTER COLUMN TYPE ... USING having no constraints at
+-- all.  heap and ao_row rewrite under an MVCC snapshot and never see the row.
+--------------------------------------------------------------------------------
+CREATE TABLE at_dead_cast(k int, a text) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_dead_cast VALUES (1, 'bad'), (1, '2');
+DELETE FROM at_dead_cast WHERE a = 'bad';
+ALTER TABLE at_dead_cast ALTER COLUMN a TYPE int USING a::int;
+SELECT * FROM at_dead_cast;
+ k | a 
+---+---
+ 1 | 2
+(1 row)
+
+-- a live row that cannot be cast is still an error
+CREATE TABLE at_live_cast(k int, a text) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_live_cast VALUES (1, 'bad'), (1, '2');
+ALTER TABLE at_live_cast ALTER COLUMN a TYPE int USING a::int;  -- fail
+ERROR:  invalid input syntax for type integer: "bad"
+-- the dead row is exempt from the checks too, but a live one is not
+CREATE TABLE at_dead_cast_nn(k int, a text NOT NULL) USING ao_column
+  DISTRIBUTED BY (k);
+INSERT INTO at_dead_cast_nn VALUES (1, 'bad'), (1, '2');
+DELETE FROM at_dead_cast_nn WHERE a = 'bad';
+ALTER TABLE at_dead_cast_nn ALTER COLUMN a TYPE int USING NULLIF(a, '2')::int;  -- fail
+ERROR:  column "a" of relation "at_dead_cast_nn" contains null values
+-- SET ENCODING only restates the column, so it keeps skipping the per-row
+-- visibility lookup; deleted rows must still come through untouched
+CREATE TABLE at_dead_enc(k int, a int) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_dead_enc SELECT 1, i FROM generate_series(1, 50) i;
+DELETE FROM at_dead_enc WHERE a <= 10;
+ALTER TABLE at_dead_enc ALTER COLUMN a SET ENCODING (compresstype=zstd, compresslevel=1);
+SELECT count(*), sum(a) FROM at_dead_enc;
+ count | sum  
+-------+------
+    40 | 1220
+(1 row)
+
+DROP TABLE at_dead_cast, at_live_cast, at_dead_cast_nn, at_dead_enc;
