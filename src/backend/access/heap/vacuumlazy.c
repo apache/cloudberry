@@ -335,11 +335,13 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 				minmulti_updated;
 	BlockNumber orig_rel_pages,
 				new_rel_pages,
-				new_rel_allvisible;
+				new_rel_allvisible,
+				new_rel_allfrozen;
 	PGRUsage	ru0;
 	TimestampTz starttime = 0;
 	PgStat_Counter startreadtime = 0,
 				startwritetime = 0;
+	double		startdelaytime;
 	WalUsage	startwalusage = pgWalUsage;
 	BufferUsage startbufferusage = pgBufferUsage;
 	ErrorContextCallback errcallback;
@@ -351,13 +353,16 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 	if (instrument)
 	{
 		pg_rusage_init(&ru0);
-		starttime = GetCurrentTimestamp();
 		if (track_io_timing)
 		{
 			startreadtime = pgStatBlockReadTime;
 			startwritetime = pgStatBlockWriteTime;
 		}
 	}
+
+	/* Used for instrumentation and stats report */
+	starttime = GetCurrentTimestamp();
+	startdelaytime = VacuumDelayTime;
 
 	pgstat_progress_start_command(PROGRESS_COMMAND_VACUUM,
 								  RelationGetRelid(rel));
@@ -589,9 +594,17 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 	 * pg_class.relpages to
 	 */
 	new_rel_pages = vacrel->rel_pages;	/* After possible rel truncation */
-	visibilitymap_count(rel, &new_rel_allvisible, NULL);
+	visibilitymap_count(rel, &new_rel_allvisible, &new_rel_allfrozen);
 	if (new_rel_allvisible > new_rel_pages)
 		new_rel_allvisible = new_rel_pages;
+
+	/*
+	 * An all-frozen block _must_ be all-visible. As such, clamp the count of
+	 * all-frozen blocks to the count of all-visible blocks. This matches the
+	 * clamping of relallvisible above.
+	 */
+	if (new_rel_allfrozen > new_rel_allvisible)
+		new_rel_allfrozen = new_rel_allvisible;
 
 	/*
 	 * Now actually update rel's pg_class entry.
@@ -601,7 +614,8 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 	 * scan every page that isn't skipped using the visibility map.
 	 */
 	vac_update_relstats(rel, new_rel_pages, vacrel->new_live_tuples,
-						new_rel_allvisible, vacrel->nindexes > 0,
+						new_rel_allvisible, new_rel_allfrozen,
+						vacrel->nindexes > 0,
 						vacrel->NewRelfrozenXid, vacrel->NewRelminMxid,
 						&frozenxid_updated, &minmulti_updated, false, true);
 
@@ -615,11 +629,20 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 	 * soon in cases where the failsafe prevented significant amounts of heap
 	 * vacuuming.
 	 */
+	/*
+	 * The delay counter covers the whole heap_vacuum_rel() run, matching the
+	 * scope of total_vacuum_time.  In a parallel vacuum it covers the
+	 * leader's sleeps only; parallel workers account their own sleeps to the
+	 * indexes they process.
+	 */
 	pgstat_report_vacuum(RelationGetRelid(rel),
 						 rel->rd_rel->relisshared,
 						 Max(vacrel->new_live_tuples, 0),
 						 vacrel->recently_dead_tuples +
-						 vacrel->missed_dead_tuples);
+						 vacrel->missed_dead_tuples,
+						 starttime,
+						 (PgStat_Counter) rint(VacuumDelayTime - startdelaytime),
+						 VacuumFailsafeActive);
 	pgstat_progress_end_command();
 
 	if (instrument)
@@ -754,8 +777,9 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 					continue;
 
 				appendStringInfo(&buf,
-								 _("index \"%s\": pages: %u in total, %u newly deleted, %u currently deleted, %u reusable\n"),
+								 _("index \"%s\": tuples: %.0f removed; pages: %u in total, %u newly deleted, %u currently deleted, %u reusable\n"),
 								 indnames[i],
+								 istat->tuples_removed,
 								 istat->num_pages,
 								 istat->pages_newly_deleted,
 								 istat->pages_deleted,
@@ -911,7 +935,7 @@ lazy_scan_heap(LVRelState *vacrel)
 		update_vacuum_error_info(vacrel, NULL, VACUUM_ERRCB_PHASE_SCAN_HEAP,
 								 blkno, InvalidOffsetNumber);
 
-		vacuum_delay_point();
+		vacuum_delay_point(false);
 
 		/*
 		 * Regularly check if wraparound failsafe should trigger.
@@ -1151,7 +1175,7 @@ lazy_scan_heap(LVRelState *vacrel)
 		{
 			elog(WARNING, "page is not marked all-visible but visibility map bit is set in relation \"%s\" page %u",
 				 vacrel->relname, blkno);
-			visibilitymap_clear(vacrel->rel, blkno, vmbuffer,
+			visibilitymap_clear_rel(vacrel->rel, blkno, vmbuffer,
 								VISIBILITYMAP_VALID_BITS);
 		}
 
@@ -1176,7 +1200,7 @@ lazy_scan_heap(LVRelState *vacrel)
 				 vacrel->relname, blkno);
 			PageClearAllVisible(page);
 			MarkBufferDirty(buf);
-			visibilitymap_clear(vacrel->rel, blkno, vmbuffer,
+			visibilitymap_clear_rel(vacrel->rel, blkno, vmbuffer,
 								VISIBILITYMAP_VALID_BITS);
 		}
 
@@ -1374,7 +1398,7 @@ lazy_scan_skip(LVRelState *vacrel, Buffer *vmbuffer, BlockNumber next_block,
 			skipsallvis = true;
 		}
 
-		vacuum_delay_point();
+		vacuum_delay_point(false);
 		next_unskippable_block++;
 		nskippable_blocks++;
 	}
@@ -2460,7 +2484,7 @@ lazy_vacuum_heap_rel(LVRelState *vacrel)
 		Page		page;
 		Size		freespace;
 
-		vacuum_delay_point();
+		vacuum_delay_point(false);
 
 		blkno = ItemPointerGetBlockNumber(&vacrel->dead_items->items[index]);
 		vacrel->blkno = blkno;
@@ -2734,6 +2758,8 @@ lazy_vacuum_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 {
 	IndexVacuumInfo ivinfo;
 	LVSavedErrInfo saved_err_info;
+	TimestampTz istarttime = GetCurrentTimestamp();
+	double		startdelaytime = VacuumDelayTime;
 
 	ivinfo.index = indrel;
 	ivinfo.heaprel = vacrel->rel;
@@ -2759,6 +2785,14 @@ lazy_vacuum_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 	/* Do bulk deletion */
 	istat = vac_bulkdel_one_index(&ivinfo, istat, (void *) vacrel->dead_items);
 
+	/* Accumulate this pass into the index's cumulative vacuum times */
+	pgstat_report_index_vacuum_time(indrel,
+									TimestampDifferenceMilliseconds(istarttime,
+																	GetCurrentTimestamp()),
+									(PgStat_Counter) rint(VacuumDelayTime -
+														  startdelaytime),
+									IsAutoVacuumWorkerProcess());
+
 	/* Revert to the previous phase information for error traceback */
 	restore_vacuum_error_info(vacrel, &saved_err_info);
 	pfree(vacrel->indname);
@@ -2783,6 +2817,8 @@ lazy_cleanup_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 {
 	IndexVacuumInfo ivinfo;
 	LVSavedErrInfo saved_err_info;
+	TimestampTz istarttime = GetCurrentTimestamp();
+	double		startdelaytime = VacuumDelayTime;
 
 	ivinfo.index = indrel;
 	ivinfo.heaprel = vacrel->rel;
@@ -2807,6 +2843,14 @@ lazy_cleanup_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 							 InvalidBlockNumber, InvalidOffsetNumber);
 
 	istat = vac_cleanup_one_index(&ivinfo, istat);
+
+	/* Accumulate this pass into the index's cumulative vacuum times */
+	pgstat_report_index_vacuum_time(indrel,
+									TimestampDifferenceMilliseconds(istarttime,
+																	GetCurrentTimestamp()),
+									(PgStat_Counter) rint(VacuumDelayTime -
+														  startdelaytime),
+									IsAutoVacuumWorkerProcess());
 
 	/* Revert to the previous phase information for error traceback */
 	restore_vacuum_error_info(vacrel, &saved_err_info);
@@ -3400,7 +3444,7 @@ update_relstats_all_indexes(LVRelState *vacrel)
 		vac_update_relstats(indrel,
 							istat->num_pages,
 							istat->num_index_tuples,
-							0,
+							0, 0,
 							false,
 							InvalidTransactionId,
 							InvalidMultiXactId,
@@ -3418,6 +3462,10 @@ static void
 vacuum_error_callback(void *arg)
 {
 	LVRelState *errinfo = arg;
+
+	/* Ignore non-error reports that also invoke this callback. */
+	if (errinfo->rel != NULL && geterrlevel() == ERROR)
+		pgstat_count_vacuum_error(errinfo->rel->rd_rel->relisshared);
 
 	switch (errinfo->phase)
 	{

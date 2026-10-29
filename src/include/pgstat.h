@@ -180,6 +180,14 @@ typedef struct PgStat_TableCounts
 
 	PgStat_Counter blocks_fetched;
 	PgStat_Counter blocks_hit;
+
+	/*
+	 * Revocations of all-visible and all-frozen marks in the visibility map.
+	 * The bits are cleared by the page modification itself, so these count
+	 * whether or not the transaction commits.
+	 */
+	PgStat_Counter visible_page_marks_cleared;
+	PgStat_Counter frozen_page_marks_cleared;
 } PgStat_TableCounts;
 
 /* ----------
@@ -238,7 +246,7 @@ typedef struct PgStat_TableXactStatus
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCAD
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCB4
 
 typedef struct PgStat_ArchiverStats
 {
@@ -354,6 +362,26 @@ typedef struct PgStat_StatDBEntry
 	PgStat_Counter sessions_fatal;
 	PgStat_Counter sessions_killed;
 
+	/*
+	 * Cumulative time vacuums spent processing tables of this database and
+	 * sleeping in cost-based delay points, in microseconds (the delay parts
+	 * advance only when track_cost_delay_timing is enabled).  Times of index
+	 * processing are included in the owning table's run.
+	 */
+	PgStat_Counter total_vacuum_time;
+	PgStat_Counter total_autovacuum_time;
+	PgStat_Counter total_vacuum_delay_time;
+	PgStat_Counter total_autovacuum_delay_time;
+
+	/*
+	 * Number of vacuums in this database that entered the wraparound
+	 * failsafe mode (see vacuum_failsafe_age).
+	 */
+	PgStat_Counter vacuum_failsafe_count;
+
+	/* # of vacuums in this database interrupted by errors */
+	PgStat_Counter vacuum_interrupt_count;
+
 	TimestampTz stat_reset_timestamp;
 } PgStat_StatDBEntry;
 
@@ -418,6 +446,8 @@ typedef struct PgStat_StatTabEntry
 
 	PgStat_Counter blocks_fetched;
 	PgStat_Counter blocks_hit;
+	PgStat_Counter visible_page_marks_cleared;
+	PgStat_Counter frozen_page_marks_cleared;
 
 	TimestampTz last_vacuum_time;	/* user initiated vacuum */
 	PgStat_Counter vacuum_count;
@@ -427,6 +457,25 @@ typedef struct PgStat_StatTabEntry
 	PgStat_Counter analyze_count;
 	TimestampTz last_autoanalyze_time;	/* autovacuum initiated */
 	PgStat_Counter autoanalyze_count;
+
+	PgStat_Counter total_vacuum_time;	/* times in milliseconds */
+	PgStat_Counter total_autovacuum_time;
+	PgStat_Counter total_analyze_time;
+	PgStat_Counter total_autoanalyze_time;
+
+	/*
+	 * Time slept in cost-based vacuum delay points while vacuuming this
+	 * relation, in milliseconds; nonzero only when track_cost_delay_timing
+	 * is enabled.
+	 */
+	PgStat_Counter total_vacuum_delay_time;
+	PgStat_Counter total_autovacuum_delay_time;
+
+	/*
+	 * Number of vacuums of this relation that entered the wraparound
+	 * failsafe mode (see vacuum_failsafe_age).
+	 */
+	PgStat_Counter vacuum_failsafe_count;
 } PgStat_StatTabEntry;
 
 typedef struct PgStat_WalStats
@@ -650,11 +699,22 @@ extern void pgstat_init_relation(Relation rel);
 extern void pgstat_assoc_relation(Relation rel);
 extern void pgstat_unlink_relation(Relation rel);
 
+extern void pgstat_report_vacuum_elapsed(Oid tableoid, bool shared,
+										 PgStat_Counter livetuples, PgStat_Counter deadtuples,
+										 PgStat_Counter elapsedtime, PgStat_Counter delaytime,
+										 bool failsafe);
 extern void pgstat_report_vacuum(Oid tableoid, bool shared,
-								 PgStat_Counter livetuples, PgStat_Counter deadtuples);
+								 PgStat_Counter livetuples, PgStat_Counter deadtuples,
+								 TimestampTz starttime, PgStat_Counter delaytime,
+								 bool failsafe);
+extern void pgstat_report_index_vacuum_time(Relation rel,
+											PgStat_Counter elapsedtime,
+											PgStat_Counter delaytime,
+											bool is_autovacuum);
+extern void pgstat_count_vacuum_error(bool shared);
 extern void pgstat_report_analyze(Relation rel,
 								  PgStat_Counter livetuples, PgStat_Counter deadtuples,
-								  bool resetcounter);
+								  bool resetcounter, TimestampTz starttime);
 
 /*
  * If stats are enabled, but pending data hasn't been prepared yet, call
@@ -701,6 +761,26 @@ extern void pgstat_report_analyze(Relation rel,
 	do {															\
 		if (pgstat_should_count_relation(rel))						\
 			(rel)->pgstat_info->counts.blocks_hit++;				\
+	} while (0)
+
+/*
+ * Count revocations of all-visible and all-frozen marks in the visibility
+ * map.  Only tables have a visibility map, so these always work on the
+ * table's pending counters.
+ */
+#define pgstat_count_visible_page_marks_cleared(rel)					\
+	do {															\
+		if (pgstat_should_count_relation(rel))						\
+		{															\
+			(rel)->pgstat_info->counts.visible_page_marks_cleared++;	\
+		}															\
+	} while (0)
+#define pgstat_count_frozen_page_marks_cleared(rel)					\
+	do {															\
+		if (pgstat_should_count_relation(rel))						\
+		{															\
+			(rel)->pgstat_info->counts.frozen_page_marks_cleared++;	\
+		}															\
 	} while (0)
 
 extern void pgstat_count_heap_insert(Relation rel, PgStat_Counter n);

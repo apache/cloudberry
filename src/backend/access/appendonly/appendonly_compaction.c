@@ -508,7 +508,7 @@ AppendOnlySegmentFileFullCompaction(Relation aorel,
 		tupleCount++;
 		if (VacuumCostActive && tupleCount % tuplePerPage == 0)
 		{
-			vacuum_delay_point();
+			vacuum_delay_point(false);
 		}
 	}
 
