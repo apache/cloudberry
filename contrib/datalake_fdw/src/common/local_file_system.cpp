@@ -55,7 +55,7 @@ namespace
 /* Reserved staging directories never contain published storage objects. */
 constexpr const char *STAGING_PREFIX = ".datalake-write-";
 
-static bool
+bool
 is_staging_path(const std::string &path)
 {
 	size_t start = 0;
