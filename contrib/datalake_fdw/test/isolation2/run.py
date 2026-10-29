@@ -28,7 +28,9 @@ def quote(value):
     return "'" + value.replace("'", "''") + "'"
 
 with tempfile.TemporaryDirectory(prefix='pr2044-isolation-') as tmp:
-    values = {'LOCAL_URI': 'file://' + tmp + '/replacement'}
+    values = {'LOCAL_URI': 'file://' + tmp + '/replacement',
+              'LOCAL_PATH': tmp + '/replacement', 'LOCAL_DIR': tmp,
+              'LOCAL_DIR_URI': 'file://' + tmp}
     if args.case == 's3':
         for name in ['PR2044_S3_ENDPOINT', 'PR2044_S3_BUCKET',
                      'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']:
@@ -51,13 +53,21 @@ with tempfile.TemporaryDirectory(prefix='pr2044-isolation-') as tmp:
                                 stderr=subprocess.STDOUT, env=env, timeout=180)
         output = result.stdout
         # The executor echoes SQL. Only a standalone result row is a pass marker.
-        markers = ['PR2044_LOCAL_PASS'] if args.case == 'local' else [
+        markers = ['PR2044_LOCAL_PASS', 'PR2044_LOCAL_PRIVATE_PASS',
+                   'PR2044_LOCAL_RACE_PASS', 'PR2044_LOCAL_LIST_PASS', 'PR2044_LOCAL_PUBLISH_PASS',
+                   'PR2044_LOCAL_CLEANUP_PASS'] if args.case == 'local' else [
             'PR2044_S3_BEFORE_PASS', 'PR2044_S3_AFTER_PASS']
         passed = result.returncode == 0 and 'FAILED:' not in output and all(
             re.search(r'^\s*' + marker + r'\s*$', output, re.M) for marker in markers)
         expected_error = 'PR2044 injected writer A failure' if args.case == 'local' else 'PR2044 injected S3 writer failure'
         errors = re.findall(r'^.*ERROR:.*$', output, re.M)
-        passed = passed and len(errors) == 1 and expected_error in errors[0]
+        if args.case == 'local':
+            passed = (passed and len(errors) == 3
+                      and all(expected_error in e for e in errors[:2])
+                      and 'finish_writer failed' in errors[2]
+                      and 'DETAIL:  finish a Parquet file: "replacement" already exists' in output)
+        else:
+            passed = passed and len(errors) == 1 and expected_error in errors[0]
         if args.case == 's3':
             passed = passed and "num times hit:'1'" in output
             # SQL echo includes the mapping: redact credentials before displaying it.
