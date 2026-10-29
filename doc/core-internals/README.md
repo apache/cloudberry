@@ -52,8 +52,7 @@ helper view and for the practice of disabling autovacuum during an experiment.
 ## What is here
 
 ```
-index.md                              landing page and chapter index
-part-1-introduction/                  ch01
+index.md                              chapter 1, and the landing page
 part-2-storage-data-layout/           ch02 .. ch08
 part-3-transactions-mvcc-concurrency/ ch09 .. ch12
 part-4-query-processing/              ch13 .. ch19

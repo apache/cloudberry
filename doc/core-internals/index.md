@@ -1,7 +1,8 @@
 ---
-id: ch01
-title: "1. Introduction: The Big Picture"
-sidebar_position: 1
+id: index
+title: "Apache Cloudberry — Core Internals"
+slug: /
+sidebar_position: 0
 ---
 
 <!--
@@ -23,9 +24,13 @@ sidebar_position: 1
   under the License.
 -->
 
-import RawFigure from '../_components/RawFigure';
+import RawFigure from './_components/RawFigure';
 
 # 1. Introduction: The Big Picture
+
+*Apache Cloudberry — Core Internals: 21 chapters, 104 sections. This chapter is the
+landing page; [§1.5.2](#152-module-to-chapter-guide) maps every module to the chapter
+that covers it.*
 
 ```mermaid
 flowchart TB
@@ -83,7 +88,7 @@ flowchart TB
   style SEG1 fill:#f3fbf5,stroke:#1a7f37
 ```
 
-*How a query really runs. On the coordinator the single **QD** (`Gp_role = GP_ROLE_DISPATCH`) parses and plans the query, cutting it into **slices** at each Motion; its **Dispatcher** (`CdbDispatchPlan`) allocates **gangs** of QEs and ships the plan with the **distributed snapshot** to them over **libpq**, then coordinates the 2PC commit ([§13](../part-4-query-processing/ch13.md), [§12](../part-3-transactions-mvcc-concurrency/ch12.md)). A segment may **fork several QEs** — one per slice — which share one **SharedLocalSnapshot** so they see the same data; each **Executor** scans and writes its segment's shard *locally* ([§18](../part-4-query-processing/ch18.md)), takes the **locks** it needs ([§11](../part-3-transactions-mvcc-concurrency/ch11.md)), and logs its changes to that segment's **WAL** ([§20](../part-5-high-availability-recovery/ch20.md)). Reaching another segment's data — and the final **Gather** to the QD — travels over the **Interconnect** (UDPIFC) as **Motion**, a path separate from the libpq dispatch ([§19](../part-4-query-processing/ch19.md)).*
+*How a query really runs. On the coordinator the single **QD** (`Gp_role = GP_ROLE_DISPATCH`) parses and plans the query, cutting it into **slices** at each Motion; its **Dispatcher** (`CdbDispatchPlan`) allocates **gangs** of QEs and ships the plan with the **distributed snapshot** to them over **libpq**, then coordinates the 2PC commit ([§13](./part-4-query-processing/ch13.md), [§12](./part-3-transactions-mvcc-concurrency/ch12.md)). A segment may **fork several QEs** — one per slice — which share one **SharedLocalSnapshot** so they see the same data; each **Executor** scans and writes its segment's shard *locally* ([§18](./part-4-query-processing/ch18.md)), takes the **locks** it needs ([§11](./part-3-transactions-mvcc-concurrency/ch11.md)), and logs its changes to that segment's **WAL** ([§20](./part-5-high-availability-recovery/ch20.md)). Reaching another segment's data — and the final **Gather** to the QD — travels over the **Interconnect** (UDPIFC) as **Motion**, a path separate from the libpq dispatch ([§19](./part-4-query-processing/ch19.md)).*
 
 ## 1.1 The MPP Cluster: Coordinator, Segments & Distribution
 
@@ -105,13 +110,13 @@ flowchart TB
   style SEGS fill:#f3fbf5,stroke:#1a7f37
 ```
 
-*The cluster, in its simplest form. One **Master** holds the catalog (system metadata) but no user data; the **Segments** each hold the catalog *and* a shard of the user data — so the catalog is replicated everywhere, while the data is sharded. A table's rows are spread across the segments by a hash of its distribution key: `cdbhash(key)` deterministically sends each row to one segment ([§1.1.2](#112-three-distribution-policies)–[§1.1.3](#113-how-a-row-finds-its-segment)). Master and Segments communicate over the Interconnect ([§19](../part-4-query-processing/ch19.md)).*
+*The cluster, in its simplest form. One **Master** holds the catalog (system metadata) but no user data; the **Segments** each hold the catalog *and* a shard of the user data — so the catalog is replicated everywhere, while the data is sharded. A table's rows are spread across the segments by a hash of its distribution key: `cdbhash(key)` deterministically sends each row to one segment ([§1.1.2](#112-three-distribution-policies)–[§1.1.3](#113-how-a-row-finds-its-segment)). Master and Segments communicate over the Interconnect ([§19](./part-4-query-processing/ch19.md)).*
 
 ### 1.1.1 A shared-nothing cluster
 
 Cloudberry is one logical database spread across many PostgreSQL processes that share *nothing* — no shared memory, no shared disk. One process is the **coordinator**: it accepts connections, parses and plans queries, dispatches work, and gathers results, but it stores **no user data**. The rest are **segments**, each a full PostgreSQL instance with its own CPU, memory, and disk, holding a slice of every distributed table and executing the plan on its slice in parallel. Scaling out means adding segments.
 
-For availability each primary segment can have a **mirror** — a streaming-replication copy on another host ready to take over (Chapter [20](../part-5-high-availability-recovery/ch20.md)). The whole cluster is described by one catalog, `gp_segment_configuration`, readable from the coordinator:
+For availability each primary segment can have a **mirror** — a streaming-replication copy on another host ready to take over (Chapter [20](./part-5-high-availability-recovery/ch20.md)). The whole cluster is described by one catalog, `gp_segment_configuration`, readable from the coordinator:
 
 *The cluster map. `content` −1 is the coordinator; `content` 0 and up are segments. This is a demo cluster — one coordinator and three primary segments, no mirror.*
 
@@ -132,7 +137,7 @@ FROM gp_segment_configuration ORDER BY content;
 
 - **content** — the segment's logical id: **−1** is the coordinator, **0 … N−1** are the data segments. A primary and its mirror share one content.
 - **role / preferred_role** — `p` primary or `m` mirror — current vs. the role it owns when healthy; they differ after a failover.
-- **mode / status** — sync state (`s` in-sync, `n` not-replicating) and liveness (`u` up, `d` down), maintained by the fault-tolerance service (Chapter [20](../part-5-high-availability-recovery/ch20.md)).
+- **mode / status** — sync state (`s` in-sync, `n` not-replicating) and liveness (`u` up, `d` down), maintained by the fault-tolerance service (Chapter [20](./part-5-high-availability-recovery/ch20.md)).
 
 :::note
 
@@ -146,7 +151,7 @@ Every table carries a **distribution policy** that decides how its rows are spre
 
 - **`DISTRIBUTED BY (cols)`** — **Hashed.** Each row's key columns are hashed to pick its segment. The default, and what you want for big tables: even spread, and joins on the key need no data movement.
 - **`DISTRIBUTED REPLICATED`** — **Replicated.** A full copy of the table on *every* segment. Good for small dimension tables, so joins against them never have to redistribute.
-- **`DISTRIBUTED RANDOMLY`** — **Random.** Rows go round-robin to segments with no key. Even spread, but every join on it requires a redistribution Motion (Chapter [19](../part-4-query-processing/ch19.md)).
+- **`DISTRIBUTED RANDOMLY`** — **Random.** Rows go round-robin to segments with no key. Even spread, but every join on it requires a redistribution Motion (Chapter [19](./part-4-query-processing/ch19.md)).
 
 The policy is recorded per table in `gp_distribution_policy` — `policytype` is `p` (partitioned: hashed or random) or `r` (replicated); `distkey` lists the key column numbers, and is empty for random and replicated tables:
 
@@ -377,7 +382,7 @@ The relfilenode is not fixed forever: operations that rewrite a table (`VACUUM F
 
 ### 1.2.3 Pages and TOAST
 
-Within the main fork, data is not a byte stream but a sequence of fixed-size **pages** (also called blocks) — the unit of every disk read and buffer-cache slot ([§3](../part-2-storage-data-layout/ch03.md)). PostgreSQL defaults to 8 KB; Cloudberry raises it to **32 KB** to favour the large sequential scans typical of analytics:
+Within the main fork, data is not a byte stream but a sequence of fixed-size **pages** (also called blocks) — the unit of every disk read and buffer-cache slot ([§3](./part-2-storage-data-layout/ch03.md)). PostgreSQL defaults to 8 KB; Cloudberry raises it to **32 KB** to favour the large sequential scans typical of analytics:
 
 ```c title="src/include/pg_config.h — BLCKSZ"
 #define BLCKSZ 32768   /* 32 KB pages (PostgreSQL default is 8192) */
@@ -464,7 +469,7 @@ Every process but the last is a shared helper ([§1.3.3](#133-background-workers
 
 ### 1.3.2 QD and QE backends
 
-A client connects only to the coordinator. The backend that serves it is the **query dispatcher (QD)**: it plans the query, then opens libpq connections to the segments and asks each segment's postmaster to fork a **query executor (QE)** to run its slice of the plan. A coordinated set of QEs is a *gang* ([§1.4](#14-clients-the-wire-protocol--dispatch), and in depth in Chapter [19](../part-4-query-processing/ch19.md)). The QD and its QEs share one **session id** (`con<N>`), which is the thread that lets you follow a single statement across the cluster:
+A client connects only to the coordinator. The backend that serves it is the **query dispatcher (QD)**: it plans the query, then opens libpq connections to the segments and asks each segment's postmaster to fork a **query executor (QE)** to run its slice of the plan. A coordinated set of QEs is a *gang* ([§1.4](#14-clients-the-wire-protocol--dispatch), and in depth in Chapter [19](./part-4-query-processing/ch19.md)). The QD and its QEs share one **session id** (`con<N>`), which is the thread that lets you follow a single statement across the cluster:
 
 *The same session con382 running an INSERT: the QD on the coordinator (port 7100) and its QEs on segments 0, 1, and 2 (ports 7102/7103/7104), which each segment postmaster forked to run the dispatched work (MPPEXEC).*
 
@@ -489,7 +494,7 @@ In `pg_stat_activity` on the coordinator a QD shows `gp_segment_id = -1`; the QE
 
 ### 1.3.3 Background workers
 
-The helper processes split in two. The **inherited PostgreSQL set** — `checkpointer`, `background writer` ([§3.5](../part-2-storage-data-layout/ch03.md#35-background-writer--checkpointer)), `walwriter`, the `autovacuum launcher` — runs on *every* node, coordinator and segments alike. On top of those, the postmaster starts a fixed table of **Cloudberry-specific auxiliary workers**, `PMAuxProcList`:
+The helper processes split in two. The **inherited PostgreSQL set** — `checkpointer`, `background writer` ([§3.5](./part-2-storage-data-layout/ch03.md#35-background-writer--checkpointer)), `walwriter`, the `autovacuum launcher` — runs on *every* node, coordinator and segments alike. On top of those, the postmaster starts a fixed table of **Cloudberry-specific auxiliary workers**, `PMAuxProcList`:
 
 ```c title="src/backend/postmaster/postmaster.c"
 static BackgroundWorker PMAuxProcList[MaxPMAuxProc] =
@@ -504,7 +509,7 @@ static BackgroundWorker PMAuxProcList[MaxPMAuxProc] =
 };
 ```
 
-Each entry carries a **start rule** that decides where it runs. `FtsProbeStartRule` (`src/backend/fts/fts.c`) and `DtxRecoveryStartRule` (`src/backend/cdb/cdbdtxrecovery.c`) both return true only under `GP_ROLE_DISPATCH`, which is why [§1.3.1](#131-the-postmaster-and-the-process-tree) found `ftsprobe` and `dtx recovery` on the coordinator and not on the segment. FTS is the cluster fault detector (Chapter [20](../part-5-high-availability-recovery/ch20.md)); DTX recovery finishes in-doubt distributed transactions after a crash.
+Each entry carries a **start rule** that decides where it runs. `FtsProbeStartRule` (`src/backend/fts/fts.c`) and `DtxRecoveryStartRule` (`src/backend/cdb/cdbdtxrecovery.c`) both return true only under `GP_ROLE_DISPATCH`, which is why [§1.3.1](#131-the-postmaster-and-the-process-tree) found `ftsprobe` and `dtx recovery` on the coordinator and not on the segment. FTS is the cluster fault detector (Chapter [20](./part-5-high-availability-recovery/ch20.md)); DTX recovery finishes in-doubt distributed transactions after a crash.
 
 `pg_stat_activity` reports the backend type of everything currently attached on a node:
 
@@ -535,7 +540,7 @@ The classic helpers each have a `*Main` entry point reached through the postmast
 
 ### 1.3.4 Shared versus private memory
 
-Each postmaster carves out one region of **shared memory** at startup, visible to all the backends it forks. Its largest tenant is the buffer cache (`shared_buffers`, Chapter [3](../part-2-storage-data-layout/ch03.md)); it also holds the lock tables, the WAL buffers, the process array, and the cluster-wide DTX state. On this cluster each node's share is:
+Each postmaster carves out one region of **shared memory** at startup, visible to all the backends it forks. Its largest tenant is the buffer cache (`shared_buffers`, Chapter [3](./part-2-storage-data-layout/ch03.md)); it also holds the lock tables, the WAL buffers, the process array, and the cluster-wide DTX state. On this cluster each node's share is:
 
 *Each node sizes its own shared memory independently.*
 
@@ -553,7 +558,7 @@ Everything else a backend needs is **private** to that process: the memory-conte
 
 :::note
 
-**The MPP consequence:** there is no one shared-memory region for the cluster — there are N+1 of them, one per postmaster, each sized by the same GUCs but allocated and accounted separately. That is the same per-node independence we saw for the buffer cache in [§3.1.2](../part-2-storage-data-layout/ch03.md#312-not-one-cache-but-n1), now seen one level up.
+**The MPP consequence:** there is no one shared-memory region for the cluster — there are N+1 of them, one per postmaster, each sized by the same GUCs but allocated and accounted separately. That is the same per-node independence we saw for the buffer cache in [§3.1.2](./part-2-storage-data-layout/ch03.md#312-not-one-cache-but-n1), now seen one level up.
 
 :::
 
@@ -582,7 +587,7 @@ A client — `psql`, a JDBC/ODBC driver, anything built on `libpq` — connects 
 - **Simple Query** — One `Query` message carries the SQL text; the backend parses, plans, and executes it in a single round trip. What `psql` sends for an ordinary typed statement.
 - **Extended Query** — `Parse` → `Bind` → `Execute` as separate steps, so a statement is planned once and then run many times with different bound parameters (prepared statements, most drivers). Separates planning from parameter values.
 
-Both are covered in depth in [§13.1](../part-4-query-processing/ch13.md#131-the-simple-query-protocol)–[§13.2](../part-4-query-processing/ch13.md#132-the-extended-query-protocol); here we only need the handoff point: the coordinator ends up holding a finished plan, and now must turn it into work spread across the cluster.
+Both are covered in depth in [§13.1](./part-4-query-processing/ch13.md#131-the-simple-query-protocol)–[§13.2](./part-4-query-processing/ch13.md#132-the-extended-query-protocol); here we only need the handoff point: the coordinator ends up holding a finished plan, and now must turn it into work spread across the cluster.
 
 ### 1.4.2 The QD→QE dispatch model
 
@@ -658,7 +663,7 @@ flowchart BT
 
 :::note
 
-This is the orientation-level view. How the dispatcher serializes and ships the plan is [§13.3](../part-4-query-processing/ch13.md#133-dispatch-from-coordinator-plan-to-segment-execution); how Motion actually moves tuples between gangs (Gather, Redistribute, Broadcast) over the interconnect is Chapter [19](../part-4-query-processing/ch19.md).
+This is the orientation-level view. How the dispatcher serializes and ships the plan is [§13.3](./part-4-query-processing/ch13.md#133-dispatch-from-coordinator-plan-to-segment-execution); how Motion actually moves tuples between gangs (Gather, Redistribute, Broadcast) over the interconnect is Chapter [19](./part-4-query-processing/ch19.md).
 
 :::
 
@@ -670,7 +675,7 @@ This is the orientation-level view. How the dispatcher serializes and ships the 
 
 From here on, this handbook follows that one engine a layer at a time. A statement enters the **dispatcher** on the coordinator, is turned into a plan by the **Postgres planner** (or **ORCA**) using the **catalog** and **statistics**, and is run by the **executor** — which drives **Motion** to move tuples between segments and the **access methods** to read and write rows within a segment. The access methods sit on the **buffer cache**, which sits on the **storage manager**, which reaches each segment's local disk.
 
-Cutting across that pipeline are three concerns the map draws as side layers. **Transactions, MVCC, and locks** ([§9](../part-3-transactions-mvcc-concurrency/ch09.md)–[§11](../part-3-transactions-mvcc-concurrency/ch11.md)) keep concurrent execution correct, and **distributed transactions** ([§12](../part-3-transactions-mvcc-concurrency/ch12.md)) extend commit across the segments. **High availability** ([§20](../part-5-high-availability-recovery/ch20.md)) turns every buffered change into WAL that feeds replication, recovery, and the mirrors, while FTS watches for failure. And **resource groups** ([§21](../part-6-resource-management/ch21.md)) decide which queries are admitted and how much CPU and memory they may use. Three dependencies recur throughout: the optimizer cannot plan without the **catalog** ([§8](../part-2-storage-data-layout/ch08.md)) and **statistics** ([§14](../part-4-query-processing/ch14.md)); the executor drives **both** Motion ([§19](../part-4-query-processing/ch19.md), across segments) and the access methods ([§4](../part-2-storage-data-layout/ch04.md)–[§7](../part-2-storage-data-layout/ch07.md), within a segment); and every change reaches durability only through the **buffer cache** into the **WAL** ([§20](../part-5-high-availability-recovery/ch20.md)).
+Cutting across that pipeline are three concerns the map draws as side layers. **Transactions, MVCC, and locks** ([§9](./part-3-transactions-mvcc-concurrency/ch09.md)–[§11](./part-3-transactions-mvcc-concurrency/ch11.md)) keep concurrent execution correct, and **distributed transactions** ([§12](./part-3-transactions-mvcc-concurrency/ch12.md)) extend commit across the segments. **High availability** ([§20](./part-5-high-availability-recovery/ch20.md)) turns every buffered change into WAL that feeds replication, recovery, and the mirrors, while FTS watches for failure. And **resource groups** ([§21](./part-6-resource-management/ch21.md)) decide which queries are admitted and how much CPU and memory they may use. Three dependencies recur throughout: the optimizer cannot plan without the **catalog** ([§8](./part-2-storage-data-layout/ch08.md)) and **statistics** ([§14](./part-4-query-processing/ch14.md)); the executor drives **both** Motion ([§19](./part-4-query-processing/ch19.md), across segments) and the access methods ([§4](./part-2-storage-data-layout/ch04.md)–[§7](./part-2-storage-data-layout/ch07.md), within a segment); and every change reaches durability only through the **buffer cache** into the **WAL** ([§20](./part-5-high-availability-recovery/ch20.md)).
 
 ### 1.5.2 Module-to-chapter guide
 
@@ -678,23 +683,23 @@ Cutting across that pipeline are three concerns the map draws as side layers. **
 
 | Layer | Module | Ch. |
 | --- | --- | --- |
-| Storage & data | Data files & the storage manager (smgr, VFD) | [2](../part-2-storage-data-layout/ch02.md) |
-|  | Buffer cache | [3](../part-2-storage-data-layout/ch03.md) |
-|  | Heap — the row store | [4](../part-2-storage-data-layout/ch04.md) |
-|  | Append-optimized tables (AO / AOCS) | [5](../part-2-storage-data-layout/ch05.md) |
-|  | PAX — native columnar | [6](../part-2-storage-data-layout/ch06.md) |
-|  | Indexes (B-tree … BRIN, Bitmap) | [7](../part-2-storage-data-layout/ch07.md) |
-|  | The system catalog | [8](../part-2-storage-data-layout/ch08.md) |
-| Transactions | Transactions & isolation | [9](../part-3-transactions-mvcc-concurrency/ch09.md) |
-|  | MVCC, snapshots & vacuum | [10](../part-3-transactions-mvcc-concurrency/ch10.md) |
-|  | Locks & the global deadlock detector | [11](../part-3-transactions-mvcc-concurrency/ch11.md) |
-|  | Distributed transactions & 2PC | [12](../part-3-transactions-mvcc-concurrency/ch12.md) |
-| Query processing | Query processing stages | [13](../part-4-query-processing/ch13.md) |
-|  | Statistics & selectivity | [14](../part-4-query-processing/ch14.md) |
-|  | The Postgres planner | [15](../part-4-query-processing/ch15.md) |
-|  | Distributed planning | [16](../part-4-query-processing/ch16.md) |
-|  | ORCA — the Cascades optimizer | [17](../part-4-query-processing/ch17.md) |
-|  | The executor | [18](../part-4-query-processing/ch18.md) |
-|  | Motion & the interconnect | [19](../part-4-query-processing/ch19.md) |
-| Availability | High availability & recovery (WAL, replication, FTS) | [20](../part-5-high-availability-recovery/ch20.md) |
-| Resources | Resource management | [21](../part-6-resource-management/ch21.md) |
+| Storage & data | Data files & the storage manager (smgr, VFD) | [2](./part-2-storage-data-layout/ch02.md) |
+|  | Buffer cache | [3](./part-2-storage-data-layout/ch03.md) |
+|  | Heap — the row store | [4](./part-2-storage-data-layout/ch04.md) |
+|  | Append-optimized tables (AO / AOCS) | [5](./part-2-storage-data-layout/ch05.md) |
+|  | PAX — native columnar | [6](./part-2-storage-data-layout/ch06.md) |
+|  | Indexes (B-tree … BRIN, Bitmap) | [7](./part-2-storage-data-layout/ch07.md) |
+|  | The system catalog | [8](./part-2-storage-data-layout/ch08.md) |
+| Transactions | Transactions & isolation | [9](./part-3-transactions-mvcc-concurrency/ch09.md) |
+|  | MVCC, snapshots & vacuum | [10](./part-3-transactions-mvcc-concurrency/ch10.md) |
+|  | Locks & the global deadlock detector | [11](./part-3-transactions-mvcc-concurrency/ch11.md) |
+|  | Distributed transactions & 2PC | [12](./part-3-transactions-mvcc-concurrency/ch12.md) |
+| Query processing | Query processing stages | [13](./part-4-query-processing/ch13.md) |
+|  | Statistics & selectivity | [14](./part-4-query-processing/ch14.md) |
+|  | The Postgres planner | [15](./part-4-query-processing/ch15.md) |
+|  | Distributed planning | [16](./part-4-query-processing/ch16.md) |
+|  | ORCA — the Cascades optimizer | [17](./part-4-query-processing/ch17.md) |
+|  | The executor | [18](./part-4-query-processing/ch18.md) |
+|  | Motion & the interconnect | [19](./part-4-query-processing/ch19.md) |
+| Availability | High availability & recovery (WAL, replication, FTS) | [20](./part-5-high-availability-recovery/ch20.md) |
+| Resources | Resource management | [21](./part-6-resource-management/ch21.md) |
