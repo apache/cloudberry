@@ -1,13 +1,12 @@
-import imp
 import os
 import sys
 from mock import patch
-from gppylib.test.unit.gp_unittest import GpTestCase,run_tests
+from gppylib.test.unit.gp_unittest import GpTestCase,load_source,run_tests
 
 class GpCheckPerf(GpTestCase):
     def setUp(self):
         gpcheckcat_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpcheckperf")
-        self.subject = imp.load_source('gpcheckperf', gpcheckcat_file)
+        self.subject = load_source('gpcheckperf', gpcheckcat_file)
 
     def tearDown(self):
         super(GpCheckPerf, self).tearDown()

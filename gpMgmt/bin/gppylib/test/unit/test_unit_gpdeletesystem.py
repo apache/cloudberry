@@ -1,4 +1,4 @@
-import imp, os
+import os
 from optparse import Values
 import tempfile
 import shutil
@@ -12,7 +12,7 @@ class GpDeleteSystemTestCase(GpTestCase):
         #   import gpdeletesystem
         #   self.subject = gpdeletesystem
         gpdeletesystem_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpdeletesystem")
-        self.subject = imp.load_source('gpdeletesystem', gpdeletesystem_file)
+        self.subject = load_source('gpdeletesystem', gpdeletesystem_file)
         self.tmpDir = tempfile.mkdtemp()
         os.chmod(self.tmpDir, 0o777)
         self.options = Values()

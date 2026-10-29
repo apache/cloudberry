@@ -1,4 +1,3 @@
-import imp
 import logging
 import os
 import signal
@@ -9,7 +8,7 @@ import unittest
 from mock import Mock, call, patch
 
 from gppylib.gparray import Segment, GpArray, SegmentPair
-from gppylib.test.unit.gp_unittest import GpTestCase, run_tests
+from gppylib.test.unit.gp_unittest import GpTestCase, load_source, run_tests
 from gppylib.commands import base
 from gppylib.commands.base import Command, WorkerPool
 from gppylib.commands.gp import GpSegStopCmd
@@ -25,7 +24,7 @@ class GpStop(GpTestCase):
         #   import gpstop
         #   self.subject = gpstop
         gpstop_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpstop")
-        self.subject = imp.load_source('gpstop', gpstop_file)
+        self.subject = load_source('gpstop', gpstop_file)
         self.subject.logger = Mock(spec=['log', 'warn', 'info', 'debug', 'error', 'warning', 'fatal'])
 
         self.mock_gp = Mock()
@@ -471,7 +470,7 @@ class GpStop(GpTestCase):
 
 # Perform an 'import gpstop', as above.
 _gpstop_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpstop")
-gpstop = imp.load_source('gpstop', _gpstop_file)
+gpstop = load_source('gpstop', _gpstop_file)
 
 
 class GpStopPrintProgressTestCase(unittest.TestCase):
