@@ -20,6 +20,7 @@
 #include "gpopt/base/CDistributionSpecNonSingleton.h"
 #include "gpopt/base/CDistributionSpecReplicated.h"
 #include "gpopt/base/CDistributionSpecSingleton.h"
+#include "gpopt/base/CDistributionSpecWorkerRandom.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/base/CUtils.h"
 #include "gpopt/operators/CExpressionHandle.h"
@@ -293,6 +294,39 @@ CPhysicalHashJoin::PdsMatch(CMemoryPool *mp, CDistributionSpec *pds,
 			return PdshashedMatching(mp,
 									 CDistributionSpecHashed::PdsConvert(pds),
 									 ulSourceChildIndex);
+
+		case CDistributionSpec::EdtWorkerRandom:
+		{
+			CDistributionSpecWorkerRandom *pdsWorkerRandom =
+				CDistributionSpecWorkerRandom::PdsConvert(pds);
+			CDistributionSpec *pdsSegmentBase =
+				pdsWorkerRandom->PdsSegmentBase();
+
+			if (nullptr == pdsSegmentBase ||
+				CDistributionSpec::EdtHashed != pdsSegmentBase->Edt())
+			{
+				GPOS_RAISE(
+					CException::ExmaInvalid, CException::ExmiInvalid,
+					GPOS_WSZ_LIT(
+						"Unable to create matching worker-random distribution."));
+			}
+
+			CDistributionSpecHashed *pdsMatchingSegmentBase =
+				PdshashedMatching(
+					mp, CDistributionSpecHashed::PdsConvert(pdsSegmentBase),
+					ulSourceChildIndex);
+			CDistributionSpecWorkerRandom *pdsMatchingWorkerRandom =
+				CDistributionSpecWorkerRandom::PdsCreateWorkerRandom(
+					mp, pdsWorkerRandom->UlWorkers(), pdsMatchingSegmentBase);
+			pdsMatchingSegmentBase->Release();
+
+			if (pdsWorkerRandom->IsDuplicateSensitive())
+			{
+				pdsMatchingWorkerRandom->MarkDuplicateSensitive();
+			}
+
+			return pdsMatchingWorkerRandom;
+		}
 
 		default:
 			GPOS_ASSERT(CDistributionSpec::EdtStrictReplicated == pds->Edt() ||
