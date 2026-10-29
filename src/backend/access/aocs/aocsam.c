@@ -4288,10 +4288,12 @@ aocs_writecol_add(Oid relid, List *newvals, TupleDesc oldDesc)
 static void
 aocs_writecol_rewritesegfiles(
 	AOCSWriteColumnDesc idesc, AOCSScanDesc scanDesc, List *constraints,
+	AppendOnlyVisimap *visimap,
 	ExprContext *econtext, TupleTableSlot *oldslot,
 	TupleTableSlot *newslot, int colno)
 {
 	ListCell *l;
+	bool	 row_is_live;
 	/* expected first row number of the next varblock */
 	int64 expectedFRN = -1;
 	Assert(list_length(idesc->newcolvals) > 0);
@@ -4341,6 +4343,26 @@ aocs_writecol_rewritesegfiles(
 
 
 		/*
+		 * Is this row part of the table's contents?
+		 *
+		 * The scan runs under SnapshotAny because every row has to be
+		 * rewritten, visible or not, to keep the new segfile's block structure
+		 * -- and so every row number -- aligned with the columns that are not
+		 * being rewritten.  Deleted rows come along for that ride only.  heap
+		 * and ao_row rewrite under an MVCC snapshot and never see them, so
+		 * nothing the user wrote is meant to apply to them: not the
+		 * constraints checked below, and not the expression evaluated just
+		 * here, which for "ALTER COLUMN a TYPE int USING a::int" is a cast
+		 * that fails outright on a row the DELETE already took out of the
+		 * table.  Where the expression is a bare Var it is only a copy, so a
+		 * deleted row keeps its bytes; anything else gets a NULL, there being
+		 * no value of the new type to keep.  No one can read either back.
+		 */
+		row_is_live = (visimap == NULL ||
+					   AppendOnlyVisimap_IsVisible(visimap,
+												   (AOTupleId *) &scanDesc->cdb_fake_ctid));
+
+		/*
 		 * Process supplied expressions to replace selected columns.
 		 *
 		 * First, evaluate expressions whose inputs come from the old
@@ -4353,6 +4375,19 @@ aocs_writecol_rewritesegfiles(
 			NewColumnValue *ex = lfirst(l);
 			if (ex->is_generated)
 				continue;
+
+			/*
+			 * A bare Var just copies the old value across and cannot fail, so
+			 * a deleted row keeps its bytes.  Anything else is skipped: its
+			 * result is of the new type, there is no old value of that type
+			 * to fall back on, and evaluating it is what can fail.
+			 */
+			if (!row_is_live && !IsA(ex->expr, Var))
+			{
+				newslot->tts_values[ex->attnum - 1] = (Datum) 0;
+				newslot->tts_isnull[ex->attnum - 1] = true;
+				continue;
+			}
 
 			newslot->tts_values[ex->attnum - 1]
 				= ExecEvalExprSwitchContext(ex->exprstate,
@@ -4375,6 +4410,14 @@ aocs_writecol_rewritesegfiles(
 			if (!ex->is_generated)
 				continue;
 
+			/* see above */
+			if (!row_is_live && !IsA(ex->expr, Var))
+			{
+				newslot->tts_values[ex->attnum - 1] = (Datum) 0;
+				newslot->tts_isnull[ex->attnum - 1] = true;
+				continue;
+			}
+
 			newslot->tts_values[ex->attnum - 1]
 				= ExecEvalExprSwitchContext(ex->exprstate,
 											econtext,
@@ -4390,33 +4433,39 @@ aocs_writecol_rewritesegfiles(
 		 * here.  Only the rewritten columns can newly become NULL -- the rest
 		 * were copied over verbatim -- so NOT NULL needs checking for those
 		 * only.
+		 *
+		 * Deleted rows are exempt, for the reason given above where
+		 * row_is_live is worked out.
 		 */
-		foreach(l, idesc->newcolvals)
+		if (row_is_live)
 		{
-			NewColumnValue    *ex = lfirst(l);
-			Form_pg_attribute  attr = TupleDescAttr(newslot->tts_tupleDescriptor,
-													ex->attnum - 1);
+			foreach(l, idesc->newcolvals)
+			{
+				NewColumnValue    *ex = lfirst(l);
+				Form_pg_attribute  attr = TupleDescAttr(newslot->tts_tupleDescriptor,
+														ex->attnum - 1);
 
-			if (attr->attnotnull && newslot->tts_isnull[ex->attnum - 1])
-				ereport(ERROR,
-						(errcode(ERRCODE_NOT_NULL_VIOLATION),
-						 errmsg("column \"%s\" of relation \"%s\" contains null values",
-								NameStr(attr->attname),
-								RelationGetRelationName(idesc->rel))));
-		}
+				if (attr->attnotnull && newslot->tts_isnull[ex->attnum - 1])
+					ereport(ERROR,
+							(errcode(ERRCODE_NOT_NULL_VIOLATION),
+							 errmsg("column \"%s\" of relation \"%s\" contains null values",
+									NameStr(attr->attname),
+									RelationGetRelationName(idesc->rel))));
+			}
 
-		foreach(l, constraints)
-		{
-			NewConstraint *con = lfirst(l);
+			foreach(l, constraints)
+			{
+				NewConstraint *con = lfirst(l);
 
-			if (con->contype != CONSTR_CHECK)
-				continue;
-			if (!ExecCheck(con->qualstate, econtext))
-				ereport(ERROR,
-						(errcode(ERRCODE_CHECK_VIOLATION),
-						 errmsg("check constraint \"%s\" of relation \"%s\" is violated by some row",
-								con->name,
-								RelationGetRelationName(idesc->rel))));
+				if (con->contype != CONSTR_CHECK)
+					continue;
+				if (!ExecCheck(con->qualstate, econtext))
+					ereport(ERROR,
+							(errcode(ERRCODE_CHECK_VIOLATION),
+							 errmsg("check constraint \"%s\" of relation \"%s\" is violated by some row",
+									con->name,
+									RelationGetRelationName(idesc->rel))));
+			}
 		}
 
 		aocs_writecol_insert_datum(idesc,
@@ -4548,6 +4597,8 @@ aocs_writecol_rewrite(Oid relid, List *newvals, List *constraints,
 	int32 nseg;
 	AOCSWriteColumnDesc idesc;
 	FileNumber newfilenum;
+	AppendOnlyVisimap visimap;
+	bool		validating = false;
 
 	estate = CreateExecutorState();
 	Assert(newvals);
@@ -4595,6 +4646,47 @@ aocs_writecol_rewrite(Oid relid, List *newvals, List *constraints,
 						 (int) con->contype);
 			}
 		}
+
+		/*
+		 * None of what the user wrote applies to the deleted rows the rewrite
+		 * drags along; see the comment in aocs_writecol_rewritesegfiles().
+		 * Open the visibility map when something would otherwise be applied to
+		 * them -- a constraint to check, a NOT NULL to enforce, or an
+		 * expression that can fail, such as the cast in
+		 * "ALTER COLUMN a TYPE int USING a::int".
+		 *
+		 * A bare Var cannot fail, so the rewrites that only restate a column --
+		 * SET ENCODING, and the one DROP COLUMN does to an incomplete column --
+		 * still skip the per-row lookup, which is what it is here to avoid.
+		 */
+		if (constraints != NIL)
+			validating = true;
+		else
+		{
+			foreach(l, idesc->newcolvals)
+			{
+				NewColumnValue *ex = lfirst(l);
+
+				if (TupleDescAttr(RelationGetDescr(rel), ex->attnum - 1)->attnotnull ||
+					!IsA(ex->expr, Var))
+				{
+					validating = true;
+					break;
+				}
+			}
+		}
+
+		if (validating)
+		{
+			Oid		visimaprelid;
+			Oid		visimapidxid;
+
+			GetAppendOnlyEntryAuxOids(rel, NULL, NULL, NULL,
+									  &visimaprelid, &visimapidxid);
+			AppendOnlyVisimap_Init(&visimap, visimaprelid, visimapidxid,
+								   AccessShareLock, snapshot);
+		}
+
 		oldslot = MakeSingleTupleTableSlot(oldDesc, &TTSOpsVirtual);
 		newslot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtual);
 
@@ -4673,12 +4765,16 @@ aocs_writecol_rewrite(Oid relid, List *newvals, List *constraints,
 			aocs_writecol_rewritesegfiles(idesc,
 										scanDesc,
 										constraints,
+										validating ? &visimap : NULL,
 										econtext,
 										oldslot,
 										newslot,
 										colno);
 			aocs_endscan(scanDesc);
 		}
+
+		if (validating)
+			AppendOnlyVisimap_Finish(&visimap, AccessShareLock);
 
 		aocs_writecol_finish(idesc);
 		FreeExecutorState(estate);
