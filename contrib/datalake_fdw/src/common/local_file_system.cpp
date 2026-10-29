@@ -32,6 +32,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <random>
 #include <utility>
 
 #include <arrow/memory_pool.h>
@@ -45,89 +46,139 @@ extern "C"
 {
 #include "postgres.h"
 #include "common/file_perm.h"
+#include "utils/faultinjector.h"
 }
 
 namespace
 {
 
-/*
- * A pathname may have been removed and reused while our descriptor stayed
- * open.  Keep the descriptor open through this check and unlink so that its
- * inode cannot be recycled.  lstat, rather than stat, also preserves a
- * replacement symlink pointing at our file.
- *
- * POSIX has no conditional unlink-by-inode operation: callers must still
- * serialize pathname changes during this check/unlink pair.
- */
-static arrow::Status
-unlink_owned_file(const std::string &path, int fd)
-{
-	struct stat owned;
-	struct stat named;
+/* Reserved staging directories never contain published storage objects. */
+static constexpr const char *STAGING_PREFIX = ".datalake-write-";
 
-	if (fstat(fd, &owned) != 0)
-		return arrow::Status::IOError("could not stat output descriptor: ", strerror(errno));
-	if (lstat(path.c_str(), &named) != 0)
+static bool
+is_staging_path(const std::string &path)
+{
+	size_t start = 0;
+
+	while (start < path.size())
 	{
-		if (errno == ENOENT)
-			return arrow::Status::OK();
-		return arrow::Status::IOError("could not stat \"", path, "\": ", strerror(errno));
+		if (path.compare(start, strlen(STAGING_PREFIX), STAGING_PREFIX) == 0)
+			return true;
+		size_t slash = path.find('/', start);
+		if (slash == std::string::npos)
+			break;
+		start = slash + 1;
 	}
-	if (owned.st_dev != named.st_dev || owned.st_ino != named.st_ino)
-		return arrow::Status::OK();
-	if (unlink(path.c_str()) != 0 && errno != ENOENT)
-		return arrow::Status::IOError("could not remove \"", path, "\": ", strerror(errno));
-	return arrow::Status::OK();
+	return false;
 }
 
 /*
- * The descriptor between open() and the point where Arrow takes it over.  Any
- * error in between has to undo the creation, or an empty file is left behind
- * and every later attempt at the same path fails with ALREADY_EXISTS.
+ * Write into a private directory on the destination filesystem.  Directory
+ * descriptors anchor both publication and cleanup even if a parent is renamed.
+ * Cleanup NEVER unlinks the destination: linkat publishes without replacing
+ * an existing name, and a failed publication leaves only private staging data.
  */
-class CreatedFile
+class PendingFile
 {
 public:
-	CreatedFile(int fd, const std::string &path) : fd_(fd), path_(path) {}
-
-	~CreatedFile()
+	~PendingFile()
 	{
 		if (fd_ >= 0)
-		{
-			(void) unlink_owned_file(path_, fd_);
 			(void) close(fd_);
+		if (staging_fd_ >= 0)
+		{
+			(void) unlinkat(staging_fd_, "data", 0);
+			(void) close(staging_fd_);
 		}
+		if (created_dir_)
+			(void) unlinkat(parent_fd_, staging_name_.c_str(), AT_REMOVEDIR);
+		if (parent_fd_ >= 0)
+			(void) close(parent_fd_);
 	}
 
-	CreatedFile(const CreatedFile &) = delete;
-	CreatedFile &operator=(const CreatedFile &) = delete;
+	static arrow::Result<std::unique_ptr<PendingFile>> Make(const std::string &path)
+	{
+		if (is_staging_path(path))
+			return arrow::Status::Invalid("reserved storage staging path: ", path);
+		auto pending = std::unique_ptr<PendingFile>(new PendingFile());
+		size_t slash = path.find_last_of('/');
+		std::string parent = slash == std::string::npos ? "." :
+			(slash == 0 ? "/" : path.substr(0, slash));
+		pending->name_ = slash == std::string::npos ? path : path.substr(slash + 1);
+		if (pending->name_.empty() || pending->name_ == "." || pending->name_ == "..")
+			return arrow::Status::Invalid("invalid output path: ", path);
+		pending->parent_fd_ = open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+		if (pending->parent_fd_ < 0)
+			return arrow::Status::IOError("could not open output directory: ", strerror(errno));
+
+		/* Preserve the early AlreadyExists result, including dangling symlinks.
+		 * This is only an optimization: linkat enforces exclusivity at commit. */
+		struct stat existing;
+		if (fstatat(pending->parent_fd_, pending->name_.c_str(), &existing,
+					AT_SYMLINK_NOFOLLOW) == 0)
+			return arrow::Status::AlreadyExists("\"", path, "\" already exists");
+		if (errno != ENOENT)
+			return arrow::Status::IOError("could not stat output path: ", strerror(errno));
+
+		std::random_device random;
+		for (int attempt = 0; attempt < 128; ++attempt)
+		{
+			pending->staging_name_ = std::string(STAGING_PREFIX) +
+				std::to_string(random()) + "-" + std::to_string(random());
+			if (mkdirat(pending->parent_fd_, pending->staging_name_.c_str(), 0700) == 0)
+			{
+				pending->created_dir_ = true;
+				break;
+			}
+			if (errno != EEXIST)
+				return arrow::Status::IOError("could not create staging directory: ", strerror(errno));
+		}
+		if (!pending->created_dir_)
+			return arrow::Status::IOError("could not allocate a unique staging directory");
+		pending->staging_fd_ = openat(pending->parent_fd_, pending->staging_name_.c_str(),
+										O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+		if (pending->staging_fd_ < 0)
+			return arrow::Status::IOError("could not open staging directory: ", strerror(errno));
+		pending->fd_ = openat(pending->staging_fd_, "data",
+							 O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, pg_file_create_mode);
+		if (pending->fd_ < 0)
+			return arrow::Status::IOError("could not create staged output: ", strerror(errno));
+		return pending;
+	}
+
+	arrow::Status Publish()
+	{
+		if (linkat(staging_fd_, "data", parent_fd_, name_.c_str(), 0) != 0)
+		{
+			if (errno == EEXIST)
+				return arrow::Status::AlreadyExists("\"", name_, "\" already exists");
+			return arrow::Status::IOError("could not publish output file: ", strerror(errno));
+		}
+		return arrow::Status::OK();
+	}
 
 	int fd() const { return fd_; }
-	void release() { fd_ = -1; }
+	void release_fd() { fd_ = -1; }
 
 private:
-	int			fd_;
-	const std::string &path_;
+	PendingFile() = default;
+	int parent_fd_ = -1;
+	int staging_fd_ = -1;
+	int fd_ = -1;
+	bool created_dir_ = false;
+	std::string name_;
+	std::string staging_name_;
 };
 
-/*
- * Wraps the Arrow stream so that cleanup checks the identity of the file
- * created with O_EXCL before unlinking its pathname.
- */
 class CreateOnlyOutputStream : public arrow::io::OutputStream
 {
 public:
 	CreateOnlyOutputStream(std::shared_ptr<arrow::io::FileOutputStream> file,
-						   std::string path)
-		: file_(std::move(file)), path_(std::move(path))
+						   std::unique_ptr<PendingFile> pending)
+		: file_(std::move(file)), pending_(std::move(pending))
 	{
 	}
 
-	/*
-	 * Nothing should reach this without a Close or an Abort, but a C++
-	 * exception on the way out of a caller can, and what it would leave is an
-	 * empty file that makes every later attempt at the name fail.
-	 */
 	~CreateOnlyOutputStream() override
 	{
 		if (!done_)
@@ -138,95 +189,88 @@ public:
 	{
 		if (done_)
 			return arrow::Status::OK();
-
-		/* Pin the inode even if Arrow closes its descriptor before failing. */
-		int fd = dup(file_->file_descriptor());
-		if (fd < 0)
-			return arrow::Status::IOError("could not duplicate output descriptor: ", strerror(errno));
-		CreatedFile created(fd, path_);
 		done_ = true;
-
 		arrow::Status status = file_->Close();
-
-		/* On failure the guard removes only the file we still own. */
 		if (status.ok())
-		{
-			created.release();
-			(void) close(fd);
-		}
+			status = pending_->Publish();
+		pending_.reset();
 		return status;
 	}
 
-	/*
-	 * Remove our file before closing its descriptor, preserving a replacement
-	 * that another writer has already installed at the same pathname.
-	 */
 	arrow::Status Abort() override
 	{
 		if (done_)
 			return arrow::Status::OK();
 		done_ = true;
-
-		arrow::Status removed = unlink_owned_file(path_, file_->file_descriptor());
-		arrow::Status closed = file_->Close();
-		return removed.ok() ? closed : removed;
+		arrow::Status status = file_->Close();
+		/* Test the interval immediately before private staging cleanup. */
+		SIMPLE_FAULT_INJECTOR("datalake_local_abort_before_cleanup");
+		pending_.reset();
+		return status;
 	}
 
 	bool closed() const override { return done_ || file_->closed(); }
-
 	arrow::Result<int64_t> Tell() const override { return file_->Tell(); }
-
 	arrow::Status Write(const void *data, int64_t nbytes) override
 	{
 		return file_->Write(data, nbytes);
 	}
-
 	arrow::Status Write(const std::shared_ptr<arrow::Buffer> &data) override
 	{
 		return file_->Write(data);
 	}
-
 	arrow::Status Flush() override { return file_->Flush(); }
 
 private:
 	std::shared_ptr<arrow::io::FileOutputStream> file_;
-	std::string path_;
-	bool		done_ = false;
+	std::unique_ptr<PendingFile> pending_;
+	bool done_ = false;
 };
 
-}							/* namespace */
+}                               /* namespace */
 
 arrow::Result<std::shared_ptr<arrow::io::OutputStream>>
 LocalCreateOnlyFileSystem::OpenOutputStream(
 	const std::string &path,
 	const std::shared_ptr<const arrow::KeyValueMetadata> &metadata)
 {
-	int			fd;
-
 	(void) metadata;
-	fd = open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL, pg_file_create_mode);
-	if (fd < 0)
+	ARROW_ASSIGN_OR_RAISE(auto pending, PendingFile::Make(path));
+	ARROW_ASSIGN_OR_RAISE(auto stream, arrow::io::FileOutputStream::Open(pending->fd()));
+	pending->release_fd();          /* Arrow now owns the descriptor. */
+	return std::make_shared<CreateOnlyOutputStream>(std::move(stream), std::move(pending));
+}
+
+arrow::Result<std::vector<arrow::fs::FileInfo>>
+LocalCreateOnlyFileSystem::GetFileInfo(const arrow::fs::FileSelector &selector)
+{
+	std::vector<arrow::fs::FileInfo> result;
+	std::vector<std::pair<std::string, int>> directories = {{selector.base_dir, 0}};
+
+	/* Do not descend into staging directories: they can disappear during
+	 * cleanup, and neither their names nor their contents are storage data. */
+	while (!directories.empty())
 	{
-		if (errno == EEXIST)
-			return arrow::Status::AlreadyExists("\"", path, "\" already exists");
-		return arrow::Status::IOError("could not create \"", path, "\": ",
-									  strerror(errno));
+		auto current = std::move(directories.back());
+		directories.pop_back();
+		if (is_staging_path(current.first))
+			continue;
+		arrow::fs::FileSelector shallow = selector;
+		shallow.base_dir = current.first;
+		shallow.recursive = false;
+		if (current.second > 0)
+			shallow.allow_not_found = true;
+		ARROW_ASSIGN_OR_RAISE(auto infos, arrow::fs::LocalFileSystem::GetFileInfo(shallow));
+		for (auto &info : infos)
+		{
+			if (is_staging_path(info.path()))
+				continue;
+			if (selector.recursive && info.IsDirectory() && current.second < selector.max_recursion)
+				directories.emplace_back(info.path(), current.second + 1);
+			result.push_back(std::move(info));
+		}
 	}
-
-	CreatedFile created(fd, path);
-	auto		stream = arrow::io::FileOutputStream::Open(fd);
-
-	if (!stream.ok())
-		return stream.status();		/* CreatedFile closes and unlinks */
-
-	/*
-	 * Built before the guard is disarmed: allocating the wrapper can throw,
-	 * and the file must not survive that either.
-	 */
-	auto		owned = std::make_shared<CreateOnlyOutputStream>(*stream, path);
-
-	created.release();				/* the wrapper owns the file now */
-	return owned;
+	return result;
 }
 
 /*

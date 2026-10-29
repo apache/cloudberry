@@ -31,20 +31,17 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <arrow/filesystem/localfs.h>
 #include <arrow/io/interfaces.h>
 
 /*
- * A local file system whose OpenOutputStream creates the file and fails if it
- * is already there, and whose streams clean up after themselves.
- *
- * Arrow's own LocalFileSystem opens output with O_TRUNC, which would let a
- * failed write destroy an existing file; this keeps the O_EXCL rule the
- * Parquet writer has had since #1951.  The returned stream owns what it
- * created: Abort(), and a Close() that fails, check the file's identity before
- * unlinking, preserving a replacement already installed at the same path.
- * Pathname changes must be serialized with cleanup's identity check/unlink.
+ * A create-only local file system. Output is staged in a private directory
+ * and published by an atomic, non-overwriting link on successful Close().
+ * Abort and failed Close clean up only staging data, never the destination.
+ * Concurrent opens may succeed; only one can publish to a given pathname.
+ * The .datalake-write- directory prefix is reserved and hidden from listings.
  *
  * The test backend mounts the same implementation through SubTreeFileSystem,
  * so the storage conformance cases exercise one implementation, not two.
@@ -56,6 +53,10 @@ public:
 		: arrow::fs::LocalFileSystem(io_context)
 	{
 	}
+
+	using arrow::fs::LocalFileSystem::GetFileInfo;
+	arrow::Result<std::vector<arrow::fs::FileInfo>> GetFileInfo(
+		const arrow::fs::FileSelector &selector) override;
 
 	arrow::Result<std::shared_ptr<arrow::io::OutputStream>> OpenOutputStream(
 		const std::string &path,

@@ -308,8 +308,8 @@ endif
 .PHONY: installcheck-storage-conformance
 
 # Two-session abort ownership/retry tests against an existing test cluster.
-# The local case needs the coordinator's filesystem; S3 also needs boto3 and
-# a FAULT_INJECTOR build. Keep this an explicit target for those prerequisites.
+# Both need a FAULT_INJECTOR build. Local needs the coordinator's filesystem;
+# S3 also needs boto3. Keep this an explicit target for those prerequisites.
 ISOLATION2_PYTHON ?= python3
 installcheck-storage-abort:
 	$(ISOLATION2_PYTHON) $(srcdir)/test/isolation2/run.py local --dbname=$(CONTRIB_TESTDB)
