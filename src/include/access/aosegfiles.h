@@ -110,6 +110,7 @@ typedef struct FileSegInfo
 typedef struct FileSegTotals
 {
 	int			totalfilesegs;	/* total number of file segments */
+	int			awaiting_drop_segments; /* metadata entries awaiting recycling */
 	int64		totalbytes;		/* the sum of all 'eof' values  */
 	int64		totaltuples;	/* the sum of all 'tupcount' values */
 	int64		totalvarblocks; /* the sum of all 'varblockcount' values */

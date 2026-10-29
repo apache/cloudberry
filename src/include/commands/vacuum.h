@@ -21,10 +21,12 @@
 #include "catalog/pg_class.h"
 #include "catalog/pg_statistic.h"
 #include "catalog/pg_type.h"
+#include "executor/instrument.h"
 #include "parser/parse_node.h"
 #include "storage/buf.h"
 #include "storage/lock.h"
 #include "utils/relcache.h"
+#include "pgstat.h"
 #include "utils/snapshot.h"
 
 /*
@@ -276,6 +278,7 @@ typedef struct VPgClassStats
 	BlockNumber rel_pages;
 	double		rel_tuples;
 	BlockNumber relallvisible;
+	BlockNumber relallfrozen;
 } VPgClassStats;
 
 typedef struct VPgClassStatsCombo
@@ -284,6 +287,7 @@ typedef struct VPgClassStatsCombo
 	BlockNumber rel_pages;
 	double		rel_tuples;
 	BlockNumber relallvisible;
+	BlockNumber relallfrozen;
 
 	int			count; /* expect to equal to the number of dispatched segments */
 } VPgClassStatsCombo;
@@ -434,15 +438,36 @@ extern PGDLLIMPORT int vacuum_multixact_freeze_min_age;
 extern PGDLLIMPORT int vacuum_multixact_freeze_table_age;
 extern PGDLLIMPORT int vacuum_failsafe_age;
 extern PGDLLIMPORT int vacuum_multixact_failsafe_age;
+extern PGDLLIMPORT bool track_cost_delay_timing;
 
 /* Variables for cost-based parallel vacuum */
 extern PGDLLIMPORT pg_atomic_uint32 *VacuumSharedCostBalance;
 extern PGDLLIMPORT pg_atomic_uint32 *VacuumActiveNWorkers;
 extern PGDLLIMPORT int VacuumCostBalanceLocal;
 
+/* Allocated only for VERBOSE or an extended-statistics hook. */
+typedef struct LVExtStatCounters
+{
+	WalUsage	walusage;
+	BufferUsage bufusage;
+	PgStat_Counter blocks_fetched;
+	PgStat_Counter blocks_hit;
+	PgStat_VacuumRelationCounts report;
+} LVExtStatCounters;
+
+extern LVExtStatCounters *extvac_stats_start(Relation rel, bool verbose);
+extern void extvac_stats_end(Relation rel, LVExtStatCounters *counters,
+							 PgStat_CommonCounts *report);
+
+extern void extvac_stats_log(Relation rel, const char *phase,
+							  const PgStat_CommonCounts *report);
+
 extern PGDLLIMPORT bool VacuumFailsafeActive;
 extern PGDLLIMPORT double vacuum_cost_delay;
 extern PGDLLIMPORT int vacuum_cost_limit;
+
+extern PGDLLIMPORT int64 parallel_vacuum_worker_delay_ns;
+extern PGDLLIMPORT double VacuumDelayTime;
 
 /* in commands/vacuum.c */
 extern void ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_stats);
@@ -459,11 +484,13 @@ extern double vac_estimate_reltuples(Relation relation,
 extern void vac_send_relstats_to_qd(Relation relation,
 						BlockNumber num_pages,
 						double num_tuples,
-						BlockNumber num_all_visible_pages);
+						BlockNumber num_all_visible_pages,
+						BlockNumber num_all_frozen_pages);
 extern void vac_update_relstats(Relation relation,
 								BlockNumber num_pages,
 								double num_tuples,
 								BlockNumber num_all_visible_pages,
+								BlockNumber num_all_frozen_pages,
 								bool hasindex,
 								TransactionId frozenxid,
 								MultiXactId minmulti,
@@ -475,7 +502,11 @@ extern bool vacuum_get_cutoffs(Relation rel, const VacuumParams *params,
 							   struct VacuumCutoffs *cutoffs);
 extern bool vacuum_xid_failsafe_check(const struct VacuumCutoffs *cutoffs);
 extern void vac_update_datfrozenxid(void);
-extern void vacuum_delay_point(void);
+extern void vacuum_report_index_stats(Relation indrel,
+									  const IndexBulkDeleteResult *istat,
+									  double prev_tuples_removed,
+									  BlockNumber prev_pages_newly_deleted, bool cleanup);
+extern void vacuum_delay_point(bool is_analyze);
 extern bool vacuum_is_relation_owner(Oid relid, Form_pg_class reltuple,
 									 bits32 options);
 extern Relation vacuum_open_relation(Oid relid, RangeVar *relation,
@@ -517,7 +548,8 @@ extern void analyze_rel(Oid relid, RangeVar *relation,
 /* in commands/vacuumlazy.c */
 extern void lazy_vacuum_rel_heap(Relation onerel,
 							VacuumParams *params, BufferAccessStrategy bstrategy);
-extern void scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy bstrategy);
+extern void scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy bstrategy,
+					   IndexBulkDeleteResult *result);
 
 /* in commands/vacuum_ao.c */
 extern void ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy);

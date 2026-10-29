@@ -541,7 +541,10 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 						   save_sec_context | SECURITY_RESTRICTED_OPERATION);
 	save_nestlevel = NewGUCNestLevel();
 
-	/* measure elapsed time iff autovacuum logging requires it */
+	/*
+	 * When autovacuum logging is used, initialize a resource usage snapshot
+	 * and optionally track I/O timing.
+	 */
 	if (IsAutoVacuumWorkerProcess() && params->log_min_duration >= 0)
 	{
 		if (track_io_timing)
@@ -551,8 +554,10 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 		}
 
 		pg_rusage_init(&ru0);
-		starttime = GetCurrentTimestamp();
 	}
+
+	/* Used for instrumentation and stats report */
+	starttime = GetCurrentTimestamp();
 
 	/*
 	 * Determine which columns to analyze
@@ -1100,12 +1105,12 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 	 */
 	if (!inh)
 	{
-		BlockNumber relallvisible;
+		BlockNumber relallvisible = 0;
+		BlockNumber relallfrozen = 0;
 
-		if (RelationStorageIsAO(onerel))
-			relallvisible = 0;
-		else
-			relallvisible = AcquireNumberOfAllVisibleBlocks(onerel);
+		if (RELKIND_HAS_STORAGE(onerel->rd_rel->relkind) &&
+			!RelationStorageIsAO(onerel))
+			AcquireVisibilityMapCounts(onerel, &relallvisible, &relallfrozen);
 
 		/*
 		 * Update pg_class for table relation.  CCI first, in case acquirefunc
@@ -1116,6 +1121,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 							relpages,
 							totalrows,
 							relallvisible,
+							relallfrozen,
 							hasindex,
 							InvalidTransactionId,
 							InvalidMultiXactId,
@@ -1187,7 +1193,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 			vac_update_relstats(Irel[ind],
 								estimatedIndexPages,
 								totalindexrows,
-								0,
+								0, 0,
 								false,
 								InvalidTransactionId,
 								InvalidMultiXactId,
@@ -1204,7 +1210,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 		 */
 		CommandCounterIncrement();
 		vac_update_relstats(onerel, -1, totalrows,
-							0, hasindex, InvalidTransactionId,
+							0, 0, hasindex, InvalidTransactionId,
 							InvalidMultiXactId,
 							NULL, NULL,
 							in_outer_xact,
@@ -1222,9 +1228,9 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 	 */
 	if (!inh)
 		pgstat_report_analyze(onerel, totalrows, totaldeadrows,
-							  (va_cols == NIL));
+							  (va_cols == NIL), starttime);
 	else if (onerel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
-		pgstat_report_analyze(onerel, 0, 0, (va_cols == NIL));
+		pgstat_report_analyze(onerel, 0, 0, (va_cols == NIL), starttime);
 
 	/*
 	 * If this isn't part of VACUUM ANALYZE, let index AMs do cleanup.
@@ -1423,7 +1429,7 @@ compute_index_stats(Relation onerel, double totalrows,
 		{
 			HeapTuple	heapTuple = rows[rowno];
 
-			vacuum_delay_point();
+			vacuum_delay_point(true);
 
 			/*
 			 * Reset the per-tuple context each time, to reclaim any cruft
@@ -1843,7 +1849,7 @@ acquire_sample_rows(Relation onerel, int elevel,
 			prefetch_targblock = BlockSampler_Next(&prefetch_bs);
 #endif
 
-		vacuum_delay_point();
+		vacuum_delay_point(true);
 
 		block_accepted = table_scan_analyze_next_block(scan, targblock, vac_strategy);
 
@@ -2428,46 +2434,63 @@ AcquireNumberOfBlocks(Relation onerel)
 }
 
 /*
- * Collect visibility map of relation in dispatcher.
- *
- * In GPDB if we're in the dispatcher, we need to collect the number of
- * visibility map in pg_class from segments.
+ * Collect both visibility-map counts locally or from the segment catalogs.
+ * Replicated relations contribute one copy, just like relpages.
  */
-BlockNumber
-AcquireNumberOfAllVisibleBlocks(Relation onerel)
+void
+AcquireVisibilityMapCounts(Relation onerel, BlockNumber *all_visible,
+						   BlockNumber *all_frozen)
 {
-    int64     totalvms;
+	if (Gp_role == GP_ROLE_DISPATCH &&
+		onerel->rd_cdbpolicy && !GpPolicyIsEntry(onerel->rd_cdbpolicy))
+	{
+		char		relvm_sql[128];
+		int64		visible = 0;
+		int64		frozen = 0;
+		CdbPgResults cdb_pgresults = {NULL, 0};
 
-    /* collect total vms from segments in master */
-    if (Gp_role == GP_ROLE_DISPATCH &&
-        onerel->rd_cdbpolicy && !GpPolicyIsEntry(onerel->rd_cdbpolicy))
-    {
-        /* Query the segments pg_class. */
-        char        relvm_sql[80];
+		/* Read both counters from the same catalog row in one dispatch. */
+		snprintf(relvm_sql, sizeof(relvm_sql),
+				 "select relallvisible, relallfrozen from pg_catalog.pg_class where oid = %u",
+				 RelationGetRelid(onerel));
+		CdbDispatchCommand(relvm_sql, DF_WITH_SNAPSHOT, &cdb_pgresults);
+		PG_TRY();
+		{
+			for (int i = 0; i < cdb_pgresults.numResults; i++)
+			{
+				PGresult   *result = cdb_pgresults.pg_results[i];
+				ExecStatusType status = PQresultStatus(result);
+				int			ntuples = PQntuples(result);
+				int			nfields = PQnfields(result);
 
-        snprintf(relvm_sql, sizeof(relvm_sql),
-                 "select relallvisible from pg_catalog.pg_class where oid = %u", RelationGetRelid(onerel));
-        totalvms = get_size_from_segDBs(relvm_sql);
-        if (GpPolicyIsReplicated(onerel->rd_cdbpolicy))
-        {
-            /*
-             * If the distribution of the relation is replicated, we will sum up
-             * vms much twice which we expecting only once. So we need to divide
-             * up totalvms by numsegments.
-             */
-            totalvms /= onerel->rd_cdbpolicy->numsegments;
-        }
+				if (status != PGRES_TUPLES_OK)
+					elog(ERROR, "unexpected result from segment: %d", status);
+				if (ntuples != 1 || nfields != 2)
+					elog(ERROR, "unexpected shape of visibility-map result from segment (%d rows, %d cols)",
+						 ntuples, nfields);
+				if (PQgetisnull(result, 0, 0) || PQgetisnull(result, 0, 1))
+					elog(ERROR, "unexpected NULL visibility-map count from segment");
 
-        return (BlockNumber)totalvms;
-    }
-    /* get vms from local in segment */
-    else
-    {
-        BlockNumber all_visible = 0;
-        visibilitymap_count(onerel, &all_visible, NULL);
+				visible += pg_strtoint64(PQgetvalue(result, 0, 0));
+				frozen += pg_strtoint64(PQgetvalue(result, 0, 1));
+			}
+		}
+		PG_FINALLY();
+		{
+			cdbdisp_clearCdbPgResults(&cdb_pgresults);
+		}
+		PG_END_TRY();
 
-        return all_visible;
-    }
+		if (GpPolicyIsReplicated(onerel->rd_cdbpolicy))
+		{
+			visible /= onerel->rd_cdbpolicy->numsegments;
+			frozen /= onerel->rd_cdbpolicy->numsegments;
+		}
+		*all_visible = (BlockNumber) visible;
+		*all_frozen = (BlockNumber) frozen;
+	}
+	else
+		visibilitymap_count(onerel, all_visible, all_frozen);
 }
 
 /*
@@ -3471,7 +3494,7 @@ compute_trivial_stats(VacAttrStatsP stats,
 		Datum		value;
 		bool		isnull;
 
-		vacuum_delay_point();
+		vacuum_delay_point(true);
 
 		value = fetchfunc(stats, i, &isnull);
 
@@ -3593,7 +3616,7 @@ compute_distinct_stats(VacAttrStatsP stats,
 		int			firstcount1,
 					j;
 
-		vacuum_delay_point();
+		vacuum_delay_point(true);
 
 		value = fetchfunc(stats, i, &isnull);
 
@@ -3953,7 +3976,7 @@ compute_scalar_stats(VacAttrStatsP stats,
 		Datum		value;
 		bool		isnull;
 
-		vacuum_delay_point();
+		vacuum_delay_point(true);
 
 		value = fetchfunc(stats, i, &isnull);
 

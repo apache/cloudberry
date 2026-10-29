@@ -1,0 +1,140 @@
+-- start_matchsubs
+--
+-- # the segment that reports the injected error first is not deterministic
+--
+-- m/^ERROR:  fault triggered, fault name:'vacuum_ao_after_compact' fault type:'error'  \(seg\d+ .*\)/
+-- s/^ERROR:  fault triggered, fault name:'vacuum_ao_after_compact' fault type:'error'  \(seg\d+ .*\)/ERROR:  fault triggered, fault name:'vacuum_ao_after_compact' fault type:'error'/
+-- end_matchsubs
+--
+-- The vacuum statistics of the core for append-optimized tables: the vacuum
+-- and delay times of the tables and their indexes, and vacuum_interrupt_count.
+--
+CREATE TABLE vacstat_ao_row (i int, v text) WITH (appendonly=true) DISTRIBUTED BY (i);
+CREATE
+CREATE TABLE vacstat_ao_col (i int, v text) WITH (appendonly=true, orientation=column) DISTRIBUTED BY (i);
+CREATE
+CREATE INDEX vacstat_ao_row_idx ON vacstat_ao_row (i);
+CREATE
+CREATE INDEX vacstat_ao_col_idx ON vacstat_ao_col (i);
+CREATE
+INSERT INTO vacstat_ao_row SELECT g, repeat('x', 100) FROM generate_series(1, 3000) g;
+INSERT 3000
+INSERT INTO vacstat_ao_col SELECT g, repeat('x', 100) FROM generate_series(1, 3000) g;
+INSERT 3000
+DELETE FROM vacstat_ao_row WHERE i % 2 = 0;
+DELETE 1500
+DELETE FROM vacstat_ao_col WHERE i % 2 = 0;
+DELETE 1500
+
+-- A cost-limited vacuum sleeps, in the index passes at least, so both the
+-- tables and the indexes get vacuum and delay time on every segment.
+1: SET track_cost_delay_timing = on;
+SET
+1: SET vacuum_cost_delay = '1ms';
+SET
+1: SET vacuum_cost_limit = 10;
+SET
+1: VACUUM vacstat_ao_row, vacstat_ao_col;
+VACUUM
+1: SELECT relname, count(*) FILTER (WHERE total_vacuum_time > 0) AS segments_timed, count(*) FILTER (WHERE total_vacuum_delay_time > 0) AS segments_delayed FROM gp_dist_random('pg_stat_all_tables') WHERE relname LIKE 'vacstat_ao_%' GROUP BY relname ORDER BY relname;
+ relname        | segments_timed | segments_delayed 
+----------------+----------------+------------------
+ vacstat_ao_col | 3              | 3                
+ vacstat_ao_row | 3              | 3                
+(2 rows)
+1: SELECT indexrelname, count(*) FILTER (WHERE total_vacuum_time > 0) AS segments_timed, count(*) FILTER (WHERE total_vacuum_delay_time > 0) AS segments_delayed FROM gp_dist_random('pg_stat_all_indexes') WHERE indexrelname LIKE 'vacstat_ao_%' GROUP BY indexrelname ORDER BY indexrelname;
+ indexrelname       | segments_timed | segments_delayed 
+--------------------+----------------+------------------
+ vacstat_ao_col_idx | 3              | 3                
+ vacstat_ao_row_idx | 3              | 3                
+(2 rows)
+1: RESET vacuum_cost_limit;
+RESET
+1: RESET vacuum_cost_delay;
+RESET
+1: RESET track_cost_delay_timing;
+RESET
+
+-- A vacuum interrupted by an error.  Start from zero on every instance.
+1: SELECT pg_stat_reset() FROM gp_dist_random('gp_id');
+ pg_stat_reset 
+---------------
+               
+               
+               
+(3 rows)
+1: SELECT pg_stat_reset();
+ pg_stat_reset 
+---------------
+               
+(1 row)
+INSERT INTO vacstat_ao_row SELECT g, repeat('y', 100) FROM generate_series(1, 100) g;
+INSERT 100
+DELETE FROM vacstat_ao_row WHERE i % 2 = 1;
+DELETE 1550
+
+-- Make the compact phase fail on the segments.  The fault is scoped to this
+-- session, so that no other backend can consume it.
+1: SELECT gp_inject_fault('vacuum_ao_after_compact', 'error', '', '', '', 1, -1, 0, dbid, current_setting('gp_session_id')::int) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+(3 rows)
+1: VACUUM vacstat_ao_row;
+ERROR:  fault triggered, fault name:'vacuum_ao_after_compact' fault type:'error'
+1: SELECT gp_inject_fault('vacuum_ao_after_compact', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+(3 rows)
+
+-- The phases of an append-optimized vacuum share one AOVacuumRelStats, which
+-- is freed at the end of the last phase.  A vacuum that fails in between used
+-- to leave it behind, and the next vacuum of the relation then reused its
+-- start time, so the time of everything that happened in between was added
+-- to the relation's cumulative vacuum time.  Let time pass.
+1: SELECT pg_sleep(5);
+ pg_sleep 
+----------
+          
+(1 row)
+
+1: VACUUM vacstat_ao_row;
+VACUUM
+
+-- The second vacuum takes milliseconds; without resetting the stats of the
+-- failed one it would be credited with the five seconds slept above.
+1: SELECT sum(total_vacuum_time) < 3000 AS vacuum_time_is_sane FROM gp_dist_random('pg_stat_all_tables') WHERE relname = 'vacstat_ao_row';
+ vacuum_time_is_sane 
+---------------------
+ t                   
+(1 row)
+
+-- The segments that raised the error counted it; the coordinator, which only
+-- dispatched the failing phase, did not.  A segment may also be canceled
+-- after its phase is already done, so check for "some", not for "all".
+--
+-- A segment adds the count to its pending statistics when its transaction
+-- ends, and flushes them when it is idle outside a transaction, which it is
+-- not while its part of the failed distributed transaction waits for the
+-- coordinator; the second vacuum above has ended that.  Give the flush the
+-- second it may wait for (PGSTAT_MIN_INTERVAL).
+1: SELECT pg_sleep(2);
+ pg_sleep 
+----------
+          
+(1 row)
+1: SELECT gp_segment_id = -1 AS coordinator, sum(vacuum_interrupt_count) > 0 AS interrupted FROM gp_stat_vacuum WHERE datname = current_database() GROUP BY 1 ORDER BY 1;
+ coordinator | interrupted 
+-------------+-------------
+ f           | t           
+ t           | f           
+(2 rows)
+
+1: DROP TABLE vacstat_ao_row, vacstat_ao_col;
+DROP
+1q: ... <quitting>

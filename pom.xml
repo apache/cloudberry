@@ -49,6 +49,12 @@ code or new licensing patterns.
         <configuration>
           <consoleOutput>true</consoleOutput>
           <excludes>
+            <!-- Generated regression output must match the test runner's output;
+                 in particular, isolation spec comments are not echoed.
+                 These exact exclusions do not cover the extension's sources. -->
+            <exclude>contrib/ext_vacuum_statistics/expected/vacuum-extending-in-repetable-read.out</exclude>
+            <exclude>contrib/ext_vacuum_statistics/expected/ext_vacuum_statistics.out</exclude>
+
             <!--
                 The following files are part of the original Greenplum
                 Database open-source release, licensed under the Apache

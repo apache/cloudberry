@@ -1974,7 +1974,7 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 	{
 		all_visible_cleared = true;
 		PageClearAllVisible(BufferGetPage(buffer));
-		visibilitymap_clear(relation,
+		visibilitymap_clear_rel(relation,
 							ItemPointerGetBlockNumber(&(heaptup->t_self)),
 							vmbuffer, VISIBILITYMAP_VALID_BITS);
 	}
@@ -2350,7 +2350,7 @@ heap_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 		{
 			all_visible_cleared = true;
 			PageClearAllVisible(page);
-			visibilitymap_clear(relation,
+			visibilitymap_clear_rel(relation,
 								BufferGetBlockNumber(buffer),
 								vmbuffer, VISIBILITYMAP_VALID_BITS);
 		}
@@ -2935,7 +2935,7 @@ l1:
 	{
 		all_visible_cleared = true;
 		PageClearAllVisible(page);
-		visibilitymap_clear(relation, BufferGetBlockNumber(buffer),
+		visibilitymap_clear_rel(relation, BufferGetBlockNumber(buffer),
 							vmbuffer, VISIBILITYMAP_VALID_BITS);
 	}
 
@@ -3764,7 +3764,7 @@ l2:
 		 * worthwhile.
 		 */
 		if (PageIsAllVisible(page) &&
-			visibilitymap_clear(relation, block, vmbuffer,
+			visibilitymap_clear_rel(relation, block, vmbuffer,
 								VISIBILITYMAP_ALL_FROZEN))
 			cleared_all_frozen = true;
 
@@ -3998,14 +3998,14 @@ l2:
 	{
 		all_visible_cleared = true;
 		PageClearAllVisible(BufferGetPage(buffer));
-		visibilitymap_clear(relation, BufferGetBlockNumber(buffer),
+		visibilitymap_clear_rel(relation, BufferGetBlockNumber(buffer),
 							vmbuffer, VISIBILITYMAP_VALID_BITS);
 	}
 	if (newbuf != buffer && PageIsAllVisible(BufferGetPage(newbuf)))
 	{
 		all_visible_cleared_new = true;
 		PageClearAllVisible(BufferGetPage(newbuf));
-		visibilitymap_clear(relation, BufferGetBlockNumber(newbuf),
+		visibilitymap_clear_rel(relation, BufferGetBlockNumber(newbuf),
 							vmbuffer_new, VISIBILITYMAP_VALID_BITS);
 	}
 
@@ -5095,7 +5095,7 @@ failed:
 
 	/* Clear only the all-frozen bit on visibility map if needed */
 	if (PageIsAllVisible(page) &&
-		visibilitymap_clear(relation, block, vmbuffer,
+		visibilitymap_clear_rel(relation, block, vmbuffer,
 							VISIBILITYMAP_ALL_FROZEN))
 		cleared_all_frozen = true;
 
@@ -5852,7 +5852,7 @@ l4:
 								  &new_xmax, &new_infomask, &new_infomask2);
 
 		if (PageIsAllVisible(BufferGetPage(buf)) &&
-			visibilitymap_clear(rel, block, vmbuffer,
+			visibilitymap_clear_rel(rel, block, vmbuffer,
 								VISIBILITYMAP_ALL_FROZEN))
 			cleared_all_frozen = true;
 

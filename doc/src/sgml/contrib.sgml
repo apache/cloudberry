@@ -142,6 +142,7 @@ CREATE EXTENSION <replaceable>extension_name</replaceable>;
  &dict-int;
  &dict-xsyn;
  &earthdistance;
+ &extvacuumstatistics;
  &file-fdw;
  &fuzzystrmatch;
  &hstore;

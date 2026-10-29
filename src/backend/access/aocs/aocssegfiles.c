@@ -545,6 +545,8 @@ GetAOCSSSegFilesTotalsWithProj(Relation parentrel,
 		{
 			totals->totaltuples += allseg[s]->total_tupcount;
 		}
+		else
+			totals->awaiting_drop_segments++;
 		totals->totalvarblocks += allseg[s]->varblockcount;
 		totals->totalfilesegs++;
 	}
