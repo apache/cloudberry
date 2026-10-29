@@ -20,6 +20,17 @@ class CFile(object):
     attribute_pat = re.compile(r'__attribute__\s*\(\((format\s*\([^\)]+\)\s*|format_arg\s*\(\d+\)\s*|.+?)\)\)')
     # #include <filename>.c
     include_c_pat = re.compile(r'#include ".+\.c"')
+    # any #include, to follow into the headers
+    include_pat = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', re.MULTILINE)
+    # preprocessor directive, continuation lines included
+    directive_pat = re.compile(r'^\s*#(?:.*\\\n)*.*', re.MULTILINE)
+    # pg_attribute_noreturn(), before or after the declarator
+    noreturn_pat = re.compile(r'\bpg_attribute_noreturn\s*\(\s*\)')
+    # pg_attribute_xxx(...), which may sit before the name or the noreturn
+    pg_attribute_pat = re.compile(r'\bpg_attribute_\w+\s*\([^()]*\)')
+    # the name of the function a declaration declares; a function pointer's
+    # "void (*" is not one
+    decl_name_pat = re.compile(r'(\w+)\s*\((?!\s*\*)')
 
     # function pattern
     func_pat = re.compile(
@@ -41,6 +52,7 @@ class CFile(object):
         #with open(self.make_i()) as f:
         with open(self.path) as f:
             self.content = self.strip(f.read())
+        self.noreturn = self.noreturn_funcs()
 
     def make_i(self):
         """create .i file from .c by using preprocessor with existing make
@@ -70,6 +82,53 @@ class CFile(object):
         if 'guc' not in self.path:
             content = CFile.include_c_pat.sub('', content)
         return content
+
+    def noreturn_funcs(self):
+        """Names of the functions declared pg_attribute_noreturn() in this
+           file or in a header it includes, directly or not, from its own
+           directory or src/include.  The compiler warns when the mock of one
+           of them returns.
+        """
+        include_dir = os.path.join(self.options.src_dir, 'include')
+        funcs = set()
+        seen = set()
+        pending = [(self.path, self.content)]
+        while pending:
+            (path, content) = pending.pop()
+            if 'pg_attribute_noreturn' in content:
+                funcs.update(CFile.noreturn_decls(content))
+            for name in CFile.include_pat.findall(content):
+                for d in (os.path.dirname(path), include_dir):
+                    header = os.path.normpath(os.path.join(d, name))
+                    if not os.path.isfile(header):
+                        continue
+                    if header not in seen:
+                        seen.add(header)
+                        with open(header, errors='replace') as f:
+                            text = CFile.m_comment_pat.sub('', f.read())
+                        pending.append((header, CFile.s_comment_pat.sub('', text)))
+                    break
+        return funcs
+
+    @staticmethod
+    def noreturn_decls(content):
+        """Names of the functions declared pg_attribute_noreturn() in the
+           content.  The declaration a pg_attribute_noreturn() belongs to runs
+           from the end of the previous statement or block to the next ';' or
+           '{'; the first name there followed by '(' is the function's.
+        """
+        names = set()
+        content = CFile.directive_pat.sub('', content)
+        for m in CFile.noreturn_pat.finditer(content):
+            start = max(content.rfind(c, 0, m.start()) for c in ';{}') + 1
+            end = min([i for i in (content.find(';', m.end()),
+                                   content.find('{', m.end())) if i >= 0] +
+                      [len(content)])
+            decl = CFile.pg_attribute_pat.sub('', content[start:end])
+            n = CFile.decl_name_pat.search(decl)
+            if n:
+                names.add(n.group(1))
+        return names
 
     def skip_func_body(self, content, index):
         """Skip function body by finding a line starting with a closing brace.
@@ -116,7 +175,8 @@ class CFile(object):
                 continue
             if rettype.strip() in ['define', 'select']:
                 continue
-            func = FuncSignature(modifier, rettype, funcname, args)
+            func = FuncSignature(modifier, rettype, funcname, args,
+                                 funcname in self.noreturn)
             yield (func, m)
 
 class MockFile(object):
@@ -172,11 +232,12 @@ class FuncSignature(object):
         r'([\w\[\]]+)?')
     Variadic = object()
 
-    def __init__(self, modifier, rettype, funcname, args):
+    def __init__(self, modifier, rettype, funcname, args, noreturn=False):
         self.modifier = modifier.strip()
         self.rettype = re.sub('inline', '', rettype).strip()
         self.funcname = funcname.strip()
         self.args = self.parse_args(args)
+        self.noreturn = noreturn
 
     def is_local(self):
         """Am I a local function?
@@ -280,6 +341,10 @@ class FuncSignature(object):
                   '\treturn *ret;').format(rettype=self.rettype)
         elif self.rettype != 'void':
             ret = '\treturn ({cast}) mock();'.format(cast=self.rettype)
+        elif self.noreturn:
+            # A test leaves it through a side effect that longjmps; one that
+            # forgets to must not run on past the call.
+            ret = '\tmock();\n\tabort();'
         else:
             ret = '\tmock();'
         buf.append(ret)
