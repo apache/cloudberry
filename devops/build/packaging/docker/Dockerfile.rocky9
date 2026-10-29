@@ -1,0 +1,149 @@
+# --------------------------------------------------------------------
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License. You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# --------------------------------------------------------------------
+# Dockerfile for Apache Cloudberry (Incubating) - Production Build
+# --------------------------------------------------------------------
+# Multi-stage build optimized for production deployment
+# Builds Cloudberry from source using official development environment
+# --------------------------------------------------------------------
+
+# --------------------------------------------------------------------
+# Build stage: Use official Cloudberry development image
+# --------------------------------------------------------------------
+ARG BUILDER_IMAGE=apache/incubator-cloudberry:cbdb-build-rocky9-latest
+FROM ${BUILDER_IMAGE} AS builder
+
+# Copy source code
+COPY --chown=gpadmin:gpadmin . /home/gpadmin/cloudberry
+
+# Build Cloudberry using official build scripts
+USER gpadmin
+WORKDIR /home/gpadmin/cloudberry
+
+RUN sudo dnf install -y --enablerepo=crb liburing-devel && \
+    export SRC_DIR=/home/gpadmin/cloudberry && \
+    export BUILD_DESTINATION=/usr/local/cloudberry-db && \
+    mkdir -p ${SRC_DIR}/build-logs && \
+    ./devops/build/automation/cloudberry/scripts/configure-cloudberry.sh && \
+    ./devops/build/automation/cloudberry/scripts/build-cloudberry.sh
+
+# --------------------------------------------------------------------
+# Runtime stage: Minimal production image
+# --------------------------------------------------------------------
+FROM rockylinux/rockylinux:9.6
+
+# Set locale environment and timezone
+ENV TZ=UTC
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+# Cloudberry environment variables
+ENV GPHOME=/usr/local/cloudberry-db
+ENV PATH=$GPHOME/bin:$PATH
+ENV LD_LIBRARY_PATH=$GPHOME/lib
+ENV COORDINATOR_DATA_DIRECTORY=/data0/database/coordinator/gpseg-1
+
+# Runtime dependencies (keep aligned with devops/sandbox/Dockerfile.*.rockylinux9 where possible)
+# Note: do NOT install libcurl here to avoid rocky9 libcurl-minimal conflicts.
+RUN dnf -y install --setopt=install_weak_deps=False \
+      apr \
+      bash \
+      bzip2-libs \
+      ca-certificates \
+      glibc-langpack-en \
+      iproute \
+      keyutils \
+      krb5-libs \
+      libevent \
+      libicu \
+      libstdc++ \
+      liburing \
+      libuv \
+      libuuid \
+      libxml2 \
+      libyaml \
+      libzstd \
+      lz4 \
+      ncurses \
+      net-tools \
+      openldap \
+      openssh-clients \
+      openssh-server \
+      openssl \
+      pam \
+      pcre2 \
+      perl \
+      procps-ng \
+      protobuf \
+      python3 \
+      readline \
+      rsync \
+      shadow-utils \
+      sudo \
+      which \
+      zlib && \
+    dnf clean all && rm -rf /var/cache/dnf
+
+# Set locale, create gpadmin user, and setup directories & SSH config
+RUN echo "LANG=en_US.UTF-8" > /etc/locale.conf && \
+    /usr/sbin/groupadd -r gpadmin && \
+    /usr/sbin/useradd -m -r -g gpadmin gpadmin && \
+    printf "Defaults:gpadmin !requiretty\ngpadmin ALL=(ALL) NOPASSWD: ALL\n" > /etc/sudoers.d/90-gpadmin && \
+    chmod 440 /etc/sudoers.d/90-gpadmin && \
+    echo -e '\n# Add Cloudberry entries\nif [ -f /usr/local/cloudberry-db/cloudberry-env.sh ]; then\n  source /usr/local/cloudberry-db/cloudberry-env.sh\nfi' >> /home/gpadmin/.bashrc && \
+    mkdir -p /data0/database/coordinator /data0/database/primary /data0/database/mirror && \
+    mkdir -p /home/gpadmin/.ssh && \
+    mkdir -p /run/sshd && \
+    chown -R gpadmin:gpadmin /data0 /home/gpadmin/.ssh && \
+    chmod 700 /home/gpadmin/.ssh && \
+    echo -e "Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile ~/.ssh/known_hosts\n  ServerAliveInterval 60" > /home/gpadmin/.ssh/config && \
+    chown gpadmin:gpadmin /home/gpadmin/.ssh/config && \
+    chmod 600 /home/gpadmin/.ssh/config
+
+# Copy configuration files from sandbox (reusable components)
+COPY --chown=gpadmin:gpadmin devops/sandbox/configs/gpinitsystem_singlenode /tmp/gpinitsystem_singlenode
+
+# Reuse sandbox tuning configs (note: sysctls require privileged/sysctl support at runtime)
+COPY devops/sandbox/configs/90-cbdb-limits.conf /etc/security/limits.d/90-cbdb-limits.conf
+COPY devops/sandbox/configs/90-cbdb-sysctl.conf /etc/sysctl.d/90-cbdb-sysctl.conf
+
+# Copy custom scripts
+COPY --chown=gpadmin:gpadmin devops/build/packaging/docker/cloudberry-entrypoint.sh /usr/local/bin/cloudberry-entrypoint.sh
+
+# Set executable permissions
+RUN chmod 755 /usr/local/bin/cloudberry-entrypoint.sh /tmp/gpinitsystem_singlenode
+
+# Copy built Cloudberry from builder stage
+COPY --from=builder --chown=gpadmin:gpadmin /usr/local/cloudberry-db /usr/local/cloudberry-db
+COPY --from=builder --chown=gpadmin:gpadmin /usr/local/xerces-c/lib/libxerces-c.so /usr/local/cloudberry-db/lib/
+COPY --from=builder --chown=gpadmin:gpadmin /usr/local/xerces-c/lib/libxerces-c-3.*.so /usr/local/cloudberry-db/lib/
+
+# Expose coordinator port
+EXPOSE 5432
+
+# Healthcheck: coordinator readiness (initialization can take a while)
+HEALTHCHECK --interval=10s --timeout=5s --start-period=5m --retries=6 \
+  CMD /usr/local/cloudberry-db/bin/pg_isready -h localhost -p 5432 || exit 1
+
+# Volume for persistent data
+VOLUME ["/data0"]
+
+# Set default user
+USER gpadmin
+
+# Entrypoint and default command
+ENTRYPOINT ["/usr/local/bin/cloudberry-entrypoint.sh"]
+CMD ["cloudberry"]
