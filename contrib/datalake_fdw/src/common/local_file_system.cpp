@@ -66,7 +66,7 @@ is_staging_path(const std::string &path)
 			return true;
 		size_t slash = path.find('/', start);
 		if (slash == std::string::npos)
-			break;
+			return false;
 		start = slash + 1;
 	}
 	return false;
