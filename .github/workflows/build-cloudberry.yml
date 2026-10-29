@@ -377,6 +377,9 @@ jobs:
               },
               {"test":"ic-walrep",
                "make_configs":["src/test/walrep:installcheck"]
+              },
+              {"test": "ic-mcxt_peak_tracker",
+               "make_configs":["src/test/modules/test_mcxt_peak_tracker:installcheck"]
               }
             ]
           }'

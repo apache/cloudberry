@@ -68,10 +68,6 @@ static const MemoryContextMethods mcxt_methods[] = {
 	[MCTX_ASET_ID].get_chunk_space = AllocSetGetChunkSpace,
 	[MCTX_ASET_ID].is_empty = AllocSetIsEmpty,
 	[MCTX_ASET_ID].stats = AllocSetStats,
-	[MCTX_ASET_ID].declare_accounting_root = AllocSetDeclareAccountingRoot,
-	[MCTX_ASET_ID].get_current_usage = AllocSetGetCurrentUsage,
-	[MCTX_ASET_ID].get_peak_usage = AllocSetGetPeakUsage,
-	[MCTX_ASET_ID].set_peak_usage = AllocSetSetPeakUsage,
 #ifdef MEMORY_CONTEXT_CHECKING
 	[MCTX_ASET_ID].check = AllocSetCheck,
 #endif
@@ -182,6 +178,13 @@ static void MemoryContextStatsPrint(MemoryContext context, void *passthru,
 static pg_noinline void add_size_error(Size s1, Size s2) pg_attribute_noreturn();
 static pg_noinline void mul_size_error(Size s1, Size s2) pg_attribute_noreturn();
 
+static Size rebindContextTreeGroupRecurse(
+										  MemoryContext context,
+										  MemoryContextPeakTrackerGroup newGroup,
+										  bool isRootCxt,
+										  bool calcMemUsage);
+
+
 /*
  * You should not do memory allocations within a critical section, because
  * an out-of-memory error will be escalated to a PANIC. To enforce that
@@ -197,6 +200,18 @@ static pg_noinline void mul_size_error(Size s1, Size s2) pg_attribute_noreturn()
 #else
 #define AssertNotInCriticalSection(context)
 #endif
+
+#define IsTrackerGroupOwner(cxt) (cxt && cxt->trackerGroup ? cxt->trackerGroup->owner == cxt : false)
+
+#define ValidateMemoryContextTrackerGroupOwner(context) \
+do { \
+	AssertArg(MemoryContextIsValid(context)); \
+	if (!IsTrackerGroupOwner(context)) \
+		ereport(ERROR, \
+				(errcode(ERRCODE_INTERNAL_ERROR), \
+				 errmsg("given context is not an tracker group owner") \
+				 )); \
+} while (0)
 
 /*
  * Call the given function in the MemoryContextMethods for the memory context
@@ -434,7 +449,8 @@ MemoryContextResetChildren(MemoryContext context)
 void
 MemoryContextDeleteImpl(MemoryContext context, const char* sfile, const char *func, int sline)
 {
-	MemoryContext parent;
+	bool        isGroupOwner = false;
+	MemoryContextPeakTrackerGroup group;
 
 	Assert(MemoryContextIsValid(context));
 	/* We had better not be deleting TopMemoryContext ... */
@@ -464,8 +480,9 @@ MemoryContextDeleteImpl(MemoryContext context, const char* sfile, const char *fu
 	 * there's an error we won't have deleted/busted contexts still attached
 	 * to the context tree.  Better a leak than a crash.
 	 */
-	parent = MemoryContextGetParent(context);
 	MemoryContextSetParent(context, NULL);
+	group = context->trackerGroup;
+	isGroupOwner = IsTrackerGroupOwner(context);
 
 	/*
 	 * Also reset the context's ident pointer, in case it points into the
@@ -474,7 +491,10 @@ MemoryContextDeleteImpl(MemoryContext context, const char* sfile, const char *fu
 	 */
 	context->ident = NULL;
 
-	context->methods->delete_context(context, parent);
+	context->methods->delete_context(context);
+
+	if (isGroupOwner)
+		pfree(group);
 
 	VALGRIND_DESTROY_MEMPOOL(context);
 }
@@ -592,8 +612,11 @@ MemoryContextSetParent(MemoryContext context, MemoryContext new_parent)
 	if (new_parent == context->parent)
 		return;
 
-	/* update memory accounting */
-	AllocSetTransferAccounting(context, new_parent);
+	/*
+	 * Reparent peak tracker group to prevent dangling pointer dereferences
+	 * under different conditions.
+	 */
+	MemoryContextReparentPeakUsage(context, new_parent);
 
 	/* Delink from existing parent, if any */
 	if (context->parent)
@@ -773,63 +796,6 @@ MemoryContextError(int errorcode, MemoryContext context,
 	abort();
 }                               /* MemoryContextError */
 
-
-void
-MemoryContextDeclareAccountingRoot(MemoryContext context)
-{
-	AssertArg(MemoryContextIsValid(context));
-
-	return (*context->methods->declare_accounting_root) (context);
-}
-
-/*
- * MemoryContextGetCurrentSpace
- *		Return the number of bytes currently occupied by the memory context.
- *
- * This is the amount of space obtained from the lower-level source of the
- * memory (e.g. malloc) and not yet released back to that source.  Includes
- * overhead and free space held and managed within this context by the
- * context-type-specific memory manager.
- */
-Size
-MemoryContextGetCurrentSpace(MemoryContext context)
-{
-	AssertArg(MemoryContextIsValid(context));
-
-	return (*context->methods->get_current_usage) (context);
-}                               /* MemoryContextGetCurrentSpace */
-
-/*
- * MemoryContextGetPeakSpace
- *		Return the peak number of bytes occupied by the memory context.
- *
- * This is the maximum value reached by MemoryContextGetCurrentSpace() since
- * the context was created, or since reset by MemoryContextSetPeakSpace().
- */
-Size
-MemoryContextGetPeakSpace(MemoryContext context)
-{
-	AssertArg(MemoryContextIsValid(context));
-
-	return (*context->methods->get_peak_usage) (context);
-}                               /* MemoryContextGetPeakSpace */
-
-/*
- * MemoryContextSetPeakSpace
- *		Resets the peak space statistic to the space currently occupied or
- *      the specified value, whichever is greater.  Returns the former peak
- *      space value.
- *
- * Can be used to observe local maximum usage over an interval and then to
- * restore the overall maximum.
- */
-Size
-MemoryContextSetPeakSpace(MemoryContext context, Size nbytes)
-{
-	AssertArg(MemoryContextIsValid(context));
-
-	return (*context->methods->set_peak_usage) (context, nbytes);
-}                               /* MemoryContextSetPeakSpace */
 
 /*
  * Find the memory allocated to blocks for this memory context. If recurse is
@@ -1241,6 +1207,7 @@ MemoryContextCreate(MemoryContext node,
 	node->name = name;
 	node->ident = NULL;
 	node->reset_cbs = NULL;
+	node->trackerGroup = NULL;
 
 	/* OK to link node into context tree */
 	if (parent)
@@ -1251,6 +1218,7 @@ MemoryContextCreate(MemoryContext node,
 		parent->firstchild = node;
 		/* inherit allowInCritSection flag from parent */
 		node->allowInCritSection = parent->allowInCritSection;
+		node->trackerGroup = parent->trackerGroup;
 	}
 	else
 	{
@@ -2078,4 +2046,197 @@ pchomp(const char *in)
 	while (n > 0 && in[n - 1] == '\n')
 		n--;
 	return pnstrdup(in, n);
+}
+
+
+static MemoryContextPeakTrackerGroup
+initNewPeakTrackerGroup(MemoryContext context, MemoryContext parent)
+{
+	MemoryContextPeakTrackerGroup g;
+	MemoryContext groupHolderCxt = parent ? parent : TopMemoryContext;
+
+	/*
+	 * If context->trackerGroup points into the context's memory, it'll become
+	 * a danging pointer (for ex during MemorycontextDelete for the owner
+	 * context of trackerGroup Reset method may be performed firstly and right
+	 * after that trackerGroup points to freed memory, but the owner context
+	 * Delete method doesn't finished an accounting). So move trackerGroup
+	 * outside of the current context.
+	 */
+	g = MemoryContextAlloc(groupHolderCxt, sizeof(MemoryContextPeakTrackerGroupData));
+	memset(g, 0, sizeof(MemoryContextPeakTrackerGroupData));
+
+	g->owner = context;
+	g->parentGroup = NULL;
+	if (parent)
+		g->parentGroup = parent->trackerGroup;
+
+	return g;
+}
+
+/*
+ * MemoryContextStartPeakUsageTracking
+ * 		Init trackerGroup for peak usage memoery tracking if given context is reset.
+ *		Return true if context is not a trackerGroup owner, otherwise false.
+ */
+bool
+MemoryContextStartPeakUsageTracking(MemoryContext context)
+{
+	MemoryContextPeakTrackerGroup group = NULL;
+
+	AssertArg(MemoryContextIsValid(context));
+
+	/* context already group owner - nothing to do */
+	if (context->trackerGroup && context->trackerGroup->owner == context)
+		return false;
+
+	if (!context->isReset)
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("peak usage tracking allowed for newly created contexts")
+				 ));
+
+	/*
+	 * Context may belongs to group (after creation it belongs to parent
+	 * group), usage info for old group must be updated.
+	 */
+	DecMcxtTrackerGroupCurrentUsage(context->trackerGroup, context->mem_allocated);
+
+	group = initNewPeakTrackerGroup(context, context->parent);
+
+	/* update peak usage for new group (and it's parents) */
+	IncMcxtTrackerGroupCurrentUsage(group, context->mem_allocated);
+
+	context->trackerGroup = group;
+
+	return true;
+}
+
+/*
+ * MemoryContextGetPeakUsage
+ *		Return peak number of bytes occupied by contexts within the trackerGroup
+ *		Context must be an owner of trackerGroup
+ */
+Size
+MemoryContextGetPeakUsage(MemoryContext context)
+{
+	ValidateMemoryContextTrackerGroupOwner(context);
+
+	return context->trackerGroup->peakUsage;
+}
+
+/*
+ * MemoryContextSetPeakUsage
+ *		Resets the peak usage statistic to the memory currently occupied or
+ *		the specified value, whichever is greater.  Returns the former peak
+ *		space value.
+ *
+ * Can be used to observe local maximum usage over an interval and then to
+ * restore the overall maximum.
+ */
+Size
+MemoryContextSetPeakUsage(MemoryContext context, Size nbytes)
+{
+	Size oldPeak = 0;
+
+	ValidateMemoryContextTrackerGroupOwner(context);
+
+	oldPeak = context->trackerGroup->peakUsage;
+	context->trackerGroup->peakUsage = Max(context->trackerGroup->currentUsage, nbytes);
+	/* TODO FIXME: should we propagate the diff oldPeak with new peak value to parents? */
+
+	return oldPeak;
+}
+
+/*
+ * MemoryContextGetCurrentUsage
+ *		Return current number of bytes occupied by contexts within the trackerGroup
+ *		Context must be an owner of trackerGroup
+ */
+Size
+MemoryContextGetCurrentUsage(MemoryContext context)
+{
+	ValidateMemoryContextTrackerGroupOwner(context);
+
+	return context->trackerGroup->currentUsage;
+}
+
+
+/*
+ * MemoryContextReparentPeakUsage
+ *		Performs context tracker group reparenting to a new parent. It's done
+ *		for correct calculation of peak usage and also to keep valid references
+ *		to trackerGroup within conetxts.
+ */
+void
+MemoryContextReparentPeakUsage(MemoryContext cxt, MemoryContext new_parent)
+{
+	MemoryContextPeakTrackerGroup newGroup = NULL;
+	MemoryContextPeakTrackerGroup prevCxtGroup = cxt->trackerGroup;
+	MemoryContextPeakTrackerGroup newParentGroup = new_parent ? new_parent->trackerGroup : NULL;
+	bool		cxtGroupOwner = IsTrackerGroupOwner(cxt);
+	Size		curAllocated = 0;
+
+	/* both contexts belongs to the same peak tracker group (nulls too) */
+	if (cxt->trackerGroup == newParentGroup)
+		return;
+
+	if (cxtGroupOwner)
+		newGroup = initNewPeakTrackerGroup(cxt, new_parent);
+	else
+		newGroup = newParentGroup;
+
+	curAllocated = rebindContextTreeGroupRecurse(cxt, newGroup, true, true);
+
+	DecMcxtTrackerGroupCurrentUsage(prevCxtGroup, curAllocated);
+	IncMcxtTrackerGroupCurrentUsage(newGroup, curAllocated);
+
+	if (cxtGroupOwner)
+		pfree(prevCxtGroup);
+}
+
+static Size
+rebindContextTreeGroupRecurse(MemoryContext context,
+							  MemoryContextPeakTrackerGroup newGroup,
+							  bool isRootCxt,
+							  bool calcMemUsage)
+{
+	Size		total = 0;
+	bool		isGroupOwner = IsTrackerGroupOwner(context);
+
+	if (isGroupOwner)
+	{
+		if (calcMemUsage)
+			total += context->trackerGroup->currentUsage;
+
+		/*
+		 * if context is an owner of top most group so all caclulcations are
+		 * done and we want only rebind child context links
+		 */
+		if (isRootCxt)
+		{
+			context->trackerGroup = newGroup;
+			calcMemUsage = false;
+		}
+		else
+		{
+			/*
+			 * founded subgroup - we only need to change the parent link (no
+			 * need to recurse)
+			 */
+			context->trackerGroup->parentGroup = newGroup;
+			return total;
+		}
+	}
+	else
+	{
+		if (calcMemUsage)
+			total += context->mem_allocated;
+		context->trackerGroup = newGroup;
+	}
+
+	for (MemoryContext child = context->firstchild; child != NULL; child = child->nextchild)
+		total += rebindContextTreeGroupRecurse(child, newGroup, false, calcMemUsage);
+
+	return total;
 }
