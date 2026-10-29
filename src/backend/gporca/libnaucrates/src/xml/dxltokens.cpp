@@ -713,6 +713,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		 GPOS_WSZ_LIT("IntermediateResultType")},
 		{EdxltokenGPDBAggSplittable, GPOS_WSZ_LIT("IsSplittable")},
 		{EdxltokenGPDBAggHashAggCapable, GPOS_WSZ_LIT("HashAggCapable")},
+		{EdxltokenGPDBAggFinalFuncVolatile, GPOS_WSZ_LIT("FinalFuncVolatile")},
 
 		{EdxltokenGPDBCast, GPOS_WSZ_LIT("MDCast")},
 		{EdxltokenGPDBCastBinaryCoercible, GPOS_WSZ_LIT("BinaryCoercible")},
