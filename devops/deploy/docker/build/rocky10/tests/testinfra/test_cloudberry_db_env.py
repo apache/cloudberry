@@ -135,3 +135,16 @@ def test_arrow_for_datalake_fdw(host):
         version = host.run(f"pkg-config --modversion {module}")
         assert version.exit_status == 0
         assert version.stdout.strip() == "26.0.0"
+
+
+def test_meson_and_ninja(host):
+    """
+    Test if meson and ninja are installed, with a ninja new enough
+    (1.10 or later) for the build.ninja meson generates.
+    """
+    meson = host.run("meson --version")
+    assert meson.exit_status == 0
+    ninja = host.run("ninja --version")
+    assert ninja.exit_status == 0
+    version = tuple(int(n) for n in ninja.stdout.strip().split(".")[:2])
+    assert version >= (1, 10)
