@@ -53,11 +53,11 @@ helper view and for the practice of disabling autovacuum during an experiment.
 
 ```
 index.md                              chapter 1, and the landing page
-part-2-storage-data-layout/           ch02 .. ch08
-part-3-transactions-mvcc-concurrency/ ch09 .. ch12
-part-4-query-processing/              ch13 .. ch19
-part-5-high-availability-recovery/    ch20
-part-6-resource-management/           ch21
+part-2-storage-data-layout/           Part I    ch02 .. ch08
+part-3-transactions-mvcc-concurrency/ Part II   ch09 .. ch12
+part-4-query-processing/              Part III  ch13 .. ch19
+part-5-high-availability-recovery/    Part IV   ch20
+part-6-resource-management/           Part V    ch21
 figures/                              64 SVG figures
 _components/                          one MDX component and its stylesheet
 ```
