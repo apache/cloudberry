@@ -11269,7 +11269,6 @@ dumpDumpableObject(Archive *fout, DumpableObject *dobj)
 			dumpTable(fout, (const TableInfo *) dobj);
 			break;
 		case DO_TABLE_ATTACH:
-			/* GPDB_14_MERGE_FIXME: why some cases don't check postDataSchemaOnly ? */ 
 			dumpTableAttach(fout, (const TableAttachInfo *) dobj);
 			break;
 		case DO_ATTRDEF:
