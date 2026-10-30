@@ -1310,7 +1310,7 @@ validate_describe_callback(List *describeQualName,
 							   inputTypeOids,
 							   false,	/* expand_variadic */
 							   false,	/* expand_defaults */
-							   false, /* GPDB_14_MERGE_FIXME: new added */
+							   false,	/* include_out_arguments */
 							   &describeFuncOid,
 							   &describeReturnTypeOid, 
 							   &describeReturnsSet,
@@ -1926,7 +1926,6 @@ AlterFunction(ParseState *pstate, AlterFunctionStmt *stmt)
 								repl_val, repl_null, repl_repl);
 	}
 	/* DO NOT put more touches of procForm below here; it's now dangling. */
-	/* GPDB_14_MERGE_FIXME: except refetch procForm from new tup? */
 
 	if (describe_item)
 	{
@@ -1972,10 +1971,7 @@ AlterFunction(ParseState *pstate, AlterFunctionStmt *stmt)
 					 RelationGetDescr(rel), &isnull));
 	Assert(!isnull);
 
-	/*
-	* GPDB_14_MERGE_FIXME: we need to check the new procForm as the tup is updated.
-	* The issue also exists in GPDB7.
-	*/
+	/* Refetch procForm, as tup may have been replaced above. */
 	procForm = (Form_pg_proc) GETSTRUCT(tup);
 
 	/* Cross check for various properties. */
