@@ -16,6 +16,7 @@
 #include "gpopt/base/CColRef.h"
 #include "gpopt/base/CColRefSet.h"
 #include "gpopt/base/CColRefSetIter.h"
+#include "gpopt/base/CColRefTable.h"
 #include "gpopt/base/CConstraintConjunction.h"
 #include "gpopt/base/CConstraintInterval.h"
 #include "gpopt/base/CDrvdPropRelational.h"
@@ -331,6 +332,7 @@ CKeyCollection *
 CLogical::PkcCombineKeys(CMemoryPool *mp, CExpressionHandle &exprhdl)
 {
 	CColRefSet *pcrs = GPOS_NEW(mp) CColRefSet(mp);
+	BOOL fNullsDistinct = false;
 	const ULONG arity = exprhdl.Arity();
 	for (ULONG ul = 0; ul < arity - 1; ul++)
 	{
@@ -345,9 +347,15 @@ CLogical::PkcCombineKeys(CMemoryPool *mp, CExpressionHandle &exprhdl)
 		CColRefArray *colref_array = pkc->PdrgpcrKey(mp);
 		pcrs->Include(colref_array);
 		colref_array->Release();
+
+		// the combined key permits multiple NULLs if one of its parts does
+		fNullsDistinct = fNullsDistinct || pkc->FNullsDistinct(0);
 	}
 
-	return GPOS_NEW(mp) CKeyCollection(mp, pcrs);
+	CKeyCollection *pkc = GPOS_NEW(mp) CKeyCollection(mp);
+	pkc->Add(pcrs, fNullsDistinct);
+
+	return pkc;
 }
 
 //---------------------------------------------------------------------------
@@ -374,16 +382,22 @@ CLogical::PkcKeysBaseTable(CMemoryPool *mp, const CBitSetArray *pdrgpbsKeys,
 	for (ULONG ul = 0; ul < ulKeys; ul++)
 	{
 		CColRefSet *pcrs = GPOS_NEW(mp) CColRefSet(mp);
+		BOOL fNullsDistinct = false;
 
 		CBitSet *pbs = (*pdrgpbsKeys)[ul];
 		CBitSetIter bsiter(*pbs);
 
 		while (bsiter.Advance())
 		{
-			pcrs->Include((*pdrgpcrOutput)[bsiter.Bit()]);
+			CColRef *colref = (*pdrgpcrOutput)[bsiter.Bit()];
+			pcrs->Include(colref);
+
+			// a UNIQUE constraint permits multiple NULLs in nullable columns
+			fNullsDistinct = fNullsDistinct ||
+							 CColRefTable::PcrConvert(colref)->IsNullable();
 		}
 
-		pkc->Add(pcrs);
+		pkc->Add(pcrs, fNullsDistinct);
 	}
 
 	return pkc;
