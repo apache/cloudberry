@@ -45,14 +45,25 @@ begin
 end;
 $$ language plpgsql;
 
--- Same, for EXPLAIN ANALYZE BUFFERS
-create or replace function get_explain_analyze_buffers_output(explain_query text) returns setof text as
+-- Run EXPLAIN ANALYZE BUFFERS retaining the position of every Buffers: line
+create or replace function explain_buffers_filter(explain_query text) returns setof text as
 $$
 declare
   explainrow text;
 begin
-  for explainrow in execute 'EXPLAIN (ANALYZE, BUFFERS) ' || explain_query
+  for explainrow in execute
+    'EXPLAIN (ANALYZE, BUFFERS, COSTS OFF, TIMING OFF, SUMMARY OFF) ' || explain_query
   loop
+    if explainrow ~ '^\s*Buffers:' then
+      explainrow := regexp_replace(explainrow, 'Buffers:.*$', 'Buffers: N');
+    else
+      explainrow := regexp_replace(explainrow,
+                                   '\m\d+([kK]B?)\M', 'N\1', 'g');
+      explainrow := regexp_replace(explainrow,
+                                   '\m\d+(x)', 'N\1', 'g');
+      explainrow := regexp_replace(explainrow,
+                                   '-?\m\d+\M', 'N', 'g');
+    end if;
     return next explainrow;
   end loop;
 end;
@@ -107,28 +118,13 @@ CREATE TABLE explaintest (id int4);
 INSERT INTO explaintest SELECT generate_series(1, 10);
 ANALYZE explaintest;
 
--- Exclude buffer usage reported for the planning stage. Check that buffer usage
--- is reported for at least one executor node.
-WITH query_plan (et, line_number) AS
-(
-  SELECT *
-  FROM get_explain_analyze_buffers_output($$
-    SELECT * FROM explaintest;
-  $$) WITH ORDINALITY
-)
-SELECT EXISTS
-(
-  SELECT 1
-  FROM query_plan buffer_line
-  WHERE et LIKE '%Buffers:%'
-    AND NOT EXISTS
-    (
-      SELECT 1
-      FROM query_plan planning_line
-      WHERE btrim(planning_line.et) = 'Planning:'
-        AND planning_line.line_number < buffer_line.line_number
-    )
-) AS executor_buffers_reported;
+-- Compare normalized buffer placement without automatic EXPLAIN processing.
+-- explain_processing_off
+SELECT plan_line
+FROM explain_buffers_filter($$
+  SELECT * FROM explaintest;
+$$) WITH ORDINALITY AS plan(plan_line, line_number)
+ORDER BY line_number;
 
 EXPLAIN ANALYZE SELECT * FROM explaintest;
 
