@@ -3421,12 +3421,10 @@ vacuum_params_to_options_list(VacuumParams *params)
 	else
 		optmask &= ~VACOPT_PROCESS_MAIN;
 	
-	if (optmask & VACOPT_PROCESS_TOAST)
-	{
-		/* GPDB_14_MERGE_FIXME: skip_toast is replaced by process_toast, need to check */
-		options = lappend(options, makeDefElem("process_toast", (Node *) makeInteger(1), -1));
+	if (!(optmask & VACOPT_PROCESS_TOAST))
+		options = lappend(options, makeDefElem("process_toast", (Node *) makeInteger(0), -1));
+	else
 		optmask &= ~VACOPT_PROCESS_TOAST;
-	}
 	if (optmask & VACOPT_DISABLE_PAGE_SKIPPING)
 	{
 		options = lappend(options, makeDefElem("disable_page_skipping", (Node *) makeInteger(1), -1));
