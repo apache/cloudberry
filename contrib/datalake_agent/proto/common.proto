@@ -1,0 +1,125 @@
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+// Compatibility policy: only append fields; never change field numbers or
+// remove fields. Reserve retired field numbers permanently.
+
+syntax = "proto3";
+
+package cloudberry.datalake.v1;
+
+option java_multiple_files = true;
+option java_package = "org.apache.cloudberry.dlagent.proto";
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+/* HTTP-style header preserved as repeated values. */
+message Header {
+  string key = 1;
+  repeated string values = 2;
+}
+
+/*
+ * Structured audit identity added in contract v1.1. Values are copied to
+ * Iceberg snapshot summaries; empty values are omitted.
+ */
+message AuditContext {
+  string query_id = 1;    // v1.1: query identifier written as cloudberry.query-id
+  string xid = 2;         // v1.1: database transaction identifier written as cloudberry.xid
+  string session_id = 3;  // v1.1: database session identifier written as cloudberry.session
+  string user_id = 4;     // v1.1: database user identifier written as cloudberry.user
+}
+
+/*
+ * Version negotiation, returned in every response message.  The server rejects
+ * a client whose version, sent in the x-cloudberry-client-version request
+ * metadata, is older than min_client_version.  A client rejects a server whose
+ * min_client_version is newer than its own version, and a server older than
+ * the oldest it was written against: a field the server does not know arrives
+ * as its zero value, which for several fields here means "none".  See
+ * README.md.
+ */
+message ResponseHeader {
+  string server_version = 1;
+  string min_client_version = 2;
+}
+
+/* Identifies an Iceberg table. */
+message TableIdentifier {
+  string prefix = 1;                  // optional catalog or tenant scope
+  repeated string namespace = 2;      // v1 requires exactly one segment
+  string name = 3;
+}
+
+message Schema {
+  int32 schema_id = 1;
+  google.protobuf.Struct fields = 2;
+  repeated int32 identifier_field_ids = 3;
+}
+
+message PartitionSpec {
+  int32 spec_id = 1;
+  google.protobuf.Struct fields = 2;
+}
+
+message SortOrder {
+  int32 order_id = 1;
+  google.protobuf.Struct fields = 2;
+}
+
+message Snapshot {
+  int64 snapshot_id = 1;
+  int64 parent_snapshot_id = 2;          // 0 if none
+  int64 sequence_number = 3;
+  google.protobuf.Timestamp committed_at = 4;
+  string manifest_list = 5;
+  map<string, string> summary = 6;
+}
+
+/* Storage configuration kept provider-neutral. */
+message StorageConfig {
+  google.protobuf.Struct config = 1;
+}
+
+/*
+ * What a failed call says about itself, carried as a detail of the
+ * google.rpc.Status it ends with.  business_code is what a client branches on;
+ * code repeats the gRPC status name for logs.  Stack traces stay in the
+ * server's log, and correlation_id finds them there.
+ */
+message ErrorDetail {
+  string code = 1;
+  string type = 2;
+  string message = 3;
+  string correlation_id = 4;
+  map<string, string> labels = 5;
+  BusinessErrorCode business_code = 6;
+}
+
+enum BusinessErrorCode {
+  BUSINESS_ERROR_UNSPECIFIED = 0;
+  BUSINESS_ERROR_NOT_FOUND = 1;
+  BUSINESS_ERROR_ALREADY_EXISTS = 2;
+  BUSINESS_ERROR_CONFLICT = 3;
+  BUSINESS_ERROR_INVALID_ARGUMENT = 4;
+  BUSINESS_ERROR_UNAUTHENTICATED = 5;
+  BUSINESS_ERROR_PERMISSION_DENIED = 6;
+  BUSINESS_ERROR_RESOURCE_EXHAUSTED = 7;
+  BUSINESS_ERROR_INTERNAL = 8;
+  BUSINESS_ERROR_UNAVAILABLE = 9;
+}
