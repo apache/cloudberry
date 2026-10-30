@@ -214,6 +214,7 @@ test: rpt rpt_joins rpt_tpch rpt_returning
 # temp tables
 test: bfv_cte
 test: bfv_joins bfv_subquery bfv_planner bfv_legacy bfv_temp bfv_dml
+test: orca_motion_subplan
 
 # test tpcds query 04
 test: tpcds_q04
