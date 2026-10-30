@@ -4225,17 +4225,11 @@ CTranslatorExprToDXL::PdxlnExistentialSubplan(
 	}
 	else
 	{
-		// restrict requested columns to required inner column
-		inner_dxlnode =
-			PdxlnRestrictResult(pdxlnInnerChild, (*pdrgpcrInner)[0]);
-	}
-
-	if (nullptr == inner_dxlnode)
-	{
-		GPOS_RAISE(
-			gpopt::ExmaDXL, gpopt::ExmiExpr2DXLUnsupportedFeature,
-			GPOS_WSZ_LIT(
-				"Outer references in the project list of a correlated subquery"));
+		// EXISTS and NOT EXISTS only inspect whether the inner plan returns
+		// a row, so there is no need to restrict its output to one column.
+		// Keep the original project list, including any nested SubPlans.
+		// Folding a restricting Result later could orphan their Motion slices.
+		inner_dxlnode = pdxlnInnerChild;
 	}
 
 	const IMDTypeBool *pmdtypebool = m_pmda->PtMDType<IMDTypeBool>();
