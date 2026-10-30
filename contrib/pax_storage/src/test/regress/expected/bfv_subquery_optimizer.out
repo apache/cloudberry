@@ -485,14 +485,13 @@ SELECT (EXISTS (SELECT UNNEST(X))) AS B FROM A;
 EXPLAIN SELECT (EXISTS (SELECT UNNEST(X))) AS B FROM A;
                                    QUERY PLAN                                    
 ---------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..882690.51 rows=1 width=1)
-   ->  Seq Scan on a  (cost=0.00..882690.51 rows=334 width=1)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..882690.58 rows=1 width=1)
+   ->  Seq Scan on a  (cost=0.00..882690.58 rows=334 width=1)
          SubPlan 1
-           ->  Result  (cost=0.00..0.00 rows=1 width=6)
-                 ->  ProjectSet  (cost=0.00..0.00 rows=1 width=6)
-                       ->  Result  (cost=0.00..0.00 rows=1 width=1)
- Optimizer: Pivotal Optimizer (GPORCA)
-(7 rows)
+           ->  ProjectSet  (cost=0.00..0.00 rows=1 width=6)
+                 ->  Result  (cost=0.00..0.00 rows=1 width=1)
+ Optimizer: GPORCA
+(6 rows)
 
 DROP TABLE A;
 --
