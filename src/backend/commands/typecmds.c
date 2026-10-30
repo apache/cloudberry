@@ -1699,7 +1699,6 @@ DefineRange(ParseState *pstate, CreateRangeStmt *stmt)
 
 	multirangeOid = AssignTypeMultirangeOid(multirangeTypeName, multirangeNamespace);
 
-	/* GPDB_14_MERGE_FIXME: multirangeArray uses typeNamespace */
 	/* Create the multirange's array type */
 	multirangeArrayName = makeArrayTypeName(multirangeTypeName, typeNamespace);
 	multirangeArrayOid = AssignTypeMultirangeArrayOid(multirangeArrayName,typeNamespace);	

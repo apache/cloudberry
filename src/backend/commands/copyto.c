@@ -426,7 +426,6 @@ BeginCopyTo(ParseState *pstate,
 			}
 
 			// Increase buffer size to improve performance  (cmcdevitt)
-			/* GPDB_14_MERGE_FIXME: Ret value process. */
 			setvbuf(cstate->copy_file, NULL, _IOFBF, 393216); // 384 Kbytes
 
 			if (fstat(fileno(cstate->copy_file), &st))
@@ -1454,7 +1453,6 @@ BeginCopyToOnSegment(QueryDesc *queryDesc)
 							errmsg("could not open file \"%s\" for writing: %m", filename)));
 
 		// Increase buffer size to improve performance  (cmcdevitt)
-		/* GPDB_14_MERGE_FIXME: Ret value process. */
 		setvbuf(cstate->copy_file, NULL, _IOFBF, 393216); // 384 Kbytes
 
 		fstat(fileno(cstate->copy_file), &st);
@@ -2372,7 +2370,6 @@ BeginCopyToDirectoryTable(ParseState *pstate,
 			}
 
 			// Increase buffer size to improve performance  (cmcdevitt)
-			/* GPDB_14_MERGE_FIXME: Ret value process. */
 			setvbuf(cstate->copy_file, NULL, _IOFBF, 393216);	// 384 Kbytes
 
 			if (fstat(fileno(cstate->copy_file), &st))

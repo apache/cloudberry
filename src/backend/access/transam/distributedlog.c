@@ -288,11 +288,6 @@ DistributedLog_AdvanceOldestXmin(TransactionId oldestLocalXmin,
 											&expected, (uint32)oldestXmin))
 				break;
 
-			/*
-			* GPDB_14_MERGE_FIXME:
-			* Other processes may set DistributedLogShared->oldestXmin,
-			* should we return the more accurate value instead of oldestXmin we got ?
-			*/
 			if (TransactionIdPrecedesOrEquals(oldestXmin, expected))
 			{
 				/*

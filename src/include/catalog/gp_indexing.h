@@ -19,13 +19,6 @@
 
 
 
-/* GPDB_14_MERGE_FIXME: not used in upstream anymore */
-/*
-DECLARE_UNIQUE_INDEX(pg_pltemplate_name_index, 1137, on pg_pltemplate using btree(tmplname name_ops));
-#define PLTemplateNameIndexId  1137
-*/
-
-
 /* MPP-6929: metadata tracking */
 
 /* Note: no dbid */
@@ -34,9 +27,5 @@ DECLARE_UNIQUE_INDEX(pg_pltemplate_name_index, 1137, on pg_pltemplate using btre
 
 
 
-
-/* GPDB_14_MERGE_FIXME: seems not directly used */
-
-/* GPDB_14_MERGE_FIXME: oid conflicts, assgin new */
 
 #endif							/* GP_INDEXING_H */
