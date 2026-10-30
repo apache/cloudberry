@@ -150,7 +150,7 @@ typedef struct IntoClause
 	/* materialized view's SELECT query */
 	Node	   *viewQuery pg_node_attr(query_jumble_ignore);
 	bool		skipData;		/* true for WITH NO DATA */
-	Node       *distributedBy;  /* GPDB: columns to distribubte the data on. */
+	Node       *distributedBy;  /* GPDB: columns to distribute the data on. */
 	bool		ivm;			/* true for WITH IVM */
 	Oid 		matviewOid;		/* matview oid */
 	char		*enrname;		/* ENR name for materialized view delta */
