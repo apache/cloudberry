@@ -818,6 +818,7 @@ cdbexplain_collectStatsFromNode(PlanState *planstate, CdbExplain_SendStatCtx *ct
 	si->ntuples = instr->ntuples;
 	si->ntuples2 = instr->ntuples2;
 	si->nloops = instr->nloops;
+	si->bufusage = instr->bufusage;
 	si->nfiltered1 = instr->nfiltered1;
 	si->nfiltered2 = instr->nfiltered2;
 	si->prf_work     = instr->prf_work;
@@ -953,7 +954,6 @@ cdbexplain_depStatAcc_saveText(CdbExplain_DepStatAcc *acc,
 	}
 }								/* cdbexplain_depStatAcc_saveText */
 
-
 /*
  * cdbexplain_depositStatsToNode
  *
@@ -994,6 +994,7 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 	CdbExplain_DepStatAcc vmem_reserved;
 	CdbExplain_DepStatAcc totalPartTableScanned;
 	CdbExplain_DepStatAcc sortSpaceUsed[NUM_SORT_SPACE_TYPE][NUM_SORT_METHOD];
+	BufferUsage bufusage;
 	int			imsgptr;
 	int			nInst;
 
@@ -1018,6 +1019,7 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 	cdbexplain_depStatAcc_init0(&workmemwanted);
 	cdbexplain_depStatAcc_init0(&totalWorkfileCreated);
 	cdbexplain_depStatAcc_init0(&totalPartTableScanned);
+	memset(&bufusage, 0, sizeof(bufusage));
 	for (int i = 0; i < NUM_SORT_METHOD; i++)
 	{
 		for (int j = 0; j < NUM_SORT_SPACE_TYPE; j++)
@@ -1063,6 +1065,7 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 		cdbexplain_depStatAcc_upd(&workmemwanted, rsi->workmemwanted, rsh, rsi, nsi);
 		cdbexplain_depStatAcc_upd(&totalWorkfileCreated, (rsi->workfileCreated ? 1 : 0), rsh, rsi, nsi);
 		cdbexplain_depStatAcc_upd(&totalPartTableScanned, rsi->numPartScanned, rsh, rsi, nsi);
+		BufferUsageAdd(&bufusage, &rsi->bufusage);
 		Assert(rsi->sortstats.sortMethod < NUM_SORT_METHOD);
 		Assert(rsi->sortstats.spaceType < NUM_SORT_SPACE_TYPE);
 		if (rsi->sortstats.sortMethod != SORT_TYPE_STILL_IN_PROGRESS)
@@ -1133,6 +1136,9 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 		instr->workfileCreated = nodeAcc->nsimax->workfileCreated;
 		instr->firststart = nodeAcc->nsimax->firststart;
 	 }
+
+	/* Buffer usage is summed across all workers, not taken from the winner. */
+	instr->bufusage = bufusage;
 
 	/* Save extra message text for the most interesting winning qExecs. */
 	if (ctx->extratextbuf)

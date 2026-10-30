@@ -34,6 +34,7 @@ typedef struct CdbExplain_StatInst
 	double		ntuples;		/* Total tuples produced */
 	double		ntuples2;
 	double		nloops;			/* # of run cycles for this node */
+	BufferUsage bufusage;		/* Total buffer usage */
 	double		nfiltered1;
 	double		nfiltered2;
 	bool		prf_work;
