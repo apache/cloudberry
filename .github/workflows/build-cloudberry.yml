@@ -243,6 +243,9 @@ jobs:
                "make_configs":["src/test/regress:installcheck-good"],
                "pg_settings":{"optimizer":"on"}
               },
+              {"test":"ic-anser",
+               "make_configs":["gpcontrib/anser:installcheck-with-install"]
+              },
               {"test":"pax-ic-good-opt-off",
                "make_configs":[
                 "contrib/pax_storage/:pax-test",

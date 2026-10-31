@@ -2149,22 +2149,51 @@ cdb_sequence_nextval_qe(Relation	seqrel,
 
 	/*
 	 * Read nextval response from QD.
+	 *
+	 * The loop is here because this is not the only thing the QD sends down
+	 * this connection: a sideband message may arrive for a waiter that has
+	 * already stopped waiting for it, and it can land in the middle of this
+	 * exchange.  Skipping one and carrying on is the only safe answer, since
+	 * the type byte has been taken by then and there is no way to put it back
+	 * for someone else to read.
 	 */
-	do
+	for (;;)
 	{
-		pq_startmsgread();
-		retval = pq_getbyte_if_available(&qtype);
-		if (retval == 0)
-		{
-			pq_endmsgread();
-			CHECK_FOR_INTERRUPTS();
-		}
+		StringInfoData sideband;
 
-		if (retval == EOF)
+		do
+		{
+			pq_startmsgread();
+			retval = pq_getbyte_if_available(&qtype);
+			if (retval == 0)
+			{
+				pq_endmsgread();
+				CHECK_FOR_INTERRUPTS();
+			}
+
+			if (retval == EOF)
+				ereport(ERROR,
+						(errcode(ERRCODE_INTERNAL_ERROR),
+						 errmsg("nextval: connection is gone unexpectedly")));
+		} while (retval != 1);
+
+		if (qtype != GP_SIDEBAND_MESSAGE)
+			break;
+
+		/*
+		 * Not ours.  Read the body out whole and drop it: whoever it was meant
+		 * for is no longer reading, and leaving it in the stream would put
+		 * every later read at the wrong offset -- which does not surface here
+		 * but as an absurd allocation or an invalid message type somewhere
+		 * else entirely, after the connection has gone back to the gang pool.
+		 */
+		initStringInfo(&sideband);
+		if (pq_getmessage(&sideband, PQ_LARGE_MESSAGE_LIMIT) != 0)
 			ereport(ERROR,
 					(errcode(ERRCODE_INTERNAL_ERROR),
 					 errmsg("nextval: connection is gone unexpectedly")));
-	} while (retval != 1);
+		pfree(sideband.data);
+	}
 	if (qtype == 'X')
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 						errmsg("nextval: QD closed the connection")));
