@@ -108,4 +108,5 @@ drop table fts_reset_t3;
 DROP
 
 -- In case anything goes wrong, we don't want to affect other tests. So rebalance the cluster anyway.
-!\retcode gprecoverseg -aF !\retcode gprecoverseg -ar
+-- start_ignore
+-- end_ignore

@@ -89,6 +89,13 @@ m/Distributed randomly/
 -- m/^HINT.*To uniquely identify a row within a distributed table.*/
 -- m/^NOTICE.*SELECT uses system-defined column.*/
 
+# When a QE errors out, the QD cancels the other QEs.  A QE that has already
+# committed locally (e.g. the first transaction of CREATE INDEX CONCURRENTLY)
+# and is waiting for the mirror ignores the cancel and warns about it.  Whether
+# that happens depends on timing, so ignore the warning and its detail.
+m/^WARNING:  ignoring query cancel request for synchronous replication to ensure cluster consistency/
+m/^DETAIL:  The transaction has already changed locally, it has to be replicated to standby\./
+
 -- end_matchignore
 
 -- start_matchsubs

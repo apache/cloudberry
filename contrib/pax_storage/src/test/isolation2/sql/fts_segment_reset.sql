@@ -66,5 +66,7 @@ select pg_reload_conf();
 drop table fts_reset_t3;
 
 -- In case anything goes wrong, we don't want to affect other tests. So rebalance the cluster anyway.
-!\retcode gprecoverseg -aF
-!\retcode gprecoverseg -ar
+-- start_ignore
+!\retcode gprecoverseg -aF;
+!\retcode gprecoverseg -ar;
+-- end_ignore
