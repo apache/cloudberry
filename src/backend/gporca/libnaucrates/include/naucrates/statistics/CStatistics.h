@@ -153,6 +153,10 @@ private:
 									  UlongToColRefMap *colref_mapping,
 									  BOOL must_exist);
 
+	// helper method to add attno information without remapping
+	static void AddAttnoInfo(CMemoryPool *mp, UlongToIntMap *src_attno,
+							 UlongToIntMap *dest_attno);
+
 public:
 	CStatistics &operator=(CStatistics &) = delete;
 
