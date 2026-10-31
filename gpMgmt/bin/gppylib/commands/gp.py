@@ -858,7 +858,17 @@ class ModifyConfSetting(Command):
     def __init__(self, name, file, optName, optVal, optType='string', ctxt=LOCAL, remoteHost=None):
         cmdStr = None
         if optType == 'number':
-            cmdStr = "perl -p -i.bak -e 's/^%s[ ]*=[ ]*\\d+/%s=%d/' %s" % (optName, optName, optVal, file)
+            # Replace the whole value: valid integers can be signed, octal,
+            # hexadecimal, or quoted scientific notation. Matching only the
+            # initial digits can leave a suffix that corrupts the config.
+            # Keep trailing whitespace/comments and require a setting-name
+            # separator so similarly named parameters are not changed.
+            # \x27 is a quote inside the shell's single-quoted Perl program.
+            cmdStr = (
+                "perl -p -i.bak -e 's/^[ \\t]*%s(?:[ \\t]*=[ \\t]*|[ \\t]+)"
+                "(?:\\x27[^\\x27]*\\x27|[^\\s\\x27#]+)"
+                "(?=[ \\t]*(?:#|$))/%s=%d/i' %s"
+            ) % (optName, optName, optVal, file)
         elif optType == 'string':
             cmdStr = "perl -i -p -e \"s/^%s[ ]*=[ ]*'[^']*'/%s='%s'/\" %s" % (optName, optName, optVal, file)
         else:
@@ -1669,6 +1679,18 @@ def createTempDirectoryName(coordinatorDataDirectory, tempDirPrefix):
                                 tempDirPrefix,
                                 datetime.datetime.now().strftime('%m%d%Y'),
                                 os.getpid())
+
+# Cherry-picked from Greenplum Database (greenplum-db/gpdb-archive @ 482967c1b4),
+# gpMgmt/bin/gppylib/commands/gp.py.
+def is_gprecoverseg_running():
+    gprecoverseg_pidfile = os.path.join(get_coordinatordatadir(), 'gprecoverseg.lock', 'PID')
+    try:
+        with open(gprecoverseg_pidfile) as pidfile:
+            gprecoverseg_pid = pidfile.read()
+    except Exception:
+        return False
+
+    return check_pid(gprecoverseg_pid)
 
 #-------------------------------------------------------------------------
 class GpRecoverSeg(Command):

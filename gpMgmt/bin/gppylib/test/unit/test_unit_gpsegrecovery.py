@@ -1,7 +1,10 @@
 from contextlib import redirect_stderr
 from mock import call, Mock, patch, ANY
 import io
+import os
+import shutil
 import sys
+import tempfile
 
 from .gp_unittest import GpTestCase
 import gpsegrecovery
@@ -18,11 +21,13 @@ class IncrementalRecoveryTestCase(GpTestCase):
         self.mock_logger = Mock()
         self.apply_patches([
             patch('gpsegrecovery.start_segment', return_value=Mock()),
+            patch('gpsegrecovery.ModifyConfSetting', return_value=Mock()),
             patch('gppylib.commands.pg.PgRewind.__init__', return_value=None),
             patch('gppylib.commands.pg.PgRewind.run')
         ])
         self.mock_pgrewind_run = self.get_mock_from_apply_patch('run')
         self.mock_pgrewind_init = self.get_mock_from_apply_patch('__init__')
+        self.mock_modify_conf = self.get_mock_from_apply_patch('ModifyConfSetting')
 
         p = Segment.initFromString("1|0|p|p|s|u|sdw1|sdw1|40000|/data/primary0")
         m = Segment.initFromString("2|0|m|m|s|u|sdw2|sdw2|50000|/data/mirror0")
@@ -56,8 +61,13 @@ class IncrementalRecoveryTestCase(GpTestCase):
         self.assertEqual(1, self.mock_pgrewind_run.call_count)
         self.assertEqual(call(validateAfter=True), self.mock_pgrewind_run.call_args)
         logger_call_args = [call('Running pg_rewind with progress output temporarily in /tmp/test_progress_file'),
-                            call('Successfully ran pg_rewind for dbid: 2')]
+                            call('Successfully ran pg_rewind for dbid: 2'),
+                            call('Updating /data/mirror0/postgresql.conf')]
         self.assertEqual(logger_call_args, self.mock_logger.info.call_args_list)
+        self.mock_modify_conf.assert_called_once_with('Updating /data/mirror0/postgresql.conf',
+                                                      '/data/mirror0/postgresql.conf', 'port', 50000,
+                                                      optType='number')
+        self.mock_modify_conf.return_value.run.assert_called_once_with(validateAfter=True)
         gpsegrecovery.start_segment.assert_called_once_with(self.seg_recovery_info, self.mock_logger, self.era)
 
     def test_incremental_run_exception(self):
@@ -71,6 +81,7 @@ class IncrementalRecoveryTestCase(GpTestCase):
         self.assertEqual(call(validateAfter=True), self.mock_pgrewind_run.call_args)
         self.assertEqual([call('Running pg_rewind with progress output temporarily in /tmp/test_progress_file')],
                          self.mock_logger.info.call_args_list)
+        self.assertEqual(0, self.mock_modify_conf.call_count)
         self.assertEqual(0, gpsegrecovery.start_segment.call_count)
         self._assert_cmd_failed('{"error_type": "incremental", "error_msg": "pg_rewind failed", "dbid": 2, ' \
                                 '"datadir": "/data/mirror0", "port": 50000, "progress_file": "/tmp/test_progress_file"}')
@@ -92,7 +103,8 @@ class IncrementalRecoveryTestCase(GpTestCase):
         self.assertEqual(1, self.mock_pgrewind_init.call_count)
         self.assertEqual(1, self.mock_pgrewind_run.call_count)
         logger_call_args = [call('Running pg_rewind with progress output temporarily in /tmp/test_progress_file'),
-                            call('Successfully ran pg_rewind for dbid: 2')]
+                            call('Successfully ran pg_rewind for dbid: 2'),
+                            call('Updating /data/mirror0/postgresql.conf')]
         self.assertEqual(logger_call_args, self.mock_logger.info.call_args_list)
         gpsegrecovery.start_segment.assert_called_once_with(self.seg_recovery_info, self.mock_logger, self.era)
         self._assert_cmd_failed('{"error_type": "start", "error_msg": "pg_ctl start failed", "dbid": 2, ' \
@@ -107,11 +119,13 @@ class FullRecoveryTestCase(GpTestCase):
         self.mock_logger = Mock(spec=['log', 'info', 'debug', 'error', 'warn', 'exception'])
         self.apply_patches([
             patch('gpsegrecovery.start_segment', return_value=Mock()),
+            patch('gpsegrecovery.ModifyConfSetting', return_value=Mock()),
             patch('gpsegrecovery.PgBaseBackup.__init__', return_value=None),
             patch('gpsegrecovery.PgBaseBackup.run')
         ])
         self.mock_pgbasebackup_run = self.get_mock_from_apply_patch('run')
         self.mock_pgbasebackup_init = self.get_mock_from_apply_patch('__init__')
+        self.mock_modify_conf = self.get_mock_from_apply_patch('ModifyConfSetting')
 
         p = Segment.initFromString("1|0|p|p|s|u|sdw1|sdw1|40000|/data/primary0")
         m = Segment.initFromString("2|0|m|m|s|u|sdw2|sdw2|50000|/data/mirror0")
@@ -135,8 +149,13 @@ class FullRecoveryTestCase(GpTestCase):
         self.assertEqual(1, self.mock_pgbasebackup_run.call_count)
         self.assertEqual(call(validateAfter=True), self.mock_pgbasebackup_run.call_args)
         expected_logger_info_args = [call('Running pg_basebackup with progress output temporarily in /tmp/test_progress_file'),
-                                     call("Successfully ran pg_basebackup for dbid: 2")]
+                                     call("Successfully ran pg_basebackup for dbid: 2"),
+                                     call('Updating /data/mirror0/postgresql.conf')]
         self.assertEqual(expected_logger_info_args, self.mock_logger.info.call_args_list)
+        self.mock_modify_conf.assert_called_once_with('Updating /data/mirror0/postgresql.conf',
+                                                      '/data/mirror0/postgresql.conf', 'port', 50000,
+                                                      optType='number')
+        self.mock_modify_conf.return_value.run.assert_called_once_with(validateAfter=True)
         gpsegrecovery.start_segment.assert_called_once_with(self.seg_recovery_info, self.mock_logger, self.era)
 
     def _assert_cmd_passed(self):
@@ -277,6 +296,7 @@ class SegRecoveryTestCase(GpTestCase):
         self.apply_patches([
             patch('gpsegrecovery.SegmentStart.__init__', return_value=None),
             patch('gpsegrecovery.SegmentStart.run'),
+            patch('gpsegrecovery.ModifyConfSetting', return_value=Mock()),
         ])
         self.mock_segment_start_init = self.get_mock_from_apply_patch('__init__')
 
@@ -396,3 +416,59 @@ class SegRecoveryTestCase(GpTestCase):
         mock_init.assert_called_once()
         self.assertEqual(1, self.mock_logger.info.call_count)
         mock_run.assert_called_once_with(validateAfter=True)
+
+
+class UpdatePortInConfTestCase(GpTestCase):
+    """
+    Runs the real rewrite, not a mock of it: the rewrite reports success
+    whether or not it matched a line, so only the file shows whether the port
+    was changed.
+    """
+    def setUp(self):
+        self.datadir = tempfile.mkdtemp()
+        self.recovery_info = RecoveryInfo(self.datadir, 50000, 2, 'sdw1', 40000, False, '/tmp/test_progress_file')
+
+    def tearDown(self):
+        shutil.rmtree(self.datadir)
+        super(UpdatePortInConfTestCase, self).tearDown()
+
+    def _rewrite(self, line):
+        conf = os.path.join(self.datadir, 'postgresql.conf')
+        with open(conf, 'w') as f:
+            f.write(line + '\n')
+        gpsegrecovery.update_port_in_conf(self.recovery_info, Mock())
+        with open(conf) as f:
+            return f.read().rstrip('\n')
+
+    def test_every_form_postgresql_conf_accepts_is_rewritten(self):
+        forms = ['port=40000', 'port = 40000', ' port = 40000', 'port\t=40000', '\tport=40000',
+                 'port 40000', "port = '40000'", 'PORT = 40000', 'Port=40000']
+        for form in forms:
+            with self.subTest(form=form):
+                self.assertEqual('port=50000', self._rewrite(form))
+
+    def test_trailing_comment_is_kept(self):
+        self.assertEqual('port=50000 # sets the listener port',
+                         self._rewrite('port = 40000 # sets the listener port'))
+
+    def test_commented_out_and_other_settings_are_left_alone(self):
+        for line in ['#port = 5432', '#PORT = 5432', 'port_range = 40000', 'PORT_RANGE = 40000']:
+            with self.subTest(line=line):
+                self.assertEqual(line, self._rewrite(line))
+
+    def test_alternative_numeric_values_are_replaced_completely(self):
+        values = ['+40000', "'+40000'", '0116100', "'0116100'",
+                  '0x9c40', "'0x9c40'", '40000.0', "'40000.0'", "'4e4'"]
+        for value in values:
+            with self.subTest(value=value):
+                self.assertEqual('port=50000', self._rewrite('port = ' + value))
+                self.assertEqual('port=50000 # source port',
+                                 self._rewrite('PORT ' + value + ' # source port'))
+
+    def test_last_port_assignment_is_also_rewritten(self):
+        self.assertEqual('port=50000\nport=50000 # override',
+                         self._rewrite("port=40000\nPORT = '0x9c40' # override"))
+
+    def test_rewrite_preserves_adjacent_lines(self):
+        self.assertEqual("# source config\n\nport=50000\nport_range = 40000",
+                         self._rewrite("# source config\n\nport = '4e4'\nport_range = 40000"))
