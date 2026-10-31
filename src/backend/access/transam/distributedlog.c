@@ -28,12 +28,17 @@
  */
 #include "postgres.h"
 
+#include <fcntl.h>
+
 #include "access/distributedlog.h"
 #include "access/slru.h"
 #include "access/transam.h"
+#include "access/xlog.h"
 #include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
 #include "port/atomics.h"
+#include "port/pg_crc32c.h"
+#include "storage/fd.h"
 #include "storage/shmem.h"
 #include "utils/faultinjector.h"
 #include "utils/guc.h"
@@ -91,6 +96,18 @@ typedef struct DistributedLogShmem
 	 */
 	volatile TransactionId	oldestXmin;
 
+	/*
+	 * Every distributed log entry whose local xid is below oldestXmin has
+	 * distribXid < truncGXidBound.  Maintained as a monotonic max of the
+	 * xminAllDistributedSnapshots values that backed each oldestXmin
+	 * advance (or, in recovery, the bound carried by a TRUNCATE WAL
+	 * record).  A distributed snapshot with
+	 * xminAllDistributedSnapshots < truncGXidBound may need entries that
+	 * the primary already trimmed, which readers cannot resolve
+	 * correctly: see DistributedLog_AdvanceOldestXmin().
+	 */
+	pg_atomic_uint64 truncGXidBound;
+
 } DistributedLogShmem;
 
 static DistributedLogShmem *DistributedLogShared = NULL;
@@ -100,6 +117,22 @@ static bool DistributedLog_PagePrecedes(int page1, int page2);
 static void DistributedLog_WriteZeroPageXlogRec(int page);
 static void DistributedLog_WriteTruncateXlogRec(int page);
 static void DistributedLog_Truncate(TransactionId oldestXmin);
+static void DistributedLog_RaiseTruncGXidBound(DistributedTransactionId gbound);
+static void DistributedLog_CheckSnapshot(DistributedTransactionId xminAllDistributedSnapshots);
+static void DistributedLog_SaveHorizon(void);
+static void DistributedLog_RestoreHorizon(void);
+
+/* Keep both truncation horizons across checkpoints and restarts. */
+#define DISTRIBUTEDLOG_HORIZON_FILE "global/pg_distributedlog_horizon"
+#define DISTRIBUTEDLOG_HORIZON_MAGIC 0xD1060001
+
+typedef struct DistributedLogHorizon
+{
+	DistributedTransactionId truncGXid;
+	TransactionId oldestXmin;
+	uint32		magic;
+	pg_crc32c	crc;
+} DistributedLogHorizon;
 
 /*
  * Initialize the value for oldest local XID that might still be visible
@@ -115,7 +148,18 @@ void
 DistributedLog_InitOldestXmin(void)
 {
 	TransactionId oldestXmin = ShmemVariableCache->oldestXid;
-	TransactionId latestXid = XidFromFullTransactionId(ShmemVariableCache->latestCompletedXid);
+	TransactionId nextXid = XidFromFullTransactionId(ShmemVariableCache->nextXid);
+	TransactionId savedOldestXmin = pg_atomic_read_u32(
+		(pg_atomic_uint32 *) &DistributedLogShared->oldestXmin);
+
+	/* A saved truncation can be newer than the checkpoint we recover from. */
+	if (TransactionIdIsValid(savedOldestXmin))
+	{
+		if (TransactionIdPrecedes(oldestXmin, savedOldestXmin))
+			oldestXmin = savedOldestXmin;
+		if (TransactionIdPrecedes(nextXid, savedOldestXmin))
+			nextXid = savedOldestXmin;
+	}
 
 	/*
 	 * Start scanning from oldest datfrozenxid, until we find a
@@ -136,9 +180,9 @@ DistributedLog_InitOldestXmin(void)
 		xid = AdvanceTransactionIdToNextPage(oldestXmin);
 
 		/*
-		 * But don't go past oldestLocalXmin + 1 which is the most 
-		 * we might've set the oldestXmin before restart (essentially
-		 * it's same as the 'xmax' value in GetSnapshotData()).
+		 * Do not go past nextXid: the page for an unassigned xid need not
+		 * exist yet. latestCompletedXid is not initialized at this point
+		 * during hot standby startup, so it cannot bound this scan.
 		 *
 		 * Note that, stopping here means that we don't have a page
 		 * for oldestXmin, but we are fine because:
@@ -151,10 +195,9 @@ DistributedLog_InitOldestXmin(void)
 		 *     DistributedLog_AdvanceOldestXmin(), since we don't have
 		 *     any newer xid to advance to, the call would be a no-op.
 		 */
-		if (TransactionIdFollows(xid, latestXid))
+		if (TransactionIdFollowsOrEquals(xid, nextXid))
 		{
-			oldestXmin = latestXid;
-			TransactionIdAdvance(oldestXmin);
+			oldestXmin = nextXid;
 			break;
 		}
 
@@ -212,6 +255,19 @@ DistributedLog_AdvanceOldestXmin(TransactionId oldestLocalXmin,
 	oldestXmin = (TransactionId)pg_atomic_read_u32((pg_atomic_uint32 *)&DistributedLogShared->oldestXmin);
 	oldOldestXmin = oldestXmin;
 	Assert(oldestXmin != InvalidTransactionId);
+
+	/*
+	 * Only the primary may advance and truncate the log.  In recovery, use
+	 * the replayed horizon and check it while excluding concurrent TRUNCATE
+	 * replay.  Visibility lookups must recheck it as replay can proceed after
+	 * we release the lock, including after a reader copied this snapshot.
+	 */
+	if (RecoveryInProgress())
+	{
+		DistributedLog_CheckSnapshot(xminAllDistributedSnapshots);
+		LWLockRelease(DistributedLogTruncateLock);
+		return oldestXmin;
+	}
 
 	/*
 	 * oldestXmin (DistributedLogShared->oldestXmin) can be higher than
@@ -284,9 +340,17 @@ DistributedLog_AdvanceOldestXmin(TransactionId oldestLocalXmin,
 
 		while (1)
 		{
-			if (pg_atomic_compare_exchange_u32((pg_atomic_uint32 *)&DistributedLogShared->oldestXmin, 
+			if (pg_atomic_compare_exchange_u32((pg_atomic_uint32 *)&DistributedLogShared->oldestXmin,
 											&expected, (uint32)oldestXmin))
+			{
+				/*
+				 * This scan moved the shared horizon past entries whose
+				 * distribXid it verified to be < xminAllDistributedSnapshots,
+				 * so raise the recorded truncation bound accordingly.
+				 */
+				DistributedLog_RaiseTruncGXidBound(xminAllDistributedSnapshots);
 				break;
+			}
 
 			/*
 			* GPDB_14_MERGE_FIXME:
@@ -474,14 +538,33 @@ DistributedLog_GetDistributedXid(
 	int			entryno = TransactionIdToEntry(localXid);
 	int			slotno;
 	DistributedLogEntry *ptr;
+	TransactionId oldestXmin;
 
 	Assert(!IS_QUERY_DISPATCHER());
+
+	/*
+	 * If the requested xid is below the truncation horizon, its entry
+	 * has already been trimmed: return "not found" cleanly instead of
+	 * attempting an SLRU read of a removed page.
+	 */
+	LWLockAcquire(DistributedLogTruncateLock, LW_SHARED);
+	oldestXmin = (TransactionId)pg_atomic_read_u32((pg_atomic_uint32 *)&DistributedLogShared->oldestXmin);
+	if (oldestXmin == InvalidTransactionId)
+		elog(PANIC, "DistributedLog's OldestXmin not initialized yet");
+
+	if (TransactionIdPrecedes(localXid, oldestXmin))
+	{
+		*distribXid = 0;
+		LWLockRelease(DistributedLogTruncateLock);
+		return;
+	}
 
 	slotno = SimpleLruReadPage_ReadOnly(DistributedLogCtl, page, localXid);
 	ptr = (DistributedLogEntry *) DistributedLogCtl->shared->page_buffer[slotno];
 	ptr += entryno;
 	*distribXid = ptr->distribXid;
 	LWLockRelease(DistributedLogControlLock);
+	LWLockRelease(DistributedLogTruncateLock);
 }
 
 /*
@@ -490,7 +573,8 @@ DistributedLog_GetDistributedXid(
 bool
 DistributedLog_CommittedCheck(
 	TransactionId 						localXid,
-	DistributedTransactionId 			*distribXid)
+	DistributedTransactionId 			*distribXid,
+	DistributedTransactionId xminAllDistributedSnapshots)
 {
 	int			page = TransactionIdToPage(localXid);
 	int			entryno = TransactionIdToEntry(localXid);
@@ -502,6 +586,9 @@ DistributedLog_CommittedCheck(
 	TransactionId oldestXmin;
 
 
+	/* Revalidate the snapshot and read the mapping in one lock interval. */
+	LWLockAcquire(DistributedLogTruncateLock, LW_SHARED);
+	DistributedLog_CheckSnapshot(xminAllDistributedSnapshots);
 	oldestXmin = (TransactionId)pg_atomic_read_u32((pg_atomic_uint32 *)&DistributedLogShared->oldestXmin);
 	if (oldestXmin == InvalidTransactionId)
 		elog(PANIC, "DistributedLog's OldestXmin not initialized yet");
@@ -509,10 +596,10 @@ DistributedLog_CommittedCheck(
 	if (TransactionIdPrecedes(localXid, oldestXmin))
 	{
 		*distribXid = 0;
+		LWLockRelease(DistributedLogTruncateLock);
 		return false;
 	}
 
-	LWLockAcquire(DistributedLogTruncateLock, LW_SHARED);
 	slotno = SimpleLruReadPage_ReadOnly(DistributedLogCtl, page, localXid);
 	ptr = (DistributedLogEntry *) DistributedLogCtl->shared->page_buffer[slotno];
 	ptr += entryno;
@@ -696,7 +783,138 @@ DistributedLog_ShmemInit(void)
 	if (!found)
 	{
 		DistributedLogShared->oldestXmin = InvalidTransactionId;
+		pg_atomic_init_u64(&DistributedLogShared->truncGXidBound,
+						   FirstDistributedTransactionId);
 	}
+}
+
+/*
+ * Monotonic advance of the truncation gxid bound.  The bound is only
+ * ever raised, so a plain CAS retry loop suffices; callers pass the
+ * gxid whose respecting scan just let the shared oldestXmin advance.
+ */
+static void
+DistributedLog_RaiseTruncGXidBound(DistributedTransactionId gbound)
+{
+	DistributedTransactionId cur =
+		pg_atomic_read_u64(&DistributedLogShared->truncGXidBound);
+
+	while (cur < gbound)
+	{
+		if (pg_atomic_compare_exchange_u64(
+				&DistributedLogShared->truncGXidBound,
+				&cur, gbound))
+			break;
+	}
+}
+
+/* Caller holds DistributedLogTruncateLock, also taken exclusively by redo. */
+static void
+DistributedLog_CheckSnapshot(DistributedTransactionId xminAllDistributedSnapshots)
+{
+	Assert(LWLockHeldByMe(DistributedLogTruncateLock));
+
+	if (RecoveryInProgress() &&
+		xminAllDistributedSnapshots <
+		pg_atomic_read_u64(&DistributedLogShared->truncGXidBound))
+		ereport(ERROR,
+				(errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
+				 errmsg("canceling statement due to conflict with recovery"),
+				 errdetail("The distributed snapshot needed by this query is no longer "
+						   "available because the distributed log has been truncated "
+						   "on the primary.")));
+}
+
+/*
+ * Persist both horizons before removing any segment.  Unlike shared memory,
+ * this file survives a restart from a checkpoint after the TRUNCATE WAL record.
+ * Use the shared local horizon too, so replaying an older TRUNCATE cannot
+ * move the saved state backwards.
+ * Both the primary and redo hold DistributedLogTruncateLock exclusively.
+ */
+static void
+DistributedLog_SaveHorizon(void)
+{
+	const char *tmppath = DISTRIBUTEDLOG_HORIZON_FILE ".tmp";
+	DistributedLogHorizon horizon;
+	int			fd;
+
+	Assert(LWLockHeldByMeInMode(DistributedLogTruncateLock, LW_EXCLUSIVE));
+	memset(&horizon, 0, sizeof(horizon));
+	horizon.truncGXid = pg_atomic_read_u64(&DistributedLogShared->truncGXidBound);
+	horizon.oldestXmin = pg_atomic_read_u32(
+		(pg_atomic_uint32 *) &DistributedLogShared->oldestXmin);
+	horizon.magic = DISTRIBUTEDLOG_HORIZON_MAGIC;
+	INIT_CRC32C(horizon.crc);
+	COMP_CRC32C(horizon.crc, &horizon, offsetof(DistributedLogHorizon, crc));
+	FIN_CRC32C(horizon.crc);
+
+	fd = OpenTransientFile(tmppath, O_CREAT | O_TRUNC | O_WRONLY | PG_BINARY);
+	if (fd < 0)
+		ereport(ERROR,
+				(errcode_for_file_access(),
+				 errmsg("could not open file \"%s\": %m", tmppath)));
+	errno = 0;
+	if (write(fd, &horizon, sizeof(horizon)) != sizeof(horizon))
+	{
+		if (errno == 0)
+			errno = ENOSPC;
+		ereport(ERROR,
+				(errcode_for_file_access(),
+				 errmsg("could not write to file \"%s\": %m", tmppath)));
+	}
+	if (CloseTransientFile(fd) != 0)
+		ereport(ERROR,
+				(errcode_for_file_access(),
+				 errmsg("could not close file \"%s\": %m", tmppath)));
+
+	/* durable_rename fsyncs the file and its parent directory. */
+	durable_rename(tmppath, DISTRIBUTEDLOG_HORIZON_FILE, ERROR);
+}
+
+static void
+DistributedLog_RestoreHorizon(void)
+{
+	DistributedLogHorizon horizon;
+	pg_crc32c	crc;
+	int			fd;
+	int			nread;
+
+	fd = OpenTransientFile(DISTRIBUTEDLOG_HORIZON_FILE, O_RDONLY | PG_BINARY);
+	if (fd < 0)
+	{
+		/* A new cluster, or a cluster last run without persistent bounds. */
+		if (errno == ENOENT)
+			return;
+		ereport(FATAL,
+				(errcode_for_file_access(),
+				 errmsg("could not open file \"%s\": %m", DISTRIBUTEDLOG_HORIZON_FILE)));
+	}
+	nread = read(fd, &horizon, sizeof(horizon));
+	if (nread < 0)
+		ereport(FATAL,
+				(errcode_for_file_access(),
+				 errmsg("could not read file \"%s\": %m", DISTRIBUTEDLOG_HORIZON_FILE)));
+	if (CloseTransientFile(fd) != 0)
+		ereport(FATAL,
+				(errcode_for_file_access(),
+				 errmsg("could not close file \"%s\": %m", DISTRIBUTEDLOG_HORIZON_FILE)));
+	if (nread != sizeof(horizon) || horizon.magic != DISTRIBUTEDLOG_HORIZON_MAGIC ||
+		!TransactionIdIsNormal(horizon.oldestXmin))
+		ereport(FATAL,
+				(errcode(ERRCODE_DATA_CORRUPTED),
+				 errmsg("invalid distributed log horizon file")));
+	INIT_CRC32C(crc);
+	COMP_CRC32C(crc, &horizon, offsetof(DistributedLogHorizon, crc));
+	FIN_CRC32C(crc);
+	if (!EQ_CRC32C(crc, horizon.crc))
+		ereport(FATAL,
+				(errcode(ERRCODE_DATA_CORRUPTED),
+				 errmsg("incorrect checksum in distributed log horizon file")));
+
+	DistributedLog_RaiseTruncGXidBound(horizon.truncGXid);
+	pg_atomic_write_u32((pg_atomic_uint32 *) &DistributedLogShared->oldestXmin,
+						horizon.oldestXmin);
 }
 
 /*
@@ -762,6 +980,7 @@ DistributedLog_Startup(TransactionId oldestActiveXid,
 {
 	int			startPage;
 	int			endPage;
+	TransactionId savedOldestXmin;
 
 	if (IS_QUERY_DISPATCHER())
 		return;
@@ -775,6 +994,9 @@ DistributedLog_Startup(TransactionId oldestActiveXid,
 	endPage = TransactionIdToPage(nextXid);
 
 	LWLockAcquire(DistributedLogControlLock, LW_EXCLUSIVE);
+	DistributedLog_RestoreHorizon();
+	savedOldestXmin = pg_atomic_read_u32(
+		(pg_atomic_uint32 *) &DistributedLogShared->oldestXmin);
 
 	elog((Debug_print_full_dtm ? LOG : DEBUG5),
 		 "DistributedLog_Startup startPage %d, endPage %d",
@@ -834,7 +1056,9 @@ DistributedLog_Startup(TransactionId oldestActiveXid,
 	 * nextXid is exactly at a page boundary; and it's likely that the
 	 * "current" page doesn't exist yet in that case.)
 	 */
-	if (TransactionIdToEntry(nextXid) != 0)
+	if (TransactionIdToEntry(nextXid) != 0 &&
+		(!TransactionIdIsValid(savedOldestXmin) ||
+		 !TransactionIdPrecedes(nextXid, savedOldestXmin)))
 	{
 		int			entryno = TransactionIdToEntry(nextXid);
 		int			slotno;
@@ -1025,12 +1249,18 @@ DistributedLog_WriteZeroPageXlogRec(int page)
 static void
 DistributedLog_WriteTruncateXlogRec(int page)
 {
+	xl_distributedlog_truncate	rec = {0};
 	XLogRecPtr	recptr;
 
+	rec.page = page;
+	rec.truncGXid = pg_atomic_read_u64(
+		&DistributedLogShared->truncGXidBound);
+
 	XLogBeginInsert();
-	XLogRegisterData((char *) (&page), sizeof(int));
+	XLogRegisterData((char *) &rec, SizeOfDistributedLogTruncate);
 	recptr = XLogInsert(RM_DISTRIBUTEDLOG_ID, DISTRIBUTEDLOG_TRUNCATE);
 	XLogFlush(recptr);
+	DistributedLog_SaveHorizon();
 }
 
 /*
@@ -1068,8 +1298,66 @@ DistributedLog_redo(XLogReaderState *record)
 	else if (info == DISTRIBUTEDLOG_TRUNCATE)
 	{
 		int			page;
+		TransactionId cutoffXid;
+		TransactionId curOldestXmin;
+		xl_distributedlog_truncate xlrec;
 
 		memcpy(&page, XLogRecGetData(record), sizeof(int));
+		if (XLogRecGetDataLen(record) >= SizeOfDistributedLogTruncate)
+		{
+			memcpy(&xlrec, XLogRecGetData(record), SizeOfDistributedLogTruncate);
+		}
+		else
+		{
+			/* Pre-bound record: the truncated gxid range is unknown. */
+			xlrec.page = page;
+			xlrec.truncGXid = InvalidDistributedTransactionId;
+		}
+
+		LWLockAcquire(DistributedLogTruncateLock, LW_EXCLUSIVE);
+
+		/*
+		 * The primary already removed all DistributedLog pages older
+		 * than the cutoff page.  Advance our oldestXmin to the first
+		 * xid on the cutoff page, so that standby/mirror readers
+		 * resolving pre-truncation gxids take the soft "below
+		 * oldestXmin => not found" path in
+		 * DistributedLog_CommittedCheck() /
+		 * DistributedLog_GetDistributedXid() instead of erroring out
+		 * when the SLRU read fails on a truncated segment.
+		 *
+		 * The loop also covers a replay that runs before the first
+		 * DistributedLog_AdvanceOldestXmin() call, where the shared
+		 * oldestXmin still holds its InvalidTransactionId initial
+		 * value: nothing better has been written yet, and the cutoff
+		 * is a valid lower bound, so CAS from 0 installs it.
+		 */
+		cutoffXid = ((TransactionId) page) * ENTRIES_PER_PAGE;
+		if (cutoffXid < FirstNormalTransactionId)
+			cutoffXid = FirstNormalTransactionId;
+
+		curOldestXmin = (TransactionId) pg_atomic_read_u32(
+			(pg_atomic_uint32 *) &DistributedLogShared->oldestXmin);
+		while (TransactionIdPrecedes(curOldestXmin, cutoffXid))
+		{
+			uint32		expected = (uint32) curOldestXmin;
+
+			if (pg_atomic_compare_exchange_u32(
+					(pg_atomic_uint32 *) &DistributedLogShared->oldestXmin,
+					&expected, (uint32) cutoffXid))
+				break;
+			curOldestXmin = expected;
+		}
+
+		/*
+		 * All entries below the cutoff were verified on the primary to
+		 * carry a gxid older than every distributed snapshot it knew of,
+		 * i.e. gxid < truncGXid as logged in the record.  Record the
+		 * bound so that mirrors can detect snapshots that predate it.
+		 */
+		if (xlrec.truncGXid != InvalidDistributedTransactionId)
+			DistributedLog_RaiseTruncGXidBound(xlrec.truncGXid);
+		DistributedLog_SaveHorizon();
 
 		elog((Debug_print_full_dtm ? LOG : DEBUG5),
 			 "Redo DISTRIBUTEDLOG_TRUNCATE page %d",
@@ -1082,6 +1370,7 @@ DistributedLog_redo(XLogReaderState *record)
 		DistributedLogCtl->shared->latest_page_number = page;
 
 		SimpleLruTruncate(DistributedLogCtl, page);
+		LWLockRelease(DistributedLogTruncateLock);
 
 		elog((Debug_print_full_dtm ? LOG : DEBUG5),
 			 "DistributedLog_redo truncate to cutoff page = %d",

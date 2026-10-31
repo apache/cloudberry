@@ -1,0 +1,121 @@
+-- Distributed log truncation must not lose an old standby distributed snapshot
+--
+-- The truncation horizon the primary computes only accounts for distributed
+-- snapshots it knows about.  A distributed snapshot taken by a hot standby QD
+-- and dispatched to the mirrors later is invisible to the primary's
+-- DistributedLog_AdvanceOldestXmin() bookkeeping, so a replayed TRUNCATE may
+-- advance the mirror's horizon (and truncgxid bound) past gxid entries that
+-- snapshot still needs.  Resuming such a query would otherwise fall back to
+-- the (newer) local snapshot visibility and return rows committed after the
+-- distributed snapshot.  The mirror must instead fail the query with a
+-- recovery conflict.
+--
+-- start_matchsubs
+-- m/^ERROR:  canceling statement due to conflict with recovery/
+-- s/^ERROR:  canceling statement due to conflict with recovery.*$/ERROR:  canceling statement due to conflict with recovery/
+-- end_matchsubs
+
+1: create table hs_dlog_conf(a int, b int) distributed by (a);
+CREATE
+1: create table hs_dlog_sync(a int) distributed by (a);
+CREATE
+
+-- Pause the standby QD after it took the distributed snapshot, before it
+-- dispatches the query to the mirrors.
+-1S: select gp_inject_fault('select_after_qd_create_snapshot', 'suspend', dbid) from gp_segment_configuration where content = -1 and role = 'm';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+-1S&: select * from hs_dlog_conf order by a;  <waiting ...>
+1: select gp_wait_until_triggered_fault('select_after_qd_create_snapshot', 1, dbid) from gp_segment_configuration where content = -1 and role = 'm';
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+
+-- Commit rows after the paused snapshot.
+1: insert into hs_dlog_conf select g, g from generate_series(1, 10) g;
+INSERT 10
+
+-- Burn more than one distributed-log segment worth of segment-local xids on
+-- every primary (32 SLRU pages * 4096 entries per page = 131072 xids per
+-- segment), so that the horizon advance below truncates the pages backing
+-- the rows inserted above and the bound recorded with the TRUNCATE record is
+-- far ahead of the paused snapshot.
+!\retcode sh -ec 'export PGDATABASE=postgres; F=$(mktemp); trap "rm -f $F" EXIT; printf "SELECT txid_current();\n" > $F; for p in $(psql -Atqc "select port from gp_segment_configuration where role = chr(112) and content >= 0 order by content"); do PGOPTIONS="-c gp_role=utility -c synchronous_commit=off" pgbench -n -p $p -c 2 -j 2 -t 70000 -f $F > /dev/null; done';
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+-- Remember how many distributed-log segments each mirror currently holds, so
+-- that we can wait for the truncation below to be replayed (the segment count
+-- must shrink), regardless of the state left over by earlier tests.
+!\retcode sh -ec 'export PGDATABASE=postgres; : > $COORDINATOR_DATA_DIRECTORY/dlog_conflict_before; for d in $(psql -Atqc "select datadir from gp_segment_configuration where role = chr(109) and content >= 0 order by content"); do echo "$(ls $d/pg_distributedlog 2>/dev/null | wc -l)" >> $COORDINATOR_DATA_DIRECTORY/dlog_conflict_before; done';
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+-- A dispatched statement advances the distributed log horizon on every
+-- primary and emits the TRUNCATE record, together with the truncation bound
+-- that backs the progressed horizon.
+1: insert into hs_dlog_sync select generate_series(1, 10);
+INSERT 10
+
+-- Wait until every mirror has replayed the truncation (each mirror's
+-- distributed-log segment count drops, because the burn above guarantees at
+-- least one segment below the new cutoff).  Without this the resumed query
+-- could race the replay.
+!\retcode sh -ec 'export PGDATABASE=postgres; for i in $(seq 1 120); do ok=1; n=0; for d in $(psql -Atqc "select datadir from gp_segment_configuration where role = chr(109) and content >= 0 order by content"); do n=$((n+1)); before=$(sed -n ${n}p $COORDINATOR_DATA_DIRECTORY/dlog_conflict_before); now=$(ls $d/pg_distributedlog 2>/dev/null | wc -l); [ "$now" -lt "$before" ] || ok=0; done; [ $ok -eq 1 ] && rm -f $COORDINATOR_DATA_DIRECTORY/dlog_conflict_before && exit 0; sleep 1; done; exit 1';
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+-- Checkpoint after TRUNCATE and restart the mirrors. The bound must survive
+-- even when recovery starts after the WAL record that originally supplied it.
+-- Use the pre-created table as a replay barrier to avoid catalog cleanup
+-- conflicts with the paused standby QD snapshot.
+1: checkpoint;
+CHECKPOINT
+1: do $$ begin perform force_mirrors_to_catch_up(); end $$;
+DO
+!\retcode sh -ec 'export PGDATABASE=postgres; for p in $(psql -Atqc "select port from gp_segment_configuration where role = chr(109) and content >= 0 order by content"); do PGOPTIONS="-c gp_role=utility" psql -X -p "$p" -c "checkpoint" > /dev/null; done';
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+!\retcode sh -ec 'export PGDATABASE=postgres; for d in $(psql -Atqc "select datadir from gp_segment_configuration where role = chr(109) and content >= 0 order by content"); do pg_ctl -D "$d" restart -m fast -w -l "$d/dlog_restart.log" > /dev/null; done';
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+1: insert into hs_dlog_sync select generate_series(1, 10);
+INSERT 10
+
+-- Resume the old standby distributed snapshot: the mirror must cancel the
+-- statement with a recovery conflict instead of returning rows committed
+-- after the snapshot.
+1: select gp_inject_fault('select_after_qd_create_snapshot', 'reset', dbid) from gp_segment_configuration where content = -1 and role = 'm';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+-1S<:  <... completed>
+ERROR:  canceling statement due to conflict with recovery
+DETAIL:  The distributed snapshot needed by this query is no longer available because the distributed log has been truncated on the primary.
+
+-- A new standby distributed snapshot is unaffected: it sees the rows.
+-1S: select count(*) from hs_dlog_conf;
+ count 
+-------
+ 10    
+(1 row)
+
+-1Sq: ... <quitting>
+1: drop table hs_dlog_conf;
+DROP
+1: drop table hs_dlog_sync;
+DROP

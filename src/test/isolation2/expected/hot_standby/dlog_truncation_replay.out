@@ -1,0 +1,91 @@
+-- Distributed log truncation must preserve old standby distributed snapshots.
+-- A query that already passed snapshot validation must still detect a
+-- TRUNCATE replayed before it reads its tuples.
+--
+-- start_matchsubs
+-- m/^ERROR:  canceling statement due to conflict with recovery/
+-- s/^ERROR:  canceling statement due to conflict with recovery.*$/ERROR:  canceling statement due to conflict with recovery/
+-- end_matchsubs
+
+1: create table hs_dlog_conf(a int, b int) distributed by (a);
+CREATE
+1: create table hs_dlog_sync(a int) distributed by (a);
+CREATE
+
+-- Take a distributed snapshot before the INSERT, then let the mirrors take
+-- their local snapshots after it. Pause after snapshot validation, before
+-- the executor reads the table.
+-1S: select gp_inject_fault('select_after_qd_create_snapshot', 'suspend', dbid) from gp_segment_configuration where content = -1 and role = 'm';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+-1S&: select * from hs_dlog_conf order by a;  <waiting ...>
+1: select gp_wait_until_triggered_fault('select_after_qd_create_snapshot', 1, dbid) from gp_segment_configuration where content = -1 and role = 'm';
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+1: insert into hs_dlog_conf select g, g from generate_series(1, 10) g;
+INSERT 10
+1: select distinct gp_inject_fault('qe_got_snapshot_and_interconnect', 'suspend', dbid) from gp_segment_configuration where content >= 0 and role = 'm';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: select gp_inject_fault('select_after_qd_create_snapshot', 'reset', dbid) from gp_segment_configuration where content = -1 and role = 'm';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: select distinct gp_wait_until_triggered_fault('qe_got_snapshot_and_interconnect', 1, dbid) from gp_segment_configuration where content >= 0 and role = 'm';
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+
+-- Allocate more than a DLOG segment of local xids on every primary.
+!\retcode sh -ec 'export PGDATABASE=postgres; F=$(mktemp); trap "rm -f $F" EXIT; printf "SELECT txid_current();\n" > $F; for p in $(psql -Atqc "select port from gp_segment_configuration where role = chr(112) and content >= 0 order by content"); do PGOPTIONS="-c gp_role=utility -c synchronous_commit=off" pgbench -n -p $p -c 2 -j 2 -t 70000 -f $F > /dev/null; done';
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+-- Record the segment counts before a dispatched statement advances the
+-- primary horizons. Wait for every mirror to replay the resulting TRUNCATE.
+!\retcode sh -ec 'export PGDATABASE=postgres; : > $COORDINATOR_DATA_DIRECTORY/dlog_conflict_before; for d in $(psql -Atqc "select datadir from gp_segment_configuration where role = chr(109) and content >= 0 order by content"); do ls $d/pg_distributedlog | wc -l >> $COORDINATOR_DATA_DIRECTORY/dlog_conflict_before; done';
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+1: insert into hs_dlog_sync select generate_series(1, 10);
+INSERT 10
+!\retcode sh -ec 'export PGDATABASE=postgres; for i in $(seq 1 120); do ok=1; n=0; for d in $(psql -Atqc "select datadir from gp_segment_configuration where role = chr(109) and content >= 0 order by content"); do n=$((n+1)); before=$(sed -n ${n}p $COORDINATOR_DATA_DIRECTORY/dlog_conflict_before); now=$(ls $d/pg_distributedlog | wc -l); [ "$now" -lt "$before" ] || ok=0; done; [ $ok -eq 1 ] && rm -f $COORDINATOR_DATA_DIRECTORY/dlog_conflict_before && exit 0; sleep 1; done; exit 1';
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+-- The first query passed the snapshot check before replay. Its visibility
+-- lookups must detect the new horizon instead of returning the ten rows.
+1: select distinct gp_inject_fault('qe_got_snapshot_and_interconnect', 'reset', dbid) from gp_segment_configuration where content >= 0 and role = 'm';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+-1S<:  <... completed>
+ERROR:  canceling statement due to conflict with recovery
+DETAIL:  The distributed snapshot needed by this query is no longer available because the distributed log has been truncated on the primary.
+-1Sq: ... <quitting>
+
+-- A fresh snapshot sees all ten committed rows.
+-1S: select count(*) from hs_dlog_conf;
+ count 
+-------
+ 10    
+(1 row)
+-1Sq: ... <quitting>
+1: drop table hs_dlog_conf;
+DROP
+1: drop table hs_dlog_sync;
+DROP
