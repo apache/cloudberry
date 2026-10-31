@@ -532,3 +532,46 @@ ALTER TABLE at_dead_enc ALTER COLUMN a SET ENCODING (compresstype=zstd, compress
 SELECT count(*), sum(a) FROM at_dead_enc;
 
 DROP TABLE at_dead_cast, at_live_cast, at_dead_cast_nn, at_dead_enc;
+
+--------------------------------------------------------------------------------
+-- ALTER COLUMN TYPE on a constrained or indexed column, with ADD COLUMN
+--
+-- ATPostAlterTypeCleanup() re-adds the column's CHECK constraints and indexes
+-- through AT_PASS_OLD_CONSTR and AT_PASS_OLD_INDEX once AT_PASS_ALTER_TYPE is
+-- done.  setupColumnOnlyRewrite() is consulted before that for ALTER COLUMN
+-- TYPE and after it for ADD COLUMN, and it used to refuse those two passes:
+-- so the rewrite was accepted, the add was not, and ATRewriteTables() ran the
+-- column-only rewrite while never writing the new column -- the table came
+-- back unreadable, its new column's segment files missing.  Both passes are
+-- handled by the column-only paths, so they are allowed now.
+--------------------------------------------------------------------------------
+CREATE TABLE at_old_ck(k int, a int CHECK (a > 0)) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_old_ck SELECT i, i * 10 FROM generate_series(1, 30) i;
+CREATE TEMP TABLE at_old_before AS
+SELECT pg_relation_filenode('at_old_ck') AS fn DISTRIBUTED BY (fn);
+ALTER TABLE at_old_ck ALTER COLUMN a TYPE bigint,
+  ADD COLUMN b text DEFAULT 'ok' CHECK (length(b) > 0),
+  ADD COLUMN c int DEFAULT 50 CHECK (c > a / 10);
+SELECT count(*), count(b), count(c), sum(a) FROM at_old_ck;
+SELECT pg_relation_filenode('at_old_ck') = fn AS not_rewritten FROM at_old_before;
+
+CREATE TABLE at_old_idx(k int, a int) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_old_idx SELECT i, i * 10 FROM generate_series(1, 30) i;
+CREATE INDEX at_old_idx_a ON at_old_idx (a);
+ALTER TABLE at_old_idx ALTER COLUMN a TYPE bigint, ADD COLUMN b text DEFAULT 'ok';
+SELECT count(*), count(b) FROM at_old_idx;
+-- the re-added index is rebuilt and usable
+SET enable_seqscan = off;
+SELECT k, b FROM at_old_idx WHERE a = 200;
+RESET enable_seqscan;
+
+-- the re-added constraint and the new column's are both still enforced
+CREATE TABLE at_old_viol(k int, a int CHECK (a > 0)) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO at_old_viol VALUES (1, 20);
+ALTER TABLE at_old_viol ALTER COLUMN a TYPE bigint USING -a::bigint,
+  ADD COLUMN b text DEFAULT 'ok';  -- fail
+ALTER TABLE at_old_viol ALTER COLUMN a TYPE bigint,
+  ADD COLUMN b text DEFAULT '' CHECK (length(b) > 0);  -- fail
+SELECT * FROM at_old_viol;
+
+DROP TABLE at_old_ck, at_old_idx, at_old_viol;
