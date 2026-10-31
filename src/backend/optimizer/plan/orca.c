@@ -34,6 +34,7 @@
 #include "optimizer/planner.h"
 #include "optimizer/tlist.h"
 #include "optimizer/transform.h"
+#include "optimizer/walkers.h"
 #include "parser/parse_collate.h"
 #include "parser/parsetree.h"
 #include "rewrite/rewriteManip.h"
@@ -52,6 +53,7 @@ extern PlannedStmt * GPOPTOptimizedPlan(Query *parse, bool *had_unexpected_failu
 static Plan *remove_redundant_results(PlannerInfo *root, Plan *plan);
 static Node *remove_redundant_results_mutator(Node *node, void *);
 static bool can_replace_tlist(Plan *plan);
+static bool preserves_subplans(List *old_tlist, List *new_tlist);
 static Node *push_down_expr_mutator(Node *node, List *child_tlist);
 
 /*
@@ -453,11 +455,12 @@ remove_redundant_results_mutator(Node *node, void *ctx)
 			!expression_returns_set((Node *) result_plan->plan.targetlist) &&
 			can_replace_tlist(child_plan))
 		{
-			List	   *tlist = result_plan->plan.targetlist;
+			List	   *tlist = copyObject(result_plan->plan.targetlist);
 			ListCell   *lc;
 
 			child_plan = (Plan *)
 				remove_redundant_results_mutator((Node *) child_plan, ctx);
+			result_plan->plan.lefttree = child_plan;
 
 			foreach(lc, tlist)
 			{
@@ -465,6 +468,24 @@ remove_redundant_results_mutator(Node *node, void *ctx)
 
 				tle->expr = (Expr *) push_down_expr_mutator((Node *) tle->expr,
 															child_plan->targetlist);
+			}
+
+			/*
+			 * The slice table has already been built. Dropping a SubPlan
+			 * reference here can leave its Motion slices without an executable
+			 * plan tree. Keep the Result unless all child SubPlans survive.
+			 */
+			if (!preserves_subplans(child_plan->targetlist, tlist))
+			{
+				/*
+				 * The child was already processed above. Process the Result's
+				 * target list here so that SubPlans retained by the Result are
+				 * processed too, without descending into the child a second time.
+				 */
+				result_plan->plan.targetlist = (List *)
+					remove_redundant_results_mutator(
+						(Node *) result_plan->plan.targetlist, ctx);
+				return node;
 			}
 
 			child_plan->targetlist = tlist;
@@ -478,6 +499,34 @@ remove_redundant_results_mutator(Node *node, void *ctx)
 							 remove_redundant_results_mutator,
 							 ctx,
 							 true);
+}
+
+/* Allow projection folding when it retains every referenced SubPlan. */
+static bool
+preserves_subplans(List *old_tlist, List *new_tlist)
+{
+	List	   *old_subplans;
+	List	   *new_subplans;
+	ListCell   *lc;
+	Bitmapset  *remaining = NULL;
+	bool		preserved;
+
+	if (!contain_subplans((Node *) old_tlist))
+		return true;
+
+	old_subplans = extract_nodes_expression((Node *) old_tlist, T_SubPlan, false);
+	new_subplans = new_tlist ?
+		extract_nodes_expression((Node *) new_tlist, T_SubPlan, false) : NIL;
+	foreach(lc, old_subplans)
+		remaining = bms_add_member(remaining, ((SubPlan *) lfirst(lc))->plan_id);
+	foreach(lc, new_subplans)
+		remaining = bms_del_member(remaining, ((SubPlan *) lfirst(lc))->plan_id);
+
+	preserved = bms_is_empty(remaining);
+	bms_free(remaining);
+	list_free(old_subplans);
+	list_free(new_subplans);
+	return preserved;
 }
 
 /*
@@ -541,20 +590,23 @@ push_down_expr_mutator(Node *node, List *child_tlist)
 		{
 			TargetEntry *child_tle = (TargetEntry *)
 				list_nth(child_tlist, var->varattno - 1);
+			Expr	   *expr = copyObject(child_tle->expr);
+
+			/* Do not change the child if the proposed replacement is rejected. */
 			// The const expr pertatining to a column in a child result node
 			// has const.consttypmod set as default value.
 			// correct typmod can be found at var.vartypmod.
 			// const.consttypmod value needs to be fixed before replacing var with const.
-			if (IsA(child_tle->expr, Const))
+			if (IsA(expr, Const))
 			{
-				((Const *) child_tle->expr)->consttypmod = ((Var *) node)->vartypmod;
+				((Const *) expr)->consttypmod = var->vartypmod;
 			}
-			else if (IsA(child_tle->expr, Var))
+			else if (IsA(expr, Var))
 			{
-				((Var *) child_tle->expr)->vartypmod = ((Var *) node)->vartypmod;
+				((Var *) expr)->vartypmod = var->vartypmod;
 			}
 
-			return (Node *) child_tle->expr;
+			return (Node *) expr;
 		}
 	}
 	return expression_tree_mutator(node, push_down_expr_mutator, child_tlist);
