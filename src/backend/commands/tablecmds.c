@@ -8512,10 +8512,30 @@ setupColumnOnlyRewrite(List **wqueue,
 
 	for (int i = 0; i < AT_NUM_PASSES; ++i)
 	{
-		if (i != AT_PASS_SET_ENCODING && 
-					i != AT_PASS_ADD_COL && 
-					i != AT_PASS_ALTER_TYPE && 
-					i != AT_PASS_DROP && 
+		/*
+		 * AT_PASS_OLD_INDEX and AT_PASS_OLD_CONSTR hold the indexes and
+		 * constraints ATPostAlterTypeCleanup() re-adds after ALTER COLUMN TYPE
+		 * drops them.  They are allowed here because the column-only rewrite
+		 * already handles them: it rebuilds the indexes that depend on a
+		 * rewritten column and checks the re-added constraints row by row.
+		 * Also because this function is called at different points for the
+		 * subcommands it serves -- from ATExecAlterColumnType() during
+		 * AT_PASS_ALTER_TYPE, before those passes are filled in, and from
+		 * ATExecAddColumn() during AT_PASS_ADD_COL, after.  Rejecting them
+		 * here therefore never affected ALTER COLUMN TYPE, only an ADD COLUMN
+		 * in the same command, which then went without
+		 * AT_REWRITE_NEW_COLUMNS_ONLY while AT_REWRITE_REWRITE_COLUMNS_ONLY
+		 * stayed set.  ATRewriteTables() took the column-only branch on the
+		 * latter, never wrote the new column, and skipped the full rewrite
+		 * that AT_REWRITE_COLUMN_REWRITE asked for: the table came out
+		 * unreadable, missing the new column's segment files.
+		 */
+		if (i != AT_PASS_SET_ENCODING &&
+					i != AT_PASS_ADD_COL &&
+					i != AT_PASS_ALTER_TYPE &&
+					i != AT_PASS_OLD_INDEX &&
+					i != AT_PASS_OLD_CONSTR &&
+					i != AT_PASS_DROP &&
 					i != AT_PASS_ADD_CONSTR &&
 					i != AT_PASS_ADD_OTHERCONSTR &&
 					tab->subcmds[i])
