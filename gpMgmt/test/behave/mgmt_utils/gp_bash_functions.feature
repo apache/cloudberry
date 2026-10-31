@@ -1,5 +1,16 @@
 @gp_bash_functions.sh
 Feature: gp_bash_funtions.sh unit test cases
+    @sed_pg_conf
+    Scenario Outline: SED_PG_CONF changes only the requested parameter
+        Then SED_PG_CONF preserves unrelated settings on "<host>" with KEEP_PREV "<keep_prev>"
+
+        Examples:
+            | host      | keep_prev |
+            | local     | 0         |
+            | local     | 1         |
+            | localhost | 0         |
+            | localhost | 1         |
+
     Scenario: REMOTE_EXECUTE_AND_GET_OUTPUT returns proper output when no banner is set
         Given a standard local demo cluster is running
         Then source gp_bash_functions and run simple echo
