@@ -219,6 +219,19 @@ RUN cp /tmp/90-cbdb-limits /etc/security/limits.d/90-cbdb-limits && \
     echo "LANG=en_US.UTF-8" | tee /etc/locale.conf && \
     dnf clean all  # Final cleanup to remove unnecessary files
 
+# --------------------------------------------------------------------
+# Install Meson and Ninja
+# --------------------------------------------------------------------
+# For building with meson. Rocky 8 packages ninja-build 1.8.2, older
+# than the 1.10 the generated build.ninja needs, so both come from
+# PyPI instead. The system pip 9 predates the wheel tags ninja
+# publishes, so pip is upgraded first; pip 21 is the last release that
+# runs on this image's Python 3.6, which in turn caps meson at 0.61.5,
+# still above the 0.54 the build requires.
+# --------------------------------------------------------------------
+RUN python3 -m pip install --upgrade "pip<22" && \
+    python3 -m pip install meson ninja
+
 # Install testinfra via pip
 RUN pip3 install pytest-testinfra
 

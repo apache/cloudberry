@@ -137,6 +137,8 @@ RUN dnf makecache && \
         liburing-devel \
         libuv-devel \
         libyaml-devel \
+        meson \
+        ninja-build \
         perl-IPC-Run \
         python3-wheel \
         protobuf-devel && \
