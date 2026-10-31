@@ -32,9 +32,10 @@
 -- teardown cleanup for the test
 1Uq:
 1U:ALTER SYSTEM reset shared_buffers;
-2:SELECT pg_ctl(datadir, 'restart') from gp_segment_configuration where role = 'p' and content = 1;
--- start_ignore
+-- Reset the checkpoint fault before the restart: gp_inject_fault connects
+-- to every primary directly without retrying, while pg_ctl -w can return
+-- before the restarted segment accepts connections.
 3:SELECT gp_inject_fault_infinite('checkpoint', 'reset', dbid) FROM gp_segment_configuration WHERE role='p';
--- end_ignore
+2:SELECT pg_ctl(datadir, 'restart') from gp_segment_configuration where role = 'p' and content = 1;
 
 3:SELECT gp_inject_fault('fts_probe', 'reset', dbid) FROM gp_segment_configuration WHERE role='p' AND content=-1;
