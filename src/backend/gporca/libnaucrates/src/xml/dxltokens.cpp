@@ -137,6 +137,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenPhysicalResult, GPOS_WSZ_LIT("Result")},
 		{EdxltokenPhysicalValuesScan, GPOS_WSZ_LIT("Values")},
 		{EdxltokenPhysicalAppend, GPOS_WSZ_LIT("Append")},
+		{EdxltokenPhysicalParallelAppend, GPOS_WSZ_LIT("ParallelAppend")},
 		{EdxltokenPhysicalMaterialize, GPOS_WSZ_LIT("Materialize")},
 		{EdxltokenPhysicalDynamicForeignScan,
 		 GPOS_WSZ_LIT("DynamicForeignScan")},
@@ -713,6 +714,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		 GPOS_WSZ_LIT("IntermediateResultType")},
 		{EdxltokenGPDBAggSplittable, GPOS_WSZ_LIT("IsSplittable")},
 		{EdxltokenGPDBAggHashAggCapable, GPOS_WSZ_LIT("HashAggCapable")},
+		{EdxltokenGPDBAggFinalFuncVolatile, GPOS_WSZ_LIT("FinalFuncVolatile")},
 
 		{EdxltokenGPDBCast, GPOS_WSZ_LIT("MDCast")},
 		{EdxltokenGPDBCastBinaryCoercible, GPOS_WSZ_LIT("BinaryCoercible")},

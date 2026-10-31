@@ -14,6 +14,7 @@
 
 #include "naucrates/dxl/parser/CParseHandlerAgg.h"
 #include "naucrates/dxl/parser/CParseHandlerAppend.h"
+#include "naucrates/dxl/parser/CParseHandlerParallelAppend.h"
 #include "naucrates/dxl/parser/CParseHandlerArray.h"
 #include "naucrates/dxl/parser/CParseHandlerAssert.h"
 #include "naucrates/dxl/parser/CParseHandlerBroadcastMotion.h"

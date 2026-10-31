@@ -2127,3 +2127,28 @@ DROP SCHEMA regress_roleoption;
 DROP ROLE regress_roleoption_protagonist;
 DROP ROLE regress_roleoption_donor;
 DROP ROLE regress_roleoption_recipient;
+
+-- gp_add_master_standby() is reserved to superusers: a regular role is
+-- denied at the privilege layer, and with EXECUTE granted - the state of a
+-- cluster upgraded without initdb, where proacl stays NULL - by the function
+-- itself.
+CREATE ROLE regress_standby_user;
+
+SET SESSION AUTHORIZATION regress_standby_user;
+SELECT gp_add_master_standby('localhost', 'localhost', '/nonexistent');
+SELECT gp_add_master_standby('localhost', 'localhost', '/nonexistent', 5432);
+RESET SESSION AUTHORIZATION;
+
+GRANT EXECUTE ON FUNCTION gp_add_master_standby(text, text, text) TO regress_standby_user;
+GRANT EXECUTE ON FUNCTION gp_add_master_standby(text, text, text, integer) TO regress_standby_user;
+SET SESSION AUTHORIZATION regress_standby_user;
+SELECT gp_add_master_standby('localhost', 'localhost', '/nonexistent');
+SELECT gp_add_master_standby('localhost', 'localhost', '/nonexistent', 5432);
+-- the privilege is checked before the arguments
+SELECT gp_add_master_standby(NULL, NULL, NULL);
+RESET SESSION AUTHORIZATION;
+
+-- clean up
+REVOKE EXECUTE ON FUNCTION gp_add_master_standby(text, text, text) FROM regress_standby_user;
+REVOKE EXECUTE ON FUNCTION gp_add_master_standby(text, text, text, integer) FROM regress_standby_user;
+DROP ROLE regress_standby_user;

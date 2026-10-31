@@ -128,6 +128,19 @@ get_maxcontentid()
 static void
 mirroring_sanity_check(int flags, const char *func)
 {
+	/*
+	 * Check the privilege first: a role that may not call the function at all
+	 * is refused before it learns anything about the mode or the role of this
+	 * server.
+	 */
+	if ((flags & SUPERUSER) == SUPERUSER)
+	{
+		if (!superuser())
+			ereport(ERROR,
+					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+					 errmsg("%s can only be run by a superuser", func)));
+	}
+
 	if ((flags & MASTER_ONLY) == MASTER_ONLY)
 	{
 		if (GpIdentity.dbid == UNINITIALIZED_GP_IDENTITY_VALUE)
@@ -147,12 +160,6 @@ mirroring_sanity_check(int flags, const char *func)
 	{
 		if (IsUnderPostmaster)
 			elog(ERROR, "%s must be run in single-user mode", func);
-	}
-
-	if ((flags & SUPERUSER) == SUPERUSER)
-	{
-		if (!superuser())
-			elog(ERROR, "%s can only be run by a superuser", func);
 	}
 
 	if ((flags & SEGMENT_ONLY) == SEGMENT_ONLY)
@@ -589,15 +596,15 @@ gp_add_master_standby(PG_FUNCTION_ARGS)
 	GpSegConfigEntry	*config;
 	Relation	gprel;
 
+	mirroring_sanity_check(MASTER_ONLY | UTILITY_MODE | SUPERUSER,
+						   "gp_add_master_standby");
+
 	if (PG_ARGISNULL(0))
 		elog(ERROR, "host name cannot be NULL");
 	if (PG_ARGISNULL(1))
 		elog(ERROR, "address cannot be NULL");
 	if (PG_ARGISNULL(2))
 		elog(ERROR, "datadir cannot be NULL");
-
-	mirroring_sanity_check(MASTER_ONLY | UTILITY_MODE,
-						   "gp_add_master_standby");
 
 	/* Check if the system is ok */
 	if (standby_exists())

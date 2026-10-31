@@ -33,16 +33,17 @@
 
 /* Canonical, versioned location form. URIs are parsed ONCE (options layer);
  * every backend receives only this struct and must never re-parse URIs. */
-typedef struct DatalakeLocation {
-    uint32_t schema_version;  /* = 1 */
-    char    *scheme;          /* v1 whitelist: "s3" | "hdfs" */
-    char    *authority;       /* s3: bucket (validated); hdfs: namenode[:port] */
-    char    *path_prefix;     /* normalized: always starts with '/', never ends with '/'
-                               * (a bare "/" normalizes to "") */
-    char    *endpoint;        /* optional, may be NULL */
-    char    *region;          /* optional, may be NULL */
+typedef struct DatalakeLocation
+{
+	uint32_t	abi_version;     /* = DATALAKE_LOCATION_ABI_VERSION */
+	char	   *scheme;          /* v1 whitelist: "s3" | "file" */
+	char	   *authority;       /* s3: bucket (validated); file: empty */
+	char	   *path_prefix;     /* normalized: starts with '/', no trailing '/'
+								 * except the file root itself */
+	char	   *endpoint;        /* optional, may be NULL */
+	char	   *region;          /* optional, may be NULL */
 } DatalakeLocation;
-#define DATALAKE_LOCATION_SCHEMA_VERSION 1
+#define DATALAKE_LOCATION_ABI_VERSION 1
 
 /* Join paths as full = path_prefix + "/" + relative; relative never starts
  * with '/'. */

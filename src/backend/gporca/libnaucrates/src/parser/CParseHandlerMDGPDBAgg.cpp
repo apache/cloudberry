@@ -40,7 +40,8 @@ CParseHandlerMDGPDBAgg::CParseHandlerMDGPDBAgg(
 	  m_is_ordered(false),
 	  m_is_splittable(true),
 	  m_hash_agg_capable(true),
-	  m_is_repsafe(false)
+	  m_is_repsafe(false),
+	  m_is_final_func_volatile(false)
 {
 }
 
@@ -97,6 +98,16 @@ CParseHandlerMDGPDBAgg::StartElement(const XMLCh *const,  // element_uri,
 			m_is_repsafe = CDXLOperatorFactory::ConvertAttrValueToBool(
 				m_parse_handler_mgr->GetDXLMemoryManager(), xml_str_repsafe_agg,
 				EdxltokenGPDBIsAggRepSafe, EdxltokenGPDBAgg);
+		}
+
+		const XMLCh *xml_str_final_func_volatile = attrs.getValue(
+			CDXLTokens::XmlstrToken(EdxltokenGPDBAggFinalFuncVolatile));
+		if (nullptr != xml_str_final_func_volatile)
+		{
+			m_is_final_func_volatile = CDXLOperatorFactory::ConvertAttrValueToBool(
+				m_parse_handler_mgr->GetDXLMemoryManager(),
+				xml_str_final_func_volatile, EdxltokenGPDBAggFinalFuncVolatile,
+				EdxltokenGPDBAgg);
 		}
 
 		// parse splittable aggregate info
@@ -177,7 +188,8 @@ CParseHandlerMDGPDBAgg::EndElement(const XMLCh *const,	// element_uri,
 		m_imd_obj = GPOS_NEW(m_mp)
 			CMDAggregateGPDB(m_mp, m_mdid, m_mdname, m_mdid_type_result,
 							 m_mdid_type_intermediate, m_is_ordered,
-							 m_is_splittable, m_hash_agg_capable, m_is_repsafe);
+							 m_is_splittable, m_hash_agg_capable, m_is_repsafe,
+							 m_is_final_func_volatile);
 
 		// deactivate handler
 		m_parse_handler_mgr->DeactivateHandler();

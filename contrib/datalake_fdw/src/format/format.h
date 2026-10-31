@@ -32,6 +32,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "common/file_system_wrapper.h"
+
 #include "common/dl_err.h"
 
 /* Arrow C data interface: stable public ABI. */
@@ -72,7 +74,8 @@ struct ArrowArray {
  */
 typedef struct Fragment
 {
-	const char *path;
+	DatalakeFileSystem fs;			/* where the file lives; never NULL */
+	const char *path;				/* relative to that file system's root */
 	int			first_row_group;	/* 0-based */
 	int			n_row_groups;		/* 0 == to the end of the file */
 } Fragment;
@@ -170,15 +173,18 @@ struct FormatWriter { const FormatWriterOps *ops; void *impl; };
 /*
  * Bumped when an existing field changes meaning; appending does not need it.
  * 2: ProjectionSet names field ids rather than positions in the file.
+ * 3: a fragment and a writer name a file system, and their paths are relative
+ *    to its root, so a format reads and writes wherever the volume is.
  */
-#define DL_FORMAT_ABI_VERSION 2
+#define DL_FORMAT_ABI_VERSION 3
 
 typedef struct FormatRoutine {
 	uint32_t abi_version, struct_size;    /* same prefix-compat semantics as meta engine */
 	const char *name;                     /* "parquet" */
 	DlErrCode (*open_reader)(const Fragment *, const ProjectionSet *,
 							 const RowGroupFilterSet *, FormatReader **out);
-	DlErrCode (*open_writer)(const char *path, /* TupleDesc */ void *tupdesc,
+	DlErrCode (*open_writer)(DatalakeFileSystem fs, const char *path,
+							 /* TupleDesc */ void *tupdesc,
 							 const WriterOptions *, FormatWriter **out);
 } FormatRoutine;
 

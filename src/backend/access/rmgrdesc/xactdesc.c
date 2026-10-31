@@ -150,9 +150,12 @@ ParseCommitRecord(uint8 info, xl_xact_commit *xlrec, xl_xact_parsed_commit *pars
 
 	if (parsed->xinfo & XACT_XINFO_HAS_DISTRIB)
 	{
-		xl_xact_distrib *xl_distrib = (xl_xact_distrib *) data;
+		xl_xact_distrib xl_distrib;
 
-		parsed->distribXid = xl_distrib->distrib_xid;
+		/* no alignment is guaranteed, so copy onto stack */
+		memcpy(&xl_distrib, data, sizeof(xl_distrib));
+
+		parsed->distribXid = xl_distrib.distrib_xid;
 		data += sizeof(xl_xact_distrib);
 	}
 }

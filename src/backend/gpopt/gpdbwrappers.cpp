@@ -157,17 +157,6 @@ gpdb::WalkExpressionTree(Node *node, bool (*walker)(Node *, void *), void *conte
 	return false;
 }
 
-gpos::BOOL
-gpdb::WalkQueryTree(Query *query, bool (*walker)(), void *context, int flags)
-{
-	GP_WRAP_START;
-	{
-		return query_tree_walker(query, walker, context, flags);
-	}
-	GP_WRAP_END;
-	return false;
-}
-
 Oid
 gpdb::ExprType(Node *expr)
 {
@@ -413,6 +402,24 @@ gpdb::GetAggIntermediateResultType(Oid aggid)
 	}
 	GP_WRAP_END;
 	return 0;
+}
+
+bool
+gpdb::IsAggFinalFuncVolatile(Oid aggid)
+{
+	GP_WRAP_START;
+	{
+		HeapTuple agg_tuple = SearchSysCache1(AGGFNOID, ObjectIdGetDatum(aggid));
+		if (!HeapTupleIsValid(agg_tuple))
+			elog(ERROR, "cache lookup failed for aggregate %u", aggid);
+
+		Oid final_func = ((Form_pg_aggregate) GETSTRUCT(agg_tuple))->aggfinalfn;
+		ReleaseSysCache(agg_tuple);
+		return OidIsValid(final_func) &&
+			   func_volatile(final_func) == PROVOLATILE_VOLATILE;
+	}
+	GP_WRAP_END;
+	return false;
 }
 
 int

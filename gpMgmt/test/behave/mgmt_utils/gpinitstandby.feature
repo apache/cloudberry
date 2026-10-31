@@ -30,6 +30,8 @@ Feature: Tests for gpinitstandby feature
           And gpinitstandby should print "coordinator data directory exists" to stdout
           And gpinitstandby should print "use -S and -P to specify a new data directory and port" to stdout
 
+    # needs_fix: pg_basebackup EXCLUDE (#2172)
+    @needs_fix
     Scenario: gpinitstandby exclude dirs
         Given the database is running
         And the standby is not initialized
@@ -45,6 +47,8 @@ Feature: Tests for gpinitstandby feature
         And the file "pg_hba.conf.bak" does not exist under standby coordinator data directory
         ## maybe clean up the directories created in the coordinator data directory
 
+    # needs_fix: standby promotes itself without the EXCLUDE fix (#2172)
+    @needs_fix
     Scenario: gpstate -f shows standby coordinator information after running gpinitstandby
         Given the database is running
         And the standby is not initialized

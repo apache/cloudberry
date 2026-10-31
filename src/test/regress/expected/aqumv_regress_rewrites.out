@@ -1,0 +1,133 @@
+--
+-- AQUMV rewrite regressions: MVs that cannot serve a query must be
+-- declined, not produce "ORDER/GROUP BY expression not found in targetlist".
+-- Postgres planner only.
+set optimizer = off;
+create schema aqumv_rw;
+set search_path to aqumv_rw;
+-- A grouped aggregate MV used to break ungrouped aggregate queries.
+create table rw_t1(id int, k int, v numeric(12,2)) distributed by (id);
+insert into rw_t1 select g, g % 50, (g % 1000)::numeric(12,2) from generate_series(1, 20000) g;
+analyze rw_t1;
+create materialized view rw_mv_grouped as
+  select k, count(*) as c, sum(v) as s
+  from rw_t1 where k is not null group by k distributed by (k);
+analyze rw_mv_grouped;
+set enable_answer_query_using_materialized_views = on;
+-- used to fail with "ORDER/GROUP BY expression not found in targetlist"
+select count(*) from rw_t1 where k is not null;
+ count 
+-------
+ 20000
+(1 row)
+
+-- a grouped query matching the MV keeps working
+select k, count(*) as c, sum(v) as s
+  from rw_t1 where k is not null group by k order by k limit 3;
+ k |  c  |     s     
+---+-----+-----------
+ 0 | 400 | 190000.00
+ 1 | 400 | 190400.00
+ 2 | 400 | 190800.00
+(3 rows)
+
+-- An exact-match join MV used to break queries ordered by a column
+-- that is not in its SELECT list.
+create table rw_ta(id int, k int) distributed by (id);
+create table rw_tb(id int, w int) distributed by (id);
+insert into rw_ta select g, g % 1000 from generate_series(1, 6000) g;
+insert into rw_tb select g, g from generate_series(1, 6000) g;
+analyze rw_ta;
+analyze rw_tb;
+create materialized view rw_mv_join as
+  select a.id as aid from rw_ta a join rw_tb b on a.id = b.id
+  where a.k > 995 order by b.w distributed by (aid);
+analyze rw_mv_join;
+-- the exact defining query; used to fail with the GUC on
+select a.id as aid from rw_ta a join rw_tb b on a.id = b.id
+  where a.k > 995 order by b.w;
+ aid  
+------
+  996
+  997
+  998
+  999
+ 1996
+ 1997
+ 1998
+ 1999
+ 2996
+ 2997
+ 2998
+ 2999
+ 3996
+ 3997
+ 3998
+ 3999
+ 4996
+ 4997
+ 4998
+ 4999
+ 5996
+ 5997
+ 5998
+ 5999
+(24 rows)
+
+-- ORDER BY over a selected column is still rewritten (2e27d4c2b3d)
+create materialized view rw_mv_join_intlist as
+  select a.id as aid, b.w as w from rw_ta a join rw_tb b on a.id = b.id
+  where a.k > 995 order by a.id distributed by (aid);
+analyze rw_mv_join_intlist;
+explain (costs off)
+  select a.id as aid, b.w as w from rw_ta a join rw_tb b on a.id = b.id
+  where a.k > 995 order by a.id;
+                 QUERY PLAN                 
+--------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: aid
+   ->  Sort
+         Sort Key: aid
+         ->  Seq Scan on rw_mv_join_intlist
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+select a.id as aid, b.w as w from rw_ta a join rw_tb b on a.id = b.id
+  where a.k > 995 order by a.id;
+ aid  |  w   
+------+------
+  996 |  996
+  997 |  997
+  998 |  998
+  999 |  999
+ 1996 | 1996
+ 1997 | 1997
+ 1998 | 1998
+ 1999 | 1999
+ 2996 | 2996
+ 2997 | 2997
+ 2998 | 2998
+ 2999 | 2999
+ 3996 | 3996
+ 3997 | 3997
+ 3998 | 3998
+ 3999 | 3999
+ 4996 | 4996
+ 4997 | 4997
+ 4998 | 4998
+ 4999 | 4999
+ 5996 | 5996
+ 5997 | 5997
+ 5998 | 5998
+ 5999 | 5999
+(24 rows)
+
+reset enable_answer_query_using_materialized_views;
+drop schema aqumv_rw cascade;
+NOTICE:  drop cascades to 6 other objects
+DETAIL:  drop cascades to table rw_t1
+drop cascades to materialized view rw_mv_grouped
+drop cascades to table rw_ta
+drop cascades to table rw_tb
+drop cascades to materialized view rw_mv_join
+drop cascades to materialized view rw_mv_join_intlist

@@ -217,6 +217,9 @@ public:
 		EopPhysicalHashSequenceProject,
 		EopPhysicalDynamicIndexScan,
 
+		EopPhysicalAppendTableScan,
+		EopPhysicalParallelAppendTableScan,
+
 		EopPhysicalInnerHashJoin,
 		EopPhysicalLeftOuterHashJoin,
 		EopPhysicalLeftSemiHashJoin,

@@ -31,9 +31,9 @@
 
 #include <stdint.h>
 
-#include "common/datalake_location.h"
-#include "common/dl_err.h"
-#include "common/dl_kv.h"
+#include "datalake_location.h"
+#include "dl_err.h"
+#include "dl_kv.h"
 
 /*
  * A file system reached over one storage protocol, and an open file in it.
@@ -81,6 +81,13 @@ extern void datalake_fs_close(DatalakeFileSystem *fs);
 
 extern DlErrCode datalake_fs_list(DatalakeFileSystem fs, const char *prefix,
 								  char ***names_out, int *nnames_out);
+
+/*
+ * Remove one file.  Nothing in the write path calls this -- a stream that
+ * gives up removes its own work -- but a caller that knows an object is
+ * finished with can say so.
+ */
+extern DlErrCode datalake_file_delete(DatalakeFileSystem fs, const char *path);
 
 extern DlErrCode datalake_file_open(DatalakeFileSystem fs, const char *path,
 									DatalakeFileMode mode,

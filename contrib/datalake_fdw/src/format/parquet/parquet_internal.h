@@ -40,7 +40,8 @@ extern DlErrCode parquet_open_reader(const Fragment *fragment,
 									 const RowGroupFilterSet *filters,
 									 FormatReader **out);
 
-extern DlErrCode parquet_open_writer(const char *path, void *tupdesc,
+extern DlErrCode parquet_open_writer(DatalakeFileSystem fs, const char *path,
+									 void *tupdesc,
 									 const WriterOptions *options,
 									 FormatWriter **out);
 

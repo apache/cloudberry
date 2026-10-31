@@ -116,6 +116,7 @@ enum Edxltoken
 	EdxltokenPhysicalResult,
 	EdxltokenPhysicalAggregate,
 	EdxltokenPhysicalAppend,
+	EdxltokenPhysicalParallelAppend,
 	EdxltokenPhysicalMaterialize,
 	EdxltokenPhysicalDynamicForeignScan,
 	EdxltokenPhysicalSequence,
@@ -667,6 +668,7 @@ enum Edxltoken
 	EdxltokenGPDBAggIntermediateResultTypeId,
 	EdxltokenGPDBAggSplittable,
 	EdxltokenGPDBAggHashAggCapable,
+	EdxltokenGPDBAggFinalFuncVolatile,
 
 	EdxltokenEntireRow,
 

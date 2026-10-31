@@ -40,6 +40,11 @@ Add your commit body here
 #Assisted-by: ChatGPT
 #Assisted-by: Claude Code
 #Assisted-by: GitHub Copilot
+# If this commit on main should also go to a release branch, name the
+# OLDEST stable branch it applies to; every newer stable branch is
+# implied (REL_2_STABLE means REL_2_STABLE and REL_3_STABLE). Leave it
+# out for main-only changes such as new features or catalog changes:
+#Backpatch-through: REL_2_STABLE
 ########################################################################
 #
 #

@@ -1332,3 +1332,47 @@ select * from generate_series(1,2) t1, lateral (select t3.i from lat_oq_t2 t2 jo
 
 drop table lat_oq_t2;
 drop table lat_oq_t3;
+
+--
+-- Test that ORCA can plan a USING join whose merged column is the left input
+-- coerced with a binary-compatible cast (RelabelType), e.g. varchar vs text or
+-- int vs oid. The query-to-DXL translator used to assert on such join alias
+-- vars and fall back to the Postgres planner.
+--
+create table using_coerce_t1(k varchar(10), f2 int) distributed by (f2);
+create table using_coerce_t2(k text, f2 oid) distributed by (f2);
+insert into using_coerce_t1 values ('a', 1), ('b', 2);
+insert into using_coerce_t2 values ('a', 1), ('c', 3);
+
+explain (costs off) select k from using_coerce_t1 left join using_coerce_t2 using(k) order by 1;
+select k from using_coerce_t1 left join using_coerce_t2 using(k) order by 1;
+select f2, count(*) from using_coerce_t1 left join using_coerce_t2 using(f2) group by f2 order by 1;
+select f2, count(*) from using_coerce_t1 x(x0,x1) left join (using_coerce_t1 left join using_coerce_t2 using(f2)) on (x0 = 'a') group by f2 order by 1;
+
+-- Quals are deliberately not flattened by flatten_join_alias_var_optimizer, so
+-- a predicate on the merged column references the computed join output column
+-- directly. Without a projection producing it ORCA fell back with
+-- "Attribute number N not found in project list".
+explain (costs off) select k from using_coerce_t1 left join using_coerce_t2 using(k) where k = 'a';
+select k from using_coerce_t1 left join using_coerce_t2 using(k) where k = 'a';
+select f2 from using_coerce_t1 join using_coerce_t2 using(f2) where f2 = 1;
+select k from using_coerce_t1 full join using_coerce_t2 using(k) where k = 'c';
+
+drop table using_coerce_t1;
+drop table using_coerce_t2;
+
+--
+-- Same, for a merged column that needs a real cast function (FuncExpr) rather
+-- than a binary-compatible relabel.
+--
+create table using_coerce_t3(k int, v int) distributed by (v);
+create table using_coerce_t4(k bigint, v int) distributed by (v);
+insert into using_coerce_t3 values (1, 1), (2, 2);
+insert into using_coerce_t4 values (1, 1), (3, 3);
+
+explain (costs off) select k from using_coerce_t3 left join using_coerce_t4 using(k) where k = 1;
+select k from using_coerce_t3 left join using_coerce_t4 using(k) where k = 1;
+select k from using_coerce_t3 full join using_coerce_t4 using(k) order by 1;
+
+drop table using_coerce_t3;
+drop table using_coerce_t4;

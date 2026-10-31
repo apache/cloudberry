@@ -336,6 +336,11 @@ private:
 		CMemoryPool *mp, CParseHandlerManager *parse_handler_mgr,
 		CParseHandlerBase *parse_handler_root);
 
+	// construct a parallel append parse handler
+	static CParseHandlerBase *CreateParallelAppendParseHandler(
+		CMemoryPool *mp, CParseHandlerManager *parse_handler_mgr,
+		CParseHandlerBase *parse_handler_root);
+
 	// construct a materialize parse handler
 	static CParseHandlerBase *CreateMaterializeParseHandler(
 		CMemoryPool *mp, CParseHandlerManager *parse_handler_mgr,

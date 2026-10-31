@@ -62,6 +62,7 @@
 
 PG_MODULE_MAGIC;
 
+
 static ProcessUtility_hook_type prev_ProcessUtility_hook;
 
 static bool iceberg_is_effective_am(const char *accessMethod);
@@ -1010,6 +1011,7 @@ pg_iceberg_ProcessUtility(PlannedStmt *pstmt,
 void
 _PG_init(void)
 {
+
 	if (!process_shared_preload_libraries_in_progress)
 		ereport(ERROR,
 				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),

@@ -127,3 +127,13 @@ def test_locale_generated(host):
     locale = host.run("locale -a | grep en_US.utf8")
     assert locale.exit_status == 0
     assert "en_US.utf8" in locale.stdout
+
+
+def test_arrow_for_datalake_fdw(host):
+    """
+    Test if Arrow and Parquet C++ are installed at the pinned version.
+    """
+    for module in ("arrow", "parquet"):
+        version = host.run(f"pkg-config --modversion {module}")
+        assert version.exit_status == 0
+        assert version.stdout.strip() == "26.0.0"

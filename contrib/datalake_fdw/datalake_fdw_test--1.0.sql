@@ -39,17 +39,46 @@
 CREATE FUNCTION datalake_parquet_write(path text,
 									   query text,
 									   row_group_size int DEFAULT 0,
-									   compression text DEFAULT '')
-RETURNS bigint AS 'MODULE_PATHNAME' LANGUAGE C STRICT VOLATILE;
+									   compression text DEFAULT '',
+									   volume text DEFAULT NULL)
+-- Not STRICT: volume defaults to NULL, and a strict function would answer NULL
+-- rather than run.  The required arguments are checked in C instead.
+RETURNS bigint AS 'MODULE_PATHNAME' LANGUAGE C VOLATILE;
 
-REVOKE EXECUTE ON FUNCTION datalake_parquet_write(text, text, int, text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION datalake_parquet_write(text, text, int, text, text)
+	FROM PUBLIC;
 
 -- field_ids names, for each column of the definition list, the Iceberg field
 -- id it is read from; empty reads the file as it is, column for column.
 CREATE FUNCTION datalake_parquet_read(path text,
 									  first_row_group int DEFAULT 0,
 									  n_row_groups int DEFAULT 0,
-									  field_ids int[] DEFAULT '{}')
-RETURNS SETOF record AS 'MODULE_PATHNAME' LANGUAGE C STRICT EXECUTE ON COORDINATOR;
+									  field_ids int[] DEFAULT '{}',
+									  volume text DEFAULT NULL)
+RETURNS SETOF record AS 'MODULE_PATHNAME' LANGUAGE C EXECUTE ON COORDINATOR;
 
-REVOKE EXECUTE ON FUNCTION datalake_parquet_read(text, int, int, int[]) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION datalake_parquet_read(text, int, int, int[], text)
+	FROM PUBLIC;
+
+-- Test-only storage contract functions.
+CREATE FUNCTION datalake_storage_write_text(uri text, content text,
+											 kv text[] DEFAULT NULL)
+RETURNS bigint AS 'MODULE_PATHNAME' LANGUAGE C VOLATILE;
+CREATE FUNCTION datalake_storage_read_text(uri text, kv text[] DEFAULT NULL)
+RETURNS text AS 'MODULE_PATHNAME' LANGUAGE C VOLATILE;
+CREATE FUNCTION datalake_storage_list(uri text, kv text[] DEFAULT NULL)
+RETURNS SETOF text AS 'MODULE_PATHNAME'
+LANGUAGE C VOLATILE EXECUTE ON COORDINATOR;
+CREATE FUNCTION datalake_storage_delete(uri text, kv text[] DEFAULT NULL)
+RETURNS boolean AS 'MODULE_PATHNAME' LANGUAGE C VOLATILE;
+CREATE FUNCTION datalake_storage_probe(scheme text)
+RETURNS text AS 'MODULE_PATHNAME' LANGUAGE C VOLATILE;
+CREATE FUNCTION datalake_storage_register_bad(kind text)
+RETURNS text AS 'MODULE_PATHNAME' LANGUAGE C VOLATILE;
+
+REVOKE EXECUTE ON FUNCTION datalake_storage_write_text(text, text, text[]) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION datalake_storage_read_text(text, text[]) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION datalake_storage_list(text, text[]) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION datalake_storage_delete(text, text[]) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION datalake_storage_probe(text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION datalake_storage_register_bad(text) FROM PUBLIC;

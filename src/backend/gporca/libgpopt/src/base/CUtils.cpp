@@ -2162,6 +2162,30 @@ CUtils::FHasCountAgg(CExpression *pexpr,
 }
 
 
+BOOL
+CUtils::FHasScalarAgg(CExpression *pexpr)
+{
+	GPOS_CHECK_STACK_SIZE;
+	GPOS_ASSERT(pexpr->Pop()->FLogical());
+
+	if (COperator::EopLogicalGbAgg == pexpr->Pop()->Eopid() &&
+		0 == CLogicalGbAgg::PopConvert(pexpr->Pop())->Pdrgpcr()->Size())
+	{
+		return true;
+	}
+
+	for (ULONG ul = 0; ul < pexpr->Arity(); ul++)
+	{
+		CExpression *pexprChild = (*pexpr)[ul];
+		if (pexprChild->Pop()->FLogical() && FHasScalarAgg(pexprChild))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+
 static BOOL
 FCountAggMatchingColumn(CExpression *pexprPrjElem, const CColRef *colref)
 {

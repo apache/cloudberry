@@ -4558,6 +4558,8 @@ RecvTupleChunkUDPIFC(MotionConn *conn, ChunkTransportState *transportStates)
 
 	while (bytesProcessed != conn->msgSize)
 	{
+		uint16		chunkLength;
+
 		if (conn->msgSize - bytesProcessed < TUPLE_CHUNK_HEADER_SIZE)
 		{
 			logChunkParseDetails(conn, transportStates->sliceTable->ic_instance_id);
@@ -4569,7 +4571,8 @@ RecvTupleChunkUDPIFC(MotionConn *conn, ChunkTransportState *transportStates)
 							   conn->msgSize, bytesProcessed, TUPLE_CHUNK_HEADER_SIZE)));
 		}
 
-		tcSize = TUPLE_CHUNK_HEADER_SIZE + (*(uint16 *) (conn->msgPos + bytesProcessed));
+		memcpy(&chunkLength, conn->msgPos + bytesProcessed, sizeof(chunkLength));
+		tcSize = TUPLE_CHUNK_HEADER_SIZE + chunkLength;
 
 		/* sanity check */
 		if (tcSize > Gp_max_packet_size)

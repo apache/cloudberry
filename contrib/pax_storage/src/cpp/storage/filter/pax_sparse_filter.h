@@ -32,6 +32,7 @@
 #include <map>
 #include <memory>
 #include <utility>
+#include <array>
 #include <vector>
 
 #include "storage/filter/pax_column_stats.h"

@@ -1033,12 +1033,33 @@ class GpSystemStateProgram:
         return unsync_segs
 
     @staticmethod
+    def _is_in_recovery(segment):
+        """
+        Ask a segment whether it is still in recovery.  Returns False if it
+        cannot be asked, so that a caller treats an unanswered question as
+        "not in recovery".
+        """
+        try:
+            url = dbconn.DbURL(hostname=segment.hostname, port=segment.port,
+                               dbname='template1', timeout=10, retries=1)
+            with closing(dbconn.connect(url, utility=True, logConn=False)) as conn:
+                return bool(dbconn.querySingleton(conn, "SELECT pg_is_in_recovery()"))
+        except (pgdb.DatabaseError, dbconn.ConnectionError):
+            logger.warning('could not query segment {} ({}:{})'.format(
+                    segment.dbid, segment.hostname, segment.port
+            ))
+            return False
+
+    @staticmethod
     def _add_replication_info(data, primary, mirror):
         """
         Adds WAL replication information for a segment to GpStateData.
 
         If segment is a mirror, peer should be set to its corresponding primary.
         Otherwise, peer is ignored.
+
+        Returns the raw replication state string from pg_stat_replication
+        (e.g. 'streaming', 'catchup'), or None if unavailable.
         """
         # Preload the mirror's replication info with Unknowns so that we'll
         # still have usable UI information on an early exit from this function.
@@ -1047,7 +1068,7 @@ class GpSystemStateProgram:
         # Even though this information is considered part of the mirror's state,
         # we have to connect to the primary to get it.
         if not primary.isSegmentUp():
-            return
+            return None
 
         # Query pg_stat_replication for the info we want.
         rows = []
@@ -1102,7 +1123,7 @@ class GpSystemStateProgram:
             logger.warning('could not query segment {} ({}:{})'.format(
                     primary.dbid, primary.hostname, primary.port
             ))
-            return
+            return None
 
         # Successfully queried pg_stat_replication. If there are any backup
         # or pg_rewind connections, mention them in the primary status.
@@ -1134,10 +1155,10 @@ class GpSystemStateProgram:
         standby_connections = [r for r in rows if r[0] == 'gp_walreceiver']
         if not standby_connections:
             logger.warning('pg_stat_replication shows no standby connections')
-            return
+            return None
         elif len(standby_connections) > 1:
             logger.warning('pg_stat_replication shows more than one standby connection')
-            return
+            return None
 
         row = standby_connections[0]
 
@@ -1153,6 +1174,8 @@ class GpSystemStateProgram:
             replay_lsn=row[5],
             replay_left=row[6],
         )
+
+        return row[1]
 
     @staticmethod
     def _set_mirror_replication_values(data, mirror, **kwargs):
@@ -1217,11 +1240,16 @@ class GpSystemStateProgram:
                 data.addValue(VALUE__MIRROR_STATUS, "Physical replication not configured")
 
         # Add replication info on a per-pair basis.
+        # mirrorReplState maps mirror dbid -> raw replication state from pg_stat_replication
+        # (e.g. 'streaming', 'catchup'), used below to detect hot standby false positives.
+        mirrorReplState = {}
         if gpArray.hasMirrors:
             for pair in gpArray.segmentPairs:
                 primary, mirror = pair.primaryDB, pair.mirrorDB
                 data.switchSegment(mirror)
-                self._add_replication_info(data, primary, mirror)
+                replState = self._add_replication_info(data, primary, mirror)
+                if replState is not None:
+                    mirrorReplState[mirror.getSegmentDbId()] = replState
 
         for seg in segments:
             data.switchSegment(seg)
@@ -1283,6 +1311,18 @@ class GpSystemStateProgram:
                 databaseStatusIsWarning = True
             else:
                 databaseStatus = segmentData[gp.SEGMENT_STATUS__GET_MIRROR_STATUS]["databaseStatus"]
+                # With hot_standby=on, a mirror in recovery returns PQPING_OK, causing
+                # gpgetstatususingtransition to report "Acting as Primary". An active
+                # WAL receiver connection (streaming/catchup) on the primary proves the
+                # mirror is a hot standby.  Its absence proves nothing -- the receiver
+                # may be starting up or disconnected -- so in that case ask the mirror
+                # itself.  Only a mirror that answers and is out of recovery is still
+                # reported as "Acting as Primary".
+                if (databaseStatus == "Acting as Primary"
+                        and seg.isSegmentMirror(current_role=True)
+                        and (mirrorReplState.get(seg.getSegmentDbId()) in ('streaming', 'catchup')
+                             or self._is_in_recovery(seg))):
+                    databaseStatus = "Up"
                 databaseStatusIsWarning = databaseStatus != "Up"
 
             if seg.isSegmentMirror(current_role=True):

@@ -354,6 +354,14 @@ CREATE SERVER dlskel_bad_userinfo
 CREATE SERVER dlskel_bad_bucket
   FOREIGN DATA WRAPPER iceberg_volume_fdw
   OPTIONS (base_path 's3://UPPER_case/p');
+-- What stands before "://" is quoted back only when it is a scheme.  Anything
+-- else there may be userinfo or a query typed in front of it, and is masked.
+CREATE SERVER dlskel_bad_scheme_userinfo
+  FOREIGN DATA WRAPPER iceberg_volume_fdw
+  OPTIONS (base_path 'user:hunter2@evil://x/y');
+CREATE SERVER dlskel_bad_scheme_query
+  FOREIGN DATA WRAPPER iceberg_volume_fdw
+  OPTIONS (base_path '?token=hunter2://b/c');
 
 -- The metadata engine is not selectable, so naming one is an unknown option.
 CREATE TABLE dlskel_bad_engine (a int)

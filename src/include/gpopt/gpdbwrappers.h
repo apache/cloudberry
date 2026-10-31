@@ -262,6 +262,8 @@ List *ExtractNodesExpression(Node *node, int node_tag,
 // intermediate result type of given aggregate
 Oid GetAggIntermediateResultType(Oid aggid);
 
+bool IsAggFinalFuncVolatile(Oid aggid);
+
 // Identify the specific datatypes passed to an aggregate call.
 int GetAggregateArgTypes(Aggref *aggref, Oid *inputTypes);
 
@@ -805,9 +807,6 @@ bool TestexprIsHashable(Node *testexpr, List *param_ids);
 
 RTEPermissionInfo *
 GetRTEPermissionInfo(List *rteperminfos, const RangeTblEntry *rte);
-
-gpos::BOOL WalkQueryTree(Query *query, bool (*walker)(), void *context,
-						 int flags);
 
 }  //namespace gpdb
 
