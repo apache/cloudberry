@@ -230,7 +230,7 @@ class OperationWorkerPool(WorkerPool):
         if operations is not None:
             for operation in operations:
                 self._spoof_operation(operation)
-        super(OperationWorkerPool, self).__init__(numWorkers, operations)
+        super(OperationWorkerPool, self).__init__(numWorkers, items=operations)
 
     def check_results(self):
         raise NotImplementedError("OperationWorkerPool has no means of verifying success.")
