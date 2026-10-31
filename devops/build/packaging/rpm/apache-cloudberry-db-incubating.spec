@@ -140,6 +140,50 @@ Requires:       python3
 Requires:       xz
 %endif
 
+# Rocky Linux 10 / RHEL 10.
+#
+# This list is derived from the shared libraries the el10 build actually
+# links against, mapped onto the packages that provide them on el10.
+# Three el10 specifics are worth calling out:
+#
+#   - zlib was replaced by zlib-ng-compat.
+#   - libbz2, liblz4 and libperl only ship in the *-libs subpackages;
+#     pulling the umbrella perl package instead would drag in the whole
+#     Perl toolchain (263 packages / 312MB versus 65 / 65MB).
+#   - a stock Rocky Linux 10 ships libcurl-minimal, which conflicts with
+#     libcurl while providing the same libcurl.so.4, so a plain
+#     "Requires: libcurl" makes the package uninstallable there. The rich
+#     dependency accepts either.
+#
+# libicu is required both by PostgreSQL itself (postgres and initdb link
+# ICU directly) and by the bundled ICU-enabled xerces-c used by ORCA.
+%if 0%{?rhel} == 10
+Requires:       apr
+Requires:       bzip2-libs
+Requires:       glibc
+Requires:       krb5-libs
+Requires:       (libcurl or libcurl-minimal)
+Requires:       libevent
+Requires:       libgcc
+Requires:       libicu
+Requires:       libstdc++
+Requires:       liburing
+Requires:       libuuid
+Requires:       libuv
+Requires:       libxml2
+Requires:       libyaml
+Requires:       libzstd
+Requires:       lz4-libs
+Requires:       openldap
+Requires:       openssl-libs
+Requires:       pam
+Requires:       perl-libs
+Requires:       protobuf
+Requires:       python3
+Requires:       readline
+Requires:       zlib-ng-compat
+%endif
+
 %description
 
 Apache Cloudberry (Incubating) is an advanced, open-source, massively
