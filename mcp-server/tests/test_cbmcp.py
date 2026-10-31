@@ -336,3 +336,38 @@ async def test_client_modes():
             assert isinstance(tools, list)
         finally:
             await client.close()
+
+
+# Every tool that runs only fixed SQL.  execute_query and explain_query are
+# left out on purpose: the agent's own query can call a function that writes.
+READ_ONLY_TOOLS = {
+    "list_tables", "list_views", "list_indexes", "list_columns",
+    "get_table_stats", "list_large_tables", "get_database_schemas",
+    "get_database_information", "get_database_summary", "list_users",
+    "list_user_permissions", "list_table_privileges", "list_constraints",
+    "list_foreign_keys", "list_referenced_tables", "get_slow_queries",
+    "get_index_usage", "get_table_bloat_info", "get_database_activity",
+    "list_functions", "get_function_definition", "list_triggers",
+    "get_table_ddl", "list_materialized_views", "get_vacuum_info",
+    "list_active_connections", "list_searchable_columns", "vector_search",
+    "fulltext_search", "hybrid_search",
+}
+NOT_READ_ONLY_TOOLS = {"execute_query", "explain_query"}
+
+
+def hints(tool):
+    """A tool's annotations by their MCP names; the mcp package renamed the fields."""
+    if tool.annotations is None:
+        return {}
+    return tool.annotations.model_dump(by_alias=True, exclude_none=True)
+
+
+@pytest.mark.asyncio
+async def test_read_only_annotations(client):
+    """Fixed-SQL tools say they are read-only; the two that run agent SQL do not"""
+    tools = {tool.name: tool for tool in await client.list_tools()}
+    assert READ_ONLY_TOOLS | NOT_READ_ONLY_TOOLS <= set(tools)
+    for name in READ_ONLY_TOOLS:
+        assert hints(tools[name]).get("readOnlyHint") is True, name
+    for name in NOT_READ_ONLY_TOOLS:
+        assert not hints(tools[name]).get("readOnlyHint"), name
