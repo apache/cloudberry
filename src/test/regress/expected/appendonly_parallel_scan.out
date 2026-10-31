@@ -1,0 +1,1360 @@
+--
+-- Parallel sequential scans of AOCS tables.
+--
+-- Each segment file is split into chunks of rows, and the parallel processes
+-- of a segment take chunks from a shared counter (see
+-- src/backend/access/aocs/README.parallel_scan.md).
+--
+-- Most cases run :check, which returns
+--   rows        number of rows read
+--   sum_a       sum of column a
+--   misaligned  rows whose other columns do not belong to their column a,
+--               i.e. the column readers were positioned at different rows;
+--               always 0
+--   sum_rownum  sum of the row numbers in the rows' ctids; it changes if a
+--               row is returned twice or with another row's ctid
+-- Column a holds 1..n, so rows and sum_a show whether every row was read
+-- exactly once.  The check queries avoid aggregate FILTER and count(DISTINCT)
+-- on a row value, which ORCA cannot plan.
+--
+-- Tables are distributed by a constant key, so all rows are on one segment
+-- and the chunk layout of that segment is known.  A chunk holds at least
+-- 512kB of rows (AOCS_PARALLEL_SCAN_MIN_CHUNK_BYTES), using the average row
+-- size of the table.  The tables with columns (k int, a int, c text) have 41
+-- bytes per row, so a chunk holds 524288 / 41 = 12787 rows.
+--
+set enable_parallel = on;
+set optimizer = off;
+set max_parallel_workers_per_gather = 4;
+create schema appendonly_parallel_scan;
+set search_path = appendonly_parallel_scan;
+\set check 'select count(*) as rows, sum(a) as sum_a, sum(case when c <> md5(a::text) then 1 else 0 end) as misaligned, sum(((ctid::text::point)[0]::bigint % 33554432) * 32768 + (ctid::text::point)[1]::bigint - 1) as sum_rownum from'
+-- Segment files that a scan reads on the segment that holds the table: those
+-- with rows that are not awaiting drop (state 2).  Whether VACUUM can drop a
+-- compacted segment file right away depends on other sessions' snapshots, so
+-- empty and awaiting-drop segment files are left out to keep the output
+-- stable.
+create function segfile_rows(rel regclass)
+returns table (segno int, tupcount bigint) language sql as $$
+  select segno, tupcount
+  from gp_toolkit.__gp_aocsseg(rel)
+  where column_num = 0
+    and tupcount > 0
+    and state <> 2
+    and segment_id in (select segment_id from gp_toolkit.__gp_aocsseg(rel)
+                       where column_num = 0
+                       group by segment_id having sum(tupcount) > 0)
+  order by segno
+$$;
+--
+-- Chunk layout
+--
+-- One segment file split into several chunks: 100000 rows are 8 chunks, the
+-- last one 10491 rows long.
+create table single_segfile (k int, a int, c text)
+  using ao_column with (parallel_workers = 4) distributed by (k);
+insert into single_segfile select 0, i, md5(i::text) from generate_series(1, 100000) i;
+select * from segfile_rows('single_segfile');
+ segno | tupcount 
+-------+----------
+     1 |   100000
+(1 row)
+
+-- the average row size: uncompressed bytes of all columns per row
+select div(sum(eof_uncompressed), 100000) as row_bytes
+from gp_toolkit.__gp_aocsseg('single_segfile') where tupcount > 0;
+ row_bytes 
+-----------
+        41
+(1 row)
+
+explain (costs off) :check single_segfile;
+                      QUERY PLAN                       
+-------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on single_segfile
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check single_segfile;
+  rows  |   sum_a    | misaligned | sum_rownum 
+--------+------------+------------+------------
+ 100000 | 5000050000 |          0 | 5000050000
+(1 row)
+
+-- Several segment files of different sizes: an insert that spreads rows over
+-- three segment files writes 20000, 20000 and 10000 rows, then a plain insert
+-- appends 70000 more rows to the last one.
+create table multi_segfile (k int, a int, c text)
+  using ao_column with (parallel_workers = 4) distributed by (k);
+set gp_appendonly_insert_files = 3;
+set gp_appendonly_insert_files_tuples_range = 20000;
+insert into multi_segfile select 0, i, md5(i::text) from generate_series(1, 50000) i;
+reset gp_appendonly_insert_files;
+reset gp_appendonly_insert_files_tuples_range;
+insert into multi_segfile select 0, i, md5(i::text) from generate_series(50001, 120000) i;
+select tupcount from segfile_rows('multi_segfile') order by 1;
+ tupcount 
+----------
+    20000
+    20000
+    80000
+(3 rows)
+
+explain (costs off) :check multi_segfile;
+                      QUERY PLAN                      
+------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on multi_segfile
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check multi_segfile;
+  rows  |   sum_a    | misaligned | sum_rownum 
+--------+------------+------------+------------
+ 120000 | 7200060000 |          0 | 3607060000
+(1 row)
+
+-- Segment files without rows to scan between, before and after the ones
+-- with rows.  Three segment files of 30000 rows each; deleting all rows of one
+-- and vacuuming leaves an empty segment file in its place, or one awaiting
+-- drop if another session's snapshot can still see its rows.  The scan must
+-- skip both.
+create table empty_segfiles (k int, a int, c text)
+  using ao_column with (parallel_workers = 4) distributed by (k);
+set gp_appendonly_insert_files = 3;
+set gp_appendonly_insert_files_tuples_range = 30000;
+insert into empty_segfiles select 0, i, md5(i::text) from generate_series(1, 90000) i;
+reset gp_appendonly_insert_files;
+reset gp_appendonly_insert_files_tuples_range;
+-- rows 30001-60000 are in the second segment file: empty it
+delete from empty_segfiles where a between 30001 and 60000;
+vacuum empty_segfiles;
+select * from segfile_rows('empty_segfiles');
+ segno | tupcount 
+-------+----------
+     1 |    30000
+     3 |    30000
+(2 rows)
+
+explain (costs off) :check empty_segfiles;
+                      QUERY PLAN                       
+-------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on empty_segfiles
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check empty_segfiles;
+ rows  |   sum_a    | misaligned | sum_rownum 
+-------+------------+------------+------------
+ 60000 | 2700030000 |          0 |  900030000
+(1 row)
+
+-- rows 1-30000 are in the first segment file: empty it too
+delete from empty_segfiles where a <= 30000;
+vacuum empty_segfiles;
+select * from segfile_rows('empty_segfiles');
+ segno | tupcount 
+-------+----------
+     3 |    30000
+(1 row)
+
+explain (costs off) :check empty_segfiles;
+                      QUERY PLAN                       
+-------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on empty_segfiles
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check empty_segfiles;
+ rows  |   sum_a    | misaligned | sum_rownum 
+-------+------------+------------+------------
+ 30000 | 2250015000 |          0 |  450015000
+(1 row)
+
+-- Row counts at a chunk boundary: exactly 3 chunks, one row less, and one
+-- row more (a fourth chunk of a single row).
+create table boundary_eq (k int, a int, c text)
+  using ao_column with (parallel_workers = 4) distributed by (k);
+insert into boundary_eq select 0, i, md5(i::text) from generate_series(1, 3 * 12787) i;
+explain (costs off) :check boundary_eq;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on boundary_eq
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check boundary_eq;
+ rows  |   sum_a   | misaligned | sum_rownum 
+-------+-----------+------------+------------
+ 38361 | 735802341 |          0 |  735802341
+(1 row)
+
+create table boundary_minus (k int, a int, c text)
+  using ao_column with (parallel_workers = 4) distributed by (k);
+insert into boundary_minus select 0, i, md5(i::text) from generate_series(1, 3 * 12787 - 1) i;
+explain (costs off) :check boundary_minus;
+                      QUERY PLAN                       
+-------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on boundary_minus
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check boundary_minus;
+ rows  |   sum_a   | misaligned | sum_rownum 
+-------+-----------+------------+------------
+ 38360 | 735763980 |          0 |  735763980
+(1 row)
+
+create table boundary_plus (k int, a int, c text)
+  using ao_column with (parallel_workers = 4) distributed by (k);
+insert into boundary_plus select 0, i, md5(i::text) from generate_series(1, 3 * 12787 + 1) i;
+explain (costs off) :check boundary_plus;
+                      QUERY PLAN                      
+------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on boundary_plus
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check boundary_plus;
+ rows  |   sum_a   | misaligned | sum_rownum 
+-------+-----------+------------+------------
+ 38362 | 735840703 |          0 |  735840703
+(1 row)
+
+-- Fewer chunks than workers: a table of one short chunk, and an empty table.
+create table tiny (k int, a int, c text)
+  using ao_column with (parallel_workers = 4) distributed by (k);
+insert into tiny select 0, i, md5(i::text) from generate_series(1, 10) i;
+explain (costs off) :check tiny;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on tiny
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check tiny;
+ rows | sum_a | misaligned | sum_rownum 
+------+-------+------------+------------
+   10 |    55 |          0 |         55
+(1 row)
+
+create table empty (k int, a int, c text)
+  using ao_column with (parallel_workers = 4) distributed by (k);
+explain (costs off) :check empty;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on empty
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check empty;
+ rows | sum_a | misaligned | sum_rownum 
+------+-------+------------+------------
+    0 |       |            |           
+(1 row)
+
+--
+-- Positioning
+--
+-- At the first row of a chunk every column file is positioned separately, by
+-- reading block headers.  Columns of different widths hold different numbers
+-- of rows per block, so each column file stops at a different block.  All
+-- tables below have the same columns, each derived from a, so misaligned
+-- counts the rows where any column was read from another row than a.
+--
+-- b and n are fixed width, t is mostly 32 bytes, but every 1000th value is
+-- 64000 bytes: larger than a block, so it is stored over several blocks.
+create function t_for(a int) returns text language sql immutable parallel safe as $$
+  select case when a % 1000 = 0 then repeat(md5(a::text), 2000)
+              else md5(a::text) end
+$$;
+\set check_cols 'select count(*) as rows, sum(a) as sum_a, sum(case when b <> a::bigint * 7 or n <> a / 4.0 or t <> t_for(a) then 1 else 0 end) as misaligned, sum(((ctid::text::point)[0]::bigint % 33554432) * 32768 + (ctid::text::point)[1]::bigint - 1) as sum_rownum from'
+-- Columns of different widths.
+create table wide_cols (k int, a int, b bigint, n numeric, t text)
+  using ao_column with (parallel_workers = 4) distributed by (k);
+insert into wide_cols select 0, i, i::bigint * 7, i / 4.0, t_for(i) from generate_series(1, 100000) i;
+explain (costs off) :check_cols wide_cols;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on wide_cols
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check_cols wide_cols;
+  rows  |   sum_a    | misaligned | sum_rownum 
+--------+------------+------------+------------
+ 100000 | 5000050000 |          0 | 5000050000
+(1 row)
+
+-- Projections reading only some of the columns.
+explain (costs off) select sum(n) from wide_cols;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on wide_cols
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+select sum(n) from wide_cols;
+               sum               
+---------------------------------
+ 1250012500.00000000000000000000
+(1 row)
+
+explain (costs off) select sum(b), sum(length(t)) from wide_cols;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on wide_cols
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+select sum(b), sum(length(t)) from wide_cols;
+     sum     |   sum   
+-------------+---------
+ 35000350000 | 9596800
+(1 row)
+
+-- Small blocks: many blocks per chunk.
+create table block_8k (k int, a int, b bigint, n numeric, t text)
+  using ao_column with (parallel_workers = 4, blocksize = 8192) distributed by (k);
+insert into block_8k select * from wide_cols;
+explain (costs off) :check_cols block_8k;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on block_8k
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check_cols block_8k;
+  rows  |   sum_a    | misaligned | sum_rownum 
+--------+------------+------------+------------
+ 100000 | 5000050000 |          0 | 5000050000
+(1 row)
+
+-- Large blocks: several chunks in one block.
+create table block_2m (k int, a int, b bigint, n numeric, t text)
+  using ao_column with (parallel_workers = 4, blocksize = 2097152) distributed by (k);
+insert into block_2m select * from wide_cols;
+explain (costs off) :check_cols block_2m;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on block_2m
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check_cols block_2m;
+  rows  |   sum_a    | misaligned | sum_rownum 
+--------+------------+------------+------------
+ 100000 | 5000050000 |          0 | 5000050000
+(1 row)
+
+-- Compressed blocks.  Only the block holding the first row of a chunk is
+-- decompressed.  rle_type packs the regular values of b and n densely, so a
+-- block holds many more rows.
+create table compress_zstd (k int, a int, b bigint, n numeric, t text)
+  using ao_column with (parallel_workers = 4, compresstype = zstd, compresslevel = 1) distributed by (k);
+insert into compress_zstd select * from wide_cols;
+explain (costs off) :check_cols compress_zstd;
+                      QUERY PLAN                      
+------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on compress_zstd
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check_cols compress_zstd;
+  rows  |   sum_a    | misaligned | sum_rownum 
+--------+------------+------------+------------
+ 100000 | 5000050000 |          0 | 5000050000
+(1 row)
+
+create table compress_zlib (k int, a int, b bigint, n numeric, t text)
+  using ao_column with (parallel_workers = 4, compresstype = zlib, compresslevel = 1) distributed by (k);
+insert into compress_zlib select * from wide_cols;
+explain (costs off) :check_cols compress_zlib;
+                      QUERY PLAN                      
+------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on compress_zlib
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check_cols compress_zlib;
+  rows  |   sum_a    | misaligned | sum_rownum 
+--------+------------+------------+------------
+ 100000 | 5000050000 |          0 | 5000050000
+(1 row)
+
+create table compress_rle (k int, a int,
+                           b bigint encoding (compresstype = rle_type, compresslevel = 4),
+                           n numeric encoding (compresstype = rle_type, compresslevel = 1),
+                           t text encoding (compresstype = rle_type, compresslevel = 2))
+  using ao_column with (parallel_workers = 4) distributed by (k);
+insert into compress_rle select * from wide_cols;
+explain (costs off) :check_cols compress_rle;
+                     QUERY PLAN                      
+-----------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on compress_rle
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check_cols compress_rle;
+  rows  |   sum_a    | misaligned | sum_rownum 
+--------+------------+------------+------------
+ 100000 | 5000050000 |          0 | 5000050000
+(1 row)
+
+-- A column added after rows were loaded: rows inserted before the ALTER get
+-- the default, rows inserted after it their own value.
+create table added_col (k int, a int, t text)
+  using ao_column with (parallel_workers = 4) distributed by (k);
+insert into added_col select 0, i, md5(i::text) from generate_series(1, 60000) i;
+alter table added_col add column b bigint default -1;
+insert into added_col select 0, i, md5(i::text), i::bigint * 7 from generate_series(60001, 100000) i;
+\set check_added 'select count(*) as rows, sum(a) as sum_a, sum(b) as sum_b, sum(case when t <> md5(a::text) or b <> case when a <= 60000 then -1 else a::bigint * 7 end then 1 else 0 end) as misaligned, sum(((ctid::text::point)[0]::bigint % 33554432) * 32768 + (ctid::text::point)[1]::bigint - 1) as sum_rownum from'
+explain (costs off) :check_added added_col;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on added_col
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check_added added_col;
+  rows  |   sum_a    |    sum_b    | misaligned | sum_rownum 
+--------+------------+-------------+------------+------------
+ 100000 | 5000050000 | 22400080000 |          0 | 5004050000
+(1 row)
+
+--
+-- Row visibility
+--
+-- Chunks cover every row stored in a segment file, including deleted ones.
+-- The scan drops deleted rows with the visibility map, which it looks up by
+-- the row number of each row, so sum_rownum also checks those row numbers.
+--
+-- Every 7th row deleted: every chunk has both visible and deleted rows.
+create table vis_scattered (k int, a int, c text)
+  using ao_column with (parallel_workers = 4) distributed by (k);
+insert into vis_scattered select 0, i, md5(i::text) from generate_series(1, 100000) i;
+delete from vis_scattered where a % 7 = 0;
+explain (costs off) :check vis_scattered;
+                      QUERY PLAN                      
+------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on vis_scattered
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check vis_scattered;
+ rows  |   sum_a    | misaligned | sum_rownum 
+-------+------------+------------+------------
+ 85715 | 4285785715 |          0 | 4285785715
+(1 row)
+
+-- Rows 12788-51148 deleted: the second, third and fourth chunks have no
+-- visible rows.
+create table vis_chunks (k int, a int, c text)
+  using ao_column with (parallel_workers = 4) distributed by (k);
+insert into vis_chunks select 0, i, md5(i::text) from generate_series(1, 100000) i;
+delete from vis_chunks where a between 12788 and 51148;
+explain (costs off) :check vis_chunks;
+                    QUERY PLAN                     
+---------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on vis_chunks
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check vis_chunks;
+ rows  |   sum_a    | misaligned | sum_rownum 
+-------+------------+------------+------------
+ 61639 | 3773725552 |          0 | 3773725552
+(1 row)
+
+-- Every 5th row updated: the old version is marked deleted and the new one is
+-- appended, so the segment file holds both.
+create table vis_updated (k int, a int, c text)
+  using ao_column with (parallel_workers = 4) distributed by (k);
+insert into vis_updated select 0, i, md5(i::text) from generate_series(1, 100000) i;
+update vis_updated set a = -a, c = md5((-a)::text) where a % 5 = 0;
+explain (costs off) :check vis_updated;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on vis_updated
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check vis_updated;
+  rows  |   sum_a    | misaligned | sum_rownum 
+--------+------------+------------+------------
+ 100000 | 2999950000 |          0 | 6202010000
+(1 row)
+
+-- Gaps in row numbers: an aborted insert and many small inserts use up row
+-- numbers that no stored row has, so row numbers no longer follow row
+-- positions.
+create table vis_gaps (k int, a int, c text)
+  using ao_column with (parallel_workers = 4) distributed by (k);
+insert into vis_gaps select 0, i, md5(i::text) from generate_series(1, 30000) i;
+begin;
+insert into vis_gaps select 0, i, md5(i::text) from generate_series(1, 50000) i;
+abort;
+do $$
+begin
+  for j in 0..99 loop
+    insert into vis_gaps
+      select 0, i, md5(i::text) from generate_series(30001 + j * 500, 30500 + j * 500) i;
+  end loop;
+end $$;
+insert into vis_gaps select 0, i, md5(i::text) from generate_series(80001, 100000) i;
+select count(*) as rows,
+       max(((ctid::text::point)[0]::bigint % 33554432) * 32768 + (ctid::text::point)[1]::bigint - 1) > count(*) as has_gaps
+from vis_gaps;
+  rows  | has_gaps 
+--------+----------
+ 100000 | t
+(1 row)
+
+explain (costs off) :check vis_gaps;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on vis_gaps
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+:check vis_gaps;
+  rows  |   sum_a    | misaligned | sum_rownum 
+--------+------------+------------+------------
+ 100000 | 5000050000 |          0 | 8961550000
+(1 row)
+
+--
+-- Filters
+--
+-- A filter on AOCS columns is evaluated inside the scan, by
+-- aocs_getnext_withqual(); its first gp_predicate_pushdown_sample_rows rows go
+-- through aocs_getnext_sample().  Both loops must stop at the end of a chunk.
+--
+create table filt (k int, a int, c text)
+  using ao_column with (parallel_workers = 4) distributed by (k);
+insert into filt select 0, i, md5(i::text) from generate_series(1, 100000) i;
+-- One column in the filter: 10000 rows match.
+explain (costs off) :check filt where a % 10 = 3;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on filt
+                     Filter: ((a % 10) = 3)
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+:check filt where a % 10 = 3;
+ rows  |   sum_a   | misaligned | sum_rownum 
+-------+-----------+------------+------------
+ 10000 | 499980000 |          0 |  499980000
+(1 row)
+
+-- Two columns in the filter.
+explain (costs off) :check filt where a % 10 = 3 and c > '8';
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on filt
+                     Filter: ((c > '8'::text) AND ((a % 10) = 3))
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+:check filt where a % 10 = 3 and c > '8';
+ rows |   sum_a   | misaligned | sum_rownum 
+------+-----------+------------+------------
+ 4957 | 247106691 |          0 |  247106691
+(1 row)
+
+-- No row matches, and every row matches.
+explain (costs off) :check filt where a < 0;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on filt
+                     Filter: (a < 0)
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+:check filt where a < 0;
+ rows | sum_a | misaligned | sum_rownum 
+------+-------+------------+------------
+    0 |       |            |           
+(1 row)
+
+explain (costs off) :check filt where a > 0;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on filt
+                     Filter: (a > 0)
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+:check filt where a > 0;
+  rows  |   sum_a    | misaligned | sum_rownum 
+--------+------------+------------+------------
+ 100000 | 5000050000 |          0 | 5000050000
+(1 row)
+
+-- Sampling over more rows than a chunk, so the sampling loop reaches the end
+-- of chunks; and no sampling at all.
+set gp_predicate_pushdown_sample_rows = 50000;
+explain (costs off) :check filt where a % 10 = 3;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on filt
+                     Filter: ((a % 10) = 3)
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+:check filt where a % 10 = 3;
+ rows  |   sum_a   | misaligned | sum_rownum 
+-------+-----------+------------+------------
+ 10000 | 499980000 |          0 |  499980000
+(1 row)
+
+set gp_predicate_pushdown_sample_rows = 0;
+explain (costs off) :check filt where a % 10 = 3;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on filt
+                     Filter: ((a % 10) = 3)
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+:check filt where a % 10 = 3;
+ rows  |   sum_a   | misaligned | sum_rownum 
+-------+-----------+------------+------------
+ 10000 | 499980000 |          0 |  499980000
+(1 row)
+
+reset gp_predicate_pushdown_sample_rows;
+--
+-- Joins and aggregates
+--
+-- A parallel hash join of two parallel scans.
+explain (costs off)
+select count(*), sum(x.a) from filt x join filt y on x.a = y.a;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Hash Join
+                     Hash Cond: (x.a = y.a)
+                     ->  Redistribute Motion 12:12  (slice2; segments: 12)
+                           Hash Key: x.a
+                           Hash Module: 3
+                           ->  Parallel Seq Scan on filt x
+                     ->  Parallel Hash
+                           ->  Redistribute Motion 12:12  (slice3; segments: 12)
+                                 Hash Key: y.a
+                                 Hash Module: 3
+                                 ->  Parallel Seq Scan on filt y
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+select count(*), sum(x.a) from filt x join filt y on x.a = y.a;
+ count  |    sum     
+--------+------------
+ 100000 | 5000050000
+(1 row)
+
+-- Partial and final aggregation.
+explain (costs off)
+select a % 7 as g, count(*), sum(a) from filt group by 1 order by 1;
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 12:1  (slice1; segments: 12)
+   Merge Key: ((a % 7))
+   ->  Sort
+         Sort Key: ((a % 7))
+         ->  Finalize HashAggregate
+               Group Key: ((a % 7))
+               ->  Redistribute Motion 12:12  (slice2; segments: 12)
+                     Hash Key: ((a % 7))
+                     Hash Module: 3
+                     ->  Partial HashAggregate
+                           Group Key: (a % 7)
+                           ->  Parallel Seq Scan on filt
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+select a % 7 as g, count(*), sum(a) from filt group by 1 order by 1;
+ g | count |    sum    
+---+-------+-----------
+ 0 | 14285 | 714264285
+ 1 | 14286 | 714278571
+ 2 | 14286 | 714292857
+ 3 | 14286 | 714307143
+ 4 | 14286 | 714321429
+ 5 | 14286 | 714335715
+ 6 | 14285 | 714250000
+(7 rows)
+
+--
+-- Partitioned tables
+--
+-- Each AOCS partition is split into its own chunks.
+--
+create table part (k int, a int, c text) partition by range (a) distributed by (k);
+create table part_1 partition of part for values from (1) to (30001)
+  using ao_column with (parallel_workers = 4);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table part_2 partition of part for values from (30001) to (60001)
+  using ao_column with (parallel_workers = 4);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table part_3 partition of part for values from (60001) to (90001)
+  using ao_column with (parallel_workers = 4);
+NOTICE:  table has parent, setting distribution columns to match parent table
+insert into part select 0, i, md5(i::text) from generate_series(1, 90000) i;
+analyze part;
+explain (costs off) :check part;
+                     QUERY PLAN                      
+-----------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Append
+                     ->  Parallel Seq Scan on part_1
+                     ->  Parallel Seq Scan on part_2
+                     ->  Parallel Seq Scan on part_3
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+:check part;
+ rows  |   sum_a    | misaligned | sum_rownum 
+-------+------------+------------+------------
+ 90000 | 4050045000 |          0 | 1350045000
+(1 row)
+
+--
+-- Rescans
+--
+-- A parallel scan hands out each chunk once, so it cannot be scanned again.
+-- Neither planner rescans one: it becomes the outer side of a nested loop, is
+-- read once into a Materialize, or the plan is not parallel.  These queries
+-- have shapes where a rescan could happen.
+--
+create table outer_rows (a int)
+  using ao_column with (parallel_workers = 4) distributed by (a);
+insert into outer_rows select i * 1000 from generate_series(1, 20) i;
+create table inner_rows (k int, a int, c text)
+  using ao_column with (parallel_workers = 4) distributed by (a);
+insert into inner_rows select i % 7, i, md5(i::text) from generate_series(1, 200000) i;
+analyze outer_rows;
+analyze inner_rows;
+set enable_hashjoin = off;
+set enable_mergejoin = off;
+set enable_material = off;
+explain (costs off)
+select count(*), sum(i.a) from outer_rows o join inner_rows i on i.a < o.a and i.k = 3;
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Nested Loop
+                     Join Filter: (i.a < o.a)
+                     ->  Parallel Seq Scan on inner_rows i
+                           Filter: (k = 3)
+                     ->  Materialize
+                           ->  Broadcast Motion 3:12  (slice2; segments: 3)
+                                 ->  Seq Scan on outer_rows o
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+select count(*), sum(i.a) from outer_rows o join inner_rows i on i.a < o.a and i.k = 3;
+ count |    sum    
+-------+-----------
+ 30000 | 204979006
+(1 row)
+
+explain (costs off)
+select sum(n) from
+  (select (select count(*) from inner_rows i where i.a < o.a and i.k = 3) as n
+   from outer_rows o) s;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on outer_rows o
+               SubPlan 1
+                 ->  Aggregate
+                       ->  Result
+                             Filter: (i.a < o.a)
+                             ->  Materialize
+                                   ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                         ->  Seq Scan on inner_rows i
+                                               Filter: (k = 3)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+select sum(n) from
+  (select (select count(*) from inner_rows i where i.a < o.a and i.k = 3) as n
+   from outer_rows o) s;
+  sum  
+-------
+ 30000
+(1 row)
+
+explain (costs off)
+select count(*) from outer_rows o
+  where exists (select 1 from inner_rows i where i.a = o.a + 1);
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  HashAggregate
+               Group Key: (RowIdExpr)
+               ->  Redistribute Motion 12:12  (slice2; segments: 12)
+                     Hash Key: (RowIdExpr)
+                     Hash Module: 3
+                     ->  Merge Join
+                           Merge Cond: (i.a = ((o.a + 1)))
+                           ->  Sort
+                                 Sort Key: i.a
+                                 ->  Parallel Seq Scan on inner_rows i
+                           ->  Sort
+                                 Sort Key: ((o.a + 1))
+                                 ->  Result
+                                       ->  Broadcast Motion 3:12  (slice3; segments: 3)
+                                             ->  Seq Scan on outer_rows o
+ Optimizer: Postgres query optimizer
+(18 rows)
+
+select count(*) from outer_rows o
+  where exists (select 1 from inner_rows i where i.a = o.a + 1);
+ count 
+-------
+    20
+(1 row)
+
+explain (costs off)
+select count(*) from outer_rows o
+  where o.a in (select i.a from inner_rows i where i.k = o.a % 7);
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  HashAggregate
+               Group Key: (RowIdExpr)
+               ->  Redistribute Motion 12:12  (slice2; segments: 12)
+                     Hash Key: (RowIdExpr)
+                     Hash Module: 3
+                     ->  Merge Join
+                           Merge Cond: ((i.a = o.a) AND (i.k = ((o.a % 7))))
+                           ->  Sort
+                                 Sort Key: i.a, i.k
+                                 ->  Parallel Seq Scan on inner_rows i
+                           ->  Sort
+                                 Sort Key: o.a, ((o.a % 7))
+                                 ->  Result
+                                       ->  Broadcast Motion 3:12  (slice3; segments: 3)
+                                             ->  Seq Scan on outer_rows o
+ Optimizer: Postgres query optimizer
+(18 rows)
+
+select count(*) from outer_rows o
+  where o.a in (select i.a from inner_rows i where i.k = o.a % 7);
+ count 
+-------
+    20
+(1 row)
+
+explain (costs off)
+select count(*), sum(l.n) from outer_rows o,
+  lateral (select count(*) as n from inner_rows i where i.a < o.a) l;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Aggregate
+   ->  Nested Loop
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               ->  Seq Scan on outer_rows o
+         ->  Materialize
+               ->  Aggregate
+                     ->  Result
+                           Filter: (i.a < o.a)
+                           ->  Materialize
+                                 ->  Gather Motion 3:1  (slice2; segments: 3)
+                                       ->  Seq Scan on inner_rows i
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+select count(*), sum(l.n) from outer_rows o,
+  lateral (select count(*) as n from inner_rows i where i.a < o.a) l;
+ count |  sum   
+-------+--------
+    20 | 209980
+(1 row)
+
+reset enable_material;
+reset enable_mergejoin;
+reset enable_hashjoin;
+-- The same plan executed several times.
+prepare inner_rows_count(int) as select count(*), sum(a) from inner_rows where k = $1;
+explain (costs off) execute inner_rows_count(3);
+                    QUERY PLAN                     
+---------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on inner_rows
+                     Filter: (k = 3)
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+execute inner_rows_count(3);
+ count |    sum     
+-------+------------
+ 28572 | 2857242858
+(1 row)
+
+execute inner_rows_count(4);
+ count |    sum     
+-------+------------
+ 28571 | 2857071429
+(1 row)
+
+execute inner_rows_count(3);
+ count |    sum     
+-------+------------
+ 28572 | 2857242858
+(1 row)
+
+deallocate inner_rows_count;
+-- A cursor.
+begin;
+declare c cursor for select count(*), sum(a) from inner_rows where k = 3;
+fetch all from c;
+ count |    sum     
+-------+------------
+ 28572 | 2857242858
+(1 row)
+
+close c;
+commit;
+--
+-- Planner
+--
+-- With the Postgres planner, an AOCS table without the parallel_workers
+-- option gets workers according to its size, like a heap table, because its
+-- segment files are split into chunks.  An AO row table still hands out whole
+-- segment files, so it gets at most one worker per segment file.
+--
+create table plan_small (a int, c text) using ao_column distributed by (a);
+insert into plan_small select i, md5(i::text) from generate_series(1, 1000) i;
+create table plan_mid (a int, c text) using ao_column distributed by (a);
+insert into plan_mid select i, md5(i::text) from generate_series(1, 100000) i;
+create table plan_big (a int, c text) using ao_column distributed by (a);
+insert into plan_big select i, md5(i::text) from generate_series(1, 1000000) i;
+create table plan_option (a int, c text)
+  using ao_column with (parallel_workers = 3) distributed by (a);
+insert into plan_option select i, md5(i::text) from generate_series(1, 1000) i;
+create table plan_row_one (a int, c text) using ao_row distributed by (a);
+insert into plan_row_one select i, md5(i::text) from generate_series(1, 1000000) i;
+create table plan_row_three (a int, c text) using ao_row distributed by (a);
+set gp_appendonly_insert_files = 3;
+set gp_appendonly_insert_files_tuples_range = 10000;
+insert into plan_row_three select i, md5(i::text) from generate_series(1, 1000000) i;
+reset gp_appendonly_insert_files;
+reset gp_appendonly_insert_files_tuples_range;
+analyze plan_small;
+analyze plan_mid;
+analyze plan_big;
+analyze plan_option;
+analyze plan_row_one;
+analyze plan_row_three;
+select c.relname, a.segfilecount
+from pg_class c join pg_appendonly a on a.relid = c.oid
+where c.relname like 'plan\_%' order by 1;
+    relname     | segfilecount 
+----------------+--------------
+ plan_big       |            1
+ plan_mid       |            1
+ plan_option    |            1
+ plan_row_one   |            1
+ plan_row_three |            3
+ plan_small     |            1
+(6 rows)
+
+set min_parallel_table_scan_size = '8MB';
+-- One segment file, and still a parallel plan.
+explain (costs off) select count(*) from plan_big;
+                   QUERY PLAN                    
+-------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on plan_big
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+-- A table smaller than min_parallel_table_scan_size is scanned serially.
+explain (costs off) select count(*) from plan_small;
+                   QUERY PLAN                   
+------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on plan_small
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+-- The parallel_workers option overrides the size: 3 workers per segment.
+explain (costs off) select count(*) from plan_option;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 9:1  (slice1; segments: 9)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on plan_option
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+-- A larger table gets more workers, up to max_parallel_workers_per_gather.
+set min_parallel_table_scan_size = '128kB';
+set max_parallel_workers_per_gather = 8;
+explain (costs off) select count(*) from plan_mid;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on plan_mid
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+explain (costs off) select count(*) from plan_big;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 18:1  (slice1; segments: 18)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on plan_big
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+set max_parallel_workers_per_gather = 2;
+explain (costs off) select count(*) from plan_big;
+                   QUERY PLAN                    
+-------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on plan_big
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+set max_parallel_workers_per_gather = 8;
+-- AO row tables: one segment file gives no parallel plan, three segment
+-- files give 3 workers per segment.
+explain (costs off) select count(*) from plan_row_one;
+                   QUERY PLAN                   
+------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on plan_row_one
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+explain (costs off) select count(*) from plan_row_three;
+                      QUERY PLAN                       
+-------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 9:1  (slice1; segments: 9)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on plan_row_three
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+-- No parallel index scans on AOCS tables.
+create index plan_big_a on plan_big (a);
+set enable_seqscan = off;
+set min_parallel_index_scan_size = 0;
+explain (costs off) select count(*) from plan_big where a < 100;
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Bitmap Heap Scan on plan_big
+                     Recheck Cond: (a < 100)
+                     ->  Bitmap Index Scan on plan_big_a
+                           Index Cond: (a < 100)
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+reset min_parallel_index_scan_size;
+reset enable_seqscan;
+reset min_parallel_table_scan_size;
+set max_parallel_workers_per_gather = 4;
+--
+-- ORCA
+--
+-- ORCA plans a parallel scan only where it needs no rewinding, and puts a
+-- Materialize above it on the inner side of a nested loop.
+--
+set optimizer = on;
+analyze empty_segfiles;
+explain (costs off) :check single_segfile;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Parallel Seq Scan on single_segfile
+ Optimizer: GPORCA
+(4 rows)
+
+:check single_segfile;
+  rows  |   sum_a    | misaligned | sum_rownum 
+--------+------------+------------+------------
+ 100000 | 5000050000 |          0 | 5000050000
+(1 row)
+
+explain (costs off) :check empty_segfiles;
+                      QUERY PLAN                       
+-------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on empty_segfiles
+ Optimizer: GPORCA
+(5 rows)
+
+:check empty_segfiles;
+ rows  |   sum_a    | misaligned | sum_rownum 
+-------+------------+------------+------------
+ 30000 | 2250015000 |          0 |  450015000
+(1 row)
+
+explain (costs off) :check_cols compress_rle;
+                     QUERY PLAN                      
+-----------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on compress_rle
+ Optimizer: GPORCA
+(5 rows)
+
+:check_cols compress_rle;
+  rows  |   sum_a    | misaligned | sum_rownum 
+--------+------------+------------+------------
+ 100000 | 5000050000 |          0 | 5000050000
+(1 row)
+
+explain (costs off) :check vis_gaps;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Parallel Seq Scan on vis_gaps
+ Optimizer: GPORCA
+(4 rows)
+
+:check vis_gaps;
+  rows  |   sum_a    | misaligned | sum_rownum 
+--------+------------+------------+------------
+ 100000 | 5000050000 |          0 | 8961550000
+(1 row)
+
+-- LIMIT: the processes stop before all chunks are handed out.  The Postgres
+-- planner does not choose a parallel scan for these.
+explain (costs off) select count(*) from (select a from filt limit 10) s;
+                       QUERY PLAN                       
+--------------------------------------------------------
+ Aggregate
+   ->  Limit
+         ->  Gather Motion 12:1  (slice1; segments: 12)
+               ->  Parallel Seq Scan on filt
+ Optimizer: GPORCA
+(5 rows)
+
+select count(*) from (select a from filt limit 10) s;
+ count 
+-------
+    10
+(1 row)
+
+explain (costs off) select count(*) from (select a from filt limit 20000) s;
+                       QUERY PLAN                       
+--------------------------------------------------------
+ Aggregate
+   ->  Limit
+         ->  Gather Motion 12:1  (slice1; segments: 12)
+               ->  Parallel Seq Scan on filt
+ Optimizer: GPORCA
+(5 rows)
+
+select count(*) from (select a from filt limit 20000) s;
+ count 
+-------
+ 20000
+(1 row)
+
+set optimizer_enable_parallel_append = on;
+explain (costs off) :check part;
+                     QUERY PLAN                      
+-----------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Append
+                     ->  Parallel Seq Scan on part_1
+                     ->  Parallel Seq Scan on part_2
+                     ->  Parallel Seq Scan on part_3
+ Optimizer: GPORCA
+(8 rows)
+
+:check part;
+ rows  |   sum_a    | misaligned | sum_rownum 
+-------+------------+------------+------------
+ 90000 | 4050045000 |          0 | 1350045000
+(1 row)
+
+reset optimizer_enable_parallel_append;
+set enable_hashjoin = off;
+set enable_mergejoin = off;
+explain (costs off)
+select count(*), sum(i.a) from outer_rows o join inner_rows i on i.a < o.a and i.k = 3;
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Nested Loop
+                     Join Filter: (i.a < o.a)
+                     ->  Broadcast Motion 12:12  (slice2; segments: 12)
+                           ->  Parallel Seq Scan on outer_rows o
+                     ->  Materialize
+                           ->  Parallel Seq Scan on inner_rows i
+                                 Filter: (k = 3)
+ Optimizer: GPORCA
+(11 rows)
+
+select count(*), sum(i.a) from outer_rows o join inner_rows i on i.a < o.a and i.k = 3;
+ count |    sum    
+-------+-----------
+ 30000 | 204979006
+(1 row)
+
+reset enable_mergejoin;
+reset enable_hashjoin;
+reset optimizer;
+reset max_parallel_workers_per_gather;
+reset enable_parallel;
+drop schema appendonly_parallel_scan cascade;
+NOTICE:  drop cascades to 31 other objects
+DETAIL:  drop cascades to function segfile_rows(regclass)
+drop cascades to table single_segfile
+drop cascades to table multi_segfile
+drop cascades to table empty_segfiles
+drop cascades to table boundary_eq
+drop cascades to table boundary_minus
+drop cascades to table boundary_plus
+drop cascades to table tiny
+drop cascades to table empty
+drop cascades to function t_for(integer)
+drop cascades to table wide_cols
+drop cascades to table block_8k
+drop cascades to table block_2m
+drop cascades to table compress_zstd
+drop cascades to table compress_zlib
+drop cascades to table compress_rle
+drop cascades to table added_col
+drop cascades to table vis_scattered
+drop cascades to table vis_chunks
+drop cascades to table vis_updated
+drop cascades to table vis_gaps
+drop cascades to table filt
+drop cascades to table part
+drop cascades to table outer_rows
+drop cascades to table inner_rows
+drop cascades to table plan_small
+drop cascades to table plan_mid
+drop cascades to table plan_big
+drop cascades to table plan_option
+drop cascades to table plan_row_one
+drop cascades to table plan_row_three

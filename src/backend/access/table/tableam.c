@@ -24,6 +24,7 @@
 #include "access/syncscan.h"
 #include "access/tableam.h"
 #include "access/xact.h"
+#include "cdb/cdbaocsam.h"
 #include "optimizer/plancat.h"
 #include "port/pg_bitutils.h"
 #include "storage/bufmgr.h"
@@ -218,7 +219,7 @@ table_parallelscan_initialize(Relation rel, ParallelTableScanDesc pscan,
 			appendOnlyMetaDataSnapshot = GetTransactionSnapshot();
 		}
 		seginfo = GetAllAOCSFileSegInfo(rel, appendOnlyMetaDataSnapshot, &segfile_count, NULL);
-		bpscan->phs_nblocks = segfile_count;
+		bpscan->phs_nblocks = aocs_parallelscan_compute_chunks(rel, seginfo, segfile_count);
 		if (seginfo)
 		{
 			FreeAllAOCSSegFileInfo(seginfo, segfile_count);

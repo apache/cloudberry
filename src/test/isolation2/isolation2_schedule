@@ -326,6 +326,9 @@ test: aocs_unique_index
 test: uao/ao_unique_index_vacuum_row
 test: uao/ao_unique_index_vacuum_column
 
+# Concurrent changes during a parallel scan of an AO/CO table (uses fault injector)
+test: appendonly_parallel_scan_concurrency
+
 test: spilling_hashagg
 
 test: local_directory_table_mixed

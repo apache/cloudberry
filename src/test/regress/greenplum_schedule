@@ -298,6 +298,9 @@ test: freeze_aux_tables
 # cbdb parallel test
 test: cbdb_parallel
 
+# parallel scans of append-optimized tables
+test: appendonly_parallel_scan
+
 # ORCA parallel append over partitioned tables
 test: orca_parallel_append
 
