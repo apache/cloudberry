@@ -79,11 +79,16 @@ INSERT INTO expr_key SELECT * FROM expr_key;
 CREATE INDEX expr_key_idx_x_t ON expr_key (x, t);
 VACUUM ANALYZE expr_key;
 
+-- ORCA may pick either an Index Scan or an Index Only Scan for the inner
+-- side depending on how much of expr_key the VACUUM above could mark
+-- all-visible, which varies with concurrently running tests. Pin the plan.
+SET optimizer_enable_indexonlyscan TO off;
 -- Ensure we get we get a cache miss and hit for each of the 20 distinct values
 SELECT explain_memoize('
 SELECT * FROM expr_key t1 INNER JOIN expr_key t2
 ON t1.x = t2.t::numeric AND t1.t::numeric = t2.x;', false);
 
+RESET optimizer_enable_indexonlyscan;
 DROP TABLE expr_key;
 
 -- Reduce work_mem and hash_mem_multiplier so that we see some cache evictions
