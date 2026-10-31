@@ -190,7 +190,7 @@ static void shareinput_release_callback(ResourceReleasePhase phase,
 										void *arg);
 
 static void shareinput_writer_notifyready(shareinput_Xslice_reference *ref);
-static void shareinput_reader_waitready(shareinput_Xslice_reference *ref);
+static void shareinput_reader_waitready(ShareInputScanState *node);
 static void shareinput_reader_notifydone(shareinput_Xslice_reference *ref, int nconsumers);
 static void shareinput_writer_waitdone(shareinput_Xslice_reference *ref, int nconsumers);
 
@@ -312,7 +312,7 @@ init_tuplestore_state(ShareInputScanState *node)
 
 			Assert(sisc->cross_slice);
 
-			shareinput_reader_waitready(node->ref);
+			shareinput_reader_waitready(node);
 
 			shareinput_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), sisc->share_id);
 			ts = tuplestore_open_shared(get_shareinput_fileset(), rwfile_prefix);
@@ -929,6 +929,45 @@ shareinput_release_callback(ResourceReleasePhase phase,
 	}
 }
 
+/* Error context remains useful when cancellation prevents EXPLAIN output. */
+typedef struct ShareInputWaitContext
+{
+	shareinput_Xslice_reference *ref;
+	bool		is_reader;
+	instr_time	start;
+} ShareInputWaitContext;
+
+static void
+shareinput_wait_error_context(void *arg)
+{
+	ShareInputWaitContext *ctx = arg;
+	instr_time	elapsed;
+
+	INSTR_TIME_SET_CURRENT(elapsed);
+	INSTR_TIME_SUBTRACT(elapsed, ctx->start);
+	if (ctx->is_reader)
+		errcontext("ShareInputScan consumer (share_id=%d) in slice %d blocked %.3f ms waiting for the producer slice to publish",
+				   ctx->ref->share_id, currentSliceId,
+				   INSTR_TIME_GET_MILLISEC(elapsed));
+	else
+		errcontext("ShareInputScan producer (share_id=%d) in slice %d blocked %.3f ms waiting for consumer slices to finish reading",
+				   ctx->ref->share_id, currentSliceId,
+				   INSTR_TIME_GET_MILLISEC(elapsed));
+}
+
+/* Account on both success and ERROR, before executor error hooks run. */
+static void
+shareinput_record_wait(ShareInputScanState *node, instr_time start)
+{
+	instr_time	end;
+	EState	   *estate = node->ss.ps.state;
+
+	INSTR_TIME_SET_CURRENT(end);
+	INSTR_TIME_ACCUM_DIFF(node->waitready_time, end, start);
+	estate->es_cross_slice_wait = Max(estate->es_cross_slice_wait,
+									INSTR_TIME_GET_DOUBLE(node->waitready_time));
+}
+
 /*
  * shareinput_reader_waitready
  *
@@ -938,34 +977,59 @@ shareinput_release_callback(ResourceReleasePhase phase,
  *  This is a blocking operation.
  */
 static void
-shareinput_reader_waitready(shareinput_Xslice_reference *ref)
+shareinput_reader_waitready(ShareInputScanState *node)
 {
+	shareinput_Xslice_reference *ref = node->ref;
 	shareinput_Xslice_state *state = ref->xslice_state;
+	ShareInputWaitContext waitctx;
+	ErrorContextCallback errcallback;
 
 	elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC READER (shareid=%d, slice=%d): Waiting for producer",
 		 ref->share_id, currentSliceId);
 
-	/*
-	 * Wait until the the producer sets 'ready' to true. The producer will
-	 * use the condition variable to wake us up.
-	 */
-	for (;;)
+	waitctx.ref = ref;
+	waitctx.is_reader = true;
+	INSTR_TIME_SET_CURRENT(waitctx.start);
+	errcallback.callback = shareinput_wait_error_context;
+	errcallback.arg = &waitctx;
+	errcallback.previous = error_context_stack;
+	error_context_stack = &errcallback;
+
+	PG_TRY();
 	{
 		/*
-		 * set state->ready via pg_atomic_exchange_u32() in shareinput_writer_notifyready()
-		 * it acts as a memory barrier, so always get the latest value here
+		 * Wait until the producer sets 'ready' to true. The producer will
+		 * use the condition variable to wake us up.
 		 */
-		int ready = pg_atomic_read_u32(&state->ready);
-		if (ready)
-			break;
+		for (;;)
+		{
+			/*
+			 * set state->ready via pg_atomic_exchange_u32() in shareinput_writer_notifyready()
+			 * it acts as a memory barrier, so always get the latest value here
+			 */
+			int ready = pg_atomic_read_u32(&state->ready);
+			if (ready)
+				break;
 
-		ConditionVariableSleep(&state->ready_done_cv, WAIT_EVENT_SHAREINPUT_SCAN);
+			ConditionVariableSleep(&state->ready_done_cv, WAIT_EVENT_SHAREINPUT_SCAN);
+		}
+		ConditionVariableCancelSleep();
 	}
-	ConditionVariableCancelSleep();
+	PG_CATCH();
+	{
+		error_context_stack = errcallback.previous;
+		ConditionVariableCancelSleep();
+		shareinput_record_wait(node, waitctx.start);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+	error_context_stack = errcallback.previous;
+	shareinput_record_wait(node, waitctx.start);
 
 	/* it's ready now */
-	elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC READER (shareid=%d, slice=%d): Wait ready got writer's handshake",
-		 ref->share_id, currentSliceId);
+	elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC READER (shareid=%d, slice=%d): Wait ready got writer's handshake after %.3f ms",
+		 ref->share_id, currentSliceId,
+		 INSTR_TIME_GET_MILLISEC(node->waitready_time));
 }
 
 /*
@@ -1028,10 +1092,21 @@ static void
 shareinput_writer_waitdone(shareinput_Xslice_reference *ref, int nconsumers)
 {
 	shareinput_Xslice_state *state = ref->xslice_state;
+	ShareInputWaitContext waitctx;
+	ErrorContextCallback errcallback;
+	instr_time	elapsed;
 
 	int ready = pg_atomic_read_u32(&state->ready);
 	if (!ready)
 		elog(ERROR, "shareinput_writer_waitdone() called without creating the tuplestore");
+
+	waitctx.ref = ref;
+	waitctx.is_reader = false;
+	INSTR_TIME_SET_CURRENT(waitctx.start);
+	errcallback.callback = shareinput_wait_error_context;
+	errcallback.arg = &waitctx;
+	errcallback.previous = error_context_stack;
+	error_context_stack = &errcallback;
 
 	ConditionVariablePrepareToSleep(&state->ready_done_cv);
 	for (;;)
@@ -1057,8 +1132,13 @@ shareinput_writer_waitdone(shareinput_Xslice_reference *ref, int nconsumers)
 		break;
 	}
 
-	elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC WRITER (shareid=%d, slice=%d): got DONE message from %d readers",
-		 ref->share_id, currentSliceId, nconsumers);
+	error_context_stack = errcallback.previous;
+	INSTR_TIME_SET_CURRENT(elapsed);
+	INSTR_TIME_SUBTRACT(elapsed, waitctx.start);
+
+	elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC WRITER (shareid=%d, slice=%d): got DONE message from %d readers after %.3f ms",
+		 ref->share_id, currentSliceId, nconsumers,
+		 INSTR_TIME_GET_MILLISEC(elapsed));
 
 	/* it's all done now */
 }
