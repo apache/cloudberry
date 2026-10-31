@@ -141,21 +141,32 @@ else
   echo "Warning: Source spec file not found at $SOURCE_SPEC_FILE, assuming it is already in ~/rpmbuild/SPECS/"
 fi
 
-# Copy Apache mandatory compliance files to rpmbuild/SOURCES
+# Copy Apache mandatory compliance files to rpmbuild/SOURCES.
+#
+# The binary packages ship the -binary variants, which describe what is
+# actually inside the package rather than what is in the source release:
+# they cover the components downloaded and built during packaging (psutil,
+# PyYAML, PyGreSQL) and the bundled Xerces-C, and they omit components that
+# only tests or other platforms use.  They are installed under their plain
+# names so that the package contains a LICENSE, a NOTICE and a licenses/
+# directory that describe the package itself.
 echo "Copying compliance files from $PROJECT_ROOT to ~/rpmbuild/SOURCES..."
-for f in LICENSE NOTICE DISCLAIMER; do
-    if [ -f "$PROJECT_ROOT/$f" ]; then
-        cp -af "$PROJECT_ROOT/$f" ~/rpmbuild/SOURCES/
-    else
-        echo "Warning: $f not found in $PROJECT_ROOT"
+for mapping in "LICENSE-binary:LICENSE" "NOTICE-binary:NOTICE" "DISCLAIMER:DISCLAIMER"; do
+    src="${mapping%%:*}"
+    dst="${mapping##*:}"
+    if [ ! -f "$PROJECT_ROOT/$src" ]; then
+        echo "Error: required compliance file $src not found in $PROJECT_ROOT"
+        exit 1
     fi
+    cp -af "$PROJECT_ROOT/$src" ~/rpmbuild/SOURCES/"$dst"
 done
 
-if [ -d "$PROJECT_ROOT/licenses" ]; then
-    cp -af "$PROJECT_ROOT/licenses" ~/rpmbuild/SOURCES/
-else
-    echo "Warning: licenses directory not found in $PROJECT_ROOT"
+if [ ! -d "$PROJECT_ROOT/licenses-binary" ]; then
+    echo "Error: required licenses-binary directory not found in $PROJECT_ROOT"
+    exit 1
 fi
+rm -rf ~/rpmbuild/SOURCES/licenses
+cp -af "$PROJECT_ROOT/licenses-binary" ~/rpmbuild/SOURCES/licenses
 
 # Check if the spec file exists at the target location before proceeding
 if [ ! -f "$SPEC_FILE" ]; then
