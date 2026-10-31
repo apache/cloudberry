@@ -366,7 +366,7 @@ RemoveAppendonlyEntry(Oid relid)
 	}
 
 	/* Piggyback here to remove gp_fastsequence entries */
-	RemoveFastSequenceEntry(aosegrelid);
+	RemoveFastSequenceEntry(relid, aosegrelid);
 
 	/*
 	 * Delete the appendonly table entry from the catalog (pg_appendonly).
@@ -566,6 +566,8 @@ ATAOEntries(Form_pg_class relform1, Form_pg_class relform2,
 					 * follow suit.
 					 */
 					TransferAppendonlyEntries(relform1->oid, relform2->oid);
+					/* Remove the pg_attribute_encoding entries, since heap tables shouldn't have these. */
+					RemoveAttributeEncodingsByRelidNoCCI(relform1->oid);
 					break;
 				case AO_ROW_TABLE_AM_OID:
 					swapAppendonlyEntriesUsingTAM(relform1, relform2, frozenXid, cutoffMulti);
@@ -586,13 +588,13 @@ ATAOEntries(Form_pg_class relform1, Form_pg_class relform2,
 					/* For pg_appendonly entries, it's the same as AO->Heap. */
 					TransferAppendonlyEntries(relform1->oid, relform2->oid);
 					/* Remove the pg_attribute_encoding entries, since heap tables shouldn't have these. */
-					RemoveAttributeEncodingsByRelid(relform1->oid);
+					RemoveAttributeEncodingsByRelidNoCCI(relform1->oid);
 					break;
 				case AO_ROW_TABLE_AM_OID:
 					/* For pg_appendonly entries, it's same as AO->AO/CO. */
 					SwapAppendonlyEntries(relform1->oid, relform2->oid);
 					/* For pg_attribute_encoding entries, it's same as AOCO->heap.*/
-					RemoveAttributeEncodingsByRelid(relform1->oid);
+					RemoveAttributeEncodingsByRelidNoCCI(relform1->oid);
 					break;
 				case AO_COLUMN_TABLE_AM_OID:
 					swapAppendonlyEntriesUsingTAM(relform1, relform2, frozenXid, cutoffMulti);

@@ -50,6 +50,7 @@ typedef struct MemTupleBinding
 	TupleDesc tupdesc;
 	int column_align;
 	int null_bitmap_extra_size;  /* extra bytes required by null bitmap */
+	int natts; 			/* number of attributes in memtuple (note: it could be smaller than tupdesc->natts) */
 
 	MemTupleBindingCols bind;  	/* 2 bytes offsets */
 	MemTupleBindingCols large_bind; /* large tup, 4 bytes offsets */
@@ -128,7 +129,7 @@ static inline void memtuple_set_hasext(MemTuple mtup)
 
 
 extern void destroy_memtuple_binding(MemTupleBinding *pbind);
-extern MemTupleBinding* create_memtuple_binding(TupleDesc tupdesc);
+extern MemTupleBinding* create_memtuple_binding(TupleDesc tupdesc, int expected_natts);
 
 extern Datum memtuple_getattr(MemTuple mtup, MemTupleBinding *pbind, int attnum, bool *isnull);
 extern bool memtuple_attisnull(MemTuple mtup, MemTupleBinding *pbind, int attnum);

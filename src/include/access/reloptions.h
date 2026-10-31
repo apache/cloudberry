@@ -302,17 +302,23 @@ extern void validate_and_adjust_options(StdRdOptions *result, relopt_value *opti
 
 /* attribute enconding specific functions */
 extern void validateAOCOColumnEncodingClauses(List *aocoColumnEncoding);
+extern ColumnReferenceStorageDirective *find_crsd(const char *column, List *stenc);
 extern List *transformColumnEncoding(const TableAmRoutine *tam, Relation rel, List *colDefs,
 										List *stenc, List *withOptions, List *parentenc,
 										bool explicitOnly, bool createDefaultOne, bool appendonly);
 
 List* transfromColumnEncodingAocoRootPartition(List *colDefs, List *stenc, List *withOptions, bool errorOnEncodingClause);
 
+
 extern List *transformStorageEncodingClause(List *options, bool validate);
+extern List *updateEncodingList(List *current_encodings,
+								  ColumnReferenceStorageDirective *new_crsd, bool *is_updated);
 extern List *form_default_storage_directive(List *enc);
 extern bool is_storage_encoding_directive(const char *name);
 extern bool reloptions_has_opt(List *opts, const char *name);
 extern List *build_ao_rel_storage_opts(List *opts, Relation rel);
+extern List *get_cols_for_new_reloption_defaults(Relation rel, Datum newOptions,
+												 List *current_new_crsds);
 
 extern relopt_value *
 parseRelOptions(Datum options, bool validate, relopt_kind kind, int *numrelopts);

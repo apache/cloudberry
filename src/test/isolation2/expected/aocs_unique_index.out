@@ -13,10 +13,10 @@ INSERT INTO unique_index_ao_column SELECT * FROM generate_series(1, 658491);
 INSERT 658491
 -- should conflict
 INSERT INTO unique_index_ao_column VALUES (1);
-ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg0 192.168.0.148:7002 pid=721860)
+ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg0 127.0.0.1:11002 pid=905135)
 DETAIL:  Key (a)=(1) already exists.
 INSERT INTO unique_index_ao_column VALUES (658491);
-ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg0 192.168.0.148:7002 pid=721860)
+ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg0 127.0.0.1:11002 pid=905135)
 DETAIL:  Key (a)=(658491) already exists.
 -- should not conflict
 INSERT INTO unique_index_ao_column VALUES (658492);
@@ -33,7 +33,7 @@ INSERT INTO unique_index_ao_column SELECT * FROM generate_series(1, 658491);
 INSERT 658491
 -- should conflict
 INSERT INTO unique_index_ao_column VALUES (1);
-ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg1 192.168.0.148:7003 pid=721861)
+ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg0 127.0.0.1:11002 pid=905135)
 DETAIL:  Key (a)=(1) already exists.
 END;
 END
@@ -48,7 +48,7 @@ INSERT INTO unique_index_ao_column SELECT * FROM generate_series(1, 658491);
 INSERT 658491
 -- should conflict
 INSERT INTO unique_index_ao_column VALUES (658491);
-ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg0 192.168.0.148:7002 pid=721860)
+ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg0 127.0.0.1:11002 pid=905135)
 DETAIL:  Key (a)=(658491) already exists.
 END;
 END
@@ -124,13 +124,13 @@ INSERT 1
 2: COMMIT;
 COMMIT
 3<:  <... completed>
-ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg0 192.168.0.148:7002 pid=722493)
+ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg0 127.0.0.1:11002 pid=905368)
 DETAIL:  Key (a)=(1) already exists.
 4<:  <... completed>
-ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg0 192.168.0.148:7002 pid=722502)
+ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg1 127.0.0.1:11003 pid=905378)
 DETAIL:  Key (a)=(658490) already exists.
 5<:  <... completed>
-ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg1 192.168.0.148:7003 pid=722513)
+ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg2 127.0.0.1:11004 pid=905437)
 DETAIL:  Key (a)=(658491) already exists.
 1: COMMIT;
 COMMIT
@@ -203,7 +203,7 @@ ABORT
 3: INSERT INTO unique_index_ao_column VALUES(102);
 INSERT 1
 4: INSERT INTO unique_index_ao_column VALUES(2);
-ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg0 192.168.0.148:7002 pid=659656)
+ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg1 127.0.0.1:11003 pid=905378)
 DETAIL:  Key (a)=(2) already exists.
 5: INSERT INTO unique_index_ao_column VALUES(202);
 INSERT 1
@@ -263,7 +263,7 @@ SELECT gp_inject_fault('appendonly_insert', 'reset', dbid) FROM gp_segment_confi
  Success:        
 (3 rows)
 1<:  <... completed>
-ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg1 192.168.0.148:7003 pid=828519)
+ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg1 127.0.0.1:11003 pid=905348)
 DETAIL:  Key (a)=(4) already exists.
 2<:  <... completed>
 INSERT 1
@@ -360,7 +360,7 @@ SELECT gp_inject_fault('appendonly_insert', 'reset', dbid) FROM gp_segment_confi
 (3 rows)
 
 1<:  <... completed>
-ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg2 192.168.0.148:7004 pid=735802)
+ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg2 127.0.0.1:11004 pid=905349)
 DETAIL:  Key (a)=(1321075) already exists.
 2<:  <... completed>
 INSERT 1
@@ -433,7 +433,7 @@ INSERT 1
 
 -- conflict should be detected within the same subtx.
 1: INSERT INTO unique_index_ao_column VALUES(1);
-ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg1 192.168.0.148:7003 pid=3397768)
+ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg2 127.0.0.1:11004 pid=905349)
 DETAIL:  Key (a)=(1) already exists.
 -- the concurrent tx should now succeed.
 2<:  <... completed>
@@ -515,7 +515,7 @@ ABORT
 ---
 (0 rows)
 2: INSERT INTO unique_index_ao_column VALUES(2);
-ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg0 192.168.0.148:7002 pid=3417500)
+ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg0 127.0.0.1:11002 pid=905356)
 DETAIL:  Key (a)=(2) already exists.
 2: ABORT;
 ABORT
@@ -536,8 +536,8 @@ ALTER table unique_index_ao_column ADD CONSTRAINT a_unique UNIQUE(a);
 ALTER
 -- should conflict
 INSERT INTO unique_index_ao_column VALUES (1);
+ERROR:  duplicate key value violates unique constraint "a_unique"  (seg0 127.0.0.1:11002 pid=905135)
 DETAIL:  Key (a)=(1) already exists.
-ERROR:  duplicate key value violates unique constraint "a_unique"
 ALTER table unique_index_ao_column DROP CONSTRAINT a_unique;
 ALTER
 
@@ -545,8 +545,8 @@ INSERT INTO unique_index_ao_column VALUES (1);
 INSERT 1
 -- should failed
 ALTER table unique_index_ao_column ADD CONSTRAINT a_unique UNIQUE(a);
+ERROR:  could not create unique index "a_unique"  (seg1 127.0.0.1:11003 pid=905136)
 DETAIL:  Key (a)=(1) is duplicated.
-ERROR:  could not create unique index "a_unique"
 
 DROP TABLE unique_index_ao_column;
 DROP
@@ -567,7 +567,138 @@ INSERT INTO unique_index_ao_column VALUES (1,2);
 INSERT 1
 -- should conflict
 INSERT INTO unique_index_ao_column VALUES (1,1);
+ERROR:  duplicate key value violates unique constraint "a_b_unique"  (seg0 127.0.0.1:11002 pid=905135)
 DETAIL:  Key (a, b)=(1, 1) already exists.
-ERROR:  duplicate key value violates unique constraint "a_b_unique"
+
+--------------------------------------------------------------------------------
+--------------- Tests for the unique-check column choice ------------------------
+--------------------------------------------------------------------------------
+
+-- GPDB_PORT: cbdb's copy of this test does not drop its last table; the
+-- scenarios below reuse the same name.
+DROP TABLE IF EXISTS unique_index_ao_column;
+DROP
+
+-- The column whose block directory entries are consulted during uniqueness
+-- checks must be the same column for which insert commands persist their
+-- placeholder row, and its choice must not depend on mutable state such as
+-- segfile eofs (see aocs_unique_check_col()).
+--
+-- These tests use multi-column tables with a highly-compressible constant
+-- column: after a bulk load, that column has the smallest eof, which used to
+-- make readers consult it (as the min-eof "anchor" column) while writers
+-- placed their placeholder row on the first non-dropped column, letting
+-- same-command and concurrent duplicates slip through undetected.
+
+-- Case A: same-command and cross-command duplicates after a bulk load.
+CREATE TABLE unique_index_ao_column (a bigint unique, b bigint, c bigint) USING ao_column WITH (compresstype=zstd) DISTRIBUTED REPLICATED;
+CREATE
+INSERT INTO unique_index_ao_column SELECT i, i, 1 FROM generate_series(1, 10000) i;
+INSERT 10000
+-- should conflict (same command)
+INSERT INTO unique_index_ao_column SELECT v.x, 0, 1 FROM (VALUES (-1), (-1)) v(x);
+ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg0 127.0.0.1:11002 pid=905135)
+DETAIL:  Key (a)=(-1) already exists.
+-- should conflict (cross command, with a committed row)
+INSERT INTO unique_index_ao_column VALUES (-2, 0, 1);
+INSERT 1
+INSERT INTO unique_index_ao_column VALUES (-2, 0, 1);
+ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg0 127.0.0.1:11002 pid=905135)
+DETAIL:  Key (a)=(-2) already exists.
+-- should not conflict
+INSERT INTO unique_index_ao_column VALUES (-3, 0, 1);
+INSERT 1
+SELECT a, count(*) FROM unique_index_ao_column WHERE a < 0 GROUP BY a ORDER BY a;
+ a  | count 
+----+-------
+ -3 | 1     
+ -2 | 1     
+(2 rows)
+DROP TABLE unique_index_ao_column;
+DROP
+
+-- Case B: conflict with a concurrent to-be-committed transaction after a bulk
+-- load (only the placeholder row can reveal the in-progress conflict).
+CREATE TABLE unique_index_ao_column (a bigint unique, b bigint, c bigint) USING ao_column WITH (compresstype=zstd) DISTRIBUTED REPLICATED;
+CREATE
+INSERT INTO unique_index_ao_column SELECT i, i, 1 FROM generate_series(1, 10000) i;
+INSERT 10000
+1: BEGIN;
+BEGIN
+1: INSERT INTO unique_index_ao_column VALUES (-1, 0, 1);
+INSERT 1
+-- should block on tx 1's in-progress insert
+2&: INSERT INTO unique_index_ao_column VALUES (-1, 0, 1);  <waiting ...>
+1: COMMIT;
+COMMIT
+2<:  <... completed>
+ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg0 127.0.0.1:11002 pid=905356)
+DETAIL:  Key (a)=(-1) already exists.
+SELECT a, count(*) FROM unique_index_ao_column WHERE a < 0 GROUP BY a ORDER BY a;
+ a  | count 
+----+-------
+ -1 | 1     
+(1 row)
+DROP TABLE unique_index_ao_column;
+DROP
+
+-- Case C: with the first column dropped, the unique-check column moves to the
+-- first non-dropped complete column, on both the write and the read side.
+CREATE TABLE unique_index_ao_column (dropme int, a bigint unique, c bigint) USING ao_column WITH (compresstype=zstd) DISTRIBUTED REPLICATED;
+CREATE
+INSERT INTO unique_index_ao_column SELECT 0, i, 1 FROM generate_series(1, 10000) i;
+INSERT 10000
+ALTER TABLE unique_index_ao_column DROP COLUMN dropme;
+ALTER
+-- should conflict (same command)
+INSERT INTO unique_index_ao_column SELECT v.x, 1 FROM (VALUES (-1), (-1)) v(x);
+ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg0 127.0.0.1:11002 pid=905135)
+DETAIL:  Key (a)=(-1) already exists.
+-- should conflict (cross command, with a committed row)
+INSERT INTO unique_index_ao_column VALUES (1, 1);
+ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg1 127.0.0.1:11003 pid=905136)
+DETAIL:  Key (a)=(1) already exists.
+-- should not conflict
+INSERT INTO unique_index_ao_column VALUES (-3, 1);
+INSERT 1
+SELECT a, count(*) FROM unique_index_ao_column WHERE a < 0 GROUP BY a ORDER BY a;
+ a  | count 
+----+-------
+ -3 | 1     
+(1 row)
+DROP TABLE unique_index_ao_column;
+DROP
+
+-- Case D: a column added in missing mode is "incomplete": its block directory
+-- does not cover rows predating the ADD COLUMN, so it must never be picked as
+-- the unique-check column even though it has the smallest eof.
+CREATE TABLE unique_index_ao_column (a bigint unique, b bigint) USING ao_column WITH (compresstype=zstd) DISTRIBUTED REPLICATED;
+CREATE
+INSERT INTO unique_index_ao_column SELECT i, i FROM generate_series(1, 10000) i;
+INSERT 10000
+ALTER TABLE unique_index_ao_column ADD COLUMN c int DEFAULT 1;
+ALTER
+-- the added column is incomplete (lastrownums is set)
+SELECT attnum FROM pg_attribute_encoding WHERE attrelid = 'unique_index_ao_column'::regclass AND lastrownums IS NOT NULL;
+ attnum 
+--------
+ 3      
+(1 row)
+-- should conflict (same command)
+INSERT INTO unique_index_ao_column SELECT v.x, 0, 1 FROM (VALUES (-1), (-1)) v(x);
+ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg0 127.0.0.1:11002 pid=905135)
+DETAIL:  Key (a)=(-1) already exists.
+-- should conflict with a row predating the ADD COLUMN
+INSERT INTO unique_index_ao_column VALUES (1, 0, 1);
+ERROR:  duplicate key value violates unique constraint "unique_index_ao_column_a_key"  (seg2 127.0.0.1:11004 pid=905137)
+DETAIL:  Key (a)=(1) already exists.
+-- should not conflict
+INSERT INTO unique_index_ao_column VALUES (-3, 0, 1);
+INSERT 1
+SELECT a, count(*) FROM unique_index_ao_column WHERE a < 0 GROUP BY a ORDER BY a;
+ a  | count 
+----+-------
+ -3 | 1     
+(1 row)
 DROP TABLE unique_index_ao_column;
 DROP

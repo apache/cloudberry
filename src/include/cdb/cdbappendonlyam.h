@@ -37,6 +37,7 @@
 #include "utils/snapshot.h"
 
 #include "access/appendonlytid.h"
+#include "access/appendonlywriter.h"
 
 #include "cdb/cdbbufferedappend.h"
 #include "cdb/cdbbufferedread.h"
@@ -53,6 +54,16 @@
 #define MAX_APPENDONLY_BLOCK_SIZE			 (2 * 1024 * 1024)
 #define DEFAULT_VARBLOCK_TEMPSPACE_LEN   	 (4 * 1024)
 #define DEFAULT_FS_SAFE_WRITE_SIZE			 (0)
+
+/*
+ * Check if an attribute value is missing in an AO/CO row according to the row number
+ * and the mapping from attnum to "lastrownum" for the corresponding table/segment.
+ *
+ * See comment for AppendOnlyExecutorReadBlock_BindingInit() for an explanation 
+ * on AO tables, which applies to CO tables as well.
+ */
+#define AO_ATTR_VAL_IS_MISSING(rowNum, colno, segmentFileNum, attnum_to_rownum) \
+		((rowNum) <= (attnum_to_rownum)[(colno) * MAX_AOREL_CONCURRENCY + (segmentFileNum)])
 
 extern AppendOnlyBlockDirectory *GetAOBlockDirectory(Relation relation);
 
@@ -127,6 +138,8 @@ typedef struct AppendOnlyExecutorReadBlock
 
 	AppendOnlyStorageRead	*storageRead;
 
+	AttrNumber 		curLargestAttnum; /* the largest attnum stored in memtuple currently being read */
+	int64 			*attnum_to_rownum; /*attnum to rownum mapping, used in building memtuple binding */
 	MemTupleBinding *mt_bind;
 	/*
 	 * When reading a segfile that's using version < AOSegfileFormatVersion_GP5,
@@ -521,6 +534,10 @@ extern bool AppendOnlyExecutorReadBlock_ScanNextTuple(AppendOnlyExecutorReadBloc
 										  TupleTableSlot *slot);
 
 extern void AppendOnlyExecutorReadBlock_GetContents(AppendOnlyExecutorReadBlock *executorReadBlock);
+extern bool appendonly_positionscan(AppendOnlyScanDesc aoscan,
+									AppendOnlyBlockDirectoryEntry *dirEntry,
+									int fsInfoIdx);
+
 /*
  * Update total bytes read for the entire scan. If the block was compressed,
  * update it with the compressed length. If the block was not compressed, update

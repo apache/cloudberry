@@ -87,6 +87,18 @@ GetTableAmRoutine(Oid amhandler)
 	Assert(routine->relation_nontransactional_truncate != NULL);
 	Assert(routine->relation_copy_data != NULL);
 	Assert(routine->relation_copy_for_cluster != NULL);
+
+	/*
+	 * relation_add_columns and relation_rewrite_columns are optional: they let
+	 * an access method add or rewrite individual columns without rewriting the
+	 * relation, and only ao_column can do that.  The in-tree access methods
+	 * supply stubs that just raise an error, but out-of-tree ones (PAX) leave
+	 * them NULL, so they must not be required here -- requiring them turns
+	 * loading such an access method into an assertion failure.
+	 * table_relation_add_columns() and table_relation_rewrite_columns() check
+	 * for NULL and report an unsupported operation instead.
+	 */
+
 	Assert(routine->relation_vacuum != NULL);
 	Assert(routine->scan_analyze_next_block != NULL);
 	Assert(routine->scan_analyze_next_tuple != NULL);

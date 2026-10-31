@@ -2418,7 +2418,21 @@ heap_drop_with_catalog(Oid relid)
 		rel->rd_rel->relkind == RELKIND_MATVIEW ||
 		rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 	{
-		RemoveAttributeEncodingsByRelid(relid);
+		/*
+		 * Skip the command counter increment for a directory table: its
+		 * caller is not finished reading the catalog yet.  performDeletion()
+		 * runs DirectoryTableDropStorage() right after this returns, and that
+		 * still has to find the pg_directory_table row this very command just
+		 * deleted above -- a counter increment here would make the deletion
+		 * visible and turn that into "cache lookup failed for directory
+		 * table".  Nothing in the directory table path needs the increment:
+		 * it is there for relations whose pg_attribute_encoding rows get
+		 * touched again later in the same command.
+		 */
+		if (rel->rd_rel->relkind == RELKIND_DIRECTORY_TABLE)
+			RemoveAttributeEncodingsByRelidNoCCI(relid);
+		else
+			RemoveAttributeEncodingsByRelid(relid);
 	}
 
 	/*
@@ -2568,6 +2582,66 @@ RelationClearMissing(Relation rel)
 
 	/*
 	 * Our update of the pg_attribute rows will force a relcache rebuild, so
+	 * there's nothing else to do here.
+	 */
+	table_close(attr_rel, RowExclusiveLock);
+}
+
+/* 
+ * GPDB: similar to RelationClearMissing, but only clearing for one column.
+ * Currently used only for CO tables when we are rewriting a specific column.
+ */
+void
+RelationClearMissingByAttname(Relation rel, char *attname)
+{
+	Relation	attr_rel;
+	Oid			relid = RelationGetRelid(rel);
+	Datum		repl_val[Natts_pg_attribute];
+	bool		repl_null[Natts_pg_attribute];
+	bool		repl_repl[Natts_pg_attribute];
+	Form_pg_attribute attrtuple;
+	HeapTuple	tuple,
+				newtuple;
+
+	Assert(attname);
+
+	/* Get a lock on pg_attribute */
+	attr_rel = table_open(AttributeRelationId, RowExclusiveLock);
+
+	tuple = SearchSysCache2(ATTNAME,
+							ObjectIdGetDatum(relid),
+							CStringGetDatum(attname));
+	if (!HeapTupleIsValid(tuple))	/* shouldn't happen */
+		elog(ERROR, "cache lookup failed for attribute %s of relation %u",
+			 attname, relid);
+
+	attrtuple = (Form_pg_attribute) GETSTRUCT(tuple);
+
+	/* ignore if the attribute is not missing */
+	if (attrtuple->atthasmissing)
+	{
+		memset(repl_val, 0, sizeof(repl_val));
+		memset(repl_null, false, sizeof(repl_null));
+		memset(repl_repl, false, sizeof(repl_repl));
+
+		repl_val[Anum_pg_attribute_atthasmissing - 1] = BoolGetDatum(false);
+		repl_null[Anum_pg_attribute_attmissingval - 1] = true;
+
+		repl_repl[Anum_pg_attribute_atthasmissing - 1] = true;
+		repl_repl[Anum_pg_attribute_attmissingval - 1] = true;
+
+		newtuple = heap_modify_tuple(tuple, RelationGetDescr(attr_rel),
+									 repl_val, repl_null, repl_repl);
+
+		CatalogTupleUpdate(attr_rel, &newtuple->t_self, newtuple);
+
+		heap_freetuple(newtuple);
+	}
+
+	ReleaseSysCache(tuple);
+
+	/*
+	 * Our update of the pg_attribute row will force a relcache rebuild, so
 	 * there's nothing else to do here.
 	 */
 	table_close(attr_rel, RowExclusiveLock);

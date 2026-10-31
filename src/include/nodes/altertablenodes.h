@@ -23,6 +23,17 @@
 #define ALTERTABLENODES_H
 
 /*
+ * Which column-level rewrite an AOCO table is performing.  Defined here, not
+ * in cdbaocsam.h, because NewColumnValue below has a field of this type and
+ * gen_node_support.pl only learns about enums from the headers it reads.
+ */
+typedef enum AOCSWriteColumnOperation
+{
+	AOCSADDCOLUMN,				/* ADD COLUMN */
+	AOCSREWRITECOLUMN,			/* ALTER COLUMN TYPE */
+	AOCSADDCOLUMN_MISSINGMODE	/* ADD COLUMN (missing mode) */
+} AOCSWriteColumnOperation;
+/*
  * GPDB: Moved here from tablecmds.c
  *
  * State information for ALTER TABLE
@@ -32,7 +43,7 @@
  * plus any child tables that are affected).  We save lists of subcommands
  * to apply to this table (possibly modified by parse transformation steps);
  * these lists will be executed in Phase 2.  If a Phase 3 step is needed,
- * necessary information is stored in the constraints and newvals lists.
+ * necessary information is stored in the constraints and newcolvals lists.
  *
  * Phase 2 is divided into multiple passes; subcommands are executed in
  * a pass determined by subcommand type.
@@ -50,8 +61,17 @@
 #define AT_PASS_ADD_INDEXCONSTR	7	/* ADD index-based constraints */
 #define AT_PASS_ADD_INDEX		8	/* ADD indexes */
 #define AT_PASS_ADD_OTHERCONSTR	9	/* ADD other constraints, defaults */
-#define AT_PASS_MISC			10	/* other stuff */
-#define AT_NUM_PASSES			11
+/*
+ * ALTER COLUMN SET ENCODING. Note: if you are going to reorder the macros,
+ * this has to be after ALTER COLUMN TYPE.
+ *
+ * GPDB_PORT: upstream numbers the passes differently -- cbdb has
+ * AT_PASS_ADD_INDEXCONSTR and AT_PASS_ADD_OTHERCONSTR that it does not -- so
+ * this is inserted before AT_PASS_MISC rather than taking upstream's values.
+ */
+#define AT_PASS_SET_ENCODING	10
+#define AT_PASS_MISC			11	/* other stuff */
+#define AT_NUM_PASSES			12
 
 typedef struct AlteredTableInfo
 {
@@ -123,6 +143,8 @@ typedef struct AlteredTableInfo
 	 */
 	List	   *beforeStmtLists;
 	List	   *constraintLists;
+
+	List	   *new_crsds;		/* new column reference storage directives */
 } AlteredTableInfo;
 
 typedef struct ExprState ExprState;
@@ -161,6 +183,8 @@ typedef struct NewColumnValue
 	Expr	   *expr;			/* expression to compute */
 	ExprState  *exprstate pg_node_attr(read_as(NULL), read_write_ignore);		/* execution state */
 	bool		is_generated;	/* is it a GENERATED expression? */
+	List 		*new_encoding; 	/* new column encoding options */
+	AOCSWriteColumnOperation op;/* operation being performed */
 } NewColumnValue;
 
 #endif							/* ALTERTABLENODES_H */

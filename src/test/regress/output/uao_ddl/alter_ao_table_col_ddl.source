@@ -111,6 +111,11 @@ SELECT 1 AS VisimapPresent FROM pg_appendonly WHERE visimaprelid is not NULL AND
 (1 row)
 
 insert into sto_alt_uao1 values ('5_zero', 5, '0_zero', 5, 5, 5, '{3}', 0, 0, 0);
+-- GPDB_PORT: this used to assert an absolute physical row count here.  ALTER
+-- COLUMN TYPE on a CO table now rewrites just the column instead of the whole
+-- table, so the dead rows left by the earlier UPDATEs and DELETE survive it and
+-- the absolute count is no longer 10.  Upstream switched to measuring the
+-- difference across the UPDATE, which is what the check is actually about.
 update sto_alt_uao1 set int4_col = int4_col+100;
 select count(int4_col) = 5 as passed from sto_alt_uao1;
  passed 
@@ -119,10 +124,11 @@ select count(int4_col) = 5 as passed from sto_alt_uao1;
 (1 row)
 
 set gp_select_invisible = true;
-select count(int4_col) from sto_alt_uao1;
- count 
--------
-    10
+-- check tuple count difference before and after UPDATE
+select count(int4_col) = :tupcount + 5 from sto_alt_uao1;
+ ?column? 
+----------
+ t
 (1 row)
 
 set gp_select_invisible = false;
@@ -146,3 +152,75 @@ select relfrozenxid from gp_dist_random('pg_class') c, pg_namespace n where
 (3 rows)
 
 COMMIT;
+-- Test VACUUM after the abortion of adding a column and inserting data, mainly test pg_attribute_encoding could
+-- handle this.
+CREATE TABLE IF NOT EXISTS uao_add_column_abortion (
+	id int,
+	name text
+)
+DISTRIBUTED BY (id);
+BEGIN;
+ALTER TABLE uao_add_column_abortion ADD COLUMN country text;
+INSERT INTO uao_add_column_abortion VALUES (1, 'abc', 'def'), (2, 'abc', 'def');
+ABORT;
+-- should work well
+VACUUM uao_add_column_abortion;
+-- test subtransaction
+BEGIN;
+ALTER TABLE uao_add_column_abortion ADD COLUMN country text;
+INSERT INTO uao_add_column_abortion VALUES (1, 'Mike', 'London'), (2, 'Jimmy', 'Seattle');
+SAVEPOINT sub;
+ALTER TABLE uao_add_column_abortion DROP COLUMN country;
+SELECT * FROM uao_add_column_abortion;
+ id | name  
+----+-------
+  2 | Jimmy
+  1 | Mike
+(2 rows)
+
+TRUNCATE TABLE uao_add_column_abortion;
+ROLLBACK TO sub;
+SELECT * FROM uao_add_column_abortion;
+ id | name  | country 
+----+-------+---------
+  2 | Jimmy | Seattle
+  1 | Mike  | London
+(2 rows)
+
+ABORT;
+SELECT * FROM uao_add_column_abortion;
+ id | name 
+----+------
+(0 rows)
+
+-- should work well
+VACUUM uao_add_column_abortion;
+-- clean
+DROP TABLE uao_add_column_abortion;
+-- @Description select from zero column AO/AOCS table
+--
+-- DROP COLUMN to zero column.
+CREATE TABLE uao_drop_col_to_zero__@amname@(a int);
+INSERT INTO uao_drop_col_to_zero__@amname@ SELECT * FROM generate_series(1,10);
+ALTER TABLE uao_drop_col_to_zero__@amname@ DROP COLUMN a;
+SELECT relnatts FROM pg_class WHERE relname = 'uao_drop_col_to_zero__@amname@';
+ relnatts 
+----------
+        1
+(1 row)
+
+SELECT count(*) FROM uao_drop_col_to_zero__@amname@;
+ count 
+-------
+    10
+(1 row)
+
+CREATE TABLE uao_drop_col_to_zero_ctas__@amname@ USING ao_row AS SELECT * FROM uao_drop_col_to_zero__@amname@;
+SELECT count(*) FROM uao_drop_col_to_zero_ctas__@amname@;
+ count 
+-------
+    10
+(1 row)
+
+DROP TABLE uao_drop_col_to_zero__@amname@;
+DROP TABLE uao_drop_col_to_zero_ctas__@amname@;

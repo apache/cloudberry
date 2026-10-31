@@ -278,8 +278,8 @@ drop table ccddl;
 -- We exclude the other tables leftover from other tests.
 select * from pg_attribute_encoding where
 	attrelid not in (select oid from pg_class where relname <> 'ccddl');
- attrelid | attnum | filenum | attoptions 
-----------+--------+---------+------------
+ attrelid | attnum | filenum | lastrownums | attoptions 
+----------+--------+---------+-------------+------------
 (0 rows)
 
 -- mix inline and default
@@ -1772,7 +1772,8 @@ alter table ccddl add column j int42 default '1'::int42;
 execute ccddlcheck;
  relname | attname | filenum | attoptions 
 ---------+---------+---------+------------
-(0 rows)
+ ccddl   | j       |       1 | 
+(1 row)
 
 drop table ccddl;
 create table ccddl (i int42) with(appendonly = true);
@@ -1783,7 +1784,8 @@ alter table ccddl add column j int42 default '1'::int42;
 execute ccddlcheck;
  relname | attname | filenum | attoptions 
 ---------+---------+---------+------------
-(0 rows)
+ ccddl   | j       |       1 | 
+(1 row)
 
 drop table ccddl;
 -- We used to accept SQL standard aliases for the built-in types,

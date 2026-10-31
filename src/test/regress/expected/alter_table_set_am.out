@@ -1,14 +1,17 @@
 -- Check changing table access method
 \set HIDE_TABLEAM off
+PREPARE attribute_encoding_check AS
+SELECT c.relname, a.attname, e.filenum, e.attoptions, e.lastrownums FROM pg_attribute_encoding e, pg_class c, pg_attribute a
+WHERE e.attrelid = c.oid AND e.attnum = a.attnum and e.attrelid = a.attrelid AND c.relname LIKE $1;
 -- Scenario 1: Changing to the same AM: it should have no effect but
 -- make sure it doesn't rewrite table or blow up existing reloptions:
 CREATE TABLE sameam_heap(a int, b int) WITH (fillfactor=70) DISTRIBUTED BY (a);
 CREATE TABLE sameam_heap2(a int, b int) WITH (fillfactor=70) DISTRIBUTED BY (a);
 CREATE TABLE sameam_ao(a int, b int) WITH (appendoptimized=true, orientation=row, compresstype=zlib, compresslevel=3);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE sameam_co(a int, b int) WITH (appendoptimized=true, orientation=column, compresstype=rle_type, compresslevel=3);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO sameam_heap SELECT i,i FROM generate_series(1,5) i;
 INSERT INTO sameam_heap2 SELECT i,i FROM generate_series(1,5) i;
@@ -18,7 +21,7 @@ CREATE TEMP TABLE relfilebeforesameam AS
     SELECT -1 segid, relfilenode FROM pg_class WHERE relname LIKE 'sameam_%'
     UNION SELECT gp_segment_id segid, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'sameam_%' ORDER BY segid;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- changing to the same access method shouldn't rewrite the table
 -- (i.e. the relfilenodes shouldn't change)
@@ -30,7 +33,7 @@ CREATE TEMP TABLE relfileaftersameam AS
     SELECT -1 segid, relfilenode FROM pg_class WHERE relname LIKE 'sameam_%'
     UNION SELECT gp_segment_id segid, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'sameam_%' ORDER BY segid;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- relfilenodes shouldn't change
 SELECT * FROM relfilebeforesameam EXCEPT SELECT * FROM relfileaftersameam;
@@ -59,15 +62,15 @@ INSERT INTO heap2ao2 SELECT i,i FROM generate_series(1,5) i;
 SELECT reloptions from pg_class where relname in ('heap2ao', 'heap2ao2');
    reloptions    
 -----------------
- 
  {fillfactor=70}
+ 
 (2 rows)
 
 CREATE TEMP TABLE relfilebeforeao AS
     SELECT -1 segid, relfilenode FROM pg_class WHERE relname in ('heap2ao', 'heap2ao2', 'heapi')
     UNION SELECT gp_segment_id segid, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname in ('heap2ao', 'heap2ao2', 'heapi') ORDER BY segid;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Set default storage options for the table to inherit from
 SET gp_default_storage_options = 'blocksize=65536, compresstype=zlib, compresslevel=5, checksum=true';
@@ -125,10 +128,10 @@ SELECT * FROM heap2ao2;
  a | b 
 ---+---
  1 | 1
+ 5 | 5
  2 | 2
  3 | 3
  4 | 4
- 5 | 5
 (5 rows)
 
 -- The tables and indexes should have been rewritten (should have different relfilenodes)
@@ -136,7 +139,7 @@ CREATE TEMP TABLE relfileafterao AS
     SELECT -1 segid, relfilenode FROM pg_class WHERE relname in ('heap2ao', 'heap2ao2', 'heapi')
     UNION SELECT gp_segment_id segid, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname in ('heap2ao', 'heap2ao2', 'heapi') ORDER BY segid;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM relfilebeforeao INTERSECT SELECT * FROM relfileafterao;
  segid | relfilenode 
@@ -147,9 +150,9 @@ SELECT * FROM relfilebeforeao INTERSECT SELECT * FROM relfileafterao;
 SELECT * FROM gp_toolkit.__gp_aoseg('heap2ao');
  segment_id | segno | eof | tupcount | varblockcount | eof_uncompressed | modcount | formatversion | state 
 ------------+-------+-----+----------+---------------+------------------+----------+---------------+-------
-          2 |     0 |  40 |        1 |             1 |               40 |        1 |             3 |     1
           0 |     0 |  72 |        3 |             1 |               88 |        1 |             3 |     1
           1 |     0 |  40 |        1 |             1 |               40 |        1 |             3 |     1
+          2 |     0 |  40 |        1 |             1 |               40 |        1 |             3 |     1
 (3 rows)
 
 SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('heap2ao')).* FROM gp_dist_random('gp_id');
@@ -160,9 +163,9 @@ SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('heap2ao')).* FROM gp_dist_rand
 SELECT gp_segment_id, (gp_toolkit.__gp_aoblkdir('heap2ao')).* FROM gp_dist_random('gp_id');
  gp_segment_id | tupleid | segno | columngroup_no | entry_no | first_row_no | file_offset | row_count 
 ---------------+---------+-------+----------------+----------+--------------+-------------+-----------
-             0 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         3
              1 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
              2 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
+             0 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         3
 (3 rows)
 
 SELECT * FROM gp_toolkit.__gp_aoseg('heap2ao2');
@@ -188,12 +191,12 @@ SELECT c.relname FROM pg_class c, pg_appendonly p WHERE c.relname LIKE 'heap2ao%
 
 -- check inherited tables
 CREATE TABLE heapbase (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE heapchild (c int) INHERITS (heapbase);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE heapbase2 (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE heapchild2 (c int) INHERITS (heapbase2);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -205,13 +208,13 @@ CREATE TEMP TABLE inheritrelfilebefore AS
     SELECT -1 segid, relfilenode FROM pg_class WHERE relname in ('heapbase', 'heapbase2')
     UNION SELECT gp_segment_id segid, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname in ('heapbase', 'heapbase2') ORDER BY segid;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TEMP TABLE inheritchildrelfilebefore AS
     SELECT -1 segid, relfilenode FROM pg_class WHERE relname in ('heapchild', 'heapchild2')
     UNION SELECT gp_segment_id segid, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname in ('heapchild', 'heapchild2') ORDER BY segid;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE heapbase SET ACCESS METHOD ao_row;
 ALTER TABLE heapbase2 SET WITH (appendoptimized=true);
@@ -254,10 +257,10 @@ SELECT reloptions from pg_class where relname in ('heapchild','heapchild2');
 SELECT c.relname, a.amname FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname LIKE 'heapbase%' OR c.relname LIKE 'heapchild%';
   relname   | amname 
 ------------+--------
- heapbase   | ao_row
- heapbase2  | ao_row
  heapchild  | heap
  heapchild2 | heap
+ heapbase   | ao_row
+ heapbase2  | ao_row
 (4 rows)
 
 -- Check data is intact
@@ -279,16 +282,16 @@ SELECT * FROM heapbase;
 SELECT * FROM heapbase2;
  a | b 
 ---+---
+ 5 | 5
+ 5 | 5
+ 1 | 1
+ 1 | 1
  2 | 2
  3 | 3
  4 | 4
  2 | 2
  3 | 3
  4 | 4
- 5 | 5
- 5 | 5
- 1 | 1
- 1 | 1
 (10 rows)
 
 -- relfile node should change for base table set to AO
@@ -296,7 +299,7 @@ CREATE TEMP TABLE inheritrelfileafter AS
     SELECT -1 segid, relfilenode FROM pg_class WHERE relname in ('heapbase', 'heapbase2')
     UNION SELECT gp_segment_id segid, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname in ('heapbase', 'heapbase2') ORDER BY segid;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM inheritrelfilebefore INTERSECT SELECT * FROM inheritrelfileafter;
  segid | relfilenode 
@@ -308,7 +311,7 @@ CREATE TEMP TABLE inheritchildrelfileafter AS
     SELECT -1 segid, relfilenode FROM pg_class WHERE relname in ('heapchild', 'heapchild2')
     UNION SELECT gp_segment_id segid, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname in ('heapchild', 'heapchild2') ORDER BY segid;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT count(*) FROM (SELECT * FROM inheritchildrelfilebefore UNION SELECT * FROM inheritchildrelfileafter)a;
  count 
@@ -320,9 +323,9 @@ SELECT count(*) FROM (SELECT * FROM inheritchildrelfilebefore UNION SELECT * FRO
 SELECT * FROM gp_toolkit.__gp_aoseg('heapbase');
  segment_id | segno | eof | tupcount | varblockcount | eof_uncompressed | modcount | formatversion | state 
 ------------+-------+-----+----------+---------------+------------------+----------+---------------+-------
-          0 |     0 |  72 |        3 |             1 |               88 |        1 |             3 |     1
-          1 |     0 |  40 |        1 |             1 |               40 |        1 |             3 |     1
           2 |     0 |  40 |        1 |             1 |               40 |        1 |             3 |     1
+          1 |     0 |  40 |        1 |             1 |               40 |        1 |             3 |     1
+          0 |     0 |  72 |        3 |             1 |               88 |        1 |             3 |     1
 (3 rows)
 
 SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('heapbase')).* FROM gp_dist_random('gp_id');
@@ -352,13 +355,13 @@ SELECT c.relname FROM pg_class c, pg_appendonly p WHERE c.relname LIKE 'heapbase
 
 -- aux tables are not created for child table
 SELECT * FROM gp_toolkit.__gp_aoseg('heapchild');
-ERROR:  Relation 'heapchild' does not have appendoptimized row-oriented storage  (seg0 slice1 127.0.1.1:7002 pid=26472)
+ERROR:  Relation 'heapchild' does not have appendoptimized row-oriented storage  (seg1 slice1 127.0.0.1:11003 pid=807618)
 SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('heapchild')).* FROM gp_dist_random('gp_id');
-ERROR:  function not supported on relation  (seg0 slice1 192.168.0.148:7002 pid=674753)
+ERROR:  function not supported on relation  (seg1 slice1 127.0.0.1:11003 pid=807618)
 SELECT * FROM gp_toolkit.__gp_aoseg('heapchild2');
-ERROR:  Relation 'heapchild2' does not have appendoptimized row-oriented storage  (seg0 slice1 127.0.1.1:7002 pid=26472)
+ERROR:  Relation 'heapchild2' does not have appendoptimized row-oriented storage  (seg1 slice1 127.0.0.1:11003 pid=807618)
 SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('heapchild2')).* FROM gp_dist_random('gp_id');
-ERROR:  function not supported on relation  (seg0 slice1 192.168.0.148:7002 pid=674753)
+ERROR:  function not supported on relation  (seg1 slice1 127.0.0.1:11003 pid=807618)
 SELECT c.relname FROM pg_class c, pg_appendonly p WHERE c.relname LIKE 'heapchild%' AND c.oid = p.relid;
  relname 
 ---------
@@ -367,10 +370,10 @@ SELECT c.relname FROM pg_class c, pg_appendonly p WHERE c.relname LIKE 'heapchil
 -- Scenario 3: AO to Heap
 SET gp_default_storage_options = 'blocksize=65536, compresstype=zlib, compresslevel=5, checksum=true';
 CREATE TABLE ao2heap(a int, b int) WITH (appendonly=true);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE ao2heap2(a int, b int) WITH (appendonly=true);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX aoi ON ao2heap(b);
 INSERT INTO ao2heap SELECT i,i FROM generate_series(1,5) i;
@@ -395,7 +398,7 @@ CREATE TEMP TABLE relfilebeforeao2heap AS
     SELECT -1 segid, relfilenode FROM pg_class WHERE relname in ('ao2heap', 'ao2heap2', 'aoi')
     UNION SELECT gp_segment_id segid, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname in ('ao2heap', 'ao2heap2', 'aoi') ORDER BY segid;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Altering AO to heap
 ALTER TABLE ao2heap SET ACCESS METHOD heap;
@@ -405,7 +408,7 @@ CREATE TEMP TABLE relfileafterao2heap AS
     SELECT -1 segid, relfilenode FROM pg_class WHERE relname in ('ao2heap', 'ao2heap2', 'aoi')
     UNION SELECT gp_segment_id segid, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname in ('ao2heap', 'ao2heap2', 'aoi') ORDER BY segid;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM relfilebeforeao2heap INTERSECT SELECT * FROM relfileafterao2heap;
  segid | relfilenode 
@@ -435,15 +438,15 @@ SELECT * FROM ao2heap2;
 
 -- No AO aux tables should be left
 SELECT * FROM gp_toolkit.__gp_aoseg('ao2heap');
-ERROR:  Relation 'ao2heap' does not have appendoptimized row-oriented storage  (seg0 slice1 127.0.1.1:7002 pid=26472)
+ERROR:  Relation 'ao2heap' does not have appendoptimized row-oriented storage  (seg0 slice1 127.0.0.1:11002 pid=807617)
 SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('ao2heap')).* FROM gp_dist_random('gp_id');
-ERROR:  function not supported on relation  (seg0 slice1 192.168.0.148:7002 pid=674753)
+ERROR:  function not supported on relation  (seg0 slice1 127.0.0.1:11002 pid=807617)
 SELECT gp_segment_id, (gp_toolkit.__gp_aoblkdir('ao2heap')).* FROM gp_dist_random('gp_id');
-ERROR:  function not supported on non append-optimized relation  (seg2 slice1 192.168.0.148:7004 pid=1401173)
+ERROR:  function not supported on non append-optimized relation  (seg0 slice1 127.0.0.1:11002 pid=807617)
 SELECT * FROM gp_toolkit.__gp_aoseg('ao2heap2');
-ERROR:  Relation 'ao2heap2' does not have appendoptimized row-oriented storage  (seg0 slice1 127.0.1.1:7002 pid=26472)
+ERROR:  Relation 'ao2heap2' does not have appendoptimized row-oriented storage  (seg0 slice1 127.0.0.1:11002 pid=807617)
 SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('ao2heap2')).* FROM gp_dist_random('gp_id');
-ERROR:  function not supported on relation  (seg0 slice1 192.168.0.148:7002 pid=674753)
+ERROR:  function not supported on relation  (seg0 slice1 127.0.0.1:11002 pid=807617)
 -- No pg_appendonly entries should be left too
 SELECT c.relname FROM pg_class c, pg_appendonly p WHERE c.relname LIKE 'ao2heap%' AND c.oid = p.relid;
  relname 
@@ -478,7 +481,11 @@ DROP TABLE ao2heap;
 DROP TABLE ao2heap2;
 -- Scenario 4: Set reloptions along with change of AM.
 CREATE TABLE ataoset(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE ataoset2(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO ataoset select * from generate_series(1, 5);
 INSERT INTO ataoset2 select * from generate_series(1, 5);
 -- Error: user specifies a different AM than the one indicated in the WITH clause
@@ -488,6 +495,8 @@ LINE 1: ALTER TABLE ataoset SET ACCESS METHOD ao_row WITH(appendonly...
                                                      ^
 -- Error: user specifiies AO reloption when altering an AO table to heap.
 CREATE TABLE ao2heaperror (a int) WITH (appendonly=true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE ao2heaperror SET ACCESS METHOD heap WITH (blocksize=65536);
 ERROR:  unrecognized parameter "blocksize"
 DROP TABLE ao2heaperror;
@@ -496,12 +505,16 @@ CREATE TEMP TABLE relfilebeforeat AS
     SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'ataoset%'
     UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'ataoset%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE ataoset SET WITH (appendonly=true, blocksize=65536, compresslevel=7);
 ALTER TABLE ataoset2 SET ACCESS METHOD ao_row WITH (blocksize=65536, compresslevel=7);
 CREATE TEMP TABLE relfileafterat AS
     SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'ataoset%'
     UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'ataoset%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- relfilenode changed
 SELECT * FROM relfilebeforeat INTERSECT SELECT * FROM relfileafterat;
  segid | relname | relfilenode 
@@ -537,6 +550,8 @@ CREATE TEMP TABLE relfilebeforeat AS
     SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'ataoset%'
     UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'ataoset%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Firstly alter them with the exact same options as case 1.
 -- Secondly alter them with same option values but different order.
 -- Neither should trigger table rewrite. 
@@ -548,6 +563,8 @@ CREATE TEMP TABLE relfileafterat AS
     SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'ataoset%'
     UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'ataoset%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- no change to relfilenode
 SELECT * FROM relfilebeforeat EXCEPT SELECT * FROM relfileafterat;
  segid | relname | relfilenode 
@@ -612,12 +629,16 @@ CREATE TEMP TABLE relfilebeforeat AS
     SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'ataoset%'
     UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'ataoset%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE ataoset SET ACCESS METHOD heap WITH (fillfactor=70);
 ALTER TABLE ataoset2 SET ACCESS METHOD heap WITH (fillfactor=70);
 CREATE TEMP TABLE relfileafterat AS
     SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'ataoset%'
     UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'ataoset%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- there's a table rewrite
 SELECT * FROM relfilebeforeat INTERSECT SELECT * FROM relfileafterat;
  segid | relname | relfilenode 
@@ -639,9 +660,17 @@ DROP TABLE ataoset2;
 -- Scenario 5: AO to AOCO 
 SET gp_default_storage_options = 'blocksize=65536, compresstype=zlib, compresslevel=5, checksum=true';
 CREATE TABLE ao2co(a int, b int) WITH (appendonly=true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE ao2co2(a int, b int) WITH (appendonly=true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE ao2co3(a int, b int) WITH (appendonly=true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE ao2co4(a int, b int) WITH (appendonly=true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX index_ao2co ON ao2co(b);
 CREATE INDEX index_ao2co3 ON ao2co3(b);
 INSERT INTO ao2co SELECT i,i FROM generate_series(1,5) i;
@@ -655,12 +684,14 @@ LINE 1: ALTER TABLE ao2co SET ACCESS METHOD ao_column WITH (appendop...
                                                       ^
 -- Use of *both* ACCESS METHOD and WITH clauses is allowed, but we'll print a hint to indicate the redundancy.
 ALTER TABLE ao2co SET ACCESS METHOD ao_row WITH (appendoptimized=true, orientation=row);
-HINT:  Only one of these is needed to indicate access method: the SET ACCESS METHOD clause or the options in the WITH clause.
 NOTICE:  Redundant clauses are used to indicate the access method.
+HINT:  Only one of these is needed to indicate access method: the SET ACCESS METHOD clause or the options in the WITH clause.
 CREATE TEMP TABLE relfilebeforeao AS
     SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'ao2co%'
     UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'ao2co%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Check once the reloptions
 SELECT c.relname, a.amname, c.reloptions FROM pg_class c JOIN pg_am a ON c.relam = a.oid WHERE c.relname LIKE 'ao2co%';
  relname | amname |            reloptions             
@@ -681,6 +712,8 @@ CREATE TEMP TABLE relfileafterao AS
     SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'ao2co%'
     UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'ao2co%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM relfilebeforeao INTERSECT SELECT * FROM relfileafterao;
  segid | relname | relfilenode 
 -------+---------+-------------
@@ -717,7 +750,7 @@ SELECT count(*) FROM ao2co4;
 -- Only tested for 2 out of the 4 tables being created, where the tables were altered w/wo reloptions. 
 -- No need to test the other ones created by the alternative syntax SET WITH().
 SELECT * FROM gp_toolkit.__gp_aoseg('ao2co');
-ERROR:  Relation 'ao2co' does not have appendoptimized row-oriented storage  (seg0 slice1 127.0.1.1:7002 pid=26472)
+ERROR:  Relation 'ao2co' does not have appendoptimized row-oriented storage  (seg0 slice1 127.0.0.1:11002 pid=807617)
 SELECT * FROM gp_toolkit.__gp_aovisimap('ao2co');
  tid | segno | row_num 
 -----+-------+---------
@@ -735,7 +768,7 @@ SELECT * FROM gp_toolkit.__gp_aoblkdir('ao2co');
 (0 rows)
 
 SELECT * FROM gp_toolkit.__gp_aoseg('ao2co3');
-ERROR:  Relation 'ao2co3' does not have appendoptimized row-oriented storage  (seg0 slice1 127.0.1.1:7002 pid=26472)
+ERROR:  Relation 'ao2co3' does not have appendoptimized row-oriented storage  (seg0 slice1 127.0.0.1:11002 pid=807617)
 SELECT * FROM gp_toolkit.__gp_aovisimap('ao2co3');
  tid | segno | row_num 
 -----+-------+---------
@@ -756,14 +789,14 @@ SELECT * FROM gp_toolkit.__gp_aoblkdir('ao2co3');
 SELECT c.relname, a.attnum, a.attoptions FROM pg_attribute_encoding a, pg_class c WHERE a.attrelid = c.oid AND c.relname LIKE 'ao2co%';
  relname | attnum |                       attoptions                        
 ---------+--------+---------------------------------------------------------
- ao2co   |      1 | {compresstype=zlib,compresslevel=5,blocksize=65536}
  ao2co   |      2 | {compresstype=zlib,compresslevel=5,blocksize=65536}
- ao2co2  |      1 | {compresstype=zlib,compresslevel=5,blocksize=65536}
+ ao2co   |      1 | {compresstype=zlib,compresslevel=5,blocksize=65536}
  ao2co2  |      2 | {compresstype=zlib,compresslevel=5,blocksize=65536}
- ao2co3  |      1 | {blocksize=32768,compresstype=rle_type,compresslevel=3}
+ ao2co2  |      1 | {compresstype=zlib,compresslevel=5,blocksize=65536}
  ao2co3  |      2 | {blocksize=32768,compresstype=rle_type,compresslevel=3}
- ao2co4  |      1 | {blocksize=32768,compresstype=rle_type,compresslevel=3}
+ ao2co3  |      1 | {blocksize=32768,compresstype=rle_type,compresslevel=3}
  ao2co4  |      2 | {blocksize=32768,compresstype=rle_type,compresslevel=3}
+ ao2co4  |      1 | {blocksize=32768,compresstype=rle_type,compresslevel=3}
 (8 rows)
 
 -- AM and reloptions changed accordingly
@@ -794,9 +827,17 @@ DROP TABLE ao2co4;
 -- Scenario 6: AOCO to Heap
 SET gp_default_storage_options = 'blocksize=65536, compresstype=zlib, compresslevel=5, checksum=true';
 CREATE TABLE co2heap(a int, b int) WITH (appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE co2heap2(a int, b int) WITH (appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE co2heap3(a int, b int) WITH (appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE co2heap4(a int, b int) WITH (appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX aoi ON co2heap(b);
 INSERT INTO co2heap SELECT i,i FROM generate_series(1,5) i;
 INSERT INTO co2heap2 SELECT i,i FROM generate_series(1,5) i;
@@ -827,20 +868,22 @@ SELECT relname, relfrozenxid FROM pg_class WHERE relname LIKE 'co2heap%';
 SELECT c.relname, a.attnum, attoptions FROM pg_attribute_encoding a, pg_class c WHERE a.attrelid=c.oid AND c.relname LIKE 'co2heap%';
  relname  | attnum |                     attoptions                      
 ----------+--------+-----------------------------------------------------
- co2heap  |      1 | {compresstype=zlib,compresslevel=5,blocksize=65536}
  co2heap  |      2 | {compresstype=zlib,compresslevel=5,blocksize=65536}
- co2heap2 |      1 | {compresstype=zlib,compresslevel=5,blocksize=65536}
+ co2heap  |      1 | {compresstype=zlib,compresslevel=5,blocksize=65536}
  co2heap2 |      2 | {compresstype=zlib,compresslevel=5,blocksize=65536}
- co2heap3 |      1 | {compresstype=zlib,compresslevel=5,blocksize=65536}
+ co2heap2 |      1 | {compresstype=zlib,compresslevel=5,blocksize=65536}
  co2heap3 |      2 | {compresstype=zlib,compresslevel=5,blocksize=65536}
- co2heap4 |      1 | {compresstype=zlib,compresslevel=5,blocksize=65536}
+ co2heap3 |      1 | {compresstype=zlib,compresslevel=5,blocksize=65536}
  co2heap4 |      2 | {compresstype=zlib,compresslevel=5,blocksize=65536}
+ co2heap4 |      1 | {compresstype=zlib,compresslevel=5,blocksize=65536}
 (8 rows)
 
 CREATE TEMP TABLE relfilebeforeco2heap AS
     SELECT -1 segid, relfilenode FROM pg_class WHERE relname LIKE 'co2heap%'
     UNION SELECT gp_segment_id segid, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'co2heap%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Various cases of altering AOCO to AO:
 -- 1. Basic ATSETAMs:
 ALTER TABLE co2heap SET ACCESS METHOD heap;
@@ -853,6 +896,8 @@ CREATE TEMP TABLE relfileafterco2heap AS
     SELECT -1 segid, relfilenode FROM pg_class WHERE relname LIKE 'co2heap%'
     UNION SELECT gp_segment_id segid, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'co2heap%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM relfilebeforeco2heap INTERSECT SELECT * FROM relfileafterco2heap;
  segid | relfilenode 
 -------+-------------
@@ -887,19 +932,19 @@ SELECT count(*) FROM co2heap4;
 -- Only testing 2 out of the 4 tables being created, where the tables were altered w/wo reloptions. 
 -- No need to test the other ones created by the alternative syntax SET WITH().
 SELECT * FROM gp_toolkit.__gp_aoseg('co2heap');
-ERROR:  Relation 'co2heap' does not have appendoptimized row-oriented storage  (seg1 slice1 127.0.1.1:7003 pid=26473)
+ERROR:  Relation 'co2heap' does not have appendoptimized row-oriented storage  (seg0 slice1 127.0.0.1:11002 pid=807617)
 SELECT * FROM gp_toolkit.__gp_aovisimap('co2heap');
 ERROR:  function not supported on relation
 SELECT count(*) FROM gp_toolkit.__gp_aocsseg('co2heap');
-ERROR:  Relation 'co2heap' does not have append-optimized column-oriented storage  (seg1 slice1 127.0.1.1:7003 pid=26473)
+ERROR:  Relation 'co2heap' does not have append-optimized column-oriented storage  (seg0 slice1 127.0.0.1:11002 pid=807617)
 SELECT * FROM gp_toolkit.__gp_aoblkdir('co2heap');
 ERROR:  function not supported on non append-optimized relation
 SELECT * FROM gp_toolkit.__gp_aoseg('co2heap3');
-ERROR:  Relation 'co2heap3' does not have appendoptimized row-oriented storage  (seg1 slice1 127.0.1.1:7003 pid=26473)
+ERROR:  Relation 'co2heap3' does not have appendoptimized row-oriented storage  (seg0 slice1 127.0.0.1:11002 pid=807617)
 SELECT * FROM gp_toolkit.__gp_aovisimap('co2heap3');
 ERROR:  function not supported on relation
 SELECT count(*) FROM gp_toolkit.__gp_aocsseg('co2heap3');
-ERROR:  Relation 'co2heap3' does not have append-optimized column-oriented storage  (seg1 slice1 127.0.1.1:7003 pid=26473)
+ERROR:  Relation 'co2heap3' does not have append-optimized column-oriented storage  (seg0 slice1 127.0.0.1:11002 pid=807617)
 SELECT * FROM gp_toolkit.__gp_aoblkdir('co2heap3');
 ERROR:  function not supported on non append-optimized relation
 -- No pg_appendonly entries should be left too
@@ -950,9 +995,17 @@ DROP TABLE co2heap3;
 DROP TABLE co2heap4;
 -- Scenario 7: AOCO to AO
 CREATE TABLE co2ao(a int, b int) WITH (appendonly=true, orientation=column, compresstype=zlib, compresslevel=3);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE co2ao2(a int, b int) WITH (appendonly=true, orientation=column, compresstype=zlib, compresslevel=3);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE co2ao3(a int, b int) WITH (appendonly=true, orientation=column, compresstype=rle_type, compresslevel=3);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE co2ao4(a int, b int) WITH (appendonly=true, orientation=column, compresstype=rle_type, compresslevel=3);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX aoi ON co2ao(b);
 CREATE INDEX aoi2 ON co2ao3(b);
 INSERT INTO co2ao SELECT i,i FROM generate_series(1,5) i;
@@ -984,26 +1037,26 @@ SELECT c.relname, p.compresstype, p.compresslevel, p.blocksize FROM pg_class c, 
 SELECT c.relname, a.attnum, attoptions FROM pg_attribute_encoding a, pg_class c WHERE a.attrelid=c.oid AND c.relname LIKE 'co2ao%';
  relname | attnum |                       attoptions                        
 ---------+--------+---------------------------------------------------------
- co2ao   |      1 | {compresstype=zlib,compresslevel=3,blocksize=65536}
  co2ao   |      2 | {compresstype=zlib,compresslevel=3,blocksize=65536}
- co2ao2  |      1 | {compresstype=zlib,compresslevel=3,blocksize=65536}
+ co2ao   |      1 | {compresstype=zlib,compresslevel=3,blocksize=65536}
  co2ao2  |      2 | {compresstype=zlib,compresslevel=3,blocksize=65536}
- co2ao3  |      1 | {compresstype=rle_type,compresslevel=3,blocksize=65536}
+ co2ao2  |      1 | {compresstype=zlib,compresslevel=3,blocksize=65536}
  co2ao3  |      2 | {compresstype=rle_type,compresslevel=3,blocksize=65536}
- co2ao4  |      1 | {compresstype=rle_type,compresslevel=3,blocksize=65536}
+ co2ao3  |      1 | {compresstype=rle_type,compresslevel=3,blocksize=65536}
  co2ao4  |      2 | {compresstype=rle_type,compresslevel=3,blocksize=65536}
+ co2ao4  |      1 | {compresstype=rle_type,compresslevel=3,blocksize=65536}
 (8 rows)
 
 -- Check once on the aoblkdirs
 SELECT gp_segment_id, (gp_toolkit.__gp_aoblkdir('co2ao')).* FROM gp_dist_random('gp_id');
  gp_segment_id | tupleid | segno | columngroup_no | entry_no | first_row_no | file_offset | row_count 
 ---------------+---------+-------+----------------+----------+--------------+-------------+-----------
-             0 | (0,1)   |     1 |              0 |        0 |            1 |           0 |         3
-             0 | (0,2)   |     1 |              1 |        0 |            1 |           0 |         3
-             1 | (0,1)   |     1 |              0 |        0 |            1 |           0 |         1
-             1 | (0,2)   |     1 |              1 |        0 |            1 |           0 |         1
              2 | (0,1)   |     1 |              0 |        0 |            1 |           0 |         1
              2 | (0,2)   |     1 |              1 |        0 |            1 |           0 |         1
+             1 | (0,1)   |     1 |              0 |        0 |            1 |           0 |         1
+             1 | (0,2)   |     1 |              1 |        0 |            1 |           0 |         1
+             0 | (0,1)   |     1 |              0 |        0 |            1 |           0 |         3
+             0 | (0,2)   |     1 |              1 |        0 |            1 |           0 |         3
 (6 rows)
 
 SELECT gp_segment_id, (gp_toolkit.__gp_aoblkdir('co2ao3')).* FROM gp_dist_random('gp_id');
@@ -1011,16 +1064,18 @@ SELECT gp_segment_id, (gp_toolkit.__gp_aoblkdir('co2ao3')).* FROM gp_dist_random
 ---------------+---------+-------+----------------+----------+--------------+-------------+-----------
              0 | (0,1)   |     1 |              0 |        0 |            1 |           0 |         3
              0 | (0,2)   |     1 |              1 |        0 |            1 |           0 |         3
-             1 | (0,1)   |     1 |              0 |        0 |            1 |           0 |         1
-             1 | (0,2)   |     1 |              1 |        0 |            1 |           0 |         1
              2 | (0,1)   |     1 |              0 |        0 |            1 |           0 |         1
              2 | (0,2)   |     1 |              1 |        0 |            1 |           0 |         1
+             1 | (0,1)   |     1 |              0 |        0 |            1 |           0 |         1
+             1 | (0,2)   |     1 |              1 |        0 |            1 |           0 |         1
 (6 rows)
 
 CREATE TEMP TABLE relfilebeforeco2ao AS
     SELECT -1 segid, relfilenode FROM pg_class WHERE relname LIKE 'co2ao%'
     UNION SELECT gp_segment_id segid, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'co2ao%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Various cases of altering AOCO to AO:
 -- 1. Basic ATSETAMs:
 ALTER TABLE co2ao SET ACCESS METHOD ao_row;
@@ -1033,6 +1088,8 @@ CREATE TEMP TABLE relfileafterco2ao AS
     SELECT -1 segid, relfilenode FROM pg_class WHERE relname LIKE 'co2ao%'
     UNION SELECT gp_segment_id segid, relfilenode FROM gp_dist_random('pg_class')
     WHERE relname LIKE 'co2ao%' ORDER BY segid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM relfilebeforeco2ao INTERSECT SELECT * FROM relfileafterco2ao;
  segid | relfilenode 
 -------+-------------
@@ -1071,13 +1128,13 @@ SELECT count(*) FROM co2ao4;
 SELECT * FROM gp_toolkit.__gp_aoseg('co2ao');
  segment_id | segno | eof | tupcount | varblockcount | eof_uncompressed | modcount | formatversion | state 
 ------------+-------+-----+----------+---------------+------------------+----------+---------------+-------
-          0 |     0 |  72 |        3 |             1 |               88 |        1 |             3 |     1
           1 |     0 |  40 |        1 |             1 |               40 |        1 |             3 |     1
           2 |     0 |  40 |        1 |             1 |               40 |        1 |             3 |     1
+          0 |     0 |  72 |        3 |             1 |               88 |        1 |             3 |     1
 (3 rows)
 
 SELECT * FROM gp_toolkit.__gp_aocsseg('co2ao');
-ERROR:  Relation 'co2ao' does not have append-optimized column-oriented storage  (seg2 slice1 127.0.1.1:7004 pid=26474)
+ERROR:  Relation 'co2ao' does not have append-optimized column-oriented storage  (seg1 slice1 127.0.0.1:11003 pid=807618)
 SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('co2ao')).* FROM gp_dist_random('gp_id');
  gp_segment_id | tid | segno | row_num 
 ---------------+-----+-------+---------
@@ -1086,21 +1143,21 @@ SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('co2ao')).* FROM gp_dist_random
 SELECT gp_segment_id, (gp_toolkit.__gp_aoblkdir('co2ao')).* FROM gp_dist_random('gp_id');
  gp_segment_id | tupleid | segno | columngroup_no | entry_no | first_row_no | file_offset | row_count 
 ---------------+---------+-------+----------------+----------+--------------+-------------+-----------
+             2 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
              0 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         3
              1 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
-             2 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
 (3 rows)
 
 SELECT * FROM gp_toolkit.__gp_aoseg('co2ao3');
  segment_id | segno | eof | tupcount | varblockcount | eof_uncompressed | modcount | formatversion | state 
 ------------+-------+-----+----------+---------------+------------------+----------+---------------+-------
+          2 |     0 |  40 |        1 |             1 |               40 |        1 |             3 |     1
           0 |     0 |  72 |        3 |             1 |               88 |        1 |             3 |     1
           1 |     0 |  40 |        1 |             1 |               40 |        1 |             3 |     1
-          2 |     0 |  40 |        1 |             1 |               40 |        1 |             3 |     1
 (3 rows)
 
 SELECT * FROM gp_toolkit.__gp_aocsseg('co2ao3');
-ERROR:  Relation 'co2ao3' does not have append-optimized column-oriented storage  (seg0 slice1 127.0.1.1:7002 pid=26472)
+ERROR:  Relation 'co2ao3' does not have append-optimized column-oriented storage  (seg1 slice1 127.0.0.1:11003 pid=807618)
 SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('co2ao3')).* FROM gp_dist_random('gp_id');
  gp_segment_id | tid | segno | row_num 
 ---------------+-----+-------+---------
@@ -1157,16 +1214,16 @@ DROP TABLE co2ao4;
 -- Scenario 8: Heap to AOCO
 SET gp_default_storage_options = 'blocksize=65536, compresstype=zlib, compresslevel=5, checksum=true';
 CREATE TABLE heap2co(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE heap2co2(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE heap2co3(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE heap2co4(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX index_heap2co ON heap2co(b);
 CREATE INDEX index_heap2co3 ON heap2co3(b);
@@ -1178,7 +1235,7 @@ CREATE TEMP TABLE relfilebeforeaoco AS
 SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'heap2co%'
 UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
 WHERE relname LIKE 'heap2co%' ORDER BY segid;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- ERROR: conflicting storage option specified.
 ALTER TABLE heap2co SET ACCESS METHOD ao_column WITH (appendoptimized=false);
@@ -1209,7 +1266,7 @@ CREATE TEMP TABLE relfileafteraoco AS
 SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'heap2co%'
 UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
 WHERE relname LIKE 'heap2co%' ORDER BY segid;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM relfilebeforeaoco INTERSECT SELECT * FROM relfileafteraoco;
  segid | relname | relfilenode 
@@ -1253,12 +1310,12 @@ SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('heap2co')).* FROM gp_dist_rand
 SELECT gp_segment_id, (gp_toolkit.__gp_aoblkdir('heap2co')).* FROM gp_dist_random('gp_id');
  gp_segment_id | tupleid | segno | columngroup_no | entry_no | first_row_no | file_offset | row_count 
 ---------------+---------+-------+----------------+----------+--------------+-------------+-----------
-             2 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
-             2 | (0,2)   |     0 |              1 |        0 |            1 |           0 |         1
              0 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         3
              0 | (0,2)   |     0 |              1 |        0 |            1 |           0 |         3
              1 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
              1 | (0,2)   |     0 |              1 |        0 |            1 |           0 |         1
+             2 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
+             2 | (0,2)   |     0 |              1 |        0 |            1 |           0 |         1
 (6 rows)
 
 SELECT count(*) FROM gp_toolkit.__gp_aocsseg('heap2co');
@@ -1275,12 +1332,12 @@ SELECT gp_segment_id, (gp_toolkit.__gp_aovisimap('heap2co3')).* FROM gp_dist_ran
 SELECT gp_segment_id, (gp_toolkit.__gp_aoblkdir('heap2co3')).* FROM gp_dist_random('gp_id');
  gp_segment_id | tupleid | segno | columngroup_no | entry_no | first_row_no | file_offset | row_count 
 ---------------+---------+-------+----------------+----------+--------------+-------------+-----------
-             1 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
-             1 | (0,2)   |     0 |              1 |        0 |            1 |           0 |         1
              2 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
              2 | (0,2)   |     0 |              1 |        0 |            1 |           0 |         1
              0 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         3
              0 | (0,2)   |     0 |              1 |        0 |            1 |           0 |         3
+             1 | (0,1)   |     0 |              0 |        0 |            1 |           0 |         1
+             1 | (0,2)   |     0 |              1 |        0 |            1 |           0 |         1
 (6 rows)
 
 SELECT count(*) FROM gp_toolkit.__gp_aocsseg('heap2co3');
@@ -1335,6 +1392,8 @@ DROP TABLE heap2co4;
 -- 3. Heap->AOCO->Heap->AOCO
 -- 1. Heap->AO->Heap->AO
 CREATE TABLE heapao(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX heapaoindex ON heapao(b);
 INSERT INTO heapao SELECT i,i FROM generate_series(1,5) i;
 ALTER TABLE heapao SET ACCESS METHOD ao_row;
@@ -1350,6 +1409,8 @@ SELECT count(*) FROM heapao;
 DROP TABLE heapao;
 -- 2. AO->AOCO->AO->AOCO
 CREATE TABLE aoco(a int, b int) with (appendoptimized=true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX aocoindex ON aoco(b);
 INSERT INTO aoco SELECT i,i FROM generate_series(1,5) i;
 ALTER TABLE aoco SET ACCESS METHOD ao_column;
@@ -1365,6 +1426,8 @@ SELECT count(*) FROM aoco;
 DROP TABLE aoco;
 -- 3. Heap->AOCO->Heap->AOCO
 CREATE TABLE heapco(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX heapcoindex ON heapco(b);
 INSERT INTO heapco SELECT i,i FROM generate_series(1,5) i;
 ALTER TABLE heapco SET ACCESS METHOD ao_column;
@@ -1384,6 +1447,8 @@ DROP TABLE heapco;
 -- The dropped column should still have an entry in pg_attribute_encoding if it is 
 -- an AOCO table, just like pg_attribute.
 CREATE TABLE atsetam_dropcol(a int, b int, c int, d int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO atsetam_dropcol VALUES(1,1,1,1);
 SELECT count(*) FROM pg_attribute WHERE attrelid = 'atsetam_dropcol'::regclass AND attnum > 0;
  count 
@@ -1457,3 +1522,327 @@ SELECT * FROM atsetam_dropcol;
  1
 (1 row)
 
+-- ALTER TABLE ao_row with pg_attribute_encoding entries to ao_column
+CREATE TABLE at_with_addedcols(a int, b int) USING ao_row;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO at_with_addedcols SELECT i,i FROM generate_series(1,3)i;
+ALTER TABLE at_with_addedcols ADD COLUMN c int DEFAULT 4;
+INSERT INTO at_with_addedcols SELECT i,i FROM generate_series(1,3)i;
+SELECT * FROM at_with_addedcols;
+ a | b | c 
+---+---+---
+ 2 | 2 | 4
+ 3 | 3 | 4
+ 2 | 2 | 4
+ 3 | 3 | 4
+ 1 | 1 | 4
+ 1 | 1 | 4
+(6 rows)
+
+-- pg_attribute_encoding should have entries for just column c
+EXECUTE attribute_encoding_check ('at_with_addedcols');
+      relname      | attname | filenum | attoptions | lastrownums 
+-------------------+---------+---------+------------+-------------
+ at_with_addedcols | c       |       1 |            | {0}
+(1 row)
+
+ALTER TABLE at_with_addedcols SET ACCESS METHOD ao_column;
+-- check data is intact
+SELECT * FROM at_with_addedcols;
+ a | b | c 
+---+---+---
+ 2 | 2 | 4
+ 3 | 3 | 4
+ 2 | 2 | 4
+ 3 | 3 | 4
+ 1 | 1 | 4
+ 1 | 1 | 4
+(6 rows)
+
+-- pg_attribute_encoding should have entries for all columns
+EXECUTE attribute_encoding_check ('at_with_addedcols');
+      relname      | attname | filenum |                     attoptions                      | lastrownums 
+-------------------+---------+---------+-----------------------------------------------------+-------------
+ at_with_addedcols | a       |       1 | {compresstype=zlib,compresslevel=5,blocksize=65536} | 
+ at_with_addedcols | b       |       2 | {compresstype=zlib,compresslevel=5,blocksize=65536} | 
+ at_with_addedcols | c       |       3 | {compresstype=zlib,compresslevel=5,blocksize=65536} | 
+(3 rows)
+
+ALTER TABLE at_with_addedcols SET ACCESS METHOD ao_row;
+-- check data is intact
+SELECT * FROM at_with_addedcols;
+ a | b | c 
+---+---+---
+ 1 | 1 | 4
+ 1 | 1 | 4
+ 2 | 2 | 4
+ 3 | 3 | 4
+ 2 | 2 | 4
+ 3 | 3 | 4
+(6 rows)
+
+-- pg_attribute_encoding should not have any entries
+EXECUTE attribute_encoding_check ('at_with_addedcols');
+ relname | attname | filenum | attoptions | lastrownums 
+---------+---------+---------+------------+-------------
+(0 rows)
+
+DROP TABLE at_with_addedcols;
+-- ALTER TABLE ao_row with pg_attribute_encoding entries to heap
+CREATE TABLE at_with_addedcols(a int, b int) USING ao_row;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO at_with_addedcols SELECT i,i FROM generate_series(1,3)i;
+ALTER TABLE at_with_addedcols ADD COLUMN c int DEFAULT 4;
+INSERT INTO at_with_addedcols SELECT i,i FROM generate_series(1,3)i;
+SELECT * FROM at_with_addedcols;
+ a | b | c 
+---+---+---
+ 2 | 2 | 4
+ 3 | 3 | 4
+ 2 | 2 | 4
+ 3 | 3 | 4
+ 1 | 1 | 4
+ 1 | 1 | 4
+(6 rows)
+
+-- pg_attribute_encoding should have entries for just column c
+EXECUTE attribute_encoding_check ('at_with_addedcols');
+      relname      | attname | filenum | attoptions | lastrownums 
+-------------------+---------+---------+------------+-------------
+ at_with_addedcols | c       |       1 |            | {0}
+(1 row)
+
+ALTER TABLE at_with_addedcols SET ACCESS METHOD heap;
+-- check data is intact
+SELECT * FROM at_with_addedcols;
+ a | b | c 
+---+---+---
+ 1 | 1 | 4
+ 1 | 1 | 4
+ 2 | 2 | 4
+ 3 | 3 | 4
+ 2 | 2 | 4
+ 3 | 3 | 4
+(6 rows)
+
+-- pg_attribute_encoding should not have any entries
+EXECUTE attribute_encoding_check ('at_with_addedcols');
+ relname | attname | filenum | attoptions | lastrownums 
+---------+---------+---------+------------+-------------
+(0 rows)
+
+ALTER TABLE at_with_addedcols SET ACCESS METHOD ao_row;
+-- check data is intact
+SELECT * FROM at_with_addedcols;
+ a | b | c 
+---+---+---
+ 2 | 2 | 4
+ 3 | 3 | 4
+ 2 | 2 | 4
+ 3 | 3 | 4
+ 1 | 1 | 4
+ 1 | 1 | 4
+(6 rows)
+
+-- pg_attribute_encoding should not have any entries
+EXECUTE attribute_encoding_check ('at_with_addedcols');
+ relname | attname | filenum | attoptions | lastrownums 
+---------+---------+---------+------------+-------------
+(0 rows)
+
+DROP TABLE at_with_addedcols;
+--
+-- Ensure that the array type of the base table type is removed when moving from
+-- heap -> ao_row | ao_column
+--
+CREATE TABLE at_array_type_heap_to_ao(i int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT typname, typnamespace::regnamespace, typcategory, typarray::regtype FROM pg_type
+    WHERE typname = 'at_array_type_heap_to_ao';
+         typname          | typnamespace | typcategory |          typarray          
+--------------------------+--------------+-------------+----------------------------
+ at_array_type_heap_to_ao | public       | C           | at_array_type_heap_to_ao[]
+(1 row)
+
+SELECT typname, typnamespace::regnamespace, typcategory, typelem::regtype FROM pg_type
+    WHERE typname = '_at_array_type_heap_to_ao';
+          typname          | typnamespace | typcategory |         typelem          
+---------------------------+--------------+-------------+--------------------------
+ _at_array_type_heap_to_ao | public       | A           | at_array_type_heap_to_ao
+(1 row)
+
+ALTER TABLE at_array_type_heap_to_ao SET ACCESS METHOD ao_row;
+-- The array type should be gone.
+SELECT typname, typnamespace::regnamespace, typcategory, typarray::regtype FROM pg_type
+    WHERE typname = 'at_array_type_heap_to_ao';
+         typname          | typnamespace | typcategory |          typarray          
+--------------------------+--------------+-------------+----------------------------
+ at_array_type_heap_to_ao | public       | C           | at_array_type_heap_to_ao[]
+(1 row)
+
+SELECT typname, typnamespace::regnamespace, typcategory, typelem::regtype FROM pg_type
+    WHERE typname = '_at_array_type_heap_to_ao';
+          typname          | typnamespace | typcategory |         typelem          
+---------------------------+--------------+-------------+--------------------------
+ _at_array_type_heap_to_ao | public       | A           | at_array_type_heap_to_ao
+(1 row)
+
+-- A successful drop indicates that the array type -> base type dependency
+-- should have been removed successfully by the ALTER TABLE SET AM above.
+DROP TABLE at_array_type_heap_to_ao;
+CREATE TABLE at_array_type_heap_to_co(i int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT typname, typnamespace::regnamespace, typcategory, typarray::regtype FROM pg_type
+    WHERE typname = 'at_array_type_heap_to_co';
+         typname          | typnamespace | typcategory |          typarray          
+--------------------------+--------------+-------------+----------------------------
+ at_array_type_heap_to_co | public       | C           | at_array_type_heap_to_co[]
+(1 row)
+
+SELECT typname, typnamespace::regnamespace, typcategory, typelem::regtype FROM pg_type
+    WHERE typname = '_at_array_type_heap_to_co';
+          typname          | typnamespace | typcategory |         typelem          
+---------------------------+--------------+-------------+--------------------------
+ _at_array_type_heap_to_co | public       | A           | at_array_type_heap_to_co
+(1 row)
+
+ALTER TABLE at_array_type_heap_to_co SET ACCESS METHOD ao_column;
+-- The array type should be gone.
+SELECT typname, typnamespace::regnamespace, typcategory, typarray::regtype FROM pg_type
+    WHERE typname = 'at_array_type_heap_to_co';
+         typname          | typnamespace | typcategory |          typarray          
+--------------------------+--------------+-------------+----------------------------
+ at_array_type_heap_to_co | public       | C           | at_array_type_heap_to_co[]
+(1 row)
+
+SELECT typname, typnamespace::regnamespace, typcategory, typelem::regtype FROM pg_type
+    WHERE typname = '_at_array_type_heap_to_co';
+          typname          | typnamespace | typcategory |         typelem          
+---------------------------+--------------+-------------+--------------------------
+ _at_array_type_heap_to_co | public       | A           | at_array_type_heap_to_co
+(1 row)
+
+-- A successful drop indicates that the array type -> base type dependency
+-- should have been removed successfully by the ALTER TABLE SET AM above.
+DROP TABLE at_array_type_heap_to_co;
+--
+-- Ensure that the array type of the base table type is created when moving from
+-- ao_row | ao_column -> heap
+--
+CREATE TABLE at_array_type_ao_to_heap(i int) USING ao_row;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT typname, typnamespace::regnamespace, typcategory, typarray::regtype FROM pg_type
+    WHERE typname = 'at_array_type_ao_to_heap';
+         typname          | typnamespace | typcategory |          typarray          
+--------------------------+--------------+-------------+----------------------------
+ at_array_type_ao_to_heap | public       | C           | at_array_type_ao_to_heap[]
+(1 row)
+
+SELECT typname, typnamespace::regnamespace, typcategory, typelem::regtype FROM pg_type
+    WHERE typname = '_at_array_type_ao_to_heap';
+          typname          | typnamespace | typcategory |         typelem          
+---------------------------+--------------+-------------+--------------------------
+ _at_array_type_ao_to_heap | public       | A           | at_array_type_ao_to_heap
+(1 row)
+
+ALTER TABLE at_array_type_ao_to_heap SET ACCESS METHOD heap;
+-- The array type should have been created and linked.
+SELECT typname, typnamespace::regnamespace, typcategory, typarray::regtype FROM pg_type
+    WHERE typname = 'at_array_type_ao_to_heap';
+         typname          | typnamespace | typcategory |          typarray          
+--------------------------+--------------+-------------+----------------------------
+ at_array_type_ao_to_heap | public       | C           | at_array_type_ao_to_heap[]
+(1 row)
+
+SELECT typname, typnamespace::regnamespace, typcategory, typelem::regtype FROM pg_type
+    WHERE typname = '_at_array_type_ao_to_heap';
+          typname          | typnamespace | typcategory |         typelem          
+---------------------------+--------------+-------------+--------------------------
+ _at_array_type_ao_to_heap | public       | A           | at_array_type_ao_to_heap
+(1 row)
+
+SELECT objid::regtype, refobjid::regtype FROM pg_depend
+    WHERE objid = '_at_array_type_ao_to_heap'::regtype AND refobjid = 'at_array_type_ao_to_heap'::regtype;
+           objid            |         refobjid         
+----------------------------+--------------------------
+ at_array_type_ao_to_heap[] | at_array_type_ao_to_heap
+(1 row)
+
+-- Alter it back to ao_row so that we test the upgrade path
+ALTER TABLE at_array_type_ao_to_heap SET ACCESS METHOD ao_row;
+CREATE TABLE at_array_type_co_to_heap(i int) USING ao_column;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT typname, typnamespace::regnamespace, typcategory, typarray::regtype FROM pg_type
+    WHERE typname = 'at_array_type_co_to_heap';
+         typname          | typnamespace | typcategory |          typarray          
+--------------------------+--------------+-------------+----------------------------
+ at_array_type_co_to_heap | public       | C           | at_array_type_co_to_heap[]
+(1 row)
+
+SELECT typname, typnamespace::regnamespace, typcategory, typelem::regtype FROM pg_type
+    WHERE typname = '_at_array_type_co_to_heap';
+          typname          | typnamespace | typcategory |         typelem          
+---------------------------+--------------+-------------+--------------------------
+ _at_array_type_co_to_heap | public       | A           | at_array_type_co_to_heap
+(1 row)
+
+ALTER TABLE at_array_type_co_to_heap SET ACCESS METHOD heap;
+-- The array type should have been created and linked.
+SELECT typname, typnamespace::regnamespace, typcategory, typarray::regtype FROM pg_type
+    WHERE typname = 'at_array_type_co_to_heap';
+         typname          | typnamespace | typcategory |          typarray          
+--------------------------+--------------+-------------+----------------------------
+ at_array_type_co_to_heap | public       | C           | at_array_type_co_to_heap[]
+(1 row)
+
+SELECT typname, typnamespace::regnamespace, typcategory, typelem::regtype FROM pg_type
+    WHERE typname = '_at_array_type_co_to_heap';
+          typname          | typnamespace | typcategory |         typelem          
+---------------------------+--------------+-------------+--------------------------
+ _at_array_type_co_to_heap | public       | A           | at_array_type_co_to_heap
+(1 row)
+
+SELECT objid::regtype, refobjid::regtype FROM pg_depend
+    WHERE objid = '_at_array_type_co_to_heap'::regtype AND refobjid = 'at_array_type_co_to_heap'::regtype;
+           objid            |         refobjid         
+----------------------------+--------------------------
+ at_array_type_co_to_heap[] | at_array_type_co_to_heap
+(1 row)
+
+-- Alter it back to ao_column so that we test the upgrade path
+ALTER TABLE at_array_type_co_to_heap SET ACCESS METHOD ao_column;
+-- Alter a very wide table from HEAP to CO
+CREATE OR REPLACE FUNCTION create_very_wide_table(num_columns INTEGER, column_prefix TEXT, data_type TEXT)
+RETURNS VOID AS $$
+DECLARE
+    sql_statement TEXT := 'CREATE TABLE very_wide_table (';
+    i INTEGER;
+BEGIN
+    FOR i IN 1..num_columns LOOP
+        sql_statement := sql_statement || quote_ident(column_prefix || i) || ' ' || data_type;
+        IF i < num_columns THEN
+            sql_statement := sql_statement || ', ';
+        END IF;
+    END LOOP;
+    sql_statement := sql_statement || ');';
+
+    EXECUTE sql_statement;
+    RAISE NOTICE 'Table "very_wide_table" created with % columns.', num_columns;
+END;
+$$ LANGUAGE plpgsql;
+SELECT create_very_wide_table(1594, 'col_', 'TEXT');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col_1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table "very_wide_table" created with 1594 columns.
+ create_very_wide_table 
+------------------------
+ 
+(1 row)
+
+ALTER TABLE very_wide_table SET ACCESS METHOD ao_column WITH (compresstype=zstd);

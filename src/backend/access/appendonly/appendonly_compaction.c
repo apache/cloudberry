@@ -447,7 +447,7 @@ AppendOnlySegmentFileFullCompaction(Relation aorel,
 	/* Use the slot type the table's access method hands out, not a fixed one. */
 	slot = table_slot_create(aorel, NULL);
 	slot->tts_tableOid = RelationGetRelid(aorel);
-	mt_bind = create_memtuple_binding(tupDesc);
+	mt_bind = create_memtuple_binding(tupDesc, tupDesc->natts);
 
 	/*
 	 * We need a ResultRelInfo and an EState so we can use the regular
@@ -522,13 +522,9 @@ AppendOnlySegmentFileFullCompaction(Relation aorel,
 	AppendOnlyVisimap_DeleteSegmentFile(&visiMap, compact_segno);
 
 	/* Delete all mini pages of the segment files if block directory exists */
-	if (OidIsValid(blkdirrelid))
-	{
-		AppendOnlyBlockDirectory_DeleteSegmentFile(aorel,
-												   appendOnlyMetaDataSnapshot,
-												   compact_segno,
-												   0);
-	}
+	AppendOnlyBlockDirectory_DeleteSegmentFiles(blkdirrelid,
+												appendOnlyMetaDataSnapshot,
+												compact_segno);
 
 	if (Debug_appendonly_print_compaction)
 		elog(LOG, "Finished compaction: AO segfile %d, relation %s, moved tuple count " INT64_FORMAT,
@@ -777,15 +773,18 @@ AppendOptimizedTruncateToEOF(Relation aorel, AOVacuumRelStats *vacrelstats)
 		}
 		else
 		{
+			AOCSFileSegInfo 	*aocs_seginfo;
+
 			Datum		d = fastgetattr(tuple,
 										Anum_pg_aocs_vpinfo,
 										pg_aoseg_dsc, &isNull);
-			AOCSVPInfo *vpinfo = (AOCSVPInfo *) PG_DETOAST_DATUM(d);
 
-			AOCSSegmentFileTruncateToEOF(aorel, segno, vpinfo, vacrelstats);
+			aocs_seginfo = (AOCSFileSegInfo *) palloc0(aocsfileseginfo_size(RelationGetNumberOfAttributes(aorel)));			
+			deformAOCSVPInfo(aorel, (struct varlena *) DatumGetPointer(d), aocs_seginfo);
 
-			if (DatumGetPointer(d) != (Pointer) vpinfo)
-				pfree(vpinfo);
+			AOCSSegmentFileTruncateToEOF(aorel, segno, &aocs_seginfo->vpinfo, vacrelstats);
+
+			pfree(aocs_seginfo);
 		}
 	}
 	systable_endscan(aoscan);

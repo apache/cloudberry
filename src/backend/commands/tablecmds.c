@@ -16,6 +16,7 @@
  */
 #include "postgres.h"
 
+#include "access/appendonlywriter.h"
 #include "access/attmap.h"
 #include "access/genam.h"
 #include "access/heapam.h"
@@ -357,6 +358,9 @@ static void ATController(AlterTableStmt *parsetree,
 static void ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 					  bool recurse, bool recursing, LOCKMODE lockmode,
 					  AlterTableUtilityContext *context);
+static void setupColumnOnlyRewrite(List **wqueue,
+					 const AlteredTableInfo *tab,
+					 AlterTableType ATtype);
 static void ATRewriteCatalogs(List **wqueue, LOCKMODE lockmode,
 							  AlterTableUtilityContext *context);
 static void ATExecCmd(List **wqueue, AlteredTableInfo *tab,
@@ -371,10 +375,6 @@ static void ATRewriteTables(AlterTableStmt *parsetree,
 							List **wqueue, LOCKMODE lockmode,
 							AlterTableUtilityContext *context);
 static void ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode);
-static void ATAocsWriteSegFileNewColumns(
-		AOCSAddColumnDesc idesc, AOCSHeaderScanDesc sdesc,
-		AlteredTableInfo *tab, ExprContext *econtext, TupleTableSlot *slot, const char *relname);
-static void ATAocsWriteNewColumns(AlteredTableInfo *tab);
 static AlteredTableInfo *ATGetQueueEntry(List **wqueue, Relation rel);
 static void ATSimplePermissions(AlterTableType cmdtype, Relation rel, int allowed_targets);
 static void ATSimpleRecursion(List **wqueue, Relation rel,
@@ -394,6 +394,8 @@ static ObjectAddress ATExecAddColumn(List **wqueue, AlteredTableInfo *tab,
 									 bool recurse, bool recursing,
 									 LOCKMODE lockmode, int cur_pass,
 									 AlterTableUtilityContext *context);
+static void ATExecSetColumnEncoding(List **wqueue, AlteredTableInfo *tab, Relation rel,
+									AlterTableCmd *cmd);
 static bool check_for_column_name_collision(Relation rel, const char *colname,
 											bool if_not_exists);
 static void add_column_datatype_dependency(Oid relid, int32 attnum, Oid typid);
@@ -523,8 +525,12 @@ static void ATPrepAlterColumnType(List **wqueue,
 								  AlterTableCmd *cmd, LOCKMODE lockmode,
 								  AlterTableUtilityContext *context);
 static bool ATColumnChangeRequiresRewrite(Node *expr, AttrNumber varattno);
-static ObjectAddress ATExecAlterColumnType(AlteredTableInfo *tab, Relation rel,
-										   AlterTableCmd *cmd, LOCKMODE lockmode);
+static ObjectAddress
+ATExecAlterColumnType(List **wqueue,
+					  AlteredTableInfo *tab,
+					  Relation rel,
+					  AlterTableCmd *cmd,
+					  LOCKMODE lockmode);
 static void RememberConstraintForRebuilding(Oid conoid, AlteredTableInfo *tab);
 static void RememberIndexForRebuilding(Oid indoid, AlteredTableInfo *tab);
 static void RememberStatisticsForRebuilding(Oid stxoid, AlteredTableInfo *tab);
@@ -556,6 +562,7 @@ static void ATExecSetTableSpaceNoStorage(Relation rel, Oid newTableSpace);
 static void ATExecSetRelOptions(Relation rel, List *defList,
 								AlterTableType operation,
 								bool *aoopt_changed,
+								Datum *newOptions_out,
 								Oid newAccessMethod,
 								LOCKMODE lockmode);
 static void ATExecEnableDisableTrigger(Relation rel, const char *trigname,
@@ -632,7 +639,6 @@ static bool prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *
 static void checkATSetDistributedByStandalone(AlteredTableInfo *tab, Relation rel);
 static void populate_rel_col_encodings(Relation rel, List *stenc, List *withOptions, Oid newAm);
 static void clear_rel_opts(Relation rel);
-
 
 /* ----------------------------------------------------------------
  *		DefineRelation
@@ -1170,7 +1176,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	 * Analyze AOCS attribute encoding clauses.
 	 *
 	 * Ideally this could have happened even later confined in
-	 * AddRelationAttributeEncodings(). However, since this function can
+	 * AddCOAttributeEncodings(). However, since this function can
 	 * legitimately error out, it is prefered to call it before updating the
 	 * catalog in heap_create_with_catalog().
 	 *
@@ -1396,10 +1402,10 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 									&& !stmt->partbound && !stmt->partspec
 									/* errorOnEncodingClause */, true);
 
-		AddRelationAttributeEncodings(rel, part_attr_encodings);
+		AddCOAttributeEncodings(relationId, part_attr_encodings);
 	}
 	else if (stmt->attr_encodings && (relkind != RELKIND_PARTITIONED_TABLE))
-		AddRelationAttributeEncodings(rel, stmt->attr_encodings);
+		AddCOAttributeEncodings(relationId, stmt->attr_encodings);
 
 	/*
 	 * Make column generation expressions visible for use by partitioning.
@@ -2099,7 +2105,7 @@ ao_aux_tables_safe_truncate(Relation rel)
 	 * This mimics the state of the gp_fastsequence row when an empty AO/AOCS
 	 * table is created.
 	 */
-	RemoveFastSequenceEntry(aoseg_relid);
+	RemoveFastSequenceEntry(RelationGetRelid(rel), aoseg_relid);
 	InsertInitialFastSequenceEntries(aoseg_relid);
 
 	/* GPDB truncate should also update pg_appendonly.segfilecount */
@@ -5045,14 +5051,27 @@ static void populate_rel_col_encodings(Relation rel, List *stenc, List *withOpti
 {
 	int 		attno;
 	List 		*colDefs = NIL;
+
 	const TableAmRoutine *tam;
 	TupleDesc 	tupdesc = RelationGetDescr(rel);
+	List 		*current_encodings = NIL;
 
+	current_encodings = rel_get_column_encodings(rel);
 	/* Figure out the column definition list. */
 	for (attno = 0; attno < tupdesc->natts; attno++)
 	{
 		Form_pg_attribute 	att = TupleDescAttr(tupdesc, attno);
-		ColumnDef 		*cd = makeColumnDef(NameStr(att->attname),
+		ColumnDef 		*cd;
+
+		/* 
+		 * Skip if it's already in pg_attribute_encoding. 
+		 * This is possible when we do ALTER COLUMN SET ENCODING and 
+		 * SET ACCESS METHOD together and the former takes place first.
+		 */
+		if (find_crsd(NameStr(att->attname), current_encodings))
+			continue;
+
+		cd = makeColumnDef(NameStr(att->attname),
 								att->atttypid, 
 								att->atttypmod,
 								0);
@@ -5077,8 +5096,13 @@ static void populate_rel_col_encodings(Relation rel, List *stenc, List *withOpti
 							false,
 							newAccessMethod == AO_COLUMN_TABLE_AM_OID, RelationIsAppendOptimized(rel));
 
-
-	AddRelationAttributeEncodings(rel, attr_encodings);
+	/*
+	 * Update in place rather than insert: an ao_row table already has an entry
+	 * per column added by fast ADD COLUMN, and its lastrownums must survive
+	 * into phase 3, which still reads the old ao_row data.
+	 * swap_relation_files() clears them once the rewrite is done.
+	 */
+	AddOrUpdateCOAttributeEncodings(RelationGetRelid(rel), attr_encodings);
 }
 
 /*
@@ -5160,6 +5184,7 @@ AlterTableGetLockLevel(List *cmds)
 				/*
 				 * These subcommands rewrite the heap, so require full locks.
 				 */
+			case AT_SetColumnEncoding: /* must rewrite heap */
 			case AT_AddColumn:	/* may rewrite heap, in some cases and visible
 								 * to SELECT */
 			case AT_SetAccessMethod:	/* must rewrite heap */
@@ -5608,6 +5633,11 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 							lockmode, context);
 			/* Recursion occurs during execution phase */
 			pass = AT_PASS_ADD_COL;
+			break;
+		case AT_SetColumnEncoding: /* ALTER COLUMN SET ENCODING */
+			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE);
+			ATSimpleRecursion(wqueue, rel, cmd, recurse, lockmode, context);
+			pass = AT_PASS_SET_ENCODING;
 			break;
 		case AT_ColumnDefault:	/* ALTER COLUMN DEFAULT */
 
@@ -6253,6 +6283,9 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 									  cmd->recurse, false,
 									  lockmode, cur_pass, context);
 			break;
+		case AT_SetColumnEncoding:
+			ATExecSetColumnEncoding(wqueue, tab, rel, cmd);
+			break;
 		case AT_ColumnDefault:	/* ALTER COLUMN DEFAULT */
 			address = ATExecColumnDefault(rel, cmd->name, cmd->def, lockmode);
 			break;
@@ -6366,7 +6399,7 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 			break;
 		case AT_AlterColumnType:	/* ALTER COLUMN TYPE */
 			/* parse transformation was done earlier */
-			address = ATExecAlterColumnType(tab, rel, cmd, lockmode);
+			address = ATExecAlterColumnType(wqueue, tab, rel, cmd, lockmode);
 			break;
 		case AT_AlterColumnGenericOptions:	/* ALTER COLUMN OPTIONS */
 			address =
@@ -6395,7 +6428,7 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 			{
 				bool aoopt_changed = false;
 
-				ATExecSetRelOptions(rel, (List *) cmd->def, cmd->subtype, &aoopt_changed, tab->newAccessMethod, lockmode);
+				ATExecSetRelOptions(rel, (List *) cmd->def, cmd->subtype, &aoopt_changed, NULL, tab->newAccessMethod, lockmode);
 
 				/* 
 				 * When user sets the same access method as the existing one, the
@@ -6427,12 +6460,50 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 		case AT_ReplaceRelOptions:	/* replace entire option list */
 			{
 				bool 		aoopt_changed = false;
+				Datum		newOptions = (Datum) 0;
 
-				ATExecSetRelOptions(rel, (List *) cmd->def, cmd->subtype, &aoopt_changed, InvalidOid, lockmode);
+				ATExecSetRelOptions(rel, (List *) cmd->def, cmd->subtype,
+									&aoopt_changed, &newOptions, InvalidOid, lockmode);
 
 				/* Will rewrite table if there's a change to the AO reloptions. */
 				if (aoopt_changed)
 					tab->rewrite |= AT_REWRITE_ALTER_RELOPTS;
+
+				/*
+				 * A column with no ENCODING of its own only ever gets a codec
+				 * from the table-level default, so the rewrite the options
+				 * change triggers has to re-encode it with the new default
+				 * rather than just relabel pg_class.reloptions.  Columns
+				 * carrying an explicit override keep it, including one given
+				 * by an ALTER COLUMN ... SET ENCODING earlier in this same
+				 * command -- get_cols_for_new_reloption_defaults() sorts that
+				 * out by inspecting tab->new_crsds.
+				 *
+				 * GPDB_PORT: upstream reads the proposed options from
+				 * tab->newOptions, which cbdb's AlteredTableInfo does not
+				 * have -- ATExecSetRelOptions() writes pg_class itself -- so
+				 * they come from the out parameter added to it instead.
+				 * Upstream also handles a partitioned root here; cbdb cannot
+				 * reach that case, because partitioned_table_reloptions()
+				 * rejects AO storage options outright ("unrecognized
+				 * parameter \"compresstype\""), so that branch is left out.
+				 */
+				if (RelationIsAoCols(rel))
+				{
+					List	   *default_updates =
+						get_cols_for_new_reloption_defaults(rel, newOptions, tab->new_crsds);
+					ListCell   *lc2;
+
+					foreach(lc2, default_updates)
+					{
+						ColumnReferenceStorageDirective *c = lfirst(lc2);
+						bool		is_updated;
+
+						if (!tab->new_crsds)
+							tab->new_crsds = rel_get_column_encodings(rel);
+						tab->new_crsds = updateEncodingList(tab->new_crsds, c, &is_updated);
+					}
+				}
 			}
 			break;
 		case AT_EnableTrig:		/* ENABLE TRIGGER name */
@@ -6894,67 +6965,73 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				errmsg("cannot rewrite temporary tables of other sessions")));
 		}
-		heap_close(OldHeap, NoLock);
 
 		/*
-		 * GPDB_12_MERGE_FIXME: This is a AM specific optimization, currently
-		 * exposted out of the AM handler.  The add-column optimization should
-		 * ideally be implemented within the table AM.
+		 * If the operation can be optimized to not rewrite the AOCO table
+		 * but instead just write new columns/ rewrite existing columns with new type
+		 * Call the corresponding optimization and continue
 		 *
-		 * A counterargument can be made that this optimization is very
-		 * specific to column-oriented table AM.  Should the table AM API be
-		 * generalised to fit it?
-		 *
-		 * If table AM API needs to be changed, we can imagine a few options
-		 * to implement the add-column optimization.
-		 *
-		 * (1) definfe a new interface on the lines of
-		 * table_relation_copy_for_cluster.  It would require traslating the
-		 * state currently maintained in AlteredTableInfo for per-row
-		 * expression and constraint evaluation and passed as arguments to the
-		 * new interface.
-		 *
-		 * (2) Define a new interface to scan the underlying table one block
-		 * at a time, where block is a append-optimized varblock.  And another
-		 * interface to scan tuples within the block.  After evaluating the
-		 * expressions and constraints on this tuple, new slot is constructed,
-		 * as is currently done.  A new interface is needed to insert this
-		 * slot into specific block and finish the block being inserted into,
-		 * when there are no more tuples in the scanned block.  Let's
-		 * illustrate this with pseudocode:
-		 *
-		 * TableScanDesc sdesc = table_begin_block_scan();
-		 * Block block;
-		 * 
-		 * // table AM API doesn't provide an insert descriptor
-		 * TableInsertDesc idesc = table_begin_block_insert();
-		 *
-		 * while (block = table_getnext_block(sdesc))
-		 * {
-		 *     table_insert_begin_block(idesc, block);
-		 *     while (slot = table_getnextslot_in_block(block))
-		 *     {
-		 *         // evaluate expressions and constraints for tab->newvals
-		 *         newslot = ExecEvalExpr();
-		 *         tuple_insert_in_block(idesc, block, newslot);
-		 *     }
-		 *     table_insert_end_block(idesc);
-		 * }
-		 *
-		 * table_end_block_insert(idesc);
-		 *
-		 * table_end_blcok_scan(sdesc);
-		 *
-		 *
-		 * Ideally, ALTER TABLE ADD COLUMN should not be exposed to any code
-		 * specific to table AM.  Descide the best option to achieve this
-		 * goal.
+		 * We call CommandCounterIncrement after ATAocsWriteNewColumns since
+		 * we might edit the catalog again in ATAocsRewriteColumns if the AT
+		 * cmd has both subcmds
 		 */
-		if (tab->rewrite & AT_REWRITE_NEW_COLUMNS_ONLY_AOCS)
+		if (tab->rewrite & AT_REWRITE_NEW_COLUMNS_ONLY || tab->rewrite & AT_REWRITE_REWRITE_COLUMNS_ONLY)
 		{
-			ATAocsWriteNewColumns(tab);
+			/*
+			 * Both flags are only ever set under RelationIsAoCols(); no other
+			 * access method implements the two callbacks below.  table_relation_
+			 * add_columns() rejects the rest at runtime, this just pins the
+			 * assumption down in assert-enabled builds.
+			 */
+			Assert(RelationIsAoCols(OldHeap));
+
+			if (tab->rewrite & AT_REWRITE_NEW_COLUMNS_ONLY)
+			{
+				table_relation_add_columns(OldHeap, tab->newvals, tab->oldDesc);
+				CommandCounterIncrement();
+			}
+			if (tab->rewrite & AT_REWRITE_REWRITE_COLUMNS_ONLY)
+			{
+				/*
+				 * The rewrite checks the constraints itself, one tuple at a
+				 * time, which costs nothing extra because it is reading every
+				 * column anyway.  It can only do so when this is the whole
+				 * command, though.  Alongside ADD COLUMN its tuples are not
+				 * complete: it builds them from tab->oldDesc, the descriptor
+				 * from before the command, so the columns ADD COLUMN has just
+				 * appended are left at the zero the slot was allocated with --
+				 * and marked not-null, so a CHECK over one of them reads a
+				 * datum of 0.  For "ADD COLUMN b text ... CHECK (length(b) >
+				 * 0)" that is a NULL pointer handed to the detoaster.  Leave
+				 * the checking to the pass below, which reads whole tuples
+				 * back off disk.
+				 */
+				table_relation_rewrite_columns(OldHeap, tab->newvals,
+											   (tab->rewrite & AT_REWRITE_NEW_COLUMNS_ONLY) ?
+											   NIL : tab->constraints,
+											   tab->oldDesc);
+			}
+			heap_close(OldHeap, NoLock);
+
+			/*
+			 * ADD COLUMN only writes the new columns; it never reads the
+			 * existing ones, so the access method cannot evaluate a CHECK that
+			 * references them.  Run the same validate-only scan the ordinary
+			 * no-rewrite path below performs, which reads the tuples as they
+			 * now stand on disk.  Passing InvalidOid is what makes it a
+			 * verification pass rather than a rebuild.
+			 *
+			 * This covers a combined ADD COLUMN + ALTER COLUMN TYPE as well,
+			 * the rewrite half having deferred its constraints to here.
+			 */
+			if (tab->rewrite & AT_REWRITE_NEW_COLUMNS_ONLY &&
+				(tab->constraints != NIL || tab->verify_new_notnull ||
+				 tab->partition_constraint != NULL))
+				ATRewriteTable(tab, InvalidOid, lockmode);
 			continue;
 		}
+		heap_close(OldHeap, NoLock);
+
 		/*
 		 * We only need to rewrite the table if at least one column needs to
 		 * be recomputed, or we are
@@ -7074,7 +7151,8 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 			 * unlogged anyway.
 			 */
 			OIDNewHeap = make_new_heap(tab->relid, NewTableSpace, NewAccessMethod,
-									   persistence, lockmode, hasIndexes, false);
+									   tab->new_crsds, persistence, lockmode,
+									   hasIndexes, false);
 
 			/*
 			 * Copy the heap data into the new table with the desired
@@ -7241,336 +7319,6 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 }
 
 /*
- * A helper for ATAocsWriteNewColumns(). It scans an existing column for
- * varblock headers. Write one new segfile each for new columns.
- */
-static void
-ATAocsWriteSegFileNewColumns(
-		AOCSAddColumnDesc idesc, AOCSHeaderScanDesc sdesc,
-		AlteredTableInfo *tab, ExprContext *econtext, TupleTableSlot *slot, const char *relname)
-{
-	NewColumnValue *newval;
-	TupleDesc tupdesc = RelationGetDescr(idesc->rel);
-	Form_pg_attribute attr;
-	Datum *values = slot->tts_values;
-	bool *isnull = slot->tts_isnull;
-	int64 expectedFRN = -1; /* expected firstRowNum of the next varblock */
-	ListCell *l;
-	int i;
-
-	/* Start index in values and isnull array for newly added columns. */
-	AttrNumber newcol = tupdesc->natts - idesc->num_newcols;
-
-	/* Loop over each varblock in an appendonly segno. */
-	while (aocs_get_nextheader(sdesc))
-	{
-		if (sdesc->ao_read.current.hasFirstRowNum)
-		{
-			if (expectedFRN == -1)
-			{
-				/*
-				 * Initialize expected firstRowNum for each appendonly
-				 * segment.  Initializing it to 1 may not always be
-				 * good.  E.g. if the first insert into an appendonly
-				 * segment is aborted.  A subsequent successful insert
-				 * creates the first varblock having firstRowNum
-				 * greater than 1.
-				 */
-				expectedFRN = sdesc->ao_read.current.firstRowNum;
-				aocs_addcol_setfirstrownum(idesc, expectedFRN);
-			}
-			else
-			{
-				Assert(expectedFRN <= sdesc->ao_read.current.firstRowNum);
-				if (expectedFRN < sdesc->ao_read.current.firstRowNum)
-				{
-					elogif(Debug_appendonly_print_storage_headers, LOG,
-						   "hole in %s: exp FRN: " INT64_FORMAT ", actual FRN: "
-						   INT64_FORMAT, sdesc->ao_read.segmentFileName,
-						   expectedFRN, sdesc->ao_read.current.firstRowNum);
-					/*
-					 * We encountered a break in sequence of row
-					 * numbers (hole), replicate it in the new
-					 * segfiles.
-					 */
-					aocs_addcol_endblock(
-							idesc, sdesc->ao_read.current.firstRowNum);
-				}
-			}
-			for (i = 0; i < sdesc->ao_read.current.rowCount; ++i)
-			{
-				foreach (l, tab->newvals)
-				{
-					newval = lfirst(l);
-					values[newval->attnum-1] =
-							ExecEvalExprSwitchContext(newval->exprstate,
-													  econtext,
-													  &isnull[newval->attnum-1]);
-					/*
-					 * Ensure that NOT NULL constraint for the newly
-					 * added columns is not being violated.  This
-					 * covers the case when explicit "CHECK()"
-					 * constraint is not specified but only "NOT NULL"
-					 * is specified in the new column's definition.
-					 */
-					attr = TupleDescAttr(tupdesc, newval->attnum - 1);
-					if (attr->attnotnull &&	isnull[newval->attnum-1])
-					{
-						ereport(ERROR,
-								(errcode(ERRCODE_NOT_NULL_VIOLATION),
-								 errmsg("column \"%s\" of relation \"%s\" contains null values",
-										NameStr(attr->attname),
-										relname)));
-					}
-				}
-				foreach (l, tab->constraints)
-				{
-					NewConstraint *con = lfirst(l);
-					switch(con->contype)
-					{
-						case CONSTR_CHECK:
-							if(!ExecCheck(con->qualstate, econtext))
-								ereport(ERROR,
-										(errcode(ERRCODE_CHECK_VIOLATION),
-										 errmsg("check constraint \"%s\" is violated by some row",
-											con->name)));
-							break;
-						case CONSTR_FOREIGN:
-							/* Nothing to do */
-							break;
-						default:
-							elog(ERROR, "Unrecognized constraint type: %d",
-								 (int) con->contype);
-					}
-				}
-				aocs_addcol_insert_datum(idesc, values+newcol, isnull+newcol);
-				ResetExprContext(econtext);
-				CHECK_FOR_INTERRUPTS();
-			}
-			expectedFRN = sdesc->ao_read.current.firstRowNum +
-					sdesc->ao_read.current.rowCount;
-		}
-	}
-}
-
-/*
- * Choose the column that has the smallest segfile size so as to
- * minimize disk I/O in subsequent varblock header scan. The natts arg
- * includes only existing columns and not the ones being added. Once
- * we find a segfile with nonzero tuplecount and find the column with
- * the smallest eof to return, we continue the loop but skip over all
- * segfiles except for those in AOSEG_STATE_AWAITING_DROP state which
- * we need to append to our drop list.
- */
-static int
-column_to_scan(AOCSFileSegInfo **segInfos, int nseg, int natts, Relation aocsrel)
-{
-	int scancol = -1;
-	int segi;
-	int i;
-	AOCSVPInfoEntry *vpe;
-	int64 min_eof = 0;
-
-	for (segi = 0; segi < nseg; ++segi)
-	{
-		/*
-		 * Don't use a AOSEG_STATE_AWAITING_DROP segfile. That seems
-		 * like a bad idea in general, but there's one particular problem:
-		 * the 'vpinfo' of a dropped segfile might be missing information
-		 * for columns that were added later.
-		 */
-		if (segInfos[segi]->state == AOSEG_STATE_AWAITING_DROP)
-			continue;
-
-		/*
-		 * Skip over appendonly segments with no tuples (caused by VACUUM)
-		 */
-		if (segInfos[segi]->total_tupcount > 0 && scancol == -1)
-		{
-			for (i = 0; i < natts; ++i)
-			{
-				vpe = getAOCSVPEntry(segInfos[segi], i);
-				if (vpe->eof > 0 && (!min_eof || vpe->eof < min_eof))
-				{
-					min_eof = vpe->eof;
-					scancol = i;
-				}
-			}
-		}
-	}
-
-	return scancol;
-}
-
-static void
-ATAocsWriteNewColumns(AlteredTableInfo *tab)
-{
-	AOCSFileSegInfo **segInfos;
-	AOCSHeaderScanDesc sdesc;
-	AOCSAddColumnDesc idesc;
-	NewColumnValue *newval;
-	NewConstraint *con;
-	TupleTableSlot *slot;
-	EState *estate;
-	ExprContext *econtext;
-	Relation rel; /* Relation being altered */
-	int32 nseg;
-	int32 segi;
-	char *basepath;
-	int32 scancol; /* chosen column number to scan from */
-	ListCell *l;
-	Snapshot snapshot;
-	int addcols;
-
-	snapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
-
-	estate = CreateExecutorState();
-	foreach(l, tab->constraints)
-	{
-		con = lfirst(l);
-		switch (con->contype)
-		{
-			case CONSTR_CHECK:
-				con->qualstate = ExecPrepareExpr((Expr *) con->qual, estate);
-				break;
-			case CONSTR_FOREIGN:
-				/* Nothing to do here */
-				break;
-			default:
-				elog(ERROR, "unrecognized constraint type: %d",
-					 (int) con->contype);
-		}
-	}
-	Assert(tab->newvals);
-	foreach(l, tab->newvals)
-	{
-		newval = lfirst(l);
-		newval->exprstate = ExecPrepareExpr((Expr *) newval->expr, estate);
-	}
-
-	rel = heap_open(tab->relid, NoLock);
-	Assert(RelationIsAoCols(rel));
-
-	/*
-     * There might be AWAITING_DROP segments occupying spaces for failing
-     * to drop at VACUUM in the case of cleaning up happened concurrently
-     * with earlier readers which was accessing the dead segment files.
-     *
-     * We used to call AppendOptimizedRecycleDeadSegments() (current name is
-     * ao_vacuum_rel_recycle_dead_segments) to recycle those segfiles to save
-     * spaces in this scenario. But it didn't do corresponding index tuples
-     * cleanup for unknown reason.
-     *
-     * After optimizing VACUUM AO strategy, we did refactor for
-     * AppendOptimizedRecycleDeadSegments() a little bit and combine
-     * dead segfiles cleanup with corresponding indexes cleanup together.
-     * While it seems to be impossible to pass index vacuuming parameter in
-     * this scenario, so we removed AppendOptimizedRecycleDeadSegments() out
-     * of this function and dedicated it to be called only in VACUUM scenario.
-     *
-     * We are supposed to be fine without recycling spaces here, or find
-     * another way to fix it if that does become a real problem.
-     */
-
-	segInfos = GetAllAOCSFileSegInfo(rel, snapshot, &nseg, NULL);
-	basepath = relpathbackend(rel->rd_locator, rel->rd_backend, MAIN_FORKNUM);
-	if (nseg > 0)
-	{
-		aocs_addcol_emptyvpe(rel, segInfos, nseg,
-							 list_length(tab->newvals));
-	}
-
-	scancol = column_to_scan(segInfos, nseg, tab->oldDesc->natts, rel);
-	elogif(Debug_appendonly_print_storage_headers, LOG,
-		   "using column %d of relation %s for alter table scan",
-		   scancol, RelationGetRelationName(rel));
-
-	/*
-	 * Continue only if a non-empty existing segfile was found above.
-	 */
-	if (Gp_role != GP_ROLE_DISPATCH && scancol != -1)
-	{
-		slot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtual);
-
-		/*
-		 * Initialize expression context for evaluating values and
-		 * constraints of the newly added columns.
-		 */
-		econtext = GetPerTupleExprContext(estate);
-		/*
-		 * The slot's data will be populated for each newly added
-		 * column by ExecEvalExpr().
-		 */
-		econtext->ecxt_scantuple = slot;
-
-		/*
-		 * Mark all attributes including newly added columns as valid.
-		 * Used for per tuple constraint evaluation.
-		 */
-		ExecStoreAllNullTuple(slot);
-
-		sdesc = aocs_begin_headerscan(rel, scancol);
-		addcols = RelationGetDescr(rel)->natts - tab->oldDesc->natts;
-		/*
-		 * Protect against potential negative number here.
-		 * Note that natts is not decremented to reflect dropped columns,
-		 * so this should be safe
-		 */
-		Assert(addcols > 0);
-		idesc = aocs_addcol_init(rel, addcols);
-
-		/* Loop over all appendonly segments */
-		for (segi = 0; segi < nseg; ++segi)
-		{
-			if (segInfos[segi]->total_tupcount <= 0 ||
-				segInfos[segi]->state == AOSEG_STATE_AWAITING_DROP)
-			{
-				/*
-				 * VACUUM may cause appendonly segments with eof=0.
-				 * We only need to add new rows in pg_aocsseg_* in
-				 * this case for each newly added column.  This is
-				 * accomplished by aocs_addcol_emptyvpe() above.
-				 *
-				 * Compaction leaves redundant segments in
-				 * AOSEG_STATE_AWAITING_DROP.  We skip over them too.
-				 */
-				elogif(Debug_appendonly_print_storage_headers, LOG,
-					   "Skipping over empty segno %d relation %s",
-					   segInfos[segi]->segno, RelationGetRelationName(rel));
-				continue;
-			}
-			/*
-			 * Open aocs segfile for chosen column for current
-			 * appendonly segment.
-			 */
-			aocs_headerscan_opensegfile(sdesc, segInfos[segi], basepath);
-
-			/*
-			 * Create new segfiles for new columns for current
-			 * appendonly segment.
-			 */
-			RelFileLocatorBackend rnode;
-
-			rnode.locator = rel->rd_locator;
-			rnode.backend = rel->rd_backend;
-
-			aocs_addcol_newsegfile(idesc, segInfos[segi],
-								   basepath, rnode);
-
-			ATAocsWriteSegFileNewColumns(idesc, sdesc, tab, econtext, slot, RelationGetRelationName(rel));
-		}
-		aocs_end_headerscan(sdesc);
-		aocs_addcol_finish(idesc);
-		ExecDropSingleTupleTableSlot(slot);
-	}
-
-
-	FreeExecutorState(estate);
-	heap_close(rel, NoLock);
-	UnregisterSnapshot(snapshot);
-}
-
-/*
  * ATRewriteTable: scan or rewrite one table
  *
  * OIDNewHeap is InvalidOid if we don't need to rewrite
@@ -7725,10 +7473,18 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode)
 		 * can't be evaluated.  Note that even when the tuple layout is the
 		 * same and no rewrite is required, the tupDescs might not be
 		 * (consider ADD COLUMN without a default).
+		 *
+		 * This tested tab->rewrite, under an Assert() that newrel was
+		 * non-NULL.  "OIDNewHeap is InvalidOid if we don't need to rewrite" is
+		 * this function's contract, so newrel is what says whether a rewrite is
+		 * happening; tab->rewrite only agreed with it because every rewrite
+		 * reason came with a new heap.  The AOCO column-only paths break that:
+		 * they ask for a verification pass over a table they have already
+		 * updated in place, and so arrive with a rewrite reason set and no new
+		 * heap.
 		 */
-		if (tab->rewrite)
+		if (newrel)
 		{
-			Assert(newrel != NULL);
 			oldslot = MakeSingleTupleTableSlot(oldTupDesc,
 											   table_slot_callbacks(oldrel));
 			newslot = MakeSingleTupleTableSlot(newTupDesc,
@@ -7782,7 +7538,8 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode)
 		{
 			TupleTableSlot *insertslot;
 
-			if (tab->rewrite > 0)
+			/* See the newrel comment above */
+			if (newrel)
 			{
 				/* Extract data from old tuple */
 				slot_getallattrs(oldslot);
@@ -7980,6 +7737,7 @@ ATGetQueueEntry(List **wqueue, Relation rel)
 	tab->relkind = rel->rd_rel->relkind;
 	tab->oldDesc = CreateTupleDescCopyConstr(RelationGetDescr(rel));
 	tab->newAccessMethod = InvalidOid;
+	tab->new_crsds = NIL;
 	tab->newTableSpace = InvalidOid;
 	tab->newrelpersistence = RELPERSISTENCE_PERMANENT;
 	tab->chgPersistence = false;
@@ -8053,6 +7811,8 @@ alter_table_type_to_string(AlterTableType cmdtype)
 			return "SET WITHOUT CLUSTER";
 		case AT_SetAccessMethod:
 			return "SET ACCESS METHOD";
+		case AT_SetColumnEncoding:
+			return "ALTER COLUMN ... SET ENCODING";
 		case AT_SetLogged:
 			return "SET LOGGED";
 		case AT_SetUnLogged:
@@ -8720,6 +8480,131 @@ ATPrepAddColumn(List **wqueue, Relation rel, bool recurse, bool recursing,
 }
 
 /*
+ * Checks if we can avoid a full-table rewrite in phase 3,
+ * by only manipulating the columns involved in the ALTER operation.
+ * For instance, for an ADD COLUMN operation,
+ * we can simply add a new column file for CO tables.
+ * Also, for CO tables, we can rewrite an existing column solely, if we ALTER it's type or encoding.
+ * If we can optimize, then we set AlteredTableInfo->rewrite with the appropriate flag.
+ */
+static void
+setupColumnOnlyRewrite(List **wqueue,
+					 const AlteredTableInfo *tab,
+					 AlterTableType ATtype)
+{
+	bool columnar_rewrite = true;
+
+	/*
+	* ADD COLUMN, ALTER COLUMN TYPE, ALTER COLUMN SET ENCODING or ADD constraint commands for 
+	* CO can be optimize only if there's no other subcommand (except DROP COLUMN) being performed.
+	*
+	* GPDB_PORT: upstream has a single AT_PASS_ADD_CONSTR, described as "ADD
+	* constraints, defaults".  PG13 split the defaults out of it into
+	* AT_PASS_ADD_OTHERCONSTR, so allowing only AT_PASS_ADD_CONSTR here would
+	* leave ALTER COLUMN ... SET DEFAULT blocking the optimization, which is
+	* one of the cases this commit is about.  Both passes are allowed.
+	*/
+
+	/* we should be here for these commands only */
+	Assert(ATtype == AT_AddColumn ||
+				ATtype == AT_AlterColumnType ||
+				ATtype == AT_SetColumnEncoding);
+
+	for (int i = 0; i < AT_NUM_PASSES; ++i)
+	{
+		if (i != AT_PASS_SET_ENCODING && 
+					i != AT_PASS_ADD_COL && 
+					i != AT_PASS_ALTER_TYPE && 
+					i != AT_PASS_DROP && 
+					i != AT_PASS_ADD_CONSTR &&
+					i != AT_PASS_ADD_OTHERCONSTR &&
+					tab->subcmds[i])
+		{
+			columnar_rewrite = false;
+			break;
+		}
+	}
+
+	if (columnar_rewrite)
+	{
+		/*
+		 * We have acquired lockmode on the root and first-level partitions
+		 * already. This leaves the deeper subpartitions unlocked, but no
+		 * operations can drop (or alter) those relations without locking
+		 * through the root. But we still lock them to meet the upstream
+		 * expecation in relation_open that all callers should have acquired
+		 * a lock on the table except in bootstrap mode.
+
+		 * Note that find_all_inheritors() also includes the root partition
+		 * in the returned list.
+		 */
+		List *all_inheritors = find_all_inheritors(tab->relid, AccessShareLock, NULL);
+		ListCell *lc;
+		foreach (lc, all_inheritors)
+		{
+			Oid r = lfirst_oid(lc);
+			Relation rel = heap_open(r, NoLock);
+			AlteredTableInfo *childtab;
+			childtab = ATGetQueueEntry(wqueue, rel);
+
+			if (RelationIsAoCols(rel))
+			{
+				bool add_generated_column = false;
+				ListCell *l;
+
+				/*
+				 * Check if it is adding generated column by existing column value.
+				 *
+				 * We place this check here instead of under AT_AddColumn is
+				 * because add-column could be a subcommand of ALTER TABLE
+				 * which may contain other subcommand like alter-column-type.
+				 * We need to pre-detect the case and mark/unmark `rewrite` flag
+				 * accordingly to determine whether needs to do AOCO optimization
+				 * or not.
+				 */
+				foreach(l, childtab->newvals)
+				{
+					NewColumnValue *nv = lfirst(l);
+					if (nv->is_generated && contain_var_clause((Node *)nv->expr))
+					{
+						/* 
+						 * For a generated column, if the expression contains Var,
+						 * it indicates the new column value needs to be calculated
+						 * based on existing column, in this case we need to fallback
+						 * to ATRewriteTable() to do table scan instead of scanning
+						 * varblock header only.
+						 * 
+						 * TODO: currently we scan all columns in ATRewriteTable(),
+						 * it is optimizable to only scan the required columns.
+						 * 
+						 * Note, for partitioned table, we clear the flag for parent
+						 * only as newvals is null for children, we clear it in
+						 * recursive ATExecAddColumn(recursing=true) for children.
+						 */
+						add_generated_column = true;
+						break;
+					}
+				}
+
+				if (ATtype == AT_AddColumn)
+					childtab->rewrite |= AT_REWRITE_NEW_COLUMNS_ONLY;
+				else if (ATtype == AT_AlterColumnType || ATtype == AT_SetColumnEncoding)
+					childtab->rewrite |= AT_REWRITE_REWRITE_COLUMNS_ONLY;
+				else
+					Assert(false); /* shouldn't reach here */
+				
+				/* unmark flags to fallback to ATRewriteTable() for generated column */
+				if (add_generated_column)
+				{
+					childtab->rewrite &= ~AT_REWRITE_NEW_COLUMNS_ONLY;
+					childtab->rewrite &= ~AT_REWRITE_REWRITE_COLUMNS_ONLY;
+				}
+			}
+			heap_close(rel, NoLock);
+		}
+	}
+}
+/*
  * Add a column to a table.  The return value is the address of the
  * new column in the parent relation.
  *
@@ -8758,6 +8643,7 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 
 	/* since this function recurses, it could be driven to stack overflow */
 	check_stack_depth();
+	bool		missingmode = true;
 
 	/* At top level, permission check was done in ATPrepCmd, else do it */
 	if (recursing)
@@ -9002,26 +8888,11 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		 * Did the request for a missing value work? If not we'll have to do a
 		 * rewrite
 		 */
-		/*
-		 * GPDB_12_MERGE_FIXME: This optimization to avoid rewriting a table
-		 * is based on the assumption that at the time of reading tuples from
-		 * this table, it is possible to determine if the tuple does not
-		 * contain the value for the new column being added.  In that case,
-		 * the missing value would be replaced with the default value from
-		 * pg_attrdef catalog table.
-		 *
-		 * The optimization cannot be applied to appendoptimized row-oriented
-		 * tables because the number of attributes is not recorded on disk.
-		 * MemTuples only record the tuple length followed by the tuple data.
-		 * This information is not sufficient to determine if the tuple
-		 * contains a missing column.
-		 *
-		 * A possible solution involves recoding the number of attributes for
-		 * each tuple or for each varblock, so that this optimization can be
-		 * applied on similar lines as heap_getattr.
-		 */
-		if (!rawEnt->missingMode || RelationIsAoRows(rel))
+		if (!rawEnt->missingMode)
+		{
 			tab->rewrite |= AT_REWRITE_DEFAULT_VAL;
+			missingmode = false;
+		}
 	}
 
 	/*
@@ -9103,45 +8974,26 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		}
 
 		/*
-		 * Handling of default NULL for AO/CO tables.
-		 *
-		 * Currently memtuples cannot deal with the scenario where the number of
-		 * attributes in the tuple data don't match the attnum. We will generate an
-		 * explicit NULL default value and force a rewrite of the table below.
-		 *
-		 * At one point there were plans to restructure memtuples so that this
-		 * rewrite did not have to occur. An optimization was added to
-		 * column-oriented tables to avoid the rewrite, but it does not apply to
-		 * row-oriented tables. Eventually it would be nice to remove this
-		 * workaround; see GitHub issue
-		 *     https://github.com/greenplum-db/gpdb/issues/3756
-		 *
-		 * GPDB_12_MERGE_FIXME: we used to do this only if no default was given,
-		 * but starting with PostgreSQL v11, a table doesn't need to be rewritten
-		 * even if a non-NULL default is used. That caused an assertion failure in
-		 * the 'uao_ddl/alter_ao_table_constraint_column' test. To make that go
-		 * away, always force full rewrite on AO_ROW and AO_COLUMN tables. We
-		 * should be smarter..
+		 * Handling of default NULL for ao_column tables.
 		 */
-
-		if (RelationIsAppendOptimized(rel))
-		{
-			if (!defval)
-				defval = (Expr *) makeNullConst(typeOid, -1, collOid);
-			tab->rewrite |= AT_REWRITE_DEFAULT_VAL;
-		}
+		if (!defval && RelationIsAoCols(rel))
+			defval = (Expr *) makeNullConst(typeOid, -1, collOid);
 
 		if (defval)
 		{
 			NewColumnValue *newval;
 
-			/* If QE, AlteredTableInfo streamed from QD already contains newvals */
+			/* If QE, AlteredTableInfo streamed from QD already contains newcolvals */
 			if (Gp_role != GP_ROLE_EXECUTE)
 			{
 				newval = (NewColumnValue *) palloc0(sizeof(NewColumnValue));
 				newval->attnum = attribute.attnum;
 				newval->expr = expression_planner(defval);
 				newval->is_generated = (colDef->generated != '\0');
+				if (missingmode)
+					newval->op = AOCSADDCOLUMN_MISSINGMODE;
+				else
+					newval->op = AOCSADDCOLUMN;
 
 				/*
 				 * tab is null if this is called by "create or replace view" which
@@ -9149,6 +9001,24 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 				 */
 				Assert(tab);
 				tab->newvals = lappend(tab->newvals, newval);
+
+				/*
+				 * Similar like setupColumnOnlyRewrite(), we need to clear
+				 * AT_REWRITE_NEW_COLUMNS_ONLY to fallback to do table scan instead
+				 * of varblock header only scan for partitions in the case of
+				 * generating column based on existing column values.
+				 * 
+				 * TODO: currently we scan all columns in ATRewriteTable(),
+				 * it is optimizable to only scan the required columns.
+				 */
+				if (tab->rewrite & AT_REWRITE_NEW_COLUMNS_ONLY &&
+					newval->is_generated && contain_var_clause((Node *)newval->expr))
+				{
+					/* Assuming AT_REWRITE_NEW_COLUMNS_ONLY is only for ao_column tables. */
+					Assert(RelationIsAoCols(rel));
+					tab->rewrite &= ~AT_REWRITE_NEW_COLUMNS_ONLY;
+					tab->rewrite &= ~AT_REWRITE_REWRITE_COLUMNS_ONLY;
+				}
 			}
 			else
 			{
@@ -9198,6 +9068,16 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 				 */
 				tab->rewrite |= AT_REWRITE_DEFAULT_VAL;
 			}
+
+			/*
+			 * We need to write the new column for AOCO tables. But don't do
+			 * that if we are going to rewrite the whole table anyway.
+			 *
+			 * ao_row tables need neither: the new column is missing for the
+			 * rows recorded in lastrownums, and written normally after that.
+			 */
+			if (RelationIsAoCols(rel) && tab->rewrite == 0)
+				tab->rewrite |= AT_REWRITE_NEW_COLUMNS_ONLY;
 		}
 
 		if (!has_missing)
@@ -9237,11 +9117,57 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 						NULL /* parentenc */,
 						false /* explicitOnly */,
 						RelationIsAoCols(rel) /* createDefaultOne */, true);
+
 		/*
-		 * Store the encoding clause for AO/CO tables.
+		 * Add a pg_attribute_encoding entry for the column.
+		 * For ao_row tables, only add if the column value is going to be missing
+		 * since only the lastrownums information is useful for them.
+		 * For ao_column tables, always add the entry.
 		 */
-		if (AMHandlerSupportEncodingClause(tam))
-			AddRelationAttributeEncodings(rel, enc);
+		if (RelationIsAoCols(rel) || (RelationStorageIsAoRows(rel) && missingmode))
+		{
+			Oid 	segrelid;
+			int64 	lastrownums[MAX_AOREL_CONCURRENCY];
+			Datum 	lastrownums_val = (Datum) 0;
+			List 	*filenums = GetNextNAvailableFilenums(myrelid, 1);
+			Datum 	attoptions = (Datum) 0;
+
+			/* lastrownums are only for both ao_row and ao_column table w/ storage (i.e. not partitioned table) */
+			if (RelationStorageIsAO(rel) && missingmode)
+			{
+				GetAppendOnlyEntryAuxOids(rel, &segrelid, NULL, NULL, NULL, NULL);
+				ReadAllLastSequences(segrelid, lastrownums);
+				lastrownums_val = transform_lastrownums(lastrownums);
+			}
+
+			/* encoding options are only for CO tables */
+			if (RelationIsAoCols(rel))
+			{
+				/* we're adding one column at a time */
+				Assert(enc->length == 1);
+				ColumnReferenceStorageDirective *crsd = lfirst(list_head(enc));
+				attoptions = transformRelOptions(PointerGetDatum(NULL),
+												 crsd->encoding,
+												 NULL,
+												 NULL,
+												 true,
+												 false);
+			}
+
+			add_attribute_encoding_entry(myrelid,
+										newattnum,
+										linitial_int(filenums),
+										lastrownums_val,
+										attoptions);
+		}
+		/*
+		 * GPDB_PORT: upstream writes the entry above for CO tables too, so the
+		 * AddCOAttributeEncodings() call cbdb had here would now insert a second
+		 * row for the same attnum.  It is still needed for any other AM whose
+		 * handler advertises encoding clauses but is not AO/CO.
+		 */
+		else if (AMHandlerSupportEncodingClause(tam))
+			AddCOAttributeEncodings(myrelid, enc);
 	}
 
 	/* MPP-6929: metadata tracking */
@@ -9290,50 +9216,8 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 	 * So, we only need to execute this block on QD.
 	 */
 	if (!recursing && (tab->relkind == RELKIND_PARTITIONED_TABLE || tab->relkind == RELKIND_RELATION) && Gp_role != GP_ROLE_EXECUTE)
-	{
-		bool	aocs_write_new_columns_only;
-		/*
-		 * ADD COLUMN for CO can be optimized only if it is the
-		 * only subcommand being performed.
-		 */
-		aocs_write_new_columns_only = true;
-		for (int i = 0; i < AT_NUM_PASSES; ++i)
-		{
-			if (i != AT_PASS_ADD_COL && tab->subcmds[i])
-			{
-				aocs_write_new_columns_only = false;
-				break;
-			}
-		}
-
-		if (aocs_write_new_columns_only)
-		{
-			/*
-			 * We have acquired lockmode on the root and first-level partitions
-			 * already. This leaves the deeper subpartitions unlocked, but no
-			 * operations can drop (or alter) those relations without locking
-			 * through the root. But we still lock them to meet the upstream 
-			 * expecation in relation_open that all callers should have acquired
-			 * a lock on the table except in bootstrap mode.
-
-			 * Note that find_all_inheritors() also includes the root partition 
-			 * in the returned list.
-			 */
-			List *all_inheritors = find_all_inheritors(tab->relid, AccessShareLock, NULL);
-			ListCell *lc;
-			foreach (lc, all_inheritors)
-			{
-				Oid r = lfirst_oid(lc);
-				Relation rel = heap_open(r, NoLock);
-				AlteredTableInfo *childtab;
-				childtab = ATGetQueueEntry(wqueue, rel);
-
-				if (RelationIsAoCols(rel))
-					childtab->rewrite |= AT_REWRITE_NEW_COLUMNS_ONLY_AOCS;
-				heap_close(rel, NoLock);
-			}
-		}
-	}
+		setupColumnOnlyRewrite(wqueue,
+							 tab, AT_AddColumn);
 
 	foreach(child, children)
 	{
@@ -9452,6 +9336,137 @@ add_column_collation_dependency(Oid relid, int32 attnum, Oid collid)
 		referenced.objectSubId = 0;
 		recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
 	}
+}
+
+/*
+ * ALTER TABLE ... ALTER COLUMN a SET ENCODING (...)
+ *
+ * Update pg_attribute_encoding with the given encoding options.
+ * Normally this will need a table rewrite, except when
+ * (1) the table is a partitioned one,
+ * or
+ * (2) the encoding option isn't really changed (they are the same as the given ones).
+ */
+static void
+ATExecSetColumnEncoding(List **wqueue, AlteredTableInfo *tab, Relation rel, AlterTableCmd *cmd)
+{
+	ColumnReferenceStorageDirective 	*new_crsd;
+	char 					*colName;
+	bool 					is_updated;
+
+	if (OidIsValid(tab->newAccessMethod))
+	{
+		if (tab->newAccessMethod != AO_COLUMN_TABLE_AM_OID)
+			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+				errmsg("ALTER COLUMN SET ENCODING operation is only applicable to AOCO tables"),
+				errdetail("New access method for \"%s\" is not ao_column",
+						  RelationGetRelationName(rel))));
+	}
+	else if (rel->rd_rel->relam != AO_COLUMN_TABLE_AM_OID)
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+			errmsg("ALTER COLUMN SET ENCODING operation is only applicable to AOCO tables"),
+			errdetail("\"%s\" is not an AOCO table",
+					  RelationGetRelationName(rel))));
+
+
+	if (!tab->new_crsds) /* first iteration */
+		tab->new_crsds = rel_get_column_encodings(rel);
+
+	new_crsd = (ColumnReferenceStorageDirective *) cmd->def;
+	tab->new_crsds = updateEncodingList(tab->new_crsds, new_crsd, &is_updated);
+
+	/* Nothing needs to be done if we are not really changing the encodings */
+	if (!is_updated)
+		return;
+
+	/*
+	 * Get new encoding from the updated tab->new_crsds and use that to update
+	 * pg_attribute_encoding later. We do not directly transform the new_crsd
+	 * because we could miss existing options in the current relation.
+	 */
+	colName = ((ColumnReferenceStorageDirective *)cmd->def)->column;
+	new_crsd = find_crsd(colName, tab->new_crsds);
+	Assert(new_crsd);
+
+	if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+	{
+		/*
+		 * No table rewrite nor column rewrite will be performed for partitioned table,
+		 * so we'll just update encoding here. 
+		 *
+		 * Note that we could be altering AM from non-CO to CO as well, so the table may
+		 * not have any existing pg_attribute_encoding entry. Do update-or-add here.
+		 */
+		UpdateOrAddAttributeEncodingsAttoptionsOnly(rel, lappend(NIL, new_crsd));
+	}
+	else if (rel->rd_rel->relkind == RELKIND_RELATION)
+	{
+		/* this block is only for preparing stuff in 'tab'. QE gets those from QD */
+		if(Gp_role == GP_ROLE_EXECUTE)
+			return;
+
+		/* decide if we could rewrite column only */
+		setupColumnOnlyRewrite(wqueue, tab, AT_SetColumnEncoding);
+
+		/* if we are going to rewrite column only, prepare tab->newvals */
+		if (tab->rewrite & AT_REWRITE_REWRITE_COLUMNS_ONLY)
+		{
+			NewColumnValue 		*newval = (NewColumnValue *) palloc0(sizeof(NewColumnValue));
+			HeapTuple 		tup;
+			Form_pg_attribute 	attTup;
+			Node 			*transform;
+			bool 			col_has_rewrite = false;
+			ListCell 		*l;
+
+			/* Find the column tuple so we'll know its attnum */
+			tup = SearchSysCacheAttName(RelationGetRelid(rel), colName);
+			if (!HeapTupleIsValid(tup))
+				ereport(ERROR,
+						(errcode(ERRCODE_UNDEFINED_COLUMN),
+						errmsg("column \"%s\" of relation \"%s\" does not exist",
+						colName, RelationGetRelationName(rel))));
+			attTup = (Form_pg_attribute) GETSTRUCT(tup);
+
+			/*
+			 * Check if we already did an ALTER COLUMN TYPE on the this column, in which
+			 * case we will not add newval for the same column because we would be rewriting
+			 * that column anyway. So just need to update pg_attribute_encoding in that case.
+			 */
+			foreach(l, tab->newvals)
+			{
+				NewColumnValue *nv = lfirst(l);
+				if (nv->attnum == attTup->attnum && nv->op == AOCSREWRITECOLUMN)
+				{
+					col_has_rewrite = true;
+					nv->new_encoding = new_crsd->encoding;
+					break;
+				}
+			}
+
+			/* No rewrite has been planned for this column, let's plan one now. */
+			if (!col_has_rewrite)
+			{
+				newval->attnum = attTup->attnum;
+				/* no change to the column type */
+				transform = (Node *) makeVar(1, attTup->attnum,
+										 attTup->atttypid, attTup->atttypmod,
+										 attTup->attcollation,
+										 0);
+				newval->expr = expression_planner((Expr*) transform);
+				newval->is_generated = false;
+				newval->op = AOCSREWRITECOLUMN;
+				newval->new_encoding = new_crsd->encoding;
+				tab->newvals = lappend(tab->newvals, newval);
+			}
+
+			ReleaseSysCache(tup);
+		}
+		else
+			/* we are unable to do a column-only rewrite, perform a table rewrite instead */
+			tab->rewrite |= AT_REWRITE_COLUMN_REWRITE;
+	}
+	else
+		Assert(false); /* cannot reach here */
 }
 
 /*
@@ -10733,6 +10748,83 @@ set_random_distribution_if_drop_distkey(Relation rel, AttrNumber attnum)
 }
 
 /*
+ * GPDB: Helper function for ATExecDropColumn(), only for CO tables.
+ *
+ * This function checks if the column indicated by 'attnum' is the last complete
+ * column (not missing values) in the table. If so, it rewrites the column.
+ * The 'colName' is of the same column, for logging purpose.
+ */
+static void
+rewrite_column_on_drop(Relation rel, AttrNumber attnum, const char *colName)
+{
+	AttrNumber 	natts = RelationGetNumberOfAttributes(rel);
+	AttrNumber 	nexistcols = 0;
+	AttrNumber 	ncompletecols = 0;
+	AttrNumber 	attnum_to_rewrite = 0;
+	bool 		*column_not_complete = ExistValidLastrownums(RelationGetRelid(rel), natts);
+
+	/* if we are not dropping a complete column, no need to worry */
+	if (column_not_complete[attnum - 1])
+		return;
+
+	/* check how many complete columns and existed columns in the table */
+	for (int i = 0; i < natts; i++)
+	{
+		HeapTuple atttup;
+		atttup = SearchSysCacheAttNum(RelationGetRelid(rel), i + 1);
+		/* column could be dropped */
+		if (!atttup)
+			continue;
+
+		/* pick the first non-dropped, incomplete column as the rewrite candidate */
+		nexistcols++;
+		if (!column_not_complete[i])
+			ncompletecols++;
+		else if (attnum_to_rewrite == 0)
+			attnum_to_rewrite = i + 1;
+
+		ReleaseSysCache(atttup);
+	}
+
+	/* sanity check: we should still have complete column in the table */
+	Assert(ncompletecols > 0 && nexistcols > 0);
+
+	/*
+	 * This is the case we care about: if we are about to drop the *last* complete
+	 * column which is not the last column in the table, we need to conduct a 
+	 * column rewrite to make sure there's still another complete column in the table.
+	 */
+	if (ncompletecols == 1 && nexistcols > 1)
+	{
+		HeapTuple 		atttup = SearchSysCacheAttNum(RelationGetRelid(rel), attnum_to_rewrite);
+		Form_pg_attribute 	atttupform = (Form_pg_attribute) GETSTRUCT(atttup);
+		NewColumnValue 		*newval = (NewColumnValue *) palloc0(sizeof(NewColumnValue));
+		Node       		*transform = (Node *) makeVar(1, attnum_to_rewrite,
+								 atttupform->atttypid, atttupform->atttypmod,
+								 atttupform->attcollation,
+								 0);
+
+		transform = (Node *) expression_planner((Expr *) transform);
+
+		ReleaseSysCache(atttup);
+
+		if (Gp_role == GP_ROLE_DISPATCH)
+			ereport(WARNING,
+					(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+					 errmsg("dropping the last complete column \"%s\" of the AOCO table incurs a column rewrite"
+						" of the incomplete column %s. This DROP COLUMN command might be slower than usual",
+							colName, atttupform->attname.data)));
+
+		newval->attnum = attnum_to_rewrite;
+		newval->expr = (Expr *) transform;
+		newval->is_generated = false;
+		newval->op = AOCSREWRITECOLUMN;
+		/* identity transform of one column: no constraint can change meaning */
+		table_relation_rewrite_columns(rel, lappend(NIL, newval), NIL,
+									   CreateTupleDescCopyConstr(RelationGetDescr(rel)));
+	}
+}
+/*
  * Drops column 'colName' from relation 'rel' and returns the address of the
  * dropped column.  The column is also dropped (or marked as no longer
  * inherited from relation) from the relation's inheritance children, if any.
@@ -10824,6 +10916,16 @@ ATExecDropColumn(List **wqueue, Relation rel, const char *colName,
 				(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 				 errmsg("cannot drop column \"%s\" because it is part of the partition key of relation \"%s\"",
 						colName, RelationGetRelationName(rel))));
+
+	/*
+	 * GPDB: although rare, but if it's the last complete column of an AOCO table, 
+	 * dropping it means losing row number information in the data files. So conduct
+	 * an ad-hoc column rewrite (for creating a new complete column) in that case.
+	 * We have to do this here before we drop it because column rewrite requires
+	 * at least one complete column.
+	 */
+	if (RelationStorageIsAoCols(rel))
+		rewrite_column_on_drop(rel, attnum, colName);
 
 	ReleaseSysCache(tuple);
 
@@ -14884,13 +14986,27 @@ ATPrepAlterColumnType(List **wqueue,
 		/*
 		 * Add a work queue item to make ATRewriteTable update the column
 		 * contents.
+		 *
+		 * If QE, AlteredTableInfo streamed from QD already contains
+		 * newcolvals.  A QE runs ATPrepCmd() over the same commands whose work
+		 * queue the QD dispatched to it (see ATController()), so appending here
+		 * as well would leave two entries for the same column.  ATRewriteTable()
+		 * tolerates that -- it just evaluates the column twice -- but the AOCO
+		 * column rewrite does not: aocs_writecol_init() would create one datum
+		 * stream and one new segfile per duplicate, and the column's filenum
+		 * would be toggled twice, leaving the QE pointing back at the old file.
+		 * ATExecAddColumn() guards its newvals the same way.
 		 */
-		newval = (NewColumnValue *) palloc0(sizeof(NewColumnValue));
-		newval->attnum = attnum;
-		newval->expr = (Expr *) transform;
-		newval->is_generated = false;
+		if (Gp_role != GP_ROLE_EXECUTE)
+		{
+			newval = (NewColumnValue *) palloc0(sizeof(NewColumnValue));
+			newval->attnum = attnum;
+			newval->expr = (Expr *) transform;
+			newval->is_generated = false;
+			newval->op = AOCSREWRITECOLUMN;
 
-		tab->newvals = lappend(tab->newvals, newval);
+			tab->newvals = lappend(tab->newvals, newval);
+		}
 		if (ATColumnChangeRequiresRewrite(transform, attnum))
 			tab->rewrite |= AT_REWRITE_COLUMN_REWRITE;
 
@@ -15096,8 +15212,11 @@ ATColumnChangeRequiresRewrite(Node *expr, AttrNumber varattno)
  * Return the address of the modified column.
  */
 static ObjectAddress
-ATExecAlterColumnType(AlteredTableInfo *tab, Relation rel,
-					  AlterTableCmd *cmd, LOCKMODE lockmode)
+ATExecAlterColumnType(List **wqueue,
+					  AlteredTableInfo *tab,
+					  Relation rel,
+					  AlterTableCmd *cmd,
+					  LOCKMODE lockmode)
 {
 	char	   *colName = cmd->name;
 	ColumnDef  *def = (ColumnDef *) cmd->def;
@@ -15120,19 +15239,42 @@ ATExecAlterColumnType(AlteredTableInfo *tab, Relation rel,
 	ObjectAddress address;
 
 	/*
+	 * Leave a flag on tables in the partition hierarchy that can benefit from the
+	 * optimization for columnar tables.
+	 * We have to do it while processing the root partition because that's the
+	 * only level where the `ADD COLUMN` or `ALTER COLUMN TYPE` subcommands are
+	 * populated.
+	 *
+	 * QD will dispatch wqueue and the QE will get all the info
+	 * to perform the column optimized rewrite.
+	 * So, we only need to execute this block on QD.
+	 */
+	if ((tab->relkind == RELKIND_PARTITIONED_TABLE || tab->relkind == RELKIND_RELATION) && Gp_role != GP_ROLE_EXECUTE)
+		setupColumnOnlyRewrite(wqueue, tab, AT_AlterColumnType);
+
+	/*
 	 * Clear all the missing values if we're rewriting the table, since this
 	 * renders them pointless.
+	 * GPDB: we are not rewriting CO tables, only the column. So only clear the
+	 * column that we are altering.
 	 */
 	if (tab->rewrite)
 	{
 		Relation	newrel;
 
 		newrel = table_open(RelationGetRelid(rel), NoLock);
-		RelationClearMissing(newrel);
+		if (tab->rewrite & AT_REWRITE_REWRITE_COLUMNS_ONLY)
+		{
+			Assert(RelationIsAoCols(newrel));
+			RelationClearMissingByAttname(newrel, colName);
+		}
+		else
+			RelationClearMissing(newrel);
 		relation_close(newrel, NoLock);
 		/* make sure we don't conflict with later attribute modifications */
 		CommandCounterIncrement();
 	}
+
 
 	attrelation = table_open(AttributeRelationId, RowExclusiveLock);
 
@@ -17110,7 +17252,8 @@ ATPrepSetTableSpace(AlteredTableInfo *tab, Relation rel, const char *tablespacen
  */
 static void
 ATExecSetRelOptions(Relation rel, List *defList, AlterTableType operation,
-					bool *aoopt_changed, Oid newAccessMethod, LOCKMODE lockmode)
+					bool *aoopt_changed, Datum *newOptions_out,
+					Oid newAccessMethod, LOCKMODE lockmode)
 {
 	Oid			relid;
 	Relation	pgclass;
@@ -17187,6 +17330,13 @@ ATExecSetRelOptions(Relation rel, List *defList, AlterTableType operation,
 	newOptions = transformRelOptions(isnull ? (Datum) 0 : datum,
 									 defList, NULL, validnsps, false,
 									 operation == AT_ResetRelOptions);
+
+	/*
+	 * Hand the proposed options back: the AOCO caller needs them to work out
+	 * which columns were following the old table-level default.
+	 */
+	if (newOptions_out)
+		*newOptions_out = newOptions;
 
 	/* Validate */
 	switch (rel->rd_rel->relkind)
