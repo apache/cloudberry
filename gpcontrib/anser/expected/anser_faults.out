@@ -21,6 +21,9 @@ NOTICE:  extension "gp_inject_fault" already exists, skipping
 SET enable_nestloop = off;
 SET enable_mergejoin = off;
 SET optimizer = off;
+-- Trace every exchange step into the server logs (never reaches the client),
+-- so a CI run that goes wrong can be diagnosed from the log artifacts.
+SET anser.debug = on;
 -- nextval guard: the QD sends two kinds of message down a QE's dispatch
 -- connection -- the nextval reply and a sideband message -- and each has its
 -- own reader.  A reader that meets the other's message has to skip it whole:
@@ -278,6 +281,7 @@ SELECT gp_inject_fault('anser_before_deliver', 'reset', dbid)
 
 DROP TABLE anser_sf_b1, anser_sf_p1, anser_sf_b2, anser_sf_p2;
 RESET anser.runtime_filter;
+RESET anser.debug;
 RESET anser.timeout_ms;
 RESET optimizer;
 RESET enable_nestloop;

@@ -213,6 +213,9 @@ AnserDispatchReset(void)
 	if (AnserDispChannels == NULL)
 		return;
 
+	ANSER_DEBUG("anser: QD reset drops %ld channel(s)",
+				hash_get_num_entries(AnserDispChannels));
+
 	hash_destroy(AnserDispChannels);
 	AnserDispChannels = NULL;
 	MemoryContextDelete(AnserDispContext);
@@ -258,6 +261,9 @@ AnserDispatchResetCommand(int command_count)
 		if (!chan->complete || chan->subscribers != NIL)
 			continue;
 
+		ANSER_DEBUG("anser: QD dropping finished channel cond=%u ccnt=%d",
+					chan->key.condition_id, chan->key.gp_command_count);
+
 		/*
 		 * AnserDispContext outlives this, so free what the entry owns rather
 		 * than the context.  Deleting the entry the scan just handed back is
@@ -296,6 +302,10 @@ void
 AnserDispatchFlushPending(long timeout_ms)
 {
 	ListCell   *lc;
+
+	if (AnserDispPendingPush != NIL)
+		ANSER_DEBUG("anser: QD flushing %d torn deliver(ies) at query end",
+				list_length(AnserDispPendingPush));
 
 	foreach(lc, AnserDispPendingPush)
 	{
@@ -757,9 +767,9 @@ anser_disp_push(PGconn *conn, AnserDispChannel *chan)
 		MemoryContextSwitchTo(oldcxt);
 	}
 
-	ANSER_DEBUG("anser: QD pushed cond=%u type=%c bytes=%d cancelled=%d",
+	ANSER_DEBUG("anser: QD pushed cond=%u type=%c bytes=%d cancelled=%d queued=%d",
 				chan->key.condition_id, paytype, paylen,
-				chan->cancelled ? 1 : 0);
+				chan->cancelled ? 1 : 0, conn->outCount);
 	return true;
 }
 

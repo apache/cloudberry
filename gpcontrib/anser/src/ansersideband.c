@@ -528,7 +528,20 @@ anser_inbox_take(const AnserChannelKey *key, char payload_type, void **payload,
 			entry->key.gp_command_count != key->gp_command_count ||
 			strncmp(entry->key.condition_key, key->condition_key,
 					ANSER_CONDITION_KEY_SIZE) != 0)
+		{
+			/*
+			 * The stale-delivery signature is rare enough to log: same
+			 * condition, different command.
+			 */
+			if (entry->key.condition_id == key->condition_id &&
+				strncmp(entry->key.condition_key, key->condition_key,
+						ANSER_CONDITION_KEY_SIZE) == 0)
+				ANSER_DEBUG("anser: seg%d skipping delivery for cond=%u pushed for ssid=%d ccnt=%d (mine is ssid=%d ccnt=%d)",
+							GpIdentity.segindex, key->condition_id,
+							entry->key.gp_session_id, entry->key.gp_command_count,
+							key->gp_session_id, key->gp_command_count);
 			continue;
+		}
 
 		/*
 		 * Right channel, wrong kind of information.  The coordinator stamps
@@ -560,6 +573,10 @@ anser_inbox_take(const AnserChannelKey *key, char payload_type, void **payload,
 		}
 
 		AnserInbox = foreach_delete_current(AnserInbox, lc);
+		ANSER_DEBUG("anser: seg%d claimed cond=%u from inbox (pushed for ssid=%d ccnt=%d, cancelled=%d)",
+					GpIdentity.segindex, key->condition_id,
+					entry->key.gp_session_id, entry->key.gp_command_count,
+					entry->cancelled ? 1 : 0);
 		if (entry->payload != NULL)
 			pfree(entry->payload);
 		pfree(entry);
@@ -579,6 +596,9 @@ AnserSidebandResetInbox(void)
 	{
 		AnserInboxEntry *entry = (AnserInboxEntry *) lfirst(lc);
 
+		ANSER_DEBUG("anser: seg%d dropping unclaimed delivery cond=%u pushed for ssid=%d ccnt=%d",
+					GpIdentity.segindex, entry->key.condition_id,
+					entry->key.gp_session_id, entry->key.gp_command_count);
 		if (entry->payload != NULL)
 			pfree(entry->payload);
 		pfree(entry);

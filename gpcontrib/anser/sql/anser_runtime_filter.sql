@@ -18,6 +18,11 @@ SET enable_mergejoin = off;
 -- hiding in the clock.
 SET anser.timeout_ms = 5000;
 
+-- Trace every exchange step into the server logs for the whole file.  LOG
+-- level never reaches the client, so the expected output is unaffected; the
+-- traces are for the CI logs when a run goes wrong.
+SET anser.debug = on;
+
 -- build is the smaller (hashed / preserved) side, distributed so the join key
 -- must be redistributed; probe is the larger side distributed by the join key.
 CREATE TABLE anser_rf_build (id int, name text) DISTRIBUTED BY (name);
@@ -286,13 +291,12 @@ SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.i
 -- A plain EXPLAIN must not allocate the filter: the coordinator initializes
 -- every slice with EXEC_FLAG_EXPLAIN_ONLY, so the producer must skip building
 -- the bitset (state=NULL) while the plan still shows the planned size.  The
--- debug log makes the decision observable.
-SET anser.debug = on;
+-- debug log makes the decision observable.  anser.debug is already on for the
+-- whole file; client_min_messages is what brings the line to the client here.
 SET client_min_messages = log;
 EXPLAIN (COSTS OFF)
 SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id;
 RESET client_min_messages;
-RESET anser.debug;
 
 -- And the filter must still be correct: 200 build rows, each matching one
 -- probe row.
@@ -696,6 +700,7 @@ DROP ROLE anser_nopriv;
 
 RESET anser.runtime_filter;
 RESET anser.debug_min_filter_bytes;
+RESET anser.debug;
 RESET anser.timeout_ms;
 RESET optimizer;
 RESET enable_nestloop;
