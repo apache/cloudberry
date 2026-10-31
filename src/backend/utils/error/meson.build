@@ -5,4 +5,5 @@ backend_sources += files(
   'csvlog.c',
   'elog.c',
   'jsonlog.c',
+  'debugutils.c',
 )

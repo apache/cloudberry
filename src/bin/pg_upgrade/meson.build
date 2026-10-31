@@ -16,7 +16,18 @@ pg_upgrade_sources = files(
   'tablespace.c',
   'util.c',
   'version.c',
+  # Cloudberry additions (OBJS += greenplum/... in this directory's Makefile)
+  'greenplum/aotable.c',
+  'greenplum/check_gp.c',
+  'greenplum/controldata_gp.c',
+  'greenplum/option_gp.c',
+  'greenplum/reporting.c',
+  'greenplum/util.c',
+  'greenplum/version_gp.c',
 )
+
+# The Makefile symlinks this in from the backend; meson can reference it directly.
+pg_upgrade_sources += files('../../backend/access/appendonly/aomd_filehandler.c')
 
 if host_system == 'windows'
   pg_upgrade_sources += rc_bin_gen.process(win32ver_rc, extra_args: [
@@ -28,6 +39,9 @@ pg_upgrade = executable('pg_upgrade',
   pg_upgrade_sources,
   c_pch: pch_postgres_fe_h,
   dependencies: [frontend_code, libpq],
+  # greenplum/*.c include "pg_upgrade.h" from the parent directory
+  # (Makefile: override CPPFLAGS := -I$(srcdir) ...)
+  include_directories: include_directories('.'),
   kwargs: default_bin_args,
 )
 bin_targets += pg_upgrade

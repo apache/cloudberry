@@ -7,4 +7,5 @@ backend_sources += files(
   'postgres.c',
   'pquery.c',
   'utility.c',
+  'idle_resource_cleaner.c',
 )

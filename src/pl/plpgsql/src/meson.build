@@ -2,10 +2,19 @@
 
 plpgsql_sources = files(
   'pl_comp.c',
-  'pl_exec.c',
   'pl_funcs.c',
   'pl_handler.c',
   'pl_scanner.c',
+)
+
+# This directory's Makefile scopes -Wno-array-bounds to pl_exec.o alone. meson
+# has no per-file flags, so pl_exec.c gets its own static library rather than
+# relaxing the warning for the whole module.
+plpgsql_pl_exec = static_library('plpgsql_pl_exec',
+  files('pl_exec.c'),
+  c_args: ['-Wno-array-bounds'],
+  dependencies: [backend_code],
+  kwargs: internal_lib_args,
 )
 
 pl_gram = custom_target('gram',
@@ -51,6 +60,7 @@ endif
 
 plpgsql = shared_module('plpgsql',
   plpgsql_sources,
+  link_whole: plpgsql_pl_exec,
   c_pch: pch_postgres_h,
   include_directories: include_directories('.'),
   kwargs: pg_mod_args,

@@ -13,4 +13,7 @@ backend_sources += files(
   'startup.c',
   'syslogger.c',
   'walwriter.c',
+  'autostats.c',
+  'backoff.c',
+  'loginmonitor.c',
 )

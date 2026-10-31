@@ -2,6 +2,8 @@
 
 subdir('regress')
 subdir('isolation')
+subdir('isolation2')
+subdir('unit')
 
 subdir('authentication')
 subdir('postmaster')
