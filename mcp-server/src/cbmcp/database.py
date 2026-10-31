@@ -416,13 +416,15 @@ class DatabaseManager:
                 "n.nspname as schema_name, "
                 "c.relname as object_name, "
                 "c.relkind as object_type, "
-                "p.perm as permission "
+                "p.privilege_type as permission "
                 "FROM pg_class c "
                 "JOIN pg_namespace n ON n.oid = c.relnamespace "
-                "CROSS JOIN LATERAL aclexplode(c.relacl) p "
-                "WHERE p.grantee = (SELECT oid FROM pg_user WHERE usename = $1) "
+                "CROSS JOIN LATERAL aclexplode(coalesce(c.relacl, "
+                "acldefault((CASE WHEN c.relkind = 'S' THEN 's' ELSE 'r' END)::\"char\", c.relowner))) p "
+                "WHERE p.grantee = (SELECT usesysid FROM pg_user WHERE usename = $1) "
+                "AND c.relkind IN ('r', 'v', 'm', 'f', 'p', 'S') "
                 "AND n.nspname NOT LIKE 'pg_%' "
-                "ORDER BY n.nspname, c.relname",
+                "ORDER BY n.nspname, c.relname, p.privilege_type",
                 username
             )
             return [
@@ -643,15 +645,16 @@ class DatabaseManager:
         async with self.get_connection() as conn:
             records = await conn.fetch(
                 "SELECT "
-                "schemaname, "
-                "relname as tablename, "
-                "pg_size_pretty(pg_total_relation_size(schemaname||'.'||relname)) as total_size, "
-                "round(100 * (relpages - (relpages * fillfactor / 100)) / relpages, 2) as bloat_ratio "
-                "FROM pg_class c "
+                "n.nspname AS schemaname, "
+                "c.relname AS tablename, "
+                "pg_size_pretty(pg_total_relation_size(c.oid)) AS total_size, "
+                "round(100.0 * s.n_dead_tup / GREATEST(s.n_live_tup + s.n_dead_tup, 1), 2)::float8 AS bloat_ratio "
+                "FROM pg_stat_user_tables s "
+                "JOIN pg_class c ON c.oid = s.relid "
                 "JOIN pg_namespace n ON n.oid = c.relnamespace "
-                "JOIN pg_stat_user_tables s ON s.relid = c.oid "
-                "WHERE c.relkind = 'r' AND n.nspname NOT LIKE 'pg_%' "
-                "ORDER BY bloat_ratio DESC "
+                "WHERE c.relkind = 'r' "
+                "AND n.nspname NOT LIKE 'pg_%' "
+                "ORDER BY bloat_ratio DESC, n.nspname, c.relname "
                 "LIMIT 20"
             )
             return [
