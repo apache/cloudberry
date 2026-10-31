@@ -13,7 +13,8 @@ Oracle application to PostgreSQL or that can be generally useful.
 
 Built-in Oracle date functions have been tested against Oracle 10 for
 conformance. Date ranges from 1960 to 2070 work correctly. Dates before
-1100-03-01 cannot be verified due to a bug in Oracle.
+1582-10-05 with the 'J' format and before 1100-03-01 with other formats
+cannot be verified due to a bug in Oracle.
 
 All functions are fully compatibles with Oracle and respect all known
 format strings. Detailed descriptions can be found on the internet.
@@ -91,6 +92,33 @@ year. The 16th of July will be rounded to August.
 	to_date('2014-0519 17:23:53+5:30')  -> 2014-05-19 17:23:53
 ----
 
+* to_date(text, text) timestamp - will typecast input text with the specified format to timestamp.
+ The GUC `orafce.orafce_emit_error_on_date_bug` is used to specify wether an error is reported
+when the date value hits the Oracle bug on dates. This bug appears with dates before `1582-10-05`
+when the `'J'` format is used (`'J2299159'`) and before `1100-03-01` with other formats. An error is
+reported by default, to disable this behavior `set orafce.orafce_emit_error_on_date_bug to off`.
+----
+	SELECT oracle.to_date('112012', 'J');
+	ERROR:  Dates before 1582-10-05 ('J2299159') cannot be verified due to a bug in Oracle.
+
+	SELECT oracle.to_date('1003-03-15', 'yyyy-mm-dd');
+	ERROR:  Dates before 1100-03-01 cannot be verified due to a bug in Oracle.
+
+	SET orafce.oracle_compatibility_date_limit TO off;
+
+	SELECT oracle.to_date('112012', 'J');
+		to_date
+	------------------------
+	 4407-07-30 00:00:00 BC
+	(1 row)
+
+	SELECT oracle.to_date('1003/03/15', 'yyyy/mm/dd');
+	       to_date
+	---------------------
+	 1003-03-15 00:00:00
+	(1 row)
+----
+
 == oracle.date data type
 
 This module contains implementation of oracle compatible DATE data type "oracle.date" and functions which are using DATE data type like oracle.add_months,oracle.last_day(),oracle.next_day(),oracle.months_between() etc.
@@ -158,21 +186,22 @@ Example:
 -----
 	oracle.sessiontimezone() -> Europe/Prague
 -----
+* oracle.sys_extract_utc(timestamp with timezone) - Returns timestamp in utc timezone
++
+-----
+	oracle.sys_extract_utc(current_timestamp)
+-----
+* oracle.sys_extract_utc(oracle.date) - Returns timestamp in utc timezone, when time zone is not specified, session (current PostgreSQL) timezone is used
++
+-----
+	oracle.sys_extract_utc(oracle.date '2005-05-24 11:21:12', 1) -> 2005-05-24 09:21:12
+-----
 * oracle.to_char(timestamp) - Returns timestamp in nls_date_format.
 +
 ----
 	orafce.nls_date_format='YY-MonDD HH24:MI:SS'
-----
-+
-----
 	oracle.to_char(to_date('14-Jan08 11:44:49+05:30')) -> 14-Jan08 11:44:49
-----
-+
-----
 	orafce.nls_date_format='YY-MonDD HH24:MI:SS'
-----
-+
-----
 	oracle.to_char(oracle.to_date('21052014 12:13:44+05:30','DDMMYYYY HH24:MI:SS')) -> 14-May21 12:13:44
 ----
 
@@ -333,6 +362,13 @@ Directory entries can be named (second column in table `utl_file.utl_file_dir`).
 The `location` parameter can be either the directory name or the dictionary path.
 The location is first interpreted and checked as a directory name.
 If not found (in 2nd column), then the location is interpreted and checked as a path.
+
+Joined paths are canonicalized and checked against the allowed directories.
+Parent-directory (`..`) references left by PostgreSQL's canonicalization are
+rejected. Use paths without parent references for consistent behavior across
+PostgreSQL versions. These checks are lexical, not a filesystem sandbox:
+authorized directories and symlinks within them must be controlled by trusted
+administrators.
 
 Functions from utl_file package (schema on Postgres) requires a access to
 table utl_file.utl_file_dir. This fact can be used to control what users
@@ -501,6 +537,10 @@ There are some differences compared to Oracle, however:
 == Package dbms_alert
 
 Another means of inter-process communication.
+
+Signals are delivered only when the signaling transaction commits. Signals
+queued after a savepoint are discarded if that savepoint is rolled back;
+releasing a savepoint defers delivery until the outer transaction commits.
 
 ----
 -- Session A
@@ -688,7 +728,7 @@ select plvsubst.string('My name is $$ $$.', 'Pavel|Stěhule','|','$$');
 
 == Package DBMS_utility
 
-* dms_utility.format_call_stack()  -- return a formatted string with content of call stack
+* dbms_utility.format_call_stack()  -- return a formatted string with content of call stack
 
 ----
 postgres=# select foo2();
@@ -766,6 +806,10 @@ This unit contains some assert functions.
 * dbms_random.value() - Returns a random number from [0.0 - 1.0)
 * dbms_random.value(low double precision, high double precision) - Returns a random number from [low - high)
 
+Range bounds must be finite. Reversed bounds are swapped; equal bounds return
+that value while still advancing the generator. The upper bound remains
+exclusive even when the bounds are adjacent floating-point values.
+
 == Others functions
 
 This module contains implementation of functions: concat, nvl, nvl2, lnnvl, decode, greatest, least,
@@ -833,9 +877,13 @@ orafce's VARCHAR2 implements parts of Oracle database specification about VARCHA
   Attention: - when result is empty string, then result is NULL. This behaviour is
   disabled by default.
 
-  Attention: - there is possible incompatibility between 3.7 and older Orafce
-  releases. A operator function is now marked as stable (was immutable before).
-  It's not possible to create functional indexes over stable or volatile expressions.
+  Attention: - orafce.varchar2_null_safe_concat should not be changed without
+  a) ending all sessions or restart,
+  b) reindex all functional indexes that uses operator || for datatypes nvarchar2 or varchar2
+
+  The reason of this is volatility immutable of function orafce_concat2. If you change this operator
+  inside a work, the result of queries can be incorrect or indexes that uses operator || can be broken.
+  When you change this value, all indexes that uses mentioned operator, must be reindexed.
 
 ----
 -- null safe concat (disabled by default)
@@ -883,12 +931,16 @@ text type columns. Both variants has some advantages and disadvantages.
 This can be enusured with trigger functions:
 
 ----
-oracle.replace_empty_strings([raise_warnings boolean])
-oracle.replace_null_strings([raise_warnings boolean])
+oracle.replace_empty_strings([ 'on' | 'true' | 'warning' | 'error' ])
+oracle.replace_null_strings([ 'on' | 'true' | 'warning' | 'error' ])
 ----
 
-Optional boolean argument is used as indicator so these functions should to
-raise warning when row was changed inside these functions.
+Optional string argument is used as indicator so these functions should to
+raise warning (possibly error) when row was changed inside these functions.
+
+Replacements preserve the column type's representation, type modifier, and
+domain constraints. A replacement forbidden by a domain raises the normal
+constraint error rather than storing an invalid value.
 
 ----
 CREATE TABLE test(id serial, name varchar, surname varchar);

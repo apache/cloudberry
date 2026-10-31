@@ -1,17 +1,12 @@
 #include "postgres.h"
 #include "funcapi.h"
-#include "assert.h"
+#include "dbms_assert.h"
 #include "miscadmin.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/syscache.h"
 #include "catalog/namespace.h"
-
-#if PG_VERSION_NUM >= 120000
-
 #include "catalog/pg_namespace_d.h"
-
-#endif
 
 #include "orafce.h"
 #include "builtins.h"
@@ -44,93 +39,136 @@ PG_FUNCTION_INFO_V1(dbms_alert_defered_signal);
 #define ISNOT_QUALIFIED_SQL_NAME_EXCEPTION() \
 	CUSTOM_EXCEPTION(ISNOT_QUALIFIED_SQL_NAME, "string is not qualified SQL name")
 
-#define EMPTY_STR(str)		((VARSIZE(str) - VARHDRSZ) == 0)
+#define EMPTY_STR(str)		(VARSIZE_ANY_EXHDR(str) == 0)
 
 static bool check_sql_name(char *cp, int len);
-static bool ParseIdentifierString(char *rawstring);
+static bool ParseIdentifierString(char *str, int len);
+
+
+/*
+ * Is character a valid identifier start?
+ * Must match scan.l's {ident_start} character class.
+ */
+static bool
+orafce_is_ident_start(unsigned char c)
+{
+	/* Underscores and ASCII letters are OK */
+	if (c == '_')
+		return true;
+	if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
+		return true;
+	/* Any high-bit-set character is OK (might be part of a multibyte char) */
+	if (IS_HIGHBIT_SET(c))
+		return true;
+	return false;
+}
+
+/*
+ * Is character a valid identifier continuation?
+ * Must match scan.l's {ident_cont} character class.
+ */
+static bool
+orafce_is_ident_cont(unsigned char c)
+{
+	/* Can be digit or dollar sign ... */
+	if ((c >= '0' && c <= '9') || c == '$')
+		return true;
+	/* ... or an identifier start character */
+	return orafce_is_ident_start(c);
+}
 
 /*
  * Procedure ParseIdentifierString is based on SplitIdentifierString
- * from varlena.c. We need different behave of quote symbol evaluation.
+ * from varlena.c. We need different behave of quote symbol evaluation,
+ * but it is modified for work with size specified string.
  */
-bool
-ParseIdentifierString(char *rawstring)
+static bool
+ParseIdentifierString(char *str, int len)
 {
-	char	   *nextp = rawstring;
-	bool		done = false;
+	char	   *ptr = str;
+	char	   *endp = str + len;
+	bool		result = false;
 
-	while (isspace((unsigned char) *nextp))
-		nextp++;				/* skip leading whitespace */
+	/* skip leading whitespace */
+	while (ptr < endp && isspace((unsigned char) *ptr))
+		ptr++;
 
-	if (*nextp == '\0')
-		return true;			/* allow empty string */
+	/* emoty string are not allowed */
+	if (ptr == endp)
+		return false;
 
 	/* At the top of the loop, we are at start of a new identifier. */
-	do
+	while (ptr < endp)
 	{
+		/* there is one nonzero nonspace char */
+		result = true;
 
-		if (*nextp == '\"')
+		if (*ptr == '\"')
 		{
-			char	   *endp;
+			ptr++;
 
 			/* Quoted name --- collapse quote-quote pairs, no downcasing */
 			for (;;)
 			{
-				endp = strchr(nextp + 1, '\"');
-				if (endp == NULL)
-					return false;		/* mismatched quotes */
+				if (ptr < endp)
+				{
+					ptr = memchr(ptr, '\"', endp - ptr);
+					/* mismatched quotes */
+					if (!ptr)
+						return false;
 
-				if (endp[1] != '\"')
-					break;		/* found end of quoted name */
+					if (ptr + 1 < endp && ptr[1] == '\"')
+					{
+						ptr += 2;
+						continue;
+					}
 
-				/* Collapse adjacent quotes into one quote, and look again */
-				memmove(endp, endp + 1, strlen(endp));
-				nextp = endp;
-			}
-
-			/* endp now points at the terminating quote */
-			nextp = endp + 1;
-		}
-		else
-		{
-			char	   *curname;
-
-			/* Unquoted name --- extends to separator or whitespace */
-			curname = nextp;
-			while (*nextp && *nextp != '.' &&
-				   !isspace((unsigned char) *nextp))
-			{
-				if (!isalnum(*nextp) && *nextp != '_')
+					ptr++;
+					break;
+				}
+				else
 					return false;
-				nextp++;
 			}
-
-			if (curname == nextp)
-				return false;	/* empty unquoted name not allowed */
 		}
-
-		while (isspace((unsigned char) *nextp))
-			nextp++;			/* skip trailing whitespace */
-
-		if (*nextp == '.')
-		{
-			nextp++;
-			while (isspace((unsigned char) *nextp))
-				nextp++;		/* skip leading whitespace for next */
-			/* we expect another name, so done remains false */
-		}
-		else if (*nextp == '\0')
-			done = true;
 		else
-			return false;		/* invalid syntax */
+		{
+			/* Unquoted name --- extends to separator or whitespace */
+			if (orafce_is_ident_start(*ptr))
+			{
+				ptr++;
 
-		/* Loop back if we didn't reach end of string */
-	} while (!done);
+				while (ptr < endp && *ptr && orafce_is_ident_cont(*ptr))
+					ptr++;
+			}
+			else
+				return false;
+		}
 
-	return true;
+		/* skip trailing whitespace */
+		while (ptr < endp && isspace((unsigned char) *ptr))
+			ptr++;
+
+		if (ptr < endp)
+		{
+			if (*ptr == '.')
+			{
+				/* we need to find another identifier */
+				result = false;
+
+				ptr++;
+
+				/* skip leading whitespace for next */
+				while (ptr < endp && isspace((unsigned char) *ptr))
+					ptr++;
+			}
+			else
+				/* invalid syntax */
+				return false;
+		}
+	}
+
+	return result;
 }
-
-
 
 /****************************************************************
  * DBMS_ASSERT.ENQUOTE_LITERAL
@@ -168,9 +206,9 @@ dbms_assert_enquote_literal(PG_FUNCTION_ARGS)
 Datum
 dbms_assert_enquote_name(PG_FUNCTION_ARGS)
 {
-	Datum name  = PG_GETARG_DATUM(0);
-	bool loweralize = PG_GETARG_BOOL(1);
-	Oid collation = PG_GET_COLLATION();
+	Datum		name = PG_GETARG_DATUM(0);
+	bool		loweralize = PG_GETARG_BOOL(1);
+	Oid			collation = PG_GET_COLLATION();
 
 	name = DirectFunctionCall1(quote_ident, name);
 
@@ -195,7 +233,7 @@ dbms_assert_enquote_name(PG_FUNCTION_ARGS)
 Datum
 dbms_assert_noop(PG_FUNCTION_ARGS)
 {
-	text *str = PG_GETARG_TEXT_P(0);
+	text	   *str = PG_GETARG_TEXT_PP(0);
 
 	PG_RETURN_TEXT_P(TextPCopy(str));
 }
@@ -217,16 +255,21 @@ dbms_assert_noop(PG_FUNCTION_ARGS)
 Datum
 dbms_assert_qualified_sql_name(PG_FUNCTION_ARGS)
 {
-	text *qname;
+	text	   *qname;
+	int			len;
+	char	   *str;
 
 	if (PG_ARGISNULL(0))
 		ISNOT_QUALIFIED_SQL_NAME_EXCEPTION();
 
-	qname = PG_GETARG_TEXT_P(0);
-	if (EMPTY_STR(qname))
+	qname = PG_GETARG_TEXT_PP(0);
+
+	str = VARDATA_ANY(qname);
+	len = VARSIZE_ANY_EXHDR(qname);
+	if (len == 0)
 		ISNOT_QUALIFIED_SQL_NAME_EXCEPTION();
 
-	if (!ParseIdentifierString(text_to_cstring(qname)))
+	if (!ParseIdentifierString(str, len))
 		ISNOT_QUALIFIED_SQL_NAME_EXCEPTION();
 
 	PG_RETURN_TEXT_P(qname);
@@ -251,14 +294,14 @@ dbms_assert_schema_name(PG_FUNCTION_ARGS)
 {
 	Oid			namespaceId;
 	AclResult	aclresult;
-	text *sname;
-	char *nspname;
-	List	*names;
+	text	   *sname;
+	char	   *nspname;
+	List	   *names;
 
 	if (PG_ARGISNULL(0))
 		INVALID_SCHEMA_NAME_EXCEPTION();
 
-	sname = PG_GETARG_TEXT_P(0);
+	sname = PG_GETARG_TEXT_PP(0);
 	if (EMPTY_STR(sname))
 		INVALID_SCHEMA_NAME_EXCEPTION();
 
@@ -277,27 +320,16 @@ dbms_assert_schema_name(PG_FUNCTION_ARGS)
 	if (list_length(names) != 1)
 		INVALID_SCHEMA_NAME_EXCEPTION();
 
-#if PG_VERSION_NUM >= 120000
-
 	namespaceId = GetSysCacheOid(NAMESPACENAME, Anum_pg_namespace_oid,
-							CStringGetDatum(strVal(linitial(names))),
-							0, 0, 0);
-
-#else
-
-	namespaceId = GetSysCacheOid(NAMESPACENAME,
-							CStringGetDatum(strVal(linitial(names))),
-							0, 0, 0);
-
-#endif
-
+								 CStringGetDatum(strVal(linitial(names))),
+								 0, 0, 0);
 
 	if (!OidIsValid(namespaceId))
 		INVALID_SCHEMA_NAME_EXCEPTION();
 
 #if PG_VERSION_NUM >= 160000
 
-	aclresult = object_aclcheck(NamespaceRelationId,namespaceId, GetUserId(),
+	aclresult = object_aclcheck(NamespaceRelationId, namespaceId, GetUserId(),
 								ACL_USAGE);
 
 #else
@@ -361,10 +393,20 @@ check_sql_name(char *cp, int len)
 	}
 	else
 	{
-		/* Doesn't allow national characters in sql name :( */
-		for (; len-- > 0; cp++)
-			if (!isalnum(*cp) && *cp != '_')
-				return false;
+		if (orafce_is_ident_start(*cp))
+		{
+			char	   *last = cp + len;
+
+			cp += 1;
+
+			while (cp < last)
+			{
+				if (!orafce_is_ident_cont(*cp++))
+					return false;
+			}
+		}
+		else
+			return false;
 	}
 
 	return true;
@@ -373,19 +415,19 @@ check_sql_name(char *cp, int len)
 Datum
 dbms_assert_simple_sql_name(PG_FUNCTION_ARGS)
 {
-	text  *sname;
-	int		len;
-	char *cp;
+	text	   *sname;
+	int			len;
+	char	   *cp;
 
 	if (PG_ARGISNULL(0))
 		ISNOT_SIMPLE_SQL_NAME_EXCEPTION();
 
-	sname = PG_GETARG_TEXT_P(0);
+	sname = PG_GETARG_TEXT_PP(0);
 	if (EMPTY_STR(sname))
 		ISNOT_SIMPLE_SQL_NAME_EXCEPTION();
 
-	len = VARSIZE(sname) - VARHDRSZ;
-	cp = VARDATA(sname);
+	len = VARSIZE_ANY_EXHDR(sname);
+	cp = VARDATA_ANY(sname);
 
 	if (!check_sql_name(cp, len))
 		ISNOT_SIMPLE_SQL_NAME_EXCEPTION();
@@ -410,15 +452,15 @@ dbms_assert_simple_sql_name(PG_FUNCTION_ARGS)
 Datum
 dbms_assert_object_name(PG_FUNCTION_ARGS)
 {
-	List	*names;
-	text	*str;
-	char	*object_name;
-	Oid 		classId;
+	List	   *names;
+	text	   *str;
+	char	   *object_name;
+	Oid			classId;
 
 	if (PG_ARGISNULL(0))
 		INVALID_OBJECT_NAME_EXCEPTION();
 
-	str = PG_GETARG_TEXT_P(0);
+	str = PG_GETARG_TEXT_PP(0);
 	if (EMPTY_STR(str))
 		INVALID_OBJECT_NAME_EXCEPTION();
 

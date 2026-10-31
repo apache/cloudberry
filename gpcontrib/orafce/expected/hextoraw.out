@@ -1,0 +1,183 @@
+-- Test for hextoraw()/rawtohex(), empty_clob()/empty_blob() and from_tz()
+\set ECHO none
+SET search_path TO oracle, "$user", public, pg_catalog;
+----
+-- hextoraw() / rawtohex() -- inverse hex <-> raw (bytea) pair
+----
+-- ORACLE> SELECT hextoraw('4142') FROM dual; -> 4142  (the raw bytes 0x41 0x42)
+SELECT hextoraw('4142');
+ hextoraw 
+----------
+ \x4142
+(1 row)
+
+-- input hex is case-insensitive
+SELECT hextoraw('deadbeef');
+  hextoraw  
+------------
+ \xdeadbeef
+(1 row)
+
+SELECT hextoraw('DEADBEEF');
+  hextoraw  
+------------
+ \xdeadbeef
+(1 row)
+
+SELECT hextoraw('deadbeef') = hextoraw('DEADBEEF');
+ ?column? 
+----------
+ t
+(1 row)
+
+-- empty input yields an empty raw
+SELECT hextoraw('');
+ hextoraw 
+----------
+ \x
+(1 row)
+
+-- ORACLE> SELECT rawtohex(utl_raw.cast_to_raw('AB')) FROM dual; -> 4142
+-- rawtohex yields UPPER-case hex, as Oracle does
+SELECT rawtohex('\xdeadbeef'::bytea);
+ rawtohex 
+----------
+ DEADBEEF
+(1 row)
+
+SELECT rawtohex('\x4142'::bytea);
+ rawtohex 
+----------
+ 4142
+(1 row)
+
+SELECT rawtohex(''::bytea);
+ rawtohex 
+----------
+ 
+(1 row)
+
+-- the two are inverses (round-trips, both directions)
+SELECT rawtohex(hextoraw('DEADBEEF'));
+ rawtohex 
+----------
+ DEADBEEF
+(1 row)
+
+SELECT hextoraw(rawtohex('\x0123456789abcdef'::bytea));
+      hextoraw      
+--------------------
+ \x0123456789abcdef
+(1 row)
+
+----
+-- empty_clob() / empty_blob() -- empty character / binary LOBs
+----
+-- ORACLE> SELECT empty_clob() FROM dual; -> (empty)
+SELECT empty_clob();
+ empty_clob 
+------------
+ 
+(1 row)
+
+SELECT empty_clob() IS NULL;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT length(empty_clob());
+ length 
+--------
+      0
+(1 row)
+
+SELECT empty_clob() = '';
+ ?column? 
+----------
+ t
+(1 row)
+
+-- ORACLE> SELECT empty_blob() FROM dual; -> (empty)
+SELECT empty_blob();
+ empty_blob 
+------------
+ \x
+(1 row)
+
+SELECT empty_blob() IS NULL;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT length(empty_blob());
+ length 
+--------
+      0
+(1 row)
+
+SELECT empty_blob() = ''::bytea;
+ ?column? 
+----------
+ t
+(1 row)
+
+----
+-- from_tz() -- read a naive timestamp as being in the given zone
+----
+-- Display the result in a fixed session zone so the point-in-time is stable.
+SET TimeZone TO 'UTC';
+-- A numeric offset follows the ISO sign convention (east of UTC is positive),
+-- as Oracle does -- NOT PostgreSQL's inverted POSIX sign.
+-- ORACLE> SELECT from_tz(TIMESTAMP '2005-04-12 13:00:00', '+02:00') FROM dual;
+--         -> 2005-04-12 13:00:00.000000 +02:00  (i.e. 11:00 UTC)
+SELECT from_tz(TIMESTAMP '2005-04-12 13:00:00', '+02:00');
+           from_tz            
+------------------------------
+ Tue Apr 12 11:00:00 2005 UTC
+(1 row)
+
+-- ORACLE> SELECT from_tz(TIMESTAMP '2005-04-12 13:00:00', '-05:00') FROM dual;
+--         -> 2005-04-12 13:00:00.000000 -05:00  (i.e. 18:00 UTC)
+SELECT from_tz(TIMESTAMP '2005-04-12 13:00:00', '-05:00');
+           from_tz            
+------------------------------
+ Tue Apr 12 18:00:00 2005 UTC
+(1 row)
+
+-- a fractional-hour offset
+SELECT from_tz(TIMESTAMP '2005-04-12 13:00:00', '+05:30');
+           from_tz            
+------------------------------
+ Tue Apr 12 07:30:00 2005 UTC
+(1 row)
+
+-- a named region resolves against the live zone database
+SELECT from_tz(TIMESTAMP '2005-01-15 12:00:00', 'Europe/Prague');
+           from_tz            
+------------------------------
+ Sat Jan 15 11:00:00 2005 UTC
+(1 row)
+
+SELECT from_tz(TIMESTAMP '2005-07-15 12:00:00', 'Europe/Prague');
+           from_tz            
+------------------------------
+ Fri Jul 15 10:00:00 2005 UTC
+(1 row)
+
+-- UTC in, UTC out is a no-op
+SELECT from_tz(TIMESTAMP '2005-04-12 13:00:00', 'UTC');
+           from_tz            
+------------------------------
+ Tue Apr 12 13:00:00 2005 UTC
+(1 row)
+
+-- from_tz is the inverse of the existing sys_extract_utc()
+SELECT sys_extract_utc(from_tz(TIMESTAMP '2005-04-12 13:00:00', '+02:00'));
+     sys_extract_utc      
+--------------------------
+ Tue Apr 12 11:00:00 2005
+(1 row)
+
+RESET TimeZone;

@@ -2,22 +2,20 @@
    "name": "orafce",
    "abstract": "Oracle's compatibility functions and packages",
    "description": "This module allows use a well known Oracle's functions and packages inside PostgreSQL",
-   "version": "4.9.2",
+   "version": "4.17.1",
    "maintainer": [
       "Pavel Stehule <pavel.stehule@gmail.com>",
       "Takahiro Itagaki <itagaki.takahiro@gmail.com>"
    ],
-   "license": {
-      "PostgreSQL": "http://www.postgresql.org/about/licence"
-   },
+   "license": "bsd",
    "prereqs": {
       "runtime": {
          "requires": {
             "plpgsql": 0,
-            "PostgreSQL": "11.0.0"
+            "PostgreSQL": "13.0.0"
          },
          "recommends": {
-            "PostgreSQL": "16.0.0"
+            "PostgreSQL": "18.0.0"
          }
       }
    },
@@ -25,7 +23,7 @@
      "orafce": {
        "file": "sql/orafce.sql",
        "docfile": "README.orafce",
-       "version": "4.9.2",
+       "version": "4.17.1",
        "abstract": "Oracle's compatibility functions and packages"
      }
    },

@@ -1,0 +1,42 @@
+-- orafce.umask needs superuser or the orafce_set_umask role, also when it
+-- is set before the orafce library is loaded.
+CREATE ROLE regress_gp_umask;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+\c
+SET ROLE regress_gp_umask;
+-- the library is not loaded yet, so this is only a placeholder
+SET orafce.umask = '0000';
+-- loading the library checks the placeholder value
+SELECT oracle.add_months('2020-01-31'::date, 1);
+WARNING:  permission denied to set "orafce.umask"
+DETAIL:  Only roles with privileges of the "orafce_set_umask" can set "orafce.umask".
+ add_months 
+------------
+ 02-29-2020
+(1 row)
+
+SHOW orafce.umask;
+ orafce.umask 
+--------------
+ 0077
+(1 row)
+
+SET orafce.umask = '0000';
+ERROR:  permission denied to set "orafce.umask"
+DETAIL:  Only roles with privileges of the "orafce_set_umask" can set "orafce.umask".
+RESET ROLE;
+GRANT orafce_set_umask TO regress_gp_umask;
+SET ROLE regress_gp_umask;
+SET orafce.umask = '0027';
+SHOW orafce.umask;
+ orafce.umask 
+--------------
+ 0027
+(1 row)
+
+SET orafce.umask = '';
+ERROR:  invalid value for parameter "orafce.umask": ""
+DETAIL:  umask must not be empty
+RESET orafce.umask;
+RESET ROLE;
+DROP ROLE regress_gp_umask;

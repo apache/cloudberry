@@ -28,3 +28,12 @@ m/^NOTICE:.*resource queue required -- using default resource queue ".*"/
 m/^NOTICE:.*resource group required -- using default resource group ".*"/
 
 -- end_matchignore
+
+-- start_matchsubs
+
+# elog(ERROR) reports carry the source location in Cloudberry, e.g.
+# "ERROR:  Dates before 1100-03-01 cannot ... (datefce.c:837)"
+m/^ERROR:  .* \(\w+\.c:\d+\)$/
+s/ \(\w+\.c:\d+\)$//
+
+-- end_matchsubs
