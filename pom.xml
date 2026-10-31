@@ -129,14 +129,9 @@ code or new licensing patterns.
             
             <exclude>gpcontrib/gp_toolkit/**</exclude>
 
-            <exclude>gpcontrib/pg_hint_plan/**/*.source</exclude>
-            <exclude>gpcontrib/pg_hint_plan/update_copied_funcs.pl</exclude>
-            <exclude>gpcontrib/pg_hint_plan/SPECS/pg_hint_plan12.spec</exclude>
-
             <exclude>gpcontrib/pg_hint_plan/pg_hint_plan.control</exclude>
-            <exclude>gpcontrib/pg_hint_plan/.github/workflows/test.yml</exclude>
             <exclude>gpcontrib/pg_hint_plan/.gitattributes</exclude>
-            <exclude>gpcontrib/pg_hint_plan/doc/style.css</exclude>
+            <exclude>gpcontrib/pg_hint_plan/docs/**</exclude>
             <exclude>gpcontrib/pg_hint_plan/data/data.csv</exclude>
             <exclude>gpcontrib/pg_hint_plan/sql/maskout2.sh</exclude>
             <exclude>gpcontrib/pg_hint_plan/sql/maskout.sh</exclude>
@@ -1749,7 +1744,8 @@ code or new licensing patterns.
               <licenseFamilyName>PostgreSQL License (NIPPON TELEGRAPH AND TELEPHONE CORPORATION-derived)</licenseFamilyName>
               <licenseFamilyCategory>NIPL</licenseFamilyCategory>
               <patterns>
-                <pattern>Copyright (c) 2012-2020, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</pattern>
+                <pattern>Copyright (c) 2012-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</pattern>
+                <pattern>Copyright (c) 2012-2026, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</pattern>
               </patterns>
             </license>
 

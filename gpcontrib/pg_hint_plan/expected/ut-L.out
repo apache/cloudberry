@@ -673,28 +673,28 @@ EXPLAIN (COSTS false) SELECT * FROM s1.p1 t1, s1.p1 t2, s1.p1 t3, s1.p1 t4 WHERE
          ->  Hash Join
                Hash Cond: (t1.c1 = t2.c1)
                ->  Append
-                     ->  Seq Scan on p1 t1
-                     ->  Seq Scan on p1c1 t1_1
-                     ->  Seq Scan on p1c2 t1_2
-                     ->  Seq Scan on p1c3 t1_3
+                     ->  Seq Scan on p1 t1_1
+                     ->  Seq Scan on p1c1 t1_2
+                     ->  Seq Scan on p1c2 t1_3
+                     ->  Seq Scan on p1c3 t1_4
                ->  Hash
                      ->  Append
-                           ->  Seq Scan on p1 t2
-                           ->  Seq Scan on p1c1 t2_1
-                           ->  Seq Scan on p1c2 t2_2
-                           ->  Seq Scan on p1c3 t2_3
+                           ->  Seq Scan on p1 t2_1
+                           ->  Seq Scan on p1c1 t2_2
+                           ->  Seq Scan on p1c2 t2_3
+                           ->  Seq Scan on p1c3 t2_4
          ->  Hash
                ->  Append
-                     ->  Seq Scan on p1 t3
-                     ->  Seq Scan on p1c1 t3_1
-                     ->  Seq Scan on p1c2 t3_2
-                     ->  Seq Scan on p1c3 t3_3
+                     ->  Seq Scan on p1 t3_1
+                     ->  Seq Scan on p1c1 t3_2
+                     ->  Seq Scan on p1c2 t3_3
+                     ->  Seq Scan on p1c3 t3_4
    ->  Hash
          ->  Append
-               ->  Seq Scan on p1 t4
-               ->  Seq Scan on p1c1 t4_1
-               ->  Seq Scan on p1c2 t4_2
-               ->  Seq Scan on p1c3 t4_3
+               ->  Seq Scan on p1 t4_1
+               ->  Seq Scan on p1c1 t4_2
+               ->  Seq Scan on p1c2 t4_3
+               ->  Seq Scan on p1c3 t4_4
 (29 rows)
 
 /*+Leading(t4 t3 t2 t1)*/
@@ -715,28 +715,28 @@ error hint:
          ->  Hash Join
                Hash Cond: (t3.c1 = t4.c1)
                ->  Append
-                     ->  Seq Scan on p1 t3
-                     ->  Seq Scan on p1c1 t3_1
-                     ->  Seq Scan on p1c2 t3_2
-                     ->  Seq Scan on p1c3 t3_3
+                     ->  Seq Scan on p1 t3_1
+                     ->  Seq Scan on p1c1 t3_2
+                     ->  Seq Scan on p1c2 t3_3
+                     ->  Seq Scan on p1c3 t3_4
                ->  Hash
                      ->  Append
-                           ->  Seq Scan on p1 t4
-                           ->  Seq Scan on p1c1 t4_1
-                           ->  Seq Scan on p1c2 t4_2
-                           ->  Seq Scan on p1c3 t4_3
+                           ->  Seq Scan on p1 t4_1
+                           ->  Seq Scan on p1c1 t4_2
+                           ->  Seq Scan on p1c2 t4_3
+                           ->  Seq Scan on p1c3 t4_4
          ->  Hash
                ->  Append
-                     ->  Seq Scan on p1 t2
-                     ->  Seq Scan on p1c1 t2_1
-                     ->  Seq Scan on p1c2 t2_2
-                     ->  Seq Scan on p1c3 t2_3
+                     ->  Seq Scan on p1 t2_1
+                     ->  Seq Scan on p1c1 t2_2
+                     ->  Seq Scan on p1c2 t2_3
+                     ->  Seq Scan on p1c3 t2_4
    ->  Hash
          ->  Append
-               ->  Seq Scan on p1 t1
-               ->  Seq Scan on p1c1 t1_1
-               ->  Seq Scan on p1c2 t1_2
-               ->  Seq Scan on p1c3 t1_3
+               ->  Seq Scan on p1 t1_1
+               ->  Seq Scan on p1c1 t1_2
+               ->  Seq Scan on p1c2 t1_3
+               ->  Seq Scan on p1c3 t1_4
 (29 rows)
 
 -- No. L-1-6-3
@@ -905,9 +905,9 @@ error hint:
                  QUERY PLAN                 
 --------------------------------------------
  Nested Loop
-   Join Filter: (t2.c1 = t1.c1)
+   Join Filter: (t1.c1 = t2.c1)
    ->  Nested Loop
-         Join Filter: (t3.c1 = t2.c1)
+         Join Filter: (t2.c1 = t3.c1)
          ->  Nested Loop
                Join Filter: (t3.c1 = t4.c1)
                ->  Function Scan on f1 t3
@@ -921,9 +921,9 @@ EXPLAIN (COSTS false) SELECT * FROM (VALUES(1,1,1,'1'), (2,2,2,'2')) AS t1 (c1, 
                       QUERY PLAN                       
 -------------------------------------------------------
  Nested Loop
-   Join Filter: ("*VALUES*".column1 = t4.c1)
+   Join Filter: (t4.c1 = "*VALUES*".column1)
    ->  Nested Loop
-         Join Filter: ("*VALUES*".column1 = t3.c1)
+         Join Filter: (t3.c1 = "*VALUES*".column1)
          ->  Hash Join
                Hash Cond: (t2.c1 = "*VALUES*".column1)
                ->  Seq Scan on t2
@@ -947,9 +947,9 @@ error hint:
                       QUERY PLAN                       
 -------------------------------------------------------
  Nested Loop
-   Join Filter: ("*VALUES*".column1 = t4.c1)
+   Join Filter: (t4.c1 = "*VALUES*".column1)
    ->  Nested Loop
-         Join Filter: ("*VALUES*".column1 = t3.c1)
+         Join Filter: (t3.c1 = "*VALUES*".column1)
          ->  Hash Join
                Hash Cond: (t2.c1 = "*VALUES*".column1)
                ->  Seq Scan on t2
@@ -1298,7 +1298,7 @@ error hint:
    InitPlan 1 (returns $0)
      ->  Aggregate
            ->  Nested Loop
-                 Join Filter: (b1t2.c1 = b1t1.c1)
+                 Join Filter: (b1t1.c1 = b1t2.c1)
                  ->  Nested Loop
                        Join Filter: (b1t2.c1 = b1t4.c1)
                        ->  Nested Loop
@@ -1316,7 +1316,7 @@ error hint:
            ->  Nested Loop
                  Join Filter: (b2t1.c1 = b2t2.c1)
                  ->  Nested Loop
-                       Join Filter: (b2t3.c1 = b2t1.c1)
+                       Join Filter: (b2t1.c1 = b2t3.c1)
                        ->  Nested Loop
                              Join Filter: (b2t3.c1 = b2t4.c1)
                              ->  Tid Scan on t3 b2t3
@@ -1453,7 +1453,7 @@ error hint:
    InitPlan 1 (returns $0)
      ->  Aggregate
            ->  Nested Loop
-                 Join Filter: (b1t2.c1 = b1t1.c1)
+                 Join Filter: (b1t1.c1 = b1t2.c1)
                  ->  Nested Loop
                        Join Filter: (b1t2.c1 = b1t4.c1)
                        ->  Nested Loop
@@ -1471,7 +1471,7 @@ error hint:
            ->  Nested Loop
                  Join Filter: (b2t1.c1 = b2t2.c1)
                  ->  Nested Loop
-                       Join Filter: (b2t3.c1 = b2t1.c1)
+                       Join Filter: (b2t1.c1 = b2t3.c1)
                        ->  Nested Loop
                              Join Filter: (b2t3.c1 = b2t4.c1)
                              ->  Tid Scan on t3 b2t3
@@ -1550,9 +1550,9 @@ error hint:
 -----------------------------------------------------------
  Aggregate
    ->  Nested Loop
-         Join Filter: (bmt2.c1 = bmt1.c1)
+         Join Filter: (bmt1.c1 = bmt2.c1)
          ->  Nested Loop
-               Join Filter: (bmt3.c1 = bmt2.c1)
+               Join Filter: (bmt2.c1 = bmt3.c1)
                ->  Nested Loop
                      Join Filter: (bmt3.c1 = bmt4.c1)
                      ->  Tid Scan on t3 bmt3
@@ -1601,9 +1601,9 @@ error hint:
 -----------------------------------------------------------
  Aggregate
    ->  Nested Loop
-         Join Filter: (bmt2.c1 = bmt1.c1)
+         Join Filter: (bmt1.c1 = bmt2.c1)
          ->  Nested Loop
-               Join Filter: (bmt3.c1 = bmt2.c1)
+               Join Filter: (bmt2.c1 = bmt3.c1)
                ->  Nested Loop
                      Join Filter: (bmt3.c1 = bmt4.c1)
                      ->  Tid Scan on t3 bmt3
@@ -1705,7 +1705,7 @@ error hint:
    InitPlan 1 (returns $0)
      ->  Aggregate
            ->  Nested Loop
-                 Join Filter: (b1t2.c1 = b1t1.c1)
+                 Join Filter: (b1t1.c1 = b1t2.c1)
                  ->  Nested Loop
                        Join Filter: (b1t2.c1 = b1t4.c1)
                        ->  Nested Loop
@@ -1723,7 +1723,7 @@ error hint:
            ->  Nested Loop
                  Join Filter: (b2t1.c1 = b2t2.c1)
                  ->  Nested Loop
-                       Join Filter: (b2t3.c1 = b2t1.c1)
+                       Join Filter: (b2t1.c1 = b2t3.c1)
                        ->  Nested Loop
                              Join Filter: (b2t3.c1 = b2t4.c1)
                              ->  Tid Scan on t3 b2t3
@@ -1862,7 +1862,7 @@ error hint:
    InitPlan 1 (returns $0)
      ->  Aggregate
            ->  Nested Loop
-                 Join Filter: (b1t2.c1 = b1t1.c1)
+                 Join Filter: (b1t1.c1 = b1t2.c1)
                  ->  Nested Loop
                        Join Filter: (b1t2.c1 = b1t4.c1)
                        ->  Nested Loop
@@ -1880,7 +1880,7 @@ error hint:
            ->  Nested Loop
                  Join Filter: (b2t1.c1 = b2t2.c1)
                  ->  Nested Loop
-                       Join Filter: (b2t3.c1 = b2t1.c1)
+                       Join Filter: (b2t1.c1 = b2t3.c1)
                        ->  Nested Loop
                              Join Filter: (b2t3.c1 = b2t4.c1)
                              ->  Tid Scan on t3 b2t3
@@ -2028,14 +2028,14 @@ error hint:
                ->  Nested Loop
                      Join Filter: (bmt1.c1 = bmt2.c1)
                      ->  Nested Loop
-                           Join Filter: ((max(b1t1.c1)) = bmt1.c1)
+                           Join Filter: (bmt1.c1 = (max(b1t1.c1)))
                            ->  Merge Join
                                  Merge Cond: ((max(b1t1.c1)) = (max(b2t1.c1)))
                                  ->  Sort
                                        Sort Key: (max(b1t1.c1))
                                        ->  Aggregate
                                              ->  Nested Loop
-                                                   Join Filter: (b1t2.c1 = b1t1.c1)
+                                                   Join Filter: (b1t1.c1 = b1t2.c1)
                                                    ->  Nested Loop
                                                          Join Filter: (b1t2.c1 = b1t4.c1)
                                                          ->  Nested Loop
@@ -2054,7 +2054,7 @@ error hint:
                                              ->  Nested Loop
                                                    Join Filter: (b2t1.c1 = b2t2.c1)
                                                    ->  Nested Loop
-                                                         Join Filter: (b2t3.c1 = b2t1.c1)
+                                                         Join Filter: (b2t1.c1 = b2t3.c1)
                                                          ->  Nested Loop
                                                                Join Filter: (b2t3.c1 = b2t4.c1)
                                                                ->  Tid Scan on t3 b2t3
@@ -2105,7 +2105,7 @@ AND bmt1.c1 = c3.c1
                      ->  Nested Loop
                            Join Filter: (bmt1.c1 = bmt2.c1)
                            ->  Nested Loop
-                                 Join Filter: ((max(b1t1.c1)) = bmt1.c1)
+                                 Join Filter: (bmt1.c1 = (max(b1t1.c1)))
                                  ->  Merge Join
                                        Merge Cond: ((max(b1t1.c1)) = (max(b2t1.c1)))
                                        ->  Sort
@@ -2210,9 +2210,9 @@ error hint:
                ->  Nested Loop
                      Join Filter: (bmt1.c1 = bmt2.c1)
                      ->  Nested Loop
-                           Join Filter: ((max(b1t1.c1)) = bmt1.c1)
+                           Join Filter: (bmt1.c1 = (max(b1t1.c1)))
                            ->  Nested Loop
-                                 Join Filter: ((max(b2t1.c1)) = (max(b1t1.c1)))
+                                 Join Filter: ((max(b1t1.c1)) = (max(b2t1.c1)))
                                  ->  Merge Join
                                        Merge Cond: ((max(b2t1.c1)) = (max(b3t1.c1)))
                                        ->  Sort
@@ -2221,7 +2221,7 @@ error hint:
                                                    ->  Nested Loop
                                                          Join Filter: (b2t1.c1 = b2t2.c1)
                                                          ->  Nested Loop
-                                                               Join Filter: (b2t3.c1 = b2t1.c1)
+                                                               Join Filter: (b2t1.c1 = b2t3.c1)
                                                                ->  Nested Loop
                                                                      Join Filter: (b2t3.c1 = b2t4.c1)
                                                                      ->  Tid Scan on t3 b2t3
@@ -2251,7 +2251,7 @@ error hint:
                                                                TID Cond: (ctid = '(1,1)'::tid)
                                  ->  Aggregate
                                        ->  Nested Loop
-                                             Join Filter: (b1t2.c1 = b1t1.c1)
+                                             Join Filter: (b1t1.c1 = b1t2.c1)
                                              ->  Nested Loop
                                                    Join Filter: (b1t2.c1 = b1t4.c1)
                                                    ->  Nested Loop
@@ -2460,7 +2460,7 @@ error hint:
                  ->  Seq Scan on t2 b3t2
                        Filter: (ctid = '(1,1)'::tid)
    ->  Nested Loop
-         Join Filter: (bmt2.c1 = bmt1.c1)
+         Join Filter: (bmt1.c1 = bmt2.c1)
          ->  Nested Loop
                Join Filter: (bmt2.c1 = (max(b1t1.c1)))
                ->  Seq Scan on t2 bmt2
@@ -2593,9 +2593,9 @@ error hint:
    InitPlan 1 (returns $0)
      ->  Aggregate
            ->  Nested Loop
-                 Join Filter: (b2t2.c1 = b2t1.c1)
+                 Join Filter: (b2t1.c1 = b2t2.c1)
                  ->  Nested Loop
-                       Join Filter: (b2t3.c1 = b2t2.c1)
+                       Join Filter: (b2t2.c1 = b2t3.c1)
                        ->  Nested Loop
                              Join Filter: (b2t3.c1 = b2t4.c1)
                              ->  Tid Scan on t3 b2t3
@@ -2609,9 +2609,9 @@ error hint:
    InitPlan 2 (returns $1)
      ->  Aggregate
            ->  Nested Loop
-                 Join Filter: (b3t2.c1 = b3t1.c1)
+                 Join Filter: (b3t1.c1 = b3t2.c1)
                  ->  Nested Loop
-                       Join Filter: (b3t3.c1 = b3t2.c1)
+                       Join Filter: (b3t2.c1 = b3t3.c1)
                        ->  Nested Loop
                              Join Filter: (b3t3.c1 = b3t4.c1)
                              ->  Tid Scan on t3 b3t3
@@ -2623,20 +2623,20 @@ error hint:
                  ->  Tid Scan on t1 b3t1
                        TID Cond: (ctid = '(1,1)'::tid)
    ->  Nested Loop
-         Join Filter: (bmt2.c1 = bmt1.c1)
+         Join Filter: (bmt1.c1 = bmt2.c1)
          ->  Nested Loop
-               Join Filter: (bmt3.c1 = bmt2.c1)
+               Join Filter: (bmt2.c1 = bmt3.c1)
                ->  Nested Loop
-                     Join Filter: (bmt4.c1 = bmt3.c1)
+                     Join Filter: (bmt3.c1 = bmt4.c1)
                      ->  Nested Loop
                            Join Filter: (bmt4.c1 = (max(b1t1.c1)))
                            ->  Tid Scan on t4 bmt4
                                  TID Cond: (ctid = '(1,1)'::tid)
                            ->  Aggregate
                                  ->  Nested Loop
-                                       Join Filter: (b1t2.c1 = b1t1.c1)
+                                       Join Filter: (b1t1.c1 = b1t2.c1)
                                        ->  Nested Loop
-                                             Join Filter: (b1t3.c1 = b1t2.c1)
+                                             Join Filter: (b1t2.c1 = b1t3.c1)
                                              ->  Nested Loop
                                                    Join Filter: (b1t3.c1 = b1t4.c1)
                                                    ->  Tid Scan on t3 b1t3
@@ -2756,20 +2756,20 @@ error hint:
            ->  Tid Scan on t1 b3t1
                  TID Cond: (ctid = '(1,1)'::tid)
    ->  Nested Loop
-         Join Filter: (bmt2.c1 = bmt1.c1)
+         Join Filter: (bmt1.c1 = bmt2.c1)
          ->  Nested Loop
-               Join Filter: (bmt3.c1 = bmt2.c1)
+               Join Filter: (bmt2.c1 = bmt3.c1)
                ->  Nested Loop
-                     Join Filter: (bmt4.c1 = bmt3.c1)
+                     Join Filter: (bmt3.c1 = bmt4.c1)
                      ->  Nested Loop
                            Join Filter: (bmt4.c1 = (max(b1t1.c1)))
                            ->  Tid Scan on t4 bmt4
                                  TID Cond: (ctid = '(1,1)'::tid)
                            ->  Aggregate
                                  ->  Nested Loop
-                                       Join Filter: (b1t2.c1 = b1t1.c1)
+                                       Join Filter: (b1t1.c1 = b1t2.c1)
                                        ->  Nested Loop
-                                             Join Filter: (b1t3.c1 = b1t2.c1)
+                                             Join Filter: (b1t2.c1 = b1t3.c1)
                                              ->  Nested Loop
                                                    Join Filter: (b1t3.c1 = b1t4.c1)
                                                    ->  Tid Scan on t3 b1t3
@@ -2831,9 +2831,9 @@ error hint:
  Aggregate
    ->  Nested Loop
          ->  Nested Loop
-               Join Filter: (t2.c1 = t1.c1)
+               Join Filter: (t1.c1 = t2.c1)
                ->  Nested Loop
-                     Join Filter: (t3.c1 = t2.c1)
+                     Join Filter: (t2.c1 = t3.c1)
                      ->  Nested Loop
                            Join Filter: (t3.c1 = t4.c1)
                            ->  Tid Scan on t3
@@ -2971,9 +2971,9 @@ error hint:
  Aggregate
    ->  Nested Loop
          ->  Nested Loop
-               Join Filter: (t2.c1 = t1.c1)
+               Join Filter: (t1.c1 = t2.c1)
                ->  Nested Loop
-                     Join Filter: (t3.c1 = t2.c1)
+                     Join Filter: (t2.c1 = t3.c1)
                      ->  Nested Loop
                            Join Filter: (t3.c1 = t4.c1)
                            ->  Tid Scan on t3
@@ -2991,9 +2991,9 @@ error hint:
  Aggregate
    ->  Nested Loop
          ->  Nested Loop
-               Join Filter: (t2.c1 = t1.c1)
+               Join Filter: (t1.c1 = t2.c1)
                ->  Nested Loop
-                     Join Filter: (t3.c1 = t2.c1)
+                     Join Filter: (t2.c1 = t3.c1)
                      ->  Nested Loop
                            Join Filter: (t3.c1 = t4.c1)
                            ->  Tid Scan on t3
@@ -3210,9 +3210,9 @@ error hint:
  Aggregate
    ->  Nested Loop
          ->  Nested Loop
-               Join Filter: (t2.c1 = t1.c1)
+               Join Filter: (t1.c1 = t2.c1)
                ->  Nested Loop
-                     Join Filter: (t3.c1 = t2.c1)
+                     Join Filter: (t2.c1 = t3.c1)
                      ->  Nested Loop
                            Join Filter: (t3.c1 = t4.c1)
                            ->  Tid Scan on t3
@@ -3230,9 +3230,9 @@ error hint:
  Aggregate
    ->  Nested Loop
          ->  Nested Loop
-               Join Filter: (t2.c1 = t1.c1)
+               Join Filter: (t1.c1 = t2.c1)
                ->  Nested Loop
-                     Join Filter: (t3.c1 = t2.c1)
+                     Join Filter: (t2.c1 = t3.c1)
                      ->  Nested Loop
                            Join Filter: (t3.c1 = t4.c1)
                            ->  Tid Scan on t3
@@ -3250,9 +3250,9 @@ error hint:
  Aggregate
    ->  Nested Loop
          ->  Nested Loop
-               Join Filter: (t2.c1 = t1.c1)
+               Join Filter: (t1.c1 = t2.c1)
                ->  Nested Loop
-                     Join Filter: (t3.c1 = t2.c1)
+                     Join Filter: (t2.c1 = t3.c1)
                      ->  Nested Loop
                            Join Filter: (t3.c1 = t4.c1)
                            ->  Tid Scan on t3
@@ -3488,66 +3488,6 @@ error hint:
          ->  Seq Scan on t1 v1t1_
 (5 rows)
 
--- No. L-2-3-6
-EXPLAIN (COSTS false) SELECT * FROM s1.r4 t1, s1.r4 t2 WHERE t1.c1 = t2.c1;
-             QUERY PLAN             
-------------------------------------
- Hash Join
-   Hash Cond: (r4t1.c1 = r4t1_1.c1)
-   ->  Seq Scan on t1 r4t1
-   ->  Hash
-         ->  Seq Scan on t1 r4t1_1
-(5 rows)
-
-/*+Leading(r4t1 r4t1)*/
-EXPLAIN (COSTS false) SELECT * FROM s1.r4 t1, s1.r4 t2 WHERE t1.c1 = t2.c1;
-INFO:  pg_hint_plan: hint syntax error at or near "Leading(r4t1 r4t1)"
-DETAIL:  Relation name "r4t1" is ambiguous.
-LOG:  pg_hint_plan:
-used hint:
-not used hint:
-duplication hint:
-error hint:
-Leading(r4t1 r4t1)
-
-             QUERY PLAN             
-------------------------------------
- Hash Join
-   Hash Cond: (r4t1.c1 = r4t1_1.c1)
-   ->  Seq Scan on t1 r4t1
-   ->  Hash
-         ->  Seq Scan on t1 r4t1_1
-(5 rows)
-
--- No. L-2-3-7
-EXPLAIN (COSTS false) SELECT * FROM s1.r4 t1, s1.r5 t2 WHERE t1.c1 = t2.c1;
-            QUERY PLAN            
-----------------------------------
- Hash Join
-   Hash Cond: (r4t1.c1 = r5t1.c1)
-   ->  Seq Scan on t1 r4t1
-   ->  Hash
-         ->  Seq Scan on t1 r5t1
-(5 rows)
-
-/*+Leading(r4t1 r5t1)*/
-EXPLAIN (COSTS false) SELECT * FROM s1.r4 t1, s1.r5 t2 WHERE t1.c1 = t2.c1;
-LOG:  pg_hint_plan:
-used hint:
-Leading(r4t1 r5t1)
-not used hint:
-duplication hint:
-error hint:
-
-            QUERY PLAN            
-----------------------------------
- Hash Join
-   Hash Cond: (r4t1.c1 = r5t1.c1)
-   ->  Seq Scan on t1 r4t1
-   ->  Hash
-         ->  Seq Scan on t1 r5t1
-(5 rows)
-
 ----
 ---- No. L-2-4 VALUES clause
 ----
@@ -3773,9 +3713,9 @@ error hint:
  Merge Join
    Merge Cond: (t1.c1 = t2.c1)
    ->  Merge Join
-         Merge Cond: (t1.c1 = t3.c1)
-         ->  Index Scan using t1_i1 on t1
+         Merge Cond: (t3.c1 = t1.c1)
          ->  Index Scan using t3_i1 on t3
+         ->  Index Scan using t1_i1 on t1
    ->  Sort
          Sort Key: t2.c1
          ->  Seq Scan on t2
@@ -3940,7 +3880,7 @@ EXPLAIN (COSTS false) SELECT * FROM s1.t3
                 QUERY PLAN                
 ------------------------------------------
  Nested Loop
-   Join Filter: (t2.c1 = t3.c1)
+   Join Filter: (t3.c1 = t2.c1)
    ->  Merge Join
          Merge Cond: (t1.c1 = t2.c1)
          ->  Index Scan using t1_i1 on t1
@@ -3965,7 +3905,7 @@ error hint:
                 QUERY PLAN                
 ------------------------------------------
  Nested Loop
-   Join Filter: (t2.c1 = t3.c1)
+   Join Filter: (t3.c1 = t2.c1)
    ->  Merge Join
          Merge Cond: (t1.c1 = t2.c1)
          ->  Index Scan using t1_i1 on t1
@@ -3999,19 +3939,19 @@ error hint:
    ->  Hash Join
          Hash Cond: (t1.c1 = t2.c1)
          ->  Append
-               ->  Seq Scan on p2c1 t1
-               ->  Seq Scan on p2c1c1 t1_1
-               ->  Seq Scan on p2c1c2 t1_2
+               ->  Seq Scan on p2c1 t1_1
+               ->  Seq Scan on p2c1c1 t1_2
+               ->  Seq Scan on p2c1c2 t1_3
          ->  Hash
                ->  Append
-                     ->  Seq Scan on p2c2 t2
-                     ->  Seq Scan on p2c2c1 t2_1
-                     ->  Seq Scan on p2c2c2 t2_2
+                     ->  Seq Scan on p2c2 t2_1
+                     ->  Seq Scan on p2c2c1 t2_2
+                     ->  Seq Scan on p2c2c2 t2_3
    ->  Hash
          ->  Append
-               ->  Seq Scan on p2c3 t3
-               ->  Seq Scan on p2c3c1 t3_1
-               ->  Seq Scan on p2c3c2 t3_2
+               ->  Seq Scan on p2c3 t3_1
+               ->  Seq Scan on p2c3c1 t3_2
+               ->  Seq Scan on p2c3c2 t3_3
 (18 rows)
 
 -- No. L-3-3-2
@@ -4033,19 +3973,19 @@ error hint:
    ->  Hash Join
          Hash Cond: (t1.c1 = t2.c1)
          ->  Append
-               ->  Seq Scan on p2c1 t1
-               ->  Seq Scan on p2c1c1 t1_1
-               ->  Seq Scan on p2c1c2 t1_2
+               ->  Seq Scan on p2c1 t1_1
+               ->  Seq Scan on p2c1c1 t1_2
+               ->  Seq Scan on p2c1c2 t1_3
          ->  Hash
                ->  Append
-                     ->  Seq Scan on p2c2 t2
-                     ->  Seq Scan on p2c2c1 t2_1
-                     ->  Seq Scan on p2c2c2 t2_2
+                     ->  Seq Scan on p2c2 t2_1
+                     ->  Seq Scan on p2c2c1 t2_2
+                     ->  Seq Scan on p2c2c2 t2_3
    ->  Hash
          ->  Append
-               ->  Seq Scan on p2c3 t3
-               ->  Seq Scan on p2c3c1 t3_1
-               ->  Seq Scan on p2c3c2 t3_2
+               ->  Seq Scan on p2c3 t3_1
+               ->  Seq Scan on p2c3c1 t3_2
+               ->  Seq Scan on p2c3c2 t3_3
 (18 rows)
 
 ----
@@ -4340,7 +4280,7 @@ error hint:
  Nested Loop
    Join Filter: (t1.c1 = t4.c1)
    ->  Nested Loop
-         Join Filter: (t2.c1 = t1.c1)
+         Join Filter: (t1.c1 = t2.c1)
          ->  Nested Loop
                ->  Index Scan using t2_i1 on t2
                ->  Index Scan using t3_i1 on t3
