@@ -481,7 +481,7 @@ checkDispatchResult(CdbDispatcherState *ds, int timeout_sec)
 	 * Parallel to fds[]: whether that connection already holds a complete
 	 * message in libpq's buffer rather than in its socket.  See the loop below.
 	 */
-	buffered = (bool *) palloc(db_count * sizeof(bool));
+	buffered = (bool *) palloc0(db_count * sizeof(bool));
 
 	/*
 	 * OK, we are finished submitting the command to the segdbs. Now, we have
