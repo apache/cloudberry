@@ -50,6 +50,7 @@ for my $storage ('heap', 'row', 'column')
     $node->safe_psql('postgres', qq{
 CREATE TABLE $table (id int, padding text) $options;
 CREATE INDEX ${table}_idx ON $table (id);
+CREATE INDEX ${table}_expression_idx ON $table ((id + 1));
 INSERT INTO $table SELECT g, repeat('x', 100) FROM generate_series(1, 4000) g;
 DELETE FROM $table WHERE id <= 1000;
 });
@@ -80,6 +81,18 @@ DELETE FROM $table WHERE id <= 1000;
         like($report, qr/WAL usage: [1-9]\d* records/,
              'compaction produces WAL') if $phase eq 'AO compaction (excluding indexes)';
     }
+    if ($storage ne 'heap')
+    {
+        my $inserts = resource_report($stderr, $table,
+          'AO compaction index inserts (all indexes)');
+        ok(defined $inserts, "$storage reports compaction index insertions separately");
+        $inserts //= '';
+        like($inserts, qr/buffer usage: [1-9]\d* hits,/,
+             "$storage compaction index insertions access buffers");
+        my ($records) = $inserts =~ /WAL usage: (\d+) records,/;
+        cmp_ok($records // 0, '>=', 4000,
+               "$storage accounts for both indexes on 2000 relocated tuples");
+    }
     my $index_phase = $storage eq 'heap' ? 'index bulk delete' : 'AO index vacuum';
     like($stderr, qr/vacuum resource usage for "public\.\Q${table}_idx\E" \(\Q$index_phase\E\):/,
          "$storage reports index resources separately");
@@ -96,6 +109,7 @@ CREATE INDEX verbose_parallel_gin ON verbose_parallel USING gin (a);
 CREATE INDEX verbose_parallel_brin ON verbose_parallel USING brin (id);
 DELETE FROM verbose_parallel WHERE id % 2 = 0;
 });
+SKIP:
 {
     my ($stdout, $stderr);
     is($node->psql('postgres', q{
@@ -104,6 +118,8 @@ SET max_parallel_maintenance_workers = 2;
 VACUUM (VERBOSE, PARALLEL 2, INDEX_CLEANUP ON) verbose_parallel;
 }, stdout => \$stdout, stderr => \$stderr), 0,
        'parallel verbose vacuum succeeds');
+    skip 'Parallel VACUUM is disabled in this build', 21
+      if $stderr =~ /disabling parallel option of vacuum.*cannot vacuum tables in parallel/;
     like($stderr, qr/launched [1-9]\d* parallel vacuum worker/,
          'parallel accounting test actually launches workers');
 
