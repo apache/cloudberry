@@ -591,7 +591,7 @@ ginbulkdelete(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 		 * and cleanup any pending inserts
 		 */
 		ginInsertCleanup(&gvs.ginstate, !IsAutoVacuumWorkerProcess(),
-						 false, true, stats);
+						 false, true, false, stats);
 	}
 
 	/* we'll re-count the tuples each time */
@@ -704,7 +704,7 @@ ginvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 		if (IsAutoVacuumWorkerProcess())
 		{
 			initGinState(&ginstate, index);
-			ginInsertCleanup(&ginstate, false, true, true, stats);
+			ginInsertCleanup(&ginstate, false, true, true, true, stats);
 		}
 		return stats;
 	}
@@ -718,7 +718,7 @@ ginvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 		stats = (IndexBulkDeleteResult *) palloc0(sizeof(IndexBulkDeleteResult));
 		initGinState(&ginstate, index);
 		ginInsertCleanup(&ginstate, !IsAutoVacuumWorkerProcess(),
-						 false, true, stats);
+						 false, true, false, stats);
 	}
 
 	memset(&idxStat, 0, sizeof(idxStat));
