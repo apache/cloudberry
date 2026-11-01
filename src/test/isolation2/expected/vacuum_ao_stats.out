@@ -9,6 +9,20 @@
 -- The vacuum statistics of the core for append-optimized tables: the vacuum
 -- and delay times of the tables and their indexes, and vacuum_interrupt_count.
 --
+-- Timing and the cost limit are instance-local GUCs: configure the segments.
+!\retcode gpconfig -c track_cost_delay_timing -v on --skipvalidation;
+-- start_ignore
+-- end_ignore
+(exited with code 0)
+!\retcode gpconfig -c vacuum_cost_limit -v 1 --skipvalidation;
+-- start_ignore
+-- end_ignore
+(exited with code 0)
+!\retcode gpstop -u;
+-- start_ignore
+-- end_ignore
+(exited with code 0)
+
 CREATE TABLE vacstat_ao_row (i int, v text) WITH (appendonly=true) DISTRIBUTED BY (i);
 CREATE
 CREATE TABLE vacstat_ao_col (i int, v text) WITH (appendonly=true, orientation=column) DISTRIBUTED BY (i);
@@ -32,7 +46,7 @@ DELETE 1500
 SET
 1: SET vacuum_cost_delay = '1ms';
 SET
-1: SET vacuum_cost_limit = 10;
+1: SET vacuum_cost_limit = 1;
 SET
 1: VACUUM vacstat_ao_row, vacstat_ao_col;
 VACUUM
@@ -138,3 +152,17 @@ VACUUM
 1: DROP TABLE vacstat_ao_row, vacstat_ao_col;
 DROP
 1q: ... <quitting>
+
+-- Restore the test cluster defaults.
+!\retcode gpconfig -r track_cost_delay_timing --skipvalidation;
+-- start_ignore
+-- end_ignore
+(exited with code 0)
+!\retcode gpconfig -r vacuum_cost_limit --skipvalidation;
+-- start_ignore
+-- end_ignore
+(exited with code 0)
+!\retcode gpstop -u;
+-- start_ignore
+-- end_ignore
+(exited with code 0)
