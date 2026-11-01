@@ -9,6 +9,11 @@
 -- The vacuum statistics of the core for append-optimized tables: the vacuum
 -- and delay times of the tables and their indexes, and vacuum_interrupt_count.
 --
+-- Timing and the cost limit are instance-local GUCs: configure the segments.
+!\retcode gpconfig -c track_cost_delay_timing -v on --skipvalidation;
+!\retcode gpconfig -c vacuum_cost_limit -v 1 --skipvalidation;
+!\retcode gpstop -u;
+
 CREATE TABLE vacstat_ao_row (i int, v text) WITH (appendonly=true) DISTRIBUTED BY (i);
 CREATE TABLE vacstat_ao_col (i int, v text) WITH (appendonly=true, orientation=column) DISTRIBUTED BY (i);
 CREATE INDEX vacstat_ao_row_idx ON vacstat_ao_row (i);
@@ -22,7 +27,7 @@ DELETE FROM vacstat_ao_col WHERE i % 2 = 0;
 -- tables and the indexes get vacuum and delay time on every segment.
 1: SET track_cost_delay_timing = on;
 1: SET vacuum_cost_delay = '1ms';
-1: SET vacuum_cost_limit = 10;
+1: SET vacuum_cost_limit = 1;
 1: VACUUM vacstat_ao_row, vacstat_ao_col;
 1: SELECT relname, count(*) FILTER (WHERE total_vacuum_time > 0) AS segments_timed,
           count(*) FILTER (WHERE total_vacuum_delay_time > 0) AS segments_delayed
@@ -82,3 +87,8 @@ DELETE FROM vacstat_ao_row WHERE i % 2 = 1;
 
 1: DROP TABLE vacstat_ao_row, vacstat_ao_col;
 1q:
+
+-- Restore the test cluster defaults.
+!\retcode gpconfig -r track_cost_delay_timing --skipvalidation;
+!\retcode gpconfig -r vacuum_cost_limit --skipvalidation;
+!\retcode gpstop -u;
