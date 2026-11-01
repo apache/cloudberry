@@ -238,7 +238,8 @@ typedef struct PgStat_KindInfo
 	 * The offset/size of statistics inside the shared stats entry. Used when
 	 * [de-]serializing statistics to / from disk respectively. Separate from
 	 * shared_size because [de-]serialization may not include in-memory state
-	 * like lwlocks.
+	 * like lwlocks. The payload length is stored on disk so entries for
+	 * unavailable custom kinds can be skipped during restart.
 	 */
 	uint32		shared_data_off;
 	uint32		shared_data_len;

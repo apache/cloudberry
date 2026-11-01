@@ -3508,6 +3508,10 @@ extern void pgstat_register_kind(PgStat_Kind kind,
      Place the extension module implementing the custom cumulative statistics
      type in <xref linkend="guc-shared-preload-libraries"/> so that it will
      be loaded early during <productname>PostgreSQL</productname> startup.
+     Statistics names must be unique, ignoring case, across both built-in
+     and custom kinds. After a clean shutdown, removing a module from this
+     setting causes its saved statistics to be skipped at startup; statistics
+     belonging to the remaining kinds are restored normally.
     </para>
    </sect2>
 
