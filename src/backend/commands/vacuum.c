@@ -2926,7 +2926,25 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 			cluster_rel(relid, InvalidOid, &cluster_params);
 		}
 		else /* Heap vacuum or AO/CO vacuum in specific phase */
-			table_relation_vacuum(rel, params, bstrategy);
+		{
+			bool		shared = rel->rd_rel->relisshared;
+
+			/*
+			 * Count errors only when they escape the access method.  Index
+			 * expressions can raise and catch errors internally (for example
+			 * during AO compaction) without interrupting this vacuum.
+			 */
+			PG_TRY();
+			{
+				table_relation_vacuum(rel, params, bstrategy);
+			}
+			PG_CATCH();
+			{
+				pgstat_count_vacuum_error(shared);
+				PG_RE_THROW();
+			}
+			PG_END_TRY();
+		}
 	}
 
 	if (IS_QD_OR_SINGLENODE() && (params->options & VACOPT_FULL))
