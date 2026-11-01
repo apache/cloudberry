@@ -35,6 +35,8 @@ sub start_instance
     $instance->_update_pid(1);
 }
 
+$node->append_conf('postgresql.conf', "shared_preload_libraries = 'test_custom_stats'");
+
 # Populate the cluster configuration in utility mode before starting the
 # dispatcher, as gpinitsystem does.
 start_instance($node, 'utility', -1);
@@ -62,6 +64,11 @@ SET ROLE restart_user;
 SELECT 1;
 RESET ROLE;
 }, connstr => $connstr);
+$node->safe_psql('postgres', q{
+CREATE FUNCTION test_custom_stats_create() RETURNS void
+AS 'test_custom_stats', 'test_custom_stats_create' LANGUAGE C;
+SELECT test_custom_stats_create();
+});
 my $stats_sql = q{
 SELECT queries_submitted, queries_admitted, queries_completed
   FROM pg_stat_resqueues WHERE queuename = 'restart_queue'};
@@ -71,6 +78,11 @@ like($before, qr/^[1-9][0-9]*[|][1-9][0-9]*[|][1-9][0-9]*$/,
 $node->restart;
 is($node->safe_psql('postgres', $stats_sql, connstr => $connstr), $before,
    'resource queue statistics survive a clean restart');
+$node->stop;
+$node->append_conf('postgresql.conf', "shared_preload_libraries = ''");
+$node->start;
+is($node->safe_psql('postgres', $stats_sql, connstr => $connstr), $before,
+   'resource queue statistics survive removal of the custom provider');
 $node->stop;
 $segment->stop;
 done_testing();
