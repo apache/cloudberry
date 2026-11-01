@@ -167,7 +167,6 @@ static AOVacuumRelStats *init_vacrelstats(void);
 static void cleanup_vacrelstats(AOVacuumRelStats **vacrelstatsp);
 static void ao_report_index_vacuum_time(Relation indrel, TimestampTz starttime,
 										double startdelaytime);
-static void ao_vacuum_error_callback(void *arg);
 
 static void
 ao_vacuum_rel_pre_cleanup(Relation onerel, VacuumParams *params, BufferAccessStrategy bstrategy, AOVacuumRelStats *vacrelstats)
@@ -431,7 +430,6 @@ void
 ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy)
 {
 	static AOVacuumRelStats *vacrelstats = NULL;
-	ErrorContextCallback errcallback;
 	instr_time	phase_start;
 	instr_time	phase_end;
 	double		phase_start_delay;
@@ -473,12 +471,6 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 		vacrelstats->relid = RelationGetRelid(rel);
 	}
 
-	/* Count the vacuums of the relation that an error interrupts */
-	errcallback.callback = ao_vacuum_error_callback;
-	errcallback.arg = rel;
-	errcallback.previous = error_context_stack;
-	error_context_stack = &errcallback;
-
 	INSTR_TIME_SET_CURRENT(phase_start);
 	phase_start_delay = VacuumDelayTime;
 
@@ -516,25 +508,6 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 		pgstat_progress_end_command();
 		cleanup_vacrelstats(&vacrelstats);
 	}
-	error_context_stack = errcallback.previous;
-}
-
-/*
- * Error context callback of an append-optimized vacuum phase.
- *
- * Like vacuum_error_callback() of the heap, count a vacuum interrupted by an
- * actual ERROR, not by a lower-severity report that merely carries this
- * context, in vacuum_interrupt_count of the database.  We are inside the
- * error handler, so pgstat_count_vacuum_error() only bumps a counter.  The
- * callback adds no context line: the phases report their own progress.
- */
-static void
-ao_vacuum_error_callback(void *arg)
-{
-	Relation	rel = (Relation) arg;
-
-	if (geterrlevel() == ERROR)
-		pgstat_count_vacuum_error(rel->rd_rel->relisshared);
 }
 
 /*
