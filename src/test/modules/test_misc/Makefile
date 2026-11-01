@@ -1,5 +1,7 @@
 # src/test/modules/test_misc/Makefile
 
+MODULES = test_custom_stats
+
 TAP_TESTS = 1
 
 ifdef USE_PGXS

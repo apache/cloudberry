@@ -144,7 +144,8 @@
 #define PGSTAT_SNAPSHOT_HASH_SIZE	512
 
 /* ---------
- * Identifiers in stats file.
+ * Identifiers in stats file. Each non-END entry stores a uint32 payload length
+ * before its kind/key/name, allowing unavailable custom kinds to be skipped.
  * ---------
  */
 #define PGSTAT_FILE_ENTRY_END	'E' /* end of file */
@@ -1491,14 +1492,14 @@ pgstat_register_kind(PgStat_Kind kind, const PgStat_KindInfo *kind_info)
 				 errdetail("Custom cumulative statistics \"%s\" already registered with the same ID.",
 						   pgstat_kind_custom_infos[idx]->name)));
 
-	/* check for existing custom stats with the same name */
-	for (PgStat_Kind existing_kind = PGSTAT_KIND_CUSTOM_MIN; existing_kind <= PGSTAT_KIND_CUSTOM_MAX; existing_kind++)
+	/* Names share a case-insensitive namespace with the built-in kinds. */
+	for (PgStat_Kind existing_kind = PGSTAT_KIND_MIN; existing_kind <= PGSTAT_KIND_MAX; existing_kind++)
 	{
-		uint32		existing_idx = existing_kind - PGSTAT_KIND_CUSTOM_MIN;
+		const PgStat_KindInfo *existing_info = pgstat_get_kind_info(existing_kind);
 
-		if (pgstat_kind_custom_infos[existing_idx] == NULL)
+		if (existing_info == NULL)
 			continue;
-		if (!pg_strcasecmp(pgstat_kind_custom_infos[existing_idx]->name, kind_info->name))
+		if (!pg_strcasecmp(existing_info->name, kind_info->name))
 			ereport(ERROR,
 					(errmsg("failed to register custom cumulative statistics \"%s\" with ID %u", kind_info->name, kind),
 					 errdetail("Existing cumulative statistics with ID %u has the same name.", existing_kind)));
@@ -1607,6 +1608,7 @@ pgstat_write_statsfile(void)
 			ptr = pgStatLocal.snapshot.custom_data[kind - PGSTAT_KIND_CUSTOM_MIN];
 
 		fputc(PGSTAT_FILE_ENTRY_FIXED, fpout);
+		write_chunk_s(fpout, &info->shared_data_len);
 		write_chunk_s(fpout, &kind);
 		write_chunk(fpout, ptr, info->shared_data_len);
 	}
@@ -1661,6 +1663,7 @@ pgstat_write_statsfile(void)
 		{
 			/* normal stats entry, identified by PgStat_HashKey */
 			fputc(PGSTAT_FILE_ENTRY_HASH, fpout);
+			write_chunk_s(fpout, &kind_info->shared_data_len);
 			write_chunk_s(fpout, &ps->key);
 		}
 		else
@@ -1671,6 +1674,7 @@ pgstat_write_statsfile(void)
 			kind_info->to_serialized_name(&ps->key, shstats, &name);
 
 			fputc(PGSTAT_FILE_ENTRY_NAME, fpout);
+			write_chunk_s(fpout, &kind_info->shared_data_len);
 			write_chunk_s(fpout, &ps->key.kind);
 			write_chunk_s(fpout, &name);
 		}
@@ -1724,6 +1728,24 @@ read_chunk(FILE *fpin, void *ptr, size_t len)
 }
 
 #define read_chunk_s(fpin, ptr) read_chunk(fpin, ptr, sizeof(*ptr))
+
+/* Read rather than seek, so a truncated unavailable-kind payload is rejected. */
+static bool
+skip_stats_data(FILE *fpin, uint32 len)
+{
+	char		buffer[1024];
+
+	while (len > 0)
+	{
+		size_t		nbytes = Min((size_t) len, sizeof(buffer));
+
+		CHECK_FOR_INTERRUPTS();
+		if (!read_chunk(fpin, buffer, nbytes))
+			return false;
+		len -= nbytes;
+	}
+	return true;
+}
 
 /*
  * Reads in existing statistics file into the shared stats hash.
@@ -1788,6 +1810,14 @@ pgstat_read_statsfile(void)
 	for (;;)
 	{
 		int			t = fgetc(fpin);
+		uint32		data_len;
+
+		/* Payload lengths let us skip kinds whose provider was removed. */
+		if (t != PGSTAT_FILE_ENTRY_END && !read_chunk_s(fpin, &data_len))
+		{
+			elog(WARNING, "could not read statistics payload length");
+			goto error;
+		}
 
 		switch (t)
 		{
@@ -1814,14 +1844,14 @@ pgstat_read_statsfile(void)
 					info = pgstat_get_kind_info(kind);
 					if (!info)
 					{
-						elog(WARNING, "could not find information of kind %u for entry of type %c",
-							 kind, t);
-						goto error;
+						if (!skip_stats_data(fpin, data_len))
+							goto error;
+						continue;
 					}
 
-					if (!info->fixed_amount)
+					if (!info->fixed_amount || data_len != info->shared_data_len)
 					{
-						elog(WARNING, "invalid fixed_amount in stats kind %u for entry of type %c",
+						elog(WARNING, "invalid fixed statistics layout for kind %u and entry type %c",
 							 kind, t);
 						goto error;
 					}
@@ -1871,6 +1901,14 @@ pgstat_read_statsfile(void)
 								 key.kind, key.dboid, key.objoid, t);
 							goto error;
 						}
+
+						/* The extension may no longer be preloaded. */
+						if (!pgstat_get_kind_info(key.kind))
+						{
+							if (!skip_stats_data(fpin, data_len))
+								goto error;
+							continue;
+						}
 					}
 					else
 					{
@@ -1900,14 +1938,16 @@ pgstat_read_statsfile(void)
 						kind_info = pgstat_get_kind_info(kind);
 						if (!kind_info)
 						{
-							elog(WARNING, "could not find information of kind %u for entry of type %c",
-								 kind, t);
-							goto error;
+							if (!skip_stats_data(fpin, data_len))
+								goto error;
+							continue;
 						}
 
-						if (!kind_info->from_serialized_name)
+						if (kind_info->fixed_amount ||
+							data_len != kind_info->shared_data_len ||
+							!kind_info->from_serialized_name)
 						{
-							elog(WARNING, "invalid from_serialized_name in stats kind %u for entry of type %c",
+							elog(WARNING, "invalid named statistics layout for kind %u and entry type %c",
 								 kind, t);
 							goto error;
 						}
@@ -1915,9 +1955,9 @@ pgstat_read_statsfile(void)
 						if (!kind_info->from_serialized_name(&name, &key))
 						{
 							/* skip over data for entry we don't care about */
-							if (fseek(fpin, pgstat_get_entry_len(kind), SEEK_CUR) != 0)
+							if (!skip_stats_data(fpin, data_len))
 							{
-								elog(WARNING, "could not seek \"%s\" of stats kind %u for entry of type %c",
+								elog(WARNING, "could not skip \"%s\" of stats kind %u for entry of type %c",
 									 NameStr(name), kind, t);
 								goto error;
 							}
@@ -1926,6 +1966,15 @@ pgstat_read_statsfile(void)
 						}
 
 						Assert(key.kind == kind);
+					}
+
+					/* Validate the stored layout before allocating or reading data. */
+					if (pgstat_get_kind_info(key.kind)->fixed_amount ||
+						data_len != pgstat_get_entry_len(key.kind))
+					{
+						elog(WARNING, "invalid statistics payload length or kind for entry %u/%u/%u",
+							 key.kind, key.dboid, key.objoid);
+						goto error;
 					}
 
 					/*
