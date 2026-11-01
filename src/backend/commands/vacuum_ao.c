@@ -129,6 +129,7 @@
 #include "cdb/cdbvars.h"
 #include "commands/progress.h"
 #include "commands/vacuum.h"
+#include "executor/executor.h"
 #include "pgstat.h"
 #include "postmaster/autovacuum.h"
 #include "storage/freespace.h"
@@ -506,7 +507,12 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 				ao_vacuum_phase == VACOPT_AO_COMPACT_PHASE ? _("AO compaction (excluding indexes)") :
 				_("AO post-cleanup (excluding indexes)");
 
-			/* Only index passes executed during this phase are excluded. */
+			/* Report relocated tuples' index insertions as one aggregate. */
+			if (ao_vacuum_phase == VACOPT_AO_COMPACT_PHASE)
+				extvac_stats_log(rel, _("AO compaction index inserts (all indexes)"),
+							  &vacrelstats->extstats->index_inserts);
+
+			/* Only index work executed during this phase is excluded. */
 			ao_accum_resources(&index_usage, &index_start, true);
 			ao_accum_resources(&phase_usage, &index_usage, true);
 			extvac_stats_log(rel, phase_name, &phase_usage);
@@ -556,6 +562,61 @@ ao_accum_resources(PgStat_CommonCounts *dst, const PgStat_CommonCounts *src,
 		dst->wal_records += src->wal_records;
 		dst->wal_fpi += src->wal_fpi;
 		dst->wal_bytes += src->wal_bytes;
+	}
+}
+
+/*
+ * Compaction reinserts each surviving tuple into its indexes.  Measure the
+ * complete executor call, including index expressions and predicates, without
+ * allocating or logging once per tuple.  The phase reports these insertions
+ * together, separately from both table work and index vacuum passes.
+ */
+void
+ao_vacuum_insert_index_tuples(ResultRelInfo *resultRelInfo, TupleTableSlot *slot,
+							  EState *estate, AOVacuumRelStats *vacrelstats)
+{
+	LVExtStatCounters counters = {0};
+	PgStat_CommonCounts usage = {0};
+	PgStat_Counter fetched = 0;
+	PgStat_Counter hit = 0;
+
+	if (vacrelstats->extstats != NULL)
+	{
+		for (int i = 0; i < resultRelInfo->ri_NumIndices; i++)
+		{
+			Relation indrel = resultRelInfo->ri_IndexRelationDescs[i];
+
+			if (pgstat_track_counts && indrel->pgstat_info != NULL)
+			{
+				fetched += indrel->pgstat_info->counts.blocks_fetched;
+				hit += indrel->pgstat_info->counts.blocks_hit;
+			}
+		}
+		counters.walusage = pgWalUsage;
+		counters.bufusage = pgBufferUsage;
+	}
+
+	ExecInsertIndexTuples(resultRelInfo, slot, estate, false, false,
+						  NULL, NIL, false);
+
+	if (vacrelstats->extstats != NULL)
+	{
+		extvac_stats_end(resultRelInfo->ri_RelationDesc, &counters, &usage);
+		/* Replace the table's relation counters with the indexes' delta. */
+		usage.blks_fetched = -fetched;
+		usage.blks_hit = -hit;
+		for (int i = 0; i < resultRelInfo->ri_NumIndices; i++)
+		{
+			Relation indrel = resultRelInfo->ri_IndexRelationDescs[i];
+
+			if (pgstat_track_counts && indrel->pgstat_info != NULL)
+			{
+				usage.blks_fetched += indrel->pgstat_info->counts.blocks_fetched;
+				usage.blks_hit += indrel->pgstat_info->counts.blocks_hit;
+			}
+		}
+		ao_accum_resources(&vacrelstats->extstats->index_inserts, &usage, false);
+		ao_accum_resources(&vacrelstats->extstats->indexes, &usage, false);
 	}
 }
 
