@@ -433,10 +433,9 @@ accumulate_heap_vacuum_statistics(LVRelState *vacrel, PgStat_VacuumRelationCount
 	extVacStats->type = PGSTAT_EXTVAC_TABLE;
 
 	/*
-	 * Subtract the resource usage of the index passes this process ran: they
-	 * are reported per index, and the database-wide aggregate would count
-	 * them twice otherwise.  Parallel workers report their own usage with
-	 * their index passes, so it never enters the leader's counters.
+	 * Subtract index work, including worker usage merged into the leader by
+	 * InstrAccumParallelQuery().  Serial passes contribute individually;
+	 * parallel passes contribute the complete phase after worker aggregation.
 	 */
 	extVacStats->common.total_blks_read -= vacrel->extVacReportIdx->total_blks_read;
 	extVacStats->common.total_blks_hit -= vacrel->extVacReportIdx->total_blks_hit;
@@ -2553,9 +2552,26 @@ lazy_vacuum_all_indexes(LVRelState *vacrel)
 	}
 	else
 	{
+		LVExtStatCounters *extVacCounters;
+
+		/*
+		 * The parallel phase merges worker buffer/WAL usage into the leader.
+		 * Snapshot the whole phase, including leader-only indexes, and subtract
+		 * it only after that merge so index work is not reported as heap work.
+		 */
+		extVacCounters = extvac_stats_start(vacrel->rel, vacrel->verbose);
+
 		/* Outsource everything to parallel variant */
 		parallel_vacuum_bulkdel_all_indexes(vacrel->pvs, old_live_tuples,
 											vacrel->num_index_scans);
+
+		if (extVacCounters != NULL)
+		{
+			extvac_stats_end(vacrel->rel, extVacCounters,
+							 &extVacCounters->report.common);
+			accumulate_idxs_vacuum_statistics(vacrel, &extVacCounters->report);
+			pfree(extVacCounters);
+		}
 
 		/*
 		 * Do a postcheck to consider applying wraparound failsafe now.  Note
@@ -2883,10 +2899,27 @@ lazy_cleanup_all_indexes(LVRelState *vacrel)
 	}
 	else
 	{
+		LVExtStatCounters *extVacCounters;
+
+		/*
+		 * The parallel phase merges worker buffer/WAL usage into the leader.
+		 * Snapshot the whole phase, including leader-only indexes, and subtract
+		 * it only after that merge so index work is not reported as heap work.
+		 */
+		extVacCounters = extvac_stats_start(vacrel->rel, vacrel->verbose);
+
 		/* Outsource everything to parallel variant */
 		parallel_vacuum_cleanup_all_indexes(vacrel->pvs, reltuples,
 											vacrel->num_index_scans,
 											estimated_count);
+
+		if (extVacCounters != NULL)
+		{
+			extvac_stats_end(vacrel->rel, extVacCounters,
+							 &extVacCounters->report.common);
+			accumulate_idxs_vacuum_statistics(vacrel, &extVacCounters->report);
+			pfree(extVacCounters);
+		}
 	}
 }
 
