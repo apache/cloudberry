@@ -554,7 +554,7 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 									 vacrelstats->live_tuples, vacrelstats->dead_tuples,
 									 (PgStat_Counter) rint(INSTR_TIME_GET_MILLISEC(phase_end)),
 									 (PgStat_Counter) rint(VacuumDelayTime - phase_start_delay),
-									 false, 0, /* AO has no failsafe mode or heap VM. */
+									 false, 0, 0, /* AO has no failsafe mode or heap VM. */
 									 ao_vacuum_phase == VACOPT_AO_POST_CLEANUP_PHASE);
 	}
 

@@ -217,12 +217,13 @@ void
 pgstat_report_vacuum(Oid tableoid, bool shared,
 					 PgStat_Counter livetuples, PgStat_Counter deadtuples,
 					 TimestampTz starttime, PgStat_Counter delaytime,
-					 bool failsafe, PgStat_Counter pages_frozen)
+					 bool failsafe, PgStat_Counter pages_frozen,
+					 PgStat_Counter pages_all_visible)
 {
 	pgstat_report_vacuum_elapsed(tableoid, shared, livetuples, deadtuples,
 								 TimestampDifferenceMilliseconds(starttime,
 														GetCurrentTimestamp()),
-								 delaytime, failsafe, pages_frozen, true);
+								 delaytime, failsafe, pages_frozen, pages_all_visible, true);
 }
 
 /*
@@ -235,7 +236,8 @@ void
 pgstat_report_vacuum_elapsed(Oid tableoid, bool shared,
 							 PgStat_Counter livetuples, PgStat_Counter deadtuples,
 							 PgStat_Counter elapsedtime, PgStat_Counter delaytime,
-							 bool failsafe, PgStat_Counter pages_frozen, bool is_complete)
+							 bool failsafe, PgStat_Counter pages_frozen,
+							 PgStat_Counter pages_all_visible, bool is_complete)
 {
 	PgStat_EntryRef *entry_ref;
 	PgStatShared_Relation *shtabentry;
@@ -297,6 +299,7 @@ pgstat_report_vacuum_elapsed(Oid tableoid, bool shared,
 	}
 
 	tabentry->pages_frozen += pages_frozen;
+	tabentry->pages_all_visible += pages_all_visible;
 
 	if (failsafe)
 		tabentry->vacuum_failsafe_count++;
