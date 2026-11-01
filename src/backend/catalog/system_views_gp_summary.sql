@@ -146,6 +146,7 @@ SELECT
     m.total_autovacuum_delay_time,
     m.vacuum_failsafe_count,
     m.pages_frozen,
+    m.pages_all_visible,
     m.visible_page_marks_cleared,
     m.frozen_page_marks_cleared
 FROM
@@ -184,6 +185,7 @@ FROM
          case when d.policytype = 'r' then (sum(total_autovacuum_delay_time)/d.numsegments) else sum(total_autovacuum_delay_time) end total_autovacuum_delay_time,
          max(vacuum_failsafe_count) as vacuum_failsafe_count,
          case when d.policytype = 'r' then (sum(pages_frozen)/d.numsegments)::bigint else sum(pages_frozen) end pages_frozen,
+         case when d.policytype = 'r' then (sum(pages_all_visible)/d.numsegments)::bigint else sum(pages_all_visible) end pages_all_visible,
 
          case when d.policytype = 'r' then (sum(visible_page_marks_cleared)/d.numsegments)::bigint else sum(visible_page_marks_cleared) end visible_page_marks_cleared,
          case when d.policytype = 'r' then (sum(frozen_page_marks_cleared)/d.numsegments)::bigint else sum(frozen_page_marks_cleared) end frozen_page_marks_cleared

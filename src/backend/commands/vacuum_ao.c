@@ -512,7 +512,7 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 									 rel->rd_rel->relisshared,
 									 vacrelstats->live_tuples, vacrelstats->dead_tuples,
 									 0, 0,
-									 false, 0); /* AO has no failsafe mode or heap VM. */
+									 false, 0, 0); /* AO has no failsafe mode or heap VM. */
 		pgstat_progress_end_command();
 		cleanup_vacrelstats(&vacrelstats);
 	}

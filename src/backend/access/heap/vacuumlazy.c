@@ -206,6 +206,7 @@ typedef struct LVRelState
 	BlockNumber scanned_pages;	/* # pages examined (not skipped via VM) */
 	BlockNumber removed_pages;	/* # pages removed by relation truncation */
 	BlockNumber frozen_pages;	/* # pages with newly frozen tuples */
+	BlockNumber all_visible_pages; /* # pages newly marked all-visible */
 	BlockNumber lpdead_item_pages;	/* # pages with LP_DEAD items */
 	BlockNumber missed_dead_pages;	/* # pages with missed dead tuples */
 	BlockNumber nonempty_pages; /* actually, last nonempty page + 1 */
@@ -446,6 +447,7 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 	vacrel->scanned_pages = 0;
 	vacrel->removed_pages = 0;
 	vacrel->frozen_pages = 0;
+	vacrel->all_visible_pages = 0;
 	vacrel->lpdead_item_pages = 0;
 	vacrel->missed_dead_pages = 0;
 	vacrel->nonempty_pages = 0;
@@ -632,7 +634,8 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 						 vacrel->missed_dead_tuples,
 						 starttime,
 						 (PgStat_Counter) rint(VacuumDelayTime - startdelaytime),
-						 VacuumFailsafeActive, vacrel->frozen_pages);
+						 VacuumFailsafeActive, vacrel->frozen_pages,
+						 vacrel->all_visible_pages);
 	pgstat_progress_end_command();
 
 	if (instrument)
@@ -731,6 +734,8 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 								 _("new relminmxid: %u, which is %d MXIDs ahead of previous value\n"),
 								 vacrel->NewRelminMxid, diff);
 			}
+			appendStringInfo(&buf, _("pages marked all-visible: %u\n"),
+							 vacrel->all_visible_pages);
 			appendStringInfo(&buf, _("frozen: %u pages from table (%.2f%% of total) had %lld tuples frozen\n"),
 							 vacrel->frozen_pages,
 							 orig_rel_pages == 0 ? 100.0 :
@@ -1149,6 +1154,9 @@ lazy_scan_heap(LVRelState *vacrel)
 			 */
 			PageSetAllVisible(page);
 			MarkBufferDirty(buf);
+			/* Check the current VM bit while holding the heap page lock. */
+			if (!VM_ALL_VISIBLE(vacrel->rel, blkno, &vmbuffer))
+				vacrel->all_visible_pages++;
 			visibilitymap_set(vacrel->rel, blkno, buf, InvalidXLogRecPtr,
 							  vmbuffer, prunestate.visibility_cutoff_xid,
 							  flags);
@@ -1222,6 +1230,8 @@ lazy_scan_heap(LVRelState *vacrel)
 			 * safe for REDO was logged when the page's tuples were frozen.
 			 */
 			Assert(!TransactionIdIsValid(prunestate.visibility_cutoff_xid));
+			if (!VM_ALL_VISIBLE(vacrel->rel, blkno, &vmbuffer))
+				vacrel->all_visible_pages++;
 			visibilitymap_set(vacrel->rel, blkno, buf, InvalidXLogRecPtr,
 							  vmbuffer, InvalidTransactionId,
 							  VISIBILITYMAP_ALL_VISIBLE |
@@ -1530,6 +1540,8 @@ lazy_scan_new_or_empty(LVRelState *vacrel, Buffer buf, BlockNumber blkno,
 				log_newpage_buffer(buf, true);
 
 			PageSetAllVisible(page);
+			if (!VM_ALL_VISIBLE(vacrel->rel, blkno, &vmbuffer))
+				vacrel->all_visible_pages++;
 			visibilitymap_set(vacrel->rel, blkno, buf, InvalidXLogRecPtr,
 							  vmbuffer, InvalidTransactionId,
 							  VISIBILITYMAP_ALL_VISIBLE | VISIBILITYMAP_ALL_FROZEN);
@@ -2630,6 +2642,8 @@ lazy_vacuum_heap_page(LVRelState *vacrel, BlockNumber blkno, Buffer buffer,
 		}
 
 		PageSetAllVisible(page);
+		if (!VM_ALL_VISIBLE(vacrel->rel, blkno, &vmbuffer))
+			vacrel->all_visible_pages++;
 		visibilitymap_set(vacrel->rel, blkno, buffer, InvalidXLogRecPtr,
 						  vmbuffer, visibility_cutoff_xid, flags);
 	}
