@@ -13083,3 +13083,8 @@
   proargmodes => '{i,o,o,o,o,o,o,o,o,o,o,o,o,o}',
   proargnames => '{queueid,queueid,queries_submitted,queries_admitted,queries_rejected,queries_completed,elapsed_wait_secs,max_wait_secs,elapsed_exec_secs,max_exec_secs,total_cost,total_memory_kb,stat_reset_timestamp,have_stats}',
   prosrc => 'pg_stat_get_resqueue_stats' },
+
+{ oid => '8694', descr => 'cumulative heap pages where vacuum froze tuples',
+  proname => 'pg_stat_get_pages_frozen', provolatile => 's',
+  proparallel => 'r', prorettype => 'int8', proargtypes => 'oid',
+  prosrc => 'pg_stat_get_pages_frozen' },
