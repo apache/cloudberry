@@ -185,7 +185,8 @@ static void
 AOCSMoveTuple(TupleTableSlot *slot,
 			  AOCSInsertDesc insertDesc,
 			  ResultRelInfo *resultRelInfo,
-			  EState *estate)
+			  EState *estate,
+			  AOVacuumRelStats *vacrelstats)
 {
 	AOTupleId  *oldAoTupleId;
 	AOTupleId	newAoTupleId;
@@ -207,9 +208,7 @@ AOCSMoveTuple(TupleTableSlot *slot,
 	/* insert index' tuples if needed */
 	if (resultRelInfo->ri_NumIndices > 0)
 	{
-		ExecInsertIndexTuples(resultRelInfo,
-							  slot, estate, false, false,
-							  NULL, NIL, false);
+		ao_vacuum_insert_index_tuples(resultRelInfo, slot, estate, vacrelstats);
 		ResetPerTupleExprContext(estate);
 	}
 
@@ -312,7 +311,7 @@ AOCSSegmentFileFullCompaction(Relation aorel,
 		AOCSMoveTuple(slot,
 					  insertDesc,
 					  resultRelInfo,
-					  estate);
+					  estate, vacrelstats);
 
 		if (aocs_compaction_delete_hook)
 			(*aocs_compaction_delete_hook) (aorel, &otid);
