@@ -16,6 +16,7 @@ tests += {
       't/024_ao_dead_pages.pl',
       't/027_freeze_age_vacuum_count.pl',
       't/028_vacuum_work_core.pl',
+      't/030_vacuum_work_reset.pl',
     ],
   },
 }

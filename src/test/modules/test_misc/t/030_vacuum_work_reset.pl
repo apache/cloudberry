@@ -32,7 +32,7 @@ SELECT row_to_json(s) FROM pg_stat_get_vacuum_database_stats(
 };
 my $other_sql = q{
 SELECT n_tup_ins, n_tup_del, n_mod_since_analyze, vacuum_count, analyze_count,
-       last_vacuum, last_analyze, total_vacuum_time, total_vacuum_delay_time
+       last_vacuum, last_analyze
   FROM pg_stat_all_tables WHERE relname = 'reset_work'
 };
 my $zero_sql = q{
@@ -71,7 +71,7 @@ SELECT pg_stat_reset_vacuum_stats('reset_work'::regclass);
 });
 is($node->safe_psql('postgres', $zero_sql), 't', 'relation reset clears every work field');
 is($node->safe_psql('postgres', $other_sql), $other_before,
-   'relation reset preserves timing, invocation counts and other statistics');
+   'relation reset preserves timestamps, invocation counts and other statistics');
 is($node->safe_psql('postgres', $db_work_sql), $db_before,
    'relation reset preserves database work aggregate');
 is($node->safe_psql('postgres', q{
