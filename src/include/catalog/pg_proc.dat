@@ -13088,3 +13088,7 @@
   proname => 'pg_stat_get_pages_frozen', provolatile => 's',
   proparallel => 'r', prorettype => 'int8', proargtypes => 'oid',
   prosrc => 'pg_stat_get_pages_frozen' },
+{ oid => '8695', descr => 'cumulative heap pages newly marked all-visible by vacuum',
+  proname => 'pg_stat_get_pages_all_visible', provolatile => 's',
+  proparallel => 'r', prorettype => 'int8', proargtypes => 'oid',
+  prosrc => 'pg_stat_get_pages_all_visible' },
