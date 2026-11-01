@@ -4829,8 +4829,11 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
        <structfield>vacuum_interrupt_count</structfield> <type>bigint</type>
       </para>
       <para>
-       Number of times a vacuum in this database was interrupted by an error,
-       the vacuum of an append-optimized table included.  In a Cloudberry
+       Number of errors escaping the table access method during vacuum,
+       including heap lazy vacuum and append-optimized vacuum phases. Errors
+       caught inside an index function, errors before entering the access
+       method (such as opening the relation), and heap <command>VACUUM FULL</command>
+       are not counted. In a Cloudberry
        cluster the count is kept by the instance on which the vacuum failed:
        a vacuum dispatched to the segments that fails there is counted by
        those segments, not by the coordinator.  A segment reports the count

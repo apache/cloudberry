@@ -37,7 +37,7 @@ static int	pgStatXactRollback = 0;
 static PgStat_Counter pgLastSessionReportTime = 0;
 
 /*
- * Vacuums interrupted by an error, counted from the vacuum error callback
+ * Vacuums interrupted by an error, counted when errors escape the table vacuum
  * and folded into the pending database entries at transaction end.
  */
 static PgStat_Counter pgStatVacuumErrors = 0;
@@ -359,9 +359,9 @@ pgstat_should_report_connstat(void)
 /*
  * Count a vacuum that was interrupted by an error.
  *
- * This is called from the vacuum error callback, that is from inside the
- * error handler, so it must not do anything that could fail or block: the
- * error may well have been raised by the locking code itself, possibly
+ * This is called from the table vacuum PG_CATCH handler, so it must not
+ * do anything that could fail or block: the error may well have been
+ * raised by the locking code itself, possibly
  * while holding an LWLock.  Just bump a counter here; the counter reaches
  * the pending database entry in AtEOXact_PgStat_Database(), once the
  * transaction end has released the locks we might have been holding.
