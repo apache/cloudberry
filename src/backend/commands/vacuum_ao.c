@@ -551,7 +551,7 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 									 vacrelstats->live_tuples, vacrelstats->dead_tuples,
 									 (PgStat_Counter) rint(vacrelstats->vacuum_time),
 									 (PgStat_Counter) rint(vacrelstats->delay_time),
-									 false); /* AO has no failsafe mode. */
+									 false, 0); /* AO has no failsafe mode or heap VM. */
 		pgstat_progress_end_command();
 		cleanup_vacrelstats(&vacrelstats);
 	}
