@@ -1806,6 +1806,7 @@ pg_stat_all_tables| SELECT c.oid AS relid,
     pg_stat_get_total_vacuum_delay_time(c.oid) AS total_vacuum_delay_time,
     pg_stat_get_total_autovacuum_delay_time(c.oid) AS total_autovacuum_delay_time,
     pg_stat_get_vacuum_failsafe_count(c.oid) AS vacuum_failsafe_count,
+    pg_stat_get_pages_frozen(c.oid) AS pages_frozen,
     pg_stat_get_visible_page_marks_cleared(c.oid) AS visible_page_marks_cleared,
     pg_stat_get_frozen_page_marks_cleared(c.oid) AS frozen_page_marks_cleared
    FROM ((pg_class c
@@ -2187,6 +2188,7 @@ pg_stat_sys_tables| SELECT relid,
     total_vacuum_delay_time,
     total_autovacuum_delay_time,
     vacuum_failsafe_count,
+    pages_frozen,
     visible_page_marks_cleared,
     frozen_page_marks_cleared
    FROM pg_stat_all_tables
@@ -2244,6 +2246,7 @@ pg_stat_user_tables| SELECT relid,
     total_vacuum_delay_time,
     total_autovacuum_delay_time,
     vacuum_failsafe_count,
+    pages_frozen,
     visible_page_marks_cleared,
     frozen_page_marks_cleared
    FROM pg_stat_all_tables
