@@ -127,6 +127,7 @@ DELETE FROM vacuum_progress_ao_column where j % 2 = 0;
 -- Suspend execution at the end of compact phase.
 2: SELECT gp_inject_fault('vacuum_ao_after_compact', 'suspend', dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
 
+1: SET track_cost_delay_timing = on;
 1: set debug_appendonly_print_compaction to on;
 1&: vacuum vacuum_progress_ao_column;
 
@@ -159,6 +160,9 @@ select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, he
 -- Also all segments should reach to the same "vacuum_worker_changed" point
 -- due to FTS version being changed.
 2: SELECT gp_wait_until_triggered_fault('vacuum_worker_changed', 1, dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
+-- Completed phase timing survives worker replacement before final reporting.
+SELECT bool_and(total_vacuum_time > 0 AND vacuum_count = 0) AS phase_timing_saved FROM gp_stat_all_tables WHERE relname = 'vacuum_progress_ao_column' AND gp_segment_id > -1;
+
 -- now seg1's mirror is marked as down
 2: SELECT content, role, preferred_role, mode, status FROM gp_segment_configuration WHERE content > -1;
 
@@ -174,6 +178,10 @@ select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, he
 2: SELECT gp_inject_fault('vacuum_ao_post_cleanup_end', 'reset', dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
 
 1<:
+-- The replacement gang inherits the session timing setting.
+1: SELECT bool_and(setting = 'on') AS timing_synced FROM gp_dist_random('pg_settings') WHERE name = 'track_cost_delay_timing';
+1: RESET track_cost_delay_timing;
+
 
 -- restore environment
 1: reset debug_appendonly_print_compaction;

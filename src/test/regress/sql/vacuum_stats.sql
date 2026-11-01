@@ -21,18 +21,31 @@ AND relallvisible =
 
 DROP TABLE vacstat_test;
 
+-- A fresh backend's first heap write must clear VM bits without allocating
+-- inside its critical section (also exercised by assertion builds).
+CREATE TABLE core_vm_first_write (a int) DISTRIBUTED REPLICATED;
+INSERT INTO core_vm_first_write VALUES (1);
+VACUUM FREEZE core_vm_first_write;
+\connect -reuse-previous=on
+INSERT INTO core_vm_first_write VALUES (2);
+SELECT gp_stat_force_next_flush();
+SELECT bool_and(visible_page_marks_cleared > 0 AND frozen_page_marks_cleared > 0)
+       AS vm_clears_counted
+  FROM gp_stat_all_tables WHERE relname = 'core_vm_first_write' AND gp_segment_id > -1;
+DROP TABLE core_vm_first_write;
+
 -- Core GUC regression: reconnect with timing enabled at session startup.
--- Segment processes must keep the default off across coordinator startup
--- options, SET, and ROLLBACK.  All three checks expect t.
+-- Segment processes must follow coordinator startup options, SET, and
+-- ROLLBACK.  All three checks expect t.
 \connect -reuse-previous=on "options='-c track_cost_delay_timing=on'"
-SELECT bool_and(setting = 'off') AS segment_timing_local
+SELECT bool_and(setting = 'on') AS segment_timing_local
   FROM gp_dist_random('pg_settings') WHERE name = 'track_cost_delay_timing';
 BEGIN;
 SET track_cost_delay_timing = off;
 SELECT bool_and(setting = 'off') AS segment_timing_local
   FROM gp_dist_random('pg_settings') WHERE name = 'track_cost_delay_timing';
 ROLLBACK;
-SELECT bool_and(setting = 'off') AS segment_timing_local
+SELECT bool_and(setting = 'on') AS segment_timing_local
   FROM gp_dist_random('pg_settings') WHERE name = 'track_cost_delay_timing';
 RESET track_cost_delay_timing;
 

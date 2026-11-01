@@ -162,6 +162,11 @@ bool
 visibilitymap_clear_rel(Relation rel, BlockNumber heapBlk, Buffer vmbuf,
 						uint8 flags)
 {
+	/* Noncritical callers may not have prepared pending statistics yet. */
+	if (CritSectionCount == 0)
+		(void) pgstat_should_count_relation(rel);
+	Assert(!rel->pgstat_enabled || rel->pgstat_info != NULL);
+
 	return vm_do_clear(rel, heapBlk, vmbuf, flags, true);
 }
 

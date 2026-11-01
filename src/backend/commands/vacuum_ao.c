@@ -173,7 +173,6 @@ static void ao_measure_index_resources(Relation indrel,
 									 AOVacuumRelStats *vacrelstats, bool verbose);
 static void ao_report_index_vacuum_time(Relation indrel, TimestampTz starttime,
 										double startdelaytime);
-static void ao_vacuum_error_callback(void *arg);
 
 static void
 ao_vacuum_rel_pre_cleanup(Relation onerel, VacuumParams *params, BufferAccessStrategy bstrategy, AOVacuumRelStats *vacrelstats)
@@ -443,7 +442,6 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 	LVExtStatCounters *extcounters;
 	bool		verbose = (params->options & VACOPT_VERBOSE) != 0;
 	PgStat_CommonCounts index_start = {0};
-	ErrorContextCallback errcallback;
 	instr_time	phase_start;
 	instr_time	phase_end;
 	double		phase_start_delay;
@@ -489,12 +487,6 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 	extcounters = extvac_stats_start(rel, verbose);
 	if (verbose)
 		index_start = vacrelstats->extstats->indexes;
-	/* Count the vacuums of the relation that an error interrupts */
-	errcallback.callback = ao_vacuum_error_callback;
-	errcallback.arg = rel;
-	errcallback.previous = error_context_stack;
-	error_context_stack = &errcallback;
-
 	INSTR_TIME_SET_CURRENT(phase_start);
 	phase_start_delay = VacuumDelayTime;
 
@@ -515,8 +507,10 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 	{
 		INSTR_TIME_SET_CURRENT(phase_end);
 		INSTR_TIME_SUBTRACT(phase_end, phase_start);
-		vacrelstats->vacuum_time += INSTR_TIME_GET_MILLISEC(phase_end);
-		vacrelstats->delay_time += VacuumDelayTime - phase_start_delay;
+		/* Publish each completed phase before its QE can be replaced. */
+		pgstat_report_vacuum_phase(rel,
+			(PgStat_Counter) rint(INSTR_TIME_GET_MILLISEC(phase_end)),
+			(PgStat_Counter) rint(VacuumDelayTime - phase_start_delay));
 	}
 
 	if (verbose && ao_vacuum_phase != 0)
@@ -545,12 +539,11 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 
 	if (ao_vacuum_phase == VACOPT_AO_POST_CLEANUP_PHASE)
 	{
-		/* The last phase: report only the phases executed by this worker. */
+		/* Count completion once; phase timings have already been published. */
 		pgstat_report_vacuum_elapsed(RelationGetRelid(rel),
 									 rel->rd_rel->relisshared,
 									 vacrelstats->live_tuples, vacrelstats->dead_tuples,
-									 (PgStat_Counter) rint(vacrelstats->vacuum_time),
-									 (PgStat_Counter) rint(vacrelstats->delay_time),
+									 0, 0,
 									 false, 0, 0); /* AO has no failsafe mode or heap VM. */
 		pgstat_progress_end_command();
 		cleanup_vacrelstats(&vacrelstats);
@@ -558,7 +551,6 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 
 	if (extcounters != NULL)
 		pfree(extcounters);
-	error_context_stack = errcallback.previous;
 }
 
 /*
@@ -669,24 +661,6 @@ ao_measure_index_resources(Relation indrel, LVExtStatCounters *counters,
 
 	ao_accum_resources(&vacrelstats->extstats->indexes, &report->common, false);
 	pfree(counters);
-}
-
-/*
- * Error context callback of an append-optimized vacuum phase.
- *
- * Like vacuum_error_callback() of the heap, count a vacuum interrupted by an
- * actual ERROR, not by a lower-severity report that merely carries this
- * context, in vacuum_interrupt_count of the database.  We are inside the
- * error handler, so pgstat_count_vacuum_error() only bumps a counter.  The
- * callback adds no context line: the phases report their own progress.
- */
-static void
-ao_vacuum_error_callback(void *arg)
-{
-	Relation	rel = (Relation) arg;
-
-	if (geterrlevel() == ERROR)
-		pgstat_count_vacuum_error(rel->rd_rel->relisshared);
 }
 
 /*

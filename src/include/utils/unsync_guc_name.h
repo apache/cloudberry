@@ -617,7 +617,6 @@
 		"track_activities",
 		"track_activity_query_size",
 		"track_commit_timestamp",
-		"track_cost_delay_timing",
 		"track_counts",
 		"track_functions",
 		"track_io_timing",

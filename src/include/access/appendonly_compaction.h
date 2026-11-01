@@ -42,9 +42,6 @@ typedef struct AOVacuumRelStats
 	int		num_index_vacuumed; /* current # of indexes been vacuumed */
 	/* Index resources are excluded from each phase's VERBOSE report. */
 	AOVacuumExtStats *extstats; /* allocated only for VERBOSE */
-	/* Active phase durations and delays in milliseconds, excluding phase gaps. */
-	double		vacuum_time;
-	double		delay_time;
 	int64		live_tuples;
 	int64		dead_tuples;
 

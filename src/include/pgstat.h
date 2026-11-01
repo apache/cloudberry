@@ -719,6 +719,8 @@ extern void pgstat_report_vacuum(Oid tableoid, bool shared,
 								 TimestampTz starttime, PgStat_Counter delaytime,
 								 bool failsafe, PgStat_Counter pages_frozen,
 								 PgStat_Counter pages_all_visible);
+extern void pgstat_report_vacuum_phase(Relation rel,
+										PgStat_Counter elapsedtime, PgStat_Counter delaytime);
 extern void pgstat_report_index_vacuum_time(Relation rel,
 											PgStat_Counter elapsedtime,
 											PgStat_Counter delaytime,
@@ -778,18 +780,19 @@ extern void pgstat_report_analyze(Relation rel,
 /*
  * Count revocations of all-visible and all-frozen marks in the visibility
  * map.  Only tables have a visibility map, so these always work on the
- * table's pending counters.
+ * table's pending counters.  Callers must prepare these before entering a
+ * critical section: these macros must never allocate.
  */
 #define pgstat_count_visible_page_marks_cleared(rel)					\
 	do {															\
-		if (pgstat_should_count_relation(rel))						\
+		if ((rel)->pgstat_info != NULL)						\
 		{															\
 			(rel)->pgstat_info->counts.visible_page_marks_cleared++;	\
 		}															\
 	} while (0)
 #define pgstat_count_frozen_page_marks_cleared(rel)					\
 	do {															\
-		if (pgstat_should_count_relation(rel))						\
+		if ((rel)->pgstat_info != NULL)						\
 		{															\
 			(rel)->pgstat_info->counts.frozen_page_marks_cleared++;	\
 		}															\

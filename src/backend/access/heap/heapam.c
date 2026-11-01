@@ -1964,6 +1964,9 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 	 */
 	CheckForSerializableConflictIn(relation, NULL, InvalidBlockNumber);
 
+	/* VM clearing below must not allocate in the critical section. */
+	(void) pgstat_should_count_relation(relation);
+
 	/* NO EREPORT(ERROR) from here till changes are logged */
 	START_CRIT_SECTION();
 
@@ -2305,6 +2308,9 @@ heap_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 
 		if (starting_with_empty_page && (options & HEAP_INSERT_FROZEN))
 			all_frozen_set = true;
+
+		/* VM clearing below must not allocate in the critical section. */
+		(void) pgstat_should_count_relation(relation);
 
 		/* NO EREPORT(ERROR) from here till changes are logged */
 		START_CRIT_SECTION();
@@ -2919,6 +2925,9 @@ l1:
 							  tp.t_data->t_infomask, tp.t_data->t_infomask2,
 							  xid, LockTupleExclusive, true,
 							  &new_xmax, &new_infomask, &new_infomask2);
+
+	/* VM clearing below must not allocate in the critical section. */
+	(void) pgstat_should_count_relation(relation);
 
 	START_CRIT_SECTION();
 
@@ -3741,6 +3750,9 @@ l2:
 
 		Assert(HEAP_XMAX_IS_LOCKED_ONLY(infomask_lock_old_tuple));
 
+		/* VM clearing below must not allocate in the critical section. */
+		(void) pgstat_should_count_relation(relation);
+
 		START_CRIT_SECTION();
 
 		/* Clear obsolete visibility flags ... */
@@ -3942,6 +3954,9 @@ l2:
 										   bms_overlap(modified_attrs, id_attrs) ||
 										   id_has_external,
 										   &old_key_copied);
+
+	/* VM clearing below must not allocate in the critical section. */
+	(void) pgstat_should_count_relation(relation);
 
 	/* NO EREPORT(ERROR) from here till changes are logged */
 	START_CRIT_SECTION();
@@ -5062,6 +5077,9 @@ failed:
 	compute_new_xmax_infomask(xmax, old_infomask, tuple->t_data->t_infomask2,
 							  GetCurrentTransactionId(), mode, false,
 							  &xid, &new_infomask, &new_infomask2);
+
+	/* VM clearing below must not allocate in the critical section. */
+	(void) pgstat_should_count_relation(relation);
 
 	START_CRIT_SECTION();
 

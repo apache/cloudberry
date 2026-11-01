@@ -292,6 +292,8 @@ DELETE 50000
  Success:        
 (3 rows)
 
+1: SET track_cost_delay_timing = on;
+SET
 1: set debug_appendonly_print_compaction to on;
 SET
 1&: vacuum vacuum_progress_ao_column;  <waiting ...>
@@ -375,6 +377,13 @@ select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, he
  Success:                      
  Success:                      
 (3 rows)
+-- Completed phase timing survives worker replacement before final reporting.
+SELECT bool_and(total_vacuum_time > 0 AND vacuum_count = 0) AS phase_timing_saved FROM gp_stat_all_tables WHERE relname = 'vacuum_progress_ao_column' AND gp_segment_id > -1;
+ phase_timing_saved 
+--------------------
+ t
+(1 row)
+
 -- now seg1's mirror is marked as down
 2: SELECT content, role, preferred_role, mode, status FROM gp_segment_configuration WHERE content > -1;
  content | role | preferred_role | mode | status 
@@ -434,6 +443,15 @@ select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, he
 
 1<:  <... completed>
 VACUUM
+
+-- The replacement gang inherits the session timing setting.
+1: SELECT bool_and(setting = 'on') AS timing_synced FROM gp_dist_random('pg_settings') WHERE name = 'track_cost_delay_timing';
+ timing_synced 
+---------------
+ t
+(1 row)
+1: RESET track_cost_delay_timing;
+RESET
 
 -- restore environment
 1: reset debug_appendonly_print_compaction;

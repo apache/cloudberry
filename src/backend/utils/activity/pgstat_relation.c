@@ -368,6 +368,37 @@ pgstat_report_index_vacuum_time(Relation rel, PgStat_Counter elapsedtime,
 }
 
 /*
+ * Publish a completed AO phase without marking the whole vacuum complete.
+ * Workers can be replaced between phases, so backend-local accumulation is
+ * insufficient.  Index reporting adds relation times without changing counts;
+ * table phases must additionally contribute to the database totals.
+ */
+void
+pgstat_report_vacuum_phase(Relation rel, PgStat_Counter elapsedtime,
+						  PgStat_Counter delaytime)
+{
+	PgStat_StatDBEntry *dbentry;
+	Oid			dboid = (rel->rd_rel->relisshared ? InvalidOid : MyDatabaseId);
+	bool		is_autovacuum = IsAutoVacuumWorkerProcess();
+
+	if (!pgstat_track_counts)
+		return;
+
+	pgstat_report_index_vacuum_time(rel, elapsedtime, delaytime, is_autovacuum);
+	dbentry = pgstat_prep_database_pending(dboid);
+	if (is_autovacuum)
+	{
+		dbentry->total_autovacuum_time += elapsedtime * 1000;
+		dbentry->total_autovacuum_delay_time += delaytime * 1000;
+	}
+	else
+	{
+		dbentry->total_vacuum_time += elapsedtime * 1000;
+		dbentry->total_vacuum_delay_time += delaytime * 1000;
+	}
+}
+
+/*
  * Report that the table was just analyzed and flush IO statistics.
  *
  * Caller must provide new live- and dead-tuples estimates, as well as a
