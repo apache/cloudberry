@@ -1871,6 +1871,14 @@ pgstat_read_statsfile(void)
 								 key.kind, key.dboid, key.objoid, t);
 							goto error;
 						}
+
+						/* The extension may no longer be preloaded. */
+						if (!pgstat_get_kind_info(key.kind))
+						{
+							elog(WARNING, "could not find information of kind %u for entry of type %c",
+								 key.kind, t);
+							goto error;
+						}
 					}
 					else
 					{

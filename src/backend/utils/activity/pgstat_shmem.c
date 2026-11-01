@@ -142,7 +142,7 @@ StatsShmemSize(void)
 
 		Assert(kind_info->shared_size != 0);
 
-		sz += MAXALIGN(kind_info->shared_size);
+		sz = add_size(sz, MAXALIGN(kind_info->shared_size));
 	}
 
 	return sz;
@@ -226,8 +226,10 @@ StatsShmemInit(void)
 				int			idx = kind - PGSTAT_KIND_CUSTOM_MIN;
 
 				Assert(kind_info->shared_size != 0);
-				ctl->custom_data[idx] = ShmemAlloc(kind_info->shared_size);
-				ptr = ctl->custom_data[idx];
+				/* StatsShmemSize() reserved this space in the main block. */
+				ctl->custom_data[idx] = p;
+				ptr = p;
+				p += MAXALIGN(kind_info->shared_size);
 			}
 
 			kind_info->init_shmem_cb(ptr);
