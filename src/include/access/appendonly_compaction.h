@@ -26,6 +26,7 @@
 typedef struct AOVacuumExtStats
 {
 	PgStat_CommonCounts indexes;
+	PgStat_CommonCounts index_inserts;
 } AOVacuumExtStats;
 
 /*
@@ -44,6 +45,9 @@ typedef struct AOVacuumRelStats
 	AOVacuumExtStats *extstats; /* allocated only for VERBOSE */
 } AOVacuumRelStats;
 
+extern void ao_vacuum_insert_index_tuples(struct ResultRelInfo *resultRelInfo,
+										 TupleTableSlot *slot, struct EState *estate,
+										 AOVacuumRelStats *vacrelstats);
 extern Bitmapset *AppendOptimizedCollectDeadSegments(Relation aorel);
 extern void AppendOptimizedDropDeadSegments(Relation aorel, Bitmapset *segnos, AOVacuumRelStats *vacrelstats);
 extern void AppendOnlyCompact(Relation aorel,
