@@ -26,6 +26,7 @@ for my $storage ('heap', 'row', 'column')
     $node->safe_psql('postgres', qq{
 CREATE TABLE $table (id int, padding text) $options;
 CREATE INDEX ${table}_idx ON $table (id);
+CREATE INDEX ${table}_expression_idx ON $table ((id + 1));
 INSERT INTO $table SELECT g, repeat('x', 100) FROM generate_series(1, 4000) g;
 DELETE FROM $table WHERE id <= 1000;
 });
@@ -56,6 +57,18 @@ DELETE FROM $table WHERE id <= 1000;
              "$phase reports I/O times in milliseconds");
         like($report, qr/WAL usage: [1-9]\d* records/,
              'compaction produces WAL') if $phase eq 'AO compaction (excluding indexes)';
+    }
+    if ($storage ne 'heap')
+    {
+        my ($inserts) = $stderr =~
+          /vacuum resource usage for "public\.\Q$table\E" \(AO compaction index inserts \(all indexes\)\):\n(.*?)(?=vacuum resource usage for|\z)/s;
+        ok(defined $inserts, "$storage reports compaction index insertions separately");
+        $inserts //= '';
+        like($inserts, qr/buffer usage: [1-9]\d* hits,/,
+             "$storage compaction index insertions access buffers");
+        my ($records) = $inserts =~ /WAL usage: (\d+) records,/;
+        cmp_ok($records // 0, '>=', 4000,
+               "$storage accounts for both indexes on 2000 relocated tuples");
     }
     my $index_phase = $storage eq 'heap' ? 'index bulk delete' : 'AO index vacuum';
     like($stderr, qr/vacuum resource usage for "public\.\Q${table}_idx\E" \(\Q$index_phase\E\):/,

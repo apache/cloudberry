@@ -290,7 +290,8 @@ AppendOnlyMoveTuple(TupleTableSlot *slot,
 					MemTupleBinding *mt_bind,
 					AppendOnlyInsertDesc insertDesc,
 					ResultRelInfo *resultRelInfo,
-					EState *estate)
+					EState *estate,
+					AOVacuumRelStats *vacrelstats)
 {
 	MemTuple	tuple;
 	AOTupleId  *oldAoTupleId;
@@ -314,9 +315,7 @@ AppendOnlyMoveTuple(TupleTableSlot *slot,
 	/* insert index' tuples if needed */
 	if (resultRelInfo->ri_NumIndices > 0)
 	{
-		ExecInsertIndexTuples(resultRelInfo,
-													slot, estate, false, false,
-													NULL, NIL, false);
+		ao_vacuum_insert_index_tuples(resultRelInfo, slot, estate, vacrelstats);
 		ResetPerTupleExprContext(estate);
 	}
 
@@ -486,7 +485,7 @@ AppendOnlySegmentFileFullCompaction(Relation aorel,
 								mt_bind,
 								insertDesc,
 								resultRelInfo,
-								estate);
+								estate, vacrelstats);
 			movedTupleCount++;
 		}
 		else
