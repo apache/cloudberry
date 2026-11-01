@@ -29,6 +29,7 @@ tests += {
       't/027_freeze_age_vacuum_count.pl',
       't/028_vacuum_work_core.pl',
       't/029_vacuum_resource_verbose.pl',
+      't/030_vacuum_work_reset.pl',
     ],
   },
 }
