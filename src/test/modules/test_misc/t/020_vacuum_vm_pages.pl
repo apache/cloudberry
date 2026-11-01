@@ -17,14 +17,15 @@ INSERT INTO vm_pages SELECT g, repeat('x', 100) FROM generate_series(1, 4000) g;
 VACUUM (FREEZE) vm_pages;
 });
 my $first = $node->safe_psql('postgres', q{
-SELECT pages_frozen FROM pg_stat_all_tables
+SELECT pages_frozen, pages_all_visible FROM pg_stat_all_tables
 WHERE relid = 'vm_pages'::regclass
 });
-my $frozen = $first;
+my ($frozen, $visible) = split /\|/, $first;
 cmp_ok($frozen, '>', 0, 'VACUUM FREEZE records pages with freezing work');
+cmp_ok($visible, '>', 0, 'VACUUM records new all-visible marks');
 $node->safe_psql('postgres', 'VACUUM (FREEZE, DISABLE_PAGE_SKIPPING) vm_pages');
 is($node->safe_psql('postgres', q{
-SELECT pages_frozen FROM pg_stat_all_tables
+SELECT pages_frozen, pages_all_visible FROM pg_stat_all_tables
 WHERE relid = 'vm_pages'::regclass
 }), $first, 'rescanning frozen visible pages does not recount them');
 $node->safe_psql('postgres', q{
@@ -32,17 +33,17 @@ UPDATE vm_pages SET padding = 'changed';
 VACUUM (FREEZE) vm_pages;
 });
 is($node->safe_psql('postgres', qq{
-SELECT pages_frozen > $frozen
+SELECT pages_frozen > $frozen AND pages_all_visible > $visible
        AND visible_page_marks_cleared > 0 AND frozen_page_marks_cleared > 0
 FROM pg_stat_all_tables WHERE relid = 'vm_pages'::regclass
-}), 't', 'new freezing work accumulates alongside cleared marks');
+}), 't', 'new freezing and visibility work accumulates alongside cleared marks');
 $node->safe_psql('postgres', q{
 SELECT pg_stat_reset_single_table_counters('vm_pages'::regclass);
 });
 is($node->safe_psql('postgres', q{
-SELECT pages_frozen = 0
+SELECT pages_frozen = 0 AND pages_all_visible = 0
 FROM pg_stat_all_tables WHERE relid = 'vm_pages'::regclass
-}), 't', 'relation statistics reset clears the freezing work counter');
+}), 't', 'relation statistics reset clears both work counters');
 is($node->safe_psql('postgres', q{
 SELECT NOT EXISTS (SELECT FROM pg_attribute
                    WHERE attrelid = 'pg_class'::regclass

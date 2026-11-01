@@ -5223,6 +5223,15 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
 
      <row>
       <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>pages_all_visible</structfield> <type>bigint</type>
+      </para><para>
+       Cumulative number of heap pages newly marked all-visible by completed vacuums. Repeated scans of already-visible pages do not increment this counter. Manual vacuum and autovacuum are both included; append-optimized
+       tables report zero. The counter is reset with the relation statistics.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
        <structfield>visible_page_marks_cleared</structfield> <type>bigint</type>
       </para>
       <para>
