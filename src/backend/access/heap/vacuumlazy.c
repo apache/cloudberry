@@ -806,7 +806,7 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 						 vacrel->missed_dead_tuples,
 						 starttime,
 						 (PgStat_Counter) rint(VacuumDelayTime - startdelaytime),
-						 VacuumFailsafeActive);
+						 VacuumFailsafeActive, vacrel->frozen_pages);
 	pgstat_progress_end_command();
 
 	if (instrument)

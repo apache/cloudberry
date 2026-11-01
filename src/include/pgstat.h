@@ -253,7 +253,7 @@ typedef struct PgStat_TableXactStatus
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCB4
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCB5
 
 typedef struct PgStat_ArchiverStats
 {
@@ -483,6 +483,8 @@ typedef struct PgStat_StatTabEntry
 	 * failsafe mode (see vacuum_failsafe_age).
 	 */
 	PgStat_Counter vacuum_failsafe_count;
+	/* Cumulative work of completed heap vacuums, not current VM sizes. */
+	PgStat_Counter pages_frozen;
 } PgStat_StatTabEntry;
 
 typedef struct PgStat_WalStats
@@ -709,11 +711,11 @@ extern void pgstat_unlink_relation(Relation rel);
 extern void pgstat_report_vacuum_elapsed(Oid tableoid, bool shared,
 										 PgStat_Counter livetuples, PgStat_Counter deadtuples,
 										 PgStat_Counter elapsedtime, PgStat_Counter delaytime,
-										 bool failsafe);
+										 bool failsafe, PgStat_Counter pages_frozen);
 extern void pgstat_report_vacuum(Oid tableoid, bool shared,
 								 PgStat_Counter livetuples, PgStat_Counter deadtuples,
 								 TimestampTz starttime, PgStat_Counter delaytime,
-								 bool failsafe);
+								 bool failsafe, PgStat_Counter pages_frozen);
 extern void pgstat_report_index_vacuum_time(Relation rel,
 											PgStat_Counter elapsedtime,
 											PgStat_Counter delaytime,

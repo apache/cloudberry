@@ -21,6 +21,7 @@ tests += {
       't/018_vacuum_interrupts.pl',
       't/019_resqueue_stats_restart.pl',
       't/020_custom_stats_restart.pl',
+      't/020_vacuum_vm_pages.pl',
       't/029_vacuum_resource_verbose.pl',
     ],
   },
