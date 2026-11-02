@@ -136,7 +136,7 @@ test: brin_ao brin_aocs
 
 test: sreh
 
-test: rle rle_delta dsp not_out_of_shmem_exit_slots create_am_gp
+test: rle rle_delta dsp not_out_of_shmem_exit_slots create_am_gp ao_btree_dedup
 
 # Cloudberry-specific tests
 test: cbdb_optimizer_test
