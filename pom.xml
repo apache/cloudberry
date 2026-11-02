@@ -567,8 +567,8 @@ code or new licensing patterns.
             <exclude>src/test/**/*.spec</exclude>
             <exclude>src/test/**/*.control</exclude>
 
-            <include>src/backend/gporca/data/**</include>
-            <include>src/backend/gporca/**/Makefile</include>
+            <exclude>src/backend/gporca/data/**</exclude>
+            <exclude>src/backend/gporca/**/Makefile</exclude>
 
             <exclude>src/backend/gporca/cmake/FindXerces.cmake</exclude>
             <exclude>src/backend/gporca/server/fixdxl.sh</exclude>
