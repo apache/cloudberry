@@ -206,6 +206,9 @@ static Oid	myTempToastNamespace = InvalidOid;
 
 static SubTransactionId myTempNamespaceSubID = InvalidSubTransactionId;
 
+/* GPDB: has RemoveTempRelationsCallback been registered for this session? */
+static bool tempRelationsCallbackRegistered = false;
+
 /*
  * This is the user's textual search path specification --- it's the value
  * of the GUC variable 'search_path'.
@@ -4442,16 +4445,9 @@ ResetTempNamespace(void)
 	result = myTempNamespace;
 
 	/*
-	 * MPP-19973: The shmem exit callback to remove a temp
-	 * namespace is registered. We need to remove it here as the
-	 * namespace has already been reseted. 
+	 * MPP-19973: The shmem exit callback stays registered, but it does nothing
+	 * until the session has a temp namespace again.
 	 */
-	/*
-	 * GPDB_14_MERGE_FIXME: can't be removed here as before_shmem_exit_list
-	 * will enlarge beyond the MAX_ON_EXITS limit.
-	 */
-	cancel_before_shmem_exit_if_matched(RemoveTempRelationsCallback, 0);
-
 	myTempNamespace = InvalidOid;
 	myTempToastNamespace = InvalidOid;
 	myTempNamespaceSubID = InvalidSubTransactionId;
@@ -4477,7 +4473,18 @@ AtEOXact_Namespace(bool isCommit, bool parallel)
 	if (myTempNamespaceSubID != InvalidSubTransactionId && !parallel)
 	{
 		if (isCommit)
-			before_shmem_exit(RemoveTempRelationsCallback, 0);
+		{
+			/*
+			 * GPDB: a gang reset makes the session forget its temp namespace,
+			 * and it can then create another one, so we can get here several
+			 * times per session.
+			 */
+			if (!tempRelationsCallbackRegistered)
+			{
+				before_shmem_exit(RemoveTempRelationsCallback, 0);
+				tempRelationsCallbackRegistered = true;
+			}
+		}
 		else
 		{
 			myTempNamespace = InvalidOid;
