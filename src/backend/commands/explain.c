@@ -738,7 +738,10 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 	else
 		dest = None_Receiver;
 
-	// GPDB_14_MERGE_FIXME: fix intoClause in optimizer
+	/*
+	 * GPDB: the executor reads intoClause from the plan.  CREATE TABLE AS
+	 * EXECUTE gets here without ExplainOneQuery() having set it.
+	 */
 	plannedstmt->intoClause = copyObject(into);
 	/* Create a QueryDesc for the query */
 	queryDesc = CreateQueryDesc(plannedstmt, queryString,

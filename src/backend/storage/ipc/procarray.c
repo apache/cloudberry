@@ -3338,8 +3338,10 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 
 
 	/*
-	* GPDB_14_MERGE_FIXME: use globalxmin to compute Globals.
-	*/
+	 * GPDB: the upper bounds below don't take distributed snapshots into
+	 * account.  That is safe: an xid between the two bounds makes GlobalVis
+	 * recompute them with ComputeXidHorizons(), which does.
+	 */
 	/* maintain state for GlobalVis* */
 	{
 		TransactionId def_vis_xid;
