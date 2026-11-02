@@ -481,7 +481,7 @@ checkDispatchResult(CdbDispatcherState *ds, int timeout_sec)
 	 * Parallel to fds[]: whether that connection already holds a complete
 	 * message in libpq's buffer rather than in its socket.  See the loop below.
 	 */
-	buffered = (bool *) palloc(db_count * sizeof(bool));
+	buffered = (bool *) palloc0(db_count * sizeof(bool));
 
 	/*
 	 * OK, we are finished submitting the command to the segdbs. Now, we have
@@ -1203,9 +1203,11 @@ processNotifies(CdbDispatchResult *dispatchResult)
 			 * for its reply; taking the type byte and erroring would leave the
 			 * body in the stream and desynchronise the connection.
 			 */
+#ifdef FAULT_INJECTOR
 			if (SIMPLE_FAULT_INJECTOR("nextval_sideband_before_response") ==
 				FaultInjectorTypeSkip)
 				send_fake_sideband_message(segdbDesc->conn);
+#endif
 
 			/* respond back on this libpq connection with the next value */
 			send_sequence_response(segdbDesc->conn, seq_oid, last, cached, increment, overflow, false /* error */);

@@ -34,6 +34,7 @@ OBJS = \
 	src/anserinit.o \
 	src/anserpayload.o \
 	src/anserplan.o \
+	src/anserplankeys.o \
 	src/anserplanexec.o \
 	src/ansersideband.o
 
@@ -153,3 +154,7 @@ preload-anser:
 installcheck-with-install:
 	$(MAKE) install
 	$(MAKE) installcheck
+
+.PHONY: localcheck
+localcheck:
+	$(MAKE) -C test localcheck

@@ -14,6 +14,10 @@ SET enable_mergejoin = off;
 -- Pinned shorter here, so a filter that never arrives fails the run instead of
 -- hiding in the clock.
 SET anser.timeout_ms = 5000;
+-- Trace every exchange step into the server logs for the whole file.  LOG
+-- level never reaches the client, so the expected output is unaffected; the
+-- traces are for the CI logs when a run goes wrong.
+SET anser.debug = on;
 -- build is the smaller (hashed / preserved) side, distributed so the join key
 -- must be redistributed; probe is the larger side distributed by the join key.
 CREATE TABLE anser_rf_build (id int, name text) DISTRIBUTED BY (name);
@@ -119,10 +123,10 @@ SELECT count(*) AS only_off_orca
              0
 (1 row)
 
--- Pushdown mix: with gp_enable_runtime_filter_pushdown on, the consumer hands
--- the unioned filter to the probe SeqScan as an SK_BLOOM_FILTER scan key and
--- the scan (or the table AM) does the pruning.  Results must still match the
--- filter-off run.
+-- Pushdown mix: with gp_enable_runtime_filter_pushdown on, the consumer
+-- installs its filter on the probe SeqScan before projection. Narrow keys use
+-- an Anser-owned qual to normalize storage-dependent Datum padding. Results
+-- must still match the filter-off run.
 SET optimizer = off;
 SET gp_enable_runtime_filter_pushdown = on;
 SET anser.runtime_filter = on;
@@ -444,8 +448,8 @@ SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.i
 -- A plain EXPLAIN must not allocate the filter: the coordinator initializes
 -- every slice with EXEC_FLAG_EXPLAIN_ONLY, so the producer must skip building
 -- the bitset (state=NULL) while the plan still shows the planned size.  The
--- debug log makes the decision observable.
-SET anser.debug = on;
+-- debug log makes the decision observable.  anser.debug is already on for the
+-- whole file; client_min_messages is what brings the line to the client here.
 SET client_min_messages = log;
 EXPLAIN (COSTS OFF)
 SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id;
@@ -472,7 +476,6 @@ LOG:  anser: producer init cond=0 part=0/1 elems=33554432 payload=67108928 state
 
 RESET client_min_messages;
 LOG:  statement: RESET client_min_messages;
-RESET anser.debug;
 -- And the filter must still be correct: 200 build rows, each matching one
 -- probe row.
 SELECT count(*) AS rows_joined
@@ -493,6 +496,52 @@ SELECT injected, total_elems, planned_bytes FROM anser_test_rf_size(200);
 (1 row)
 
 DROP EXTENSION anser_test;
+-- The same exchange in chunks: an 8 kB chunk turns the 64 MB filter into
+-- thousands of NEXT round trips.  The result must match the unfiltered run and
+-- the query must simply finish -- a whole-filter push that outgrew the
+-- connection buffers is exactly what used to wedge the session.  Matching
+-- results alone would not prove it: a consumer that gives up produces the
+-- same rows, so the coordinator's counters must say every consumer was
+-- served and none withdrew.
+-- start_ignore
+CREATE EXTENSION IF NOT EXISTS anser_test;
+-- end_ignore
+SELECT anser_test_deliveries_completed() AS d_before \gset
+SELECT anser_test_unsubscribes() AS u_before \gset
+SET anser.debug_delivery_chunk_bytes = 8192;
+SET anser.runtime_filter = on;
+CREATE TEMP TABLE anser_rf_r_chunk AS
+    SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id
+    DISTRIBUTED BY (name);
+SELECT anser_test_deliveries_completed() = :d_before + 3 AS all_delivered;
+ all_delivered 
+---------------
+ t
+(1 row)
+
+SELECT anser_test_unsubscribes() = :u_before AS nobody_gave_up;
+ nobody_gave_up 
+----------------
+ t
+(1 row)
+
+SELECT count(*) AS only_chunk
+    FROM (SELECT * FROM anser_rf_r_chunk EXCEPT ALL SELECT * FROM anser_rf_r_off) d;
+ only_chunk 
+------------
+          0
+(1 row)
+
+SELECT count(*) AS only_off_chunk
+    FROM (SELECT * FROM anser_rf_r_off EXCEPT ALL SELECT * FROM anser_rf_r_chunk) d;
+ only_off_chunk 
+----------------
+              0
+(1 row)
+
+DROP TABLE anser_rf_r_chunk;
+DROP EXTENSION anser_test;
+RESET anser.debug_delivery_chunk_bytes;
 -- A LIMIT can finish the query while a consumer is still waiting for its
 -- filter: the producer is squelched before it publishes, the consumer must
 -- bail out via QueryFinishPending and withdraw its subscription, and the
@@ -509,9 +558,20 @@ SELECT count(*) AS limited_rows FROM (
 -- filter exchange completes inside the FETCH's ExecutorRun window, so a
 -- sibling statement's ExecutorEnd sweep has nothing of the cursor's to wipe.
 -- The sibling runs the same filtered join, so it really does create and sweep
--- its own channels while the cursor's gang sits suspended.  (A wiped exchange
--- would fail open with the same rows, so this guards the behavior, not the
--- timing: that path is a wait, not a wrong answer.)
+-- its own channels while the cursor's gang sits suspended.  The delivery
+-- counter must also say every consumer was served -- because "came back
+-- unfiltered" returns the same rows and would hide a broken exchange.  (The
+-- sweep's failure mode itself is a wait, not a wrong answer.)  The cursor
+-- query filters the build side to ids 1..3, and on a segment none of them
+-- land on the hash is empty, the join skips the probe side, and that
+-- consumer never runs -- so its count comes from the data, not from the
+-- cluster width.  The sibling has no such filter, so it serves all three.
+-- start_ignore
+CREATE EXTENSION IF NOT EXISTS anser_test;
+-- end_ignore
+SELECT anser_test_deliveries_completed() AS d_before \gset
+SELECT count(DISTINCT gp_segment_id) AS cursor_consumers
+    FROM anser_rf_probe WHERE id <= 3 \gset
 SET optimizer = off;
 SET anser.runtime_filter = on;
 BEGIN;
@@ -539,6 +599,14 @@ FETCH ALL anser_rf_cur;
 (2 rows)
 
 COMMIT;
+SELECT anser_test_deliveries_completed()
+       = :d_before + 3 + :cursor_consumers AS cursor_delivered;
+ cursor_delivered 
+------------------
+ t
+(1 row)
+
+DROP EXTENSION anser_test;
 DROP TABLE anser_rf_r_push;
 DROP TABLE anser_rf_r_on, anser_rf_r_off, anser_rf_r_orca;
 DROP TABLE anser_rf_build, anser_rf_probe;
@@ -964,6 +1032,129 @@ SELECT count(*) AS cast_rows
 
 DROP TABLE anser_rf_p, anser_rf_o;
 RESET gp_enable_runtime_filter;
+-- A filter over another filter must resolve the child's INDEX_VAR outputs
+-- in the child's namespace, not copy them into a self-referencing namespace.
+CREATE TABLE anser_stack_probe (k1 int, k2 int) DISTRIBUTED RANDOMLY;
+CREATE TABLE anser_stack_b1 (k int) DISTRIBUTED RANDOMLY;
+CREATE TABLE anser_stack_b2 (k int) DISTRIBUTED RANDOMLY;
+INSERT INTO anser_stack_probe SELECT i % 100, i % 50 FROM generate_series(1, 10000) i;
+INSERT INTO anser_stack_b1 SELECT i FROM generate_series(0, 99) i;
+INSERT INTO anser_stack_b2 SELECT i FROM generate_series(0, 49) i;
+ANALYZE anser_stack_probe;
+ANALYZE anser_stack_b1;
+ANALYZE anser_stack_b2;
+DO $$
+DECLARE
+    opt text;
+    plan jsonb;
+BEGIN
+    PERFORM set_config('anser.runtime_filter', 'on', true);
+    FOREACH opt IN ARRAY ARRAY['off', 'on'] LOOP
+        PERFORM set_config('optimizer', opt, true);
+        EXECUTE 'EXPLAIN (VERBOSE, COSTS OFF, FORMAT JSON)
+            SELECT p.k1, p.k2 FROM anser_stack_probe p
+            JOIN anser_stack_b1 b1 ON p.k1 = b1.k
+            JOIN anser_stack_b2 b2 ON p.k2 = b2.k' INTO plan;
+        IF NOT EXISTS (
+            WITH RECURSIVE walk(node) AS (
+                SELECT plan->0->'Plan'
+                UNION ALL
+                SELECT child FROM walk CROSS JOIN LATERAL
+                    jsonb_array_elements(coalesce(node->'Plans', '[]')) child
+            ) SELECT FROM walk
+            WHERE node->>'Custom Plan Provider' = 'Anser Bloom Consumer'
+              AND node->'Plans'->0->>'Custom Plan Provider' = 'Anser Bloom Consumer') THEN
+            RAISE EXCEPTION 'stacked-consumer EXPLAIN fixture changed (optimizer=%): %', opt, plan;
+        END IF;
+    END LOOP;
+END
+$$;
+DROP TABLE anser_stack_probe, anser_stack_b1, anser_stack_b2;
+-- AOCO may zero-extend negative int4 keys while heap access sign-extends
+-- them. Check both storage directions with core pushdown on and off. Probe
+-- keys prove that a delivered filter actually rejects rows, not just that an
+-- injected but failed-open filter preserves the answer.
+CREATE TABLE anser_neg_build_ao (id int, pad int)
+    WITH (appendoptimized=true, orientation=column) DISTRIBUTED BY (pad);
+CREATE TABLE anser_neg_build_heap (id int, pad int)
+    WITH (appendoptimized=false) DISTRIBUTED BY (pad);
+CREATE TABLE anser_neg_probe_heap (id int)
+    WITH (appendoptimized=false) DISTRIBUTED BY (id);
+CREATE TABLE anser_neg_probe_ao (id int)
+    WITH (appendoptimized=true, orientation=column) DISTRIBUTED BY (id);
+INSERT INTO anser_neg_build_ao SELECT -g, g FROM generate_series(1, 1000) g;
+INSERT INTO anser_neg_build_heap SELECT * FROM anser_neg_build_ao;
+INSERT INTO anser_neg_probe_heap
+    SELECT -(g % 1000 + 1) FROM generate_series(1, 100000) g;
+INSERT INTO anser_neg_probe_heap
+    SELECT -(g % 1000 + 1001) FROM generate_series(1, 10000) g;
+INSERT INTO anser_neg_probe_ao SELECT * FROM anser_neg_probe_heap;
+ANALYZE anser_neg_build_ao;
+ANALYZE anser_neg_build_heap;
+ANALYZE anser_neg_probe_heap;
+ANALYZE anser_neg_probe_ao;
+DO $$
+DECLARE
+    opt text;
+    push text;
+    storage text;
+    q text;
+    baseline bigint;
+    filtered bigint;
+    plan jsonb;
+    consumers int;
+    pruned numeric;
+    double_counted numeric;
+BEGIN
+    PERFORM set_config('gp_enable_runtime_filter', 'off', true);
+    FOREACH opt IN ARRAY ARRAY['off', 'on'] LOOP
+        PERFORM set_config('optimizer', opt, true);
+        FOREACH storage IN ARRAY ARRAY['ao', 'heap'] LOOP
+            q := format('SELECT count(*) FROM %I p JOIN %I b ON p.id = b.id',
+                'anser_neg_probe_' || CASE WHEN storage = 'ao' THEN 'heap' ELSE 'ao' END,
+                'anser_neg_build_' || storage);
+            -- The baseline must use neither filter: the previous iteration
+            -- leaves core pushdown on.
+            PERFORM set_config('gp_enable_runtime_filter_pushdown', 'off', true);
+            PERFORM set_config('anser.runtime_filter', 'off', true);
+            EXECUTE q INTO baseline;
+            IF baseline <> 100000 THEN
+                RAISE EXCEPTION 'negative-key baseline changed: %', baseline;
+            END IF;
+            FOREACH push IN ARRAY ARRAY['off', 'on'] LOOP
+                PERFORM set_config('gp_enable_runtime_filter_pushdown', push, true);
+                PERFORM set_config('anser.runtime_filter', 'on', true);
+                EXECUTE q INTO filtered;
+                IF filtered <> baseline THEN
+                    RAISE EXCEPTION 'negative-key mismatch (optimizer=%, build=%, pushdown=%): % <> %',
+                        opt, storage, push, filtered, baseline;
+                END IF;
+                EXECUTE 'EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, FORMAT JSON) ' || q INTO plan;
+                WITH RECURSIVE walk(node) AS (
+                    SELECT plan->0->'Plan'
+                    UNION ALL
+                    SELECT child FROM walk CROSS JOIN LATERAL
+                        jsonb_array_elements(coalesce(node->'Plans', '[]')) child
+                )
+                SELECT count(*) FILTER (WHERE node->>'Custom Plan Provider' = 'Anser Bloom Consumer'),
+                    coalesce(sum((node->>'Rows Removed by Pushdown Runtime Filter')::numeric), 0),
+                    coalesce(sum(CASE WHEN node->>'Node Type' = 'Seq Scan'
+                        THEN (node->>'Rows Removed by Filter')::numeric END), 0)
+                INTO consumers, pruned, double_counted FROM walk;
+                -- Narrow keys use a scan qual even with core pushdown off.
+                -- These scans have no SQL quals, so generic filter counts
+                -- must remain zero while pushdown rejects the extra keys.
+                IF consumers = 0 OR pruned <= 0 OR double_counted <> 0 THEN
+                    RAISE EXCEPTION 'negative-key filtering not exercised (optimizer=%, build=%, pushdown=%): %',
+                        opt, storage, push, plan;
+                END IF;
+            END LOOP;
+        END LOOP;
+    END LOOP;
+END
+$$;
+DROP TABLE anser_neg_build_ao, anser_neg_build_heap,
+    anser_neg_probe_heap, anser_neg_probe_ao;
 -- Resource and log knobs are superuser-only: an unprivileged role must not
 -- force 64 MB filters on every segment or fill the server log.  runtime_filter
 -- and timeout_ms only shape the caller's own queries, so they stay
@@ -983,6 +1174,7 @@ RESET ROLE;
 DROP ROLE anser_nopriv;
 RESET anser.runtime_filter;
 RESET anser.debug_min_filter_bytes;
+RESET anser.debug;
 RESET anser.timeout_ms;
 RESET optimizer;
 RESET enable_nestloop;

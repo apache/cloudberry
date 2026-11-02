@@ -36,6 +36,8 @@
  */
 #include "postgres.h"
 
+#include "anserplanutils.h"
+
 #include "anser.h"
 #include "anserfilter.h"
 #include "anserplan.h"
@@ -99,7 +101,6 @@ AnserApplyRuntimeFilters(PlannedStmt *stmt)
 		 * count out of it and allocates that much.
 		 */
 		AnserInjectCtx ctx = {0};
-		ListCell   *lc;
 		int			maxid;
 
 		/*
@@ -118,9 +119,7 @@ AnserApplyRuntimeFilters(PlannedStmt *stmt)
 		 * planner_hooks do not promise.  max + 1 is correct under any
 		 * assignment scheme.
 		 */
-		maxid = anser_max_plan_node_id(stmt->planTree);
-		foreach(lc, stmt->subplans)
-			maxid = Max(maxid, anser_max_plan_node_id((Plan *) lfirst(lc)));
+		maxid = AnserMaxPlanNodeId(stmt);
 
 		ctx.stmt = stmt;
 		ctx.slice_index = 0;	/* the root runs in the coordinator's slice */
@@ -131,6 +130,22 @@ AnserApplyRuntimeFilters(PlannedStmt *stmt)
 
 		anser_inject_walk(stmt->planTree, &ctx);
 	}
+}
+
+/* Include separately stored SubPlans as well as the main tree. */
+int
+AnserMaxPlanNodeId(PlannedStmt *stmt)
+{
+	int maxid = anser_max_plan_node_id(stmt->planTree);
+	ListCell *lc;
+
+	foreach(lc, stmt->subplans)
+	{
+		int subplan_maxid = anser_max_plan_node_id((Plan *) lfirst(lc));
+
+		maxid = Max(maxid, subplan_maxid);
+	}
+	return maxid;
 }
 
 /*
@@ -146,53 +161,25 @@ AnserApplyRuntimeFilters(PlannedStmt *stmt)
  * InitPlans need no arm here: a SubPlan only references stmt->subplans by index,
  * and AnserApplyRuntimeFilters walks that list separately.
  */
+static void
+anser_max_child_id(Plan *child, void *context)
+{
+	int *maxid = (int *) context;
+	int child_maxid = anser_max_plan_node_id(child);
+
+	*maxid = Max(*maxid, child_maxid);
+}
+
 static int
 anser_max_plan_node_id(Plan *plan)
 {
-	int			m;
-	ListCell   *lc;
+	int maxid;
 
 	if (plan == NULL)
 		return 0;
-
-	m = plan->plan_node_id;
-	m = Max(m, anser_max_plan_node_id(outerPlan(plan)));
-	m = Max(m, anser_max_plan_node_id(innerPlan(plan)));
-
-	switch (nodeTag(plan))
-	{
-		case T_Append:
-			foreach(lc, ((Append *) plan)->appendplans)
-				m = Max(m, anser_max_plan_node_id((Plan *) lfirst(lc)));
-			break;
-		case T_MergeAppend:
-			foreach(lc, ((MergeAppend *) plan)->mergeplans)
-				m = Max(m, anser_max_plan_node_id((Plan *) lfirst(lc)));
-			break;
-		case T_Sequence:
-			foreach(lc, ((Sequence *) plan)->subplans)
-				m = Max(m, anser_max_plan_node_id((Plan *) lfirst(lc)));
-			break;
-		case T_BitmapAnd:
-			foreach(lc, ((BitmapAnd *) plan)->bitmapplans)
-				m = Max(m, anser_max_plan_node_id((Plan *) lfirst(lc)));
-			break;
-		case T_BitmapOr:
-			foreach(lc, ((BitmapOr *) plan)->bitmapplans)
-				m = Max(m, anser_max_plan_node_id((Plan *) lfirst(lc)));
-			break;
-		case T_SubqueryScan:
-			m = Max(m, anser_max_plan_node_id(((SubqueryScan *) plan)->subplan));
-			break;
-		case T_CustomScan:
-			foreach(lc, ((CustomScan *) plan)->custom_plans)
-				m = Max(m, anser_max_plan_node_id((Plan *) lfirst(lc)));
-			break;
-		default:
-			break;
-	}
-
-	return m;
+	maxid = plan->plan_node_id;
+	AnserForEachChildPlan(plan, anser_max_child_id, &maxid);
+	return maxid;
 }
 
 /*
@@ -293,187 +280,49 @@ AnserRuntimeFilterSize(double est_rows, int64 *total_elems, int64 *max_payload,
 	return true;
 }
 
-/*
- * The key types we may filter on: by-value types for which SQL equality is
- * provably bitwise equality of the stored bytes, so that hashing the raw
- * Datum on both sides agrees with the equality operator.  Producer and
- * consumer hash raw bytes, so a type with a non-canonical representation
- * would hash two different ways under one equality operator -- a false
- * negative that drops a joinable row.  Floats are the canonical
- * counterexample (-0.0 and 0.0 compare equal but are not bitwise equal);
- * everything else that does not make this guarantee is refused by omission.
- * Domains resolve through getBaseType() before landing here.
- */
-static bool
-anser_rf_key_type_supported(Oid keytype)
-{
-	switch (keytype)
-	{
-		case BOOLOID:
-		case CHAROID:
-		case INT2OID:
-		case INT4OID:
-		case INT8OID:
-		case OIDOID:
-		case XIDOID:
-		case CIDOID:
-		case DATEOID:
-		case TIMEOID:
-		case TIMESTAMPOID:
-		case TIMESTAMPTZOID:
-		case MONEYOID:
-		case PG_LSNOID:
-		case XID8OID:
-			return true;
-		default:
-			return false;
-	}
-}
-
-/*
- * Match a single-column equijoin over plain (by-value) Vars and return the
- * inner (build) and outer (probe) key attnos.  After set_plan_references the
- * operands are INNER_VAR / OUTER_VAR references into the join's child tlists.
- */
 static bool
 anser_hashjoin_keys(HashJoin *hj, AttrNumber *inner_attno, AttrNumber *outer_attno)
 {
-	OpExpr	   *op;
-	Node	   *l;
-	Node	   *r;
 	Var		   *outer_var;
 	Var		   *inner_var;
-	Oid			keytype;
-	TypeCacheEntry *tce;
+	Oid			key_type;
 
-	if (list_length(hj->hashclauses) != 1)
+	if (list_length(hj->hashclauses) != 1 ||
+		!AnserEqualityKeys((Node *) linitial(hj->hashclauses),
+						   &outer_var, &inner_var, &key_type))
 		return false;
-	op = (OpExpr *) linitial(hj->hashclauses);
-	if (!IsA(op, OpExpr) || list_length(op->args) != 2)
-		return false;
-
-	l = (Node *) linitial(op->args);
-	r = (Node *) lsecond(op->args);
-	while (l != NULL && IsA(l, RelabelType))
-		l = (Node *) ((RelabelType *) l)->arg;
-	while (r != NULL && IsA(r, RelabelType))
-		r = (Node *) ((RelabelType *) r)->arg;
-	if (l == NULL || r == NULL || !IsA(l, Var) || !IsA(r, Var))
-		return false;
-
-	if (((Var *) l)->varno == OUTER_VAR && ((Var *) r)->varno == INNER_VAR)
-	{
-		outer_var = (Var *) l;
-		inner_var = (Var *) r;
-	}
-	else if (((Var *) l)->varno == INNER_VAR && ((Var *) r)->varno == OUTER_VAR)
-	{
-		outer_var = (Var *) r;
-		inner_var = (Var *) l;
-	}
-	else
-		return false;
-
-	/*
-	 * Producer and consumer hash the raw Datum bytes, which is only correct
-	 * when SQL equality coincides with bitwise Datum equality of the key.
-	 * That requires the same type on both sides -- cross-type equijoins (e.g.
-	 * float4 = float8, date = timestamp) hash different bit patterns for equal
-	 * values -- and the type on the whitelist (see
-	 * anser_rf_key_type_supported), which is where the bitwise-equality claim
-	 * is made.  Anything looser could prune rows that actually join -- a wrong
-	 * answer, not a slow one.
-	 */
-	if (inner_var->vartype != outer_var->vartype)
-		return false;
-
-	keytype = getBaseType(inner_var->vartype);
-	if (!anser_rf_key_type_supported(keytype))
-		return false;
-
-	/*
-	 * Finally, the clause has to be the type's own equality rather than just
-	 * some hashable operator spelled "=".  This does not prove bitwise
-	 * equality -- float8's default equality is float8eq, which is why floats
-	 * need the exclusion above -- but it keeps an operator with semantics of
-	 * its own from being read as if it were the canonical one.
-	 */
-	tce = lookup_type_cache(keytype, TYPECACHE_EQ_OPR);
-	if (!OidIsValid(tce->eq_opr) || op->opno != tce->eq_opr)
-		return false;
-
 	*inner_attno = inner_var->varattno;
 	*outer_attno = outer_var->varattno;
 	return true;
 }
 
-/*
- * Node types the descent may pass through: the single-child passthroughs
- * (Hash, Motion), the joins whose sides carry the column up (HashJoin), and
- * our own filter nodes.  Anything else -- WindowAgg, Limit, Agg, Result, an
- * Append or SetOp whose column comes from several relations at once -- ends
- * the descent: the superset argument for landing the filter on the base scan
- * (anser_try_inject) only holds for joins and passthroughs; an operator whose
- * output depends on the whole input (a window over it, an aggregate of it,
- * its first N rows) would be computed over the filtered rows instead.
- */
-static bool
-anser_rf_passthrough_node(const Plan *plan)
+typedef struct AnserKeyPathContext
 {
-	return IsA(plan, Hash) || IsA(plan, Motion) || IsA(plan, HashJoin) ||
-		AnserIsRuntimeFilterScan(plan);
+	bool for_consumer;
+	int slice_index;
+} AnserKeyPathContext;
+
+static bool
+anser_key_terminus(const Plan *plan)
+{
+	return IsA(plan, SeqScan);
 }
 
-/*
- * Is this side of the join the nullable one?  On that side an outer join
- * extends non-matching rows with NULLs, so a pruned row comes back as a
- * NULL-extended row rather than disappearing -- and a downstream condition
- * can tell the difference (IS NOT DISTINCT FROM matches NULL to NULL, so
- * what was a no-match becomes a match).  The preserved side is safe to
- * filter: its rows survive identically either way.
- */
 static bool
-anser_rf_nullable_side(JoinType jointype, bool inner_side)
+anser_key_edge(const Plan *parent, const Plan *child, bool inner_side, void *arg)
 {
-	switch (jointype)
-	{
-		case JOIN_INNER:
-			return false;
-		case JOIN_LEFT:
-			return inner_side;
-		case JOIN_RIGHT:
-			return !inner_side;
-		default:
-			/* FULL, ANTI, LASJ variants and anything future: block both. */
-			return true;
-	}
-}
+	AnserKeyPathContext *context = (AnserKeyPathContext *) arg;
 
-/*
- * Require the scan's own targetlist entry for the column to be a plain Var
- * of the scanned relation, never a computed expression (ORCA emits those in
- * a Seq Scan's Output).  Producer and consumer hash the raw Datum, and a
- * tuple-fetched value and an expression-computed one need not agree in the
- * upper bytes for 4-byte types: fetch_att sign-extends (Int32GetDatum,
- * tupmacs.h) while e.g. ObjectIdGetDatum zero-extends, so an oid >= 2^31
- * would hash two different ways under one equality operator -- a false
- * negative that drops a joinable row.  A plain Var guarantees both sides
- * read the column through fetch_att, where the representation is fixed.
- */
-static bool
-anser_rf_scan_column_is_var(Plan *scan, AttrNumber attno)
-{
-	TargetEntry *tle;
-	Var		   *var;
-
-	if (scan == NULL || !IsA(scan, SeqScan) ||
-		attno < 1 || attno > list_length(scan->targetlist))
+	/* Anser only places a SeqScan through an outer/custom link. The inner
+	 * child of an executable HashJoin is a Hash, not a bare SeqScan. */
+	if (inner_side && IsA(child, SeqScan))
 		return false;
-	tle = (TargetEntry *) list_nth(scan->targetlist, attno - 1);
-	if (tle == NULL || !IsA(tle->expr, Var))
+	if (context->for_consumer && IsA(parent, HashJoin) &&
+		!AnserJoinSidePushdownSafe(((const HashJoin *) parent)->join.jointype, inner_side))
 		return false;
-	var = (Var *) tle->expr;
-	return var->varno == ((Scan *) scan)->scanrelid;
+	if (IsA(child, Motion))
+		context->slice_index = ((const Motion *) child)->motionID;
+	return true;
 }
 
 /*
@@ -505,7 +354,7 @@ anser_rf_scan_column_is_var(Plan *scan, AttrNumber attno)
  * stacks its filter under the first one's rather than replacing it.
  *
  * On success *parent_out is the node holding the base scan -- pass it to
- * anser_relink_child(), which knows that ours hold it in custom_plans and
+ * AnserReplaceChildPlan(), which knows that ours hold it in custom_plans and
  * everything else in the outer link.  A SeqScan is only accepted through one of
  * those two: the inner child of a HashJoin is always a Hash.
  */
@@ -515,125 +364,21 @@ AnserResolveKeyScan(Plan *top, AttrNumber key_attno, int slice_index,
 					Plan **parent_out, Plan **scan_out,
 					AttrNumber *attno_out, int *slice_out)
 {
-	Plan	   *node = top;
-	AttrNumber	attno = key_attno;
+	const AnserKeyScanPolicy policy = {anser_key_terminus,
+		AnserKeyPassthroughNode, AnserIsRuntimeFilterScan, anser_key_edge};
+	AnserKeyPathContext context = {for_consumer, slice_index};
+	AnserKeyScanResult result;
 
-	/*
-	 * top itself must be descendable: the loop below checks only child, and
-	 * on the first iteration node IS top, which without this a WindowAgg,
-	 * Limit, Agg or Result above the probe scan would be walked straight
-	 * past.
-	 */
-	if (top == NULL || !anser_rf_passthrough_node(top))
+	if (top == NULL || !AnserKeyPassthroughNode(top))
 		return false;
-
-	for (;;)
-	{
-		TargetEntry *tle;
-		Var		   *var;
-		Plan	   *child;
-		bool		via_outer;
-
-		if (node == NULL ||
-			attno < 1 || attno > list_length(node->targetlist))
-			return false;
-
-		tle = (TargetEntry *) list_nth(node->targetlist, attno - 1);
-		if (tle == NULL || !IsA(tle->expr, Var))
-			return false;
-		var = (Var *) tle->expr;
-
-		/*
-		 * Which child supplies this column.  A join is the only node here with
-		 * two of them, and only a HashJoin is descended through -- an Append or
-		 * a SetOp would make the column come from several relations at once,
-		 * and then no single scan holds the keys the filter would claim.
-		 *
-		 * One of our own nodes is a passthrough with an identity targetlist, so
-		 * its columns are its child's columns in the same order and the attno
-		 * carries over unchanged.  Descending through it is what lets a second
-		 * join filter a relation a first join already filters.
-		 */
-		if (var->varno == OUTER_VAR)
-		{
-			child = outerPlan(node);
-			via_outer = true;
-		}
-		else if (var->varno == INNER_VAR && IsA(node, HashJoin))
-		{
-			child = innerPlan(node);
-			via_outer = false;
-		}
-		else if (var->varno == INDEX_VAR && AnserIsRuntimeFilterScan(node))
-		{
-			child = (Plan *) linitial(((CustomScan *) node)->custom_plans);
-			via_outer = true;
-		}
-		else
-			return false;
-
-		if (child == NULL)
-			return false;
-
-		/*
-		 * The consumer must never land below an outer join's nullable side:
-		 * pruning there does not just remove the row, it NULL-extends it, and
-		 * a downstream condition can tell that from "no row" (IS NOT DISTINCT
-		 * FROM matches NULL to NULL, so a no-match becomes a match).  The
-		 * producer may descend there: a bloom built over the whole base
-		 * column is a superset of what the outer join emits, and a superset
-		 * is all it needs to be.
-		 */
-		if (for_consumer && IsA(node, HashJoin) &&
-			anser_rf_nullable_side(((HashJoin *) node)->join.jointype,
-								   !via_outer))
-			return false;
-
-		if (via_outer && IsA(child, SeqScan))
-		{
-			/*
-			 * The scan's own entry for the column must be a plain Var, never
-			 * a computed expression (see anser_rf_scan_column_is_var).
-			 */
-			if (!anser_rf_scan_column_is_var(child, var->varattno))
-				return false;
-
-			*parent_out = node;
-			*scan_out = child;
-			*attno_out = var->varattno;
-			*slice_out = slice_index;
-			return true;
-		}
-		if (!anser_rf_passthrough_node(child))
-			return false;
-
-		/*
-		 * Descending through a Motion moves us into its sending slice, which
-		 * is where the producer will end up -- and whose width decides how
-		 * many parts the coordinator has to wait for.
-		 */
-		if (IsA(child, Motion))
-			slice_index = ((Motion *) child)->motionID;
-
-		node = child;
-		attno = var->varattno;
-	}
-}
-
-/*
- * Put `child` where the scan the descent ended on used to be.  The link is the
- * outer one for every node the descent walks except one of ours, which holds
- * its child in custom_plans -- that is the case where a second join filters a
- * relation a first join already filters, and the new node goes below the old
- * one so that both see every row.
- */
-static void
-anser_relink_child(Plan *parent, Plan *child)
-{
-	if (AnserIsRuntimeFilterScan(parent))
-		linitial(((CustomScan *) parent)->custom_plans) = child;
-	else
-		outerPlan(parent) = child;
+	if (!AnserFindKeyScan(top, key_attno, &policy, &context, &result) ||
+		result.parent == NULL)
+		return false;
+	*parent_out = result.parent;
+	*scan_out = result.scan;
+	*attno_out = result.output_attno;
+	*slice_out = context.slice_index;
+	return true;
 }
 
 /*
@@ -666,7 +411,7 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 	CustomScan *consumer;
 	ListCell   *lc;
 
-	if (hj->join.jointype != JOIN_INNER && hj->join.jointype != JOIN_RIGHT)
+	if (!AnserJoinSideReducible(hj->join.jointype, false))
 		return;
 	if (hash == NULL || !IsA(hash, Hash))
 		return;
@@ -722,7 +467,7 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 	 * does not have cannot reach the join's output through any path.
 	 */
 	if (IsA(probe, SeqScan) &&
-		anser_rf_scan_column_is_var(probe, outer_attno))
+		AnserScanOutputVar((Scan *) probe, outer_attno) != NULL)
 	{
 		probe_parent = (Plan *) hj;
 		probe_scan = probe;
@@ -740,6 +485,12 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 	 * producer would have to finish before the consumer under it could start.
 	 */
 	if (probe_scan == build_scan)
+		return;
+
+	/* Validate both links before constructing or attaching either node.
+	 * Replacing a child by itself only checks unique ownership. */
+	if (!AnserReplaceChildPlan(build_parent, build_scan, build_scan) ||
+		!AnserReplaceChildPlan(probe_parent, probe_scan, probe_scan))
 		return;
 
 	/*
@@ -814,7 +565,8 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 										   condition_key, total_elems, max_payload,
 										   planned_bytes, n_producers);
 	producer->scan.plan.plan_node_id = ctx->next_plan_node_id++;
-	anser_relink_child(build_parent, (Plan *) producer);
+	if (!AnserReplaceChildPlan(build_parent, build_scan, (Plan *) producer))
+		elog(ERROR, "Anser producer scan parent changed during injection");
 
 	/*
 	 * Consumer wraps the probe base scan; keyed by the mapped probe attno.
@@ -833,7 +585,8 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 										   planned_bytes, n_producers,
 										   hj->join.jointype != JOIN_RIGHT);
 	consumer->scan.plan.plan_node_id = ctx->next_plan_node_id++;
-	anser_relink_child(probe_parent, (Plan *) consumer);
+	if (!AnserReplaceChildPlan(probe_parent, probe_scan, (Plan *) consumer))
+		elog(ERROR, "Anser consumer scan parent changed during injection");
 
 	/* Record the channel so no later join can add a second consumer on it. */
 	ctx->consumer_keys = lappend(ctx->consumer_keys, pstrdup(condition_key));

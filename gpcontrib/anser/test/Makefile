@@ -62,5 +62,62 @@ anserfilter.o: $(srcdir)/../src/anserfilter.c
 # Not called "check": pgxs.mk already defines that target, and overriding it
 # here would only earn a warning from make.
 .PHONY: unitcheck
-unitcheck: $(PROGRAM)
+unitcheck: $(PROGRAM) anserdetach_test ansernormalize_test anserplanwalk_test ansercancel_test anserapi_test
 	./$(PROGRAM)
+	./anserdetach_test
+	./ansernormalize_test
+	./anserplanwalk_test
+	./ansercancel_test
+	./anserapi_test
+
+# Only teardown code from the included transport source is linked. Any
+# allocation, wait or error-reporting dependency in that path is unresolved,
+# so the test also checks the abort-cleanup contract at link time.
+ifeq ($(PORTNAME),darwin)
+DETACH_TEST_LDFLAGS = -Wl,-dead_strip
+else
+DETACH_TEST_LDFLAGS = -Wl,--gc-sections
+endif
+
+anserdetach_test: $(srcdir)/anserdetach_test.c $(srcdir)/../src/anserdispatch.c $(top_srcdir)/src/interfaces/libpq/libpq-events.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(PG_CPPFLAGS) -ffunction-sections -fdata-sections \
+	  -I$(top_srcdir)/src/interfaces/libpq -I$(top_srcdir)/src/backend \
+	  $(DETACH_TEST_LDFLAGS) $< $(top_srcdir)/src/interfaces/libpq/libpq-events.c -o $@
+
+EXTRA_CLEAN += anserdetach_test
+
+# Include the real evaluators; only their reachable code must link.
+ansernormalize_test: $(srcdir)/ansernormalize_test.c $(srcdir)/../src/anserplankeys.c $(srcdir)/../src/anserplanexec.c $(srcdir)/../src/anserbloomproduce.c $(srcdir)/../include/anserbloom.h $(wildcard $(srcdir)/../include/*.h)
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(PG_CPPFLAGS) -ffunction-sections -fdata-sections \
+	  $(DETACH_TEST_LDFLAGS) $< -o $@
+
+EXTRA_CLEAN += ansernormalize_test
+
+# -O0 ensures compiler optimization cannot hide Max's repeated evaluation.
+anserplanwalk_test: $(srcdir)/anserplanwalk_test.c $(srcdir)/../src/anserplan.c $(srcdir)/../src/anserplankeys.c $(wildcard $(srcdir)/../include/*.h)
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(PG_CPPFLAGS) -O0 -ffunction-sections -fdata-sections \
+	  $(DETACH_TEST_LDFLAGS) $< -o $@
+
+EXTRA_CLEAN += anserplanwalk_test
+
+# Count ownership releases in the real accumulator without a running backend.
+ansercancel_test: $(srcdir)/ansercancel_test.c $(srcdir)/../src/anserdispatch.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(PG_CPPFLAGS) -ffunction-sections -fdata-sections \
+	  -I$(top_srcdir)/src/interfaces/libpq -I$(top_srcdir)/src/backend \
+	  $(DETACH_TEST_LDFLAGS) $< -o $@
+
+EXTRA_CLEAN += ansercancel_test
+
+# Contract tests for the helpers shared with other extensions (RPT+). Each
+# helper is exercised directly; backend calls outside the contract abort.
+anserapi_test: $(srcdir)/anserapi_test.c $(srcdir)/../src/anserplankeys.c $(wildcard $(srcdir)/../include/*.h)
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(PG_CPPFLAGS) -ffunction-sections -fdata-sections \
+	  $(DETACH_TEST_LDFLAGS) $< -o $@
+
+EXTRA_CLEAN += anserapi_test
+
+# Separate output directory and flags: do not overwrite configured build flags.
+LOCALCHECK_PYTHON ?= python3
+.PHONY: localcheck
+localcheck:
+	$(LOCALCHECK_PYTHON) $(srcdir)/localcheck.py

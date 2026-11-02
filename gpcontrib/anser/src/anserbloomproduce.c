@@ -96,7 +96,7 @@ ExecInitAnserBloomFilterProduce(const AnserChannelKey *channel_key,
 
 void
 ExecAnserBloomFilterProduceAddDatum(AnserBloomFilterProduceState *state,
-									Datum value, bool isnull)
+									Datum value, bool isnull, int16 key_length)
 {
 	/*
 	 * A NULL filter means AnserBloomCreate declined to build one -- too many
@@ -106,7 +106,7 @@ ExecAnserBloomFilterProduceAddDatum(AnserBloomFilterProduceState *state,
 	if (state == NULL || state->filter == NULL || state->published || isnull)
 		return;
 
-	bloom_add_element(state->filter, (unsigned char *) &value, sizeof(Datum));
+	AnserBloomAddKey(state->filter, value, key_length);
 }
 
 /* Does this producer have a filter to fill?  False means "already hopeless". */

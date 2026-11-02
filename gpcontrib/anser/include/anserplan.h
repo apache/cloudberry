@@ -32,6 +32,19 @@
 #include "nodes/execnodes.h"	/* PlanState, for the pushdown helpers */
 #include "nodes/plannodes.h"
 
+/* Small shared key checks; traversal and placement policy stay with callers.
+ * The type argument is a base type (unwrap domains before calling).
+ * EqualityKeys performs catalog lookups and may raise a PostgreSQL ERROR.
+ * PlanOutputVar returns a borrowed Var at an output position, not table attno.
+ * KeyPassthroughNode is Anser's conservative traversal set; callers may add
+ * nodes only where their own graph/placement semantics permit them.
+ */
+extern PGDLLEXPORT bool AnserKeyTypeSupportsRawHash(Oid keytype);
+extern PGDLLEXPORT bool AnserEqualityKeys(Node *clause, Var **outer_var,
+										Var **inner_var, Oid *key_type);
+extern PGDLLEXPORT Var *AnserPlanOutputVar(const Plan *plan, AttrNumber position);
+extern PGDLLEXPORT bool AnserKeyPassthroughNode(const Plan *plan);
+
 /*
  * Post-plan pass: recognize the supported join shape in a finished PlannedStmt
  * and inject an Anser bloom-filter producer (on the hash build side) and a
@@ -150,6 +163,8 @@ extern PGDLLEXPORT bool AnserResolveKeyScan(Plan *top,
  * full QEs, each publishing for itself, and the two optimizers choose different
  * widths for the same query -- see the implementation.
  */
+extern PGDLLEXPORT int AnserMaxPlanNodeId(PlannedStmt *stmt);
+
 extern PGDLLEXPORT int AnserSliceProducers(PlannedStmt *stmt, int slice_index);
 
 /*
