@@ -115,16 +115,17 @@ FROM (VALUES
 
 -- The bytes, exactly.  Session/command/condition are 42/7/3 and part is 1 of 3,
 -- so these are golden values: any change to the layout, the field widths or
--- what the checksum covers shows up here as a diff.  Note the third row -- a
+-- what the checksum covers shows up here as a diff.  Note the fourth row -- a
 -- cancelled message carries no body even though one was passed, and its
 -- checksum must be computed over what is actually sent.
 --
 -- That the message comes back as text is itself the check that it is NUL-free,
--- which a NOTIFY payload has to be: the fourth row's body is 00 ff 00.
+-- which a NOTIFY payload has to be: the fifth row's body is 00 ff 00.
 SELECT t.what, length(m.msg) AS len, m.msg
 FROM (VALUES
         ('part with a 3-byte body',     'P', 'B', 0, '\x616263'::bytea),
         ('subscription, no body',       'S', '-', 0, '\x'::bytea),
+        ('next request, no body',       'N', '-', 0, '\x'::bytea),
         ('cancelled: body suppressed',  'P', 'B', 1, '\x616263'::bytea),
         ('body of NUL and 0xff bytes',  'P', 'B', 0, '\x00ff00'::bytea))
        AS t(what, kind, ptype, flags, body),
@@ -141,9 +142,15 @@ FROM (VALUES
 -- which is why the checksum covers the header and not just the payload.
 SELECT t.tamper,
        anser_test_wire_roundtrip('anser_rf_3', '\x616263'::bytea, t.tamper,
-                                 'B'::"char") AS outcome
+                                 'B'::"char", 'P'::"char") AS outcome
 FROM (VALUES (''), ('truncate'), ('append'), ('bodylen'), ('tag'), ('kind'),
              ('type'), ('crc'), ('key'), ('body')) AS t(tamper);
+
+-- A NEXT request is a message of its own kind: no body, and part_index carries
+-- the offset the consumer wants next.  The parser must accept it and every
+-- field must survive.
+SELECT anser_test_wire_roundtrip('anser_rf_3', '\x'::bytea, '', '-'::"char",
+                                 'N'::"char") AS next_roundtrip;
 
 -- Keys and bodies that must survive the trip unchanged.  "ok" means every
 -- field and the decoded body came back identical, so each of these is a case
@@ -151,11 +158,11 @@ FROM (VALUES (''), ('truncate'), ('append'), ('bodylen'), ('tag'), ('kind'),
 -- and is taken by length, which is what lets it contain a newline, a space, or
 -- the protocol's own tag without any escaping.
 SELECT t.what,
-       anser_test_wire_roundtrip(t.key, t.body, '', 'B'::"char") AS outcome
+       anser_test_wire_roundtrip(t.key, t.body, '', 'B'::"char", 'P'::"char") AS outcome
 FROM (VALUES
         ('plain key',                     'anser_rf_3'           , '\x616263'::bytea),
         ('key containing a newline',      E'rf:a\nb'             , '\x616263'::bytea),
-        ('key that looks like a header',  'anser3 P B 0000000000', '\x616263'::bytea),
+        ('key that looks like a header',  'anser4 P B 0000000000', '\x616263'::bytea),
         ('key with spaces and quotes',    'rf:"a b".c'           , '\x616263'::bytea),
         ('key at the 63-byte limit',      repeat('k', 63)        , '\x616263'::bytea),
         ('empty key',                     ''                     , '\x616263'::bytea),
@@ -166,26 +173,30 @@ FROM (VALUES
        AS t(what, key, body);
 
 -- The QD -> QE checksum.  The value itself does not matter; which inputs
--- change it does.  Every routing field and the key are always covered, and the
--- body only for a payload type that asks for it -- the other_body_exempt column
--- is that deliberate exemption, not an oversight.
+-- change it does.  Every routing field, the chunk's coordinates and the key
+-- are always covered, and the body only for a payload type that asks for it --
+-- the other_body_exempt column is that deliberate exemption, not an oversight.
 SELECT
-  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 'k', '\x01')
-    <> anser_test_push_crc('B'::"char", 2, 7, 3, 0, 'k', '\x01') AS condition_covered,
-  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 'k', '\x01')
-    <> anser_test_push_crc('B'::"char", 1, 8, 3, 0, 'k', '\x01') AS session_covered,
-  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 'k', '\x01')
-    <> anser_test_push_crc('B'::"char", 1, 7, 4, 0, 'k', '\x01') AS command_covered,
-  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 'k', '\x01')
-    <> anser_test_push_crc('B'::"char", 1, 7, 3, 1, 'k', '\x01') AS flags_covered,
-  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 'k', '\x01')
-    <> anser_test_push_crc('B'::"char", 1, 7, 3, 0, 'j', '\x01') AS key_covered,
-  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 'k', '\x01')
-    <> anser_test_push_crc('B'::"char", 1, 7, 3, 0, 'k', '\x02') AS bloom_body_covered,
-  anser_test_push_crc('-'::"char", 1, 7, 3, 0, 'k', '\x01')
-     = anser_test_push_crc('-'::"char", 1, 7, 3, 0, 'k', '\x02') AS other_body_exempt,
-  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 'k', '\x01')
-    <> anser_test_push_crc('-'::"char", 1, 7, 3, 0, 'k', '\x01') AS type_covered;
+  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 1000, 0, 'k', '\x01')
+    <> anser_test_push_crc('B'::"char", 2, 7, 3, 0, 1000, 0, 'k', '\x01') AS condition_covered,
+  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 1000, 0, 'k', '\x01')
+    <> anser_test_push_crc('B'::"char", 1, 8, 3, 0, 1000, 0, 'k', '\x01') AS session_covered,
+  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 1000, 0, 'k', '\x01')
+    <> anser_test_push_crc('B'::"char", 1, 7, 4, 0, 1000, 0, 'k', '\x01') AS command_covered,
+  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 1000, 0, 'k', '\x01')
+    <> anser_test_push_crc('B'::"char", 1, 7, 3, 1, 1000, 0, 'k', '\x01') AS flags_covered,
+  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 1000, 0, 'k', '\x01')
+    <> anser_test_push_crc('B'::"char", 1, 7, 3, 0, 2000, 0, 'k', '\x01') AS total_covered,
+  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 1000, 0, 'k', '\x01')
+    <> anser_test_push_crc('B'::"char", 1, 7, 3, 0, 1000, 64, 'k', '\x01') AS offset_covered,
+  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 1000, 0, 'k', '\x01')
+    <> anser_test_push_crc('B'::"char", 1, 7, 3, 0, 1000, 0, 'j', '\x01') AS key_covered,
+  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 1000, 0, 'k', '\x01')
+    <> anser_test_push_crc('B'::"char", 1, 7, 3, 0, 1000, 0, 'k', '\x02') AS bloom_body_covered,
+  anser_test_push_crc('-'::"char", 1, 7, 3, 0, 1000, 0, 'k', '\x01')
+     = anser_test_push_crc('-'::"char", 1, 7, 3, 0, 1000, 0, 'k', '\x02') AS other_body_exempt,
+  anser_test_push_crc('B'::"char", 1, 7, 3, 0, 1000, 0, 'k', '\x01')
+    <> anser_test_push_crc('-'::"char", 1, 7, 3, 0, 1000, 0, 'k', '\x01') AS type_covered;
 
 -- 5. The runtime-filter pushdown decision.  A scan key is numbered by the
 -- table's attributes, while the consumer is numbered by the scan's output

@@ -62,5 +62,22 @@ anserfilter.o: $(srcdir)/../src/anserfilter.c
 # Not called "check": pgxs.mk already defines that target, and overriding it
 # here would only earn a warning from make.
 .PHONY: unitcheck
-unitcheck: $(PROGRAM)
+unitcheck: $(PROGRAM) anserdetach_test
 	./$(PROGRAM)
+	./anserdetach_test
+
+# Only teardown code from the included transport source is linked. Any
+# allocation, wait or error-reporting dependency in that path is unresolved,
+# so the test also checks the abort-cleanup contract at link time.
+ifeq ($(PORTNAME),darwin)
+DETACH_TEST_LDFLAGS = -Wl,-dead_strip
+else
+DETACH_TEST_LDFLAGS = -Wl,--gc-sections
+endif
+
+anserdetach_test: $(srcdir)/anserdetach_test.c $(srcdir)/../src/anserdispatch.c $(top_srcdir)/src/interfaces/libpq/libpq-events.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(PG_CPPFLAGS) -ffunction-sections -fdata-sections \
+	  -I$(top_srcdir)/src/interfaces/libpq -I$(top_srcdir)/src/backend \
+	  $(DETACH_TEST_LDFLAGS) $< $(top_srcdir)/src/interfaces/libpq/libpq-events.c -o $@
+
+EXTRA_CLEAN += anserdetach_test

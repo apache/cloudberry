@@ -99,7 +99,6 @@ AnserApplyRuntimeFilters(PlannedStmt *stmt)
 		 * count out of it and allocates that much.
 		 */
 		AnserInjectCtx ctx = {0};
-		ListCell   *lc;
 		int			maxid;
 
 		/*
@@ -118,9 +117,7 @@ AnserApplyRuntimeFilters(PlannedStmt *stmt)
 		 * planner_hooks do not promise.  max + 1 is correct under any
 		 * assignment scheme.
 		 */
-		maxid = anser_max_plan_node_id(stmt->planTree);
-		foreach(lc, stmt->subplans)
-			maxid = Max(maxid, anser_max_plan_node_id((Plan *) lfirst(lc)));
+		maxid = AnserMaxPlanNodeId(stmt);
 
 		ctx.stmt = stmt;
 		ctx.slice_index = 0;	/* the root runs in the coordinator's slice */
@@ -131,6 +128,18 @@ AnserApplyRuntimeFilters(PlannedStmt *stmt)
 
 		anser_inject_walk(stmt->planTree, &ctx);
 	}
+}
+
+/* Include separately stored SubPlans as well as the main tree. */
+int
+AnserMaxPlanNodeId(PlannedStmt *stmt)
+{
+	int maxid = anser_max_plan_node_id(stmt->planTree);
+	ListCell *lc;
+
+	foreach(lc, stmt->subplans)
+		maxid = Max(maxid, anser_max_plan_node_id((Plan *) lfirst(lc)));
+	return maxid;
 }
 
 /*

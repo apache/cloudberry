@@ -150,6 +150,8 @@ extern PGDLLEXPORT bool AnserResolveKeyScan(Plan *top,
  * full QEs, each publishing for itself, and the two optimizers choose different
  * widths for the same query -- see the implementation.
  */
+extern PGDLLEXPORT int AnserMaxPlanNodeId(PlannedStmt *stmt);
+
 extern PGDLLEXPORT int AnserSliceProducers(PlannedStmt *stmt, int slice_index);
 
 /*

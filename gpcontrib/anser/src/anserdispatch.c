@@ -56,7 +56,10 @@
  */
 #include "postgres.h"
 
+#include <sys/socket.h>
+
 #include "libpq-fe.h"
+#include "libpq-events.h"
 #include "libpq-int.h"
 
 #include "anser.h"
@@ -70,11 +73,30 @@
 #include "utils/faultinjector.h"
 #include "common/base64.h"
 #include "lib/stringinfo.h"
+#include "lib/ilist.h"
 #include "nodes/pg_list.h"
+#include "portability/instr_time.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
-#include "utils/timestamp.h"
 #include "utils/wait_event.h"
+
+/*
+ * One in-flight chunked delivery to one consumer.  The merged payload is sent
+ * one chunk per GP_SIDEBAND_MESSAGE, and the next chunk goes out only when the
+ * consumer asks for it with a NEXT -- so no more than one chunk, always
+ * smaller than the connection's send buffer, is ever in flight, and a consumer
+ * that walks away between chunks leaves nothing torn behind.
+ */
+typedef struct AnserDispDelivery
+{
+	dlist_node active_node;
+	struct AnserDispChannel *channel;
+	PGconn	   *conn;
+	int			segindex;		/* for logs */
+	int			chunk_size;		/* chosen once; see anser_disp_chunk_size() */
+	uint32		next_offset;	/* sent so far; a NEXT must ask for exactly this */
+	bool		started;		/* chunk 0 has been sent */
+} AnserDispDelivery;
 
 /*
  * One channel's merge state, living for the duration of the query that created
@@ -90,31 +112,41 @@ typedef struct AnserDispChannel
 	int			expected_parts;	/* 0 until a part tells us; from total_parts */
 	bool		cancelled;
 	bool		complete;		/* every expected part folded, or cancelled */
-	List	   *subscribers;	/* PGconn * of QEs awaiting delivery */
+	List	   *deliveries;		/* AnserDispDelivery, one per subscribed QE */
 } AnserDispChannel;
 
 static HTAB *AnserDispChannels = NULL;
 
 /*
- * Connections holding a partially written delivery.  A merged filter is
- * 1-64 MB and a consumer that has stopped reading cannot take it in one
- * flush, so a push can leave bytes queued (anser_disp_push).  Nothing more
- * can be queued once the query ends -- deliveries only happen mid-query, and
- * the channels are dropped at ExecutorEnd -- so the set is final then, and
- * AnserDispatchFlushPending() completes or poisons it before the gang is
- * reused.  List nodes live in TopMemoryContext: the list must survive until
- * ExecutorEnd regardless of the context a delivery ran in.
+ * The chunk must fit an empty send buffer, so one pqFlushNonBlocking() places
+ * it whole and outCount returns to zero.  SO_SNDBUF is halved because Linux
+ * reports it doubled (the kernel's bookkeeping share included); the floor
+ * keeps a tiny or unreadable buffer from turning the delivery into thousands
+ * of round trips.  anser.debug_delivery_chunk_bytes overrides the choice, for
+ * tests that want exactly that.
+ */
+#define ANSER_CHUNK_MAX		(1024 * 1024)
+#define ANSER_CHUNK_MIN		(8 * 1024)
+
+/*
+ * Connections holding a partially written chunk.  With chunked delivery this
+ * is only the insurance case: a chunk is sized to fit an empty send buffer,
+ * and anser_disp_send_chunk() gives the socket a bounded moment to drain
+ * before recording the connection here.  Reaching this list therefore means
+ * the peer has not read for a full second -- it is gone or wedged, and
+ * AnserDispatchFlushPending() poisons the connection before the
+ * gang is reused.  List nodes live in TopMemoryContext: the list must survive
+ * until ExecutorEnd regardless of the context a delivery ran in.
  *
- * Invariant the safety of this list stands on: its connections are
- * dereferenced ONLY in AnserDispatchFlushPending(), and that call runs before
- * any gang recycling in every teardown order (standard ExecutorEnd recycles
- * after it; AtAbort_Portals reaches ExecutorEnd before
- * AtAbort_DispatcherState).  The only other place it is touched is
- * AnserDispatchReset(), which frees the list nodes without dereferencing the
- * connections.  Any future path that frees a QE connection before ExecutorEnd
- * invalidates this comment and must be handled here instead.
+ * Connections are registered with libpq before Anser retains any pointer.
+ * PGEVT_CONNDESTROY removes every reference before PQfinish frees a PGconn,
+ * including when an InitPlan releases its gangs before ExecutorEnd. A reset
+ * drops the old stream's deliveries too. No dispatcher/core hook is needed.
  */
 static List *AnserDispPendingPush = NIL;
+
+/* Intrusive index: teardown must not allocate or start a dynahash scan. */
+static dlist_head AnserDispDeliveries = DLIST_STATIC_INIT(AnserDispDeliveries);
 
 /*
  * Withdrawals honoured since the backend started.  Only a test reads it: an
@@ -124,6 +156,14 @@ static List *AnserDispPendingPush = NIL;
  * arrive in time", which look identical from SQL.
  */
 static int64 AnserDispUnsubscribes = 0;
+
+/*
+ * Deliveries that reached their last chunk.  Only a test reads it: a
+ * completed delivery leaves no other trace, and a test that wants to know the
+ * filter really arrived -- rather than the consumer quietly giving up and
+ * running unfiltered, which produces the same rows -- reads the difference.
+ */
+static int64 AnserDispDeliveriesCompleted = 0;
 static MemoryContext AnserDispContext = NULL;
 
 static AnserDispChannel *anser_disp_lookup(const AnserChannelKey *key, bool create);
@@ -132,7 +172,12 @@ static void anser_disp_apply_part(AnserDispChannel *chan,
 								  const void *payload, Size payload_len,
 								  int total_parts, bool cancelled);
 static void anser_disp_deliver(AnserDispChannel *chan);
-static bool anser_disp_push(PGconn *conn, AnserDispChannel *chan);
+static int	anser_disp_chunk_size(PGconn *conn);
+static AnserDispDelivery *anser_disp_delivery_find(AnserDispChannel *chan,
+												   PGconn *conn);
+static void anser_disp_delivery_drop(AnserDispChannel *chan,
+									 AnserDispDelivery *d);
+static void anser_disp_send_chunk(AnserDispChannel *chan, AnserDispDelivery *d);
 
 /*
  * PQstatus() / PQerrorMessage() equivalents.  See the linkage note above for
@@ -171,6 +216,15 @@ AnserDispatchUnsubscribeCount(void)
 }
 
 /*
+ * How many deliveries this backend has completed.  For tests; see the counter.
+ */
+int64
+AnserDispatchDeliveriesCompleted(void)
+{
+	return AnserDispDeliveriesCompleted;
+}
+
+/*
  * Per-query state lives in its own context so it can be dropped wholesale.
  * Channels are keyed by (session, command, condition), so entries from an
  * earlier command in the same transaction are distinct and simply unused
@@ -203,7 +257,7 @@ AnserDispatchReset(void)
 	/*
 	 * Drop the pending-delivery list too, but only the list nodes: the
 	 * connections it names may already be dead on the abort path, and
-	 * dereferencing them is reserved to AnserDispatchFlushPending (see the
+	 * dereferencing them is reserved to cleanup while their gang is live (see the
 	 * invariant at the declaration).  A delivery dropped here unflushed is
 	 * the cleanupQE guard's problem, which poisons the connection at recycle.
 	 */
@@ -213,10 +267,14 @@ AnserDispatchReset(void)
 	if (AnserDispChannels == NULL)
 		return;
 
+	ANSER_DEBUG("anser: QD reset drops %ld channel(s)",
+				hash_get_num_entries(AnserDispChannels));
+
 	hash_destroy(AnserDispChannels);
 	AnserDispChannels = NULL;
 	MemoryContextDelete(AnserDispContext);
 	AnserDispContext = NULL;
+	dlist_init(&AnserDispDeliveries);
 }
 
 /*
@@ -229,14 +287,15 @@ AnserDispatchReset(void)
  * -- for the whole call.  The key carries the command count, so a query can
  * take its own channels with it instead of waiting for that sweep.
  *
- * Only channels that are complete and have no subscriber left are taken,
+ * Only channels that are complete and have no delivery in flight are taken,
  * because the caller cannot always prove the count is its own: gp_command_count
  * names the newest query descriptor, not the one that is ending, and the two
  * differ whenever a portal outlives the statements that ran after it.  Closing
  * such a cursor from inside a live query would otherwise hand us that live
  * query's count.  A channel that is complete and already delivered costs at
  * most a consumer that had not subscribed yet, which fails open; an exchange
- * still in flight is never touched.
+ * still in flight is never touched, and a channel with a delivery in flight
+ * keeps its payload until the sweep.
  *
  * The flip side is that a channel that never completed -- a squelched producer,
  * say -- still waits for the sweep.
@@ -255,8 +314,11 @@ AnserDispatchResetCommand(int command_count)
 	{
 		if (chan->key.gp_command_count != command_count)
 			continue;
-		if (!chan->complete || chan->subscribers != NIL)
+		if (!chan->complete || chan->deliveries != NIL)
 			continue;
+
+		ANSER_DEBUG("anser: QD dropping finished channel cond=%u ccnt=%d",
+					chan->key.condition_id, chan->key.gp_command_count);
 
 		/*
 		 * AnserDispContext outlives this, so free what the entry owns rather
@@ -273,72 +335,137 @@ AnserDispatchResetCommand(int command_count)
 }
 
 /*
- * Complete or poison partially written deliveries before the query's gang is
- * reused.
- *
- * A connection on the pending list holds a torn sideband message: part of it
- * was sent, the rest is still queued, and the dispatcher's poll() stopped
- * flushing when the peer's command completed.  Left alone, the next dispatch
- * on the gang would overwrite the queued bytes (PQsendGpQuery_shared) and the
- * QE -- which has the message header already -- would wait forever for a body
- * that never comes.
- *
- * Nothing more can be queued once the query ends, so the set is final and
- * each connection gets one bounded attempt: the peer in this situation is a
- * live idle reader (it is blocked mid-message or in ReadCommand), so the
- * flush normally completes and the QE absorbs the stale delivery.  A peer
- * that stays unwritable past the deadline is gone or stuck; its connection is
- * marked bad so the dispatcher discards it rather than reusing it -- the QE
- * sees EOF and exits, and the next gang build reconnects (cdbgang_async.c
- * does not treat a bad connection as cached).
+ * Poison torn deliveries before the connections can be reused. Teardown may
+ * run while handling another error, so it must not wait, allocate or report
+ * another error. timeout_ms remains in the public API for compatibility.
  */
 void
 AnserDispatchFlushPending(long timeout_ms)
 {
-	ListCell   *lc;
+	ListCell *lc;
+
+	(void) timeout_ms;
 
 	foreach(lc, AnserDispPendingPush)
 	{
-		PGconn	   *conn = (PGconn *) lfirst(lc);
-		TimestampTz start = GetCurrentTimestamp();
-
-		while (conn->outCount > 0)
-		{
-			/*
-			 * Bail on cancel or finish: teardown must not linger.  No
-			 * CHECK_FOR_INTERRUPTS throw -- an interrupted flush degrades to
-			 * poisoning the connection below, never to an error raised this
-			 * late in the query's life.
-			 */
-			if (QueryCancelPending || QueryFinishPending)
-				break;
-
-			if (pqFlushNonBlocking(conn) < 0)
-				break;			/* libpq already logged; marked bad below */
-			if (conn->outCount == 0)
-				break;
-			if (TimestampDifferenceExceeds(start, GetCurrentTimestamp(),
-										   timeout_ms))
-				break;
-
-			(void) WaitLatchOrSocket(MyLatch,
-									 WL_LATCH_SET | WL_SOCKET_WRITEABLE |
-									 WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
-									 anser_conn_socket(conn), 100L /* ms */ ,
-									 PG_WAIT_EXTENSION);
-			ResetLatch(MyLatch);
-		}
+		PGconn *conn = (PGconn *) lfirst(lc);
 
 		if (conn->outCount > 0)
-		{
-			elog(LOG, "anser: dropping a connection with %d unsent bytes of a delivered filter",
-				 conn->outCount);
 			conn->status = CONNECTION_BAD;
-		}
 	}
-
 	list_free(AnserDispPendingPush);
 	AnserDispPendingPush = NIL;
+}
+
+/* list_delete_ptr can allocate in DEBUG_LIST_MEMORY_USAGE builds. Teardown
+ * needs the ordinary in-place deletion even in those builds. */
+static List *
+anser_disp_list_forget(List *list, void *value)
+{
+	int i;
+
+	for (i = 0; i < list_length(list); ++i)
+	{
+		if (lfirst(&list->elements[i]) != value)
+			continue;
+		if (list->length == 1)
+		{
+			list_free(list);
+			return NIL;
+		}
+		memmove(&list->elements[i], &list->elements[i + 1],
+				(list->length - i - 1) * sizeof(ListCell));
+		--list->length;
+		break;
+	}
+	return list;
+}
+
+/* libpq invokes this while conn is still alive, including on error cleanup.
+ * Never allocate, log, wait, or traverse dynahash in the destruction path. */
+static void
+anser_disp_forget_conn(PGconn *conn)
+{
+	dlist_mutable_iter iter;
+
+	AnserDispPendingPush = anser_disp_list_forget(AnserDispPendingPush, conn);
+	dlist_foreach_modify(iter, &AnserDispDeliveries)
+	{
+		AnserDispDelivery *d = dlist_container(AnserDispDelivery, active_node, iter.cur);
+
+		if (d->conn == conn)
+			anser_disp_delivery_drop(d->channel, d);
+	}
+}
+
+static int
+anser_disp_conn_event(PGEventId event, void *info, void *pass_through)
+{
+	switch (event)
+	{
+		case PGEVT_CONNDESTROY:
+			anser_disp_forget_conn(((PGEventConnDestroy *) info)->conn);
+			break;
+		case PGEVT_CONNRESET:
+			anser_disp_forget_conn(((PGEventConnReset *) info)->conn);
+			break;
+		default:
+			break;
+	}
+	return 1;
+}
+
+/*
+ * Register using the same PGEvent layout and libc allocation as
+ * PQregisterEventProc. Cloudberry hides public PQ* symbols in postgres;
+ * linking a second libpq to operate on the backend's connections is unsafe.
+ * Anser already requires the matching libpq-int.h ABI for its message writer.
+ * Registration happens during normal notify processing, never cleanup. On
+ * allocation failure refuse the subscription, which then times out unfiltered.
+ */
+static bool
+anser_disp_track_conn(PGconn *conn)
+{
+	int i;
+	char *name;
+	PGEvent *event;
+
+	if (conn == NULL)
+		return false;
+	for (i = 0; i < conn->nEvents; ++i)
+		if (conn->events[i].proc == anser_disp_conn_event)
+			return true;
+
+	name = strdup("Anser dispatch delivery");
+	if (name == NULL)
+		return false;
+	if (conn->nEvents >= conn->eventArraySize)
+	{
+		int capacity;
+		PGEvent *events;
+
+		if (conn->eventArraySize > INT_MAX / 2)
+		{
+			free(name);
+			return false;
+		}
+		capacity = conn->eventArraySize ? conn->eventArraySize * 2 : 8;
+		events = realloc(conn->events, (size_t) capacity * sizeof(PGEvent));
+		if (events == NULL)
+		{
+			free(name);
+			return false;
+		}
+		conn->events = events;
+		conn->eventArraySize = capacity;
+	}
+	event = &conn->events[conn->nEvents++];
+	event->proc = anser_disp_conn_event;
+	event->name = name;
+	event->passThrough = NULL;
+	event->data = NULL;
+	event->resultInitialized = false;
+	return true;
 }
 
 static AnserDispChannel *
@@ -365,7 +492,7 @@ anser_disp_lookup(const AnserChannelKey *key, bool create)
 		chan->expected_parts = 0;
 		chan->cancelled = false;
 		chan->complete = false;
-		chan->subscribers = NIL;
+		chan->deliveries = NIL;
 	}
 
 	return chan;
@@ -432,6 +559,37 @@ AnserDispatchNotifyHandler(struct CdbDispatchResult *dispatchResult,
 	anser_disp_init();
 	oldcxt = MemoryContextSwitchTo(AnserDispContext);
 
+	/*
+	 * NEXT names a channel that must already exist: one that does not was
+	 * dropped with its query, and the request is simply late.
+	 */
+	if (msg.kind == ANSER_WIRE_KIND_NEXT)
+	{
+		PGconn	   *conn = dr->segdbDesc->conn;
+		AnserDispDelivery *d;
+
+		chan = anser_disp_lookup(&msg.key, false);
+		d = chan != NULL ? anser_disp_delivery_find(chan, conn) : NULL;
+
+		/*
+		 * A NEXT for a delivery we do not have, or for an offset we already
+		 * passed, is a late duplicate: the delivery it belongs to is over or
+		 * never started.  Skipping it costs nothing -- the consumer's deadline
+		 * handles the rest.
+		 */
+		if (d == NULL || (uint32) msg.part_index != d->next_offset)
+		{
+			ANSER_DEBUG("anser: QD ignoring NEXT cond=%u from seg%d (offset %d, channel %s)",
+						msg.key.condition_id, sender, msg.part_index,
+						chan == NULL ? "gone" : "mismatched");
+		}
+		else
+			anser_disp_send_chunk(chan, d);
+
+		MemoryContextSwitchTo(oldcxt);
+		return true;
+	}
+
 	chan = anser_disp_lookup(&msg.key, true);
 	if (chan == NULL)
 	{
@@ -442,39 +600,59 @@ AnserDispatchNotifyHandler(struct CdbDispatchResult *dispatchResult,
 	if (msg.kind == ANSER_WIRE_KIND_SUBSCRIBE)
 	{
 		PGconn	   *conn = dr->segdbDesc->conn;
+		AnserDispDelivery *d;
+
+		if (!anser_disp_track_conn(conn))
+		{
+			MemoryContextSwitchTo(oldcxt);
+			return true;
+		}
+
+		/*
+		 * A second subscribe from the same connection restarts its delivery
+		 * from the beginning -- it cannot mean anything else, because a
+		 * consumer subscribes once per wait.
+		 */
+		d = anser_disp_delivery_find(chan, conn);
+		if (d != NULL)
+			anser_disp_delivery_drop(chan, d);
+
+		d = (AnserDispDelivery *) palloc0(sizeof(AnserDispDelivery));
+		d->conn = conn;
+		d->segindex = sender;
+		d->chunk_size = anser_disp_chunk_size(conn);
+		d->next_offset = 0;
+		d->started = false;
+		chan->deliveries = lappend(chan->deliveries, d);
+		d->channel = chan;
+		dlist_push_head(&AnserDispDeliveries, &d->active_node);
 
 		/*
 		 * A consumer can subscribe after the channel is already complete --
 		 * producers on other segments may well have finished first -- so
-		 * deliver immediately in that case rather than recording interest.
+		 * start its delivery immediately in that case.
 		 */
 		ANSER_DEBUG("anser: QD subscribe cond=%u from seg%d (channel %s)",
 					msg.key.condition_id, sender,
 					chan->complete ? "complete, delivering now" : "still collecting");
 		if (chan->complete)
-			(void) anser_disp_push(conn, chan);
-		else
-			chan->subscribers = lappend(chan->subscribers, conn);
+			anser_disp_send_chunk(chan, d);
 	}
 	else if (msg.kind == ANSER_WIRE_KIND_UNSUBSCRIBE)
 	{
 		PGconn	   *conn = dr->segdbDesc->conn;
+		AnserDispDelivery *d = anser_disp_delivery_find(chan, conn);
 
 		/*
 		 * The consumer ran out of time and is no longer reading for us.
-		 * Delivering anyway would put 1-64 MB on a connection whose other end
-		 * is busy elsewhere, and the message would then have to be recognised
-		 * and skipped by whatever reads it next.
-		 *
-		 * This narrows the window rather than closing it: the withdrawal can
-		 * arrive while delivery is already under way, which is why the push
-		 * never blocks and why every reader of this connection still has to
-		 * tolerate a message that is not its own.
+		 * Dropping the delivery stops the flow at the chunk boundary: at most
+		 * one whole chunk is in flight, and the reader discards it.
 		 */
-		ANSER_DEBUG("anser: QD unsubscribe cond=%u from seg%d (%d subscriber(s) before)",
+		ANSER_DEBUG("anser: QD unsubscribe cond=%u from seg%d (%d deliver(ies) before)",
 					msg.key.condition_id, sender,
-					list_length(chan->subscribers));
-		chan->subscribers = list_delete_ptr(chan->subscribers, conn);
+					list_length(chan->deliveries));
+		if (d != NULL)
+			anser_disp_delivery_drop(chan, d);
 		AnserDispUnsubscribes++;
 	}
 	else if (msg.kind == ANSER_WIRE_KIND_PART)
@@ -642,12 +820,11 @@ anser_disp_apply_part(AnserDispChannel *chan, const AnserPayloadOps *ops,
 	}
 }
 
-/* Push the finished channel to everyone waiting, then forget them. */
+/* Start every delivery that has not started yet; deliveries stay on the
+ * channel until their last chunk. */
 static void
 anser_disp_deliver(AnserDispChannel *chan)
 {
-	ListCell   *lc;
-
 	/*
 	 * Hold the delivery back, so a test can let every consumer reach its
 	 * deadline first and then be delivered to anyway.  That ordering is what
@@ -658,33 +835,121 @@ anser_disp_deliver(AnserDispChannel *chan)
 	SIMPLE_FAULT_INJECTOR("anser_before_deliver");
 
 	ANSER_DEBUG("anser: QD delivering cond=%u to %d subscriber(s)",
-				chan->key.condition_id, list_length(chan->subscribers));
-	foreach(lc, chan->subscribers)
-		(void) anser_disp_push((PGconn *) lfirst(lc), chan);
+				chan->key.condition_id, list_length(chan->deliveries));
 
-	list_free(chan->subscribers);
-	chan->subscribers = NIL;
+	/*
+	 * send_chunk() can drop the delivery it is given (write failure), so this
+	 * cannot be a foreach(): restart from the first unstarted delivery each
+	 * time.  Every call either starts or removes one, so it terminates.
+	 */
+	for (;;)
+	{
+		ListCell   *lc;
+		AnserDispDelivery *d = NULL;
+
+		foreach(lc, chan->deliveries)
+		{
+			AnserDispDelivery *e = (AnserDispDelivery *) lfirst(lc);
+
+			if (!e->started)
+			{
+				d = e;
+				break;
+			}
+		}
+		if (d == NULL)
+			break;
+		anser_disp_send_chunk(chan, d);
+	}
+}
+
+/* The delivery of one connection, or NULL. */
+static AnserDispDelivery *
+anser_disp_delivery_find(AnserDispChannel *chan, PGconn *conn)
+{
+	ListCell   *lc;
+
+	foreach(lc, chan->deliveries)
+	{
+		AnserDispDelivery *d = (AnserDispDelivery *) lfirst(lc);
+
+		if (d->conn == conn)
+			return d;
+	}
+	return NULL;
+}
+
+/* Forget one delivery: the consumer is gone or the delivery is done. */
+static void
+anser_disp_delivery_drop(AnserDispChannel *chan, AnserDispDelivery *d)
+{
+	chan->deliveries = anser_disp_list_forget(chan->deliveries, d);
+	dlist_delete(&d->active_node);
+	pfree(d);
 }
 
 /*
- * Write one merged payload to a QE as a GP_SIDEBAND_MESSAGE.
+ * The chunk size for one connection, chosen once when the delivery starts.
+ * The debug GUC wins so a test can force hundreds of round trips; otherwise
+ * halve the send buffer (see the constants' comment) and clamp into range.
+ */
+static int
+anser_disp_chunk_size(PGconn *conn)
+{
+	int			sndbuf = 0;
+	socklen_t	len = sizeof(sndbuf);
+	int			size;
+
+	if (gp_anser_debug_delivery_chunk_bytes > 0)
+		return Max(gp_anser_debug_delivery_chunk_bytes, ANSER_CHUNK_MIN);
+
+	/*
+	 * conn can be NULL here: the dispatcher NULLs it after PQfinish on the
+	 * error/FTS paths and treats that as a dead connection
+	 * (cdbconn_isBadConnection), so do not rely on the notify handler only
+	 * seeing live ones.
+	 */
+	if (conn != NULL && conn->sock != PGINVALID_SOCKET &&
+		getsockopt(conn->sock, SOL_SOCKET, SO_SNDBUF, &sndbuf, &len) == 0 &&
+		sndbuf > 0)
+		size = sndbuf / 2;
+	else
+		size = ANSER_CHUNK_MIN;
+
+	return Min(ANSER_CHUNK_MAX, Max(ANSER_CHUNK_MIN, size));
+}
+
+/*
+ * Write the next chunk of one delivery as one GP_SIDEBAND_MESSAGE.
+ *
+ * The chunk is sized to fit an empty send buffer, so the flush below places
+ * it whole and nothing is left queued.  The insurance for a wrong estimate is
+ * a bounded wait -- one second, no CHECK_FOR_INTERRUPTS and no dispatcher
+ * calls, because this runs inside the dispatcher's notify processing -- after
+ * which the connection goes on the pending list for AnserDispatchFlushPending()
+ * and the delivery is over: the consumer's own deadline ends its wait.
  *
  * Delivery is per consumer: a write that fails costs that one segment its
- * filter (it will time out and run unfiltered) and leaves the others alone.
- * This is the same "try to reach every consumer" rule the shared-memory send
- * service followed.
+ * filter and leaves the others alone.
  */
-static bool
-anser_disp_push(PGconn *conn, AnserDispChannel *chan)
+static void
+anser_disp_send_chunk(AnserDispChannel *chan, AnserDispDelivery *d)
 {
+	PGconn	   *conn = d->conn;
 	int			flags = chan->cancelled ? ANSER_WIRE_F_CANCELLED : 0;
+	uint32		total_len = chan->cancelled ? 0 : (uint32) chan->payload_len;
+	uint32		offset = chan->cancelled ? 0 : d->next_offset;
+	int			chunk_len = chan->cancelled ? 0 :
+		(int) Min((uint32) d->chunk_size, total_len - offset);
 	int			keylen = (int) strlen(chan->key.condition_key);
-	int			paylen = chan->cancelled ? 0 : (int) chan->payload_len;
-	pg_crc32c	crc;
+	const char *chunk = chunk_len > 0 ? chan->payload + offset : NULL;
 	char		paytype;
+	pg_crc32c	crc;
+	bool		first = !d->started;
+	bool		last;
 
 	if (!anser_conn_ok(conn))
-		return false;
+		goto out;
 
 	/*
 	 * A channel that was cancelled before any part arrived has no type.  That
@@ -695,15 +960,14 @@ anser_disp_push(PGconn *conn, AnserDispChannel *chan)
 
 	crc = AnserWirePushCrc(paytype, chan->key.condition_id,
 						   chan->key.gp_session_id, chan->key.gp_command_count,
-						   (uint32) flags, chan->key.condition_key, keylen,
-						   chan->payload, paylen);
+						   (uint32) flags, total_len, offset,
+						   chan->key.condition_key, keylen,
+						   chunk, chunk_len);
 
 	/*
 	 * Raw binary: pqPutnchar performs no encoding conversion, so unlike the
-	 * QE -> QD direction this needs no base64.  The session and command ids go
-	 * out with every delivery: condition_key restarts at the same value for
-	 * every statement, so a parked delivery is only claimable by the command
-	 * it was pushed for.
+	 * QE -> QD direction this needs no base64.  These calls only grow the
+	 * output buffer, so nothing here can block.
 	 */
 	if (pqPutMsgStart(GP_SIDEBAND_MESSAGE, conn) < 0 ||
 		pqPutInt((int) paytype, 4, conn) < 0 ||
@@ -712,55 +976,99 @@ anser_disp_push(PGconn *conn, AnserDispChannel *chan)
 		pqPutInt((int) chan->key.gp_session_id, 4, conn) < 0 ||
 		pqPutInt((int) chan->key.gp_command_count, 4, conn) < 0 ||
 		pqPutInt(flags, 4, conn) < 0 ||
+		pqPutInt((int) total_len, 4, conn) < 0 ||
+		pqPutInt((int) offset, 4, conn) < 0 ||
 		pqPutInt(keylen, 4, conn) < 0 ||
 		pqPutnchar(chan->key.condition_key, keylen, conn) < 0 ||
-		pqPutInt(paylen, 4, conn) < 0 ||
-		(paylen > 0 && pqPutnchar(chan->payload, paylen, conn) < 0))
+		pqPutInt(chunk_len, 4, conn) < 0 ||
+		(chunk_len > 0 && pqPutnchar(chunk, chunk_len, conn) < 0))
 	{
 		elog(LOG, "anser: could not deliver filter for condition %u: %s",
 			 chan->key.condition_id, anser_conn_error(conn));
-		return false;
+		goto out;
 	}
 
-	/*
-	 * Nothing above this point can block -- those calls only grow the output
-	 * buffer.  The two that can are avoided deliberately, because this runs
-	 * inside the dispatcher loop and a merged filter is 1-64 MB headed for a
-	 * peer that may have stopped reading: a consumer that gave up on its
-	 * deadline stays subscribed until it can say otherwise.
-	 *
-	 * pqPutMsgEnd() flushes by itself once the buffer passes 8 kB, and a
-	 * blocking pqFlush() then waits in pqWait() with no deadline and no
-	 * CHECK_FOR_INTERRUPTS.  Either one strands the coordinator: it stops
-	 * serving every other segment, and the query cannot even be cancelled.
-	 *
-	 * So queue the bytes and let the dispatcher's own poll() place them while
-	 * the peer's command runs.  When it ends with bytes still queued the
-	 * message is torn, and the next dispatch would overwrite the buffer, so
-	 * record the connection for AnserDispatchFlushPending() to complete or
-	 * poison before the gang is reused.
-	 */
 	pqPutMsgEndNoAutoFlush(conn);
 	if (pqFlushNonBlocking(conn) < 0)
 	{
 		elog(LOG, "anser: could not deliver filter for condition %u: %s",
 			 chan->key.condition_id, anser_conn_error(conn));
-		return false;
+		goto out;
 	}
 
-	if (conn->outCount > 0 &&
-		!list_member_ptr(AnserDispPendingPush, conn))
+	if (conn->outCount > 0)
 	{
-		MemoryContext oldcxt = MemoryContextSwitchTo(TopMemoryContext);
+		/*
+		 * The chunk was meant to fit the buffer whole.  It did not, so give
+		 * the peer a bounded moment to drain: it just asked for this chunk,
+		 * so it is alive and reading.  Over the deadline the connection is
+		 * torn and goes on the pending list.
+		 */
+		instr_time	start;
+		instr_time	now;
 
-		AnserDispPendingPush = lappend(AnserDispPendingPush, conn);
-		MemoryContextSwitchTo(oldcxt);
+		INSTR_TIME_SET_CURRENT(start);
+
+		while (conn->outCount > 0)
+		{
+			if (pqFlushNonBlocking(conn) < 0)
+				break;
+			if (conn->outCount == 0)
+				break;
+			INSTR_TIME_SET_CURRENT(now);
+			INSTR_TIME_SUBTRACT(now, start);
+			if (INSTR_TIME_GET_MILLISEC(now) >= 1000)
+				break;
+
+			(void) WaitLatchOrSocket(MyLatch,
+									 WL_LATCH_SET | WL_SOCKET_WRITEABLE |
+									 WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
+									 anser_conn_socket(conn), 100L /* ms */,
+									 PG_WAIT_EXTENSION);
+			ResetLatch(MyLatch);
+		}
+
+		if (conn->outCount > 0 &&
+			!list_member_ptr(AnserDispPendingPush, conn))
+		{
+			MemoryContext savecxt = MemoryContextSwitchTo(TopMemoryContext);
+
+			AnserDispPendingPush = lappend(AnserDispPendingPush, conn);
+			MemoryContextSwitchTo(savecxt);
+		}
+		if (conn->outCount > 0)
+		{
+			elog(LOG, "anser: cond=%u chunk did not flush in 1 s, %d bytes queued; ending the delivery",
+				 chan->key.condition_id, conn->outCount);
+			goto out;
+		}
 	}
 
-	ANSER_DEBUG("anser: QD pushed cond=%u type=%c bytes=%d cancelled=%d",
-				chan->key.condition_id, paytype, paylen,
-				chan->cancelled ? 1 : 0);
-	return true;
+	d->started = true;
+	d->next_offset = offset + (uint32) chunk_len;
+
+	/* Log only the first and last chunk; a delivery is hundreds of them. */
+	last = chan->cancelled || d->next_offset >= total_len;
+	if (first || last)
+		ANSER_DEBUG("anser: QD pushed cond=%u type=%c to seg%d chunk=[%u,%u) of %u cancelled=%d chunk_size=%d",
+					chan->key.condition_id, paytype, d->segindex,
+					offset, d->next_offset, total_len,
+					chan->cancelled ? 1 : 0, d->chunk_size);
+	if (last)
+	{
+		/*
+		 * Counted only when a filter really travelled: a cancelled delivery
+		 * tells the consumer to run unfiltered, so it must not look like an
+		 * arrival to a test.
+		 */
+		if (!chan->cancelled)
+			AnserDispDeliveriesCompleted++;
+		goto out;
+	}
+	return;
+
+out:
+	anser_disp_delivery_drop(chan, d);
 }
 
 /*
@@ -808,7 +1116,8 @@ AnserWireParse(const char *msg, AnserWireMsg *out)
 
 	if (kind != ANSER_WIRE_KIND_PART &&
 		kind != ANSER_WIRE_KIND_SUBSCRIBE &&
-		kind != ANSER_WIRE_KIND_UNSUBSCRIBE)
+		kind != ANSER_WIRE_KIND_UNSUBSCRIBE &&
+		kind != ANSER_WIRE_KIND_NEXT)
 		return false;
 	if (keylen >= ANSER_CONDITION_KEY_SIZE)
 		return false;
