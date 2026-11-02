@@ -598,11 +598,6 @@ CREATE INDEX brin_test_multi_a_idx ON brin_test_multi USING brin (a) WITH (pages
 CREATE INDEX brin_test_multi_b_idx ON brin_test_multi USING brin (b) WITH (pages_per_range = 2);
 VACUUM ANALYZE brin_test_multi;
 -- Ensure brin index is used when columns are perfectly correlated
---start_ignore
---GPDB_14_MERGE_FIXME
---It should choose bitmap index scan, but seq scan here, which is caused by
---inaccurate index correlation calculation in compute_scalar_stats.
---end_ignore
 EXPLAIN (COSTS OFF) SELECT * FROM brin_test_multi WHERE a = 1;
                 QUERY PLAN                
 ------------------------------------------

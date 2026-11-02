@@ -3914,11 +3914,6 @@ EndCopyFrom(CopyFromState cstate)
 /*
  * Initialize data loader parsing state
  */
-/*
-* GPDB_14_MERGE_FIXME:
-* Do we need this function ?
-* Check comments in this function.
-*/
 static void CopyInitDataParser(CopyFromState cstate)
 {
 	MemoryContext oldcontext = MemoryContextSwitchTo(cstate->copycontext);

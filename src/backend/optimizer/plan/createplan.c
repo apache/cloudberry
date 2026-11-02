@@ -3172,10 +3172,6 @@ create_modifytable_plan(PlannerInfo *root, ModifyTablePath *best_path)
 	Path	   *subpath = best_path->subpath;
 	Plan	   *subplan;
 
-	/*
-	 * GPDB_14_MERGE_FIXME: subpaths is removed from ModifyTablePath
-	 * need to handle multiple subpaths for sri?
-	 */
 	RangeTblEntry *rte = planner_rt_fetch(best_path->nominalRelation, root);
 	subplan = cdbpathtoplan_create_sri_plan(rte, root, subpath, CP_EXACT_TLIST);
 	if (!subplan)

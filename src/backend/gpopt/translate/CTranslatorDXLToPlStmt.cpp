@@ -5518,7 +5518,6 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 	dml->canSetTag = true;	// FIXME
 	dml->nominalRelation = index;
 	dml->resultRelations = ListMake1Int(index);
-	// GPDB_14_MERGE_FIXME: fix split update and missing partColsUpdated
 	dml->rootRelation = md_rel->IsPartitioned() ? index : 0;
 	//dml->plans = ListMake1(child_plan);
 	dml->updateColnosLists = ListMake1(updateCols);

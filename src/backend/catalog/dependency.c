@@ -1313,8 +1313,8 @@ DropObjectById(const ObjectAddress *object)
 	HeapTuple	tup;
 
 	/*
-	* GPDB_14_MERGE_FIXME: specific for GPDB's pg_stat_last_* tables.
-	* TODO: check more objects as api changed.
+	* GPDB: track the drop for the pg_stat_last_* tables. Other object types do
+	* this in their own drop functions.
 	*/
 	if ((Gp_role == GP_ROLE_DISPATCH) && (OCLASS_TRANSFORM == getObjectClass(object)))
 		MetaTrackDropObject(TransformRelationId, object->objectId);

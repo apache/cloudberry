@@ -5579,15 +5579,7 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 			pg_type_multirange_array_oid = atooid(PQgetvalue(res, 0, PQfnumber(res, "typarray")));
 			PQclear(res);
 
-			/*
-			* GPDB_14_MERGE_FIXME
-			* Fetch namespaceoid and typename of multirange and multirangearray.
-			* 1.Can pg_type_multirange_oid be invalid?(asume no).
-			* 2.Can pg_type_multirange_array_oid be invalid?(asume possible).
-			* Asset them both now, need to check.
-			*/
-			//Assert(!OidIsValid(pg_type_multirange_oid));
-			//Assert(!OidIsValid(pg_type_multirange_array_oid));
+			/* Fetch namespace OID and type name of the multirange and its array type */
 
 			printfPQExpBuffer(upgrade_query,
 							  "SELECT t.typnamespace, t.typname "
@@ -5634,7 +5626,6 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 						  pg_type_multirange_typename);
 		appendPQExpBufferStr(upgrade_buffer,
 							 "\n-- For binary upgrade, must preserve multirange pg_type array oid\n");
-		/* GPDB_14_MERGE_FIXME: new function here, check if multiple params are needed */
 		appendPQExpBuffer(upgrade_buffer,
 						  "SELECT pg_catalog.binary_upgrade_set_next_multirange_array_pg_type_oid('%u'::pg_catalog.oid, "
 						  "'%u'::pg_catalog.oid, $$%s$$::text);\n\n",
@@ -5799,9 +5790,8 @@ binary_upgrade_set_pg_class_oids_impl(Archive *fout,
 									  char *relname_override)
 {
 	/*
-	* GPDB_14_MERGE_FIXME:
-	* try to keep the same with upstream as much as possible,
-	* but put variables here for more clear. 
+	* GPDB: keep this as close to upstream as possible, but declare the variables
+	* here for clarity.
 	*/
 	PQExpBuffer upgrade_query = createPQExpBuffer();
 	PGresult   *upgrade_res;
@@ -5826,7 +5816,7 @@ binary_upgrade_set_pg_class_oids_impl(Archive *fout,
 	RelFileNumber toast_relfilenumber;
 	RelFileNumber toast_index_relfilenumber;
 
-	/* GPDB_14_MERGE_FIXME: we must put this sql here for variables which will befetched later by other sqls */
+	/* GPDB: this query must come first, later queries use the values it fetches */
 	appendPQExpBuffer(upgrade_query,
 					  "SELECT c.reltoastrelid, c.relkind, c.relfilenode, t.relnamespace AS toast_relnamespace, t.relname AS toast_relname, "
 					  "       ti.relfilenode AS toast_index_relfilenode,"
@@ -9501,7 +9491,7 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 	int			i_attmissingval;
 	int			i_atthasdef;
 
-	/* GPDB_14_MERGE_FIXME: GPDB specific column, need to keep this for easy to use*/
+	/* GPDB specific column */
 	int			i_attencoding;
 
 	/*
@@ -13035,17 +13025,6 @@ dumpFunc(Archive *fout, const FuncInfo *finfo)
 	char	  **configitems = NULL;
 	int			nconfigitems = 0;
 	const char *keyword;
-
-	/*
-	* GPDB_14_MERGE_FIXME: additional columns in GPDB
-	* these are added except Version >= 90500 which may
-	* be a bug.
-	* The new sqls are added in decent version order.
-	* So we can't handle addition values like before.
-	* These variables are handled differently base on ranges:
-	* Version:
-	* < 80300, >= 80300 < 90200, >= 90200
-	*/
 
 	char	   *callbackfunc;
 	char	   *prodataaccess;
