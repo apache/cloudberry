@@ -6336,6 +6336,34 @@ ListAllGxid(void)
 }
 
 /*
+ * This function returns a list of the pids of all backends whose
+ * subtransaction cache has overflowed.  Prepared transactions are skipped,
+ * as they have no backend.
+ */
+List *
+ListSuboverflowedPids(void)
+{
+	ProcArrayStruct *arrayP = procArray;
+	List		*pids = NIL;
+	int			index;
+
+	LWLockAcquire(ProcArrayLock, LW_SHARED);
+
+	/* subxidStates is indexed like pgprocnos, not by pgprocno */
+	for (index = 0; index < arrayP->numProcs; index++)
+	{
+		PGPROC	   *proc = &allProcs[arrayP->pgprocnos[index]];
+
+		if (ProcGlobal->subxidStates[index].overflowed && proc->pid != 0)
+			pids = lappend_int(pids, proc->pid);
+	}
+
+	LWLockRelease(ProcArrayLock);
+
+	return pids;
+}
+
+/*
  * This function returns true if the gid is an ongoing dtx transaction.
  */
 bool

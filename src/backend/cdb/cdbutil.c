@@ -52,6 +52,7 @@
 #include "cdb/cdbfts.h"
 #include "storage/ipc.h"
 #include "storage/proc.h"
+#include "storage/procarray.h"
 #include "postmaster/fts.h"
 #include "postmaster/postmaster.h"
 #include "catalog/namespace.h"
@@ -2059,18 +2060,16 @@ PG_FUNCTION_INFO_V1(gp_get_suboverflowed_backends);
 Datum
 gp_get_suboverflowed_backends(PG_FUNCTION_ARGS)
 {
-	int 			i;
+	List	   *pids;
+	ListCell   *lc;
 	ArrayBuildState *astate = NULL;
 
-	LWLockAcquire(ProcArrayLock, LW_SHARED);
-	for (i = 0; i < ProcGlobal->allProcCount; i++)
-	{
-		if (ProcGlobal->subxidStates[i].overflowed)
-			astate = accumArrayResult(astate,
-									  Int32GetDatum(ProcGlobal->allProcs[i].pid),
-									  false, INT4OID, CurrentMemoryContext);
-	}
-	LWLockRelease(ProcArrayLock);
+	pids = ListSuboverflowedPids();
+	foreach(lc, pids)
+		astate = accumArrayResult(astate,
+								  Int32GetDatum(lfirst_int(lc)),
+								  false, INT4OID, CurrentMemoryContext);
+	list_free(pids);
 
 	if (astate)
 		PG_RETURN_DATUM(makeArrayResult(astate,
@@ -4258,18 +4257,16 @@ PG_FUNCTION_INFO_V1(gp_get_suboverflowed_backends);
 Datum
 gp_get_suboverflowed_backends(PG_FUNCTION_ARGS)
 {
-	int 			i;
+	List	   *pids;
+	ListCell   *lc;
 	ArrayBuildState *astate = NULL;
 
-	LWLockAcquire(ProcArrayLock, LW_SHARED);
-	for (i = 0; i < ProcGlobal->allProcCount; i++)
-	{
-		if (ProcGlobal->subxidStates[i].overflowed)
-			astate = accumArrayResult(astate,
-									  Int32GetDatum(ProcGlobal->allProcs[i].pid),
-									  false, INT4OID, CurrentMemoryContext);
-	}
-	LWLockRelease(ProcArrayLock);
+	pids = ListSuboverflowedPids();
+	foreach(lc, pids)
+		astate = accumArrayResult(astate,
+								  Int32GetDatum(lfirst_int(lc)),
+								  false, INT4OID, CurrentMemoryContext);
+	list_free(pids);
 
 	if (astate)
 		PG_RETURN_DATUM(makeArrayResult(astate,
