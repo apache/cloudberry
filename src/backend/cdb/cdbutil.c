@@ -953,6 +953,20 @@ cleanupQE(SegmentDatabaseDescriptor *segdbDesc)
 	if (cdbconn_isBadConnection(segdbDesc))
 		return false;
 
+	/*
+	 * Unflushed output bytes at cleanup time can only be a partially
+	 * delivered asynchronous payload (an Anser sideband message; command
+	 * traffic is fully flushed before cleanup runs).  The peer may already
+	 * have read a prefix of it, and nobody will flush the rest now that the
+	 * command is over (checkDispatchResult only flushes connections whose
+	 * command is still running), so the connection is poisoned for reuse:
+	 * the next dispatch would overwrite the remainder of the buffer
+	 * (PQsendGpQuery_shared) and the peer would misread its stream.  Decline
+	 * to recycle it; a fresh connection is created on the next dispatch.
+	 */
+	if (segdbDesc->conn->outCount > 0)
+		return false;
+
 	/* if segment is down, the gang can not be reused */
 	if (FtsIsSegmentDown(segdbDesc->segment_database_info))
 		return false;
@@ -3360,6 +3374,20 @@ cleanupQE(SegmentDatabaseDescriptor *segdbDesc)
 		return false;
 
 	if (cdbconn_isBadConnection(segdbDesc))
+		return false;
+
+	/*
+	 * Unflushed output bytes at cleanup time can only be a partially
+	 * delivered asynchronous payload (an Anser sideband message; command
+	 * traffic is fully flushed before cleanup runs).  The peer may already
+	 * have read a prefix of it, and nobody will flush the rest now that the
+	 * command is over (checkDispatchResult only flushes connections whose
+	 * command is still running), so the connection is poisoned for reuse:
+	 * the next dispatch would overwrite the remainder of the buffer
+	 * (PQsendGpQuery_shared) and the peer would misread its stream.  Decline
+	 * to recycle it; a fresh connection is created on the next dispatch.
+	 */
+	if (segdbDesc->conn->outCount > 0)
 		return false;
 
 	/* if segment is down, the gang can not be reused */
