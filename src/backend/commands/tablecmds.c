@@ -9532,20 +9532,8 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		rawEnt = (RawColumnDefault *) palloc(sizeof(RawColumnDefault));
 		rawEnt->attnum = attribute.attnum;
 		rawEnt->raw_default = copyObject(colDef->raw_default);
-
-		rawEnt->hasCookedMissingVal = colDef->hasCookedMissingVal;
-		rawEnt->missingVal = colDef->missingVal;
-		rawEnt->missingIsNull = colDef->missingIsNull;
-
-		/*
-		 * Attempt to skip a complete table rewrite by storing the specified
-		 * DEFAULT value outside of the heap.  This may be disabled inside
-		 * AddRelationNewConstraints if the optimization cannot be applied.
-		 *
-		 * In GPDB, AddRelationNewConstraints will also set rawEnt->missingVal/IsNull
-		 */
-		rawEnt->missingMode = (!colDef->generated);
-
+		rawEnt->missingMode = false;	/* XXX vestigial */
+		rawEnt->hasCookedMissingVal = false;
 		rawEnt->generated = colDef->generated;
 
 		/*
@@ -9555,38 +9543,8 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		AddRelationNewConstraints(rel, list_make1(rawEnt), NIL,
 								  false, true, false, NULL);
 
-		/* copy back the cooked attmissingval for dispatch */
-		colDef->hasCookedMissingVal = rawEnt->hasCookedMissingVal;
-		colDef->missingVal = rawEnt->missingVal;
-		colDef->missingIsNull = rawEnt->missingIsNull;
-
 		/* Make the additional catalog changes visible */
 		CommandCounterIncrement();
-
-		/*
-		 * Did the request for a missing value work? If not we'll have to do a
-		 * rewrite
-		 */
-		/*
-		 * GPDB_12_MERGE_FIXME: This optimization to avoid rewriting a table
-		 * is based on the assumption that at the time of reading tuples from
-		 * this table, it is possible to determine if the tuple does not
-		 * contain the value for the new column being added.  In that case,
-		 * the missing value would be replaced with the default value from
-		 * pg_attrdef catalog table.
-		 *
-		 * The optimization cannot be applied to appendoptimized row-oriented
-		 * tables because the number of attributes is not recorded on disk.
-		 * MemTuples only record the tuple length followed by the tuple data.
-		 * This information is not sufficient to determine if the tuple
-		 * contains a missing column.
-		 *
-		 * A possible solution involves recoding the number of attributes for
-		 * each tuple or for each varblock, so that this optimization can be
-		 * applied on similar lines as heap_getattr.
-		 */
-		if (!rawEnt->missingMode || RelationIsAoRows(rel))
-			tab->rewrite |= AT_REWRITE_DEFAULT_VAL;
 	}
 
 	/*
@@ -9734,17 +9692,54 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 				!has_domain_constraints &&
 				!contain_volatile_functions((Node *) defval))
 			{
-				EState	   *estate;
+				EState	   *estate = NULL;
 				ExprState  *exprState;
 				Datum		missingval;
 				bool		missingIsNull;
 
-				/* Evaluate the default expression */
-				estate = CreateExecutorState();
-				exprState = ExecPrepareExpr(defval, estate);
-				missingval = ExecEvalExpr(exprState,
-										  GetPerTupleExprContext(estate),
-										  &missingIsNull);
+				/*
+				 * GPDB: a stable default such as now() can evaluate to a
+				 * different value on each segment, so the QD evaluates it
+				 * once and dispatches the result in the ColumnDef as a
+				 * one-element array.  QEs store that value instead of
+				 * evaluating the expression themselves.
+				 */
+				if (colDef->hasCookedMissingVal)
+				{
+					missingIsNull = colDef->missingIsNull;
+					if (!missingIsNull)
+					{
+						int			idx = 1;
+
+						missingval = array_get_element(colDef->missingVal,
+													   1, &idx, -1,
+													   attribute.attlen,
+													   attribute.attbyval,
+													   attribute.attalign,
+													   &missingIsNull);
+					}
+				}
+				else
+				{
+					/* Evaluate the default expression */
+					estate = CreateExecutorState();
+					exprState = ExecPrepareExpr(defval, estate);
+					missingval = ExecEvalExpr(exprState,
+											  GetPerTupleExprContext(estate),
+											  &missingIsNull);
+
+					/* Remember the value so that it is dispatched to QEs */
+					colDef->hasCookedMissingVal = true;
+					colDef->missingIsNull = missingIsNull;
+					if (!missingIsNull)
+						colDef->missingVal =
+							PointerGetDatum(construct_array(&missingval, 1,
+															attribute.atttypid,
+															attribute.attlen,
+															attribute.attbyval,
+															attribute.attalign));
+				}
+
 				/* If it turns out NULL, nothing to do; else store it */
 				if (!missingIsNull)
 				{
@@ -9753,7 +9748,8 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 					CommandCounterIncrement();
 					has_missing = true;
 				}
-				FreeExecutorState(estate);
+				if (estate)
+					FreeExecutorState(estate);
 			}
 			else
 			{
@@ -9919,6 +9915,25 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 						lockmode, cur_pass, context);
 
 		table_close(childrel, NoLock);
+	}
+
+	/*
+	 * GPDB: if this table has no storage (e.g. a partitioned table), the
+	 * missing value was first evaluated on a child, in childcmd.  Only *cmd
+	 * is dispatched to QEs, so copy the value back to it; otherwise each QE
+	 * would evaluate the default on its own.
+	 */
+	if (!recursing && childcmd != *cmd)
+	{
+		ColumnDef  *origDef = castNode(ColumnDef, (*cmd)->def);
+		ColumnDef  *childDef = castNode(ColumnDef, childcmd->def);
+
+		if (childDef->hasCookedMissingVal && !origDef->hasCookedMissingVal)
+		{
+			origDef->hasCookedMissingVal = true;
+			origDef->missingIsNull = childDef->missingIsNull;
+			origDef->missingVal = childDef->missingVal;
+		}
 	}
 
 	ObjectAddressSubSet(address, RelationRelationId, myrelid, newattnum);
