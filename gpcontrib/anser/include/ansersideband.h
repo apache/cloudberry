@@ -68,15 +68,23 @@ struct pgNotify;				/* #include "libpq-fe.h" */
 #define ANSER_NOTIFY_CHANNEL	"anser_rf"
 
 /* First token of every QE -> QD payload; bump when the format changes. */
-#define ANSER_WIRE_TAG			"anser3"
+#define ANSER_WIRE_TAG			"anser4"
 
 /*
  * Message kinds (QE -> QD): what the message does.  What it carries is a
  * separate field, the payload type -- see anserpayload.h.
+ *
+ * NEXT is the flow-control request of the chunked delivery: the coordinator
+ * pushes one chunk per GP_SIDEBAND_MESSAGE and waits for the consumer to ask
+ * for the following one, so no more than one chunk -- always smaller than the
+ * connection's send buffer -- is ever in flight.  In a NEXT, part_index is
+ * the offset the consumer wants next (what it has received so far),
+ * total_parts is 0, and there is no body.
  */
 #define ANSER_WIRE_KIND_PART		'P'		/* a producer's serialized part */
 #define ANSER_WIRE_KIND_SUBSCRIBE	'S'		/* a consumer registering interest */
 #define ANSER_WIRE_KIND_UNSUBSCRIBE	'U'		/* ... and withdrawing it again */
+#define ANSER_WIRE_KIND_NEXT		'N'		/* request the next chunk; see above */
 
 /* Flag bits, shared by both directions. */
 #define ANSER_WIRE_F_CANCELLED	0x0001
@@ -85,7 +93,7 @@ struct pgNotify;				/* #include "libpq-fe.h" */
  * QE -> QD header: fixed width, so the key and body start at known offsets and
  * nothing about their contents can affect parsing.
  *
- *   anser3 K T SSSSSSSSSS CCCCCCCCCC DDDDDDDDDD PPPPPPPPPP TTTTTTTTTT FFFF KKKK BBBBBBBBBB XXXXXXXX
+ *   anser4 K T SSSSSSSSSS CCCCCCCCCC DDDDDDDDDD PPPPPPPPPP TTTTTTTTTT FFFF KKKK BBBBBBBBBB XXXXXXXX
  *   ^tag   ^ ^  session    command    condition  part       total      ^    ^    bodylen    crc
  *          |  \ payload type                                       flags    keylen
  *           \ kind
@@ -175,26 +183,34 @@ extern PGDLLEXPORT bool AnserWireCheckCrc(const AnserWireMsg *msg, const void *b
 							  Size body_len);
 
 /*
- * QD -> QE push: raw binary, written with pqPutInt/pqPutnchar.
+ * QD -> QE push: raw binary, written with pqPutInt/pqPutnchar.  The payload
+ * travels in chunks, one message each, and the coordinator sends the next one
+ * only when the consumer asks with a NEXT -- so a delivery is never more than
+ * one whole chunk deep on the connection, and the reader can walk away between
+ * chunks without leaving a torn message behind.
  *
  *   payload_type | crc32c | condition_id | session_id | command_count |
- *   flags | keylen | key | bodylen | body
+ *   flags | total_len | offset | keylen | key | chunk_len | chunk
  *
- * The session and command ids are what lets a parked delivery be told apart
- * from the current command's: condition_key restarts at the same value for
- * every statement, so the consumer must match the whole identity, not the key
- * alone.
+ * total_len is the full size of the merged payload and offset is where this
+ * chunk starts in it; a cancelled delivery is a single chunk with
+ * F_CANCELLED, total_len = 0 and offset = 0.  The session and command ids are
+ * what lets a parked delivery be told apart from the current command's:
+ * condition_key restarts at the same value for every statement, so the
+ * consumer must match the whole identity, not the key alone.
  *
- * with each field a 4-byte integer except the key and body.  The CRC covers all
- * of the other fields in that order, the integers in network byte order, so it
- * validates the routing information as well as the payload; the body is
- * included only when the payload type says so.  Both ends compute it through
- * this one function so the two cannot drift apart.  It is implemented in
- * ansersideband.c, beside the reader that verifies it.
+ * Each field is a 4-byte integer except the key and the chunk.  The CRC covers
+ * all of the other fields in that order, the integers in network byte order,
+ * so it validates the routing information, the chunk's place in the payload,
+ * and the payload bytes themselves; the chunk is included only when the
+ * payload type says so.  Both ends compute it through this one function so the
+ * two cannot drift apart.  It is implemented in ansersideband.c, beside the
+ * reader that verifies it.
  */
 extern PGDLLEXPORT pg_crc32c AnserWirePushCrc(char payload_type, uint32 condition_id,
 								  uint32 session_id, uint32 command_count,
-								  uint32 flags, const char *key, int keylen,
+								  uint32 flags, uint32 total_len, uint32 offset,
+								  const char *key, int keylen,
 								  const void *body, int bodylen);
 
 /*
@@ -251,6 +267,7 @@ extern PGDLLEXPORT bool AnserDispatchLocalConsume(const AnserChannelKey *channel
  * each lives with the state it owns.
  */
 extern PGDLLEXPORT int64 AnserDispatchUnsubscribeCount(void);
+extern PGDLLEXPORT int64 AnserDispatchDeliveriesCompleted(void);
 extern PGDLLEXPORT void AnserDispatchFlushPending(long timeout_ms);
 extern PGDLLEXPORT void AnserDispatchReset(void);
 extern PGDLLEXPORT void AnserDispatchResetCommand(int command_count);

@@ -14,6 +14,10 @@ SET enable_mergejoin = off;
 -- Pinned shorter here, so a filter that never arrives fails the run instead of
 -- hiding in the clock.
 SET anser.timeout_ms = 5000;
+-- Trace every exchange step into the server logs for the whole file.  LOG
+-- level never reaches the client, so the expected output is unaffected; the
+-- traces are for the CI logs when a run goes wrong.
+SET anser.debug = on;
 -- build is the smaller (hashed / preserved) side, distributed so the join key
 -- must be redistributed; probe is the larger side distributed by the join key.
 CREATE TABLE anser_rf_build (id int, name text) DISTRIBUTED BY (name);
@@ -444,8 +448,8 @@ SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.i
 -- A plain EXPLAIN must not allocate the filter: the coordinator initializes
 -- every slice with EXEC_FLAG_EXPLAIN_ONLY, so the producer must skip building
 -- the bitset (state=NULL) while the plan still shows the planned size.  The
--- debug log makes the decision observable.
-SET anser.debug = on;
+-- debug log makes the decision observable.  anser.debug is already on for the
+-- whole file; client_min_messages is what brings the line to the client here.
 SET client_min_messages = log;
 EXPLAIN (COSTS OFF)
 SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id;
@@ -472,7 +476,6 @@ LOG:  anser: producer init cond=0 part=0/1 elems=33554432 payload=67108928 state
 
 RESET client_min_messages;
 LOG:  statement: RESET client_min_messages;
-RESET anser.debug;
 -- And the filter must still be correct: 200 build rows, each matching one
 -- probe row.
 SELECT count(*) AS rows_joined
@@ -493,6 +496,52 @@ SELECT injected, total_elems, planned_bytes FROM anser_test_rf_size(200);
 (1 row)
 
 DROP EXTENSION anser_test;
+-- The same exchange in chunks: an 8 kB chunk turns the 64 MB filter into
+-- thousands of NEXT round trips.  The result must match the unfiltered run and
+-- the query must simply finish -- a whole-filter push that outgrew the
+-- connection buffers is exactly what used to wedge the session.  Matching
+-- results alone would not prove it: a consumer that gives up produces the
+-- same rows, so the coordinator's counters must say every consumer was
+-- served and none withdrew.
+-- start_ignore
+CREATE EXTENSION IF NOT EXISTS anser_test;
+-- end_ignore
+SELECT anser_test_deliveries_completed() AS d_before \gset
+SELECT anser_test_unsubscribes() AS u_before \gset
+SET anser.debug_delivery_chunk_bytes = 8192;
+SET anser.runtime_filter = on;
+CREATE TEMP TABLE anser_rf_r_chunk AS
+    SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id
+    DISTRIBUTED BY (name);
+SELECT anser_test_deliveries_completed() = :d_before + 3 AS all_delivered;
+ all_delivered 
+---------------
+ t
+(1 row)
+
+SELECT anser_test_unsubscribes() = :u_before AS nobody_gave_up;
+ nobody_gave_up 
+----------------
+ t
+(1 row)
+
+SELECT count(*) AS only_chunk
+    FROM (SELECT * FROM anser_rf_r_chunk EXCEPT ALL SELECT * FROM anser_rf_r_off) d;
+ only_chunk 
+------------
+          0
+(1 row)
+
+SELECT count(*) AS only_off_chunk
+    FROM (SELECT * FROM anser_rf_r_off EXCEPT ALL SELECT * FROM anser_rf_r_chunk) d;
+ only_off_chunk 
+----------------
+              0
+(1 row)
+
+DROP TABLE anser_rf_r_chunk;
+DROP EXTENSION anser_test;
+RESET anser.debug_delivery_chunk_bytes;
 -- A LIMIT can finish the query while a consumer is still waiting for its
 -- filter: the producer is squelched before it publishes, the consumer must
 -- bail out via QueryFinishPending and withdraw its subscription, and the
@@ -509,9 +558,20 @@ SELECT count(*) AS limited_rows FROM (
 -- filter exchange completes inside the FETCH's ExecutorRun window, so a
 -- sibling statement's ExecutorEnd sweep has nothing of the cursor's to wipe.
 -- The sibling runs the same filtered join, so it really does create and sweep
--- its own channels while the cursor's gang sits suspended.  (A wiped exchange
--- would fail open with the same rows, so this guards the behavior, not the
--- timing: that path is a wait, not a wrong answer.)
+-- its own channels while the cursor's gang sits suspended.  The delivery
+-- counter must also say every consumer was served -- because "came back
+-- unfiltered" returns the same rows and would hide a broken exchange.  (The
+-- sweep's failure mode itself is a wait, not a wrong answer.)  The cursor
+-- query filters the build side to ids 1..3, and on a segment none of them
+-- land on the hash is empty, the join skips the probe side, and that
+-- consumer never runs -- so its count comes from the data, not from the
+-- cluster width.  The sibling has no such filter, so it serves all three.
+-- start_ignore
+CREATE EXTENSION IF NOT EXISTS anser_test;
+-- end_ignore
+SELECT anser_test_deliveries_completed() AS d_before \gset
+SELECT count(DISTINCT gp_segment_id) AS cursor_consumers
+    FROM anser_rf_probe WHERE id <= 3 \gset
 SET optimizer = off;
 SET anser.runtime_filter = on;
 BEGIN;
@@ -539,6 +599,14 @@ FETCH ALL anser_rf_cur;
 (2 rows)
 
 COMMIT;
+SELECT anser_test_deliveries_completed()
+       = :d_before + 3 + :cursor_consumers AS cursor_delivered;
+ cursor_delivered 
+------------------
+ t
+(1 row)
+
+DROP EXTENSION anser_test;
 DROP TABLE anser_rf_r_push;
 DROP TABLE anser_rf_r_on, anser_rf_r_off, anser_rf_r_orca;
 DROP TABLE anser_rf_build, anser_rf_probe;
@@ -983,6 +1051,7 @@ RESET ROLE;
 DROP ROLE anser_nopriv;
 RESET anser.runtime_filter;
 RESET anser.debug_min_filter_bytes;
+RESET anser.debug;
 RESET anser.timeout_ms;
 RESET optimizer;
 RESET enable_nestloop;

@@ -87,6 +87,7 @@ extern PGDLLEXPORT bool gp_anser_debug;
 extern PGDLLEXPORT int	gp_anser_max_info_size;
 extern PGDLLEXPORT int	gp_anser_timeout_ms;
 extern PGDLLEXPORT int	gp_anser_debug_min_filter_bytes;
+extern PGDLLEXPORT int	gp_anser_debug_delivery_chunk_bytes;
 
 /*
  * Trace the handoff between producers, the coordinator and consumers.

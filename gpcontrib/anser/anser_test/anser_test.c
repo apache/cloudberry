@@ -644,6 +644,7 @@ anser_test_wire_roundtrip(PG_FUNCTION_ARGS)
 	bytea	   *body = PG_GETARG_BYTEA_PP(1);
 	char	   *tamper = text_to_cstring(PG_GETARG_TEXT_PP(2));
 	char		payload_type = PG_GETARG_CHAR(3);
+	char		kind = PG_GETARG_CHAR(4);
 	AnserChannelKey key;
 	AnserWireMsg parsed;
 	char	   *msg;
@@ -654,7 +655,7 @@ anser_test_wire_roundtrip(PG_FUNCTION_ARGS)
 	int			decoded_len = 0;
 
 	anser_test_wire_key(&key, condition_key);
-	msg = AnserWireFormat(&key, ANSER_WIRE_KIND_PART, payload_type,
+	msg = AnserWireFormat(&key, kind, payload_type,
 						  ANSER_TEST_WIRE_PART, ANSER_TEST_WIRE_TOTAL, 0,
 						  raw_len > 0 ? raw_body : NULL, (Size) raw_len);
 	msg_len = strlen(msg);
@@ -730,7 +731,7 @@ anser_test_wire_roundtrip(PG_FUNCTION_ARGS)
 		PG_RETURN_TEXT_P(cstring_to_text("checksum-mismatch"));
 
 	/* Framed and vouched for: now every field must have survived the trip. */
-	if (parsed.kind != ANSER_WIRE_KIND_PART)
+	if (parsed.kind != kind)
 		PG_RETURN_TEXT_P(cstring_to_text("mismatch: kind"));
 	if (parsed.payload_type != payload_type)
 		PG_RETURN_TEXT_P(cstring_to_text("mismatch: payload_type"));
@@ -767,13 +768,16 @@ anser_test_push_crc(PG_FUNCTION_ARGS)
 	int32		session_id = PG_GETARG_INT32(2);
 	int32		command_count = PG_GETARG_INT32(3);
 	int32		flags = PG_GETARG_INT32(4);
-	char	   *condition_key = text_to_cstring(PG_GETARG_TEXT_PP(5));
-	bytea	   *body = PG_GETARG_BYTEA_PP(6);
+	int32		total_len = PG_GETARG_INT32(5);
+	int32		offset = PG_GETARG_INT32(6);
+	char	   *condition_key = text_to_cstring(PG_GETARG_TEXT_PP(7));
+	bytea	   *body = PG_GETARG_BYTEA_PP(8);
 
 	PG_RETURN_INT64((int64) (uint32)
 					AnserWirePushCrc(payload_type, (uint32) condition_id,
 									 (uint32) session_id, (uint32) command_count,
-									 (uint32) flags, condition_key,
+									 (uint32) flags, (uint32) total_len,
+									 (uint32) offset, condition_key,
 									 (int) strlen(condition_key),
 									 VARDATA_ANY(body),
 									 (int) VARSIZE_ANY_EXHDR(body)));
@@ -1067,4 +1071,20 @@ Datum
 anser_test_unsubscribes(PG_FUNCTION_ARGS)
 {
 	PG_RETURN_INT64(AnserDispatchUnsubscribeCount());
+}
+
+PG_FUNCTION_INFO_V1(anser_test_deliveries_completed);
+
+/*
+ * Deliveries that reached their last chunk in this backend.
+ *
+ * The counterpart of anser_test_unsubscribes: a test that wants to know the
+ * filter really arrived -- rather than the consumer quietly running
+ * unfiltered after its deadline, which produces the same rows -- reads the
+ * difference across a query, together with the unsubscribe count staying put.
+ */
+Datum
+anser_test_deliveries_completed(PG_FUNCTION_ARGS)
+{
+	PG_RETURN_INT64(AnserDispatchDeliveriesCompleted());
 }

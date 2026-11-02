@@ -50,40 +50,84 @@
 #include "nodes/pg_list.h"
 #include "port/pg_bswap.h"
 #include "port/pg_crc32c.h"
+#include "portability/instr_time.h"
 #include "storage/latch.h"
 #include "tcop/dest.h"
 #include "tcop/tcopprot.h"
+#include "utils/faultinjector.h"
 #include "utils/memutils.h"
-#include "utils/timestamp.h"
 #include "utils/wait_event.h"
 
 /* How long to sleep between wakeups while waiting for a delivery. */
 #define ANSER_SIDEBAND_POLL_MS	100L
 
 /*
- * A delivery that arrived while we were waiting for a different channel.
+ * Delivery state: one live subscription, one assembly slot.
  *
- * One slice can host consumers for more than one condition, and the
- * coordinator pushes each channel as soon as it completes, so messages can
- * arrive in an order we did not ask for.  Rather than discard them (which
- * would cost that consumer its filter), park them here and check the inbox
- * before touching the socket.
+ * With pull-based chunking there is at most one live subscription per
+ * process: AnserSidebandConsumeWait() is called from one place
+ * (anserbloomconsume.c), its loop never runs the executor, so waits cannot
+ * nest, and every exit path clears the flag.  And nothing arrives without a
+ * subscription: the coordinator sends a chunk only after a SUBSCRIBE or a
+ * NEXT.  So the push model's inbox -- several parked deliveries, one per
+ * channel -- collapses to a single slot, and the cases "several entries" and
+ * "an entry for someone else" are impossible by construction rather than by
+ * argument.
+ *
+ * The full-key match is still what rejects a late chunk from an earlier
+ * command: AnserWaitKey carries this command's session and command ids, so a
+ * chunk from an older one never enters the slot.
  */
 typedef struct AnserInboxEntry
 {
-	AnserChannelKey key;
+	AnserChannelKey key;		/* for the trace lines; always AnserWaitKey */
 	char		payload_type;
-	char	   *payload;		/* NULL when cancelled */
-	Size		payload_len;
+	char	   *payload;		/* the assembly buffer; NULL when cancelled */
+	Size		total_len;		/* declared full size; 0 when cancelled */
+	Size		received;		/* bytes assembled so far */
+	instr_time	last_chunk_at;	/* when the latest chunk was accepted */
+	bool		complete;		/* received == total_len, or cancelled */
 	bool		cancelled;
 } AnserInboxEntry;
 
-static List *AnserInbox = NIL;
+static bool AnserWaiting = false;	/* a subscription is live... */
+static AnserChannelKey AnserWaitKey;	/* ...for this key */
+static AnserInboxEntry *AnserSlot = NULL;	/* its assembly, or NULL */
 
 static bool anser_sideband_send(const char *payload);
 static bool anser_inbox_take(const AnserChannelKey *key, char payload_type,
 							 void **payload, Size *payload_len, bool *cancelled);
 static bool anser_sideband_read_one(long timeout_ms);
+static bool anser_key_equal(const AnserChannelKey *a, const AnserChannelKey *b);
+static void anser_slot_free(void);
+
+static bool
+anser_key_equal(const AnserChannelKey *a, const AnserChannelKey *b)
+{
+	return a->condition_id == b->condition_id &&
+		a->gp_session_id == b->gp_session_id &&
+		a->gp_command_count == b->gp_command_count &&
+		strncmp(a->condition_key, b->condition_key,
+				ANSER_CONDITION_KEY_SIZE) == 0;
+}
+
+/* Free the assembly slot, whatever state the delivery is in. */
+static void
+anser_slot_free(void)
+{
+	if (AnserSlot != NULL)
+	{
+		ANSER_DEBUG("anser: seg%d dropping delivery cond=%u pushed for ssid=%d ccnt=%d (%zu of %zu bytes, complete=%d)",
+					GpIdentity.segindex, AnserSlot->key.condition_id,
+					AnserSlot->key.gp_session_id, AnserSlot->key.gp_command_count,
+					AnserSlot->received, AnserSlot->total_len,
+					AnserSlot->complete ? 1 : 0);
+		if (AnserSlot->payload != NULL)
+			pfree(AnserSlot->payload);
+		pfree(AnserSlot);
+		AnserSlot = NULL;
+	}
+}
 
 /*
  * Publish one part.  Fire-and-forget: the coordinator does not acknowledge,
@@ -124,19 +168,22 @@ AnserSidebandPublish(const AnserChannelKey *channel_key, char payload_type,
 }
 
 /*
- * Withdraw a subscription: best effort, so a send failure is only logged.
- * Called on every path out of AnserSidebandConsumeWait that leaves a
- * subscription behind (deadline expiry, query finishing early): from here on
- * this process is somewhere else in the plan and no longer reading for a
- * filter, so a delivery would put up to 64 MB on a connection whose reader
- * has moved on -- and whatever reads it next has to recognise and skip it.
+ * Withdraw a subscription, in full: tell the coordinator, forget our own
+ * record of it, and drop the delivery slot whatever state it is in -- a
+ * completed but unclaimed payload is just as dead once its consumer walks
+ * away.  Called on every path out of AnserSidebandConsumeWait that leaves a
+ * subscription behind (deadline expiry, query finishing early).
  *
- * A narrowing rather than a guarantee: the coordinator may already be inside
- * its delivery when this arrives.  That is why the push never blocks and why
- * every reader still tolerates a message that is not its own.
+ * With chunked delivery this closes the problem rather than narrowing a
+ * window: the coordinator stops at the chunk boundary, at most one whole
+ * chunk can still be in flight, and read_one drops it because the slot has no
+ * live subscription -- or, if we have already left the wait, the command loop
+ * skips the message whole (postgres.c, GP_SIDEBAND_MESSAGE).  A send failure
+ * is only logged: the coordinator then keeps a stalled delivery until the
+ * channel is reset, which costs it nothing further.
  */
 static void
-anser_sideband_unsubscribe(const AnserChannelKey *channel_key)
+anser_sideband_withdraw(const AnserChannelKey *channel_key)
 {
 	char	   *msg = AnserWireFormat(channel_key, ANSER_WIRE_KIND_UNSUBSCRIBE,
 									ANSER_PAYLOAD_NONE, 0, 0, 0, NULL, 0);
@@ -145,6 +192,9 @@ anser_sideband_unsubscribe(const AnserChannelKey *channel_key)
 		ANSER_DEBUG("anser: seg%d could not unsubscribe from cond=%u",
 					GpIdentity.segindex, channel_key->condition_id);
 	pfree(msg);
+
+	AnserWaiting = false;
+	anser_slot_free();
 }
 
 /*
@@ -162,8 +212,8 @@ AnserSidebandConsumeWait(const AnserChannelKey *channel_key, char payload_type,
 						 bool *cancelled, long timeout_ms)
 {
 	char	   *msg;
-	TimestampTz start;
-	int			reads = 0;
+	instr_time	subscribe_start;
+	instr_time	now;
 
 	if (payload != NULL)
 		*payload = NULL;
@@ -193,23 +243,10 @@ AnserSidebandConsumeWait(const AnserChannelKey *channel_key, char payload_type,
 		return false;
 	}
 
-	/* It may already be here: the coordinator pushes as soon as it can. */
-	if (anser_inbox_take(channel_key, payload_type, payload, payload_len, cancelled))
-		return payload != NULL && *payload != NULL;
-
 	/*
 	 * With no deadline to wait out there is nothing to subscribe for: we would
-	 * give up on the next line anyway, and the only lasting effect would be the
-	 * coordinator later pushing a message to a process that has stopped reading
-	 * for it.  Such a delivery is not free -- it arrives while this QE is
-	 * somewhere else in the plan, and whatever reads the connection then has to
-	 * recognise and skip it.  So do not ask in the first place.
-	 *
-	 * This only narrows the window.  Any deadline can expire with the
-	 * subscription already registered, so even though we unsubscribe on the way
-	 * out (anser_sideband_unsubscribe), every reader of this connection still
-	 * has to tolerate a message that is not its own (see
-	 * cdb_sequence_nextval_qe).
+	 * give up on the next line anyway, and the only lasting effect would be a
+	 * stalled delivery on the coordinator.  So do not ask in the first place.
 	 */
 	if (timeout_ms == 0)
 	{
@@ -219,8 +256,20 @@ AnserSidebandConsumeWait(const AnserChannelKey *channel_key, char payload_type,
 	}
 
 	/*
+	 * One subscription at a time, by construction -- see the slot's comment.
+	 * A slot left over from an error exit (PG error unwinding passes none of
+	 * the exits below) is always stale: its command count is not ours.
+	 */
+	Assert(!AnserWaiting);
+	if (AnserSlot != NULL)
+		anser_slot_free();
+
+	/*
 	 * A subscription carries nothing, so its payload type is NONE -- what this
 	 * consumer expects to receive is checked on delivery, not announced here.
+	 * The key is marked live before anything can arrive: read_one drops chunks
+	 * unless the subscription is, which is how a delivery whose consumer has
+	 * given up ends at its current chunk.
 	 */
 	msg = AnserWireFormat(channel_key, ANSER_WIRE_KIND_SUBSCRIBE,
 						  ANSER_PAYLOAD_NONE, 0, 0, 0, NULL, 0);
@@ -234,10 +283,12 @@ AnserSidebandConsumeWait(const AnserChannelKey *channel_key, char payload_type,
 		return false;
 	}
 	pfree(msg);
+	AnserWaitKey = *channel_key;
+	AnserWaiting = true;
 	ANSER_DEBUG("anser: seg%d subscribed cond=%u, waiting up to %ld ms",
 				GpIdentity.segindex, channel_key->condition_id, timeout_ms);
 
-	start = GetCurrentTimestamp();
+	INSTR_TIME_SET_CURRENT(subscribe_start);
 	for (;;)
 	{
 		CHECK_FOR_INTERRUPTS();
@@ -260,46 +311,77 @@ AnserSidebandConsumeWait(const AnserChannelKey *channel_key, char payload_type,
 			 * up, so nobody here will read the filter the coordinator is
 			 * about to push.
 			 */
-			anser_sideband_unsubscribe(channel_key);
+			anser_sideband_withdraw(channel_key);
 			return false;
 		}
 
 		if (anser_inbox_take(channel_key, payload_type, payload, payload_len,
 							 cancelled))
-			return payload != NULL && *payload != NULL;
-
-		if (timeout_ms >= 0 &&
-			TimestampDifferenceExceeds(start, GetCurrentTimestamp(), timeout_ms))
 		{
-			/*
-			 * Withdraw the subscription on the way out.  From here on this
-			 * process is somewhere else in the plan and no longer reading for
-			 * a filter, so a delivery would put 1-64 MB on a connection whose
-			 * reader has moved on -- and whatever reads it next has to
-			 * recognise and skip it.
-			 */
-			anser_sideband_unsubscribe(channel_key);
-
-			/*
-			 * Report what we saw, not just that we waited: "nothing arrived"
-			 * and "something arrived for another channel" are different bugs.
-			 */
-			ANSER_DEBUG("anser: seg%d gave up on cond=%u after %ld ms (read %d message(s), %d unclaimed)",
-						GpIdentity.segindex, channel_key->condition_id,
-						timeout_ms, reads, list_length(AnserInbox));
-			return false;
+			AnserWaiting = false;
+			return payload != NULL && *payload != NULL;
 		}
 
 		/*
-		 * Any message we read lands in the inbox; the loop then rechecks
-		 * whether it was the one we wanted.  A read failure means the
-		 * connection is gone, which the interconnect will report far more
-		 * usefully than we can -- stop waiting and let the query run
-		 * unfiltered.
+		 * The deadline guards against a delivery that stalls: it counts from
+		 * the last accepted chunk (or from the subscribe while none has
+		 * arrived), not from the subscribe alone -- aborting a healthy
+		 * delivery mid-flight for being large would only waste the work
+		 * already done.  A delivery that trickles just under the deadline
+		 * forever must still end, so a hard cap a few times the deadline
+		 * counts from the subscribe.
+		 */
+		if (timeout_ms >= 0)
+		{
+			double		since_progress;
+			double		since_subscribe;
+			instr_time *last = (AnserSlot != NULL) ?
+				&AnserSlot->last_chunk_at : &subscribe_start;
+
+			INSTR_TIME_SET_CURRENT(now);
+			INSTR_TIME_SUBTRACT(now, *last);
+			since_progress = INSTR_TIME_GET_MILLISEC(now);
+
+			INSTR_TIME_SET_CURRENT(now);
+			INSTR_TIME_SUBTRACT(now, subscribe_start);
+			since_subscribe = INSTR_TIME_GET_MILLISEC(now);
+
+			if (since_progress >= timeout_ms ||
+				since_subscribe >= (double) timeout_ms * 4)
+			{
+				/*
+				 * Withdraw the subscription on the way out.  From here on
+				 * this process is somewhere else in the plan, and the
+				 * chunked delivery stops at its current chunk once the
+				 * withdrawal lands.
+				 *
+				 * Withdraw frees the slot, so read the totals first: "gave up
+				 * having received 0 of 0" and "never started" should not look
+				 * alike in the log.
+				 */
+				Size		got = AnserSlot != NULL ? AnserSlot->received : 0;
+				Size		total = AnserSlot != NULL ? AnserSlot->total_len : 0;
+
+				anser_sideband_withdraw(channel_key);
+
+				ANSER_DEBUG("anser: seg%d gave up on cond=%u after %ld ms (received %zu of %zu bytes)",
+							GpIdentity.segindex, channel_key->condition_id,
+							timeout_ms, got, total);
+				return false;
+			}
+		}
+
+		/*
+		 * The chunk we read lands in the slot; the loop then rechecks whether
+		 * the delivery is complete.  A read failure means the connection is
+		 * gone, which the interconnect will report far more usefully than we
+		 * can -- stop waiting and let the query run unfiltered.
 		 */
 		if (!anser_sideband_read_one(ANSER_SIDEBAND_POLL_MS))
+		{
+			anser_sideband_withdraw(channel_key);
 			return false;
-		reads = list_length(AnserInbox);
+		}
 	}
 }
 
@@ -316,7 +398,7 @@ anser_sideband_read_one(long timeout_ms)
 	int			retval;
 	int64		maxlen;
 	StringInfoData buf;
-	AnserInboxEntry *entry;
+	AnserChannelKey key;
 	MemoryContext oldcxt;
 	char		paytype;
 	uint32		crc;
@@ -324,8 +406,10 @@ anser_sideband_read_one(long timeout_ms)
 	uint32		session_id;
 	uint32		command_count;
 	int			flags;
+	uint32		total_len;
+	uint32		offset;
 	int			keylen;
-	int			paylen;
+	int			chunklen;
 	const char *keyptr;
 	const char *payptr;
 
@@ -434,6 +518,8 @@ anser_sideband_read_one(long timeout_ms)
 	session_id = (uint32) pq_getmsgint(&buf, 4);
 	command_count = (uint32) pq_getmsgint(&buf, 4);
 	flags = pq_getmsgint(&buf, 4);
+	total_len = (uint32) pq_getmsgint(&buf, 4);
+	offset = (uint32) pq_getmsgint(&buf, 4);
 	keylen = pq_getmsgint(&buf, 4);
 	if (keylen < 0 || keylen >= ANSER_CONDITION_KEY_SIZE)
 	{
@@ -442,19 +528,22 @@ anser_sideband_read_one(long timeout_ms)
 		return false;
 	}
 	keyptr = pq_getmsgbytes(&buf, keylen);
-	paylen = pq_getmsgint(&buf, 4);
-	if (paylen < 0 || paylen > gp_anser_max_info_size)
+	chunklen = pq_getmsgint(&buf, 4);
+	if (chunklen < 0 || (uint32) chunklen > total_len ||
+		total_len > (uint32) gp_anser_max_info_size ||
+		offset > total_len || (uint32) chunklen > total_len - offset)
 	{
 		pfree(buf.data);
-		elog(LOG, "anser: filter message has a bad length");
+		elog(LOG, "anser: filter message has a bad chunk frame");
 		return false;
 	}
-	payptr = paylen > 0 ? pq_getmsgbytes(&buf, paylen) : NULL;
+	payptr = chunklen > 0 ? pq_getmsgbytes(&buf, chunklen) : NULL;
 
 	if (crc != (uint32) AnserWirePushCrc(paytype, (uint32) condid,
 										 session_id, command_count,
-										 (uint32) flags, keyptr, keylen,
-										 payptr, paylen))
+										 (uint32) flags, total_len, offset,
+										 keyptr, keylen,
+										 payptr, chunklen))
 	{
 		/*
 		 * Drop it and keep waiting: the deadline will expire and this consumer
@@ -468,123 +557,251 @@ anser_sideband_read_one(long timeout_ms)
 	}
 
 	/*
-	 * The inbox outlives this call and the memory context it was reached in,
-	 * so anchor it somewhere stable; AnserSidebandResetAll drops it.
-	 */
-	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
-	entry = palloc0(sizeof(AnserInboxEntry));
-
-	/*
 	 * The identity comes from the wire, never from our own globals: a message
 	 * parked from an earlier command keeps that command's ids, so a later
 	 * statement can never claim it by matching its own.
 	 */
-	entry->key.gp_session_id = session_id;
-	entry->key.gp_command_count = command_count;
-	entry->key.condition_id = (uint32) condid;
-	memcpy(entry->key.condition_key, keyptr, keylen);
-	entry->key.condition_key[keylen] = '\0';
-	entry->payload_type = paytype;
-	entry->cancelled = (flags & ANSER_WIRE_F_CANCELLED) != 0;
-	if (!entry->cancelled && paylen > 0)
+	key.gp_session_id = (int) session_id;
+	key.gp_command_count = (int) command_count;
+	key.condition_id = (uint32) condid;
+	memcpy(key.condition_key, keyptr, keylen);
+	key.condition_key[keylen] = '\0';
+
+	/*
+	 * A chunk for anything but the live subscription belongs to a delivery
+	 * whose consumer has already given up.  Drop it without answering: with no
+	 * NEXT the delivery ends at its current chunk, and nothing is left in
+	 * flight to break the stream.
+	 */
+	if (!AnserWaiting || !anser_key_equal(&AnserWaitKey, &key))
 	{
-		entry->payload = palloc(paylen);
-		memcpy(entry->payload, payptr, paylen);
-		entry->payload_len = paylen;
+		ANSER_DEBUG("anser: seg%d dropping chunk cond=%u off=%u len=%d: not subscribed",
+					GpIdentity.segindex, (uint32) condid, offset, chunklen);
+		pfree(buf.data);
+		return true;
 	}
-	AnserInbox = lappend(AnserInbox, entry);
-	MemoryContextSwitchTo(oldcxt);
-	ANSER_DEBUG("anser: seg%d received cond=%u type=%c bytes=%zu cancelled=%d",
-				GpIdentity.segindex, (uint32) condid, paytype,
-				entry->payload_len, entry->cancelled ? 1 : 0);
+
+	if (flags & ANSER_WIRE_F_CANCELLED)
+	{
+		/*
+		 * A cancelled delivery is a single chunk with total_len = 0.  It
+		 * completes the slot at once; any partial assembly is replaced.
+		 */
+		if (AnserSlot == NULL)
+		{
+			oldcxt = MemoryContextSwitchTo(TopMemoryContext);
+			AnserSlot = palloc0(sizeof(AnserInboxEntry));
+			MemoryContextSwitchTo(oldcxt);
+		}
+		else if (AnserSlot->payload != NULL)
+		{
+			pfree(AnserSlot->payload);
+		}
+		AnserSlot->key = key;
+		AnserSlot->payload_type = paytype;
+		AnserSlot->payload = NULL;
+		AnserSlot->cancelled = true;
+		AnserSlot->complete = true;
+		AnserSlot->total_len = 0;
+		AnserSlot->received = 0;
+		INSTR_TIME_SET_CURRENT(AnserSlot->last_chunk_at);
+		pfree(buf.data);
+		return true;
+	}
+
+	if (AnserSlot == NULL)
+	{
+		if (offset != 0)
+		{
+			/* The window never reopens: out of order means desync. */
+			elog(LOG, "anser: chunk for condition %u starts at %u, expected 0; discarding",
+				 (uint32) condid, offset);
+			pfree(buf.data);
+			return true;
+		}
+
+		/*
+		 * The slot outlives this call and the memory context it was reached
+		 * in, so anchor it somewhere stable; AnserSidebandResetInbox drops it.
+		 * The assembly buffer is sized by the declared total_len, already
+		 * checked against anser.max_info_size above.
+		 */
+		oldcxt = MemoryContextSwitchTo(TopMemoryContext);
+		AnserSlot = palloc0(sizeof(AnserInboxEntry));
+		AnserSlot->key = key;
+		AnserSlot->payload_type = paytype;
+		AnserSlot->total_len = total_len;
+		AnserSlot->payload = total_len > 0 ? palloc(total_len) : NULL;
+		MemoryContextSwitchTo(oldcxt);
+	}
+	else if (AnserSlot->complete || AnserSlot->received != offset ||
+			 AnserSlot->total_len != total_len ||
+			 AnserSlot->payload_type != paytype)
+	{
+		/*
+		 * A duplicate, a gap, or a frame that disagrees with the first chunk:
+		 * the delivery is desynced, the stream is not.  The total_len and
+		 * payload_type checks are what keep the memcpy below inside the
+		 * buffer the first chunk sized.
+		 */
+		elog(LOG, "anser: chunk for condition %u at %u (total %u), have %zu of %zu; discarding",
+			 (uint32) condid, offset, total_len,
+			 AnserSlot->received, AnserSlot->total_len);
+		pfree(buf.data);
+		return true;
+	}
+
+	/*
+	 * Ask for the following chunk before copying this one, so the coordinator
+	 * works while we copy.  A NEXT names the offset we will hold after it.
+	 */
+	if (AnserSlot->received + (uint32) chunklen < total_len)
+	{
+		char	   *next = AnserWireFormat(&key, ANSER_WIRE_KIND_NEXT,
+										 ANSER_PAYLOAD_NONE,
+										 AnserSlot->received + (uint32) chunklen,
+										 0, 0, NULL, 0);
+
+		if (!anser_sideband_send(next))
+			ANSER_DEBUG("anser: seg%d could not ask for the next chunk of cond=%u",
+						GpIdentity.segindex, (uint32) condid);
+		pfree(next);
+	}
+
+	if (chunklen > 0)
+		memcpy(AnserSlot->payload + offset, payptr, chunklen);
+	AnserSlot->received += (uint32) chunklen;
+	if (AnserSlot->received == total_len)
+		AnserSlot->complete = true;
+	INSTR_TIME_SET_CURRENT(AnserSlot->last_chunk_at);
+
+	/* Log only the first and last chunk; a delivery is hundreds of them. */
+	if (offset == 0 || AnserSlot->complete)
+		ANSER_DEBUG("anser: seg%d received cond=%u type=%c chunk=[%u,%zu) of %u cancelled=0",
+					GpIdentity.segindex, (uint32) condid, paytype,
+					offset, AnserSlot->received, total_len);
+
+#ifdef FAULT_INJECTOR
+	/*
+	 * Let a test pause a consumer mid-delivery, past its deadline: the next
+	 * loop iteration finds it expired and withdraws -- the walk-away path.
+	 *
+	 * Not a 'sleep' fault: that is a bare nanosleep() (pgsleep.c), which any
+	 * signal cuts short, and a QE does get signals mid-query, so the pause
+	 * ends well inside the deadline and the whole delivery completes.  So the
+	 * fault only says "pause", and this waits out the pause on the monotonic
+	 * clock, re-arming after every early wakeup.  It stays cancellable, and
+	 * it does not touch the socket: the chunk it fires for stays queued, to
+	 * be dropped as unsubscribed after the withdrawal.
+	 */
+	if (SIMPLE_FAULT_INJECTOR("anser_after_chunk") == FaultInjectorTypeSkip)
+	{
+		double		pause_ms = (double) gp_anser_timeout_ms + 100;
+		instr_time	pause_start;
+		instr_time	now;
+
+		INSTR_TIME_SET_CURRENT(pause_start);
+		for (;;)
+		{
+			double		left;
+
+			CHECK_FOR_INTERRUPTS();
+
+			INSTR_TIME_SET_CURRENT(now);
+			INSTR_TIME_SUBTRACT(now, pause_start);
+			left = pause_ms - INSTR_TIME_GET_MILLISEC(now);
+			if (left <= 0)
+				break;
+
+			(void) WaitLatch(MyLatch,
+							 WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
+							 (long) left + 1,
+							 PG_WAIT_EXTENSION);
+			ResetLatch(MyLatch);
+		}
+	}
+#endif
 
 	pfree(buf.data);
 	return true;
 }
 
-/* Claim a delivery for this channel, if one has arrived. */
+/* Claim the delivery if it is complete. */
 static bool
 anser_inbox_take(const AnserChannelKey *key, char payload_type, void **payload,
 				 Size *payload_len, bool *cancelled)
 {
-	ListCell   *lc;
+	AnserInboxEntry *entry = AnserSlot;
 
-	foreach(lc, AnserInbox)
+	if (entry == NULL || !entry->complete)
+		return false;
+
+	/*
+	 * The slot can only hold the live subscription's delivery, so a mismatch
+	 * here is a bug, not a late message: assert in assert builds, and end the
+	 * wait without the filter rather than log it every 100 ms until the
+	 * deadline.
+	 */
+	if (!anser_key_equal(&entry->key, key))
 	{
-		AnserInboxEntry *entry = (AnserInboxEntry *) lfirst(lc);
-
-		/*
-		 * The condition key alone does not identify a delivery: it is built
-		 * from plan-shape names and repeats across statements, so a filter
-		 * parked by a late delivery of statement A would otherwise be
-		 * claimed by statement B.  The coordinator stamps every push with
-		 * its session id and command count, and we demand an exact match
-		 * on both integers (no hashing -- collisions are unaffordable).
-		 * gp_session_id is unique per postmaster lifetime, so an entry from
-		 * an older session can never match either.
-		 */
-		if (entry->key.condition_id != key->condition_id ||
-			entry->key.gp_session_id != key->gp_session_id ||
-			entry->key.gp_command_count != key->gp_command_count ||
-			strncmp(entry->key.condition_key, key->condition_key,
-					ANSER_CONDITION_KEY_SIZE) != 0)
-			continue;
-
-		/*
-		 * Right channel, wrong kind of information.  The coordinator stamps
-		 * the type from the parts it folded, so this means a producer and a
-		 * consumer disagree about what the channel carries -- claim the entry
-		 * to stop waiting on it, and treat it as a cancellation so this
-		 * consumer runs unfiltered.  An empty delivery carries no type to
-		 * check.
-		 */
-		if (!entry->cancelled && entry->payload != NULL &&
-			entry->payload_type != payload_type)
-		{
-			elog(WARNING, "anser: condition %u delivered payload type '%c', expected '%c'",
-				 key->condition_id, entry->payload_type, payload_type);
-			entry->cancelled = true;
-		}
-
+		Assert(false);
+		elog(LOG, "anser: inbox slot for condition %u does not match the waiter %u",
+			 entry->key.condition_id, key->condition_id);
 		if (cancelled != NULL)
-			*cancelled = entry->cancelled;
-		if (!entry->cancelled && entry->payload != NULL)
-		{
-			if (payload != NULL)
-			{
-				*payload = palloc(entry->payload_len);
-				memcpy(*payload, entry->payload, entry->payload_len);
-			}
-			if (payload_len != NULL)
-				*payload_len = entry->payload_len;
-		}
-
-		AnserInbox = foreach_delete_current(AnserInbox, lc);
+			*cancelled = true;
+		AnserSlot = NULL;
 		if (entry->payload != NULL)
 			pfree(entry->payload);
 		pfree(entry);
 		return true;
 	}
 
-	return false;
+	/*
+	 * Right channel, wrong kind of information.  The coordinator stamps
+	 * the type from the parts it folded, so this means a producer and a
+	 * consumer disagree about what the channel carries -- claim the entry
+	 * to stop waiting on it, and treat it as a cancellation so this
+	 * consumer runs unfiltered.  An empty delivery carries no type to
+	 * check.
+	 */
+	if (!entry->cancelled && entry->payload != NULL &&
+		entry->payload_type != payload_type)
+	{
+		elog(WARNING, "anser: condition %u delivered payload type '%c', expected '%c'",
+			 key->condition_id, entry->payload_type, payload_type);
+		entry->cancelled = true;
+	}
+
+	if (cancelled != NULL)
+		*cancelled = entry->cancelled;
+	if (!entry->cancelled && entry->payload != NULL)
+	{
+		if (payload != NULL)
+		{
+			*payload = palloc(entry->total_len);
+			memcpy(*payload, entry->payload, entry->total_len);
+		}
+		if (payload_len != NULL)
+			*payload_len = entry->total_len;
+	}
+
+	AnserSlot = NULL;
+	ANSER_DEBUG("anser: seg%d claimed cond=%u (pushed for ssid=%d ccnt=%d, cancelled=%d)",
+				GpIdentity.segindex, key->condition_id,
+				entry->key.gp_session_id, entry->key.gp_command_count,
+				entry->cancelled ? 1 : 0);
+	if (entry->payload != NULL)
+		pfree(entry->payload);
+	pfree(entry);
+	return true;
 }
 
-/* Drop any deliveries nobody claimed. */
+/* Drop a delivery nobody claimed, whatever state it is in. */
 void
 AnserSidebandResetInbox(void)
 {
-	ListCell   *lc;
-
-	foreach(lc, AnserInbox)
-	{
-		AnserInboxEntry *entry = (AnserInboxEntry *) lfirst(lc);
-
-		if (entry->payload != NULL)
-			pfree(entry->payload);
-		pfree(entry);
-	}
-	list_free(AnserInbox);
-	AnserInbox = NIL;
+	AnserWaiting = false;
+	anser_slot_free();
 }
 
 void
@@ -715,11 +932,12 @@ AnserWireFormat(const AnserChannelKey *channel_key, char kind,
  */
 pg_crc32c
 AnserWirePushCrc(char payload_type, uint32 condition_id, uint32 session_id,
-				 uint32 command_count, uint32 flags, const char *key,
-				 int keylen, const void *body, int bodylen)
+				 uint32 command_count, uint32 flags, uint32 total_len,
+				 uint32 offset, const char *key, int keylen,
+				 const void *body, int bodylen)
 {
 	pg_crc32c	crc;
-	uint32		fields[6];
+	uint32		fields[8];
 	uint32		belen;
 
 	fields[0] = pg_hton32((uint32) (unsigned char) payload_type);
@@ -727,7 +945,9 @@ AnserWirePushCrc(char payload_type, uint32 condition_id, uint32 session_id,
 	fields[2] = pg_hton32(session_id);
 	fields[3] = pg_hton32(command_count);
 	fields[4] = pg_hton32(flags);
-	fields[5] = pg_hton32((uint32) keylen);
+	fields[5] = pg_hton32(total_len);
+	fields[6] = pg_hton32(offset);
+	fields[7] = pg_hton32((uint32) keylen);
 
 	INIT_CRC32C(crc);
 	COMP_CRC32C(crc, fields, sizeof(fields));

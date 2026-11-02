@@ -183,11 +183,11 @@ every bitset at 1 MB, whatever the cardinality):
 | 4 | 4 | ~40 ms | ~520 ms | 549 ms |
 | 16 | 16 | ~100 ms | ~1140 ms | 1005 ms, then gave up |
 
-These numbers predate the switch to non-blocking delivery. Each write above
+These numbers predate the switch to chunked delivery. Each write above
 blocked until that peer had taken the filter, which is what made a wide slice so
 expensive — and what could strand the dispatcher outright when nobody was
-reading. Delivery now queues and flushes without blocking, so the fan-out should
-be well under this; it has not been re-measured.
+reading. Delivery now goes one chunk per NEXT request, never blocking, so the
+fan-out should be well under this; it has not been re-measured.
 
 The second row is still what sets the floor for the deadline: at 16 subscribers
 the fan-out outlived a 1 s deadline, so every consumer ran unfiltered. The 10 s
@@ -324,27 +324,52 @@ applies to the SQL-level `NOTIFY`, which must fit a queue page — but it delive
 through `pq_sendstring`, so the payload must be a NUL-free string:
 
 ```
-anser3 K T SSSSSSSSSS CCCCCCCCCC DDDDDDDDDD PPPPPPPPPP TTTTTTTTTT FFFF KKKK BBBBBBBBBB XXXXXXXX
+anser4 K T SSSSSSSSSS CCCCCCCCCC DDDDDDDDDD PPPPPPPPPP TTTTTTTTTT FFFF KKKK BBBBBBBBBB XXXXXXXX
 ^tag   ^ ^  session    command    condition  part       total      flags  keylen bodylen  crc
        |  \ payload type
         \ kind
 <condition_key bytes><base64 body>
 ```
 
-`kind` is `P` (a producer's part) or `S` (a consumer subscribing) — what the
-message *does*, as opposed to the payload type, which is what it *carries*. The
-header is **95 bytes of fixed-width ASCII**, so the key and the body begin at
-offsets that nothing in their own contents can shift, and the two lengths must
-account for the message exactly — a short, long or misaligned message is rejected
-before any of it is used. There is deliberately no delimiter anywhere in the
-format: the earlier version ended its header with a newline and found it with
-`strchr()`, which was correct only while the key could not itself contain a
-newline, an invariant nothing enforced.
+`kind` is `P` (a producer's part), `S` (a consumer subscribing), `U`
+(withdrawing), or `N` (a NEXT: ask for the next delivery chunk — see below;
+its part field carries the offset the consumer wants, `total` is 0, and there
+is no body) — what the message *does*, as opposed to the payload type, which
+is what it *carries*. The header is **95 bytes of fixed-width ASCII**, so the
+key and the body begin at offsets that nothing in their own contents can
+shift, and the two lengths must account for the message exactly — a short,
+long or misaligned message is rejected before any of it is used. There is
+deliberately no delimiter anywhere in the format: the earlier version ended
+its header with a newline and found it with `strchr()`, which was correct only
+while the key could not itself contain a newline, an invariant nothing
+enforced.
 
 **Coordinator → segment** is a `GP_SIDEBAND_MESSAGE`, written with `pqPutnchar`,
 which performs no conversion — so the merged filter travels as **raw binary**,
 with no base64 tax. That is the direction that matters most, since the merged
 payload is sent once *per consumer* while each part is sent once.
+
+The merged payload travels **in chunks, one message per chunk**, and the
+coordinator sends a chunk only when the consumer asks for it with a NEXT —
+starting with chunk 0 on subscribe (or on channel completion, whichever is
+later). The chunk size is chosen once per connection from its send buffer
+(capped at 1 MB, floored at 8 kB), so one flush places a chunk whole and
+nothing is left queued. The invariant this buys: **at most one whole chunk is
+ever in flight**, so a consumer that walks away mid-delivery — deadline
+expired, query finishing — never leaves a torn message behind, and its
+withdrawal stops the flow at the chunk boundary.
+
+```
+payload_type | crc32c | condition_id | session_id | command_count |
+flags | total_len | offset | keylen | key | chunk_len | chunk
+```
+
+`total_len` is the full merged payload size and `offset` is where the chunk
+starts in it, so the consumer allocates the assembly buffer once, when chunk 0
+arrives, and every later chunk must name the offset that continues it. A
+cancelled delivery is a single chunk with `F_CANCELLED`, `total_len = 0`,
+`offset = 0`. Both chunk coordinates are inside the CRC, so a chunk's place in
+the filter is as protected as its bytes.
 
 Both directions carry a **CRC32C**, and both discard a message that fails it.
 The transport is TCP, not the UDP interconnect, so this is not about a lossy
@@ -352,15 +377,18 @@ link — TCP's 16-bit checksum is simply thin cover for a megabyte, and hardware
 CRC32C costs about 0.05 ms/MB. The header and key are always covered; whether
 the body is covered too is the payload type's decision, for the reasons in
 [Payload types](#payload-types) above. Where it applies, the segment →
-coordinator CRC covers the pre-base64 bytes, so it validates the decode as well.
+coordinator CRC covers the pre-base64 bytes, so it validates the decode as
+well.
 
 The coordinator services these while it is blocked receiving tuples: the
 interconnect adds every dispatch socket to its wait set
 (`ic_udpifc.c`, `ic_tcp.c`), and a readable one leads to
 `checkForCancelFromQD` → `cdbdisp_checkForCancel` → `processResults`, which is
-where the notify handler runs. Under `gp_interconnect_type=proxy` that check is
-driven by a 2 s timer instead (`ic_proxy_backend.c`), so filter delivery can lag
-by up to that long.
+where the notify handler runs. Chunked delivery is what keeps that loop fed:
+every NEXT is inbound traffic, so an in-flight delivery keeps waking the
+coordinator until it is done — the consumer drives the flow. Under
+`gp_interconnect_type=proxy` that check is driven by a 2 s timer instead
+(`ic_proxy_backend.c`), so filter delivery can lag by up to that long.
 
 ## GUCs
 
@@ -368,9 +396,11 @@ by up to that long.
 | --- | --- | --- | --- |
 | `anser.enable` | `off` | SIGHUP | Master switch. With it off the plan pass never injects anything and no filters are exchanged. |
 | `anser.runtime_filter` | `off` | USERSET | Enables the post-planning pass that injects bloom-filter producer/consumer nodes into a matching plan. Requires `anser.enable`. |
-| `anser.max_info_size` | `65 MB` | USERSET | Maximum serialized payload (merged bloom filter + part header) a channel may hold; caps the effective bloom-filter size. The default is `64 MB + 1 MB` so a full 64 MB power-of-two bitset fits with its header; `bloom_create` also floors every bitset at 1 MB. The ceiling is a little under 1 GB: the payload has to arrive as a single protocol message, and `pq_getmessage()` will not read one past `PQ_LARGE_MESSAGE_LIMIT`. Both ends read it — see [Changing max_info_size](#changing-max_info_size) before touching it on a live session. |
+| `anser.max_info_size` | `65 MB` | SUSET | Maximum serialized payload (merged bloom filter + part header) a channel may hold; caps the effective bloom-filter size. The default is `64 MB + 1 MB` so a full 64 MB power-of-two bitset fits with its header; `bloom_create` also floors every bitset at 1 MB. The ceiling is a little under 1 GB: every payload is held whole in a single palloc on each end — the coordinator's merged payload and the consumer's assembly buffer, plus the base64 copy of a part on a producer — so it must stay inside `MaxAllocSize`. Both ends read it — see [Changing max_info_size](#changing-max_info_size) before touching it on a live session. |
 | `anser.timeout_ms` | `10 s` | USERSET | How long a consumer waits for its filter before running unfiltered. What the wait covers depends on the plan — see [Delivery cost](#delivery-cost). The deadline matters because a producer that gets squelched never publishes at all: `ExecSquelchNode` only marks a `CustomScanState`, it does not call the node back. |
-| `anser.debug` | `off` | USERSET | Traces the exchange — publish, merge, delivery, receive — in the log of the process each step happens in. See below. |
+| `anser.debug` | `off` | SUSET | Traces the exchange — publish, merge, delivery, receive — in the log of the process each step happens in. See below. |
+| `anser.debug_min_filter_bytes` | `0` | SUSET | Test knob: a floor on the bitset size, so a small table still produces a full-size filter. |
+| `anser.debug_delivery_chunk_bytes` | `0` | SUSET | Test knob: force the delivery chunk size instead of deriving it from the connection's send buffer, so a test can turn one delivery into hundreds of NEXT round trips. |
 
 ### Changing max_info_size
 
@@ -381,9 +411,9 @@ publishes, and passes it to `pq_getmessage()` as the cap on the sideband message
 it is about to read. A coordinator and a segment that disagree therefore do not
 merely compute different sizes — they frame the wire differently.
 
-It is `USERSET` rather than `POSTMASTER` because that is how the rest of Anser's
-knobs behave, and because being able to try a different filter size without a
-cluster restart is worth something. That is a trade-off, not a free choice:
+It is `SUSET` rather than `POSTMASTER` because a filter size is worth trying
+without a cluster restart, but not worth handing to every role: it drives
+per-segment memory and wire traffic. That is a trade-off, not a free choice:
 **do not change it on a live session.** `GUC_GPDB_NEED_SYNC` gets the new value
 to the segments — synchronously for every idle one, and in the connection
 options of every gang created afterwards — but a gang that is busy with an open
@@ -408,24 +438,27 @@ producers never published. `anser.debug` makes each step log where it happened,
 which is normally the fastest way to find where an exchange broke:
 
 ```
-seg0  producer init cond=0 part=0/3 elems=3334 payload=67108928 state=ok
+seg0  producer init cond=0 part=0/3 elems=3334 payload=1048592 state=ok
 seg0  producer child exhausted, publishing (state=ok)
 seg0  published cond=0 part=0/3 bytes=1048592 cancelled=0 sent=1
 QD    part cond=0 from seg0 (says part 0 of 3) 1/3 bytes=1048592 -> collecting
 QD    part cond=0 from seg1 (says part 1 of 3) 2/3 bytes=1048592 -> collecting
 QD    part cond=0 from seg2 (says part 2 of 3) 3/3 bytes=1048592 -> complete
 QD    delivering cond=0 to 3 subscriber(s)
-QD    pushed cond=0 bytes=1048592 cancelled=0
-seg0  received cond=0 bytes=1048592 cancelled=0
+QD    pushed cond=0 to seg0 chunk=[0,1048592) of 1048592 cancelled=0
+seg0  received cond=0 chunk=[0,1048592) of 1048592 cancelled=0
 ```
+
+(That delivery fits one chunk; anything past the chunk size repeats the last
+two lines per NEXT.)
 
 Set it in `postgresql.conf` (`gpconfig -c anser.debug -v on`) rather than with
 `SET` if you need to see the producer gang: a session-level `SET` does not
 reliably reach every gang, and the producers are the half you usually want.
 
-A consumer that gives up reports what it saw — `read 0 message(s), 0
-unclaimed` means nothing arrived at all, whereas unclaimed messages mean
-something arrived for a channel it was not waiting on.
+A consumer that gives up reports what it saw — `received 0 of 0 bytes` means
+nothing arrived at all, whereas bytes in the middle mean the delivery stalled
+part-way.
 
 ## Data flow: producer → merge (bitwise union) → consumer
 
@@ -505,8 +538,10 @@ never in an error raised into the query:
 - a broken connection → the query is failing anyway, and the interconnect
   reports it far more usefully than the filter path could;
 - query cancellation → the consumer's wait is a `CHECK_FOR_INTERRUPTS` loop, and
-  a delivery that arrives after nobody is waiting is discarded by the QE command
-  loop (`GP_SIDEBAND_MESSAGE` is accepted and ignored there).
+  a consumer that walks away mid-delivery withdraws its subscription: the
+  coordinator stops at the chunk boundary, and the one chunk that may still be
+  in flight is discarded at the door (not subscribed) or skipped whole by the
+  QE command loop (`GP_SIDEBAND_MESSAGE` is accepted and ignored there).
 
 ## Tests
 

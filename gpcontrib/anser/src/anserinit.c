@@ -61,6 +61,7 @@ bool		gp_anser_debug = false;
 int			gp_anser_max_info_size = 64 * 1024 * 1024 + 1024 * 1024;
 int			gp_anser_timeout_ms = 10000;
 int			gp_anser_debug_min_filter_bytes = 0;
+int			gp_anser_debug_delivery_chunk_bytes = 0;
 
 static void anser_define_gucs(void);
 static PlannedStmt *anser_planner(Query *parse, const char *query_string,
@@ -205,13 +206,16 @@ anser_define_gucs(void)
 							&gp_anser_max_info_size,
 							64 * 1024 * 1024 + 1024 * 1024, 1,
 							/*
-							 * Not INT_MAX: the payload has to arrive as one
-							 * protocol message, and pq_getmessage refuses
-							 * anything past PQ_LARGE_MESSAGE_LIMIT -- so a
-							 * larger setting buys a configuration that cannot
-							 * work, and used to overflow the cap computed from
-							 * it into a negative int.  Refusing it at SET is
-							 * the honest place to say so.
+							 * Not INT_MAX: every payload is held whole in a
+							 * single palloc on each end -- the coordinator's
+							 * merged payload and the consumer's assembly
+							 * buffer, plus the base64 copy of a part on the
+							 * producer -- so it must stay inside
+							 * MaxAllocSize.  A larger setting buys a
+							 * configuration that cannot work, and used to
+							 * overflow the cap computed from it into a
+							 * negative int.  Refusing it at SET is the honest
+							 * place to say so.
 							 */
 							(int) (PQ_LARGE_MESSAGE_LIMIT - ANSER_SIDEBAND_FRAME_ROOM),
 							PGC_SUSET,
@@ -235,6 +239,20 @@ anser_define_gucs(void)
 							"Sets a floor on the bloom-filter bitset size, for testing.",
 							"0 (the default) sizes filters from the plan estimate; anything larger forces at least that many bytes, still capped by anser.max_info_size.  A bigger filter over the same keys stays a superset of them, so this can only cost memory and wire time, never correctness.",
 							&gp_anser_debug_min_filter_bytes,
+							0, 0, INT_MAX,
+							PGC_SUSET,
+							0,
+							NULL, NULL, NULL);
+
+	/*
+	 * Read on the coordinator at delivery time only, and the choice never
+	 * travels -- a QE reassembles whatever chunk sizes arrive -- so no
+	 * NEED_SYNC: a QE never consults it.
+	 */
+	DefineCustomIntVariable("anser.debug_delivery_chunk_bytes",
+							"Sets the delivery chunk size, for testing.",
+							"0 (the default) sizes a chunk from the connection's send buffer; anything larger forces exactly that chunk size (the built-in floor still applies).  Small values turn one delivery into hundreds of NEXT round trips.",
+							&gp_anser_debug_delivery_chunk_bytes,
 							0, 0, INT_MAX,
 							PGC_SUSET,
 							0,
