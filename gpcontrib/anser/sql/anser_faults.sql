@@ -22,6 +22,10 @@ SET enable_nestloop = off;
 SET enable_mergejoin = off;
 SET optimizer = off;
 
+-- Trace every exchange step into the server logs (never reaches the client),
+-- so a CI run that goes wrong can be diagnosed from the log artifacts.
+SET anser.debug = on;
+
 -- nextval guard: the QD sends two kinds of message down a QE's dispatch
 -- connection -- the nextval reply and a sideband message -- and each has its
 -- own reader.  A reader that meets the other's message has to skip it whole:
@@ -113,17 +117,12 @@ DROP TABLE anser_rf_unsub_build, anser_rf_unsub_probe;
 
 -- A partially delivered filter must not wedge the next command.
 --
--- The push above is torn when the filter is bigger than the connection
--- buffers: the consumers give up and finish, the coordinator's non-blocking
--- write leaves the tail queued, and the poll loop stops flushing once the
--- peer's command completes.  The next dispatch on the same gang would then
--- overwrite the queued bytes (PQsendGpQuery_shared), leaving the QE waiting
--- forever for a body that never comes -- the session only ended with the
--- cluster.  ExecutorEnd now completes the flush, or poisons the connection.
---
--- The filter is forced to 64 MB (anser.debug_min_filter_bytes) so the push
--- cannot fit the buffers even on loopback.  This test hangs rather than fails
--- if the fix is reverted, the same warning as the push test above.
+-- With chunked delivery there is no torn 64 MB push any more: the coordinator
+-- sends one chunk and waits to be asked for the next.  What can still be in
+-- flight when every consumer has given up is exactly one chunk -- the QE is
+-- busy on its probe side by then, so the chunk sits in the stream until the
+-- command loop reads and skips it whole (postgres.c, GP_SIDEBAND_MESSAGE).
+-- The next command on the same gang must answer.
 SET anser.timeout_ms = 100;
 SET anser.debug_min_filter_bytes = 67108864;
 CREATE TABLE anser_rf_stale_build (id int, pad text) DISTRIBUTED BY (pad);
@@ -134,7 +133,7 @@ ANALYZE anser_rf_stale_build;
 ANALYZE anser_rf_stale_probe;
 
 -- Hold the delivery for 1 s so every consumer gives up at 100 ms and the
--- 64 MB filter is pushed to connections nobody is reading.
+-- first chunk goes out to connections nobody is reading.
 SELECT gp_inject_fault('anser_before_deliver', 'sleep', '', '', '', 1, 1, 1, dbid)
     FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 SET anser.runtime_filter = on;
@@ -143,28 +142,65 @@ SELECT count(*) AS stale_rows
 SELECT gp_inject_fault('anser_before_deliver', 'reset', dbid)
     FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 
--- The torn delivery is completed (or its connection poisoned) at ExecutorEnd,
--- so the next command on the same gang must answer.
+-- The leftover chunk is skipped whole, so the next command on the same gang
+-- must answer.
 SELECT 'next command' AS marker, count(*) AS build_rows FROM anser_rf_stale_build;
 DROP TABLE anser_rf_stale_build, anser_rf_stale_probe;
 RESET anser.debug_min_filter_bytes;
 
--- A filter parked by one statement must not be claimed by the next.
+-- Walking away mid-delivery must end it cleanly.  The fault pauses the
+-- consumer after its first chunk for longer than its deadline -- as a skip
+-- fault: the consumer itself waits out anser.timeout_ms plus a margin, on the
+-- monotonic clock, because a 'sleep' fault is a bare nanosleep that any
+-- signal cuts short.  The consumer withdraws, the coordinator's delivery
+-- stalls at the chunk boundary, and the one chunk in flight is discarded at
+-- the door: the key is no longer subscribed, so read_one drops it without a
+-- NEXT.  Results must still be exact, the coordinator must record the
+-- withdrawals, and the next command on the same gang must answer.
+SET anser.timeout_ms = 500;
+SET anser.debug_delivery_chunk_bytes = 8192;
+SET anser.debug_min_filter_bytes = 67108864;
+CREATE TABLE anser_rf_ab_build (id int, pad text) DISTRIBUTED BY (pad);
+CREATE TABLE anser_rf_ab_probe (id int) DISTRIBUTED BY (id);
+INSERT INTO anser_rf_ab_build SELECT g, 'b' || g FROM generate_series(1, 1000) g;
+INSERT INTO anser_rf_ab_probe SELECT g % 1000 + 1 FROM generate_series(1, 200000) g;
+ANALYZE anser_rf_ab_build;
+ANALYZE anser_rf_ab_probe;
+
+-- start_ignore
+CREATE EXTENSION IF NOT EXISTS anser_test;
+-- end_ignore
+SELECT anser_test_unsubscribes() AS unsub_before \gset
+-- Pause every consumer after its first chunk for longer than its deadline.
+SELECT gp_inject_fault('anser_after_chunk', 'skip', '', '', '', 1, 1, 0, dbid)
+    FROM gp_segment_configuration WHERE role = 'p' AND content >= 0;
+SET anser.runtime_filter = on;
+SELECT count(*) AS abort_rows
+    FROM anser_rf_ab_probe p JOIN anser_rf_ab_build b ON p.id = b.id;
+SELECT gp_inject_fault('anser_after_chunk', 'reset', dbid)
+    FROM gp_segment_configuration WHERE role = 'p' AND content >= 0;
+SELECT anser_test_unsubscribes() > :unsub_before AS consumers_withdrew;
+SELECT 'next command' AS marker, count(*) AS build_rows FROM anser_rf_ab_build;
+DROP EXTENSION anser_test;
+DROP TABLE anser_rf_ab_build, anser_rf_ab_probe;
+RESET anser.debug_min_filter_bytes;
+RESET anser.debug_delivery_chunk_bytes;
+
+-- A filter from one statement must not be claimed by the next.
 --
--- A consumer that waits while a delivery for another channel arrives parks it
--- in the inbox.  If the statement then errors inside a savepoint, there is no
--- ExecutorEnd for it (a failed portal skips it), so the parked entry used to
--- survive -- and the next statement, whose condition keys restart at the same
--- values, claimed it: a filter built from the old build side pruned the new
--- one.  Deliveries now carry the session id and command count and a consumer
--- matches on them exactly, and the subtransaction abort drops the inbox.
+-- A consumer that runs out of time withdraws, and with chunked delivery the
+-- coordinator stops at the chunk boundary: the one chunk in flight is dropped
+-- at the door, because the key is no longer subscribed.  And even a filter
+-- that somehow got parked whole could not be claimed by the next statement:
+-- condition keys restart at the same values, but the session id and command
+-- count stamped on the wire must match exactly.
 --
 -- The LEFT JOIN pins j2 as the build side, so its consumer waits first: it
--- gives up at 700 ms while the coordinator sleeps for 1 s, its late delivery
--- is then read -- and parked -- by j1's consumer, and the division errors
--- before anything claims it.  The second run re-executes the same plan shape
--- with a build side disjoint from the parked filter: claiming it would drop
--- every joinable row, so count(j2.id) must be 1000, not 0.
+-- gives up at 700 ms while the coordinator sleeps for 1 s, its late first
+-- chunk is then read -- and dropped -- while j1's consumer waits, and the
+-- division errors.  The second run re-executes the same plan shape with a
+-- build side disjoint from the parked filter: claiming anything stale would
+-- drop every joinable row, so count(j2.id) must be 1000, not 0.
 SET anser.timeout_ms = 700;
 CREATE TABLE anser_sf_b1 (id int, pad text) DISTRIBUTED BY (pad);
 CREATE TABLE anser_sf_p1 (id int) DISTRIBUTED BY (id);
@@ -201,6 +237,7 @@ SELECT gp_inject_fault('anser_before_deliver', 'reset', dbid)
 DROP TABLE anser_sf_b1, anser_sf_p1, anser_sf_b2, anser_sf_p2;
 
 RESET anser.runtime_filter;
+RESET anser.debug;
 RESET anser.timeout_ms;
 RESET optimizer;
 RESET enable_nestloop;

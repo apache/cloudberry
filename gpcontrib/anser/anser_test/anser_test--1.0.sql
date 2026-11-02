@@ -82,7 +82,8 @@ CREATE FUNCTION anser_test_wire_roundtrip(
     condition_key text,
     body bytea,
     tamper text,
-    payload_type "char")
+    payload_type "char",
+    kind "char")
 RETURNS text
 AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT;
@@ -94,6 +95,8 @@ CREATE FUNCTION anser_test_push_crc(
     session_id int4,
     command_count int4,
     flags int4,
+    total_len int4,
+    chunk_offset int4,
     condition_key text,
     body bytea)
 RETURNS int8
@@ -150,6 +153,13 @@ LANGUAGE C CALLED ON NULL INPUT;
 -- Withdrawals the coordinator has honoured in this backend, so a test can see
 -- that a consumer which ran out of time actually said so.
 CREATE FUNCTION anser_test_unsubscribes()
+RETURNS int8
+AS 'MODULE_PATHNAME'
+LANGUAGE C STRICT;
+
+-- Deliveries the coordinator has completed in this backend, so a test can tell
+-- "the filter arrived" apart from "the consumer gave up and ran unfiltered".
+CREATE FUNCTION anser_test_deliveries_completed()
 RETURNS int8
 AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT;

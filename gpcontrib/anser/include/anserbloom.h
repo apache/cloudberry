@@ -32,6 +32,59 @@
 
 #include "anser.h"
 #include "lib/bloomfilter.h"
+#include "executor/executor.h"
+
+/*
+ * Only the low attlen bytes of a by-value Datum belong to the value. Heap
+ * access may sign-extend them while AOCO zero-extends them. Clear the unused
+ * high bits before hashing, independent of storage and projection paths.
+ * Callers validate by-value key types before reaching the executor.
+ */
+static inline Datum
+AnserNormalizeBloomDatum(Datum value, int16 key_length)
+{
+	switch (key_length)
+	{
+		case 1:
+			return (Datum) (uint8) value;
+		case 2:
+			return (Datum) (uint16) value;
+		case 4:
+			return (Datum) (uint32) value;
+		default:
+			Assert(key_length == sizeof(Datum));
+			return value;
+	}
+}
+
+/* ERROR-free for a valid by-value key width; NULL handling is the caller's. */
+static inline void
+AnserBloomAddKey(bloom_filter *filter, Datum value, int16 key_length)
+{
+	value = AnserNormalizeBloomDatum(value, key_length);
+	bloom_add_element(filter, (unsigned char *) &value, sizeof(Datum));
+}
+
+static inline bool
+AnserBloomLacksKey(bloom_filter *filter, Datum value, int16 key_length)
+{
+	value = AnserNormalizeBloomDatum(value, key_length);
+	return bloom_lacks_element(filter, (unsigned char *) &value, sizeof(Datum));
+}
+
+/* Output position, not table attno. No allocation or catalog access. */
+static inline int16
+AnserKeyLength(PlanState *child, AttrNumber attno)
+{
+	TupleDesc desc;
+
+	Assert(child != NULL);
+	desc = ExecGetResultType(child);
+	Assert(desc != NULL);
+	Assert(attno >= 1 && attno <= desc->natts);
+	Assert(TupleDescAttr(desc, attno - 1)->attbyval);
+	return TupleDescAttr(desc, attno - 1)->attlen;
+}
 
 /*
  * Opaque executor state handles for the Bloom filter producer and
@@ -49,7 +102,7 @@ extern PGDLLEXPORT AnserBloomFilterProduceState *ExecInitAnserBloomFilterProduce
 										uint32 part_index,
 										uint32 total_parts);
 extern PGDLLEXPORT void ExecAnserBloomFilterProduceAddDatum(AnserBloomFilterProduceState *state,
-										 Datum value, bool isnull);
+										 Datum value, bool isnull, int16 key_length);
 extern PGDLLEXPORT bool ExecAnserBloomFilterProduceHasFilter(AnserBloomFilterProduceState *state);
 extern PGDLLEXPORT bool ExecAnserBloomFilterProducePublish(AnserBloomFilterProduceState *state);
 extern PGDLLEXPORT bool ExecAnserBloomFilterProduceCancel(AnserBloomFilterProduceState *state);
