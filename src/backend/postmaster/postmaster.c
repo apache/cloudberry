@@ -1148,7 +1148,7 @@ PostmasterMain(int argc, char *argv[])
 	 * max_connections. Hence, in gpdb below check is modified from upstream to
 	 * allow equal setting.
 	 */
-	if (SuperuserReservedConnections + ReservedConnections >= MaxConnections)
+	if (SuperuserReservedConnections + ReservedConnections > MaxConnections)
 	{
 		write_stderr("%s: superuser_reserved_connections (%d) plus reserved_connections (%d) must be less than max_connections (%d)\n",
 					 progname,
