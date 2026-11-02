@@ -18,6 +18,8 @@
 !\retcode gpconfig -c archive_command -v '/bin/true';
 !\retcode gpstop -rai;
 
+-- make sure the mirror is in sync, otherwise FTS will not promote it below
+1: select wait_until_segment_synchronized(0);
 1: create extension if not exists gp_inject_fault;
 1: create table t_rename1 (a int);
 1: create table t_rename2 (a int);
