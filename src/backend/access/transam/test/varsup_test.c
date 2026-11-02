@@ -28,7 +28,6 @@ static int expected_elevel;
 
 static void expect_ereport(int log_level)
 {
-	/* GPDB_14_MERGE_FIXME: check errcode funtion if there is an error */
 	expected_elevel = log_level;
 	if (log_level < ERROR)
 	{
@@ -145,8 +144,7 @@ test_GetNewTransactionId_xid_warn_limit(void **state)
 	expect_any(LWLockRelease, lock);
 	will_be_called(LWLockRelease);
 	/*
-	* GPDB_14_MERGE_FIXME
-	* We must put this function after all the expect*, eles it will fatal
+	* GPDB: this must come after all the expect_*() calls, else it will fatal
 	*/
 	init_ProcGlobal();
 	

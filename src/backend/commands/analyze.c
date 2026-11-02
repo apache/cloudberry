@@ -1775,7 +1775,7 @@ acquire_sample_rows(Relation onerel, int elevel,
 
 #ifdef USE_PREFETCH
 	/*
-	 * GPDB_14_MERGE_FIXME: pre-fetching is introduced in PG14.
+	 * GPDB: pre-fetching is introduced in PG14.
 	 * It's not suitable for AO tables, will get error when PrefetchBuffer
 	 * because Blocks is not same as Heap tables.
 	 * Set prefetch_maximum to zero seems the easiest way to bypass.
