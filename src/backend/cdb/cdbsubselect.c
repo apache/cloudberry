@@ -567,6 +567,12 @@ safe_to_convert_EXPR(SubLink *sublink, ConvertSubqueryToJoinContext *ctx1)
 	if (list_length(subselect->targetList) != 1)
 		return false;
 
+	/**
+	 * Pullup of subquery which has window functions lead to wrong query result,
+	 * because window functions are evaluated over the whole subquery
+	 */
+	if (subselect->hasWindowFuncs)
+		return false;
 
 	/**
 	 * Walk the quals of the subquery to do a more fine grained check as to whether this subquery
