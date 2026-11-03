@@ -962,6 +962,190 @@ SELECT name FROM t_c_dml ORDER BY name;
 
 DROP TABLE t_c_dml;
 -- ======================================================================
+-- Test: ORCA's own constant comparisons must follow the column collation
+-- ======================================================================
+-- ORCA compares constants with the type's default collation when deriving
+-- range constraints, so it must not derive them for a COLLATE "C" column.
+-- Under C, 'Z' < 'Zz' < 'a', so this is not a contradiction.
+EXPLAIN (COSTS OFF)
+SELECT name FROM t_c_collation WHERE name > 'Z' AND name < 'a';
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on t_c_collation
+         Filter: ((name > 'Z'::text) AND (name < 'a'::text))
+ Optimizer: GPORCA
+(4 rows)
+
+INSERT INTO t_c_collation VALUES (7, 'Zz', 'zz');
+SELECT name FROM t_c_collation WHERE name > 'Z' AND name < 'a';
+ name 
+------
+ Zz
+(1 row)
+
+DELETE FROM t_c_collation WHERE id = 7;
+-- Same for a name column, whose type collation is C: ranges are still
+-- derived, and compared under C
+CREATE TABLE t_name_col (id int, n name) DISTRIBUTED BY (id);
+INSERT INTO t_name_col VALUES (1, 'Zz');
+EXPLAIN (COSTS OFF)
+SELECT n FROM t_name_col WHERE n > 'b' AND n < 'a';
+        QUERY PLAN        
+--------------------------
+ Result
+   One-Time Filter: false
+ Optimizer: GPORCA
+(3 rows)
+
+SELECT n FROM t_name_col WHERE n > 'Z' AND n < 'a';
+ n  
+----
+ Zz
+(1 row)
+
+DROP TABLE t_name_col;
+-- Static partition pruning on a COLLATE "C" partition key
+CREATE TABLE t_c_part (id int, name text COLLATE "C")
+DISTRIBUTED BY (id) PARTITION BY RANGE (name);
+CREATE TABLE t_c_part_1 PARTITION OF t_c_part FOR VALUES FROM (MINVALUE) TO ('B');
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE t_c_part_2 PARTITION OF t_c_part FOR VALUES FROM ('B') TO (MAXVALUE);
+NOTICE:  table has parent, setting distribution columns to match parent table
+INSERT INTO t_c_part VALUES (1, 'ABC'), (2, 'Bcd'), (3, 'Zed'), (4, 'abc'), (5, 'bcd');
+ANALYZE t_c_part;
+EXPLAIN (COSTS OFF) SELECT name FROM t_c_part WHERE name < 'a';
+                     QUERY PLAN                     
+----------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Dynamic Seq Scan on t_c_part
+         Number of partitions to scan: 2 (out of 2)
+         Filter: (name < 'a'::text)
+ Optimizer: GPORCA
+(5 rows)
+
+SELECT name FROM t_c_part WHERE name < 'a' ORDER BY name;
+ name 
+------
+ ABC
+ Bcd
+ Zed
+(3 rows)
+
+SELECT name FROM t_c_part WHERE name >= 'a' ORDER BY name;
+ name 
+------
+ abc
+ bcd
+(2 rows)
+
+SELECT name FROM t_c_part WHERE name = 'Bcd';
+ name 
+------
+ Bcd
+(1 row)
+
+DROP TABLE t_c_part;
+-- Partition key with a collation different from the column's
+CREATE TABLE t_c_part2 (id int, name text COLLATE "C")
+DISTRIBUTED BY (id) PARTITION BY RANGE (name COLLATE "default");
+CREATE TABLE t_c_part2_1 PARTITION OF t_c_part2 FOR VALUES FROM (MINVALUE) TO ('b');
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE t_c_part2_2 PARTITION OF t_c_part2 FOR VALUES FROM ('b') TO (MAXVALUE);
+NOTICE:  table has parent, setting distribution columns to match parent table
+INSERT INTO t_c_part2 VALUES (1, 'abc'), (2, 'ABC'), (3, 'Bcd'), (4, 'bcd'), (5, 'Zed'), (6, 'zed');
+ANALYZE t_c_part2;
+SELECT name FROM t_c_part2 WHERE name < 'b' ORDER BY name;
+ name 
+------
+ ABC
+ Bcd
+ Zed
+ abc
+(4 rows)
+
+DROP TABLE t_c_part2;
+-- ======================================================================
+-- Test: indexes whose collation differs from the column's are not used
+-- ======================================================================
+SET enable_seqscan TO off;
+-- COLLATE "C" column, index in the default collation
+CREATE TABLE t_c_idx (id int, name text COLLATE "C") DISTRIBUTED BY (id);
+INSERT INTO t_c_idx SELECT g, (ARRAY['abc','ABC','def','DEF'])[1 + g % 4] || g
+FROM generate_series(1, 1000) g;
+CREATE INDEX t_c_idx_default ON t_c_idx (name COLLATE "default");
+ANALYZE t_c_idx;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM t_c_idx WHERE name < 'b';
+                   QUERY PLAN                   
+------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on t_c_idx
+                     Filter: (name < 'b'::text)
+ Optimizer: GPORCA
+(6 rows)
+
+SELECT count(*) FROM t_c_idx WHERE name < 'b';
+ count 
+-------
+   750
+(1 row)
+
+SELECT name FROM t_c_idx WHERE name < 'b' ORDER BY name LIMIT 3;
+  name  
+--------
+ ABC1
+ ABC101
+ ABC105
+(3 rows)
+
+-- an index in the column's own collation is still used
+CREATE INDEX t_c_idx_c ON t_c_idx (name);
+EXPLAIN (COSTS OFF) SELECT count(*) FROM t_c_idx WHERE name < 'b';
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Index Scan using t_c_idx_c on t_c_idx
+                     Index Cond: (name < 'b'::text)
+ Optimizer: GPORCA
+(6 rows)
+
+SELECT count(*) FROM t_c_idx WHERE name < 'b';
+ count 
+-------
+   750
+(1 row)
+
+DROP TABLE t_c_idx;
+-- default collation column, index in COLLATE "C"
+CREATE TABLE t_default_idx (id int, name text) DISTRIBUTED BY (id);
+INSERT INTO t_default_idx SELECT g, (ARRAY['abc','ABC','def','DEF'])[1 + g % 4] || g
+FROM generate_series(1, 1000) g;
+CREATE INDEX t_default_idx_c ON t_default_idx (name COLLATE "C");
+ANALYZE t_default_idx;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM t_default_idx WHERE name < 'b';
+                   QUERY PLAN                   
+------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on t_default_idx
+                     Filter: (name < 'b'::text)
+ Optimizer: GPORCA
+(6 rows)
+
+SELECT count(*) FROM t_default_idx WHERE name < 'b';
+ count 
+-------
+   500
+(1 row)
+
+DROP TABLE t_default_idx;
+RESET enable_seqscan;
+-- ======================================================================
 -- Cleanup
 -- ======================================================================
 RESET optimizer_trace_fallback;

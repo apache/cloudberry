@@ -249,6 +249,9 @@ Oid ExprCollation(Node *expr);
 // expression collation - GPDB_91_MERGE_FIXME
 Oid TypeCollation(Oid type);
 
+// collation of a relation's attribute
+Oid GetAttCollation(Oid relid, AttrNumber attnum);
+
 // Byval type get len
 void TypLenByVal(Oid typid, int16 *typlen, bool *typbyval);
 
