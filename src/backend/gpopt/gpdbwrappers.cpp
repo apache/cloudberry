@@ -614,6 +614,18 @@ gpdb::IsAggPartialCapable(Oid aggid)
 	return false;
 }
 
+bool
+gpdb::IsAggOrderInsensitive(Oid aggid)
+{
+	GP_WRAP_START;
+	{
+		/* catalog tables: pg_aggregate, pg_amop, pg_amproc */
+		return is_agg_order_insensitive(aggid);
+	}
+	GP_WRAP_END;
+	return false;
+}
+
 Oid
 gpdb::GetAggregate(const char *agg, Oid type_oid)
 {

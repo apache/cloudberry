@@ -3858,6 +3858,36 @@ CTranslatorExprToDXL::PdxlnAggregate(CExpression *pexprAgg,
 	CDXLNode *proj_list_dxlnode =
 		PdxlnProjList(pexprProjList, pcrsRequired, colref_array);
 
+	// mark the aggregates with ORDER BY whose input the scalar aggregate
+	// required to be sorted, see CPhysicalScalarAgg::PosPresorted
+	if (COperator::EopPhysicalScalarAgg == pexprAgg->Pop()->Eopid())
+	{
+		COrderSpec *pos =
+			CPhysicalScalarAgg::PopConvert(pexprAgg->Pop())
+				->PosPresorted(m_mp, pexprProjList,
+							   pexprChild->DeriveOutputColumns());
+		if (!pos->IsEmpty())
+		{
+			for (ULONG ul = 0; ul < proj_list_dxlnode->Arity(); ul++)
+			{
+				CDXLNode *pdxlnScalar = (*(*proj_list_dxlnode)[ul])[0];
+				if (EdxlopScalarAggref !=
+					pdxlnScalar->GetOperator()->GetDXLOperator())
+				{
+					continue;
+				}
+
+				CDXLScalarAggref *pdxlopAggref =
+					CDXLScalarAggref::Cast(pdxlnScalar->GetOperator());
+				if (0 < (*pdxlnScalar)[EdxlscalaraggrefIndexAggOrder]->Arity())
+				{
+					pdxlopAggref->SetPresorted(true);
+				}
+			}
+		}
+		pos->Release();
+	}
+
 	// create an empty filter
 	CDXLNode *filter_dxlnode =
 		GPOS_NEW(m_mp) CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLScalarFilter(m_mp));

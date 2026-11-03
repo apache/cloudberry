@@ -164,6 +164,7 @@ extern Oid get_agg_transtype(Oid aggid);
 extern bool is_agg_ordered(Oid aggid);
 extern bool is_agg_repsafe(Oid aggid);
 extern bool is_agg_partial_capable(Oid aggid);
+extern bool is_agg_order_insensitive(Oid aggid);
 extern RegProcedure get_func_support(Oid funcid);
 extern Oid	get_relname_relid(const char *relname, Oid relnamespace);
 extern char *get_rel_name(Oid relid);

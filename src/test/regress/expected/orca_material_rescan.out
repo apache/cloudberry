@@ -57,16 +57,19 @@ EXPLAIN (COSTS OFF)
                      Filter: ((ae_occr_dtm >= 'Wed Jun 10 06:00:00 2026'::timestamp without time zone) AND (ae_occr_dtm < 'Thu Jun 11 06:00:00 2026'::timestamp without time zone))
          SubPlan 1
            ->  Aggregate
-                 ->  Nested Loop
-                       Join Filter: ((t1.ae_rule_id)::text = (unnest(string_to_array((sh.ae_rule_id_ctn)::text, ','::text))))
-                       ->  Materialize
-                             ->  Gather Motion 3:1  (slice2; segments: 3)
-                                   ->  Seq Scan on ae_rule t1
-                       ->  Materialize
-                             ->  ProjectSet
-                                   ->  Result
+                 ->  Result
+                       ->  Sort
+                             Sort Key: t1.ae_rule_id
+                             ->  Nested Loop
+                                   Join Filter: ((t1.ae_rule_id)::text = (unnest(string_to_array((sh.ae_rule_id_ctn)::text, ','::text))))
+                                   ->  Materialize
+                                         ->  Gather Motion 3:1  (slice2; segments: 3)
+                                               ->  Seq Scan on ae_rule t1
+                                   ->  Materialize
+                                         ->  ProjectSet
+                                               ->  Result
  Optimizer: GPORCA
-(17 rows)
+(20 rows)
 
 :qry ;
  seq_nvl | ae_rule_id_ctn |        rule_ctrl        
@@ -86,11 +89,11 @@ SELECT * FROM (:qry) q WHERE seq_nvl >= $1;
 EXECUTE material_rescan(1);
  seq_nvl | ae_rule_id_ctn |        rule_ctrl        
 ---------+----------------+-------------------------
+       4 | R_04,R_99      | Sensor Offline
+       5 | R_01,R_01      | Overheating,Overheating
        1 | R_01,R_02      | Overheating,R_02
        2 | R_03           | Calibration Error
        3 |                | 
-       4 | R_04,R_99      | Sensor Offline
-       5 | R_01,R_01      | Overheating,Overheating
        6 |                | 
 (6 rows)
 

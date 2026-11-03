@@ -2097,6 +2097,86 @@ is_agg_partial_capable(Oid aggid)
 }
 
 /*
+ * is_agg_order_insensitive
+ *		Given aggregate id, check that its result never depends on the order
+ *		of its input, even with an ORDER BY clause, so that it can be split
+ *		into partial aggregation regardless.
+ *
+ * This holds for a MIN/MAX-like aggregate, i.e. one with a sort operator,
+ * if equal values of its input type are also identical: otherwise ORDER BY
+ * decides which of several equal but distinguishable values, like 4.0 and
+ * 4.00, is returned (see preprocess_minmax_aggregates()).  We check that
+ * with the "equalimage" support function of the sort operator's btree
+ * operator family, the same way as _bt_allequalimage() does.
+ *
+ * It also holds for the built-in aggregates below, whose transitions are
+ * exact and commutative.  Return false for any other aggregate, including
+ * all user-defined ones that are not MIN/MAX-like, as we cannot know.
+ */
+bool
+is_agg_order_insensitive(Oid aggid)
+{
+	HeapTuple	aggTuple;
+	Oid			aggsortop;
+	Oid			opfamily;
+	Oid			opcintype;
+	int16		strategy;
+	Oid			equalimageproc;
+
+	switch (aggid)
+	{
+		case F_COUNT_:
+		case F_COUNT_ANY:
+		case F_SUM_INT2:
+		case F_SUM_INT4:
+		case F_SUM_INT8:
+		case F_SUM_NUMERIC:
+		case F_SUM_INTERVAL:
+		case F_SUM_MONEY:
+		case F_AVG_INT2:
+		case F_AVG_INT4:
+		case F_AVG_INT8:
+		case F_AVG_NUMERIC:
+		case F_AVG_INTERVAL:
+		case F_BIT_AND_INT2:
+		case F_BIT_AND_INT4:
+		case F_BIT_AND_INT8:
+		case F_BIT_AND_BIT:
+		case F_BIT_OR_INT2:
+		case F_BIT_OR_INT4:
+		case F_BIT_OR_INT8:
+		case F_BIT_OR_BIT:
+		case F_BIT_XOR_INT2:
+		case F_BIT_XOR_INT4:
+		case F_BIT_XOR_INT8:
+		case F_BIT_XOR_BIT:
+		case F_ANY_VALUE:
+			return true;
+		default:
+			break;
+	}
+
+	aggTuple = SearchSysCache1(AGGFNOID, ObjectIdGetDatum(aggid));
+	if (!HeapTupleIsValid(aggTuple))
+		elog(ERROR, "cache lookup failed for aggregate %u", aggid);
+	aggsortop = ((Form_pg_aggregate) GETSTRUCT(aggTuple))->aggsortop;
+	ReleaseSysCache(aggTuple);
+
+	if (!OidIsValid(aggsortop) ||
+		!get_ordering_op_properties(aggsortop, &opfamily, &opcintype, &strategy))
+		return false;
+
+	equalimageproc = get_opfamily_proc(opfamily, opcintype, opcintype,
+									   BTEQUALIMAGE_PROC);
+	if (!OidIsValid(equalimageproc))
+		return false;
+
+	return DatumGetBool(OidFunctionCall1Coll(equalimageproc,
+											 DEFAULT_COLLATION_OID,
+											 ObjectIdGetDatum(opcintype)));
+}
+
+/*
  * get_rel_relisivm
  *
  *		Returns the relisivm flag associated with a given relation.

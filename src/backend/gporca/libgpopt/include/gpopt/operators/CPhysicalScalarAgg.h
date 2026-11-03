@@ -65,6 +65,11 @@ public:
 	// Required Plan Properties
 	//-------------------------------------------------------------------------------------
 
+	// order of the input that lets the aggregates with ORDER BY in the
+	// given project list skip their own sort, empty if there is none
+	COrderSpec *PosPresorted(CMemoryPool *mp, CExpression *pexprPrL,
+							 CColRefSet *pcrsChildOutput) const;
+
 	// compute required sort columns of the n-th child
 	COrderSpec *PosRequired(CMemoryPool *mp, CExpressionHandle &exprhdl,
 							COrderSpec *posRequired, ULONG child_index,

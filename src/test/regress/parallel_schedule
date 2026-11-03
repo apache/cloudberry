@@ -202,6 +202,7 @@ test: constraints_check
 
 # test of tag
 # test: tag
+test: orca_agg_order_by
 
 # run tablespace test at the end because it drops the tablespace created during
 # setup that other tests may use.
