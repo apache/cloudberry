@@ -120,9 +120,6 @@ clean:
 	rm -rf tmp_install/ portlock/
 # Garbage from autoconf:
 	@rm -rf autom4te.cache/
-# leap over gpAux/Makefile into subdirectories to avoid circular dependency.
-# gpAux/Makefile is the entry point for the enterprise build, which ends up
-# calling top-level configure and this Makefile
 	$(MAKE) -C gpMgmt $@
 
 # Important: distclean `src' last, otherwise Makefile.global

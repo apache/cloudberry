@@ -87,8 +87,7 @@ tooling, upgrade behavior, and user data safety.
   integration test infrastructure.
 - [gpMgmt/](gpMgmt/) — Python management utilities and
   cluster administration tooling.
-- [gpAux/](gpAux/) — auxiliary scripts, demo cluster support,
-  packaging, and build helpers.
+- [gpAux/](gpAux/) — demo cluster scripts (gpdemo).
 - [gpcontrib/](gpcontrib/) — Cloudberry-related extensions and
   contributed modules.
 - [contrib/](contrib/) — PostgreSQL-style contributed modules
