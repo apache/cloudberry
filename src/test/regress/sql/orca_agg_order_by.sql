@@ -115,6 +115,30 @@ RESET optimizer_enable_presorted_agg;
 DROP TABLE t_agg_presort;
 
 -- ======================================================================
+-- Test: GROUP BY with aggregates with ORDER BY
+-- ======================================================================
+
+-- A hash aggregate cannot sort the input of an aggregate with ORDER BY
+-- per group, so ORCA must use a stream aggregate instead of falling back.
+CREATE TABLE t_agg_group (id int, k int, v text) DISTRIBUTED BY (id);
+INSERT INTO t_agg_group SELECT g, g % 3, lpad(g::text, 2, '0')
+FROM generate_series(1, 30) g;
+ANALYZE t_agg_group;
+
+EXPLAIN (COSTS OFF)
+SELECT k, string_agg(v, ',' ORDER BY v) FROM t_agg_group GROUP BY k;
+SELECT k, string_agg(v, ',' ORDER BY v DESC) FROM t_agg_group GROUP BY k ORDER BY k;
+SELECT k, array_agg(id ORDER BY id), count(*) FROM t_agg_group GROUP BY k ORDER BY k;
+EXPLAIN (COSTS OFF)
+SELECT k, sum(id ORDER BY id) FROM t_agg_group GROUP BY k;
+SELECT k, sum(id ORDER BY id) FROM t_agg_group GROUP BY k ORDER BY k;
+
+-- without ORDER BY, a hash aggregate is still used
+EXPLAIN (COSTS OFF) SELECT k, sum(id) FROM t_agg_group GROUP BY k;
+
+DROP TABLE t_agg_group;
+
+-- ======================================================================
 -- Cleanup
 -- ======================================================================
 
