@@ -242,6 +242,22 @@ gpdb::TypeCollation(Oid type)
 	return 0;
 }
 
+Oid
+gpdb::GetAttCollation(Oid relid, AttrNumber attnum)
+{
+	GP_WRAP_START;
+	{
+		Oid typid;
+		int32 typmod;
+		Oid collid;
+
+		get_atttypetypmodcoll(relid, attnum, &typid, &typmod, &collid);
+		return collid;
+	}
+	GP_WRAP_END;
+	return InvalidOid;
+}
+
 void
 gpdb::TypLenByVal(Oid typid, int16 *typlen, bool *typbyval)
 {

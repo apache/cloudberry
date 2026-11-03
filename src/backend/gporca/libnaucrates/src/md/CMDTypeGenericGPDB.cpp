@@ -67,7 +67,7 @@ CMDTypeGenericGPDB::CMDTypeGenericGPDB(
 	IMDId *mdid_op_avg, IMDId *mdid_op_sum, IMDId *mdid_op_count,
 	BOOL is_hashable, BOOL is_merge_joinable, BOOL is_composite_type,
 	BOOL is_text_related, IMDId *mdid_base_relation, IMDId *mdid_type_array,
-	INT gpdb_length)
+	INT gpdb_length, OID type_collation)
 	: m_mp(mp),
 	  m_mdid(mdid),
 	  m_mdname(mdname),
@@ -99,7 +99,8 @@ CMDTypeGenericGPDB::CMDTypeGenericGPDB(
 	  m_mdid_base_relation(mdid_base_relation),
 	  m_mdid_type_array(mdid_type_array),
 	  m_gpdb_length(gpdb_length),
-	  m_datum_null(nullptr)
+	  m_datum_null(nullptr),
+	  m_type_collation(type_collation)
 {
 	GPOS_ASSERT_IMP(m_is_fixed_length, 0 < m_length);
 	GPOS_ASSERT_IMP(!m_is_fixed_length, 0 > m_gpdb_length);

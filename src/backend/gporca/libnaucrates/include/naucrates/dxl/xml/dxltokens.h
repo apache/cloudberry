@@ -591,6 +591,7 @@ enum Edxltoken
 	EdxltokenMDTypeMergeJoinable,
 	EdxltokenMDTypeComposite,
 	EdxltokenMDTypeIsTextRelated,
+	EdxltokenMDTypeCollation,
 	EdxltokenMDTypeFixedLength,
 	EdxltokenMDTypeLength,
 	EdxltokenMDTypeByValue,

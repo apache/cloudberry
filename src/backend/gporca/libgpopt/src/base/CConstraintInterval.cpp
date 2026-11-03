@@ -570,6 +570,11 @@ CConstraintInterval::PciIntervalFromColConstCmp(CMemoryPool *mp,
 												CScalarConst *popScConst,
 												BOOL infer_nulls_as)
 {
+	if (!FColConstCmpSupported(colref, cmp_type))
+	{
+		return nullptr;
+	}
+
 	CConstraintInterval *pcri = nullptr;
 	CRangeArray *pdrngprng = PciRangeFromColConstCmp(mp, cmp_type, popScConst);
 
@@ -584,6 +589,40 @@ CConstraintInterval::PciIntervalFromColConstCmp(CMemoryPool *mp,
 	return pcri;
 }
 
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CConstraintInterval::FColConstCmpSupported
+//
+//	@doc:
+//		Check if an interval can be derived from comparing the column with a
+//		constant using the given comparison type.
+//
+//		Range bounds are compared by CDefaultComparator, which evaluates the
+//		comparison on constants that carry the type's default collation. For
+//		a column whose collation differs from it (e.g. a text column declared
+//		COLLATE "C"), the resulting order is wrong, and so would be any
+//		contradiction or partition pruning derived from the ranges. Equality
+//		based comparisons only produce points, whose intersections and unions
+//		do not depend on the sort order, so they are still supported.
+//
+//---------------------------------------------------------------------------
+BOOL
+CConstraintInterval::FColConstCmpSupported(const CColRef *colref,
+										   IMDType::ECmpType cmp_type)
+{
+	if (IMDType::EcmptEq == cmp_type || IMDType::EcmptNEq == cmp_type ||
+		IMDType::EcmptIDF == cmp_type)
+	{
+		return true;
+	}
+
+	OID col_collation = colref->Collation();
+	OID type_collation = colref->RetrieveType()->TypeCollation();
+
+	return 0 == col_collation || 0 == type_collation ||
+		   col_collation == type_collation;
+}
 
 //---------------------------------------------------------------------------
 //	@function:

@@ -645,6 +645,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenMDTypeMergeJoinable, GPOS_WSZ_LIT("IsMergeJoinable")},
 		{EdxltokenMDTypeComposite, GPOS_WSZ_LIT("IsComposite")},
 		{EdxltokenMDTypeIsTextRelated, GPOS_WSZ_LIT("IsTextRelated")},
+		{EdxltokenMDTypeCollation, GPOS_WSZ_LIT("TypeCollation")},
 		{EdxltokenMDTypeFixedLength, GPOS_WSZ_LIT("IsFixedLength")},
 		{EdxltokenMDTypeLength, GPOS_WSZ_LIT("Length")},
 		{EdxltokenMDTypeByValue, GPOS_WSZ_LIT("PassByValue")},

@@ -462,6 +462,85 @@ SELECT name FROM t_c_dml ORDER BY name;
 DROP TABLE t_c_dml;
 
 -- ======================================================================
+-- Test: ORCA's own constant comparisons must follow the column collation
+-- ======================================================================
+
+-- ORCA compares constants with the type's default collation when deriving
+-- range constraints, so it must not derive them for a COLLATE "C" column.
+-- Under C, 'Z' < 'Zz' < 'a', so this is not a contradiction.
+EXPLAIN (COSTS OFF)
+SELECT name FROM t_c_collation WHERE name > 'Z' AND name < 'a';
+INSERT INTO t_c_collation VALUES (7, 'Zz', 'zz');
+SELECT name FROM t_c_collation WHERE name > 'Z' AND name < 'a';
+DELETE FROM t_c_collation WHERE id = 7;
+
+-- Same for a name column, whose type collation is C: ranges are still
+-- derived, and compared under C
+CREATE TABLE t_name_col (id int, n name) DISTRIBUTED BY (id);
+INSERT INTO t_name_col VALUES (1, 'Zz');
+EXPLAIN (COSTS OFF)
+SELECT n FROM t_name_col WHERE n > 'b' AND n < 'a';
+SELECT n FROM t_name_col WHERE n > 'Z' AND n < 'a';
+DROP TABLE t_name_col;
+
+-- Static partition pruning on a COLLATE "C" partition key
+CREATE TABLE t_c_part (id int, name text COLLATE "C")
+DISTRIBUTED BY (id) PARTITION BY RANGE (name);
+CREATE TABLE t_c_part_1 PARTITION OF t_c_part FOR VALUES FROM (MINVALUE) TO ('B');
+CREATE TABLE t_c_part_2 PARTITION OF t_c_part FOR VALUES FROM ('B') TO (MAXVALUE);
+INSERT INTO t_c_part VALUES (1, 'ABC'), (2, 'Bcd'), (3, 'Zed'), (4, 'abc'), (5, 'bcd');
+ANALYZE t_c_part;
+EXPLAIN (COSTS OFF) SELECT name FROM t_c_part WHERE name < 'a';
+SELECT name FROM t_c_part WHERE name < 'a' ORDER BY name;
+SELECT name FROM t_c_part WHERE name >= 'a' ORDER BY name;
+SELECT name FROM t_c_part WHERE name = 'Bcd';
+DROP TABLE t_c_part;
+
+-- Partition key with a collation different from the column's
+CREATE TABLE t_c_part2 (id int, name text COLLATE "C")
+DISTRIBUTED BY (id) PARTITION BY RANGE (name COLLATE "default");
+CREATE TABLE t_c_part2_1 PARTITION OF t_c_part2 FOR VALUES FROM (MINVALUE) TO ('b');
+CREATE TABLE t_c_part2_2 PARTITION OF t_c_part2 FOR VALUES FROM ('b') TO (MAXVALUE);
+INSERT INTO t_c_part2 VALUES (1, 'abc'), (2, 'ABC'), (3, 'Bcd'), (4, 'bcd'), (5, 'Zed'), (6, 'zed');
+ANALYZE t_c_part2;
+SELECT name FROM t_c_part2 WHERE name < 'b' ORDER BY name;
+DROP TABLE t_c_part2;
+
+-- ======================================================================
+-- Test: indexes whose collation differs from the column's are not used
+-- ======================================================================
+
+SET enable_seqscan TO off;
+
+-- COLLATE "C" column, index in the default collation
+CREATE TABLE t_c_idx (id int, name text COLLATE "C") DISTRIBUTED BY (id);
+INSERT INTO t_c_idx SELECT g, (ARRAY['abc','ABC','def','DEF'])[1 + g % 4] || g
+FROM generate_series(1, 1000) g;
+CREATE INDEX t_c_idx_default ON t_c_idx (name COLLATE "default");
+ANALYZE t_c_idx;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM t_c_idx WHERE name < 'b';
+SELECT count(*) FROM t_c_idx WHERE name < 'b';
+SELECT name FROM t_c_idx WHERE name < 'b' ORDER BY name LIMIT 3;
+
+-- an index in the column's own collation is still used
+CREATE INDEX t_c_idx_c ON t_c_idx (name);
+EXPLAIN (COSTS OFF) SELECT count(*) FROM t_c_idx WHERE name < 'b';
+SELECT count(*) FROM t_c_idx WHERE name < 'b';
+DROP TABLE t_c_idx;
+
+-- default collation column, index in COLLATE "C"
+CREATE TABLE t_default_idx (id int, name text) DISTRIBUTED BY (id);
+INSERT INTO t_default_idx SELECT g, (ARRAY['abc','ABC','def','DEF'])[1 + g % 4] || g
+FROM generate_series(1, 1000) g;
+CREATE INDEX t_default_idx_c ON t_default_idx (name COLLATE "C");
+ANALYZE t_default_idx;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM t_default_idx WHERE name < 'b';
+SELECT count(*) FROM t_default_idx WHERE name < 'b';
+DROP TABLE t_default_idx;
+
+RESET enable_seqscan;
+
+-- ======================================================================
 -- Cleanup
 -- ======================================================================
 

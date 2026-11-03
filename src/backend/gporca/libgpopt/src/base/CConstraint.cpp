@@ -120,7 +120,8 @@ CConstraint::PcnstrFromScalarArrayCmp(CMemoryPool *mp, CExpression *pexpr,
 		IMDType::ECmpType cmp_type =
 			CUtils::ParseCmpType(popScArrayCmp->MdIdOp());
 
-		if (IMDType::EcmptOther == cmp_type)
+		if (IMDType::EcmptOther == cmp_type ||
+			!CConstraintInterval::FColConstCmpSupported(colref, cmp_type))
 		{
 			// unsupported comparison operator for constraint derivation
 
