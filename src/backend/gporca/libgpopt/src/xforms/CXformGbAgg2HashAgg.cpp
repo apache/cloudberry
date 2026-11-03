@@ -14,6 +14,7 @@
 #include "gpos/base.h"
 
 #include "gpopt/base/COptCtxt.h"
+#include "gpopt/base/CUtils.h"
 #include "gpopt/operators/CLogicalGbAgg.h"
 #include "gpopt/operators/CPatternLeaf.h"
 #include "gpopt/operators/CPhysicalHashAgg.h"
@@ -165,8 +166,13 @@ CXformGbAgg2HashAgg::FApplicable(CExpression *pexpr)
 		CScalarAggFunc *popScAggFunc =
 			CScalarAggFunc::PopConvert(pexprAggFunc->Pop());
 
+		// The executor cannot sort the input of an aggregate with ORDER BY
+		// per group in a hash aggregate, so only a stream aggregate can
+		// compute it.  IsHashAggCapable() is a property of the aggregate's
+		// catalog entry and cannot see the ORDER BY of a particular call.
 		if (popScAggFunc->IsDistinct() ||
-			!md_accessor->RetrieveAgg(popScAggFunc->MDId())->IsHashAggCapable())
+			!md_accessor->RetrieveAgg(popScAggFunc->MDId())->IsHashAggCapable() ||
+			CUtils::FAggHasOrderBy(pexprAggFunc))
 		{
 			return false;
 		}
