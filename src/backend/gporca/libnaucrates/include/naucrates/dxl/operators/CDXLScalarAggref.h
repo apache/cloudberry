@@ -79,6 +79,9 @@ private:
 	// is agg(*)
 	BOOL m_is_aggstar;
 
+	// is the input already sorted by the ORDER BY of the aggregate
+	BOOL m_is_presorted;
+
 public:
 	CDXLScalarAggref(const CDXLScalarAggref &) = delete;
 
@@ -111,6 +114,18 @@ public:
 	BOOL IsAggStar() const
 	{
 		return m_is_aggstar;
+	}
+
+	BOOL
+	IsPresorted() const
+	{
+		return m_is_presorted;
+	}
+
+	void
+	SetPresorted(BOOL is_presorted)
+	{
+		m_is_presorted = is_presorted;
 	}
 
 	EdxlAggrefKind

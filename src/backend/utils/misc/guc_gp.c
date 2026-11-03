@@ -429,6 +429,7 @@ bool		optimizer_enable_range_predicate_dpe;
 bool		optimizer_enable_use_distribution_in_dqa;
 bool		optimizer_enable_push_join_below_union_all;
 bool		optimizer_enable_orderedagg;
+bool		optimizer_enable_presorted_agg;
 bool		optimizer_disable_dynamic_table_scan;
 
 /* Analyze related GUCs for Optimizer */
@@ -3068,6 +3069,18 @@ struct config_bool ConfigureNamesBool_gp[] =
 			NULL
 		},
 		&optimizer_enable_orderedagg,
+		true,
+		NULL, NULL, NULL
+	},
+	{
+		{"optimizer_enable_presorted_agg", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enable sorting the input of order sensitive aggregates "
+						 "with ORDER BY, e.g. string_agg(), on the segments, for "
+						 "aggregates without GROUP BY."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_presorted_agg,
 		true,
 		NULL, NULL, NULL
 	},

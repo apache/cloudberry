@@ -312,8 +312,14 @@ CXformSplitGbAgg::FApplicable(CExpression *pexpr)
 		CScalarAggFunc *popScAggFunc =
 			CScalarAggFunc::PopConvert(pexprAggFunc->Pop());
 
+		// An order sensitive aggregate with ORDER BY must see all of its
+		// input in order; combining partial results computed on different
+		// segments would lose the global ordering, even if the aggregate has
+		// a combine function (e.g. string_agg since PG16).
 		if (popScAggFunc->IsDistinct() ||
-			!md_accessor->RetrieveAgg(popScAggFunc->MDId())->IsSplittable())
+			!md_accessor->RetrieveAgg(popScAggFunc->MDId())->IsSplittable() ||
+			(CUtils::FAggHasOrderBy(pexprAggFunc) &&
+			 CUtils::FOrderSensitiveAgg(popScAggFunc->MDId())))
 		{
 			return false;
 		}

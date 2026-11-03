@@ -256,6 +256,11 @@ enum EOptTraceFlag
 	// Disable streaming hash agg in ORCA-generated local partial aggregations
 	EopttraceDisableStreamingHashAgg = 103054,
 
+	// Disable sorting the input of order sensitive aggregates with ORDER BY,
+	// e.g. string_agg(), on the segments for aggregates without GROUP BY,
+	// so that they don't need to sort it themselves on the coordinator
+	EopttraceDisablePresortedAgg = 103055,
+
 	///////////////////////////////////////////////////////
 	///////////////////// statistics flags ////////////////
 	//////////////////////////////////////////////////////

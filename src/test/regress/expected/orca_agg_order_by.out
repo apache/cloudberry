@@ -1,0 +1,363 @@
+--
+-- Test ORCA optimizer handling of aggregates with ORDER BY, comparing
+-- with the results of the Postgres planner.
+--
+-- Force ORCA and make fallback visible
+SET optimizer TO on;
+SET optimizer_trace_fallback TO on;
+CREATE SCHEMA orca_agg_order_by;
+SET search_path = orca_agg_order_by;
+-- ======================================================================
+-- Test: aggregates with ORDER BY are not split into partial aggregation
+-- ======================================================================
+-- string_agg() and array_agg() have combine functions, but with an
+-- ORDER BY each segment would only sort its own rows, and the combine
+-- function would concatenate the partial results in arrival order.
+CREATE TABLE t_agg_order (id int, v text) DISTRIBUTED BY (id);
+INSERT INTO t_agg_order SELECT g, lpad(g::text, 2, '0')
+FROM generate_series(1, 30) g;
+ANALYZE t_agg_order;
+EXPLAIN (COSTS OFF) SELECT string_agg(v, ',' ORDER BY v) FROM t_agg_order;
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: v
+         ->  Sort
+               Sort Key: v
+               ->  Seq Scan on t_agg_order
+ Optimizer: GPORCA
+(7 rows)
+
+SELECT string_agg(v, ',' ORDER BY v) FROM t_agg_order;
+                                        string_agg                                         
+-------------------------------------------------------------------------------------------
+ 01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30
+(1 row)
+
+SELECT array_agg(id ORDER BY id DESC) FROM t_agg_order;
+                                     array_agg                                      
+------------------------------------------------------------------------------------
+ {30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1}
+(1 row)
+
+SELECT count(DISTINCT id % 7), string_agg(v, ',' ORDER BY v) FROM t_agg_order;
+ count |                                        string_agg                                         
+-------+-------------------------------------------------------------------------------------------
+     7 | 01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30
+(1 row)
+
+-- aggregates without ORDER BY, and order insensitive aggregates with
+-- ORDER BY, are still split
+EXPLAIN (COSTS OFF) SELECT sum(id), count(*) FROM t_agg_order;
+                   QUERY PLAN                   
+------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on t_agg_order
+ Optimizer: GPORCA
+(5 rows)
+
+EXPLAIN (COSTS OFF) SELECT sum(id ORDER BY id), max(v ORDER BY v) FROM t_agg_order;
+                   QUERY PLAN                   
+------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on t_agg_order
+ Optimizer: GPORCA
+(5 rows)
+
+SELECT sum(id ORDER BY id), max(v ORDER BY v) FROM t_agg_order;
+ sum | max 
+-----+-----
+ 465 | 30
+(1 row)
+
+-- Any aggregate that is not known to be order insensitive is not split when
+-- it has an ORDER BY, including user-defined ones
+CREATE AGGREGATE my_concat(text) (
+    sfunc = textcat, stype = text, combinefunc = textcat, initcond = '');
+SET optimizer_force_multistage_agg TO on;
+EXPLAIN (COSTS OFF) SELECT my_concat(v ORDER BY v) FROM t_agg_order;
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: v
+         ->  Sort
+               Sort Key: v
+               ->  Seq Scan on t_agg_order
+ Optimizer: GPORCA
+(7 rows)
+
+SELECT my_concat(v || ',' ORDER BY v) FROM t_agg_order;
+                                         my_concat                                          
+--------------------------------------------------------------------------------------------
+ 01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT my_concat(v) FROM t_agg_order;
+                   QUERY PLAN                   
+------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on t_agg_order
+ Optimizer: GPORCA
+(5 rows)
+
+-- MIN/MAX is only order insensitive if equal values are identical, unlike
+-- numeric, where ORDER BY decides which of 4.0 and 4.00 max() returns
+EXPLAIN (COSTS OFF) SELECT max(id ORDER BY v), max(v ORDER BY id) FROM t_agg_order;
+                   QUERY PLAN                   
+------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on t_agg_order
+ Optimizer: GPORCA
+(5 rows)
+
+EXPLAIN (COSTS OFF) SELECT max(id::numeric ORDER BY id) FROM t_agg_order;
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: id
+         ->  Sort
+               Sort Key: id
+               ->  Seq Scan on t_agg_order
+ Optimizer: GPORCA
+(7 rows)
+
+-- floating point sums depend on the order of the input
+EXPLAIN (COSTS OFF) SELECT sum(id::float8 ORDER BY id) FROM t_agg_order;
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: id
+         ->  Sort
+               Sort Key: id
+               ->  Seq Scan on t_agg_order
+ Optimizer: GPORCA
+(7 rows)
+
+RESET optimizer_force_multistage_agg;
+DROP AGGREGATE my_concat(text);
+DROP TABLE t_agg_order;
+-- ======================================================================
+-- Test: presorted input for order sensitive aggregates
+-- ======================================================================
+-- The input of string_agg() and array_agg() with ORDER BY is sorted on the
+-- segments and merged by the Gather Motion, so that the aggregate doesn't
+-- need to sort it on the coordinator.
+CREATE TABLE t_agg_presort (id int, v text, b bytea) DISTRIBUTED BY (id);
+INSERT INTO t_agg_presort SELECT g, lpad(g::text, 2, '0'), lpad(g::text, 2, '0')::bytea
+FROM generate_series(1, 30) g;
+-- the sort on the segments and the merging Gather Motion must place the
+-- NULLs according to NULLS FIRST / LAST
+INSERT INTO t_agg_presort SELECT g, NULL, NULL FROM generate_series(31, 35) g;
+ANALYZE t_agg_presort;
+EXPLAIN (COSTS OFF) SELECT string_agg(v, ',' ORDER BY v) FROM t_agg_presort;
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: v
+         ->  Sort
+               Sort Key: v
+               ->  Seq Scan on t_agg_presort
+ Optimizer: GPORCA
+(7 rows)
+
+SELECT string_agg(v, ',' ORDER BY v) FROM t_agg_presort;
+                                        string_agg                                         
+-------------------------------------------------------------------------------------------
+ 01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30
+(1 row)
+
+SELECT string_agg(v, ',' ORDER BY v DESC) FROM t_agg_presort;
+                                        string_agg                                         
+-------------------------------------------------------------------------------------------
+ 30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,09,08,07,06,05,04,03,02,01
+(1 row)
+
+SELECT array_agg(v ORDER BY v) FROM t_agg_presort;
+                                                      array_agg                                                       
+----------------------------------------------------------------------------------------------------------------------
+ {01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,NULL,NULL,NULL,NULL,NULL}
+(1 row)
+
+SELECT array_agg(v ORDER BY v DESC) FROM t_agg_presort;
+                                                      array_agg                                                       
+----------------------------------------------------------------------------------------------------------------------
+ {NULL,NULL,NULL,NULL,NULL,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,09,08,07,06,05,04,03,02,01}
+(1 row)
+
+SELECT array_agg(v ORDER BY v NULLS FIRST) FROM t_agg_presort;
+                                                      array_agg                                                       
+----------------------------------------------------------------------------------------------------------------------
+ {NULL,NULL,NULL,NULL,NULL,01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30}
+(1 row)
+
+EXPLAIN (COSTS OFF)
+SELECT array_agg(id ORDER BY v DESC NULLS LAST, id) FROM t_agg_presort;
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: v, id
+         ->  Sort
+               Sort Key: v DESC NULLS LAST, id
+               ->  Seq Scan on t_agg_presort
+ Optimizer: GPORCA
+(7 rows)
+
+SELECT array_agg(id ORDER BY v DESC NULLS LAST, id) FROM t_agg_presort;
+                                             array_agg                                             
+---------------------------------------------------------------------------------------------------
+ {30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,31,32,33,34,35}
+(1 row)
+
+SELECT string_agg(b, ',' ORDER BY b) FROM t_agg_presort;
+                                                                                      string_agg                                                                                      
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ \x30312c30322c30332c30342c30352c30362c30372c30382c30392c31302c31312c31322c31332c31342c31352c31362c31372c31382c31392c32302c32312c32322c32332c32342c32352c32362c32372c32382c32392c3330
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT gp_array_agg(v ORDER BY v) FROM t_agg_presort;
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: v
+         ->  Sort
+               Sort Key: v
+               ->  Seq Scan on t_agg_presort
+ Optimizer: GPORCA
+(7 rows)
+
+SELECT gp_array_agg(v ORDER BY v DESC) FROM t_agg_presort;
+                                                     gp_array_agg                                                     
+----------------------------------------------------------------------------------------------------------------------
+ {NULL,NULL,NULL,NULL,NULL,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,09,08,07,06,05,04,03,02,01}
+(1 row)
+
+-- aggregates with the same ORDER BY share the sorted input
+EXPLAIN (COSTS OFF)
+SELECT string_agg(v, ',' ORDER BY v), max(id ORDER BY v), count(*) FROM t_agg_presort;
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: v
+         ->  Sort
+               Sort Key: v
+               ->  Seq Scan on t_agg_presort
+ Optimizer: GPORCA
+(7 rows)
+
+SELECT string_agg(v, ',' ORDER BY v), max(id ORDER BY v), count(*) FROM t_agg_presort;
+                                        string_agg                                         | max | count 
+-------------------------------------------------------------------------------------------+-----+-------
+ 01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 |  35 |    35
+(1 row)
+
+-- not used with different orders, DISTINCT, an ORDER BY expression, or
+-- only order insensitive aggregates
+EXPLAIN (COSTS OFF)
+SELECT string_agg(v, ',' ORDER BY v), array_agg(id ORDER BY id) FROM t_agg_presort;
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on t_agg_presort
+ Optimizer: GPORCA
+(4 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT array_agg(v ORDER BY v), array_agg(v ORDER BY v NULLS FIRST) FROM t_agg_presort;
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on t_agg_presort
+ Optimizer: GPORCA
+(4 rows)
+
+SELECT array_agg(v ORDER BY v), array_agg(v ORDER BY v NULLS FIRST) FROM t_agg_presort;
+                                                      array_agg                                                       |                                                      array_agg                                                       
+----------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------
+ {01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,NULL,NULL,NULL,NULL,NULL} | {NULL,NULL,NULL,NULL,NULL,01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30}
+(1 row)
+
+EXPLAIN (COSTS OFF)
+SELECT string_agg(DISTINCT v, ',' ORDER BY v) FROM t_agg_presort;
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on t_agg_presort
+ Optimizer: GPORCA
+(4 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT string_agg(v, ',' ORDER BY v || 'x') FROM t_agg_presort;
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on t_agg_presort
+ Optimizer: GPORCA
+(4 rows)
+
+EXPLAIN (COSTS OFF) SELECT sum(id ORDER BY id) FROM t_agg_presort;
+                   QUERY PLAN                   
+------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on t_agg_presort
+ Optimizer: GPORCA
+(5 rows)
+
+-- not used with an ORDER BY on an outer reference, which the input of the
+-- aggregate cannot be sorted by; this must not fail to produce a plan
+SELECT o.id, (SELECT length(string_agg(i.v, ',' ORDER BY o.v))
+              FROM t_agg_presort i WHERE i.id % 3 = o.id % 3)
+FROM t_agg_presort o WHERE o.id <= 3 ORDER BY 1;
+ id | length 
+----+--------
+  1 |     29
+  2 |     29
+  3 |     29
+(3 rows)
+
+-- not used when disabled
+SET optimizer_enable_presorted_agg TO off;
+EXPLAIN (COSTS OFF) SELECT string_agg(v, ',' ORDER BY v) FROM t_agg_presort;
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on t_agg_presort
+ Optimizer: GPORCA
+(4 rows)
+
+SELECT string_agg(v, ',' ORDER BY v) FROM t_agg_presort;
+                                        string_agg                                         
+-------------------------------------------------------------------------------------------
+ 01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30
+(1 row)
+
+RESET optimizer_enable_presorted_agg;
+DROP TABLE t_agg_presort;
+-- ======================================================================
+-- Cleanup
+-- ======================================================================
+RESET optimizer_trace_fallback;
+RESET optimizer;
+DROP SCHEMA orca_agg_order_by CASCADE;
