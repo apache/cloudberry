@@ -1220,7 +1220,7 @@ jobs:
               echo "Found results directory: $results_dir" | tee -a build-logs/details/make-${{ matrix.test }}-config$i-results.log
               echo "Contents of results directory:" | tee -a build-logs/details/make-${{ matrix.test }}-config$i-results.log
 
-              find "$results_dir" -type f -ls >> "$log_file" 2>&1 | tee -a build-logs/details/make-${{ matrix.test }}-config$i-results.log
+              find "$results_dir" -type f -ls 2>&1 | tee -a build-logs/details/make-${{ matrix.test }}-config$i-results.log
               echo "-----------------------------------------" | tee -a build-logs/details/make-${{ matrix.test }}-config$i-results.log
             else
               echo "-----------------------------------------"
