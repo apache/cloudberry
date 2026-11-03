@@ -838,6 +838,20 @@ WHERE (t1_issue_1950.c0 IS NOT NULL)
 
 drop table t1_issue_1950;
 drop table t2_issue_1950;
+-- Result of query with subquery which contains window function must be correct
+CREATE TEMP TABLE t1_issue_2047 AS SELECT 4 a, 1 b DISTRIBUTED BY (a);
+CREATE TEMP TABLE t2_issue_2047 AS SELECT v.a FROM (VALUES (1), (1), (2)) AS v(a) DISTRIBUTED BY (a);
+ANALYZE t1_issue_2047, t2_issue_2047;
+SELECT * FROM t1_issue_2047
+WHERE t1_issue_2047.a > (
+   SELECT SUM(t2_issue_2047.a) + COUNT(*) OVER ()
+   FROM t2_issue_2047
+   WHERE t2_issue_2047.a = t1_issue_2047.b);
+ a | b 
+---+---
+ 4 | 1
+(1 row)
+
 -- start_ignore
 drop table if exists bfv_planner_x;
 drop table if exists testbadsql;
