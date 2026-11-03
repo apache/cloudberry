@@ -794,7 +794,7 @@ fi
 
 # We already have this in Makefile.win32, but configure needs it too
 if test "$PORTNAME" = "win32"; then
-  CPPFLAGS="$CPPFLAGS -I$srcdir/src/include/port/win32 -IgpAux/ext/win32/kfw-3-2-2/inc/krb5 -IgpAux/ext/win32/kfw-3-2-2/inc/krb5/gssapi -LgpAux/ext/win32/kfw-3-2-2/lib  -DEXEC_BACKEND -DUNSAFE_STAT_OK"
+  CPPFLAGS="$CPPFLAGS -I$srcdir/src/include/port/win32 -DEXEC_BACKEND -DUNSAFE_STAT_OK"
 fi
 
 # Now that we're done automatically adding stuff to C[XX]FLAGS, put back the
@@ -2990,9 +2990,6 @@ if test "$GCC" = yes -a "$ICC" = no; then
   PGAC_PROG_CC_CFLAGS_OPT([-Werror=uninitialized])
   PGAC_PROG_CC_CFLAGS_OPT([-Werror=implicit-function-declaration])
 fi
-
-[BLD_ARCH=`echo $BLD_ARCH`]
-AC_SUBST(BLD_ARCH)
 
 # Get the Cloudberry version string from VERSION
 
