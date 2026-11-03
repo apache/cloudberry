@@ -14,6 +14,10 @@
   WHERE query='DECLARE cs1 CURSOR FOR SELECT 0;';
 
 1<:
+-- The terminated backend releases its queue slot during process exit, which
+-- happens asynchronously after pg_terminate_backend() returns. Wait for it.
+0: do $$ begin for i in 1..600 loop if (select rsqcountvalue from pg_resqueue_status where rsqname = 'rq_terminate') = 0 then return; end if; perform pg_sleep(0.1); end loop; end $$;
+
 -- Sanity check: Ensure that the resource queue is now empty.
 0:SELECT rsqcountlimit, rsqcountvalue FROM pg_resqueue_status WHERE rsqname = 'rq_terminate';
 
@@ -28,6 +32,10 @@
   WHERE query='DECLARE cs2 CURSOR WITH HOLD FOR SELECT 0;';
 
 2<:
+-- The terminated backend releases its queue slot during process exit, which
+-- happens asynchronously after pg_terminate_backend() returns. Wait for it.
+0: do $$ begin for i in 1..600 loop if (select rsqcountvalue from pg_resqueue_status where rsqname = 'rq_terminate') = 0 then return; end if; perform pg_sleep(0.1); end loop; end $$;
+
 -- Sanity check: Ensure that the resource queue is now empty.
 0:SELECT rsqcountlimit, rsqcountvalue FROM pg_resqueue_status WHERE rsqname = 'rq_terminate';
 

@@ -46,6 +46,8 @@ DROP TABLE employees;
 -- relsizes_collect_stats_once should collect files sizes without pauses
 -- The naptime value is 1ms, so the pauses take at least 10s to process 10k files.
 -- Check that relsizes_collect_stats_once completes in significantly less time.
+-- Use clock_timestamp() to avoid the rounding error of whole-second timestamps,
+-- and leave enough headroom for slow machines while staying below the 10s floor.
 
 -- start_ignore
 DROP TABLE IF EXISTS t;
@@ -54,11 +56,11 @@ DISTRIBUTED RANDOMLY
 PARTITION BY RANGE (i) (PARTITION a START (0) END (10000) EVERY (1));
 -- end_ignore
 
-SELECT EXTRACT(EPOCH FROM LOCALTIMESTAMP(0)) t1 \gset
+SELECT EXTRACT(EPOCH FROM clock_timestamp()) t1 \gset
 
 SELECT relsizes_stats_schema.relsizes_collect_stats_once();
 
-SELECT (EXTRACT(EPOCH FROM LOCALTIMESTAMP(0)) - :t1) < 5;
+SELECT (EXTRACT(EPOCH FROM clock_timestamp()) - :t1) < 8;
 
 -- Cleanup
 DROP TABLE t;
