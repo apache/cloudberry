@@ -2,6 +2,10 @@
 
 \set HIDE_TABLEAM off
 
+PREPARE attribute_encoding_check AS
+SELECT c.relname, a.attname, e.filenum, e.attoptions, e.lastrownums FROM pg_attribute_encoding e, pg_class c, pg_attribute a
+WHERE e.attrelid = c.oid AND e.attnum = a.attnum and e.attrelid = a.attrelid AND c.relname LIKE $1;
+
 -- Scenario 1: Changing to the same AM: it should have no effect but
 -- make sure it doesn't rewrite table or blow up existing reloptions:
 CREATE TABLE sameam_heap(a int, b int) WITH (fillfactor=70) DISTRIBUTED BY (a);
@@ -728,3 +732,158 @@ ALTER TABLE atsetam_dropcol SET ACCESS METHOD heap;
 SELECT count(*) FROM pg_attribute WHERE attrelid = 'atsetam_dropcol'::regclass AND attnum > 0;
 SELECT count(*) FROM pg_attribute_encoding WHERE attrelid = 'atsetam_dropcol'::regclass;
 SELECT * FROM atsetam_dropcol;
+
+-- ALTER TABLE ao_row with pg_attribute_encoding entries to ao_column
+CREATE TABLE at_with_addedcols(a int, b int) USING ao_row;
+INSERT INTO at_with_addedcols SELECT i,i FROM generate_series(1,3)i;
+ALTER TABLE at_with_addedcols ADD COLUMN c int DEFAULT 4;
+INSERT INTO at_with_addedcols SELECT i,i FROM generate_series(1,3)i;
+SELECT * FROM at_with_addedcols;
+-- pg_attribute_encoding should have entries for just column c
+EXECUTE attribute_encoding_check ('at_with_addedcols');
+ALTER TABLE at_with_addedcols SET ACCESS METHOD ao_column;
+-- check data is intact
+SELECT * FROM at_with_addedcols;
+-- pg_attribute_encoding should have entries for all columns
+EXECUTE attribute_encoding_check ('at_with_addedcols');
+
+ALTER TABLE at_with_addedcols SET ACCESS METHOD ao_row;
+-- check data is intact
+SELECT * FROM at_with_addedcols;
+-- pg_attribute_encoding should not have any entries
+EXECUTE attribute_encoding_check ('at_with_addedcols');
+DROP TABLE at_with_addedcols;
+
+-- ALTER TABLE ao_row with pg_attribute_encoding entries to heap
+CREATE TABLE at_with_addedcols(a int, b int) USING ao_row;
+INSERT INTO at_with_addedcols SELECT i,i FROM generate_series(1,3)i;
+ALTER TABLE at_with_addedcols ADD COLUMN c int DEFAULT 4;
+INSERT INTO at_with_addedcols SELECT i,i FROM generate_series(1,3)i;
+SELECT * FROM at_with_addedcols;
+-- pg_attribute_encoding should have entries for just column c
+EXECUTE attribute_encoding_check ('at_with_addedcols');
+ALTER TABLE at_with_addedcols SET ACCESS METHOD heap;
+-- check data is intact
+SELECT * FROM at_with_addedcols;
+-- pg_attribute_encoding should not have any entries
+EXECUTE attribute_encoding_check ('at_with_addedcols');
+
+ALTER TABLE at_with_addedcols SET ACCESS METHOD ao_row;
+-- check data is intact
+SELECT * FROM at_with_addedcols;
+-- pg_attribute_encoding should not have any entries
+EXECUTE attribute_encoding_check ('at_with_addedcols');
+DROP TABLE at_with_addedcols;
+
+
+--
+-- Ensure that the array type of the base table type is removed when moving from
+-- heap -> ao_row | ao_column
+--
+
+CREATE TABLE at_array_type_heap_to_ao(i int);
+
+SELECT typname, typnamespace::regnamespace, typcategory, typarray::regtype FROM pg_type
+    WHERE typname = 'at_array_type_heap_to_ao';
+SELECT typname, typnamespace::regnamespace, typcategory, typelem::regtype FROM pg_type
+    WHERE typname = '_at_array_type_heap_to_ao';
+
+ALTER TABLE at_array_type_heap_to_ao SET ACCESS METHOD ao_row;
+
+-- The array type should be gone.
+SELECT typname, typnamespace::regnamespace, typcategory, typarray::regtype FROM pg_type
+    WHERE typname = 'at_array_type_heap_to_ao';
+SELECT typname, typnamespace::regnamespace, typcategory, typelem::regtype FROM pg_type
+    WHERE typname = '_at_array_type_heap_to_ao';
+
+-- A successful drop indicates that the array type -> base type dependency
+-- should have been removed successfully by the ALTER TABLE SET AM above.
+DROP TABLE at_array_type_heap_to_ao;
+
+CREATE TABLE at_array_type_heap_to_co(i int);
+
+SELECT typname, typnamespace::regnamespace, typcategory, typarray::regtype FROM pg_type
+    WHERE typname = 'at_array_type_heap_to_co';
+SELECT typname, typnamespace::regnamespace, typcategory, typelem::regtype FROM pg_type
+    WHERE typname = '_at_array_type_heap_to_co';
+
+ALTER TABLE at_array_type_heap_to_co SET ACCESS METHOD ao_column;
+
+-- The array type should be gone.
+SELECT typname, typnamespace::regnamespace, typcategory, typarray::regtype FROM pg_type
+    WHERE typname = 'at_array_type_heap_to_co';
+SELECT typname, typnamespace::regnamespace, typcategory, typelem::regtype FROM pg_type
+    WHERE typname = '_at_array_type_heap_to_co';
+
+-- A successful drop indicates that the array type -> base type dependency
+-- should have been removed successfully by the ALTER TABLE SET AM above.
+DROP TABLE at_array_type_heap_to_co;
+
+--
+-- Ensure that the array type of the base table type is created when moving from
+-- ao_row | ao_column -> heap
+--
+
+CREATE TABLE at_array_type_ao_to_heap(i int) USING ao_row;
+
+SELECT typname, typnamespace::regnamespace, typcategory, typarray::regtype FROM pg_type
+    WHERE typname = 'at_array_type_ao_to_heap';
+SELECT typname, typnamespace::regnamespace, typcategory, typelem::regtype FROM pg_type
+    WHERE typname = '_at_array_type_ao_to_heap';
+
+ALTER TABLE at_array_type_ao_to_heap SET ACCESS METHOD heap;
+
+-- The array type should have been created and linked.
+SELECT typname, typnamespace::regnamespace, typcategory, typarray::regtype FROM pg_type
+    WHERE typname = 'at_array_type_ao_to_heap';
+SELECT typname, typnamespace::regnamespace, typcategory, typelem::regtype FROM pg_type
+    WHERE typname = '_at_array_type_ao_to_heap';
+SELECT objid::regtype, refobjid::regtype FROM pg_depend
+    WHERE objid = '_at_array_type_ao_to_heap'::regtype AND refobjid = 'at_array_type_ao_to_heap'::regtype;
+
+-- Alter it back to ao_row so that we test the upgrade path
+ALTER TABLE at_array_type_ao_to_heap SET ACCESS METHOD ao_row;
+
+CREATE TABLE at_array_type_co_to_heap(i int) USING ao_column;
+
+SELECT typname, typnamespace::regnamespace, typcategory, typarray::regtype FROM pg_type
+    WHERE typname = 'at_array_type_co_to_heap';
+SELECT typname, typnamespace::regnamespace, typcategory, typelem::regtype FROM pg_type
+    WHERE typname = '_at_array_type_co_to_heap';
+
+ALTER TABLE at_array_type_co_to_heap SET ACCESS METHOD heap;
+
+-- The array type should have been created and linked.
+SELECT typname, typnamespace::regnamespace, typcategory, typarray::regtype FROM pg_type
+    WHERE typname = 'at_array_type_co_to_heap';
+SELECT typname, typnamespace::regnamespace, typcategory, typelem::regtype FROM pg_type
+    WHERE typname = '_at_array_type_co_to_heap';
+SELECT objid::regtype, refobjid::regtype FROM pg_depend
+    WHERE objid = '_at_array_type_co_to_heap'::regtype AND refobjid = 'at_array_type_co_to_heap'::regtype;
+
+-- Alter it back to ao_column so that we test the upgrade path
+ALTER TABLE at_array_type_co_to_heap SET ACCESS METHOD ao_column;
+
+-- Alter a very wide table from HEAP to CO
+CREATE OR REPLACE FUNCTION create_very_wide_table(num_columns INTEGER, column_prefix TEXT, data_type TEXT)
+RETURNS VOID AS $$
+DECLARE
+    sql_statement TEXT := 'CREATE TABLE very_wide_table (';
+    i INTEGER;
+BEGIN
+    FOR i IN 1..num_columns LOOP
+        sql_statement := sql_statement || quote_ident(column_prefix || i) || ' ' || data_type;
+        IF i < num_columns THEN
+            sql_statement := sql_statement || ', ';
+        END IF;
+    END LOOP;
+    sql_statement := sql_statement || ');';
+
+    EXECUTE sql_statement;
+    RAISE NOTICE 'Table "very_wide_table" created with % columns.', num_columns;
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT create_very_wide_table(1594, 'col_', 'TEXT');
+
+ALTER TABLE very_wide_table SET ACCESS METHOD ao_column WITH (compresstype=zstd);

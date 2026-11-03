@@ -96,6 +96,7 @@ test: disable_autovacuum
 # Tests on Append-Optimized tables (row-oriented).
 test: concurrent_index_creation_should_not_deadlock
 test: uao/alter_while_vacuum_row uao/alter_while_vacuum2_row
+test: uao/alter_table_row
 test: uao/brin_row
 test: uao/compaction_full_stats_row
 test: uao/compaction_utility_row
@@ -156,7 +157,9 @@ test: reorganize_after_ao_vacuum_skip_drop truncate_after_ao_vacuum_skip_drop ma
 test: segwalrep/master_wal_switch
 
 # Tests on Append-Optimized tables (column-oriented).
+test: aoco_column_rewrite
 test: uao/alter_while_vacuum_column uao/alter_while_vacuum2_column
+test: uao/alter_table_column
 test: uao/brin_column
 test: uao/compaction_full_stats_column
 test: uao/compaction_utility_column
@@ -211,6 +214,7 @@ test: uao/test_pg_appendonly_version_column
 # test: uao/bad_buffer_on_temp_ao_column
 test: uao/create_index_allows_readonly_column
 test: uao/fast_analyze_column
+test: ao_partial_scan
 
 # this case contains fault injection, must be put in a separate test group
 test: terminate_in_gang_creation

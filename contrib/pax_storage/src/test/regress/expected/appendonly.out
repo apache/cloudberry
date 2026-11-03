@@ -1130,7 +1130,10 @@ relname='tenk_renamed'));
       0 | t    |             0
       0 | t    |             1
       0 | t    |             2
-(3 rows)
+      1 | f    |             0
+      1 | f    |             1
+      1 | f    |             2
+(6 rows)
 
 ALTER TABLE tenk_renamed ALTER COLUMN twothousand SET NOT NULL;
 ALTER TABLE tenk_renamed ADD COLUMN sercol serial; -- MPP-10015

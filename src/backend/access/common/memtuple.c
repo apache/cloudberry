@@ -56,9 +56,9 @@
  */
 
 static int
-compute_null_bitmap_extra_size(TupleDesc tupdesc, int col_align)
+compute_null_bitmap_extra_size(int expected_natts, int col_align)
 {
-	int nbytes = (tupdesc->natts + 7) >> 3;
+	int nbytes = (expected_natts + 7) >> 3;
 	int avail_bytes = (col_align == 4) ? 0 : 4;
 
 	Assert(col_align == 4 || col_align == 8);
@@ -198,14 +198,14 @@ att_bind_as_varoffset(Form_pg_attribute attr)
 }
 
 /* Create columns binding, depends on islarge, using 2 or 4 bytes for offset_len */
-static void create_col_bind(MemTupleBindingCols *colbind, bool islarge, TupleDesc tupdesc, int col_align)
+static void create_col_bind(MemTupleBindingCols *colbind, bool islarge, TupleDesc tupdesc, int col_align, int expected_natts)
 {
 	int i = 0;
 	int physical_col = 0;
 	int pass = 0;
 
 	uint32 cur_offset = (col_align == 8) ? 8 : 4;
-	uint32 null_save_entries = compute_null_save_entries(tupdesc->natts);
+	uint32 null_save_entries = compute_null_save_entries(expected_natts);
 
 	/* alloc null save entries.  Zero it */
 	colbind->null_saves = (short *) palloc0(sizeof(short) * null_save_entries);
@@ -213,8 +213,8 @@ static void create_col_bind(MemTupleBindingCols *colbind, bool islarge, TupleDes
 	colbind->has_null_saves_alignment_mismatch = false;
 	colbind->has_dropped_attr_alignment_mismatch = false;
 
-	/* alloc bindings, no need to zero because we will fill them out  */
-	colbind->bindings = (MemTupleAttrBinding *) palloc(sizeof(MemTupleAttrBinding) * tupdesc->natts);
+	/* alloc bindings, and zero it  */
+	colbind->bindings = (MemTupleAttrBinding *) palloc0(sizeof(MemTupleAttrBinding) * expected_natts);
 	
 	/*
 	 * The length of each binding is determined according to the alignment
@@ -235,7 +235,7 @@ static void create_col_bind(MemTupleBindingCols *colbind, bool islarge, TupleDes
 	 */
 	for(pass =0; pass < 4; ++pass)
 	{
-		for(i=0; i<tupdesc->natts; ++i)
+		for(i=0; i<expected_natts; ++i)
 		{
 			Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
 			MemTupleAttrBinding *bind = &colbind->bindings[i];
@@ -399,7 +399,7 @@ static void create_col_bind(MemTupleBindingCols *colbind, bool islarge, TupleDes
 	}
 
 #ifdef USE_DEBUG_ASSERT
-	for(i=0; i<tupdesc->natts; ++i)
+	for(i=0; i<expected_natts; ++i)
 	{
 		MemTupleAttrBinding *bind = &colbind->bindings[i];
 		Assert(bind->offset[i] != 0);
@@ -411,22 +411,37 @@ static void create_col_bind(MemTupleBindingCols *colbind, bool islarge, TupleDes
 	else
 		colbind->var_start = 8;
 
-	Assert(tupdesc->natts == physical_col);
+	Assert(expected_natts == physical_col);
 }
 
-/* Create a memtuple binding from the tupdesc.  Note we store
- * a ref to the tupdesc in the binding, so we assumed the life
+/*
+ * Create a memtuple binding from the tupdesc and number of attributes.
+ * Note we store a ref to the tupdesc in the binding, so we assumed the life
  * span of the tupdesc is no shorter than the binding.
+ *
+ * IMPORTANT: the created binding only makes sense to the given expected natts,
+ * so caller must be aware that they pass the right expected natts:
+ *   - if the binding is for write (e.g. insert, vacuum), expected natts is
+ *     number of attributes intended for the memtuple to be stored.
+ *   - if the binding is for read (e.g. select), expected natts is the number
+ *     of attributes physically stored in the memtuple to be read.
  */
-MemTupleBinding *create_memtuple_binding(TupleDesc tupdesc) 
+MemTupleBinding *create_memtuple_binding(TupleDesc tupdesc, int expected_natts) 
 {
-	MemTupleBinding *pbind = (MemTupleBinding *) palloc(sizeof(MemTupleBinding));
+	MemTupleBinding *pbind = (MemTupleBinding *) palloc0(sizeof(MemTupleBinding));
 	int			i;
 
 	pbind->tupdesc = tupdesc;
 	pbind->column_align = 4;
+
+	/*
+	 * number of expected attributes should be a valid number and no larger
+	 * than what's specified in the tuple descriptor
+	 */
+	Assert(expected_natts >= 0 && expected_natts <= tupdesc->natts);
+	pbind->natts = expected_natts;
 	
-	for(i = 0; i < tupdesc->natts; ++i)
+	for(i = 0; i < expected_natts; ++i)
 	{
 		Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
 
@@ -437,10 +452,10 @@ MemTupleBinding *create_memtuple_binding(TupleDesc tupdesc)
 		}
 	}
 
-	pbind->null_bitmap_extra_size = compute_null_bitmap_extra_size(tupdesc, pbind->column_align); 
+	pbind->null_bitmap_extra_size = compute_null_bitmap_extra_size(expected_natts, pbind->column_align); 
 
-	create_col_bind(&pbind->bind, false, tupdesc, pbind->column_align);
-	create_col_bind(&pbind->large_bind, true, tupdesc, pbind->column_align);
+	create_col_bind(&pbind->bind, false, tupdesc, pbind->column_align, expected_natts);
+	create_col_bind(&pbind->large_bind, true, tupdesc, pbind->column_align, expected_natts);
 
 	return pbind;
 }
@@ -935,12 +950,24 @@ memtuple_copy(MemTuple mtup)
 	return dest;
 }
 
+/*
+ * Get the attribute values in [start, natts).
+ *
+ * Only the first pbind->natts attributes are physically stored in the tuple;
+ * anything past that was added by a fast ADD COLUMN and comes from the
+ * catalog instead.
+ */
 static void memtuple_get_values_range(MemTuple mtup, MemTupleBinding *pbind, int start, int natts,
 									  Datum *datum, bool *isnull, bool use_null_saves_aligned)
 {
 	int i;
-	for(i=start; i<natts; ++i)
+	int stored = Min(natts, pbind->natts);
+
+	for(i=start; i<stored; ++i)
 		datum[i] = memtuple_getattr_by_alignment(mtup, pbind, i+1, &isnull[i], use_null_saves_aligned);
+	/* read the missing ones, if any */
+	for (; i<natts; ++i)
+		datum[i] = getmissingattr(pbind->tupdesc, i+1, &isnull[i]);
 }
 
 static void memtuple_get_values(MemTuple mtup, MemTupleBinding *pbind, Datum *datum, bool *isnull, bool use_null_saves_aligned)

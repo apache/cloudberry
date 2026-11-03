@@ -22,6 +22,7 @@
 
 #include "access/bitmap.h"
 #include "access/reloptions.h"
+#include "catalog/pg_attribute_encoding.h"
 #include "catalog/pg_type.h"
 #include "cdb/cdbappendonlyam.h"
 #include "cdb/cdbvars.h"
@@ -1125,7 +1126,7 @@ setDefaultCompressionLevel(char *compresstype)
 		return 1;
 }
 
-void
+static void
 free_options_deep(relopt_value *options, int num_options)
 {
 	int			i;
@@ -1341,6 +1342,128 @@ default_column_encoding_clause(Relation rel)
 
 	/* keep the order in: compresstype, compresslevel, blocksize */
 	return list_make3(e1, e3, e2);
+}
+
+/*
+ * Does 'encoding' set compresstype/blocksize/compresslevel to the same
+ * values as 'reference'? Used to guess whether a column's stored encoding
+ * is just the table-level default rather than an explicit override.
+ */
+static bool
+encoding_clause_matches(List *encoding, List *reference)
+{
+	ListCell *lc;
+
+	foreach(lc, reference)
+	{
+		DefElem    *refel = (DefElem *) lfirst(lc);
+		DefElem    *matched = NULL;
+		ListCell   *lc2;
+
+		foreach(lc2, encoding)
+		{
+			DefElem *el = (DefElem *) lfirst(lc2);
+
+			if (pg_strcasecmp(el->defname, refel->defname) == 0)
+			{
+				matched = el;
+				break;
+			}
+		}
+
+		if (!matched || pg_strcasecmp(defGetString(matched), defGetString(refel)) != 0)
+			return false;
+	}
+
+	return true;
+}
+
+/*
+ * For an AOCO table whose table-level compresstype/compresslevel/blocksize
+ * are being changed by ALTER TABLE ... SET (...), decide which columns
+ * should be re-encoded to the new defaults once the resulting rewrite
+ * happens.
+ *
+ * A column that currently matches the table's OLD default encoding is
+ * assumed to never have had an explicit per-column ENCODING and is queued
+ * up here to receive the new default. A column whose stored encoding
+ * differs from the old default is assumed to carry an explicit override
+ * and is left alone. This mirrors what CREATE TABLE / ADD COLUMN already
+ * do when a column has no ENCODING clause of its own. Without this, the
+ * ALTER TABLE ... SET (...) rewrite paid for a full rewrite but every
+ * pre-existing column kept its old codec.
+ *
+ * This is a heuristic, not a stored fact: pg_attribute_encoding does not
+ * record whether a column's encoding came from the table default or from
+ * an explicit ENCODING that merely happens to equal it. A column declared
+ * with an explicit ENCODING identical to the table's default is therefore
+ * indistinguishable from an implicit one, and a later SET (...) will treat
+ * it as implicit and re-encode it. This matches CREATE TABLE / ADD COLUMN,
+ * which resolve the same way, but is worth knowing before relying on an
+ * explicit-but-matching ENCODING to "pin" a column against future SETs.
+ *
+ * 'current_new_crsds', if given, is the caller's (e.g. tab->new_crsds)
+ * in-progress list of per-column encoding directives for the same ALTER
+ * TABLE command. A column whose entry there has already been changed away
+ * from the OLD default (e.g. by an ALTER COLUMN ... SET ENCODING earlier
+ * in the same command) is excluded from the result, so its explicit new
+ * encoding isn't clobbered by the table-level default computed here.
+ *
+ * Must be called with 'rel' still reflecting the OLD reloptions/pg_appendonly
+ * row, since the OLD default is read live off 'rel'.
+ */
+List *
+get_cols_for_new_reloption_defaults(Relation rel, Datum newOptions,
+									 List *current_new_crsds)
+{
+	List	   *result = NIL;
+	List	   *old_encodings;
+	List	   *old_default;
+	List	   *new_default;
+	StdRdOptions *newopts;
+	ListCell   *lc;
+
+	if (!RelationIsAoCols(rel))
+		return NIL;
+
+	old_encodings = rel_get_column_encodings(rel);
+	if (old_encodings == NIL)
+		return NIL;
+
+	old_default = default_column_encoding_clause(rel);
+
+	newopts = (StdRdOptions *) default_reloptions(newOptions, true,
+												   RELOPT_KIND_APPENDOPTIMIZED);
+	new_default = list_make3(
+		makeDefElem("compresstype",
+					(Node *) makeString(pstrdup(newopts->compresstype[0] ?
+												 newopts->compresstype : "none")),
+					-1),
+		makeDefElem("compresslevel", (Node *) makeInteger(newopts->compresslevel), -1),
+		makeDefElem("blocksize", (Node *) makeInteger(newopts->blocksize), -1));
+
+	foreach(lc, old_encodings)
+	{
+		ColumnReferenceStorageDirective *c = (ColumnReferenceStorageDirective *) lfirst(lc);
+		ColumnReferenceStorageDirective *pending;
+
+		if (!encoding_clause_matches(c->encoding, old_default))
+			continue;
+
+		pending = current_new_crsds ? find_crsd(c->column, current_new_crsds) : NULL;
+		if (pending && !encoding_clause_matches(pending->encoding, old_default))
+			continue;
+
+		{
+			ColumnReferenceStorageDirective *n = makeNode(ColumnReferenceStorageDirective);
+
+			n->column = pstrdup(c->column);
+			n->encoding = copyObject(new_default);
+			result = lappend(result, n);
+		}
+	}
+
+	return result;
 }
 
 /*
@@ -1581,7 +1704,7 @@ transformStorageEncodingClause(List *columnEncoding, bool validate)
  * This is called by transformColumnEncoding() in a loop but stenc should be
  * quite small in practice.
  */
-static ColumnReferenceStorageDirective *
+ColumnReferenceStorageDirective *
 find_crsd(const char *column, List *stenc)
 {
 	ListCell *lc;
@@ -1932,6 +2055,93 @@ ao_amoptions(Datum reloptions, char relkind, bool validate)
 			Assert(false);
 			return NULL;
 	}
+}
+
+/*
+ * Update the corresponding ColumnReferenceStorageDirective clause
+ * in a list of such clauses: current_encodings.
+ *
+ * If anything is really updated (either existing one is changed or
+ * a new crsd is added), set is_updated to true. Otherwise false.
+ *
+ * Return the updated or original current_encodings.
+ */
+List*
+updateEncodingList(List *current_encodings, ColumnReferenceStorageDirective *new_crsd, bool *is_updated)
+{
+	ListCell *lc_current;
+	ColumnReferenceStorageDirective *crsd = NULL;
+
+	Assert(is_updated);
+	foreach(lc_current, current_encodings)
+	{
+		ColumnReferenceStorageDirective *current_crsd = (ColumnReferenceStorageDirective *) lfirst(lc_current);
+
+		if (current_crsd->deflt == false &&
+			strcmp(new_crsd->column, current_crsd->column) == 0)
+		{
+			crsd = current_crsd;
+			break;
+		}
+	}
+	if (crsd)
+	{
+		ListCell *lc1;
+		List *merged_encodings = NIL;
+		*is_updated = false;
+
+		/*
+		 * Create a new list of encodings merging the existing and new values.
+		 *
+		 * Assuming crsd->encoding is complete list of all encoding attributes,
+		 * but new_crsd->encoding may or may not be complete list.
+		 */
+		foreach(lc1, crsd->encoding)
+		{
+			ListCell *lc2;
+			DefElem  *el1        = lfirst(lc1);
+			DefElem  *el2;
+			bool current_updated = false;
+			foreach (lc2, new_crsd->encoding)
+			{
+				el2 = lfirst(lc2);
+				if ((strcmp(el1->defname, el2->defname) == 0) &&
+					(strcmp(defGetString(el1), defGetString(el2)) != 0))
+				{
+					current_updated  = true;
+					*is_updated       = true;
+					merged_encodings = lappend(merged_encodings, copyObject(el2));
+				}
+			}
+			if (!current_updated)
+				merged_encodings = lappend(merged_encodings, copyObject(el1));
+		}
+		/*
+		 * Validate the merged encodings to weed out duplicate parameters and/or
+		 * invalid parameter values.
+		 * We can have duplicate parameters if user enters for eg:
+		 * ALTER COLUMN a SET ENCODING (compresslevel=3, compresslevel=4);
+		 */
+		merged_encodings =
+			transformStorageEncodingClause(merged_encodings, true);
+
+		/*
+		 * Update current_encodings in place with the merged and validated merged_encodings
+		 */
+		list_free_deep(crsd->encoding);
+		crsd->encoding = merged_encodings;
+	}
+	else
+	{
+		/*
+		 * new_crsd->column not found in current_encodings
+		 * Must be coming from a newly added column
+		 */
+		new_crsd->encoding = transformStorageEncodingClause(new_crsd->encoding, true);
+		current_encodings = lappend(current_encodings, new_crsd);
+		*is_updated = true;
+	}
+	return current_encodings;
 }
 
 /*
