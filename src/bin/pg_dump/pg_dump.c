@@ -15036,18 +15036,20 @@ dumpAgg(Archive *fout, const AggInfo *agginfo)
 		if (fout->remoteVersion >= 110000)
 			appendPQExpBufferStr(query,
 								 "aggfinalmodify,\n"
-								 "aggmfinalmodify\n");
+								 "aggmfinalmodify,\n");
 		else
 			appendPQExpBufferStr(query,
 								 "'0' AS aggfinalmodify,\n"
-								 "'0' AS aggmfinalmodify\n");
+								 "'0' AS aggmfinalmodify,\n");
 
-		if (fout->remoteVersion >= 140000)
+		/* GPDB: only Cloudberry 2 and later have pg_aggregate.aggrepsafeexec */
+		if (fout->remoteVersion >= 140000 &&
+			fout->version.type == Cloudberry && fout->version.version >= 2)
 			appendPQExpBufferStr(query,
-									"aggrepsafeexec,\n");
+								 "aggrepsafeexec\n");
 		else
 			appendPQExpBufferStr(query,
-									 "false AS aggrepsafeexec,\n");
+								 "false AS aggrepsafeexec\n");
 
 		appendPQExpBufferStr(query,
 							 "FROM pg_catalog.pg_aggregate a, pg_catalog.pg_proc p "
