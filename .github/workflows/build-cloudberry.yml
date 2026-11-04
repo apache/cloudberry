@@ -377,6 +377,9 @@ jobs:
               },
               {"test":"ic-walrep",
                "make_configs":["src/test/walrep:installcheck"]
+              },
+              {"test":"ic-test-escape",
+               "make_configs":["src/test/modules/test_escape:all installcheck"]
               }
             ]
           }'
