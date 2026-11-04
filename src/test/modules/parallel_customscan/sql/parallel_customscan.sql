@@ -7,6 +7,13 @@
 -- end_matchignore
 
 CREATE EXTENSION parallel_customscan;
+-- The segments run the custom scan in their QEs, and CBDB parallel also
+-- starts QEs as the parallel workers.  A QE has the custom scan methods
+-- only when it loads this library at start, so preload it for this
+-- database and connect again.
+SELECT current_database() AS dbname \gset
+ALTER DATABASE :"dbname" SET session_preload_libraries = 'parallel_customscan';
+\c
 
 -- Set up data BEFORE enabling our hook so ANALYZE doesn't traverse it.
 CREATE TABLE pcs_t (a int)
@@ -74,3 +81,4 @@ DROP TABLE pcs_t2;
 DROP TABLE pcs_empty;
 DROP TABLE pcs_t;
 DROP EXTENSION parallel_customscan;
+ALTER DATABASE :"dbname" RESET session_preload_libraries;
