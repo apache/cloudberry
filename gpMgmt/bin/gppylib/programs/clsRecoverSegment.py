@@ -19,7 +19,7 @@
 from gppylib.mainUtils import *
 
 from optparse import OptionGroup
-import glob, os, sys, signal, shutil, time
+import glob, os, re, sys, signal, shutil, time
 from contextlib import closing
 
 from gppylib import gparray, gplog, userinput, utils
@@ -45,6 +45,13 @@ from gppylib.mainUtils import ExceptionNoStackTraceNeeded
 from gppylib.programs.clsRecoverSegment_triples import RecoveryTripletsFactory
 
 logger = gplog.get_default_logger()
+
+# cherry-pick from Greenplum Database
+# greenplum-db/gpdb-archive @ 482967c1b4,
+# gpMgmt/bin/gppylib/programs/clsRecoverSegment.py
+# Upper bound and lower bound for max-rate
+MAX_RATE_LOWER = 32
+MAX_RATE_UPPER = 1048576
 
 # -------------------------------------------------------------------------
 
@@ -122,7 +129,9 @@ class GpRecoverSegmentProgram:
 
     def getRecoveryActionsBasedOnOptions(self, gpEnv, gpArray):
         if self.__options.rebalanceSegments:
-            return GpSegmentRebalanceOperation(gpEnv, gpArray, self.__options.parallelDegree, self.__options.parallelPerHost)
+            return GpSegmentRebalanceOperation(gpEnv, gpArray, self.__options.parallelDegree,
+                                               self.__options.parallelPerHost, self.__options.disableReplayLag,
+                                               self.__options.replayLag)
         else:
             instance = RecoveryTripletsFactory.instance(gpArray, self.__options.recoveryConfigFile, self.__options.newRecoverHosts)
             segs = [GpMirrorToBuild(t.failed, t.live, t.failover, self.__options.forceFullResynchronization) for t in instance.getTriplets()]
@@ -131,7 +140,8 @@ class GpRecoverSegmentProgram:
                                        instance.getInterfaceHostnameWarnings(),
                                        forceoverwrite=True,
                                        progressMode=self.getProgressMode(),
-                                       parallelPerHost=self.__options.parallelPerHost)
+                                       parallelPerHost=self.__options.parallelPerHost,
+                                       maxRate=self.__options.maxRate)
 
     def syncPackages(self, new_hosts):
         # The design decision here is to squash any exceptions resulting from the
@@ -196,6 +206,10 @@ class GpRecoverSegmentProgram:
                                                               toRecover.getFailoverSegment(), tabLog)
                 else:
                     tabLog.info(["Recovery Target", "= in-place"])
+
+                if syncMode == "Full" and mirrorBuilder.getMaxTransferRate() is not None:
+                    tabLog.info(["Maximum Transfer Rate", "= " + mirrorBuilder.getMaxTransferRate()])
+
                 tabLog.outputTable()
 
                 i = i + 1
@@ -229,6 +243,14 @@ class GpRecoverSegmentProgram:
                                "primary %s    failover target: %s"
                                % (self.__getSimpleSegmentLabel(src), self.__getSimpleSegmentLabel(dest)))
 
+            if not toRecover.isFullSynchronization() and mirrorBuilder.getMaxTransferRate() is not None:
+                #
+                # For Incremental recovery, when max-rate option is provided,
+                # warn the user that only Full recovery supports max-rate option
+                #
+                res.append(" --max-rate flag is only supported with segments undergoing Full recovery (-F). "
+                           "Other modes of recovery will use the entire available network bandwidth.")
+
         for warning in mirrorBuilder.getAdditionalWarnings():
             res.append(warning)
 
@@ -239,6 +261,46 @@ class GpRecoverSegmentProgram:
         with closing(dbconn.connect(dbconn.DbURL())) as conn:
             res = dbconn.query(conn, "SELECT datname FROM PG_DATABASE WHERE datname != 'template0'")
             return res.fetchall()
+
+    # cherry-pick from Greenplum Database
+    # greenplum-db/gpdb-archive @ 482967c1b4,
+    # gpMgmt/bin/gppylib/programs/clsRecoverSegment.py
+    def validateMaxRate(self):
+        """
+        Validate the max-rate input provided by the user.
+        Numeric part of max-rate can be a whole/decimal number with an optional suffix of either 'k' or 'M'
+        Valid range is from 32kbps to 1048576kbps(1024Mbps)
+
+        Below regex pattern validates the max-rate which can be a whole/decimal number with an optional unit suffix.
+        Valid match patterns - '12', '12.34A', '123.45'
+        Invalid match patterns - ABC', '.', '12 34'
+
+        """
+        # (\d+(?:\.\d+)?), not ([\d\.]+): the looser upstream form also matches
+        # '.', '...' and '1.2.3', which float() then rejects with a ValueError
+        # that escapes this function -- the operator gets "could not convert
+        # string to float" instead of the message below. The docstring above
+        # already calls '.' invalid; this makes the pattern agree with it.
+        pattern = r'^\s*(\d+(?:\.\d+)?)([a-zA-Z]?)\s*$'
+        match = re.match(pattern, self.__options.maxRate)
+
+        if match:
+            rateVal, rateSuffix = match.groups()
+
+            rateVal = float(rateVal)
+            if(rateVal <= 0):
+                raise ProgramArgumentValidationException("Transfer rate must be greater than zero")
+
+            if rateSuffix == 'M':
+               rateVal *= 1024
+            elif rateSuffix and rateSuffix != 'k':
+               raise ProgramArgumentValidationException("Invalid --max-rate unit: {0}".format(rateSuffix))
+
+            if rateVal < MAX_RATE_LOWER or rateVal > MAX_RATE_UPPER:
+                raise ProgramArgumentValidationException("transfer rate {0} is out of range".format(self.__options.maxRate))
+        else:
+            raise ProgramArgumentValidationException("transfer rate {0} is not a valid value".format(self.__options.maxRate))
+        return
 
     def run(self):
         if self.__options.parallelDegree < 1 or self.__options.parallelDegree > gp.MAX_COORDINATOR_NUM_WORKERS:
@@ -261,6 +323,38 @@ class GpRecoverSegmentProgram:
             optionCnt += 1
         if optionCnt > 1:
             raise ProgramArgumentValidationException("Only one of -i, -p, and -r may be specified")
+
+        # -o only writes out a sample configuration file describing what would
+        # be recovered; it does not recover anything, so combining it with an
+        # option that says where to recover to is a contradiction rather than a
+        # refinement.
+        if self.__options.outputSampleConfigFile:
+            if self.__options.recoveryConfigFile is not None:
+                raise ProgramArgumentValidationException("Invalid -i provided with -o argument")
+            if self.__options.rebalanceSegments:
+                raise ProgramArgumentValidationException("Invalid -r provided with -o argument")
+
+        if self.__options.disableReplayLag and not self.__options.rebalanceSegments:
+            raise ProgramArgumentValidationException("--disable-replay-lag should be used only with -r")
+
+        # A full resynchronisation rebuilds the mirror from its primary, which
+        # is neither what -r (rebalance back to preferred roles) nor -p
+        # (recover onto a different host) asks for.
+        if self.__options.forceFullResynchronization:
+            if self.__options.rebalanceSegments:
+                raise ProgramArgumentValidationException("-F option is not supported with -r option")
+            if self.__options.newRecoverHosts is not None:
+                raise ProgramArgumentValidationException("-F option is not supported with -p option")
+
+        # Verify max-rate supported options
+        if self.__options.maxRate and self.__options.rebalanceSegments:
+            self.logger.warn(" -r flag does not support the use of --max-rate, hence --max-rate will be ignored")
+        if self.__options.outputSampleConfigFile and self.__options.maxRate:
+            self.logger.warn(" -o flag does not support the use of --max-rate, hence --max-rate will be ignored")
+
+        # Validate max-rate value, if provided as an option
+        if self.__options.maxRate:
+            self.validateMaxRate()
 
         faultProberInterface.getFaultProber().initializeProber(gpEnv.getCoordinatorPort())
 
@@ -378,11 +472,15 @@ class GpRecoverSegmentProgram:
             if not mirrorBuilder.recover_mirrors(gpEnv, gpArray):
                 if self.termination_requested:
                     self.logger.error("gprecoverseg process was interrupted by the user.")
+                self.logger.error("gprecoverseg failed. Please check the output for more details.")
                 sys.exit(1)
 
             if self.termination_requested:
                 self.logger.info("Not able to terminate the recovery process since it has been completed successfully.")
 
+            self.logger.info("********************************")
+            self.logger.info("Future gprecoverseg executions might remove the currently created pg_basebackup/pg_rewind/rsync "
+                             "progress files, please save these files if needed.")
             self.logger.info("********************************")
             self.logger.info("Segments successfully recovered.")
             self.logger.info("********************************")
@@ -500,8 +598,15 @@ class GpRecoverSegmentProgram:
 
         addTo.add_option("-r", None, default=False, action='store_true',
                          dest='rebalanceSegments', help='Rebalance synchronized segments.')
+        addTo.add_option("--replay-lag", None, type="float", default=gp.ALLOWED_REPLAY_LAG,
+                         dest="replayLag",
+                         metavar="<replayLag>", help='Allowed replay lag on mirror, lag should be provided in GBs')
+        addTo.add_option("--disable-replay-lag", None, default=False, action='store_true',
+                         dest='disableReplayLag', help='Disable replay lag check when rebalancing segments')
         addTo.add_option('', '--hba-hostnames', action='store_true', dest='hba_hostnames',
                          help='use hostnames instead of CIDR in pg_hba.conf')
+        addTo.add_option('--max-rate', type='string', dest='maxRate', metavar='<maxRate>',
+                          help='Maximum Rate of data transfer')
 
         parser.set_defaults()
         return parser
