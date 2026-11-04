@@ -14,6 +14,10 @@ SELECT gp_inject_fault('winagg_after_spool_tuples', 'skip', dbid)
 
 EXPLAIN ANALYZE SELECT AVG(x) OVER (PARTITION BY y) FROM dummy_table;
 
+SELECT bool_and(gp_inject_fault('winagg_after_spool_tuples', 'status', dbid)
+                LIKE '%num times hit:''1''%') AS winagg_fault_fired
+  FROM gp_segment_configuration WHERE role='p' AND content>=0;
+
 SELECT gp_inject_fault('winagg_after_spool_tuples', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content>=0;
 
@@ -25,6 +29,10 @@ SELECT gp_inject_fault('winagg_after_spool_tuples', 'skip', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content>=0;
 
 EXPLAIN ANALYZE SELECT AVG(x) OVER (PARTITION BY y) FROM dummy_table;
+
+SELECT bool_and(gp_inject_fault('winagg_after_spool_tuples', 'status', dbid)
+                LIKE '%num times hit:''1''%') AS winagg_fault_fired
+  FROM gp_segment_configuration WHERE role='p' AND content>=0;
 
 SELECT gp_inject_fault('winagg_after_spool_tuples', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content>=0;

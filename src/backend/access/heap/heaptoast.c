@@ -689,7 +689,9 @@ heap_fetch_toast_slice(Relation toastrel, Oid valueid, int32 attrsize,
 	SysScanDesc toastscan;
 	HeapTuple	ttup;
 	int32		expectedchunk;
-	int32		totalchunks = ((attrsize - 1) / TOAST_MAX_CHUNK_SIZE) + 1;
+	int32		totalchunks;
+	int32		max_chunk_size = TOAST_MAX_CHUNK_SIZE;
+	bool		fetch_whole_value = sliceoffset == 0 && slicelength == attrsize;
 	int			startchunk;
 	int			endchunk;
 	int			num_indexes;
@@ -702,21 +704,61 @@ heap_fetch_toast_slice(Relation toastrel, Oid valueid, int32 attrsize,
 									&toastidxs,
 									&num_indexes);
 
-	startchunk = sliceoffset / TOAST_MAX_CHUNK_SIZE;
-	endchunk = (sliceoffset + slicelength - 1) / TOAST_MAX_CHUNK_SIZE;
-	Assert(endchunk <= totalchunks);
-
 	/* Set up a scan key to fetch from the index. */
 	ScanKeyInit(&toastkey[0],
 				(AttrNumber) 1,
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(valueid));
 
+	init_toast_snapshot(&SnapshotToast);
+
 	/*
-	 * No additional condition if fetching all chunks. Otherwise, use an
-	 * equality condition for one chunk, and a range condition otherwise.
+	 * Older clusters can have used a different TOAST_MAX_CHUNK_SIZE.  A slice
+	 * starting in the middle must inspect chunk zero before computing its
+	 * scan bounds.  Reads starting at zero learn the size in the main scan.
 	 */
-	if (startchunk == 0 && endchunk == totalchunks - 1)
+	if (sliceoffset > 0)
+	{
+		Pointer		chunk;
+		int32		chunksize;
+		bool		isnull;
+
+		ScanKeyInit(&toastkey[1], (AttrNumber) 2,
+					BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(0));
+		toastscan = systable_beginscan_ordered(toastrel, toastidxs[validIndex],
+											   &SnapshotToast, 2, toastkey);
+		ttup = systable_getnext_ordered(toastscan, ForwardScanDirection);
+		if (ttup == NULL)
+			ereport(ERROR,
+					(errcode(ERRCODE_DATA_CORRUPTED),
+					 errmsg_internal("missing chunk number 0 for toast value %u in %s",
+									 valueid, RelationGetRelationName(toastrel))));
+		chunk = DatumGetPointer(fastgetattr(ttup, 3, toasttupDesc, &isnull));
+		Assert(!isnull);
+		if (VARATT_IS_EXTENDED(chunk) && !VARATT_IS_SHORT(chunk))
+			elog(ERROR, "found toasted toast chunk for toast value %u in %s",
+				 valueid, RelationGetRelationName(toastrel));
+		chunksize = VARSIZE_ANY_EXHDR(chunk);
+		if (chunksize <= 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_DATA_CORRUPTED),
+					 errmsg_internal("invalid chunk size %d for toast value %u in %s",
+									 chunksize, valueid, RelationGetRelationName(toastrel))));
+		if (chunksize < attrsize)
+			max_chunk_size = chunksize;
+		systable_endscan_ordered(toastscan);
+	}
+
+	totalchunks = ((attrsize - 1) / max_chunk_size) + 1;
+	startchunk = sliceoffset / max_chunk_size;
+	endchunk = (sliceoffset + slicelength - 1) / max_chunk_size;
+	Assert(endchunk < totalchunks);
+
+	/*
+	 * Reads starting at chunk zero cannot limit the end until its size is
+	 * known. Otherwise, use equality for one chunk, and a range for several.
+	 */
+	if (startchunk == 0)
 		nscankeys = 1;
 	else if (startchunk == endchunk)
 	{
@@ -740,7 +782,6 @@ heap_fetch_toast_slice(Relation toastrel, Oid valueid, int32 attrsize,
 	}
 
 	/* Prepare for scan */
-	init_toast_snapshot(&SnapshotToast);
 	toastscan = systable_beginscan_ordered(toastrel, toastidxs[validIndex],
 										   &SnapshotToast, nscankeys, toastkey);
 
@@ -804,8 +845,14 @@ heap_fetch_toast_slice(Relation toastrel, Oid valueid, int32 attrsize,
 									 curchunk,
 									 startchunk, endchunk, valueid,
 									 RelationGetRelationName(toastrel))));
-		expected_size = curchunk < totalchunks - 1 ? TOAST_MAX_CHUNK_SIZE
-			: attrsize - ((totalchunks - 1) * TOAST_MAX_CHUNK_SIZE);
+		if (curchunk == 0 && chunksize > 0 && chunksize < attrsize)
+		{
+			max_chunk_size = chunksize;
+			totalchunks = ((attrsize - 1) / max_chunk_size) + 1;
+			endchunk = (sliceoffset + slicelength - 1) / max_chunk_size;
+		}
+		expected_size = curchunk < totalchunks - 1 ? max_chunk_size
+			: attrsize - ((totalchunks - 1) * max_chunk_size);
 		if (chunksize != expected_size)
 			ereport(ERROR,
 					(errcode(ERRCODE_DATA_CORRUPTED),
@@ -820,16 +867,18 @@ heap_fetch_toast_slice(Relation toastrel, Oid valueid, int32 attrsize,
 		chcpystrt = 0;
 		chcpyend = chunksize - 1;
 		if (curchunk == startchunk)
-			chcpystrt = sliceoffset % TOAST_MAX_CHUNK_SIZE;
+			chcpystrt = sliceoffset % max_chunk_size;
 		if (curchunk == endchunk)
-			chcpyend = (sliceoffset + slicelength - 1) % TOAST_MAX_CHUNK_SIZE;
+			chcpyend = (sliceoffset + slicelength - 1) % max_chunk_size;
 
 		memcpy(VARDATA(result) +
-			   (curchunk * TOAST_MAX_CHUNK_SIZE - sliceoffset) + chcpystrt,
+			   (curchunk * max_chunk_size - sliceoffset) + chcpystrt,
 			   chunkdata + chcpystrt,
 			   (chcpyend - chcpystrt) + 1);
 
 		expectedchunk++;
+		if (!fetch_whole_value && expectedchunk > endchunk)
+			break;
 	}
 
 	/*

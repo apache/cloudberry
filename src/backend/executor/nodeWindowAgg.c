@@ -2489,6 +2489,21 @@ ExecWindowAgg(PlanState *pstate)
 		 */
 		spool_tuples(winstate, winstate->currentpos);
 
+#ifdef FAULT_INJECTOR
+		/* Report the completed partition before releasing its tuplestore. */
+		if (winstate->partition_spooled &&
+			winstate->currentpos >= winstate->spooled_rows &&
+			SIMPLE_FAULT_INJECTOR("winagg_after_spool_tuples") == FaultInjectorTypeSkip)
+		{
+			if (winstate->buffer == NULL)
+				ereport(NOTICE, (errmsg("winagg: no input rows")));
+			else if (tuplestore_in_memory(winstate->buffer))
+				ereport(NOTICE, (errmsg("winagg: tuplestore fitted in memory")));
+			else
+				ereport(NOTICE, (errmsg("winagg: tuplestore spilled to disk")));
+		}
+#endif
+
 		/* Move to the next partition if we reached the end of this partition */
 		if (winstate->partition_spooled &&
 			winstate->currentpos >= winstate->spooled_rows)
