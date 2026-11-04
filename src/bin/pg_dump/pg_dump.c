@@ -11384,8 +11384,6 @@ dumpNamespace(Archive *fout, const NamespaceInfo *nspinfo)
 	if (dopt->binary_upgrade)
 		binary_upgrade_set_namespace_oid(fout, q, nspinfo->dobj.catId.oid);
 
-	appendPQExpBuffer(q, "CREATE SCHEMA %s;\n", qnspname);
-
 	if (nspinfo->create)
 	{
 		appendPQExpBuffer(delq, "DROP SCHEMA %s;\n", qnspname);
