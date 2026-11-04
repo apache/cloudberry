@@ -1196,7 +1196,7 @@ CreateBackupStreamer(char *archive_name, char *spclocation,
 		else
 		{
 			snprintf(archive_filename, sizeof(archive_filename),
-					 "%s/%s/%d", basedir, archive_name, target_gp_dbid);
+					 "%s/%s", basedir, archive_name);
 			archive_file = NULL;
 		}
 
