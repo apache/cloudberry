@@ -1777,7 +1777,7 @@ jobs:
           fi
 
           # Read configs into array
-          IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
+          mapfile -t configs <<< "${{ join(matrix.make_configs, fromJSON('"\n"')) }}"
 
           echo "=== Starting test execution for ${{ matrix.test }} ==="
           echo "Number of configurations to execute: ${#configs[@]}"
@@ -1958,7 +1958,7 @@ jobs:
           overall_status=0
 
           # Get configs array to create context for results
-          IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
+          mapfile -t configs <<< "${{ join(matrix.make_configs, fromJSON('"\n"')) }}"
 
           echo "=== Starting results parsing for ${{ matrix.test }} ==="
           echo "Number of configurations to parse: ${#configs[@]}"
@@ -2154,7 +2154,7 @@ jobs:
             fi
 
             # Process results for each configuration
-            IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
+            mapfile -t configs <<< "${{ join(matrix.make_configs, fromJSON('"\n"')) }}"
 
             for ((i=0; i<NUM_CONFIGS; i++)); do
               config="${configs[$i]}"
