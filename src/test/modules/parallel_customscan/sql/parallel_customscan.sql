@@ -1,6 +1,10 @@
+-- A parallel worker can find no outer tuples left to probe, and then
+-- EXPLAIN ANALYZE shows its outer side as never executed.
 -- start_matchsubs
 -- m/\(actual rows=[^)]*\)/
 -- s/\(actual rows=[^)]*\)/(actual rows=...)/
+-- m/\(never executed\)/
+-- s/\(never executed\)/(actual rows=...)/
 -- end_matchsubs
 -- start_matchignore
 -- m/^\s*Buckets: \d+  Batches: \d+  Memory Usage: \d+kB/
