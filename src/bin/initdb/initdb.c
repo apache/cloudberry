@@ -2159,6 +2159,33 @@ setup_cdb_schema(FILE *cmdfd)
 		free(lines);
 		free(path);
 	}
+
+	/*
+	 * The scripts run after setup_privileges(), so pg_init_privs does not
+	 * know the privileges that they grant on objects in pg_catalog.  Record
+	 * them, or pg_dump dumps these GRANTs for each database.  Objects of
+	 * extensions already have their own entries.
+	 */
+	PG_CMD_PUTS("INSERT INTO pg_init_privs "
+				"  (objoid, classoid, objsubid, initprivs, privtype)"
+				"    SELECT"
+				"        c.oid,"
+				"        (SELECT oid FROM pg_class WHERE relname = 'pg_class'),"
+				"        0,"
+				"        c.relacl,"
+				"        'i'"
+				"    FROM"
+				"        pg_class c"
+				"    WHERE"
+				"        c.relacl IS NOT NULL"
+				"        AND c.relnamespace = 'pg_catalog'::regnamespace"
+				"        AND c.relkind IN (" CppAsString2(RELKIND_RELATION) ", "
+				CppAsString2(RELKIND_VIEW) ", " CppAsString2(RELKIND_MATVIEW) ", "
+				CppAsString2(RELKIND_SEQUENCE) ", " CppAsString2(RELKIND_DIRECTORY_TABLE) ")"
+				"        AND NOT EXISTS (SELECT 1 FROM pg_init_privs p"
+				"                        WHERE p.objoid = c.oid"
+				"                          AND p.classoid = 'pg_class'::regclass"
+				"                          AND p.objsubid = 0);\n\n");
 }
 
 /*
