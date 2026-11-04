@@ -185,10 +185,14 @@ command_fails(
 # log_min_messages=fatal to remove any noise.  This test uses a startup
 # wrapped with pg_ctl to allow the case where this runs under a privileged
 # account on Windows.
+#
+# GPDB: the postmaster refuses to start, even for -C, without a contentid.
+# The test node gets one only from the options PostgreSQL::Test::Cluster
+# passes at start, so pass it here too.
 command_checks_all(
 	[
 		'pg_ctl', 'start', '-D', $pgdata, '-s', '-o',
-		'-C data_checksums -c log_min_messages=fatal'
+		'-C data_checksums -c log_min_messages=fatal --gp_contentid=0'
 	],
 	1,
 	[qr/^on$/],
