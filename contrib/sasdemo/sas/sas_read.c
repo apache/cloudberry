@@ -4,7 +4,7 @@
  * This program is mimicking the actual SAS backend, it opens a socket and 
  * starts listening on that socket for data sent from the database.
  *
- * When data is recieved it reads until the socket and writes the data to
+ * When data is received it reads until the socket and writes the data to
  * stdout.
  *
  * The real SAS backend will want to do something more intelligent.
