@@ -377,6 +377,9 @@ jobs:
               },
               {"test":"ic-walrep",
                "make_configs":["src/test/walrep:installcheck"]
+              },
+              {"test":"ic-parallel-customscan",
+               "make_configs":["src/test/modules/parallel_customscan:install installcheck"]
               }
             ]
           }'
