@@ -96,7 +96,10 @@ DROP OWNED BY regress_dump_test_role RESTRICT;
 DROP ROLE regress_dump_test_role;
 DROP EXTENSION test_pg_dump;
 -- shouldn't be anything left in pg_init_privs
-SELECT * FROM pg_init_privs WHERE privtype = 'e';
+-- GPDB: each database has the gp_toolkit extension, whose objects have
+-- entries here too, so look only for entries of objects that are gone.
+SELECT * FROM pg_init_privs WHERE privtype = 'e'
+  AND pg_describe_object(classoid, objoid, objsubid) IS NULL;
  objoid | classoid | objsubid | privtype | initprivs 
 --------+----------+----------+----------+-----------
 (0 rows)
