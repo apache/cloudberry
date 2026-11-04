@@ -584,7 +584,7 @@ END;
 $$;
 INFO:  read committed
 INFO:  repeatable read
-INFO:  serializable
+INFO:  repeatable read
 -- error cases
 DO LANGUAGE plpgsql $$
 BEGIN
