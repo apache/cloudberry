@@ -248,6 +248,74 @@ SELECT count(*) = (SELECT count(*) FROM gp_segment_configuration WHERE role = 'p
 
 DROP VIEW gpvs_repl_entry;
 DROP TABLE gpvs_dist;
+-- Heap page counters: distributed totals and replicated averages must
+-- agree with per-segment work. Forced rescans must not count it again.
+CREATE TABLE gpvs_pages_dist (id int) DISTRIBUTED BY (id);
+CREATE TABLE gpvs_pages_repl (id int) DISTRIBUTED REPLICATED;
+INSERT INTO gpvs_pages_dist SELECT generate_series(1, 10000);
+INSERT INTO gpvs_pages_repl SELECT generate_series(1, 1000);
+VACUUM (FREEZE) gpvs_pages_dist, gpvs_pages_repl;
+SELECT count(*) = 2 AND
+       bool_and(s.pages_frozen > 0 AND s.pages_all_visible > 0
+                AND s.pages_frozen = d.pages_frozen /
+                    CASE WHEN p.policytype = 'r' THEN p.numsegments ELSE 1 END
+                AND s.pages_all_visible = d.pages_all_visible /
+                    CASE WHEN p.policytype = 'r' THEN p.numsegments ELSE 1 END
+                AND s.freeze_age_vacuum_count > 0 AND s.dead_pages = 0
+                AND s.freeze_age_vacuum_count = d.freeze_age_vacuum_count /
+                    CASE WHEN p.policytype = 'r' THEN p.numsegments ELSE 1 END)
+         AS page_summaries_match
+  FROM ext_vacuum_statistics.gp_stats_vacuum_tables_summary s
+  JOIN (SELECT relid, sum(pages_frozen) AS pages_frozen,
+                     sum(pages_all_visible) AS pages_all_visible,
+                     sum(freeze_age_vacuum_count) AS freeze_age_vacuum_count
+          FROM gp_dist_random('ext_vacuum_statistics.pg_stats_vacuum_tables')
+         WHERE relname IN ('gpvs_pages_dist', 'gpvs_pages_repl')
+         GROUP BY relid) d USING (relid)
+  JOIN gp_distribution_policy p ON p.localoid = s.relid
+ WHERE s.relname IN ('gpvs_pages_dist', 'gpvs_pages_repl');
+ page_summaries_match 
+----------------------
+ t
+(1 row)
+
+CREATE TEMP TABLE gpvs_pages_before AS
+  SELECT relid, pages_frozen, pages_all_visible
+    FROM ext_vacuum_statistics.gp_stats_vacuum_tables_summary
+   WHERE relname IN ('gpvs_pages_dist', 'gpvs_pages_repl')
+  DISTRIBUTED BY (relid);
+VACUUM (FREEZE, DISABLE_PAGE_SKIPPING) gpvs_pages_dist, gpvs_pages_repl;
+SELECT bool_and(s.pages_frozen = b.pages_frozen
+                AND s.pages_all_visible = b.pages_all_visible) AS no_new_page_work
+  FROM ext_vacuum_statistics.gp_stats_vacuum_tables_summary s
+  JOIN gpvs_pages_before b USING (relid);
+ no_new_page_work 
+------------------
+ t
+(1 row)
+
+SELECT gp_stat_reset_single_table_counters('gpvs_pages_dist'::regclass);
+ gp_stat_reset_single_table_counters 
+-------------------------------------
+ 
+(1 row)
+
+SELECT gp_stat_reset_single_table_counters('gpvs_pages_repl'::regclass);
+ gp_stat_reset_single_table_counters 
+-------------------------------------
+ 
+(1 row)
+
+SELECT bool_and(pages_frozen = 0 AND pages_all_visible = 0
+                AND dead_pages = 0 AND freeze_age_vacuum_count = 0) AS page_counters_reset
+  FROM ext_vacuum_statistics.gp_stats_vacuum_tables
+ WHERE relname IN ('gpvs_pages_dist', 'gpvs_pages_repl');
+ page_counters_reset 
+---------------------
+ t
+(1 row)
+
+DROP TABLE gpvs_pages_before, gpvs_pages_dist, gpvs_pages_repl;
 -- TOAST tables and their indexes inherit the parent's distribution policy.
 CREATE TABLE gpvs_toast_repl (id int, payload text) DISTRIBUTED REPLICATED;
 CREATE TABLE gpvs_toast_dist (id int, payload text) DISTRIBUTED BY (id);

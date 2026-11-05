@@ -32,7 +32,7 @@ CREATE EXTENSION ext_vacuum_statistics;
 From a Cloudberry coordinator, query statistics across the cluster:
 
 ```sql
--- Per-table heap vacuum statistics, with gp_segment_id
+-- Per-table heap and append-optimized vacuum statistics, with gp_segment_id
 SELECT * FROM ext_vacuum_statistics.gp_stats_vacuum_tables;
 
 -- Per-index vacuum statistics
@@ -103,8 +103,9 @@ FROM pg_database WHERE datname = current_database();
 Each tracked object (table or index) uses a fixed-size shared memory entry; the exact size depends on the platform.
 
 Per-database aggregates add one entry per tracked database. Entry size includes
-pgstat bookkeeping; memory estimates must use the structures of the actual
-build rather than a fixed byte count from an earlier version.
+pgstat bookkeeping; memory estimates must use the
+structures of the actual build rather than a fixed byte count from an earlier
+version.
 
 The entry of a table or an index is dropped when the relation is dropped (at
 commit, so a rolled back `DROP` keeps it), and a new relation that gets the OID
@@ -123,7 +124,7 @@ SET vacuum_statistics.enabled = off;
 
 | View | Description |
 |------|-------------|
-| `ext_vacuum_statistics.pg_stats_vacuum_tables` | Per-table heap vacuum stats (pages scanned, tuples deleted and resource usage) |
+| `ext_vacuum_statistics.pg_stats_vacuum_tables` | Per-table heap and AO work/resource counters |
 | `ext_vacuum_statistics.pg_stats_vacuum_indexes` | Per-index vacuum stats |
 | `ext_vacuum_statistics.pg_stats_vacuum_database` | Per-database aggregate vacuum stats |
 
@@ -139,7 +140,9 @@ SET vacuum_statistics.enabled = off;
 
 Heap, index and AO work counters are accumulated once, by native pgstat.
 The extension's table and index views read those same counters through
-`pg_stat_get_vacuum_stats()`, alongside separately stored buffer, WAL and I/O
+`pg_stat_get_vacuum_stats()`. The page counters `pages_frozen` and
+`pages_all_visible` use the native getters for `pg_stat_all_tables`. These
+native counters appear alongside separately stored buffer, WAL and I/O
 measurements. They have the same work-counter history as `pg_stat_vacuum_tables`,
 `pg_stat_vacuum_indexes` and their `gp_stat_*` counterparts; enabling the
 extension does not start a second history.
@@ -167,6 +170,75 @@ series. Rebuild the server and extension together and recreate the extension's
 SQL objects when updating an earlier 1.0 installation. The new statistics-file
 format discards previously saved counters; the new core function also requires
 the matching catalog version.
+
+## Heap page counters
+
+`pages_frozen` accumulates pages on which vacuum froze at least one tuple.
+`pages_all_visible` accumulates pages whose visibility-map all-visible bit
+vacuum changed from unset to set, including empty pages. These count work
+across vacuums, not the current number of frozen or all-visible pages. A
+page can be counted again after later changes require new work; rescanning
+an unchanged page or adding only its all-frozen bit does not add to
+`pages_all_visible`. Both counters survive clean restarts. Full native relation or database
+statistics resets clear them; `pg_stat_reset_vacuum_stats()` preserves them.
+
+`dead_pages` accumulates heap pages containing tuples that are dead but
+not yet removable (for example, because an old snapshot still needs them).
+It differs from `missed_dead_pages`, which counts pages with removable tuples
+that vacuum could not remove. For indexes, `dead_pages` accumulates deleted
+pages not yet reusable, sampled once after cleanup. Repeated observations
+are counted again; this is not a snapshot of the current relation.
+
+`freeze_age_vacuum_count` counts heap vacuums made aggressive by the XID or
+MultiXact freeze table age, including `VACUUM FREEZE`. Forcing a scan with
+`DISABLE_PAGE_SKIPPING` alone does not increment it, and entering failsafe
+mode is counted separately. Both new counters survive clean restarts and
+are cleared by native statistics resets.
+
+## Append-optimized tables
+
+AO row and AOCS tables and their indexes are reported too.  For the table,
+`tuples_deleted` is the number of dead tuples the compaction discarded and
+`pages_removed` the space released by truncating and dropping segment files,
+in heap-equivalent pages. `pages_scanned` counts the data scanned during
+compaction in those units, rounded up per compacted segment (source EOF for
+AO row, scan bytes read for AOCS). `compacted_segments` and `tuples_moved`
+accumulate actual compactions and live rows moved; skipped candidates add
+nothing. `total_file_segs` is the segment metadata entry count after the
+latest vacuum, including empty and awaiting-drop entries. It is replaced on
+each vacuum, not accumulated; AOCS counts segment numbers, not individual
+column files. A native statistics reset clears these values, and the next vacuum
+refreshes the segment count even without compaction. All three AO-specific
+fields stay zero for heap tables.
+
+`recently_dead_tuples` accumulates the hidden rows remaining in the AO
+visibility map after post-cleanup. This includes rows left because
+compaction is disabled or below its threshold. Each completed vacuum adds
+its remaining count, so two vacuums that both leave 100 hidden rows add
+200; it is not a snapshot or a count of distinct rows. Once compaction
+removes those rows, later vacuums add zero. Native statistics resets clear the
+counter, and clean restarts preserve it.
+
+The heap-only counters (`pages_frozen`, `pages_all_visible`,
+`tuples_frozen`, `missed_dead_*`, `dead_pages`, `freeze_age_vacuum_count`) stay zero for AO. The
+resource usage covers all phases of the vacuum, which is reported at the end
+of the last one.  The compaction moves live tuples to another segment file,
+so an index's `tuples_deleted` counts the entries of the moved live tuples
+too.
+
+AO vacuum time and cost delay are summed over the active phases executed
+by the reporting worker. Gaps between phases are excluded. If a worker is
+replaced between phases, only the replacement worker's phases are reported.
+Removed tuple and byte counters use 64 bits; conversion of released bytes
+to heap-equivalent pages preserves the 64-bit range.
+
+AO auxiliary relations (`aoseg`, `visimap`, `blkdir`) are shown as separate
+heap-statistics rows under their own OIDs and names. Their indexes are shown
+in the index views. The parent AO row describes its vacuum; the later heap
+vacuum of auxiliary relations is not added to it. To associate an auxiliary
+row with its parent, join its `relid` to `pg_appendonly.segrelid`,
+`visimaprelid` or `blkdirrelid`. Cluster summaries use the parent table's
+replication divisor for auxiliary relations and their indexes too.
 
 ## Cloudberry
 
@@ -248,7 +320,13 @@ The test of the cluster-wide views runs against such a cluster:
 
 ```
 make -C contrib/ext_vacuum_statistics installcheck-cluster
+make -C contrib/ext_vacuum_statistics installcheck-cluster-isolation2
 ```
+
+The isolation2 target additionally requires a fault-injector build and the
+`gp_inject_fault` extension installed on every instance. It checks retained
+AO auxiliary entries during distributed DROP, including a suspension at
+COMMIT PREPARED, and their removal after commit.
 
 Reset functions return `void` and require superuser privileges by default.
 An administrator can delegate access with `GRANT EXECUTE`; cluster wrappers

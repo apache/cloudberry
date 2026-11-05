@@ -123,7 +123,8 @@ RETURNS SETOF record
 AS 'MODULE_PATHNAME', 'pg_stats_get_vacuum_database'
 LANGUAGE C STRICT STABLE;
 
--- View: vacuum statistics per table (heap)
+-- Work counters come from native pgstat, even without an extension resource entry.
+-- View: vacuum statistics per table (heap and append-optimized)
 CREATE VIEW ext_vacuum_statistics.pg_stats_vacuum_tables AS
 SELECT
   rel.oid AS relid,
@@ -143,7 +144,18 @@ SELECT
   COALESCE(stats.rel_blks_hit, 0) AS rel_blks_hit,
   work.tuples_deleted,
   work.pages_scanned,
-  work.pages_removed
+  work.pages_removed,
+  work.tuples_frozen,
+  work.recently_dead_tuples,
+  work.missed_dead_pages,
+  work.missed_dead_tuples,
+  pg_catalog.pg_stat_get_pages_frozen(rel.oid) AS pages_frozen,
+  pg_catalog.pg_stat_get_pages_all_visible(rel.oid) AS pages_all_visible,
+  work.total_file_segs,
+  work.compacted_segments,
+  work.tuples_moved,
+  work.dead_pages,
+  work.freeze_age_vacuum_count
 FROM pg_class rel
 JOIN pg_namespace ns ON ns.oid = rel.relnamespace
 JOIN pg_database db ON db.datname = current_database()
@@ -152,7 +164,7 @@ LEFT JOIN LATERAL ext_vacuum_statistics.pg_stats_get_vacuum_tables(db.oid, rel.o
 WHERE rel.relkind IN ('r', 'm', 't', 'o', 'b', 'M');
 
 COMMENT ON VIEW ext_vacuum_statistics.pg_stats_vacuum_tables IS
-  'Extended vacuum statistics per table (heap)';
+  'Extended vacuum statistics per table (heap and append-optimized)';
 
 -- View: vacuum statistics per index
 CREATE VIEW ext_vacuum_statistics.pg_stats_vacuum_indexes AS
@@ -173,7 +185,8 @@ SELECT
   COALESCE(stats.rel_blks_read, 0) AS rel_blks_read,
   COALESCE(stats.rel_blks_hit, 0) AS rel_blks_hit,
   work.tuples_deleted,
-  work.pages_deleted
+  work.pages_deleted,
+  work.dead_pages
 FROM pg_class rel
 JOIN pg_namespace ns ON ns.oid = rel.relnamespace
 JOIN pg_database db ON db.datname = current_database()
@@ -274,7 +287,18 @@ SELECT
   (sum(s.rel_blks_hit) / s.divisor)::bigint AS rel_blks_hit,
   (sum(s.tuples_deleted) / s.divisor)::bigint AS tuples_deleted,
   (sum(s.pages_scanned) / s.divisor)::bigint AS pages_scanned,
-  (sum(s.pages_removed) / s.divisor)::bigint AS pages_removed
+  (sum(s.pages_removed) / s.divisor)::bigint AS pages_removed,
+  (sum(s.tuples_frozen) / s.divisor)::bigint AS tuples_frozen,
+  (sum(s.recently_dead_tuples) / s.divisor)::bigint AS recently_dead_tuples,
+  (sum(s.missed_dead_pages) / s.divisor)::bigint AS missed_dead_pages,
+  (sum(s.missed_dead_tuples) / s.divisor)::bigint AS missed_dead_tuples,
+  (sum(s.pages_frozen) / s.divisor)::bigint AS pages_frozen,
+  (sum(s.pages_all_visible) / s.divisor)::bigint AS pages_all_visible,
+  (sum(s.total_file_segs) / s.divisor)::bigint AS total_file_segs,
+  (sum(s.compacted_segments) / s.divisor)::bigint AS compacted_segments,
+  (sum(s.tuples_moved) / s.divisor)::bigint AS tuples_moved,
+  (sum(s.dead_pages) / s.divisor)::bigint AS dead_pages,
+  (sum(s.freeze_age_vacuum_count) / s.divisor)::bigint AS freeze_age_vacuum_count
 FROM (
   SELECT v.*,
          CASE WHEN d.policytype = 'r' THEN d.numsegments ELSE 1 END AS divisor
@@ -305,7 +329,18 @@ SELECT
   rel_blks_hit,
   tuples_deleted,
   pages_scanned,
-  pages_removed
+  pages_removed,
+  tuples_frozen,
+  recently_dead_tuples,
+  missed_dead_pages,
+  missed_dead_tuples,
+  pages_frozen,
+  pages_all_visible,
+  total_file_segs,
+  compacted_segments,
+  tuples_moved,
+  dead_pages,
+  freeze_age_vacuum_count
 FROM ext_vacuum_statistics.pg_stats_vacuum_tables
 WHERE relid < 16384;
 
@@ -330,7 +365,8 @@ SELECT
   (sum(s.rel_blks_read) / s.divisor)::bigint AS rel_blks_read,
   (sum(s.rel_blks_hit) / s.divisor)::bigint AS rel_blks_hit,
   (sum(s.tuples_deleted) / s.divisor)::bigint AS tuples_deleted,
-  (sum(s.pages_deleted) / s.divisor)::bigint AS pages_deleted
+  (sum(s.pages_deleted) / s.divisor)::bigint AS pages_deleted,
+  (sum(s.dead_pages) / s.divisor)::bigint AS dead_pages
 FROM (
   SELECT v.*,
          CASE WHEN d.policytype = 'r' THEN d.numsegments ELSE 1 END AS divisor
@@ -361,7 +397,8 @@ SELECT
   rel_blks_read,
   rel_blks_hit,
   tuples_deleted,
-  pages_deleted
+  pages_deleted,
+  dead_pages
 FROM ext_vacuum_statistics.pg_stats_vacuum_indexes
 WHERE indexrelid < 16384;
 
