@@ -31,7 +31,7 @@ SELECT count(*) FROM ext_vacuum_statistics.pg_stats_get_vacuum_tables(
   'native_heap'::regclass)
 }), '0', 'disabled first vacuum creates no extension resource entry');
 is($node->safe_psql('postgres', q{
-SELECT tuples_deleted = 100 AND pages_scanned > 0
+SELECT tuples_deleted = 100 AND pages_scanned > 0 AND tuples_frozen = 900
        AND total_blks_read = 0 AND total_blks_hit = 0 AND wal_records = 0
   FROM ext_vacuum_statistics.pg_stats_vacuum_tables
  WHERE relname = 'native_heap'
@@ -42,19 +42,42 @@ SELECT tuples_deleted = 100 AND total_blks_read = 0 AND total_blks_hit = 0
  WHERE indexrelname = 'native_heap_pkey'
 }), 't', 'index view exposes native work without a resource entry');
 
-my @table_fields = qw(tuples_deleted pages_scanned pages_removed);
-my @index_fields = qw(tuples_deleted pages_deleted);
+for my $orientation ('row', 'column')
+{
+    $node->safe_psql('postgres', qq{
+CREATE TABLE native_$orientation (id int)
+  WITH (appendonly = true, orientation = $orientation);
+INSERT INTO native_$orientation SELECT generate_series(1, 1000);
+DELETE FROM native_$orientation WHERE id <= 100;
+SET gp_appendonly_compaction = off;
+VACUUM native_$orientation;
+VACUUM native_$orientation;
+SELECT pg_stat_force_next_flush();
+});
+    is($node->safe_psql('postgres', qq{
+SELECT recently_dead_tuples FROM ext_vacuum_statistics.pg_stats_vacuum_tables
+ WHERE relname = 'native_$orientation'
+}), '200', "$orientation AO shows the native cumulative hidden-row count");
+}
+
+my @table_fields = qw(tuples_deleted pages_scanned pages_removed tuples_frozen
+    recently_dead_tuples missed_dead_pages missed_dead_tuples
+    total_file_segs compacted_segments tuples_moved
+    dead_pages freeze_age_vacuum_count);
+my @index_fields = qw(tuples_deleted pages_deleted dead_pages);
 for my $consistency ('none', 'cache', 'snapshot')
 {
     my $tables_match = join(' AND ', map { "e.$_ = n.$_" } @table_fields);
     my $indexes_match = join(' AND ', map { "e.$_ = n.$_" } @index_fields);
     is($node->safe_psql('postgres', qq{
 SET stats_fetch_consistency = '$consistency';
-SELECT count(*) = 1 AND bool_and($tables_match)
+SELECT count(*) = 3 AND bool_and($tables_match
+       AND e.pages_frozen = pg_stat_get_pages_frozen(e.relid)
+       AND e.pages_all_visible = pg_stat_get_pages_all_visible(e.relid))
   FROM ext_vacuum_statistics.pg_stats_vacuum_tables e
   CROSS JOIN LATERAL pg_stat_get_vacuum_stats(e.relid) n
- WHERE e.relname = 'native_heap';
-}), 't', "$consistency: all heap work fields match native counters");
+ WHERE e.relname IN ('native_heap', 'native_row', 'native_column');
+}), 't', "$consistency: all heap and AO work fields match native counters");
     is($node->safe_psql('postgres', qq{
 SET stats_fetch_consistency = '$consistency';
 SELECT $indexes_match
@@ -96,7 +119,8 @@ SELECT row_to_json(n) FROM pg_stat_get_vacuum_database_stats($dboid) n
 };
     my $db_native = $node->safe_psql('postgres', $db_native_sql);
     my $other_sql = q{
-SELECT n_tup_ins, n_tup_del, vacuum_count, last_vacuum
+SELECT n_tup_ins, n_tup_del, vacuum_count, last_vacuum,
+       pages_frozen, pages_all_visible
   FROM pg_stat_all_tables WHERE relname = 'native_heap'
 };
     my $other = $node->safe_psql('postgres', $other_sql);
@@ -113,14 +137,21 @@ SELECT n_tup_ins, n_tup_del, vacuum_count, last_vacuum
 
 $node->safe_psql('postgres', 'VACUUM (DISABLE_PAGE_SKIPPING) native_heap');
 my $resources_before = $node->safe_psql('postgres', $resources);
+my $pages_sql = q{
+SELECT pages_frozen, pages_all_visible
+FROM ext_vacuum_statistics.pg_stats_vacuum_tables WHERE relname = 'native_heap'
+};
+my $pages_before = $node->safe_psql('postgres', $pages_sql);
 $node->safe_psql('postgres',
     q[SELECT pg_stat_reset_vacuum_stats('native_heap'::regclass)]);
 is($node->safe_psql('postgres', q{
-SELECT tuples_deleted = 0 AND pages_scanned = 0
+SELECT tuples_deleted = 0 AND pages_scanned = 0 AND tuples_frozen = 0
   FROM ext_vacuum_statistics.pg_stats_vacuum_tables WHERE relname = 'native_heap'
 }), 't', 'native reset is visible in the extension work columns');
 is($node->safe_psql('postgres', $resources), $resources_before,
    'native relation reset preserves extension resources');
 
+is($node->safe_psql('postgres', $pages_sql), $pages_before,
+   'native work-only reset preserves page counters from pg_stat_all_tables');
 $node->stop;
 done_testing();
