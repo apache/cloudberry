@@ -45,6 +45,7 @@ typedef struct AOVacuumRelStats
 	int64		dead_tuples;
 	int64		pages_scanned;
 	int64		total_file_segs;
+	int64		awaiting_drop_segments;
 	int64		compacted_segments;
 	int64		tuples_moved;
 

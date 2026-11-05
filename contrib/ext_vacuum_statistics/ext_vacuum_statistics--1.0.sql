@@ -78,7 +78,8 @@ CREATE OR REPLACE FUNCTION ext_vacuum_statistics.pg_stats_get_vacuum_tables(
     OUT blk_read_time double precision,
     OUT blk_write_time double precision,
     OUT rel_blks_read bigint,
-    OUT rel_blks_hit bigint
+    OUT rel_blks_hit bigint,
+    OUT awaiting_drop_segments bigint
 )
 RETURNS SETOF record
 AS 'MODULE_PATHNAME', 'pg_stats_get_vacuum_tables'
@@ -155,7 +156,8 @@ SELECT
   work.compacted_segments,
   work.tuples_moved,
   work.dead_pages,
-  work.freeze_age_vacuum_count
+  work.freeze_age_vacuum_count,
+  COALESCE(stats.awaiting_drop_segments, 0) AS awaiting_drop_segments
 FROM pg_class rel
 JOIN pg_namespace ns ON ns.oid = rel.relnamespace
 JOIN pg_database db ON db.datname = current_database()
@@ -298,7 +300,8 @@ SELECT
   (sum(s.compacted_segments) / s.divisor)::bigint AS compacted_segments,
   (sum(s.tuples_moved) / s.divisor)::bigint AS tuples_moved,
   (sum(s.dead_pages) / s.divisor)::bigint AS dead_pages,
-  (sum(s.freeze_age_vacuum_count) / s.divisor)::bigint AS freeze_age_vacuum_count
+  (sum(s.freeze_age_vacuum_count) / s.divisor)::bigint AS freeze_age_vacuum_count,
+  (sum(s.awaiting_drop_segments) / s.divisor)::bigint AS awaiting_drop_segments
 FROM (
   SELECT v.*,
          CASE WHEN d.policytype = 'r' THEN d.numsegments ELSE 1 END AS divisor
@@ -340,7 +343,8 @@ SELECT
   compacted_segments,
   tuples_moved,
   dead_pages,
-  freeze_age_vacuum_count
+  freeze_age_vacuum_count,
+  awaiting_drop_segments
 FROM ext_vacuum_statistics.pg_stats_vacuum_tables
 WHERE relid < 16384;
 

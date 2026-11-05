@@ -160,7 +160,8 @@ static bool appendonly_tid_reaped(ItemPointer itemptr, void *state);
 
 static void vacuum_appendonly_fill_stats(Relation aorel, Snapshot snapshot, int elevel,
 										 BlockNumber *rel_pages, double *rel_tuples,
-										 int64 *dead_tuples, bool *relhasindex, BlockNumber *total_file_segs);
+										 int64 *dead_tuples, bool *relhasindex, BlockNumber *total_file_segs,
+										 int64 *awaiting_drop_segments);
 static int vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs,
 									 BufferAccessStrategy bstrategy, AOVacuumRelStats *vacrelstats);
 static void ao_vacuum_rel_recycle_dead_segments(Relation onerel, VacuumParams *params,
@@ -171,10 +172,10 @@ static void ao_report_index_vacuum_time(Relation indrel, TimestampTz starttime,
 										double startdelaytime);
 static void ao_accum_resources(PgStat_CommonCounts *dst,
 							   const PgStat_CommonCounts *src, bool subtract);
-static void ao_measure_index_resources(Relation indrel,
+static void ao_report_index_extstats(Relation indrel,
 									 LVExtStatCounters *counters,
 									 AOVacuumRelStats *vacrelstats, bool verbose);
-static void ao_measure_table_resources(Relation rel,
+static void ao_report_table_extstats(Relation rel,
 									 AOVacuumRelStats *vacrelstats);
 
 static void
@@ -294,7 +295,8 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 								 &reltuples,
 								 &deadtuples,
 								 &relhasindex,
-								 &total_file_segs);
+								 &total_file_segs,
+								 &vacrelstats->awaiting_drop_segments);
 
 	/*
 	 * AO/AOCO tables have no per-tuple xmin/xmax, so freeze limits don't
@@ -582,7 +584,7 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 									 0, 0,
 									 false, 0, 0); /* AO has no failsafe mode or heap VM. */
 		if (extstats)
-			ao_measure_table_resources(rel, vacrelstats);
+			ao_report_table_extstats(rel, vacrelstats);
 		pgstat_progress_end_command();
 		cleanup_vacrelstats(&vacrelstats);
 	}
@@ -706,7 +708,7 @@ ao_vacuum_insert_index_tuples(ResultRelInfo *resultRelInfo, TupleTableSlot *slot
  * again.
  */
 static void
-ao_measure_index_resources(Relation indrel, LVExtStatCounters *counters,
+ao_report_index_extstats(Relation indrel, LVExtStatCounters *counters,
 						 AOVacuumRelStats *vacrelstats, bool verbose)
 {
 	PgStat_VacuumRelationCounts *report = &counters->report;
@@ -726,10 +728,10 @@ ao_measure_index_resources(Relation indrel, LVExtStatCounters *counters,
  * set_report_vacuum_hook.
  *
  * Work counters are reported separately to native pgstat.  The hook carries
- * resource usage only.
+ * resource usage and the extension-only awaiting-drop segment snapshot.
  */
 static void
-ao_measure_table_resources(Relation rel, AOVacuumRelStats *vacrelstats)
+ao_report_table_extstats(Relation rel, AOVacuumRelStats *vacrelstats)
 {
 	PgStat_VacuumRelationCounts report;
 
@@ -737,6 +739,8 @@ ao_measure_table_resources(Relation rel, AOVacuumRelStats *vacrelstats)
 	report.type = PGSTAT_EXTVAC_TABLE;
 	report.common = vacrelstats->extstats->phases;
 	ao_accum_resources(&report.common, &vacrelstats->extstats->indexes, true);
+	report.table.awaiting_drop_segments = vacrelstats->awaiting_drop_segments;
+
 	pgstat_report_vacuum_ext(rel, &report);
 
 	/* Insertions are an aggregate across indexes, not a per-index sample. */
@@ -865,7 +869,7 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 				vacuum_report_index_stats(Irel[i], &result, 0, 0, final_cleanup);
 				ao_report_index_vacuum_time(Irel[i], istarttime, startdelaytime);
 				if (extcounters != NULL)
-					ao_measure_index_resources(Irel[i], extcounters,
+					ao_report_index_extstats(Irel[i], extcounters,
 											 vacrelstats,
 											 elevel == INFO && Gp_role != GP_ROLE_DISPATCH);
 			}
@@ -890,7 +894,7 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 				vacuum_report_index_stats(Irel[i], &result, 0, 0, final_cleanup);
 				ao_report_index_vacuum_time(Irel[i], istarttime, startdelaytime);
 				if (extcounters != NULL)
-					ao_measure_index_resources(Irel[i], extcounters,
+					ao_report_index_extstats(Irel[i], extcounters,
 											 vacrelstats,
 											 elevel == INFO && Gp_role != GP_ROLE_DISPATCH);
 			}
@@ -1022,7 +1026,8 @@ appendonly_tid_reaped(ItemPointer itemptr, void *state)
 static void
 vacuum_appendonly_fill_stats(Relation aorel, Snapshot snapshot, int elevel,
 							 BlockNumber *rel_pages, double *rel_tuples,
-							 int64 *dead_tuples, bool *relhasindex, BlockNumber *total_file_segs)
+							 int64 *dead_tuples, bool *relhasindex, BlockNumber *total_file_segs,
+							 int64 *awaiting_drop_segments)
 {
 	FileSegTotals *fstotal;
 	BlockNumber nblocks;
@@ -1078,6 +1083,7 @@ vacuum_appendonly_fill_stats(Relation aorel, Snapshot snapshot, int elevel,
 	*dead_tuples = hidden_tupcount;
 	*relhasindex = aorel->rd_rel->relhasindex;
 	*total_file_segs = fstotal->totalfilesegs;
+	*awaiting_drop_segments = fstotal->awaiting_drop_segments;
 
 	ereport(elevel,
 			(errmsg("\"%s\": found %.0f rows in %u pages.",

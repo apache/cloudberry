@@ -69,7 +69,8 @@
   columns use the native getters for <structname>pg_stat_all_tables</structname>.
   A work-only reset preserves these page counters; a full relation-statistics
   reset clears them. The module adds separately stored resource measurements. Work obeys <varname>track_counts</varname>;
-  <varname>vacuum_statistics.enabled</varname> controls only extension resource metrics. Work remains
+  <varname>vacuum_statistics.enabled</varname> controls only extension metrics,
+  including the awaiting-drop snapshot. Work remains
   visible when extension collection is disabled. Relations without a resource
   entry show zero resource counters.
  </para>
@@ -359,6 +360,16 @@
       <para>
        Cumulative number of live tuples moved by append-optimized compaction.
        Zero for heap tables.
+      </para></entry>
+     </row>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>awaiting_drop_segments</structfield> <type>int8</type>
+      </para>
+      <para>
+       Number of AO segment metadata entries still in <literal>AWAITING_DROP</literal>
+       after the last completed vacuum. Replaced on each vacuum, not accumulated.
+       For AOCS, counts segment numbers, not column files. Zero for heap and after reset.
       </para></entry>
      </row>
     </tbody>
@@ -891,9 +902,12 @@ FROM pg_database WHERE datname = current_database();
      <structfield>total_file_segs</structfield> instead records the segment
      metadata entry count at the end of the latest vacuum. It includes empty
      and awaiting-drop entries, and is not the number of physical column files.
+     <structfield>awaiting_drop_segments</structfield> records only entries
+     still in <literal>AWAITING_DROP</literal> at this point; older snapshots
+     can prevent recycling them even after compaction completes.
      Native resets clear work counters and the total segment snapshot;
-     extension resets clear resources. The next vacuum refreshes the segment
-     snapshot even if it performs no compaction.
+     extension resets clear resources and the awaiting-drop snapshot; the next
+     vacuum refreshes the snapshot even if it performs no compaction.
     </para>
    </listitem>
    <listitem>

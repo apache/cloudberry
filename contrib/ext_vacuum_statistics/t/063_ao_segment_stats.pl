@@ -1,0 +1,103 @@
+# Copyright (c) 2026, PostgreSQL Global Development Group
+
+# Completed AO vacuums publish a segment-state snapshot.
+# Exercise retained segments, recycling, resets and persistence.
+use strict;
+use warnings FATAL => 'all';
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
+
+my $node = PostgreSQL::Test::Cluster->new('vacstat_ao_segments');
+$node->init;
+$node->append_conf('postgresql.conf', q{
+shared_preload_libraries = 'ext_vacuum_statistics'
+autovacuum = off
+gp_appendonly_compaction_threshold = 1
+track_io_timing = on
+});
+$node->start;
+$node->safe_psql('postgres', 'CREATE EXTENSION ext_vacuum_statistics');
+
+my @fields = ('awaiting_drop_segments');
+my $zero = 'awaiting_drop_segments = 0';
+my $view = 'ext_vacuum_statistics.pg_stats_vacuum_tables';
+my %saved;
+
+for my $orientation ('row', 'column')
+{
+    my $table = "phases_$orientation";
+    my $where = "FROM $view WHERE relname = '$table'";
+    $node->safe_psql('postgres', qq{
+CREATE TABLE $table (id int, padding text)
+  WITH (appendonly = true, orientation = $orientation);
+CREATE INDEX ${table}_idx ON $table (id);
+INSERT INTO $table SELECT g, repeat('x', 100) FROM generate_series(1, 4000) g;
+DELETE FROM $table WHERE id <= 2000;
+});
+    # The delete is visible, so compaction can discard its rows. This reader
+    # still needs the old segfile and prevents post-cleanup from recycling it.
+    my $reader = $node->background_psql('postgres');
+    $reader->query_safe("BEGIN ISOLATION LEVEL REPEATABLE READ; SELECT count(*) FROM $table");
+    # VERBOSE and the extension consume the same measurements, once each.
+    $node->safe_psql('postgres', "VACUUM (VERBOSE) $table");
+    my $awaiting = $node->safe_psql('postgres', "SELECT awaiting_drop_segments $where");
+    cmp_ok($awaiting, '>', 0, "$orientation retains compacted segments for the old snapshot");
+    my $segrel = $node->safe_psql('postgres', qq{
+SELECT segrelid::regclass FROM pg_appendonly WHERE relid = '$table'::regclass});
+    is($awaiting, $node->safe_psql('postgres', "SELECT count(*) FROM $segrel WHERE state = 2"),
+       "$orientation awaiting-drop snapshot agrees with AO metadata");
+    my $compacted = $node->safe_psql('postgres', "SELECT compacted_segments $where");
+    $node->safe_psql('postgres', "VACUUM $table");
+    is($node->safe_psql('postgres', "SELECT awaiting_drop_segments $where"), $awaiting,
+       "$orientation replaces the awaiting-drop snapshot instead of adding it again");
+    # Even a phase with no compaction can perform catalog work and emit WAL.
+    is($node->safe_psql('postgres', "SELECT compacted_segments $where"), $compacted,
+       "$orientation retained segments are not compacted again");
+    $reader->query_safe('COMMIT');
+    $reader->quit;
+    my $before_disabled = $node->safe_psql('postgres', 'SELECT ' . join(', ', @fields) . " $where");
+    $node->safe_psql('postgres', "SET vacuum_statistics.enabled = off; VACUUM $table");
+    is($node->safe_psql('postgres', 'SELECT ' . join(', ', @fields) . " $where"), $before_disabled,
+       "$orientation disabled collection preserves segment snapshot");
+    $node->safe_psql('postgres', "VACUUM $table");
+    is($node->safe_psql('postgres', "SELECT awaiting_drop_segments $where"), '0',
+       "$orientation refreshes the snapshot to zero after recycling");
+    $saved{$orientation} = $node->safe_psql('postgres', 'SELECT ' . join(', ', @fields) . " $where");
+}
+
+$node->safe_psql('postgres', q{
+CREATE TABLE phase_heap (id int);
+INSERT INTO phase_heap SELECT generate_series(1, 1000);
+DELETE FROM phase_heap;
+VACUUM phase_heap;
+});
+is($node->safe_psql('postgres', "SELECT awaiting_drop_segments FROM $view WHERE relname = 'phase_heap'"),
+   '0', 'heap tables have no awaiting-drop segments');
+
+$node->restart;
+for my $orientation ('row', 'column')
+{
+    my $table = "phases_$orientation";
+    my $where = "FROM $view WHERE relname = '$table'";
+    is($node->safe_psql('postgres', 'SELECT ' . join(', ', @fields) . " $where"), $saved{$orientation},
+       "$orientation segment snapshots survive a clean restart");
+    $node->safe_psql('postgres', qq{
+SELECT ext_vacuum_statistics.extvac_reset_entry(
+ (SELECT oid FROM pg_database WHERE datname = current_database()), '$table'::regclass)});
+    is($node->safe_psql('postgres', "SELECT $zero $where"), 't',
+       "$orientation relation reset clears all new fields");
+    $node->safe_psql('postgres', "DELETE FROM $table WHERE id <= 3000; VACUUM $table");
+}
+$node->safe_psql('postgres', q{
+SELECT ext_vacuum_statistics.extvac_reset_db_entry(
+ (SELECT oid FROM pg_database WHERE datname = current_database()))});
+is($node->safe_psql('postgres', "SELECT bool_and($zero) FROM $view"), 't',
+   'database reset clears the new fields');
+$node->safe_psql('postgres', 'VACUUM phases_row, phases_column');
+$node->safe_psql('postgres', 'SELECT ext_vacuum_statistics.vacuum_statistics_reset()');
+is($node->safe_psql('postgres', "SELECT bool_and($zero) FROM $view"), 't',
+   'global reset clears the new fields');
+
+$node->stop;
+done_testing();
