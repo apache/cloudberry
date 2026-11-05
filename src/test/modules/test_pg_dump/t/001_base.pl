@@ -410,7 +410,7 @@ my %tests = (
 		like => { binary_upgrade => 1, },
 	},
 
-	# GPDB: the default sequence cache is 20, not 1.
+	# Cloudberry: the default sequence cache is 20, not 1.
 	'CREATE SEQUENCE regress_pg_dump_seq' => {
 		regexp => qr/^
                     \QCREATE SEQUENCE public.regress_pg_dump_seq\E
@@ -423,7 +423,7 @@ my %tests = (
 		like => { binary_upgrade => 1, },
 	},
 
-	# GPDB: nextval() takes a whole cache of 20 values, so the sequence
+	# Cloudberry: nextval() takes a whole cache of 20 values, so the sequence
 	# is at 20.
 	'SETVAL SEQUENCE regress_seq_dumpable' => {
 		create_order => 6,
@@ -643,7 +643,7 @@ my %tests = (
 		like => { binary_upgrade => 1, },
 	},
 
-	# GPDB: the default sequence cache is 20, not 1.
+	# Cloudberry: the default sequence cache is 20, not 1.
 	'CREATE SEQUENCE regress_pg_dump_schema.test_seq' => {
 		regexp => qr/^
                     \QCREATE SEQUENCE regress_pg_dump_schema.test_seq\E
@@ -682,7 +682,7 @@ my %tests = (
 		like => { binary_upgrade => 1, },
 	},
 
-	# GPDB: pg_dump also writes the SQL data access of the function.
+	# Cloudberry: pg_dump also writes the SQL data access of the function.
 	'CREATE FUNCTION regress_pg_dump_schema.test_func' => {
 		regexp => qr/^
             \QCREATE FUNCTION regress_pg_dump_schema.test_func() RETURNS integer\E
