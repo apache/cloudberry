@@ -138,10 +138,10 @@ RegisterCustomRmgr(RmgrId rmid, const RmgrData *rmgr)
 	RmgrTable[rmid] = *rmgr;
 
 	/*
-	 * GPDB: with --enable-pax, every backend preloads pax, which registers
-	 * a custom rmgr (see utils/process_shared_preload_libraries.h).  Keep
-	 * the message out of the stderr of single-user backends, such as the
-	 * one initdb runs on each invocation.
+	 * Cloudberry: with --enable-pax, every backend preloads pax, which
+	 * registers a custom rmgr (see utils/process_shared_preload_libraries.h).
+	 * Keep the message out of the stderr of single-user backends, such as
+	 * the one initdb runs on each invocation.
 	 */
 	ereport(IsPostmasterEnvironment ? LOG : DEBUG1,
 			(errmsg("registered custom resource manager \"%s\" with ID %d",
