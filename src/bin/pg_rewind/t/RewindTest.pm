@@ -231,6 +231,7 @@ sub promote_primary
 sub run_pg_rewind
 {
 	my $test_mode = shift;
+	my (%params) = @_;
 	my $primary_pgdata = $node_primary->data_dir;
 	my $standby_pgdata = $node_standby->data_dir;
 	my $standby_connstr = $node_standby->connstr('postgres');
@@ -273,6 +274,12 @@ sub run_pg_rewind
 	copy(
 		"$primary_pgdata/postgresql.conf",
 		"$tmp_folder/primary-postgresql.conf.tmp");
+
+	# Cloudberry: postgresql.conf includes internal.auto.conf by a relative
+	# path, which resolves next to the copy passed to pg_rewind --config-file.
+	copy(
+		"$primary_pgdata/internal.auto.conf",
+		"$tmp_folder/internal.auto.conf");
 
 	# Now run pg_rewind
 	if ($test_mode eq "local")
