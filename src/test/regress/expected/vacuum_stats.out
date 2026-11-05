@@ -29,7 +29,6 @@ AND relallvisible =
 (1 row)
 
 DROP TABLE vacstat_test;
-
 -- Native work counters and cluster summaries need no statistics extension.
 CREATE TABLE work_stats_dist (a int PRIMARY KEY) DISTRIBUTED BY (a);
 CREATE TABLE work_stats_repl (a int) DISTRIBUTED REPLICATED;
