@@ -154,19 +154,17 @@ SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 
 -- expect insert fail
 INSERT INTO a SELECT 2, generate_series(1,100);
 ERROR:  schema's disk space quota exceeded with name: ftsr
-SELECT count(*) = 2
-       AND (SELECT count(*) FROM gp_segment_configuration WHERE content = 0) = 2
-       AND count(DISTINCT c.dbid) = 2
-       AND count(DISTINCT c.preferred_role) = 2
-       AND bool_and(c.role = c.preferred_role AND c.status = 'u' AND c.mode = 's')
-       AS content0_initially_synchronized
-FROM gp_segment_configuration c
-WHERE c.content = 0 AND c.preferred_role IN ('p', 'm');
+-- The large insert above may leave the mirror of content 0 temporarily out of
+-- sync.  FTS does not promote a mirror that is not in sync, so wait for
+-- synchronization before stopping the primary.
+SET statement_timeout = '420s';
+SELECT wait_for_content0_state('balanced', 300) AS content0_initially_synchronized;
  content0_initially_synchronized 
 ---------------------------------
  t
 (1 row)
 
+RESET statement_timeout;
 -- now one of primary is down
 SET statement_timeout = '180s';
 select pg_ctl((select datadir from gp_segment_configuration c where c.role='p' and c.content=0), 'stop');
