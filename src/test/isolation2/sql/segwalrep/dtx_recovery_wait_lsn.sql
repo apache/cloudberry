@@ -8,6 +8,12 @@
 1: create table t_wait_lsn(a int);
 5: create table t_wait_lsn2(a int);
 
+-- These sessions coordinate suspended commits rather than test snapshots.
+1: SET debug_disable_distributed_snapshot = on;
+2: SET debug_disable_distributed_snapshot = on;
+3: SET debug_disable_distributed_snapshot = on;
+5: SET debug_disable_distributed_snapshot = on;
+
 -- suspend segment 0 before performing 'COMMIT PREPARED'
 2: select gp_inject_fault_infinite('finish_prepared_start_of_function', 'suspend', dbid) from gp_segment_configuration where content=0 and role='p';
 1&: insert into t_wait_lsn values(2),(1);

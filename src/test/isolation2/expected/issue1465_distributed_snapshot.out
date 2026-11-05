@@ -1,0 +1,122 @@
+-- Verify that a distributed snapshot cannot retain a gxid after the QE has
+-- committed it.  Session 1 is opened before the fault is installed because
+-- the fault is scoped to the isolation2test database.
+-- The control connection uses postgres, so install the debug extension there
+-- as well.  --load-extension only installs it in isolation2test.
+-1U:@db_name postgres: CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
+CREATE
+
+CREATE TABLE issue1465_snapshot (k int, v int) DISTRIBUTED REPLICATED;
+CREATE
+INSERT INTO issue1465_snapshot VALUES (1, 400);
+INSERT 1
+
+1: SELECT 1;
+ ?column? 
+----------
+ 1        
+(1 row)
+1: BEGIN;
+BEGIN
+1: UPDATE issue1465_snapshot SET v = 500 WHERE k = 1;
+UPDATE 1
+-1U:@db_name postgres: SELECT gp_inject_fault('before_xact_end_procarray', 'suspend', '', 'isolation2test', '', 1, 1, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1&: COMMIT;  <waiting ...>
+-1U:@db_name postgres: SELECT gp_wait_until_triggered_fault('before_xact_end_procarray', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+
+2: BEGIN ISOLATION LEVEL REPEATABLE READ;
+BEGIN
+2&: SELECT k, v FROM issue1465_snapshot ORDER BY k;  <waiting ...>
+
+-1U:@db_name postgres: SELECT gp_inject_fault('before_xact_end_procarray', 'resume', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1<:  <... completed>
+COMMIT
+2<:  <... completed>
+ k | v   
+---+-----
+ 1 | 500 
+(1 row)
+-1U:@db_name postgres: SELECT gp_inject_fault('all', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- The same snapshot must retain the committed version after the writer exits.
+2: SELECT k, v FROM issue1465_snapshot ORDER BY k;
+ k | v   
+---+-----
+ 1 | 500 
+(1 row)
+2: ROLLBACK;
+ROLLBACK
+
+DROP TABLE issue1465_snapshot;
+DROP
+
+-- The one-phase path also notifies a QE before QD transaction cleanup.
+CREATE TABLE issue1465_onephase (k int, v int) DISTRIBUTED BY (k);
+CREATE
+INSERT INTO issue1465_onephase VALUES (1, 400);
+INSERT 1
+
+1: BEGIN;
+BEGIN
+1: UPDATE issue1465_onephase SET v = 500 WHERE k = 1;
+UPDATE 1
+-1U:@db_name postgres: SELECT gp_inject_fault('before_xact_end_procarray', 'suspend', '', 'isolation2test', '', 1, 1, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1&: COMMIT;  <waiting ...>
+-1U:@db_name postgres: SELECT gp_wait_until_triggered_fault('before_xact_end_procarray', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+
+2: BEGIN ISOLATION LEVEL REPEATABLE READ;
+BEGIN
+2&: SELECT k, v FROM issue1465_onephase WHERE k = 1;  <waiting ...>
+
+-1U:@db_name postgres: SELECT gp_inject_fault('before_xact_end_procarray', 'resume', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1<:  <... completed>
+COMMIT
+2<:  <... completed>
+ k | v   
+---+-----
+ 1 | 500 
+(1 row)
+-1U:@db_name postgres: SELECT gp_inject_fault('all', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+2: SELECT k, v FROM issue1465_onephase WHERE k = 1;
+ k | v   
+---+-----
+ 1 | 500 
+(1 row)
+2: ROLLBACK;
+ROLLBACK
+
+DROP TABLE issue1465_onephase;
+DROP

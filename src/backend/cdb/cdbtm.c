@@ -129,6 +129,7 @@ static void retryAbortPrepared(void);
 static void doQEDistributedExplicitBegin();
 static void currentDtxActivate(void);
 static void setCurrentDtxState(DtxState state);
+static void markDtxCommitInProgress(void);
 
 static bool isDtxQueryDispatcher(void);
 static void performDtxProtocolCommitPrepared(const char *gid, bool raiseErrorIfNotFound);
@@ -174,6 +175,21 @@ getDistributedTransactionId(void)
 		return MyTmGxact->gxid;
 	else
 		return InvalidDistributedTransactionId;
+}
+
+/*
+ * Mark the DTX before sending the first commit notification to a QE. The
+ * snapshot builder uses this state to wait for the QD's normal transaction
+ * cleanup, which keeps the proc-array and QE commit views atomic.
+ */
+static void
+markDtxCommitInProgress(void)
+{
+	Assert(MyTmGxact->gxid != InvalidDistributedTransactionId);
+
+	LWLockAcquire(ProcArrayLock, LW_EXCLUSIVE);
+	MyTmGxact->commitInProgress = true;
+	LWLockRelease(ProcArrayLock);
 }
 
 bool
@@ -560,6 +576,8 @@ doNotifyingOnePhaseCommit(void)
 	Assert(MyTmGxactLocal->state == DTX_STATE_ONE_PHASE_COMMIT);
 	setCurrentDtxState(DTX_STATE_NOTIFYING_ONE_PHASE_COMMIT);
 
+	markDtxCommitInProgress();
+
 	succeeded = currentDtxDispatchProtocolCommand(DTX_PROTOCOL_COMMAND_COMMIT_ONEPHASE, true);
 	if (!succeeded)
 	{
@@ -587,14 +605,15 @@ doNotifyingCommitPrepared(void)
 	Assert(MyTmGxactLocal->state == DTX_STATE_INSERTED_COMMITTED);
 	setCurrentDtxState(DTX_STATE_NOTIFYING_COMMIT_PREPARED);
 
-	SIMPLE_FAULT_INJECTOR("dtm_broadcast_commit_prepared");
-
 	/*
 	 * Acquire TwophaseCommitLock in shared mode to block any GPDB restore
 	 * points from being created while commit prepared messages are being
 	 * broadcasted.
 	 */
 	LWLockAcquire(TwophaseCommitLock, LW_SHARED);
+
+	SIMPLE_FAULT_INJECTOR("dtm_broadcast_commit_prepared");
+	markDtxCommitInProgress();
 
 	savedInterruptHoldoffCount = InterruptHoldoffCount;
 
@@ -1491,6 +1510,7 @@ resetTmGxact(void)
 	Assert(MyTmGxact->gxid == InvalidDistributedTransactionId);
 	MyTmGxact->xminDistributedSnapshot = InvalidDistributedTransactionId;
 	MyTmGxact->includeInCkpt = false;
+	MyTmGxact->commitInProgress = false;
 	MyTmGxact->sessionId = 0;
 
 	MyTmGxactLocal->explicitBeginRemembered = false;

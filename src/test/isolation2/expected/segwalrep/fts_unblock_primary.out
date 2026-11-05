@@ -78,6 +78,10 @@ INSERT 1
 2&: commit;  <waiting ...>
 
 -- this should not block due to direct dispatch to primary with active synced mirror
+-- Do not wait for the blocked commit: this test exercises direct dispatch on
+-- another primary while synchronous replication is waiting.
+SET debug_disable_distributed_snapshot = on;
+SET
 insert into fts_unblock_primary values (2);
 INSERT 1
 
