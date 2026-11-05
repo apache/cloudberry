@@ -467,7 +467,7 @@ ginHeapTupleFastInsert(GinState *ginstate, GinTupleCollector *collector)
 	 * pending list not forcibly.
 	 */
 	if (needCleanup)
-		ginInsertCleanup(ginstate, false, true, false, NULL);
+		ginInsertCleanup(ginstate, false, true, false, false, NULL);
 }
 
 /*
@@ -777,7 +777,7 @@ processPendingPage(BuildAccumulator *accum, KeyArray *ka,
  */
 void
 ginInsertCleanup(GinState *ginstate, bool full_clean,
-				 bool fill_fsm, bool forceCleanup,
+				 bool fill_fsm, bool forceCleanup, bool is_analyze,
 				 IndexBulkDeleteResult *stats)
 {
 	Relation	index = ginstate->index;
@@ -891,7 +891,7 @@ ginInsertCleanup(GinState *ginstate, bool full_clean,
 		 */
 		processPendingPage(&accum, &datums, page, FirstOffsetNumber);
 
-		vacuum_delay_point();
+		vacuum_delay_point(is_analyze);
 
 		/*
 		 * Is it time to flush memory to disk?	Flush if we are at the end of
@@ -928,7 +928,7 @@ ginInsertCleanup(GinState *ginstate, bool full_clean,
 			{
 				ginEntryInsert(ginstate, attnum, key, category,
 							   list, nlist, NULL);
-				vacuum_delay_point();
+				vacuum_delay_point(is_analyze);
 			}
 
 			/*
@@ -1001,7 +1001,7 @@ ginInsertCleanup(GinState *ginstate, bool full_clean,
 		/*
 		 * Read next page in pending list
 		 */
-		vacuum_delay_point();
+		vacuum_delay_point(is_analyze);
 		buffer = ReadBuffer(index, blkno);
 		LockBuffer(buffer, GIN_SHARE);
 		page = BufferGetPage(buffer);
@@ -1076,7 +1076,7 @@ gin_clean_pending_list(PG_FUNCTION_ARGS)
 		GinState	ginstate;
 
 		initGinState(&ginstate, indexRel);
-		ginInsertCleanup(&ginstate, true, true, true, &stats);
+		ginInsertCleanup(&ginstate, true, true, true, false, &stats);
 	}
 	else
 		ereport(DEBUG1,
