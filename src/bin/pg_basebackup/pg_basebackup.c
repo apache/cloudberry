@@ -233,6 +233,7 @@ static bool reached_end_position(XLogRecPtr segendpos, uint32 timeline,
 								 bool segment_finished);
 
 static const char *get_tablespace_mapping(const char *dir);
+static const char *get_tablespace_link_target(const char *linktarget);
 static void tablespace_list_append(const char *arg);
 static void WriteInternalConfFile(void);
 
@@ -1171,10 +1172,11 @@ CreateBackupStreamer(char *archive_name, char *spclocation,
 				pg_log_error("cannot restore user-defined tablespaces without the --target-gp-dbid option");
 				exit(1);
 			}
-			directory = psprintf("%s/%d", spclocation, target_gp_dbid);
+			directory = psprintf("%s/%d", get_tablespace_mapping(spclocation),
+								 target_gp_dbid);
 		}
 		streamer = bbstreamer_extractor_new(directory,
-											get_tablespace_mapping,
+											get_tablespace_link_target,
 											progress_update_filename);
 	}
 	else
@@ -1266,7 +1268,7 @@ CreateBackupStreamer(char *archive_name, char *spclocation,
 	 * we're talking to such a server we'll need to add the terminator here.
 	 */
 	if (must_parse_archive)
-		streamer = bbstreamer_tar_parser_new(streamer, target_gp_dbid);
+		streamer = bbstreamer_tar_parser_new(streamer);
 	else if (expect_unterminated_tarfile)
 		streamer = bbstreamer_tar_terminator_new(streamer);
 
@@ -1702,6 +1704,18 @@ get_tablespace_mapping(const char *dir)
 			return cell->new_dir;
 
 	return dir;
+}
+
+/*
+ * Cloudberry: a link in pg_tblspc points to the tablespace location, but the
+ * data of each segment is in the subdirectory of its dbid.  Apply the
+ * tablespace mapping to the location first, and then add the target dbid.
+ */
+static const char *
+get_tablespace_link_target(const char *linktarget)
+{
+	return psprintf("%s/%d", get_tablespace_mapping(linktarget),
+					target_gp_dbid);
 }
 
 static void
