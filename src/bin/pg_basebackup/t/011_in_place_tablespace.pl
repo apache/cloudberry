@@ -28,7 +28,7 @@ EOM
 # Back it up.
 my $backupdir = $tempdir . '/backup';
 $node->command_ok(
-	[ @pg_basebackup_defs, '-D', $backupdir, '-Ft', '-X', 'none' ],
+	[ @pg_basebackup_defs, '--target-gp-dbid', '123', '-D', $backupdir, '-Ft', '-X', 'none' ],
 	'pg_basebackup runs');
 
 # Make sure we got base.tar and one tablespace.
