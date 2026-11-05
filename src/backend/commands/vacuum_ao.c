@@ -525,6 +525,11 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 
 	if (extstats && ao_vacuum_phase != 0)
 	{
+		PgStat_AOVacuumPhase phase =
+			ao_vacuum_phase == VACOPT_AO_PRE_CLEANUP_PHASE ? PGSTAT_AO_PRE_CLEANUP :
+			ao_vacuum_phase == VACOPT_AO_COMPACT_PHASE ? PGSTAT_AO_COMPACTION :
+			PGSTAT_AO_POST_CLEANUP;
+
 		extvac_stats_end(rel, extcounters, &extcounters->report.common);
 		if (verbose && Gp_role != GP_ROLE_DISPATCH)
 		{
@@ -545,8 +550,13 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 			ao_accum_resources(&phase_usage, &index_usage, true);
 			extvac_stats_log(rel, phase_name, &phase_usage);
 		}
-		ao_accum_resources(&vacrelstats->extstats->phases,
+		/* Charge index work to its own report, not to the table's phase. */
+		ao_accum_resources(&extcounters->report.common,
+						   &vacrelstats->extstats->indexes, true);
+		ao_accum_resources(&vacrelstats->extstats->phases[phase],
 						   &extcounters->report.common, false);
+		memset(&vacrelstats->extstats->indexes, 0,
+			   sizeof(vacrelstats->extstats->indexes));
 	}
 
 	if (ao_vacuum_phase != 0)
@@ -728,7 +738,7 @@ ao_report_index_extstats(Relation indrel, LVExtStatCounters *counters,
  * set_report_vacuum_hook.
  *
  * Work counters are reported separately to native pgstat.  The hook carries
- * resource usage and the extension-only awaiting-drop segment snapshot.
+ * phase resources and the extension-only awaiting-drop segment snapshot.
  */
 static void
 ao_report_table_extstats(Relation rel, AOVacuumRelStats *vacrelstats)
@@ -737,8 +747,11 @@ ao_report_table_extstats(Relation rel, AOVacuumRelStats *vacrelstats)
 
 	memset(&report, 0, sizeof(report));
 	report.type = PGSTAT_EXTVAC_TABLE;
-	report.common = vacrelstats->extstats->phases;
-	ao_accum_resources(&report.common, &vacrelstats->extstats->indexes, true);
+	for (int phase = 0; phase < PGSTAT_NUM_AO_PHASES; phase++)
+	{
+		report.table.ao_phases[phase] = vacrelstats->extstats->phases[phase];
+		ao_accum_resources(&report.common, &report.table.ao_phases[phase], false);
+	}
 	report.table.awaiting_drop_segments = vacrelstats->awaiting_drop_segments;
 
 	pgstat_report_vacuum_ext(rel, &report);
