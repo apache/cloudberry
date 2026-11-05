@@ -42,6 +42,7 @@ tests += {
       't/060_heap_page_counters.pl',
       't/061_vacuum_measurements.pl',
       't/062_ao_hidden_tuples.pl',
+      't/063_ao_segment_stats.pl',
       't/064_native_work_source.pl',
       't/066_ao_index_resources.pl',
       't/068_shared_resources.pl',

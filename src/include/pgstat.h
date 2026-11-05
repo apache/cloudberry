@@ -147,6 +147,10 @@ typedef struct PgStat_VacuumRelationCounts
 {
 	PgStat_CommonCounts common;
 	ExtVacReportType type;
+	struct
+	{
+		int64		awaiting_drop_segments; /* last post-cleanup observation */
+	}			table;
 }			PgStat_VacuumRelationCounts;
 
 typedef struct PgStat_FunctionCallUsage
@@ -278,7 +282,7 @@ typedef struct PgStat_TableXactStatus
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCB9
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCBA
 
 typedef struct PgStat_ArchiverStats
 {

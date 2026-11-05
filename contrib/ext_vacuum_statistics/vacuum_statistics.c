@@ -135,6 +135,11 @@ pgstat_accumulate_extvac_stats(PgStat_VacuumRelationCounts * dst,
 	Assert(src->type == dst->type);
 
 	pgstat_accumulate_common(&dst->common, &src->common);
+	if (dst->type == PGSTAT_EXTVAC_TABLE)
+	{
+		/* A snapshot of the most recent post-cleanup phase. */
+		dst->table.awaiting_drop_segments = src->table.awaiting_drop_segments;
+	}
 }
 
 void
@@ -389,7 +394,7 @@ tuplestore_put_common(PgStat_CommonCounts * vacuum_ext,
 	Assert((*i - base) == EXTVAC_COMMON_STAT_COLS);
 }
 
-#define EXTVAC_HEAP_STAT_COLS	12
+#define EXTVAC_HEAP_STAT_COLS	13
 #define EXTVAC_IDX_STAT_COLS	12
 #define EXTVAC_MAX_STAT_COLS	Max(EXTVAC_HEAP_STAT_COLS, EXTVAC_IDX_STAT_COLS)
 
@@ -408,6 +413,10 @@ tuplestore_put_for_relation(Oid relid, Tuplestorestate *tupstore,
 	values[i++] = Int64GetDatum(vacuum_ext->common.blks_fetched - vacuum_ext->common.blks_hit);
 	values[i++] = Int64GetDatum(vacuum_ext->common.blks_hit);
 
+	if (vacuum_ext->type == PGSTAT_EXTVAC_TABLE)
+	{
+		values[i++] = Int64GetDatum(vacuum_ext->table.awaiting_drop_segments);
+	}
 
 	Assert(i == ((vacuum_ext->type == PGSTAT_EXTVAC_TABLE) ? EXTVAC_HEAP_STAT_COLS : EXTVAC_IDX_STAT_COLS));
 	tuplestore_putvalues(tupstore, tupdesc, values, nulls);

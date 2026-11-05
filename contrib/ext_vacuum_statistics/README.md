@@ -148,7 +148,7 @@ measurements. They have the same work-counter history as `pg_stat_vacuum_tables`
 extension does not start a second history.
 
 Work counters obey `track_counts`. `vacuum_statistics.enabled` controls only
-extension resource metrics.
+extension metrics, including the awaiting-drop snapshot.
 With extension collection disabled, native work remains visible in these views.
 Relations without a resource entry show zero resource counters.
 
@@ -210,6 +210,20 @@ each vacuum, not accumulated; AOCS counts segment numbers, not individual
 column files. A native statistics reset clears these values, and the next vacuum
 refreshes the segment count even without compaction. All three AO-specific
 fields stay zero for heap tables.
+
+`awaiting_drop_segments` is the number of segment metadata entries still in
+`AWAITING_DROP` at the end of the last completed vacuum. An older snapshot
+can delay their recycling even after compaction has finished. This value is
+replaced, not accumulated; AOCS counts segment numbers, not column files.
+It is zero for heap tables and after reset.
+
+Native work obeys `track_counts`; resource metrics and the awaiting-drop
+snapshot obey `vacuum_statistics.enabled`. Both survive clean restarts. Failed vacuums do not publish a table report; replacement workers
+report only phases they executed. This development-series payload change
+bumps the statistics-file format: installing the new build discards saved
+statistics from the previous format. Rebuild the server and extension
+together and recreate the extension's SQL objects when updating a test
+installation from the earlier 1.0 definition.
 
 `recently_dead_tuples` accumulates the hidden rows remaining in the AO
 visibility map after post-cleanup. This includes rows left because
