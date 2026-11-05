@@ -307,6 +307,20 @@ endif
 
 .PHONY: installcheck-storage-conformance
 
+# Two-session abort ownership/retry tests against an existing test cluster.
+# Both need a FAULT_INJECTOR build. Local needs the coordinator's filesystem;
+# S3 also needs boto3. Keep this an explicit target for those prerequisites.
+ISOLATION2_PYTHON ?= python3
+installcheck-storage-abort:
+	$(ISOLATION2_PYTHON) $(srcdir)/test/isolation2/run.py local --dbname=$(CONTRIB_TESTDB)
+ifneq ($(DATALAKE_TEST_S3_ENDPOINT),)
+	$(ISOLATION2_PYTHON) $(srcdir)/test/isolation2/run.py s3 --dbname=$(CONTRIB_TESTDB)
+else
+	@echo "NOTICE: DATALAKE_TEST_S3_ENDPOINT is not set, skipping the S3 abort test"
+endif
+
+.PHONY: installcheck-storage-abort
+
 # "make check" is in-tree only -- under PGXS pgxs.mk refuses the target -- and
 # it is the only run that supplies the temp-config that preloads this module.
 ifndef USE_PGXS
