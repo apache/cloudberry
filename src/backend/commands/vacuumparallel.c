@@ -843,11 +843,11 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 	IndexBulkDeleteResult *istat = NULL;
 	IndexBulkDeleteResult *istat_res;
 	IndexVacuumInfo ivinfo;
-	LVExtStatCounters *extVacCounters;
 	TimestampTz istarttime = GetCurrentTimestamp();
 	double		startdelaytime = VacuumDelayTime;
 	double		prev_tuples_removed = 0;
 	BlockNumber prev_pages_newly_deleted = 0;
+	LVExtStatCounters *extVacCounters;
 
 	/*
 	 * Update the pointer to the corresponding bulk-deletion result if someone
@@ -856,7 +856,6 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 	if (indstats->istat_updated)
 		istat = &(indstats->istat);
 
-	extVacCounters = extvac_stats_start(indrel, pvs->shared->elevel == INFO);
 	/*
 	 * Snapshot the running bulkdelete totals: an index may be processed
 	 * several times per vacuum, and the report below covers this pass only.
@@ -866,6 +865,7 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 		prev_tuples_removed = istat->tuples_removed;
 		prev_pages_newly_deleted = istat->pages_newly_deleted;
 	}
+	extVacCounters = extvac_stats_start(indrel, pvs->shared->elevel == INFO);
 	ivinfo.index = indrel;
 	ivinfo.heaprel = pvs->heaprel;
 	ivinfo.analyze_only = false;
@@ -893,6 +893,10 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 				 RelationGetRelationName(indrel));
 	}
 
+	vacuum_report_index_stats(indrel, istat_res, prev_tuples_removed,
+							  prev_pages_newly_deleted,
+							  indstats->status == PARALLEL_INDVAC_STATUS_NEED_CLEANUP);
+
 	if (extVacCounters != NULL)
 	{
 		PgStat_VacuumRelationCounts *extVacReport = &extVacCounters->report;
@@ -904,6 +908,7 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 							  _("index cleanup") : _("index bulk delete"),
 							  &extVacReport->common);
 		extVacReport->type = PGSTAT_EXTVAC_INDEX;
+		pgstat_report_vacuum_ext(indrel, extVacReport);
 		pfree(extVacCounters);
 	}
 
@@ -918,9 +923,6 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 									(PgStat_Counter) rint(VacuumDelayTime -
 														  startdelaytime),
 									pvs->shared->is_autovacuum);
-	vacuum_report_index_stats(indrel, istat_res, prev_tuples_removed,
-							  prev_pages_newly_deleted,
-							  indstats->status == PARALLEL_INDVAC_STATUS_NEED_CLEANUP);
 
 	/*
 	 * Copy the index bulk-deletion result returned from ambulkdelete and

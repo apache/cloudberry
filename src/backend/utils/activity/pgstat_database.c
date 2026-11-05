@@ -478,7 +478,6 @@ pgstat_database_flush_cb(PgStat_EntryRef *entry_ref, bool nowait)
 	PGSTAT_ACCUM_DBCOUNT(total_autovacuum_delay_time);
 	PGSTAT_ACCUM_DBCOUNT(vacuum_failsafe_count);
 	PGSTAT_ACCUM_DBCOUNT(vacuum_interrupt_count);
-
 	PGSTAT_ACCUM_DBCOUNT(vacuum_stats.tuples_deleted);
 	PGSTAT_ACCUM_DBCOUNT(vacuum_stats.pages_deleted);
 	PGSTAT_ACCUM_DBCOUNT(vacuum_stats.dead_pages);

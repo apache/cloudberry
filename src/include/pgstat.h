@@ -117,7 +117,7 @@ typedef struct PgStat_FunctionCounts
  * Working state needed to accumulate per-function-call timing statistics.
  */
 /*
- * Resource measurements collected during VACUUM.
+ * Extended vacuum statistics - passed to extensions via set_report_vacuum_hook.
  * Type of entry: table (heap), index, or database aggregate.
  */
 typedef enum ExtVacReportType
@@ -125,7 +125,7 @@ typedef enum ExtVacReportType
 	PGSTAT_EXTVAC_INVALID = 0,
 	PGSTAT_EXTVAC_TABLE = 1,
 	PGSTAT_EXTVAC_INDEX = 2,
-	PGSTAT_EXTVAC_DB = 3,
+	PGSTAT_EXTVAC_DB = 3,		/* database-only aggregate, no relation entry */
 }			ExtVacReportType;
 
 typedef struct PgStat_CommonCounts
@@ -278,7 +278,7 @@ typedef struct PgStat_TableXactStatus
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCC8
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCC9
 
 typedef struct PgStat_ArchiverStats
 {
@@ -509,10 +509,10 @@ typedef struct PgStat_StatTabEntry
 	 * failsafe mode (see vacuum_failsafe_age).
 	 */
 	PgStat_Counter vacuum_failsafe_count;
+	PgStat_VacuumStats vacuum_stats;
 	/* Cumulative work of completed heap vacuums, not current VM sizes. */
 	PgStat_Counter pages_frozen;
 	PgStat_Counter pages_all_visible;
-	PgStat_VacuumStats vacuum_stats;
 } PgStat_StatTabEntry;
 
 typedef struct PgStat_WalStats
@@ -740,13 +740,13 @@ extern void pgstat_unlink_relation(Relation rel);
 extern void pgstat_report_vacuum_stats_phase(Relation rel,
 											  const PgStat_VacuumStats *stats,
 											  bool final_sample);
+extern void pgstat_report_vacuum_stats(Relation rel,
+										 const PgStat_VacuumStats *stats);
 extern void pgstat_report_vacuum_elapsed(Oid tableoid, bool shared,
 										 PgStat_Counter livetuples, PgStat_Counter deadtuples,
 										 PgStat_Counter elapsedtime, PgStat_Counter delaytime,
 										 bool failsafe, PgStat_Counter pages_frozen,
 										 PgStat_Counter pages_all_visible);
-extern void pgstat_report_vacuum_stats(Relation rel,
-										 const PgStat_VacuumStats *stats);
 extern void pgstat_report_vacuum(Oid tableoid, bool shared,
 								 PgStat_Counter livetuples, PgStat_Counter deadtuples,
 								 TimestampTz starttime, PgStat_Counter delaytime,
@@ -759,6 +759,15 @@ extern void pgstat_report_index_vacuum_time(Relation rel,
 											PgStat_Counter delaytime,
 											bool is_autovacuum);
 extern void pgstat_count_vacuum_error(bool shared);
+
+extern void pgstat_report_vacuum_ext(Relation rel,
+									 PgStat_VacuumRelationCounts *extstats);
+
+/* Hook for extensions to receive extended vacuum statistics */
+typedef void (*set_report_vacuum_hook_type) (Oid tableoid, bool shared,
+											 PgStat_VacuumRelationCounts * params);
+extern PGDLLIMPORT set_report_vacuum_hook_type set_report_vacuum_hook;
+
 extern void pgstat_report_analyze(Relation rel,
 								  PgStat_Counter livetuples, PgStat_Counter deadtuples,
 								  bool resetcounter, TimestampTz starttime);
