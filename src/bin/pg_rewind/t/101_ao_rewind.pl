@@ -1,8 +1,8 @@
 
 use strict;
 use warnings;
-use TestLib;
-use Test::More tests => 17;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 use FindBin;
 use lib $FindBin::RealBin;
@@ -178,4 +178,4 @@ in primary, before promotion
 run_test('local');
 run_test('remote');
 
-exit(0);
+done_testing();
