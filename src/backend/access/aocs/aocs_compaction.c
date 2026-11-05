@@ -185,7 +185,8 @@ static void
 AOCSMoveTuple(TupleTableSlot *slot,
 			  AOCSInsertDesc insertDesc,
 			  ResultRelInfo *resultRelInfo,
-			  EState *estate)
+			  EState *estate,
+			  AOVacuumRelStats *vacrelstats)
 {
 	AOTupleId  *oldAoTupleId;
 	AOTupleId	newAoTupleId;
@@ -207,9 +208,7 @@ AOCSMoveTuple(TupleTableSlot *slot,
 	/* insert index' tuples if needed */
 	if (resultRelInfo->ri_NumIndices > 0)
 	{
-		ExecInsertIndexTuples(resultRelInfo,
-							  slot, estate, false, false,
-							  NULL, NIL, false);
+		ao_vacuum_insert_index_tuples(resultRelInfo, slot, estate, vacrelstats);
 		ResetPerTupleExprContext(estate);
 	}
 
@@ -312,7 +311,7 @@ AOCSSegmentFileFullCompaction(Relation aorel,
 		AOCSMoveTuple(slot,
 					  insertDesc,
 					  resultRelInfo,
-					  estate);
+					  estate, vacrelstats);
 
 		if (aocs_compaction_delete_hook)
 			(*aocs_compaction_delete_hook) (aorel, &otid);
@@ -323,7 +322,7 @@ AOCSSegmentFileFullCompaction(Relation aorel,
 		tupleCount++;
 		if (VacuumCostActive && tupleCount % tuplePerPage == 0)
 		{
-			vacuum_delay_point();
+			vacuum_delay_point(false);
 		}
 
 		/*
@@ -349,6 +348,12 @@ AOCSSegmentFileFullCompaction(Relation aorel,
 	vacrelstats->num_dead_tuples += scanDesc->segrowsprocessed - tupleCount;
 
 	MarkAOCSFileSegInfoAwaitingDrop(aorel, compact_segno);
+
+	/* Count completed compaction, including a scan with no surviving tuples. */
+	vacrelstats->compacted_segments++;
+	vacrelstats->tuples_moved += tupleCount;
+	vacrelstats->pages_scanned +=
+		scanDesc->totalBytesRead / BLCKSZ + (scanDesc->totalBytesRead % BLCKSZ != 0);
 
 	AppendOnlyVisimap_DeleteSegmentFile(&visiMap,
 										compact_segno);

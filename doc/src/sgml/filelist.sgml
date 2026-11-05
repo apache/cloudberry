@@ -129,6 +129,7 @@
 <!ENTITY dict-xsyn       SYSTEM "dict-xsyn.sgml">
 <!ENTITY dummy-seclabel  SYSTEM "dummy-seclabel.sgml">
 <!ENTITY earthdistance   SYSTEM "earthdistance.sgml">
+<!ENTITY extvacuumstatistics SYSTEM "extvacuumstatistics.sgml">
 <!ENTITY file-fdw        SYSTEM "file-fdw.sgml">
 <!ENTITY fuzzystrmatch   SYSTEM "fuzzystrmatch.sgml">
 <!ENTITY hstore          SYSTEM "hstore.sgml">
