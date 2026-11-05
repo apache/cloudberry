@@ -454,7 +454,7 @@ CREATE FUNCTION python_error_detail() RETURNS SETOF text AS $$
     yield row['d']
 $$ LANGUAGE plpython3u;
 SELECT python_error_detail();
-ERROR:  error fetching next item from iterator
+ERROR:  function "python_error_detail" error fetching next item from iterator
 DETAIL:  spiexceptions.InvalidDatetimeFormat: invalid value "xy" for "DD"
 CONTEXT:  Traceback (most recent call last):
 PL/Python function "python_error_detail"
