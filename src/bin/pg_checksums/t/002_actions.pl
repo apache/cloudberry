@@ -186,9 +186,9 @@ command_fails(
 # wrapped with pg_ctl to allow the case where this runs under a privileged
 # account on Windows.
 #
-# GPDB: the postmaster refuses to start, even for -C, without a contentid.
-# The test node gets one only from the options PostgreSQL::Test::Cluster
-# passes at start, so pass it here too.
+# Cloudberry: the postmaster refuses to start, even for -C, without a
+# contentid.  The test node gets one only from the options
+# PostgreSQL::Test::Cluster passes at start, so pass it here too.
 command_checks_all(
 	[
 		'pg_ctl', 'start', '-D', $pgdata, '-s', '-o',
