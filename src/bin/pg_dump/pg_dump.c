@@ -6309,9 +6309,9 @@ getTypes(Archive *fout, int *numTypes)
 	 * be revisited if the backend ever allows renaming of array types.
 	 */
 	/*
-	 * GPDB: typstorage here is not pg_type.typstorage but the type's default
-	 * column encoding from pg_type_encoding, which dumpTypeStorageOptions
-	 * emits as ALTER TYPE ... SET DEFAULT ENCODING.
+	 * Cloudberry: typstorage here is not pg_type.typstorage but the type's
+	 * default column encoding from pg_type_encoding, which
+	 * dumpTypeStorageOptions emits as ALTER TYPE ... SET DEFAULT ENCODING.
 	 */
 	appendPQExpBufferStr(query, "SELECT t.tableoid, t.oid, t.typname, "
 						 "t.typnamespace, t.typacl, "
@@ -15040,7 +15040,7 @@ dumpAgg(Archive *fout, const AggInfo *agginfo)
 								 "'0' AS aggfinalmodify,\n"
 								 "'0' AS aggmfinalmodify,\n");
 
-		/* GPDB: only Cloudberry 2 and later have pg_aggregate.aggrepsafeexec */
+		/* Cloudberry: only Cloudberry 2 and later have aggrepsafeexec */
 		if (fout->remoteVersion >= 140000 &&
 			fout->version.type == Cloudberry && fout->version.version >= 2)
 			appendPQExpBufferStr(query,

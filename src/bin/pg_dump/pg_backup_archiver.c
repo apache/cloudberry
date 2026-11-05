@@ -3604,8 +3604,8 @@ _getObjectDescription(PQExpBuffer buf, const TocEntry *te)
 		appendPQExpBufferStr(buf, fmtId(te->tag));
 	}
 	/*
-	 * GPDB: a dynamic table is a materialized view, and there is no ALTER
-	 * DYNAMIC TABLE.
+	 * Cloudberry: a dynamic table is a materialized view, and there is no
+	 * ALTER DYNAMIC TABLE.
 	 */
 	else if (strcmp(type, "DYNAMIC TABLE") == 0)
 	{

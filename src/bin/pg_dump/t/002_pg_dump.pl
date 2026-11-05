@@ -109,7 +109,7 @@ my %pgdump_runs = (
 			'--format=directory', '--compress=gzip:1',
 			"--file=$tempdir/compression_gzip_dir", 'postgres',
 		],
-		# GPDB: there are no large objects, so there is no blobs.toc to
+		# Cloudberry: there are no large objects, so there is no blobs.toc to
 		# compress by hand before the restore.
 		# Verify that only data files were compressed
 		glob_patterns => [
@@ -168,7 +168,7 @@ my %pgdump_runs = (
 			'--format=directory', '--compress=lz4:1',
 			"--file=$tempdir/compression_lz4_dir", 'postgres',
 		],
-		# GPDB: there are no large objects, so there is no blobs.toc to
+		# Cloudberry: there are no large objects, so there is no blobs.toc to
 		# compress by hand before the restore.
 		# Verify that data files were compressed
 		glob_patterns => [
@@ -230,7 +230,7 @@ my %pgdump_runs = (
 			'--format=directory', '--compress=zstd:1',
 			"--file=$tempdir/compression_zstd_dir", 'postgres',
 		],
-		# GPDB: there are no large objects, so there is no blobs.toc to
+		# Cloudberry: there are no large objects, so there is no blobs.toc to
 		# compress by hand before the restore.
 		# Verify that data files were compressed
 		glob_patterns => [
@@ -1323,7 +1323,7 @@ my %tests = (
 #			schema_only    => 1,
 #		},
 #	},
-# Disabled, because GPDB doesn't support large objects
+# Disabled, because Cloudberry doesn't support large objects
 #	'LO create (with no data)' => {
 #		create_sql => 'SELECT pg_catalog.lo_create(0);',
 #		regexp => qr/^
