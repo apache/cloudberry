@@ -168,7 +168,8 @@ SELECT tuples_deleted = 100 AS index_work_matches
 -- Native work-only resets preserve other counters and relation scope.
 CREATE TEMP TABLE work_other_before AS
   SELECT relid, sum(n_tup_ins) AS n_tup_ins, sum(n_tup_del) AS n_tup_del,
-         sum(vacuum_count) AS vacuum_count, sum(analyze_count) AS analyze_count
+         sum(vacuum_count) AS vacuum_count, sum(analyze_count) AS analyze_count,
+         sum(total_vacuum_time) AS total_vacuum_time
     FROM gp_stat_all_tables WHERE relname = 'work_stats_dist' GROUP BY relid
   DISTRIBUTED BY (relid);
 SELECT gp_stat_reset_vacuum_stats('work_stats_dist'::regclass);
@@ -203,9 +204,10 @@ SELECT tuples_deleted = 100 AS index_preserved
 
 SELECT s.n_tup_ins = b.n_tup_ins AND s.n_tup_del = b.n_tup_del
        AND s.vacuum_count = b.vacuum_count AND s.analyze_count = b.analyze_count
-         AS other_counters_preserved
+       AND s.total_vacuum_time = b.total_vacuum_time AS other_counters_preserved
   FROM (SELECT relid, sum(n_tup_ins) AS n_tup_ins, sum(n_tup_del) AS n_tup_del,
-               sum(vacuum_count) AS vacuum_count, sum(analyze_count) AS analyze_count
+               sum(vacuum_count) AS vacuum_count, sum(analyze_count) AS analyze_count,
+               sum(total_vacuum_time) AS total_vacuum_time
           FROM gp_stat_all_tables WHERE relname = 'work_stats_dist' GROUP BY relid) s
   JOIN work_other_before b USING (relid);
  other_counters_preserved 

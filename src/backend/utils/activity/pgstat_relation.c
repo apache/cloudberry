@@ -367,6 +367,24 @@ pgstat_report_index_vacuum_time(Relation rel, PgStat_Counter elapsedtime,
 	pgstat_unlock_entry(entry_ref);
 }
 
+
+/*
+ * Hook for extensions to receive extended vacuum statistics.
+ * NULL when no extension has registered.
+ */
+set_report_vacuum_hook_type set_report_vacuum_hook = NULL;
+
+/* Report optional resource measurements without updating native counters. */
+void
+pgstat_report_vacuum_ext(Relation rel, PgStat_VacuumRelationCounts *extstats)
+{
+	if (extstats != NULL && set_report_vacuum_hook)
+		(*set_report_vacuum_hook) (RelationGetRelid(rel),
+								   rel->rd_rel->relisshared,
+								   extstats);
+}
+
+
 /*
  * Report that the table was just analyzed and flush IO statistics.
  *

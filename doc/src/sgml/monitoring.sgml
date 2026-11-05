@@ -460,10 +460,15 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
      </row>
 
      <row>
-      <entry><structname>pg_stat_vacuum</structname>,
-       <structname>pg_stat_vacuum_tables</structname>,
+      <entry><structname>pg_stat_vacuum</structname></entry>
+      <entry>One row per database, plus one for shared objects, showing cumulative
+       vacuum statistics. See <xref linkend="monitoring-pg-stat-vacuum-view"/>.</entry>
+     </row>
+
+     <row>
+      <entry><structname>pg_stat_vacuum_tables</structname>,
        <structname>pg_stat_vacuum_indexes</structname></entry>
-      <entry>One row per database, table or index, showing vacuum work counters.
+      <entry>One row per table or index, showing vacuum work counters.
        See <xref linkend="monitoring-pg-stat-vacuum-work"/>.</entry>
      </row>
 
@@ -4898,6 +4903,7 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
       Heap vacuums made aggressive by the XID or MultiXact freeze table age,
       including <command>VACUUM FREEZE</command>. Forcing an aggressive scan
       with <literal>DISABLE_PAGE_SKIPPING</literal> alone does not count.
+      This is separate from the wraparound-failsafe counter.
      </entry></row>
      <row><entry><structfield>total_file_segs</structfield>,
       <structfield>compacted_segments</structfield>,
@@ -4932,9 +4938,12 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
    statistics snapshot rules, and are removed when their relation or database
    is dropped. <function>pg_stat_reset_single_table_counters(oid)</function>
    resets a relation's counters; <function>pg_stat_reset()</function> resets
-   the current database statistics. These resets are independent of the
-   compatibility counters and resource statistics in
-   <filename>ext_vacuum_statistics</filename>.
+   the current database statistics. The table and index views of
+   <filename>ext_vacuum_statistics</filename> read these same work counters.
+   A native relation reset leaves extension resource counters intact;
+   <function>pg_stat_reset()</function> resets both for the current database.
+   Extension reset functions clear only extension metrics and never modify
+   native work or other core statistics.
   </para>
   <para>
    <function>pg_stat_reset_vacuum_stats()</function> resets just native work

@@ -33,6 +33,10 @@ VACUUM freeze_age_heap;
 });
 is($node->safe_psql('postgres', $count_sql), '1',
    'XID freeze age counts a manual vacuum');
+is($node->safe_psql('postgres', q{
+SELECT vacuum_failsafe_count FROM pg_stat_all_tables
+ WHERE relname = 'freeze_age_heap'}), '0',
+   'a freeze-age vacuum need not activate the failsafe');
 
 # safe_psql opens a new connection, restoring the default XID freeze age.
 $node->safe_psql('postgres', q{

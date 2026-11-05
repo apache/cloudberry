@@ -443,7 +443,7 @@ extern PGDLLIMPORT pg_atomic_uint32 *VacuumSharedCostBalance;
 extern PGDLLIMPORT pg_atomic_uint32 *VacuumActiveNWorkers;
 extern PGDLLIMPORT int VacuumCostBalanceLocal;
 
-/* Allocated only for VERBOSE. */
+/* Allocated only for VERBOSE or an extended-statistics hook. */
 typedef struct LVExtStatCounters
 {
 	WalUsage	walusage;
