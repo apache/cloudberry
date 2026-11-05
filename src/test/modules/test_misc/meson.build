@@ -10,6 +10,13 @@ tests += {
       't/002_tablespace.pl',
       't/003_check_guc.pl',
       't/004_io_direct.pl',
+      't/021_heap_page_counters.pl',
+      't/022_ao_hidden_tuples.pl',
+      't/023_dead_pages.pl',
+      't/024_ao_dead_pages.pl',
+      't/027_freeze_age_vacuum_count.pl',
+      't/028_vacuum_work_core.pl',
+      't/030_vacuum_work_reset.pl',
     ],
   },
 }

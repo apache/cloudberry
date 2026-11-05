@@ -3914,3 +3914,23 @@ vac_cmp_itemptr(const void *left, const void *right)
 	return 0;
 }
 
+/* Report index work once per call; report remaining dead pages at cleanup. */
+void
+vacuum_report_index_stats(Relation indrel, const IndexBulkDeleteResult *istat,
+						  double prev_tuples_removed,
+						  BlockNumber prev_pages_newly_deleted, bool cleanup)
+{
+	PgStat_VacuumStats stats = {0};
+
+	if (istat == NULL)
+		return;
+
+	stats.tuples_deleted = istat->tuples_removed - prev_tuples_removed;
+	stats.pages_deleted =
+		istat->pages_newly_deleted >= prev_pages_newly_deleted ?
+		istat->pages_newly_deleted - prev_pages_newly_deleted :
+		istat->pages_newly_deleted;
+	if (cleanup && istat->pages_deleted > istat->pages_free)
+		stats.dead_pages = istat->pages_deleted - istat->pages_free;
+	pgstat_report_vacuum_stats(indrel, &stats);
+}
