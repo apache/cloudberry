@@ -270,7 +270,7 @@ plpy.execute("select pg_backend_pid()")
 for i in range(0, 5):
     yield (i)
 
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 -- inject fault and wait for trigger
 select gp_inject_fault_infinite('begin_internal_sub_transaction', 'error', 1);
