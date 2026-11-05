@@ -1555,6 +1555,63 @@ commit;
 
 drop table  t1, t2, t3, t4, t5, t6;
 
+-- Test NULLs in a UNIQUE key column. A UNIQUE constraint allows multiple NULLs
+-- (NULL is never "equal" for uniqueness checks), but grouping columns that
+-- cover such a key must still collapse those NULLs into a single row, so
+-- dropping the GbAgg is only safe when every key column is also NOT NULL.
+
+drop table if exists t7, t8, t9;
+create table t7 (a int unique, b int);
+create table t8 (a int unique not null, b int);
+create table t9 (a int primary key, b int);
+
+insert into t7 values (1, 1), (2, 2), (null, 3), (null, 4), (null, 5);
+insert into t8 values (1, 1), (2, 2), (3, 3);
+insert into t9 values (1, 1), (2, 2), (3, 3);
+
+explain (costs off) select distinct a from t7;
+select distinct a from t7 order by a;
+
+explain (costs off) select distinct a from t8;
+select distinct a from t8 order by a;
+
+explain (costs off) select distinct a from t9;
+select distinct a from t9 order by a;
+
+-- The same for partitioned tables, querying both the root and a leaf
+-- partition, which ORCA reads as a plain table.
+create table t10 (a int unique, b int) partition by range (a);
+create table t10_1 partition of t10 for values from (1) to (3);
+create table t10_d partition of t10 default;
+create table t11 (a int unique not null, b int) partition by range (a);
+create table t11_1 partition of t11 for values from (1) to (3);
+create table t11_2 partition of t11 for values from (3) to (5);
+create table t12 (a int, b int not null, unique (a, b))
+  partition by list (b) distributed by (b);
+create table t12_1 partition of t12 for values in (1);
+create table t12_2 partition of t12 for values in (2);
+
+insert into t10 values (1, 1), (2, 2), (null, 3), (null, 4), (null, 5);
+insert into t11 values (1, 1), (2, 2), (3, 3), (4, 4);
+insert into t12 values (1, 1), (null, 1), (null, 1), (2, 2), (null, 2), (null, 2);
+
+explain (costs off) select distinct a from t10;
+select distinct a from t10 order by a;
+explain (costs off) select distinct a from t10_d;
+select distinct a from t10_d;
+
+explain (costs off) select distinct a from t11;
+select distinct a from t11 order by a;
+explain (costs off) select distinct a from t11_1;
+select distinct a from t11_1 order by a;
+
+explain (costs off) select distinct a, b from t12;
+select distinct a, b from t12 order by a, b;
+explain (costs off) select distinct a, b from t12_1;
+select distinct a, b from t12_1 order by a, b;
+
+drop table t7, t8, t9, t10, t11, t12;
+
 -- CLEANUP
 set client_min_messages='warning';
 drop schema bfv_aggregate cascade;
