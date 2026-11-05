@@ -35,6 +35,9 @@ From a Cloudberry coordinator, query statistics across the cluster:
 -- Per-table heap and append-optimized vacuum statistics, with gp_segment_id
 SELECT * FROM ext_vacuum_statistics.gp_stats_vacuum_tables;
 
+-- AO/AOCS parent tables, including buffer, WAL and I/O timing by vacuum phase
+SELECT * FROM ext_vacuum_statistics.gp_stats_vacuum_ao_tables;
+
 -- Per-index vacuum statistics
 SELECT * FROM ext_vacuum_statistics.gp_stats_vacuum_indexes;
 
@@ -103,7 +106,7 @@ FROM pg_database WHERE datname = current_database();
 Each tracked object (table or index) uses a fixed-size shared memory entry; the exact size depends on the platform.
 
 Per-database aggregates add one entry per tracked database. Entry size includes
-pgstat bookkeeping; memory estimates must use the
+the AO phase counters and pgstat bookkeeping; memory estimates must use the
 structures of the actual build rather than a fixed byte count from an earlier
 version.
 
@@ -124,7 +127,8 @@ SET vacuum_statistics.enabled = off;
 
 | View | Description |
 |------|-------------|
-| `ext_vacuum_statistics.pg_stats_vacuum_tables` | Per-table heap and AO work/resource counters |
+| `ext_vacuum_statistics.pg_stats_vacuum_tables` | Per-table heap and AO work/resource counters, without the AO phase columns |
+| `ext_vacuum_statistics.pg_stats_vacuum_ao_tables` | AO/AOCS parent tables: applicable work counters, resource totals and resources by phase |
 | `ext_vacuum_statistics.pg_stats_vacuum_indexes` | Per-index vacuum stats |
 | `ext_vacuum_statistics.pg_stats_vacuum_database` | Per-database aggregate vacuum stats |
 
@@ -148,7 +152,7 @@ measurements. They have the same work-counter history as `pg_stat_vacuum_tables`
 extension does not start a second history.
 
 Work counters obey `track_counts`. `vacuum_statistics.enabled` controls only
-extension metrics, including the awaiting-drop snapshot.
+extension metrics, including AO phase resources and the awaiting-drop snapshot.
 With extension collection disabled, native work remains visible in these views.
 Relations without a resource entry show zero resource counters.
 
@@ -197,6 +201,36 @@ are cleared by native statistics resets.
 
 ## Append-optimized tables
 
+Use `pg_stats_vacuum_ao_tables` for local AO/AOCS statistics,
+`gp_stats_vacuum_ao_tables` for rows from all instances with `gp_segment_id`,
+and `gp_stats_vacuum_ao_tables_summary` for totals over primary segments.
+The summary divides replicated-table counters by `numsegments`.
+
+These views contain only parent AO/AOCS tables identified by `pg_appendonly`.
+They include relation identifiers, total buffer/WAL/I/O usage, applicable work
+counters and the 27 phase resource columns. Heap-only fields such as
+`tuples_frozen`, `pages_all_visible` and `dead_pages` are omitted.
+The general `*_vacuum_tables` views still include AO rows and their summary
+counters, but do not expose `ao_pre_cleanup_*`, `ao_compaction_*` or
+`ao_post_cleanup_*` columns. AO auxiliary heaps remain in those general views;
+indexes remain in the index views.
+
+For example, query phase WAL usage across the cluster from the coordinator:
+
+```sql
+SELECT relname, tuples_deleted, awaiting_drop_segments,
+       ao_pre_cleanup_wal_bytes, ao_compaction_wal_bytes,
+       ao_post_cleanup_wal_bytes
+FROM ext_vacuum_statistics.gp_stats_vacuum_ao_tables_summary;
+```
+
+The AO and general table views read the same native work counters and extension
+resource entry. AO resource totals and phase counters come from one fetched
+entry, even with `stats_fetch_consistency = none`; native work and resources
+are separate entries and need not reflect the same instant during a vacuum.
+Extension resets clear resources and the awaiting-drop snapshot in both views;
+native work resets are reflected in both views too.
+
 AO row and AOCS tables and their indexes are reported too.  For the table,
 `tuples_deleted` is the number of dead tuples the compaction discarded and
 `pages_removed` the space released by truncating and dropping segment files,
@@ -216,6 +250,18 @@ fields stay zero for heap tables.
 can delay their recycling even after compaction has finished. This value is
 replaced, not accumulated; AOCS counts segment numbers, not column files.
 It is zero for heap tables and after reset.
+
+The `ao_pre_cleanup_*`, `ao_compaction_*` and `ao_post_cleanup_*` columns
+in the AO views break down cumulative resource usage by phase. Each prefix has
+`blks_read`, `blks_hit`, `blks_dirtied`, `blks_written`, `wal_records`, `wal_fpi`,
+`wal_bytes`, `blk_read_time` and `blk_write_time`. Buffer counts include
+shared and local buffers, as in `total_blks_*`; I/O times are milliseconds
+and require `track_io_timing`. Index resource usage is excluded from its
+phase and remains in the index statistics. The three phase counters sum to
+the corresponding table total (apart from floating-point rounding of times).
+Heap tables do not appear in the AO views. Cluster summaries use the same
+sum/replicated-average rules as the other table fields. In replicated
+summaries, independently rounded integer fields can differ by rounding.
 
 Native work obeys `track_counts`; resource metrics and the awaiting-drop
 snapshot obey `vacuum_statistics.enabled`. Both survive clean restarts. Failed vacuums do not publish a table report; replacement workers
@@ -248,7 +294,7 @@ to heap-equivalent pages preserves the 64-bit range.
 
 AO auxiliary relations (`aoseg`, `visimap`, `blkdir`) are shown as separate
 heap-statistics rows under their own OIDs and names. Their indexes are shown
-in the index views. The parent AO row describes its vacuum; the later heap
+in the index views. The parent AO row describes its phases; the later heap
 vacuum of auxiliary relations is not added to it. To associate an auxiliary
 row with its parent, join its `relid` to `pg_appendonly.segrelid`,
 `visimaprelid` or `blkdirrelid`. Cluster summaries use the parent table's
@@ -305,9 +351,11 @@ Cluster-wide views, like the `gp_stat_*` views of the core:
 | View | Description |
 |------|-------------|
 | `ext_vacuum_statistics.gp_stats_vacuum_tables` | `pg_stats_vacuum_tables` of every instance, with `gp_segment_id` (-1 for the coordinator) |
+| `ext_vacuum_statistics.gp_stats_vacuum_ao_tables` | AO/AOCS parent tables from every instance, with phase counters and `gp_segment_id` |
 | `ext_vacuum_statistics.gp_stats_vacuum_indexes` | the same for indexes |
 | `ext_vacuum_statistics.gp_stats_vacuum_database` | the same for databases |
 | `ext_vacuum_statistics.gp_stats_vacuum_tables_summary` | one row per table: summed over the segments (divided by their number for replicated tables); catalogs as on the coordinator |
+| `ext_vacuum_statistics.gp_stats_vacuum_ao_tables_summary` | AO/AOCS totals over primary segments, divided by `numsegments` for replicated tables |
 | `ext_vacuum_statistics.gp_stats_vacuum_indexes_summary` | the same for indexes |
 | `ext_vacuum_statistics.gp_stats_vacuum_database_summary` | one row per database, summed over all instances |
 

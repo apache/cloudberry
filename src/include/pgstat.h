@@ -143,6 +143,15 @@ typedef struct PgStat_CommonCounts
 	uint64		wal_bytes;
 }			PgStat_CommonCounts;
 
+/* Array indexes for AO resource measurements, in execution order. */
+typedef enum PgStat_AOVacuumPhase
+{
+	PGSTAT_AO_PRE_CLEANUP,
+	PGSTAT_AO_COMPACTION,
+	PGSTAT_AO_POST_CLEANUP,
+	PGSTAT_NUM_AO_PHASES
+} PgStat_AOVacuumPhase;
+
 typedef struct PgStat_VacuumRelationCounts
 {
 	PgStat_CommonCounts common;
@@ -150,6 +159,8 @@ typedef struct PgStat_VacuumRelationCounts
 	struct
 	{
 		int64		awaiting_drop_segments; /* last post-cleanup observation */
+		/* Cumulative resources, excluding separately reported indexes. */
+		PgStat_CommonCounts ao_phases[PGSTAT_NUM_AO_PHASES];
 	}			table;
 }			PgStat_VacuumRelationCounts;
 
@@ -282,7 +293,7 @@ typedef struct PgStat_TableXactStatus
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCBA
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCBB
 
 typedef struct PgStat_ArchiverStats
 {

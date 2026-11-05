@@ -139,6 +139,9 @@ pgstat_accumulate_extvac_stats(PgStat_VacuumRelationCounts * dst,
 	{
 		/* A snapshot of the most recent post-cleanup phase. */
 		dst->table.awaiting_drop_segments = src->table.awaiting_drop_segments;
+		for (int phase = 0; phase < PGSTAT_NUM_AO_PHASES; phase++)
+			pgstat_accumulate_common(&dst->table.ao_phases[phase],
+									 &src->table.ao_phases[phase]);
 	}
 }
 
@@ -395,6 +398,7 @@ tuplestore_put_common(PgStat_CommonCounts * vacuum_ext,
 }
 
 #define EXTVAC_HEAP_STAT_COLS	13
+#define EXTVAC_AO_STAT_COLS	(13 + PGSTAT_NUM_AO_PHASES * EXTVAC_COMMON_STAT_COLS)
 #define EXTVAC_IDX_STAT_COLS	12
 #define EXTVAC_MAX_STAT_COLS	Max(EXTVAC_HEAP_STAT_COLS, EXTVAC_IDX_STAT_COLS)
 
@@ -422,8 +426,29 @@ tuplestore_put_for_relation(Oid relid, Tuplestorestate *tupstore,
 	tuplestore_putvalues(tupstore, tupdesc, values, nulls);
 }
 
+static void
+tuplestore_put_for_ao_table(Oid relid, Tuplestorestate *tupstore,
+						   TupleDesc tupdesc, PgStat_VacuumRelationCounts *vacuum_ext)
+{
+	Datum		values[EXTVAC_AO_STAT_COLS];
+	bool		nulls[EXTVAC_AO_STAT_COLS] = {false};
+	int			i = 0;
+
+	/* Totals and phases must come from the same fetched version of the entry. */
+	values[i++] = ObjectIdGetDatum(relid);
+	tuplestore_put_common(&vacuum_ext->common, values, nulls, &i);
+	values[i++] = Int64GetDatum(vacuum_ext->common.blks_fetched - vacuum_ext->common.blks_hit);
+	values[i++] = Int64GetDatum(vacuum_ext->common.blks_hit);
+	values[i++] = Int64GetDatum(vacuum_ext->table.awaiting_drop_segments);
+	for (int phase = 0; phase < PGSTAT_NUM_AO_PHASES; phase++)
+		tuplestore_put_common(&vacuum_ext->table.ao_phases[phase],
+							  values, nulls, &i);
+	Assert(i == EXTVAC_AO_STAT_COLS);
+	tuplestore_putvalues(tupstore, tupdesc, values, nulls);
+}
+
 static Datum
-pg_stats_vacuum(FunctionCallInfo fcinfo, int type)
+pg_stats_vacuum(FunctionCallInfo fcinfo, int type, bool ao_table)
 {
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
 	MemoryContext per_query_ctx;
@@ -431,6 +456,8 @@ pg_stats_vacuum(FunctionCallInfo fcinfo, int type)
 	Tuplestorestate *tupstore;
 	TupleDesc	tupdesc;
 	Oid			dbid = PG_GETARG_OID(0);
+
+	Assert(!ao_table || type == PGSTAT_EXTVAC_TABLE);
 
 	if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo))
 		ereport(ERROR,
@@ -471,7 +498,12 @@ pg_stats_vacuum(FunctionCallInfo fcinfo, int type)
 								   relid);
 
 		if (stats && stats->type == type)
-			tuplestore_put_for_relation(relid, tupstore, tupdesc, stats);
+		{
+			if (ao_table)
+				tuplestore_put_for_ao_table(relid, tupstore, tupdesc, stats);
+			else
+				tuplestore_put_for_relation(relid, tupstore, tupdesc, stats);
+		}
 	}
 	else if (type == PGSTAT_EXTVAC_DB)
 	{
@@ -501,23 +533,30 @@ pg_stats_vacuum(FunctionCallInfo fcinfo, int type)
 }
 
 PG_FUNCTION_INFO_V1(pg_stats_get_vacuum_tables);
+PG_FUNCTION_INFO_V1(pg_stats_get_vacuum_ao_tables);
 PG_FUNCTION_INFO_V1(pg_stats_get_vacuum_indexes);
 PG_FUNCTION_INFO_V1(pg_stats_get_vacuum_database);
 
 Datum
 pg_stats_get_vacuum_tables(PG_FUNCTION_ARGS)
 {
-	return pg_stats_vacuum(fcinfo, PGSTAT_EXTVAC_TABLE);
+	return pg_stats_vacuum(fcinfo, PGSTAT_EXTVAC_TABLE, false);
+}
+
+Datum
+pg_stats_get_vacuum_ao_tables(PG_FUNCTION_ARGS)
+{
+	return pg_stats_vacuum(fcinfo, PGSTAT_EXTVAC_TABLE, true);
 }
 
 Datum
 pg_stats_get_vacuum_indexes(PG_FUNCTION_ARGS)
 {
-	return pg_stats_vacuum(fcinfo, PGSTAT_EXTVAC_INDEX);
+	return pg_stats_vacuum(fcinfo, PGSTAT_EXTVAC_INDEX, false);
 }
 
 Datum
 pg_stats_get_vacuum_database(PG_FUNCTION_ARGS)
 {
-	return pg_stats_vacuum(fcinfo, PGSTAT_EXTVAC_DB);
+	return pg_stats_vacuum(fcinfo, PGSTAT_EXTVAC_DB, false);
 }

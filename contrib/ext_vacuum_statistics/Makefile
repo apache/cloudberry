@@ -30,7 +30,7 @@ endif
 .PHONY: installcheck-cluster installcheck-cluster-isolation2
 
 installcheck-cluster:
-	$(pg_regress_installcheck) --dbname=contrib_regression_vacstat gp_vacuum_statistics gp_vacuum_statistics_gc
+	$(pg_regress_installcheck) --dbname=contrib_regression_vacstat gp_vacuum_statistics gp_vacuum_statistics_ao gp_vacuum_statistics_gc
 
 # Concurrent checks at the segment COMMIT PREPARED boundary need isolation2.
 installcheck-cluster-isolation2:

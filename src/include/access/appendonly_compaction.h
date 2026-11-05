@@ -26,7 +26,8 @@
 /* Optional resource counters for VACUUM VERBOSE and extensions. */
 typedef struct AOVacuumExtStats
 {
-	PgStat_CommonCounts phases;
+	PgStat_CommonCounts phases[PGSTAT_NUM_AO_PHASES];
+	/* Index resources of the current phase, cleared after subtraction. */
 	PgStat_CommonCounts indexes;
 	PgStat_CommonCounts index_inserts;
 } AOVacuumExtStats;
@@ -56,8 +57,8 @@ typedef struct AOVacuumRelStats
 	Oid			relid;
 	/*
 	 * Resource usage for set_report_vacuum_hook, accumulated over the phases:
-	 * of the phases as a whole, and of the index passes among them, which are
-	 * reported per index and subtracted from the table's report.
+	 * separately for each phase, after subtracting its index passes. Index
+	 * resources are reported per index and excluded from the table's totals.
 	 */
 	AOVacuumExtStats *extstats; /* allocated for VERBOSE or an installed hook */
 } AOVacuumRelStats;
