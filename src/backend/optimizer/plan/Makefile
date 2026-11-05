@@ -12,8 +12,6 @@ subdir = src/backend/optimizer/plan
 top_builddir = ../../../..
 include $(top_builddir)/src/Makefile.global
 
-BLD_TOP = $(top_builddir)/..
-
 OBJS = \
 	analyzejoins.o \
 	createplan.o \

@@ -32,9 +32,6 @@ all:
 # started to update the file.
 .DELETE_ON_ERROR:
 
-# BLD_ARCH
-BLD_ARCH = @BLD_ARCH@
-
 # Never delete any intermediate files automatically.
 .SECONDARY:
 
@@ -862,7 +859,6 @@ LIBS := -lpgcommon -lpgport $(LIBS)
 # to make ws2_32.lib the last library
 ifeq ($(PORTNAME),win32)
 LIBS += -lws2_32 -lshfolder
-override LDFLAGS := -L$(top_builddir)/gpAux/ext/win32/kfw-3-2-2/lib $(LDFLAGS)
 override AR := /usr/bin/i686-pc-mingw32-ar
 endif
 
