@@ -42,6 +42,17 @@ from .security import SQLValidator
 # Column types that hold embeddings.  All are provided by pgvector.
 VECTOR_TYPES = frozenset({"vector", "halfvec", "sparsevec"})
 
+# lance_fdw reads a Lance vector column as real[] and defines pgvector's
+# distance operator names on real[] for it, so a real[] column of a lance_fdw
+# foreign table is searched with the same SQL as a pgvector column.  A real[]
+# column anywhere else is just an array.
+LANCE_FDW = "lance_fdw"
+LANCE_VECTOR_TYPE = "_float4"
+
+# Where an embedding column's distance operators come from.
+PGVECTOR_EMBEDDING = "pgvector"
+LANCE_EMBEDDING = "lance"
+
 # Column types that full-text search can build a tsvector from.
 TEXT_TYPES = frozenset({"text", "varchar", "bpchar", "name", "citext"})
 
@@ -84,6 +95,23 @@ METRIC_OPERATORS: Dict[str, str] = {
     SearchMetric.INNER_PRODUCT.value: "<#>",
     SearchMetric.L1.value: "<+>",
 }
+
+
+# lance_fdw defines three of the four operators; it has no L1 distance.
+LANCE_METRICS = frozenset(
+    {SearchMetric.L2.value, SearchMetric.COSINE.value, SearchMetric.INNER_PRODUCT.value}
+)
+
+
+def embedding_kind(
+    type_name: str, foreign_data_wrapper: Optional[str]
+) -> Optional[str]:
+    """Say whether a column holds embeddings, and whose operators rank it."""
+    if type_name in VECTOR_TYPES:
+        return PGVECTOR_EMBEDDING
+    if type_name == LANCE_VECTOR_TYPE and foreign_data_wrapper == LANCE_FDW:
+        return LANCE_EMBEDDING
+    return None
 
 
 class TextQueryMode(str, Enum):
@@ -345,7 +373,7 @@ def build_select_list(
     that is reading the rows.
     """
     if select_columns is None:
-        chosen = [column for column in columns if column["type_name"] not in VECTOR_TYPES]
+        chosen = [column for column in columns if not column.get("embedding")]
         if not chosen:
             chosen = list(columns)
     else:
@@ -365,7 +393,8 @@ def build_select_list(
         reference = quote_column(column, alias)
         output_name = SQLValidator.quote_identifier(column["column_name"])
         names.append(column["column_name"])
-        if column["type_name"] in VECTOR_TYPES:
+        # real[] has a codec, so only the pgvector types need the cast.
+        if column.get("embedding") == PGVECTOR_EMBEDDING:
             projection.append(f"{reference}::text AS {output_name}")
         else:
             projection.append(f"{reference} AS {output_name}")
@@ -523,16 +552,17 @@ def validate_limit(limit: Any, label: str = "limit", maximum: int = MAX_LIMIT) -
 
 def validate_vector_column(column: Dict[str, Any], query_vector: Sequence[float]) -> None:
     """Check that a column holds embeddings and that the dimensions agree."""
-    if column["type_name"] not in VECTOR_TYPES:
+    if not column.get("embedding"):
         supported = ", ".join(sorted(VECTOR_TYPES))
         raise ValueError(
             f"vector_column '{column['column_name']}' has type "
             f"{column['type_display']}, which is not an embedding type; expected one "
-            f"of: {supported}"
+            f"of: {supported}, or real[] on a {LANCE_FDW} foreign table"
         )
 
     # pgvector stores the declared dimension directly in atttypmod; -1 means the
-    # column was declared without one and accepts any width.
+    # column was declared without one and accepts any width.  real[] carries no
+    # dimension, so for a Lance column lance_fdw checks it when the scan starts.
     declared = column["type_modifier"]
     if declared and declared > 0 and len(query_vector) != declared:
         raise ValueError(
