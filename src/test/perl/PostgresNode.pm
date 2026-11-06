@@ -333,7 +333,7 @@ sub raw_connect
 	my $pghost = $self->host;
 
 	my $socket;
-	if ($PostgreSQL::Test::Utils::use_unix_sockets)
+	if ($TestLib::use_unix_sockets)
 	{
 		require IO::Socket::UNIX;
 		my $path = "$pghost/.s.PGSQL.$pgport";
@@ -378,7 +378,7 @@ sub raw_connect_works
 
 	# If we're using Unix domain sockets, we need a working
 	# IO::Socket::UNIX implementation.
-	if ($PostgreSQL::Test::Utils::use_unix_sockets)
+	if ($TestLib::use_unix_sockets)
 	{
 		eval {
 			my $sock = $self->raw_connect();
