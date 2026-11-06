@@ -970,10 +970,9 @@ $node->safe_psql('postgres', "DROP TABLESPACE tblspc2;");
 
 # check that the in-place tablespace exists in the backup
 $backupdir = $node->backup_dir . '/backup3';
-my @dst_tblspc = glob "$backupdir/pg_tblspc/$tblspc_oid/PG_*";
+# Cloudberry: the version directory is GPDB_*, not PG_*.
+my @dst_tblspc = glob "$backupdir/pg_tblspc/$tblspc_oid/GPDB_*";
 is(@dst_tblspc, 1, 'tblspc directory copied');
-
-done_testing();
 
 # Some additional GPDB tests
 my $twenty_characters = '11111111112222222222';
@@ -1077,3 +1076,5 @@ ok(-f "$tempdir/backup/internal.auto.conf", 'internal.auto.conf was created');
 ok(-f "$tempdir/backup/postgresql.auto.conf", 'postgresql.auto.conf was created');
 ok(-f "$tempdir/backup/standby.signal",       'standby.signal was created');
 rmtree("$tempdir/backup");
+
+done_testing();
