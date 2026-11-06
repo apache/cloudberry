@@ -1,6 +1,8 @@
 # Copyright (c) 2022-2023, PostgreSQL Global Development Group
 
 pageinspect_sources = files(
+  # Cloudberry: bitmap index pages (bm_metap and friends)
+  'bmfuncs.c',
   'brinfuncs.c',
   'btreefuncs.c',
   'fsmfuncs.c',

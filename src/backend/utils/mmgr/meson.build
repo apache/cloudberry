@@ -10,4 +10,10 @@ backend_sources += files(
   'memdebug.c',
   'portalmem.c',
   'slab.c',
+  'event_version.c',
+  'idle_tracker.c',
+  'memprot.c',
+  'redzone_handler.c',
+  'runaway_cleaner.c',
+  'vmem_tracker.c',
 )

@@ -42,6 +42,8 @@ plpython = shared_module('plpython3',
   include_directories: [plpython_inc, postgres_inc],
   kwargs: pg_mod_args + {
     'dependencies': [python3_dep, pg_mod_args['dependencies']],
+    # override CPPFLAGS := -Wno-error ... in this directory's Makefile
+    'c_args': pg_mod_args.get('c_args', []) + ['-Wno-error'],
   },
 )
 pl_targets += plpython
