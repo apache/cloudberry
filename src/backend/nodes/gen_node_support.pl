@@ -1436,8 +1436,7 @@ _read${n}(void)
 			# for out and read fast
 			print $ofaf q{
 	/* CustomName is a key to lookup CustomScanMethods */
-	appendStringInfoString(str, " :methods ");
-	outToken(str, node->methods->CustomName);
+	WRITE_STRING_VAR(node->methods->CustomName);
 };
 			print $rfaf q!
 	{
