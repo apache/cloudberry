@@ -175,13 +175,19 @@ $node->issues_sql_like(
 	[ 'reindexdb', '-v', '-t', 'test1', 'postgres' ],
 	qr/statement: REINDEX \(VERBOSE\) TABLE public\.test1;/,
 	'reindex with verbose output');
-$node->issues_sql_like(
-	[
-		'reindexdb', '--concurrently', '-v', '-t',
-		'test1', '--tablespace', $tbspace_name, 'postgres'
-	],
-	qr/statement: REINDEX \(VERBOSE, TABLESPACE $tbspace_name\) TABLE public\.test1;/,
-	'reindex with verbose output and tablespace');
+# Cloudberry does not support REINDEX CONCURRENTLY.
+SKIP:
+{
+	skip 'REINDEX CONCURRENTLY not implemented in Cloudberry', 2;
+
+	$node->issues_sql_like(
+		[
+			'reindexdb', '--concurrently', '-v', '-t',
+			'test1', '--tablespace', $tbspace_name, 'postgres'
+		],
+		qr/statement: REINDEX \(VERBOSE, TABLESPACE $tbspace_name\) TABLE public\.test1;/,
+		'reindex with verbose output and tablespace');
+}
 
 # REINDEX TABLESPACE on toast indexes and tables fails.  This is not
 # part of the main regression test suite as these have unpredictable
@@ -197,15 +203,21 @@ $node->command_checks_all(
 	[],
 	[qr/cannot move system relation/],
 	'reindex toast table with tablespace');
-$node->command_checks_all(
-	[
-		'reindexdb', '--concurrently', '-t', $toast_table,
-		'--tablespace', $tbspace_name, 'postgres'
-	],
-	1,
-	[],
-	[qr/cannot move system relation/],
-	'reindex toast table with tablespace');
+# Cloudberry does not support REINDEX CONCURRENTLY.
+SKIP:
+{
+	skip 'REINDEX CONCURRENTLY not implemented in Cloudberry', 2;
+
+	$node->command_checks_all(
+		[
+			'reindexdb', '--concurrently', '-t', $toast_table,
+			'--tablespace', $tbspace_name, 'postgres'
+		],
+		1,
+		[],
+		[qr/cannot move system relation/],
+		'reindex toast table with tablespace');
+}
 $node->command_checks_all(
 	[
 		'reindexdb', '-i', $toast_index, '--tablespace',
@@ -215,15 +227,21 @@ $node->command_checks_all(
 	[],
 	[qr/cannot move system relation/],
 	'reindex toast index with tablespace');
-$node->command_checks_all(
-	[
-		'reindexdb', '--concurrently', '-i', $toast_index,
-		'--tablespace', $tbspace_name, 'postgres'
-	],
-	1,
-	[],
-	[qr/cannot move system relation/],
-	'reindex toast index with tablespace');
+# Cloudberry does not support REINDEX CONCURRENTLY.
+SKIP:
+{
+	skip 'REINDEX CONCURRENTLY not implemented in Cloudberry', 2;
+
+	$node->command_checks_all(
+		[
+			'reindexdb', '--concurrently', '-i', $toast_index,
+			'--tablespace', $tbspace_name, 'postgres'
+		],
+		1,
+		[],
+		[qr/cannot move system relation/],
+		'reindex toast index with tablespace');
+}
 
 # connection strings
 $node->command_ok([qw(reindexdb --echo --table=pg_am dbname=template1)],
@@ -263,8 +281,14 @@ $node->issues_sql_like(
 $node->command_ok(
 	[ 'reindexdb', '-j', '2', '-S', 's3' ],
 	'parallel reindexdb with empty schema');
-$node->command_ok(
-	[ 'reindexdb', '-j', '2', '--concurrently', '-d', 'postgres' ],
-	'parallel reindexdb on database, concurrently');
+# Cloudberry does not support REINDEX CONCURRENTLY.
+SKIP:
+{
+	skip 'REINDEX CONCURRENTLY not implemented in Cloudberry', 1;
+
+	$node->command_ok(
+		[ 'reindexdb', '-j', '2', '--concurrently', '-d', 'postgres' ],
+		'parallel reindexdb on database, concurrently');
+}
 
 done_testing();
