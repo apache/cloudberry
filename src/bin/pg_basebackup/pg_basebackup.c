@@ -1158,12 +1158,11 @@ CreateBackupStreamer(char *archive_name, char *spclocation,
 			directory = basedir;
 		else if (!is_absolute_path(spclocation))
 		{
-			if (target_gp_dbid < 1)
-			{
-				pg_log_error("cannot restore user-defined tablespaces without the --target-gp-dbid option");
-				exit(1);
-			}
-			directory = psprintf("%s/%s/%d", basedir, spclocation, target_gp_dbid);
+			/*
+			 * Cloudberry: an in-place tablespace has no dbid subdirectory.
+			 * Its version directory is directly in pg_tblspc/<oid>.
+			 */
+			directory = psprintf("%s/%s", basedir, spclocation);
 		}
 		else
 		{
@@ -1177,7 +1176,8 @@ CreateBackupStreamer(char *archive_name, char *spclocation,
 		}
 		streamer = bbstreamer_extractor_new(directory,
 											get_tablespace_link_target,
-											progress_update_filename);
+											progress_update_filename,
+											forceoverwrite);
 	}
 	else
 	{
@@ -2087,14 +2087,19 @@ BaseBackup(char *compression_algorithm, char *compression_detail,
 			char	   *path = PQgetvalue(res, i, 1);
 			
 			if (is_absolute_path(path))
+			{
 				path = unconstify(char *, get_tablespace_mapping(path));
+				snprintf(path_with_subdir, MAXPGPATH, "%s/%d/%s", path,
+						 target_gp_dbid, GP_TABLESPACE_VERSION_DIRECTORY);
+			}
 			else
 			{
 				/* This is an in-place tablespace, so prepend basedir. */
 				path = psprintf("%s/%s", basedir, path);
+				/* Cloudberry: an in-place tablespace has no dbid directory. */
+				snprintf(path_with_subdir, MAXPGPATH, "%s/%s", path,
+						 GP_TABLESPACE_VERSION_DIRECTORY);
 			}
-
-			snprintf(path_with_subdir, MAXPGPATH, "%s/%d/%s", path, target_gp_dbid, GP_TABLESPACE_VERSION_DIRECTORY);
 
 			verify_dir_is_empty_or_create(path_with_subdir, &made_tablespace_dirs, &found_tablespace_dirs);
 		}
