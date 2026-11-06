@@ -281,9 +281,13 @@ ROLLBACK;
 -- and gp_interconnect_type=tcp is still previous behavior (watch one QE).
 
 -- block QE1 and QE3, generate an error on QE2
-select gp_inject_fault('exec_mpp_query_start', 'sleep', '', '', '', 1, 1, 10, 2);
-select gp_inject_fault('exec_mpp_query_start', 'error', 3);
-select gp_inject_fault('exec_mpp_query_start', 'sleep', '', '', '', 1, 1, 10, 4);
+--
+-- Limit the faults to this session, otherwise another backend dispatching a
+-- query in the meantime, such as an auto-analyze worker, may trigger them
+-- first and this query would not hit any fault at all.
+select gp_inject_fault('exec_mpp_query_start', 'sleep', '', '', '', 1, 1, 10, 2, current_setting('gp_session_id')::int);
+select gp_inject_fault('exec_mpp_query_start', 'error', 3, current_setting('gp_session_id')::int);
+select gp_inject_fault('exec_mpp_query_start', 'sleep', '', '', '', 1, 1, 10, 4, current_setting('gp_session_id')::int);
 
 set statement_timeout to 150; -- 150ms < MAIN_THREAD_COND_TIMEOUT_MS(250ms)
 -- result depends on gp_interconnect_type:

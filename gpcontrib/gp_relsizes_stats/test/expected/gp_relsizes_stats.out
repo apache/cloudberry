@@ -67,14 +67,16 @@ DROP TABLE
 -- relsizes_collect_stats_once should collect files sizes without pauses
 -- The naptime value is 1ms, so the pauses take at least 10s to process 10k files.
 -- Check that relsizes_collect_stats_once completes in significantly less time.
-SELECT EXTRACT(EPOCH FROM LOCALTIMESTAMP(0)) t1 \gset
+-- Use clock_timestamp() to avoid the rounding error of whole-second timestamps,
+-- and leave enough headroom for slow machines while staying below the 10s floor.
+SELECT EXTRACT(EPOCH FROM clock_timestamp()) t1 \gset
 SELECT relsizes_stats_schema.relsizes_collect_stats_once();
  relsizes_collect_stats_once 
 -----------------------------
  
 (1 row)
 
-SELECT (EXTRACT(EPOCH FROM LOCALTIMESTAMP(0)) - :t1) < 5;
+SELECT (EXTRACT(EPOCH FROM clock_timestamp()) - :t1) < 8;
  ?column? 
 ----------
  t
