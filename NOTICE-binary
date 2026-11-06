@@ -1,0 +1,25 @@
+Apache Cloudberry (Incubating)
+Copyright 2024-2026 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (http://www.apache.org/).
+
+--------------------------------------------------------------------------------
+The binary convenience packages bundle the following Apache Software
+Foundation product, whose NOTICE contents are reproduced here as required
+by section 4(d) of the Apache License, Version 2.0.
+
+Apache Xerces-C++ 3.3.0 (lib/libxerces-c.so, lib/libxerces-c-3.3.so)
+RPM packages only; DEB packages link against the libxerces-c provided by
+the distribution.
+
+   =========================================================================
+   ==  NOTICE file corresponding to section 4(d) of the Apache License,   ==
+   ==  Version 2.0, in this case for the Apache Xerces distribution.      ==
+   =========================================================================
+
+   This product includes software developed by
+   The Apache Software Foundation (http://www.apache.org/).
+
+   Portions of this software were originally based on the following:
+     - software copyright (c) 1999, IBM Corporation., http://www.ibm.com.
