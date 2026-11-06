@@ -17,7 +17,9 @@ OBJS = \
 	isolationtester.o \
 	specparse.o
 
-all: isolationtester$(X) pg_isolation_regress$(X)
+# Cloudberry: pg_isolation_regress runs gpdiff.pl, so build the links to it
+# here.  The installcheck rules of PGXS modules make only "all".
+all: isolationtester$(X) pg_isolation_regress$(X) gpdiff.pl gpstringsubs.pl
 
 gpstringsubs.pl:
 	rm -f $@ && $(LN_S) $(top_builddir)/src/test/regress/gpstringsubs.pl
