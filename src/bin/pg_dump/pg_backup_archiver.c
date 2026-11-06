@@ -3603,6 +3603,17 @@ _getObjectDescription(PQExpBuffer buf, const TocEntry *te)
 			appendPQExpBuffer(buf, "%s.", fmtId(te->namespace));
 		appendPQExpBufferStr(buf, fmtId(te->tag));
 	}
+	/*
+	 * Cloudberry: a dynamic table is a materialized view, and there is no
+	 * ALTER DYNAMIC TABLE.
+	 */
+	else if (strcmp(type, "DYNAMIC TABLE") == 0)
+	{
+		appendPQExpBufferStr(buf, "MATERIALIZED VIEW ");
+		if (te->namespace && *te->namespace)
+			appendPQExpBuffer(buf, "%s.", fmtId(te->namespace));
+		appendPQExpBufferStr(buf, fmtId(te->tag));
+	}
 	/* LOs just have a name, but it's numeric so must not use fmtId */
 	else if (strcmp(type, "BLOB") == 0)
 	{

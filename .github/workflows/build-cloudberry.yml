@@ -377,6 +377,9 @@ jobs:
               },
               {"test":"ic-walrep",
                "make_configs":["src/test/walrep:installcheck"]
+              },
+              {"test":"ic-pg-dump",
+               "make_configs":["src/bin/pg_dump:installcheck"]
               }
             ]
           }'
