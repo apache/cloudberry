@@ -3,8 +3,8 @@
 -- s|/.*/testtablespace_existing_version_dir/|/ABSPATH/testtablespace_existing_version_dir/|
 -- end_matchsubs
 -- start_matchignore
--- m/WARNING:  tablespace symlink path is too long for TAR/
--- m/DETAIL:  The symlinked path \".*\" will be truncated to 100 characters when sending a TAR to the utilities \(e.g. pg_basebackup\)/
+-- m/DETAIL:  The location is used to create a symlink target from pg_tblspc.*/
+-- m/WARNING:  tablespace location .*is too long for TAR*/
 -- end_matchignore
 \getenv abs_builddir PG_ABS_BUILDDIR
 \set testtablespace :abs_builddir '/testtablespace'
