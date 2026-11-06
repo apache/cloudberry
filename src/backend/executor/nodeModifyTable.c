@@ -3993,9 +3993,6 @@ ExecModifyTable(PlanState *pstate)
 	HeapTuple	oldtuple;
 	ItemPointer tupleid;
 	bool		tuplock;
-	List	   *relinfos = NIL;
-	ListCell   *lc;
-	PartitionTupleRouting *proute = node->mt_partition_tuple_routing;
 
 	CHECK_FOR_INTERRUPTS();
 
@@ -4498,28 +4495,8 @@ ExecModifyTable(PlanState *pstate)
 	/*
 	 * Insert remaining tuples for batch insert.
 	 */
-	if (proute)
-		relinfos = estate->es_tuple_routing_result_relations;
-	else
-		relinfos = estate->es_opened_result_relations;
-
-	/* GPDB_14_MERGE_FIXME:
-	 * We have switched resultRelInfo in INSERT phase of split-update,
-	 * It may cause some issues when executing the batch insert.
-	 * But, when we pass the root resultRelInfo in the INSERT phase of
-	 * split-update, the partition route will find the target resultRelInfo,
-	 * i.e. the resultRelInfo we saved before.
-	 */
-	foreach(lc, relinfos)
-	{
-		resultRelInfo = lfirst(lc);
-		if (resultRelInfo->ri_NumSlots > 0)
-			ExecBatchInsert(node, resultRelInfo,
-							resultRelInfo->ri_Slots,
-							resultRelInfo->ri_PlanSlots,
-							resultRelInfo->ri_NumSlots,
-							estate, node->canSetTag);
-	}
+	if (estate->es_insert_pending_result_relations != NIL)
+		ExecPendingInserts(estate);
 
 	/*
 	 * We're done, but fire AFTER STATEMENT triggers before exiting.
