@@ -23,8 +23,6 @@ analyze dqa_t2;
 -- With the default very small cost, the planner often prefer to just Gather
 -- all the rows to the QD. We want to test the more complicated multi-tage DQA
 -- plans here, without using a huge number of rows.
--- GPDB_14_MERGE_FIXME: `DedupCost` seems to be computed wrongly caused by pg's
--- change of get_agg_clause_costs implementation.
 set gp_motion_cost_per_row=2;
 
 set enable_hashagg=on;

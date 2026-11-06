@@ -1671,7 +1671,7 @@ add_single_dqa_hash_agg_path(PlannerInfo *root,
 										false, /* streaming */
 										dqa_group_clause,
 										NIL,
-										ctx->agg_partial_costs, /* FIXME */
+										ctx->agg_partial_costs,
 										clamp_row_est(dNumDistinctGroups / CdbPathLocus_NumSegments(distinct_locus)));
 
 		path = (Path *) create_agg_path(root,
@@ -1740,7 +1740,7 @@ add_single_dqa_hash_agg_path(PlannerInfo *root,
 											true, /* streaming */
 											dqa_group_clause,
 											NIL,
-											ctx->agg_partial_costs, /* FIXME */
+											ctx->agg_partial_costs,
 											estimate_num_groups_on_segment(dNumDistinctGroups,
 																		   input_rows, path->locus));
 
@@ -1755,7 +1755,7 @@ add_single_dqa_hash_agg_path(PlannerInfo *root,
 										false, /* streaming */
 										dqa_group_clause,
 										NIL,
-										ctx->agg_partial_costs, /* FIXME */
+										ctx->agg_partial_costs,
 										clamp_row_est(dNumDistinctGroups / CdbPathLocus_NumSegments(group_locus)));
 
 		path = (Path *) create_agg_path(root,
@@ -1793,7 +1793,7 @@ add_single_dqa_hash_agg_path(PlannerInfo *root,
 										true, /* streaming */
 										dqa_group_clause,
 										NIL,
-										ctx->agg_partial_costs, /* FIXME */
+										ctx->agg_partial_costs,
 										estimate_num_groups_on_segment(dNumDistinctGroups,
 																	   input_rows, path->locus));
 
@@ -1808,7 +1808,7 @@ add_single_dqa_hash_agg_path(PlannerInfo *root,
 										false, /* streaming */
 										dqa_group_clause,
 										NIL,
-										ctx->agg_partial_costs, /* FIXME */
+										ctx->agg_partial_costs,
 										clamp_row_est(dNumDistinctGroups / CdbPathLocus_NumSegments(distinct_locus)));
 
 		path = (Path *) create_agg_path(root,
@@ -1901,9 +1901,6 @@ add_multi_dqas_hash_agg_path(PlannerInfo *root,
 										  info->dqa_expr_lst);
 
 	AggClauseCosts DedupCost = {};
-	get_agg_clause_costs(root,
-						 AGGSPLIT_SIMPLE,
-						 &DedupCost);
 
 	if (gp_enable_dqa_pruning)
 	{
