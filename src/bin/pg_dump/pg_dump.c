@@ -2177,7 +2177,7 @@ selectDumpableFunction(FuncInfo *finfo, Archive *fout)
 			simple_oid_list_member(&function_include_oids, finfo->dobj.catId.oid))
 		finfo->dobj.dump = DUMP_COMPONENT_ALL;
 	else if (finfo->dobj.namespace)
-		finfo->dobj.dump = finfo->dobj.namespace->dobj.dump;
+		finfo->dobj.dump = finfo->dobj.namespace->dobj.dump_contains;
 	else
 		finfo->dobj.dump = DUMP_COMPONENT_ALL;
 }
@@ -2202,7 +2202,7 @@ selectDumpableAggregate(AggInfo *agginfo, Archive *fout)
 			simple_oid_list_member(&function_include_oids, agginfo->aggfn.dobj.catId.oid))
 		agginfo->aggfn.dobj.dump = DUMP_COMPONENT_ALL;
 	else if (agginfo->aggfn.dobj.namespace)
-		agginfo->aggfn.dobj.dump = agginfo->aggfn.dobj.namespace->dobj.dump;
+		agginfo->aggfn.dobj.dump = agginfo->aggfn.dobj.namespace->dobj.dump_contains;
 	else
 		agginfo->aggfn.dobj.dump = DUMP_COMPONENT_ALL;
 }
