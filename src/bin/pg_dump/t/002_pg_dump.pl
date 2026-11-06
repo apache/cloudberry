@@ -1596,16 +1596,19 @@ my %tests = (
 		regexp => qr/\n--[^\n]*\nattack/s,
 		like => {},
 	},
-	'CREATE DATABASE regression_invalid...' => {
-		create_order => 1,
-		create_sql => q(
-		    CREATE DATABASE regression_invalid;
-			UPDATE pg_database SET datconnlimit = -2 WHERE datname = 'regression_invalid'),
-		regexp => qr/^CREATE DATABASE regression_invalid/m,
-
-		# invalid databases should never be dumped
-		like => {},
-	},
+# Disabled, because Cloudberry 2 does not have invalid databases.  This case
+# came with 39c093b8520.  It tests c66a7d75e65, which added the invalid state
+# and made pg_dumpall skip such databases, but Cloudberry 2 does not have it.
+#	'CREATE DATABASE regression_invalid...' => {
+#		create_order => 1,
+#		create_sql => q(
+#		    CREATE DATABASE regression_invalid;
+#			UPDATE pg_database SET datconnlimit = -2 WHERE datname = 'regression_invalid'),
+#		regexp => qr/^CREATE DATABASE regression_invalid/m,
+#
+#		# invalid databases should never be dumped
+#		like => {},
+#	},
 
 	'CREATE ACCESS METHOD gist2' => {
 		create_order => 52,
@@ -2446,8 +2449,11 @@ my %tests = (
 		lz4 => 1,
 		like =>
 		  { %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
-		unlike =>
-		  { exclude_dump_test_schema => 1, no_toast_compression => 1, },
+		unlike => {
+			exclude_dump_test_schema => 1,
+			no_toast_compression => 1,
+			only_dump_measurement => 1,
+		},
 	},
 
 	'CREATE MATERIALIZED VIEW matview_ivm' => {
@@ -2462,7 +2468,10 @@ my %tests = (
 			/xm,
 		like =>
 		  { %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
-		unlike => { exclude_dump_test_schema => 1, },
+		unlike => {
+			exclude_dump_test_schema => 1,
+			only_dump_measurement => 1,
+		},
 	},
 
 	'CREATE DYNAMIC TABLE dynamic_table' => {
@@ -2477,7 +2486,10 @@ my %tests = (
 			}xm,
 		like =>
 		{ %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
-		unlike => { exclude_dump_test_schema => 1, },
+		unlike => {
+			exclude_dump_test_schema => 1,
+			only_dump_measurement => 1,
+		},
 	},
 
 	'CREATE APPEND OPTIMIZED ao_table' => {
@@ -2498,6 +2510,7 @@ my %tests = (
 			exclude_test_table       => 1,
 		},
 		unlike => {
+			only_dump_measurement => 1,
 			only_dump_test_table => 1,
 			exclude_dump_test_schema => 1,
 		},
@@ -2824,8 +2837,11 @@ my %tests = (
 		lz4 => 1,
 		like =>
 		  { %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
-		unlike =>
-		  { exclude_dump_test_schema => 1, no_toast_compression => 1, },
+		unlike => {
+			exclude_dump_test_schema => 1,
+			no_toast_compression => 1,
+			only_dump_measurement => 1,
+		},
 	},
 
 	'CREATE TABLE measurement PARTITIONED BY' => {
@@ -3289,7 +3305,10 @@ my %tests = (
 		    /xms,
 		like =>
 		  { %full_runs, %dump_test_schema_runs, section_post_data => 1, },
-		unlike => { exclude_dump_test_schema => 1, },
+		unlike => {
+			exclude_dump_test_schema => 1,
+			only_dump_measurement => 1,
+		},
 	},
 
 	'CREATE STATISTICS extended_stats_expression' => {
@@ -3301,7 +3320,10 @@ my %tests = (
 		    /xms,
 		like =>
 		  { %full_runs, %dump_test_schema_runs, section_post_data => 1, },
-		unlike => { exclude_dump_test_schema => 1, },
+		unlike => {
+			exclude_dump_test_schema => 1,
+			only_dump_measurement => 1,
+		},
 	},
 
 	'CREATE SEQUENCE test_table_col1_seq' => {
