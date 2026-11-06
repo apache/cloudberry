@@ -441,6 +441,26 @@ CGroup::PocInsert(COptimizationContext *poc)
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CGroup::FLookupFinds
+//
+//	@doc:
+//		Check if looking up the requirements of a context of this group finds
+//		that context. If requirements change after their context was
+//		inserted, a group can hold several contexts with equal requirements,
+//		of which a lookup finds only one.
+//
+//---------------------------------------------------------------------------
+BOOL
+CGroup::FLookupFinds(COptimizationContext *poc)
+{
+	ShtAcc shta(Sht(), *poc);
+
+	return poc == shta.Find();
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CGroup::PgexprBest
 //
 //	@doc:
