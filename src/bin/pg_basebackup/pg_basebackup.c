@@ -233,6 +233,7 @@ static bool reached_end_position(XLogRecPtr segendpos, uint32 timeline,
 								 bool segment_finished);
 
 static const char *get_tablespace_mapping(const char *dir);
+static const char *get_tablespace_link_target(const char *linktarget);
 static void tablespace_list_append(const char *arg);
 static void WriteInternalConfFile(void);
 
@@ -1157,12 +1158,11 @@ CreateBackupStreamer(char *archive_name, char *spclocation,
 			directory = basedir;
 		else if (!is_absolute_path(spclocation))
 		{
-			if (target_gp_dbid < 1)
-			{
-				pg_log_error("cannot restore user-defined tablespaces without the --target-gp-dbid option");
-				exit(1);
-			}
-			directory = psprintf("%s/%s/%d", basedir, spclocation, target_gp_dbid);
+			/*
+			 * Cloudberry: an in-place tablespace has no dbid subdirectory.
+			 * Its version directory is directly in pg_tblspc/<oid>.
+			 */
+			directory = psprintf("%s/%s", basedir, spclocation);
 		}
 		else
 		{
@@ -1171,11 +1171,13 @@ CreateBackupStreamer(char *archive_name, char *spclocation,
 				pg_log_error("cannot restore user-defined tablespaces without the --target-gp-dbid option");
 				exit(1);
 			}
-			directory = psprintf("%s/%d", spclocation, target_gp_dbid);
+			directory = psprintf("%s/%d", get_tablespace_mapping(spclocation),
+								 target_gp_dbid);
 		}
 		streamer = bbstreamer_extractor_new(directory,
-											get_tablespace_mapping,
-											progress_update_filename);
+											get_tablespace_link_target,
+											progress_update_filename,
+											forceoverwrite);
 	}
 	else
 	{
@@ -1196,7 +1198,7 @@ CreateBackupStreamer(char *archive_name, char *spclocation,
 		else
 		{
 			snprintf(archive_filename, sizeof(archive_filename),
-					 "%s/%s/%d", basedir, archive_name, target_gp_dbid);
+					 "%s/%s", basedir, archive_name);
 			archive_file = NULL;
 		}
 
@@ -1266,7 +1268,7 @@ CreateBackupStreamer(char *archive_name, char *spclocation,
 	 * we're talking to such a server we'll need to add the terminator here.
 	 */
 	if (must_parse_archive)
-		streamer = bbstreamer_tar_parser_new(streamer, target_gp_dbid);
+		streamer = bbstreamer_tar_parser_new(streamer);
 	else if (expect_unterminated_tarfile)
 		streamer = bbstreamer_tar_terminator_new(streamer);
 
@@ -1704,6 +1706,18 @@ get_tablespace_mapping(const char *dir)
 	return dir;
 }
 
+/*
+ * Cloudberry: a link in pg_tblspc points to the tablespace location, but the
+ * data of each segment is in the subdirectory of its dbid.  Apply the
+ * tablespace mapping to the location first, and then add the target dbid.
+ */
+static const char *
+get_tablespace_link_target(const char *linktarget)
+{
+	return psprintf("%s/%d", get_tablespace_mapping(linktarget),
+					target_gp_dbid);
+}
+
 static void
 add_to_exclude_list(PQExpBuffer buf, bool use_new_option_syntax,
 					const char *exclude)
@@ -2073,14 +2087,19 @@ BaseBackup(char *compression_algorithm, char *compression_detail,
 			char	   *path = PQgetvalue(res, i, 1);
 			
 			if (is_absolute_path(path))
+			{
 				path = unconstify(char *, get_tablespace_mapping(path));
+				snprintf(path_with_subdir, MAXPGPATH, "%s/%d/%s", path,
+						 target_gp_dbid, GP_TABLESPACE_VERSION_DIRECTORY);
+			}
 			else
 			{
 				/* This is an in-place tablespace, so prepend basedir. */
 				path = psprintf("%s/%s", basedir, path);
+				/* Cloudberry: an in-place tablespace has no dbid directory. */
+				snprintf(path_with_subdir, MAXPGPATH, "%s/%s", path,
+						 GP_TABLESPACE_VERSION_DIRECTORY);
 			}
-
-			snprintf(path_with_subdir, MAXPGPATH, "%s/%d/%s", path, target_gp_dbid, GP_TABLESPACE_VERSION_DIRECTORY);
 
 			verify_dir_is_empty_or_create(path_with_subdir, &made_tablespace_dirs, &found_tablespace_dirs);
 		}
@@ -2153,7 +2172,13 @@ BaseBackup(char *compression_algorithm, char *compression_detail,
 	{
 		/* Receive a single tar stream with everything. */
 		ReceiveArchiveStream(conn, client_compress);
-		WriteInternalConfFile();
+
+		/*
+		 * Cloudberry: write internal.auto.conf only into a plain format
+		 * backup in a local directory, as before the REL_16_9 merge.
+		 */
+		if (backup_target == NULL && format == 'p')
+			WriteInternalConfFile();
 	}
 	else
 	{
@@ -2186,8 +2211,10 @@ BaseBackup(char *compression_algorithm, char *compression_detail,
 			ReceiveTarFile(conn, archive_name, spclocation, i,
 						   client_compress);
 		}
-		
-		WriteInternalConfFile();
+
+		/* Cloudberry: see the comment for the single archive stream. */
+		if (backup_target == NULL && format == 'p')
+			WriteInternalConfFile();
 
 		
 		/*

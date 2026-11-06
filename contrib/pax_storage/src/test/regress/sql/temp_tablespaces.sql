@@ -1,3 +1,7 @@
+-- start_matchignore
+-- m/DETAIL:  The location is used to create a symlink target from pg_tblspc.*/
+-- m/WARNING:  tablespace location .*is too long for TAR*/
+-- end_matchignore
 \getenv abs_builddir PG_ABS_BUILDDIR
 \set temp_tablespace :abs_builddir '/testtablespace_temp_tablespace'
 \set dddefault_tablepace :abs_builddir '/testtablespace_default_tablespace'
