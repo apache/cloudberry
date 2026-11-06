@@ -22,10 +22,33 @@
 #define CDB_MOTION_LOST_CONTACT_STRING "Interconnect error master lost contact with segment."
 
 struct CdbDispatchResults; /* #include "cdb/cdbdispatchresult.h" */
+struct CdbDispatchResult;  /* #include "cdb/cdbdispatchresult.h" */
 struct CdbPgResults;
 struct Gang; /* #include "cdb/cdbgang.h" */
 struct ResourceOwnerData;
+struct pgNotify; /* #include "libpq-fe.h" */
 enum GangType;
+
+/*
+ * Hook for an extension to consume a NOTIFY sent by a QE on its dispatch
+ * connection, alongside the sequence and endpoint-ack channels the dispatcher
+ * handles itself.  Return true if the notify was consumed, false to let the
+ * dispatcher fall through to its own handling.
+ *
+ * 'dispatchResult' identifies the sending QE and, through its meleeResults,
+ * gives access to every connection of the current dispatch -- which is what
+ * lets a handler answer on other QEs' connections (see GP_SIDEBAND_MESSAGE).
+ *
+ * The hook runs inside the QD's dispatch-result processing, which is reached
+ * from the interconnect wait loop while the query is executing.  It must
+ * therefore be quick, must not re-enter the dispatcher, and should not throw
+ * for conditions it can recover from: an error here propagates into the
+ * running query.  The PGnotify belongs to the caller and is freed after the
+ * hook returns, so a handler must copy anything it wants to keep.
+ */
+typedef bool (*cdbdisp_notify_hook_type) (struct CdbDispatchResult *dispatchResult,
+										  struct pgNotify *notify);
+extern PGDLLIMPORT cdbdisp_notify_hook_type cdbdisp_notify_hook;
 
 /*
  * Types of message to QE when we wait for it.
