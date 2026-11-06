@@ -135,7 +135,7 @@ class SegRecovery(object):
         recovery_base = RecoveryBase(__file__)
 
         def signal_handler(sig, frame):
-            recovery_base.logger.warning("Recieved termination signal, stopping gpsegrecovery")
+            recovery_base.logger.warning("Received termination signal, stopping gpsegrecovery")
 
             while not recovery_base.pool.isDone():
 
