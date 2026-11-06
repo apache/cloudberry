@@ -3,7 +3,7 @@
  * pg_hint_plan.c
  *		  hinting on how to execute a query for PostgreSQL
  *
- * Copyright (c) 2012-2020, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ * Copyright (c) 2012-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  *
  *-------------------------------------------------------------------------
  */
@@ -11,12 +11,14 @@
 
 #include "postgres.h"
 #include "access/genam.h"
-#include "access/hash.h"
 #include "access/heapam.h"
 #include "access/relation.h"
+#include "catalog/namespace.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_index.h"
+#include "catalog/pg_proc.h"
 #include "commands/prepare.h"
+#include "commands/proclang.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "nodes/nodeFuncs.h"
@@ -24,14 +26,9 @@
 #include "optimizer/appendinfo.h"
 #include "optimizer/clauses.h"
 #include "optimizer/cost.h"
-/*
- * GPDB does not support geqo planner
- */
-#if 0
 #include "optimizer/geqo.h"
-#endif
 #include "optimizer/joininfo.h"
-#include "optimizer/orca.h"
+#include "optimizer/orca.h"		/* CBDB: plan_hint_hook */
 #include "optimizer/optimizer.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
@@ -42,9 +39,9 @@
 #include "parser/analyze.h"
 #include "parser/parsetree.h"
 #include "parser/scansup.h"
-#include "parser/scanner.h"
 #include "partitioning/partbounds.h"
 #include "tcop/utility.h"
+#include "utils/backend_status.h"
 #include "utils/builtins.h"
 #include "utils/float.h"
 #include "utils/lsyscache.h"
@@ -52,13 +49,16 @@
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
-#include "utils/resowner.h"
+
 #include "catalog/pg_class.h"
 
 #include "executor/spi.h"
 #include "catalog/pg_type.h"
 
 #include "plpgsql.h"
+
+/* partially copied from pg_stat_statements */
+#include "normalize_query.h"
 
 /* PostgreSQL */
 #include "access/htup_details.h"
@@ -98,6 +98,8 @@ PG_MODULE_MAGIC;
 #define HINT_LEADING			"Leading"
 #define HINT_SET				"Set"
 #define HINT_ROWS				"Rows"
+#define HINT_MEMOIZE			"Memoize"
+#define HINT_NOMEMOIZE			"NoMemoize"
 
 #define HINT_ARRAY_DEFAULT_INITSIZE 8
 
@@ -126,7 +128,8 @@ enum
 {
 	ENABLE_NESTLOOP = 0x01,
 	ENABLE_MERGEJOIN = 0x02,
-	ENABLE_HASHJOIN = 0x04
+	ENABLE_HASHJOIN = 0x04,
+	ENABLE_MEMOIZE	= 0x08
 } JOIN_TYPE_BITS;
 
 #define ENABLE_ALL_SCAN (ENABLE_SEQSCAN | ENABLE_INDEXSCAN | \
@@ -164,6 +167,8 @@ typedef enum HintKeyword
 	HINT_KEYWORD_SET,
 	HINT_KEYWORD_ROWS,
 	HINT_KEYWORD_PARALLEL,
+	HINT_KEYWORD_MEMOIZE,
+	HINT_KEYWORD_NOMEMOIZE,
 
 	HINT_KEYWORD_UNRECOGNIZED
 } HintKeyword;
@@ -186,11 +191,9 @@ typedef Hint *(*HintCreateFunction) (const char *hint_str,
 typedef void (*HintDeleteFunction) (Hint *hint);
 typedef void (*HintDescFunction) (Hint *hint, StringInfo buf, bool nolf);
 typedef int (*HintCmpFunction) (const Hint *a, const Hint *b);
-typedef const char *(*HintParseFunction) (Hint *hint, HintState *hstate,
-										  Query *parse, const char *str);
+typedef const char *(*HintParseFunction) (Hint *hint, const char *str);
 
 /* hint types */
-#define NUM_HINT_TYPE	6
 typedef enum HintType
 {
 	HINT_TYPE_SCAN_METHOD,
@@ -198,7 +201,10 @@ typedef enum HintType
 	HINT_TYPE_LEADING,
 	HINT_TYPE_SET,
 	HINT_TYPE_ROWS,
-	HINT_TYPE_PARALLEL
+	HINT_TYPE_PARALLEL,
+	HINT_TYPE_MEMOIZE,
+
+	NUM_HINT_TYPE
 } HintType;
 
 typedef enum HintTypeBitmap
@@ -213,8 +219,12 @@ static const char *HintTypeName[] = {
 	"leading",
 	"set",
 	"rows",
-	"parallel"
+	"parallel",
+	"memoize"
 };
+
+StaticAssertDecl(sizeof(HintTypeName) / sizeof(char *) == NUM_HINT_TYPE,
+				 "HintTypeName and HintType don't match");
 
 /* hint status */
 typedef enum HintStatus
@@ -229,17 +239,20 @@ typedef enum HintStatus
 #define hint_state_enabled(hint) ((hint)->base.state == HINT_STATE_NOTUSED || \
 								  (hint)->base.state == HINT_STATE_USED)
 
+/* These variables are used only when debug_level > 1*/
 static unsigned int qno = 0;
 static unsigned int msgqno = 0;
 static char qnostr[32];
+
 static const char *current_hint_str = NULL;
-static HintState *hstate = NULL;
 
 /*
- * However we usually take a hint stirng in post_parse_analyze_hook, we still
- * need to do so in planner_hook when client starts query execution from the
- * bind message on a prepared query. This variable prevent duplicate and
- * sometimes harmful hint string retrieval.
+ * We can utilize in-core generated jumble state in post_parse_analyze_hook.
+ * On the other hand there's a case where we're forced to get hints in
+ * planner_hook, where we don't have a jumble state.  If we a query had not a
+ * hint, we need to try to retrieve hints twice or more for one query, which is
+ * the quite common case.  To avoid such case, this variables is set true when
+ * we *try* hint retrieval.
  */
 static bool current_hint_retrieved = false;
 
@@ -381,12 +394,14 @@ struct HintState
 	JoinMethodHint **join_hints;		/* parsed join hints */
 	int				init_join_mask;		/* initial value join parameter */
 	List		  **join_hint_level;
+	List		  **memoize_hint_level;
 	LeadingHint	  **leading_hint;		/* parsed Leading hints */
 	SetHint		  **set_hints;			/* parsed Set hints */
 	GucContext		context;			/* which GUC parameters can we set? */
 	RowsHint	  **rows_hints;			/* parsed Rows hints */
 	ParallelHint  **parallel_hints;		/* parsed Parallel hints */
-	int				log_level;		/* debug_print log level */
+	JoinMethodHint **memoize_hints;		/* parsed Memoize hints */
+	int				log_level;			/* CBDB: debug_print level for ORCA */
 };
 
 /*
@@ -399,6 +414,9 @@ typedef struct HintParser
 	HintKeyword			hint_keyword;
 } HintParser;
 
+static bool enable_hint_table_check(bool *newval, void **extra, GucSource source);
+static void assign_enable_hint_table(bool newval, void *extra);
+
 /* Module callbacks */
 void		_PG_init(void);
 void		_PG_fini(void);
@@ -406,31 +424,27 @@ void		_PG_fini(void);
 static void push_hint(HintState *hstate);
 static void pop_hint(void);
 
-static void pg_hint_plan_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jstate);
-static void pg_hint_plan_ProcessUtility(PlannedStmt *pstmt,
-					const char *queryString,
-					bool readOnlyTree,
-					ProcessUtilityContext context,
-					ParamListInfo params, QueryEnvironment *queryEnv,
-					DestReceiver *dest, QueryCompletion *qc);
-static RelOptInfo *
-pg_hint_plan_make_join_rel(PlannerInfo *root, RelOptInfo *rel1, RelOptInfo *rel2);
-static void
-pg_hint_plan_add_paths_to_joinrel(PlannerInfo *root,
-							 RelOptInfo *joinrel,
-							 RelOptInfo *outerrel,
-							 RelOptInfo *innerrel,
-							 JoinType jointype,
-							 SpecialJoinInfo *sjinfo,
-							 List *restrictlist);
-#ifdef USE_ORCA
-static void *external_plan_hint_hook(Query *parse);
-#endif
-static PlannedStmt *pg_hint_plan_planner(Query *parse, const char *query_string, int cursorOptions,
-										 ParamListInfo boundParams, OptimizerOptions *optimizer_options);
+static void pg_hint_plan_post_parse_analyze(ParseState *pstate, Query *query,
+											JumbleState *jstate);
+static PlannedStmt *pg_hint_plan_planner(Query *parse, const char *query_string,
+										 int cursorOptions,
+										 ParamListInfo boundParams,
+										 OptimizerOptions *optimizer_options);
 static RelOptInfo *pg_hint_plan_join_search(PlannerInfo *root,
 											int levels_needed,
 											List *initial_rels);
+static RelOptInfo *make_join_rel_wrapper(PlannerInfo *root, RelOptInfo *rel1,
+										 RelOptInfo *rel2);
+static void add_paths_to_joinrel_wrapper(PlannerInfo *root,
+										 RelOptInfo *joinrel,
+										 RelOptInfo *outerrel,
+										 RelOptInfo *innerrel,
+										 JoinType jointype,
+										 SpecialJoinInfo *sjinfo,
+										 List *restrictlist);
+#ifdef USE_ORCA
+static void *pg_hint_plan_plan_hint_hook(Query *parse);
+#endif
 
 /* Scan method hint callbacks */
 static Hint *ScanMethodHintCreate(const char *hint_str, const char *keyword,
@@ -438,8 +452,7 @@ static Hint *ScanMethodHintCreate(const char *hint_str, const char *keyword,
 static void ScanMethodHintDelete(ScanMethodHint *hint);
 static void ScanMethodHintDesc(ScanMethodHint *hint, StringInfo buf, bool nolf);
 static int ScanMethodHintCmp(const ScanMethodHint *a, const ScanMethodHint *b);
-static const char *ScanMethodHintParse(ScanMethodHint *hint, HintState *hstate,
-									   Query *parse, const char *str);
+static const char *ScanMethodHintParse(ScanMethodHint *hint, const char *str);
 
 /* Join method hint callbacks */
 static Hint *JoinMethodHintCreate(const char *hint_str, const char *keyword,
@@ -447,8 +460,7 @@ static Hint *JoinMethodHintCreate(const char *hint_str, const char *keyword,
 static void JoinMethodHintDelete(JoinMethodHint *hint);
 static void JoinMethodHintDesc(JoinMethodHint *hint, StringInfo buf, bool nolf);
 static int JoinMethodHintCmp(const JoinMethodHint *a, const JoinMethodHint *b);
-static const char *JoinMethodHintParse(JoinMethodHint *hint, HintState *hstate,
-									   Query *parse, const char *str);
+static const char *JoinMethodHintParse(JoinMethodHint *hint, const char *str);
 
 /* Leading hint callbacks */
 static Hint *LeadingHintCreate(const char *hint_str, const char *keyword,
@@ -456,8 +468,7 @@ static Hint *LeadingHintCreate(const char *hint_str, const char *keyword,
 static void LeadingHintDelete(LeadingHint *hint);
 static void LeadingHintDesc(LeadingHint *hint, StringInfo buf, bool nolf);
 static int LeadingHintCmp(const LeadingHint *a, const LeadingHint *b);
-static const char *LeadingHintParse(LeadingHint *hint, HintState *hstate,
-									Query *parse, const char *str);
+static const char *LeadingHintParse(LeadingHint *hint, const char *str);
 
 /* Set hint callbacks */
 static Hint *SetHintCreate(const char *hint_str, const char *keyword,
@@ -465,8 +476,7 @@ static Hint *SetHintCreate(const char *hint_str, const char *keyword,
 static void SetHintDelete(SetHint *hint);
 static void SetHintDesc(SetHint *hint, StringInfo buf, bool nolf);
 static int SetHintCmp(const SetHint *a, const SetHint *b);
-static const char *SetHintParse(SetHint *hint, HintState *hstate, Query *parse,
-								const char *str);
+static const char *SetHintParse(SetHint *hint, const char *str);
 
 /* Rows hint callbacks */
 static Hint *RowsHintCreate(const char *hint_str, const char *keyword,
@@ -474,8 +484,7 @@ static Hint *RowsHintCreate(const char *hint_str, const char *keyword,
 static void RowsHintDelete(RowsHint *hint);
 static void RowsHintDesc(RowsHint *hint, StringInfo buf, bool nolf);
 static int RowsHintCmp(const RowsHint *a, const RowsHint *b);
-static const char *RowsHintParse(RowsHint *hint, HintState *hstate,
-								 Query *parse, const char *str);
+static const char *RowsHintParse(RowsHint *hint, const char *str);
 
 /* Parallel hint callbacks */
 static Hint *ParallelHintCreate(const char *hint_str, const char *keyword,
@@ -483,29 +492,21 @@ static Hint *ParallelHintCreate(const char *hint_str, const char *keyword,
 static void ParallelHintDelete(ParallelHint *hint);
 static void ParallelHintDesc(ParallelHint *hint, StringInfo buf, bool nolf);
 static int ParallelHintCmp(const ParallelHint *a, const ParallelHint *b);
-static const char *ParallelHintParse(ParallelHint *hint, HintState *hstate,
-									 Query *parse, const char *str);
+static const char *ParallelHintParse(ParallelHint *hint, const char *str);
+
+static Hint *MemoizeHintCreate(const char *hint_str, const char *keyword,
+							   HintKeyword hint_keyword);
 
 static void quote_value(StringInfo buf, const char *value);
 
 static const char *parse_quoted_value(const char *str, char **word,
 									  bool truncate);
-static void
-set_plain_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte);
-void pg_hint_plan_join_search_one_level(PlannerInfo *root, int level);
+
 void pg_hint_plan_set_rel_pathlist(PlannerInfo * root, RelOptInfo *rel,
 								   Index rti, RangeTblEntry *rte);
-RelOptInfo *pg_hint_plan_make_join_rel(PlannerInfo *root, RelOptInfo *rel1,
-									   RelOptInfo *rel2);
+static void set_plain_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
+								   RangeTblEntry *rte);
 
-static void pg_hint_plan_plpgsql_stmt_beg(PLpgSQL_execstate *estate,
-										  PLpgSQL_stmt *stmt);
-static void pg_hint_plan_plpgsql_stmt_end(PLpgSQL_execstate *estate,
-										  PLpgSQL_stmt *stmt);
-static void plpgsql_query_erase_callback(ResourceReleasePhase phase,
-										 bool isCommit,
-										 bool isTopLevel,
-										 void *arg);
 static int set_config_option_noerror(const char *name, const char *value,
 						  GucContext context, GucSource source,
 						  GucAction action, bool changeVal, int elevel);
@@ -516,12 +517,6 @@ static int set_config_int32_option(const char *name, int32 value,
 static int set_config_double_option(const char *name, double value,
 									GucContext context);
 
-static char *generate_normalized_query(JumbleState *jstate, const char *query,
-						  int query_loc, int *query_len_p, int encoding);
-static void fill_in_constant_lengths(JumbleState *jstate, const char *query,
-						 int query_loc);
-static int	comp_location(const void *a, const void *b);
-
 /* GUC variables */
 static bool	pg_hint_plan_enable_hint = true;
 static int debug_level = 0;
@@ -529,12 +524,15 @@ static int	pg_hint_plan_parse_message_level = INFO;
 static int	pg_hint_plan_debug_message_level = LOG;
 /* Default is off, to keep backward compatibility. */
 static bool	pg_hint_plan_enable_hint_table = false;
+static bool	pg_hint_plan_hints_anywhere = false;
 
 static int plpgsql_recurse_level = 0;		/* PLpgSQL recursion level            */
 static int recurse_level = 0;		/* recursion level incl. direct SPI calls */
 static int hint_inhibit_level = 0;			/* Inhibit hinting if this is above 0 */
 											/* (This could not be above 1)        */
 static int max_hint_nworkers = -1;		/* Maximum nworkers of Workers hints */
+
+static bool	hint_table_deactivated = false;
 
 static const struct config_enum_entry parse_messages_level_options[] = {
 	{"debug", DEBUG2, true},
@@ -576,17 +574,23 @@ static post_parse_analyze_hook_type prev_post_parse_analyze_hook = NULL;
 static planner_hook_type prev_planner = NULL;
 static join_search_hook_type prev_join_search = NULL;
 static set_rel_pathlist_hook_type prev_set_rel_pathlist = NULL;
-static ProcessUtility_hook_type prev_ProcessUtility_hook = NULL;
+static needs_fmgr_hook_type prev_needs_fmgr_hook = NULL;
+static fmgr_hook_type prev_fmgr_hook = NULL;
 static ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 static make_join_rel_hook_type prev_make_join_rel_hook = NULL;
 static add_paths_to_joinrel_hook_type prev_add_paths_to_joinrel_hook = NULL;
-
 #ifdef USE_ORCA
 static plan_hint_hook_type prev_plan_hint_hook = NULL;
 #endif
 
 /* Hold reference to currently active hint */
 static HintState *current_hint_state = NULL;
+
+/*
+ * Reference to OID of PL/pgsql language, saved on first lookup at a
+ * PL function.
+ */
+static Oid pg_hint_plan_pgpg_oid = InvalidOid;
 
 /*
  * List of hint contexts.  We treat the head of the list as the Top of the
@@ -623,19 +627,73 @@ static const HintParser parsers[] = {
 	{HINT_SET, SetHintCreate, HINT_KEYWORD_SET},
 	{HINT_ROWS, RowsHintCreate, HINT_KEYWORD_ROWS},
 	{HINT_PARALLEL, ParallelHintCreate, HINT_KEYWORD_PARALLEL},
+	{HINT_MEMOIZE, MemoizeHintCreate, HINT_KEYWORD_MEMOIZE},
+	{HINT_NOMEMOIZE, MemoizeHintCreate, HINT_KEYWORD_NOMEMOIZE},
 
 	{NULL, NULL, HINT_KEYWORD_UNRECOGNIZED}
 };
 
-PLpgSQL_plugin  plugin_funcs = {
-	NULL,
-	NULL,
-	NULL,
-	pg_hint_plan_plpgsql_stmt_beg,
-	pg_hint_plan_plpgsql_stmt_end,
-	NULL,
-	NULL,
-};
+static bool
+pg_hint_plan_is_plpgsql_function(Oid funcoid)
+{
+	HeapTuple		procTuple;
+	Form_pg_proc	procStruct;
+	bool			result;
+
+	procTuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcoid));
+	if (!HeapTupleIsValid(procTuple))
+		return false;
+
+	procStruct = (Form_pg_proc) GETSTRUCT(procTuple);
+
+	if (!OidIsValid(pg_hint_plan_pgpg_oid))
+		pg_hint_plan_pgpg_oid = get_language_oid("plpgsql", false);
+
+	result = (procStruct->prolang == pg_hint_plan_pgpg_oid);
+
+	ReleaseSysCache(procTuple);
+
+	return result;
+}
+
+/*
+ * Used as needs_fmgr_hook. All plpgsql functions needs this hook to properly
+ * track the nested depth of plpgsql calls.
+ */
+static bool
+pg_hint_plan_needs_fmgr_hook(Oid funcoid)
+{
+	if (prev_needs_fmgr_hook &&
+		(*prev_needs_fmgr_hook)(funcoid))
+		return true;
+
+	return pg_hint_plan_is_plpgsql_function(funcoid);
+}
+
+static void
+pg_hint_plan_fmgr_hook(FmgrHookEventType event,
+					   FmgrInfo *flinfo, Datum *private)
+{
+	if (prev_fmgr_hook)
+		(*prev_fmgr_hook) (event, flinfo, private);
+
+	switch (event)
+	{
+		case FHET_START:
+			plpgsql_recurse_level++;
+			Assert(plpgsql_recurse_level > 0);
+			break;
+		case FHET_END:
+		case FHET_ABORT:	/* may be an exception */
+			plpgsql_recurse_level--;
+			Assert(plpgsql_recurse_level >= 0);
+			break;
+		default:
+			break;
+	}
+
+	return;
+}
 
 /*
  * pg_hint_ExecutorEnd
@@ -648,7 +706,7 @@ PLpgSQL_plugin  plugin_funcs = {
 static void
 pg_hint_ExecutorEnd(QueryDesc *queryDesc)
 {
-	if (plpgsql_recurse_level <= 0)
+	if (plpgsql_recurse_level == 0)
 		current_hint_retrieved = false;
 
 	if (prev_ExecutorEnd)
@@ -663,8 +721,6 @@ pg_hint_ExecutorEnd(QueryDesc *queryDesc)
 void
 _PG_init(void)
 {
-	PLpgSQL_plugin	**var_ptr;
-
 	/* Define custom GUC variables. */
 	DefineCustomBoolVariable("pg_hint_plan.enable_hint",
 			 "Force planner to use plans specified in the hint comment preceding to the query.",
@@ -720,6 +776,17 @@ _PG_init(void)
 							 false,
 							 PGC_USERSET,
 							 0,
+							 enable_hint_table_check,
+							 assign_enable_hint_table,
+							 NULL);
+
+	DefineCustomBoolVariable("pg_hint_plan.hints_anywhere",
+							 "Read hints from anywhere in a query.",
+							 "This option lets pg_hint_plan ignore syntax so be cautious for false reads.",
+							 &pg_hint_plan_hints_anywhere,
+							 false,
+							 PGC_USERSET,
+							 0,
 							 NULL,
 							 NULL,
 							 NULL);
@@ -728,32 +795,34 @@ _PG_init(void)
 
 	/* Install hooks. */
 	prev_post_parse_analyze_hook = post_parse_analyze_hook;
-	post_parse_analyze_hook = pg_hint_plan_post_parse_analyze; /* call get_current_hint_string get the hint string */
+	post_parse_analyze_hook = pg_hint_plan_post_parse_analyze;
 	prev_planner = planner_hook;
-	planner_hook = pg_hint_plan_planner; /* get the hint string in sql, decided hints */
+	planner_hook = pg_hint_plan_planner;
 	prev_join_search = join_search_hook;
 	join_search_hook = pg_hint_plan_join_search;
 	prev_set_rel_pathlist = set_rel_pathlist_hook;
 	set_rel_pathlist_hook = pg_hint_plan_set_rel_pathlist;
-	prev_ProcessUtility_hook = ProcessUtility_hook;
-	ProcessUtility_hook = pg_hint_plan_ProcessUtility;
+	prev_fmgr_hook = fmgr_hook;
+	fmgr_hook = pg_hint_plan_fmgr_hook;
+	prev_needs_fmgr_hook = needs_fmgr_hook;
+	needs_fmgr_hook = pg_hint_plan_needs_fmgr_hook;
 	prev_ExecutorEnd = ExecutorEnd_hook;
 	ExecutorEnd_hook = pg_hint_ExecutorEnd;
+
+	/*
+	 * CBDB: join method hints are applied through backend hooks instead of
+	 * private copies of core join-search code (core.c and make_join_rel.c in
+	 * upstream).
+	 */
 	prev_make_join_rel_hook = make_join_rel_hook;
-	make_join_rel_hook = pg_hint_plan_make_join_rel;
+	make_join_rel_hook = make_join_rel_wrapper;
 	prev_add_paths_to_joinrel_hook = add_paths_to_joinrel_hook;
-	add_paths_to_joinrel_hook = pg_hint_plan_add_paths_to_joinrel;
-	
+	add_paths_to_joinrel_hook = add_paths_to_joinrel_wrapper;
 #ifdef USE_ORCA
+	/* CBDB: let ORCA consume the parsed hints */
 	prev_plan_hint_hook = plan_hint_hook;
-	plan_hint_hook = external_plan_hint_hook;
+	plan_hint_hook = pg_hint_plan_plan_hint_hook;
 #endif
-
-	/* setup PL/pgSQL plugin hook */
-	var_ptr = (PLpgSQL_plugin **) find_rendezvous_variable("PLpgSQL_plugin");
-	*var_ptr = &plugin_funcs;
-
-	RegisterResourceReleaseCallback(plpgsql_query_erase_callback, NULL);
 }
 
 /*
@@ -766,11 +835,11 @@ _PG_fini(void)
 	PLpgSQL_plugin	**var_ptr;
 
 	/* Uninstall hooks. */
-	post_parse_analyze_hook = prev_post_parse_analyze_hook;
 	planner_hook = prev_planner;
 	join_search_hook = prev_join_search;
 	set_rel_pathlist_hook = prev_set_rel_pathlist;
-	ProcessUtility_hook = prev_ProcessUtility_hook;
+	needs_fmgr_hook = prev_needs_fmgr_hook;
+	fmgr_hook = prev_fmgr_hook;
 	ExecutorEnd_hook = prev_ExecutorEnd;
 	make_join_rel_hook = prev_make_join_rel_hook;
 	add_paths_to_joinrel_hook = prev_add_paths_to_joinrel_hook;
@@ -781,6 +850,31 @@ _PG_fini(void)
 	/* uninstall PL/pgSQL plugin hook */
 	var_ptr = (PLpgSQL_plugin **) find_rendezvous_variable("PLpgSQL_plugin");
 	*var_ptr = NULL;
+}
+
+static bool
+enable_hint_table_check(bool *newval, void **extra, GucSource source)
+{
+	if (*newval)
+	{
+		EnableQueryId();
+
+		if (!IsQueryIdEnabled())
+		{
+			GUC_check_errmsg("table hint is not activated because queryid is not available");
+			GUC_check_errhint("Set compute_query_id to on or auto to use hint table.");
+			return false;
+		}
+	}
+
+	return true;
+}
+
+static void
+assign_enable_hint_table(bool newval, void *extra)
+{
+	if (!newval)
+		hint_table_deactivated = false;
 }
 
 /*
@@ -1024,6 +1118,23 @@ ParallelHintDelete(ParallelHint *hint)
 }
 
 
+static Hint *
+MemoizeHintCreate(const char *hint_str, const char *keyword,
+				  HintKeyword hint_keyword)
+{
+	/*
+	 * MemoizeHintCreate shares the same struct with JoinMethodHint and the
+	 * only difference is the hint type.
+	 */
+	JoinMethodHint *hint =
+		(JoinMethodHint *)JoinMethodHintCreate(hint_str, keyword, hint_keyword);
+
+	hint->base.type = HINT_TYPE_MEMOIZE;
+
+	return (Hint *) hint;
+}
+
+
 static HintState *
 HintStateCreate(void)
 {
@@ -1050,6 +1161,7 @@ HintStateCreate(void)
 	hstate->join_hints = NULL;
 	hstate->init_join_mask = 0;
 	hstate->join_hint_level = NULL;
+	hstate->memoize_hint_level = NULL;
 	hstate->leading_hint = NULL;
 	hstate->context = superuser() ? PGC_SUSET : PGC_USERSET;
 	hstate->set_hints = NULL;
@@ -1741,7 +1853,7 @@ parse_hints(HintState *hstate, Query *parse, const char *str)
 			hint = parser->create_func(head, keyword, parser->hint_keyword);
 
 			/* parser of each hint does parse in a parenthesis. */
-			if ((str = hint->parse_func(hint, hstate, parse, str)) == NULL)
+			if ((str = hint->parse_func(hint, str)) == NULL)
 			{
 				hint->delete_func(hint);
 				pfree(buf.data);
@@ -1796,9 +1908,9 @@ get_hints_from_table(const char *client_query, const char *client_application)
 	const char *search_query =
 		"SELECT hints "
 		"  FROM hint_plan.hints "
-		" WHERE norm_query_string = $1 "
-		"   AND ( application_name = $2 "
-		"    OR application_name = '' ) "
+		" WHERE norm_query_string OPERATOR(pg_catalog.=) $1 "
+		"   AND ( application_name OPERATOR(pg_catalog.=) $2 "
+		"    OR application_name OPERATOR(pg_catalog.=) '' ) "
 		" ORDER BY application_name DESC";
 	static SPIPlanPtr plan = NULL;
 	char   *hints = NULL;
@@ -1807,6 +1919,26 @@ get_hints_from_table(const char *client_query, const char *client_application)
 	char 	nulls[2] = {' ', ' '};
 	text   *qry;
 	text   *app;
+	Oid		namespaceId;
+	bool	hints_table_found = false;
+	uint64		saved_queryid = pgstat_get_my_query_id();
+
+	/*
+	 * Make sure that hint_plan.hints is found before we attempt to look for
+	 * a hint.
+	 */
+	namespaceId = LookupExplicitNamespace("hint_plan", true);
+	if (OidIsValid(namespaceId) &&
+		OidIsValid(get_relname_relid("hints", namespaceId)))
+		hints_table_found = true;
+
+	if (!hints_table_found)
+	{
+		ereport(WARNING,
+				(errmsg ("cannot use the hint table"),
+				 errhint("Run \"CREATE EXTENSION pg_hint_plan\" to create the hint table.")));
+		return NULL;
+	}
 
 	PG_TRY();
 	{
@@ -1836,6 +1968,7 @@ get_hints_from_table(const char *client_query, const char *client_application)
 		values[1] = PointerGetDatum(app);
 
 		SPI_execute_plan(plan, values, nulls, true, 1);
+		pgstat_report_query_id(saved_queryid, true);
 
 		if (SPI_processed > 0)
 		{
@@ -1864,135 +1997,12 @@ get_hints_from_table(const char *client_query, const char *client_application)
 	PG_CATCH();
 	{
 		hint_inhibit_level--;
+		pgstat_report_query_id(saved_queryid, true);
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
 
 	return hints;
-}
-
-/*
- * Get client-supplied query string. Addtion to that the jumbled query is
- * supplied if the caller requested. From the restriction of PGHintPlanJumbleQuery, some
- * kind of query needs special amendments. Reutrns NULL if this query doesn't
- * change the current hint. This function returns NULL also when something
- * wrong has happend and let the caller continue using the current hints.
- */
-static const char *
-get_query_string(ParseState *pstate, Query *query, Query **jumblequery)
-{
-	const char *p = debug_query_string;
-
-	/*
-	 * If debug_query_string is set, it is the top level statement. But in some
-	 * cases we reach here with debug_query_string set NULL for example in the
-	 * case of DESCRIBE message handling or EXECUTE command. We may still see a
-	 * candidate top-level query in pstate in the case.
-	 */
-	if (pstate && pstate->p_sourcetext)
-		p = pstate->p_sourcetext;
-
-	/* We don't see a query string, return NULL */
-	if (!p)
-		return NULL;
-
-	if (jumblequery != NULL)
-		*jumblequery = query;
-
-	if (query->commandType == CMD_UTILITY)
-	{
-		Query *target_query = (Query *)query->utilityStmt;
-
-		/*
-		 * Some CMD_UTILITY statements have a subquery that we can hint on.
-		 * Since EXPLAIN can be placed before other kind of utility statements
-		 * and EXECUTE can be contained other kind of utility statements, these
-		 * conditions are not mutually exclusive and should be considered in
-		 * this order.
-		 */
-		if (IsA(target_query, ExplainStmt))
-		{
-			ExplainStmt *stmt = (ExplainStmt *)target_query;
-
-			Assert(IsA(stmt->query, Query));
-			target_query = (Query *)stmt->query;
-
-			/* strip out the top-level query for further processing */
-			if (target_query->commandType == CMD_UTILITY &&
-				target_query->utilityStmt != NULL)
-				target_query = (Query *)target_query->utilityStmt;
-		}
-
-		if (IsA(target_query, DeclareCursorStmt))
-		{
-			DeclareCursorStmt *stmt = (DeclareCursorStmt *)target_query;
-			Query *query = (Query *)stmt->query;
-
-			/* the target must be CMD_SELECT in this case */
-			Assert(IsA(query, Query) && query->commandType == CMD_SELECT);
-			target_query = query;
-		}
-
-		if (IsA(target_query, CreateTableAsStmt))
-		{
-			CreateTableAsStmt  *stmt = (CreateTableAsStmt *) target_query;
-
-			Assert(IsA(stmt->query, Query));
-			target_query = (Query *) stmt->query;
-
-			/* strip out the top-level query for further processing */
-			if (target_query->commandType == CMD_UTILITY &&
-				target_query->utilityStmt != NULL)
-				target_query = (Query *)target_query->utilityStmt;
-		}
-
-		if (IsA(target_query, ExecuteStmt))
-		{
-			/*
-			 * Use the prepared query for EXECUTE. The Query for jumble
-			 * also replaced with the corresponding one.
-			 */
-			ExecuteStmt *stmt = (ExecuteStmt *)target_query;
-			PreparedStatement  *entry;
-
-			/*
-			 * Silently ignore nonexistent prepared statements. This may happen
-			 * for EXECUTE within a function definition.  Otherwise the
-			 * execution will fail anyway.
-			 */
-			entry = FetchPreparedStatement(stmt->name, false);
-
-			if (entry && entry->plansource->is_valid)
-			{
-				p = entry->plansource->query_string;
-				target_query = (Query *) linitial (entry->plansource->query_list);
-			}
-			else
-			{
-				/* igonre the hint for EXECUTE if invalidated */
-				p = NULL;
-				target_query = NULL;
-			}
-		}
-
-		/* PGHintPlanJumbleQuery accespts only a non-utility Query */
-		if (target_query &&
-			(!IsA(target_query, Query) ||
-			 target_query->utilityStmt != NULL))
-			target_query = NULL;
-
-		if (jumblequery)
-			*jumblequery = target_query;
-	}
-	/*
-	 * Return NULL if pstate is not of top-level query.  We don't need this
-	 * when jumble info is not requested or cannot do this when pstate is NULL.
-	 */
-	else if (!jumblequery && pstate && pstate->p_sourcetext != p &&
-			 strcmp(pstate->p_sourcetext, p) != 0)
-		p = NULL;
-
-	return p;
 }
 
 /*
@@ -2003,7 +2013,7 @@ get_hints_from_comment(const char *p)
 {
 	const char *hint_head;
 	char	   *head;
-	const char	   *tail;
+	const char *tail;
 	int			len;
 
 	if (p == NULL)
@@ -2013,33 +2023,38 @@ get_hints_from_comment(const char *p)
 	hint_head = strstr(p, HINT_START);
 	if (hint_head == NULL)
 		return NULL;
-	for (;p < hint_head; p++)
+	if (!pg_hint_plan_hints_anywhere)
 	{
-		/*
-		 * Allow these characters precedes hint comment:
-		 *   - digits
-		 *   - alphabets which are in ASCII range
-		 *   - space, tabs and new-lines
-		 *   - underscores, for identifier
-		 *   - commas, for SELECT clause, EXPLAIN and PREPARE
-		 *   - parentheses, for EXPLAIN and PREPARE
-		 *
-		 * Note that we don't use isalpha() nor isalnum() in ctype.h here to
-		 * avoid behavior which depends on locale setting.
-		 */
-		if (!(*p >= '0' && *p <= '9') &&
-			!(*p >= 'A' && *p <= 'Z') &&
-			!(*p >= 'a' && *p <= 'z') &&
-			!isspace(*p) &&
-			*p != '_' &&
-			*p != ',' &&
-			*p != '(' && *p != ')')
-			return NULL;
+		for (;p < hint_head; p++)
+		{
+			/*
+			 * Allow these characters precedes hint comment:
+			 *   - digits
+			 *   - alphabets which are in ASCII range
+			 *   - space, tabs and new-lines
+			 *   - underscores, for identifier
+			 *   - commas, for SELECT clause, EXPLAIN and PREPARE
+			 *   - parentheses, for EXPLAIN and PREPARE
+			 *   - squared brackets, for arrays (like arguments of PREPARE
+			 *     statements).
+			 *
+			 * Note that we don't use isalpha() nor isalnum() in ctype.h here to
+			 * avoid behavior which depends on locale setting.
+			 */
+			if (!(*p >= '0' && *p <= '9') &&
+				!(*p >= 'A' && *p <= 'Z') &&
+				!(*p >= 'a' && *p <= 'z') &&
+				!isspace(*p) &&
+				*p != '_' &&
+				*p != ',' &&
+				*p != '(' && *p != ')' &&
+				*p != '[' && *p != ']')
+				return NULL;
+		}
 	}
 
-	len = strlen(HINT_START);
-	head = (char *) p;
-	p += len;
+	head = (char *)hint_head;
+	p = head + strlen(HINT_START);
 	skip_space(p);
 
 	/* find hint end keyword. */
@@ -2050,7 +2065,7 @@ get_hints_from_comment(const char *p)
 	}
 
 	/* We don't support nested block comments. */
-	if ((head = (char *)strstr(p, BLOCK_COMMENT_START)) != NULL && head < tail)
+	if ((head = (char *) strstr(p, BLOCK_COMMENT_START)) != NULL && head < tail)
 	{
 		hint_ereport(head, ("Nested block comments are not supported."));
 		return NULL;
@@ -2151,6 +2166,8 @@ create_hintstate(Query *parse, const char *hints)
 		hstate->num_hints[HINT_TYPE_SET]);
 	hstate->parallel_hints = (ParallelHint **) (hstate->rows_hints +
 		hstate->num_hints[HINT_TYPE_ROWS]);
+	hstate->memoize_hints = (JoinMethodHint **) (hstate->parallel_hints +
+		hstate->num_hints[HINT_TYPE_PARALLEL]);
 
 	return hstate;
 }
@@ -2159,8 +2176,7 @@ create_hintstate(Query *parse, const char *hints)
  * Parse inside of parentheses of scan-method hints.
  */
 static const char *
-ScanMethodHintParse(ScanMethodHint *hint, HintState *hstate, Query *parse,
-					const char *str)
+ScanMethodHintParse(ScanMethodHint *hint, const char *str)
 {
 	const char	   *keyword = hint->base.keyword;
 	HintKeyword		hint_keyword = hint->base.hint_keyword;
@@ -2250,8 +2266,7 @@ ScanMethodHintParse(ScanMethodHint *hint, HintState *hstate, Query *parse,
 }
 
 static const char *
-JoinMethodHintParse(JoinMethodHint *hint, HintState *hstate, Query *parse,
-					const char *str)
+JoinMethodHintParse(JoinMethodHint *hint, const char *str)
 {
 	const char	   *keyword = hint->base.keyword;
 	HintKeyword		hint_keyword = hint->base.hint_keyword;
@@ -2314,6 +2329,10 @@ JoinMethodHintParse(JoinMethodHint *hint, HintState *hstate, Query *parse,
 		case HINT_KEYWORD_NOHASHJOIN:
 			hint->enforce_mask = ENABLE_ALL_JOIN ^ ENABLE_HASHJOIN;
 			break;
+		case HINT_KEYWORD_MEMOIZE:
+		case HINT_KEYWORD_NOMEMOIZE:
+			/* nothing to do here */
+			break;
 		default:
 			hint_ereport(str, ("Unrecognized hint keyword \"%s\".", keyword));
 			return NULL;
@@ -2371,8 +2390,7 @@ OuterInnerList(OuterInnerRels *outer_inner)
 }
 
 static const char *
-LeadingHintParse(LeadingHint *hint, HintState *hstate, Query *parse,
-				 const char *str)
+LeadingHintParse(LeadingHint *hint, const char *str)
 {
 	List		   *name_list = NIL;
 	OuterInnerRels *outer_inner = NULL;
@@ -2408,7 +2426,7 @@ LeadingHintParse(LeadingHint *hint, HintState *hstate, Query *parse,
 }
 
 static const char *
-SetHintParse(SetHint *hint, HintState *hstate, Query *parse, const char *str)
+SetHintParse(SetHint *hint, const char *str)
 {
 	List   *name_list = NIL;
 
@@ -2436,8 +2454,7 @@ SetHintParse(SetHint *hint, HintState *hstate, Query *parse, const char *str)
 }
 
 static const char *
-RowsHintParse(RowsHint *hint, HintState *hstate, Query *parse,
-			  const char *str)
+RowsHintParse(RowsHint *hint, const char *str)
 {
 	HintKeyword		hint_keyword = hint->base.hint_keyword;
 	List		   *name_list = NIL;
@@ -2534,8 +2551,7 @@ RowsHintParse(RowsHint *hint, HintState *hstate, Query *parse,
 }
 
 static const char *
-ParallelHintParse(ParallelHint *hint, HintState *hstate, Query *parse,
-				  const char *str)
+ParallelHintParse(ParallelHint *hint, const char *str)
 {
 	HintKeyword		hint_keyword = hint->base.hint_keyword;
 	List		   *name_list = NIL;
@@ -2572,7 +2588,7 @@ ParallelHintParse(ParallelHint *hint, HintState *hstate, Query *parse,
 						  hint->base.keyword));
 		else if (nworkers < 0)
 			hint_ereport(hint->nworkers_str,
-						 ("number of workers must be positive: %s",
+						 ("number of workers must be greater than zero: %s",
 						  hint->base.keyword));
 		else if (nworkers > max_worker_processes)
 			hint_ereport(hint->nworkers_str,
@@ -2642,6 +2658,8 @@ get_current_join_mask()
 		mask |= ENABLE_MERGEJOIN;
 	if (enable_hashjoin)
 		mask |= ENABLE_HASHJOIN;
+	if (enable_memoize)
+		mask |= ENABLE_MEMOIZE;
 
 	return mask;
 }
@@ -2677,7 +2695,7 @@ set_config_option_noerror(const char *name, const char *value,
 				 errmsg("%s", errdata->message),
 				 errdata->detail ? errdetail("%s", errdata->detail) : 0,
 				 errdata->hint ? errhint("%s", errdata->hint) : 0));
-		msgqno = qno;
+		msgqno = qno;  /* Don't bother checking debug_level > 1*/
 		FreeErrorData(errdata);
 	}
 	PG_END_TRY();
@@ -2832,7 +2850,8 @@ setup_scan_method_enforcement(ScanMethodHint *scanhint, HintState *state)
 }
 
 static void
-set_join_config_options(unsigned char enforce_mask, GucContext context)
+set_join_config_options(unsigned char enforce_mask, bool set_memoize,
+						GucContext context)
 {
 	unsigned char	mask;
 
@@ -2846,20 +2865,29 @@ set_join_config_options(unsigned char enforce_mask, GucContext context)
 	SET_CONFIG_OPTION("enable_mergejoin", ENABLE_MERGEJOIN);
 	SET_CONFIG_OPTION("enable_hashjoin", ENABLE_HASHJOIN);
 
+	if (set_memoize)
+		SET_CONFIG_OPTION("enable_memoize", ENABLE_MEMOIZE);
+
 	/*
 	 * Hash join may be rejected for the reason of estimated memory usage. Try
-	 * getting rid of that limitation. This change on work_mem is reverted just
-	 * after searching join path so no suginificant side-effects are expected.
+	 * getting rid of that limitation.
 	 */
 	if (enforce_mask == ENABLE_HASHJOIN)
 	{
 		char			buf[32];
+		int				new_multipler;
 
 		/* See final_cost_hashjoin(). */
-		if (work_mem < MAX_KILOBYTES)
+		new_multipler = MAX_KILOBYTES / work_mem;
+
+		/* See guc.c for the upper limit */
+		if (new_multipler >= 1000)
+			new_multipler = 1000;
+
+		if (new_multipler > hash_mem_multiplier)
 		{
-			snprintf(buf, sizeof(buf), UINT64_FORMAT, (uint64)MAX_KILOBYTES);
-			set_config_option_noerror("work_mem", buf,
+			snprintf(buf, sizeof(buf), UINT64_FORMAT, (uint64)new_multipler);
+			set_config_option_noerror("hash_mem_multiplier", buf,
 									  context, PGC_S_SESSION, GUC_ACTION_SAVE,
 									  true, ERROR);
 		}
@@ -2904,156 +2932,137 @@ pop_hint(void)
  * Retrieve and store hint string from given query or from the hint table.
  */
 static void
-get_current_hint_string(ParseState *pstate, Query *query)
+get_current_hint_string(Query *query, const char *query_str,
+						JumbleState *jstate)
 {
-	const char *query_str;
 	MemoryContext	oldcontext;
 
-	/* do nothing under hint table search */
-	if (hint_inhibit_level > 0)
-		return;
+	/* We shouldn't get here for internal queries. */
+	Assert (hint_inhibit_level == 0);
 
-	/* We alredy have one, don't parse it again. */
+	/* We shouldn't get here if hint is disabled. */
+	Assert (pg_hint_plan_enable_hint);
+
+	/* Do not anything if we have already tried to get hints for this query. */
 	if (current_hint_retrieved)
 		return;
 
-	/* Not support utility mode yet */
-	if (query->utilityStmt)
+	/* No way to retrieve hints from empty string. */
+	if (!query_str)
 		return;
 
 	/* Don't parse the current query hereafter */
 	current_hint_retrieved = true;
 
-	if (!pg_hint_plan_enable_hint)
+	/* Make sure trashing old hint string */
+	if (current_hint_str)
 	{
-		if (current_hint_str)
-		{
-			pfree((void *)current_hint_str);
-			current_hint_str = NULL;
-		}
-		return;
+		pfree((void *)current_hint_str);
+		current_hint_str = NULL;
 	}
 
 	/* increment the query number */
 	qnostr[0] = 0;
 	if (debug_level > 1)
 		snprintf(qnostr, sizeof(qnostr), "[qno=0x%x]", qno++);
-	qno++;
 
 	/* search the hint table for a hint if requested */
 	if (pg_hint_plan_enable_hint_table)
 	{
-		int				query_len;
-		JumbleState    *jstate = NULL;
-		Query		   *jumblequery;
-		char		   *normalized_query = NULL;
+		int			query_len;
+		char	   *normalized_query;
 
-		query_str = get_query_string(pstate, query, &jumblequery);
-
-		/* If this query is not for hint, just return */
-		if (!query_str)
-			return;
-
-		/* clear the previous hint string */
-		if (current_hint_str)
+		if (!IsQueryIdEnabled())
 		{
-			pfree((void *)current_hint_str);
-			current_hint_str = NULL;
+			/*
+			 * compute_query_id was turned off while enable_hint_table is
+			 * on. Do not go ahead and complain once until it is turned on
+			 * again.
+			 */
+			if (!hint_table_deactivated)
+				ereport(WARNING,
+						(errmsg ("hint table feature is deactivated because queryid is not available"),
+						 errhint("Set compute_query_id to \"auto\" or \"on\" to use hint table.")));
+
+			hint_table_deactivated = true;
+			return;
 		}
 
-		if (jumblequery)
+		if (hint_table_deactivated)
 		{
-			jstate = JumbleQueryDirect(query);
-
-			/*
-			 * Normalize the query string by replacing constants with '?'
-			 */
-			/*
-			 * Search hint string which is stored keyed by query string
-			 * and application name.  The query string is normalized to allow
-			 * fuzzy matching.
-			 *
-			 * Adding 1 byte to query_len ensures that the returned string has
-			 * a terminating NULL.
-			 */
-			query_len = strlen(query_str) + 1;
-			normalized_query =
-				generate_normalized_query(jstate, query_str, 0, &query_len,
-										  GetDatabaseEncoding());
-
-			/*
-			 * find a hint for the normalized query. the result should be in
-			 * TopMemoryContext
-			 */
-			oldcontext = MemoryContextSwitchTo(TopMemoryContext);
-			current_hint_str =
-				get_hints_from_table(normalized_query, application_name);
-			MemoryContextSwitchTo(oldcontext);
-
-			if (debug_level > 1)
-			{
-				if (current_hint_str)
-					ereport(pg_hint_plan_debug_message_level,
-							(errmsg("pg_hint_plan[qno=0x%x]: "
-									"post_parse_analyze_hook: "
-									"hints from table: \"%s\": "
-									"normalized_query=\"%s\", "
-									"application name =\"%s\"",
-									qno, current_hint_str,
-									normalized_query, application_name),
-							 errhidestmt(msgqno != qno),
-							 errhidecontext(msgqno != qno)));
-				else
-					ereport(pg_hint_plan_debug_message_level,
-							(errmsg("pg_hint_plan[qno=0x%x]: "
-									"no match found in table:  "
-									"application name = \"%s\", "
-									"normalized_query=\"%s\"",
-									qno, application_name,
-									normalized_query),
-							 errhidestmt(msgqno != qno),
-							 errhidecontext(msgqno != qno)));
-
-				msgqno = qno;
-			}
+			ereport(LOG, (errmsg ("hint table feature is reactivated")));
+			hint_table_deactivated = false;
 		}
 
-		/* return if we have hint here */
-		if (current_hint_str)
-			return;
-	}
-	else
-		query_str = get_query_string(pstate, query, NULL);
+		if (!jstate)
+			jstate = JumbleQuery(query);
 
-	if (query_str)
-	{
+		if (!jstate)
+			return;
+
 		/*
-		 * get hints from the comment. However we may have the same query
-		 * string with the previous call, but the extra comparison seems no
-		 * use..
+		 * Normalize the query string by replacing constants with '?'
 		 */
-		if (current_hint_str)
-		{
-			pfree((void *)current_hint_str);
-			current_hint_str = NULL;
-		}
+		/*
+		 * Search hint string which is stored keyed by query string
+		 * and application name.  The query string is normalized to allow
+		 * fuzzy matching.
+		 *
+		 * Adding 1 byte to query_len ensures that the returned string has
+		 * a terminating NULL.
+		 */
+		query_len = strlen(query_str) + 1;
+		normalized_query =
+			generate_normalized_query(jstate, query_str, 0, &query_len);
 
+		/*
+		 * find a hint for the normalized query. the result should be in
+		 * TopMemoryContext
+		 */
 		oldcontext = MemoryContextSwitchTo(TopMemoryContext);
-		current_hint_str = get_hints_from_comment(query_str);
+		current_hint_str =
+			get_hints_from_table(normalized_query, application_name);
 		MemoryContextSwitchTo(oldcontext);
+
+		if (debug_level > 1)
+		{
+			if (current_hint_str)
+				ereport(pg_hint_plan_debug_message_level,
+						(errmsg("pg_hint_plan[qno=0x%x]: "
+								"hints from table: \"%s\": "
+								"normalized_query=\"%s\", "
+								"application name =\"%s\"",
+								qno, current_hint_str,
+								normalized_query, application_name),
+						 errhidestmt(msgqno != qno),
+						 errhidecontext(msgqno != qno)));
+			else
+				ereport(pg_hint_plan_debug_message_level,
+						(errmsg("pg_hint_plan[qno=0x%x]: "
+								"no match found in table:  "
+								"application name = \"%s\", "
+								"normalized_query=\"%s\"",
+								qno, application_name,
+								normalized_query),
+						 errhidestmt(msgqno != qno),
+						 errhidecontext(msgqno != qno)));
+
+			msgqno = qno;
+		}
+
+		/* return if we have hint string here */
+		if (current_hint_str)
+			return;
 	}
-	else
-	{
-		/*
-		 * Failed to get query. We would be in fetching invalidated
-		 * plancache. Try the next chance.
-		 */
-		current_hint_retrieved = false;
-	}
+
+	/* get hints from the comment */
+	oldcontext = MemoryContextSwitchTo(TopMemoryContext);
+	current_hint_str = get_hints_from_comment(query_str);
+	MemoryContextSwitchTo(oldcontext);
 
 	if (debug_level > 1)
 	{
-		if (debug_level == 1 && query_str && debug_query_string &&
+		if (debug_level == 2 && query_str && debug_query_string &&
 			strcmp(query_str, debug_query_string))
 			ereport(pg_hint_plan_debug_message_level,
 					(errmsg("hints in comment=\"%s\"",
@@ -3076,51 +3085,49 @@ get_current_hint_string(ParseState *pstate, Query *query)
  * Retrieve hint string from the current query.
  */
 static void
-pg_hint_plan_post_parse_analyze(ParseState *pstate,
-								Query *query,
+pg_hint_plan_post_parse_analyze(ParseState *pstate, Query *query,
 								JumbleState *jstate)
 {
 	if (prev_post_parse_analyze_hook)
 		prev_post_parse_analyze_hook(pstate, query, jstate);
 
+	if (!pg_hint_plan_enable_hint || hint_inhibit_level > 0)
+		return;
+
 	/* always retrieve hint from the top-level query string */
 	if (plpgsql_recurse_level == 0)
 		current_hint_retrieved = false;
 
-	get_current_hint_string(pstate, query);
-}
+	/*
+	 * Query jumbling is possible with utility queries in PostgreSQL 16 and
+	 * newer versions, hence just leave in this case.  There could be a point
+	 * in providing hints for some cases, like a CTAS or a matview creation,
+	 * but that should not matter much in practice compared to SELECT and DML
+	 * queries, and nobody has made a case for these now.  So let's just
+	 * ignore the case entirely for now.
+	 */
+	if (query->utilityStmt)
+		return;
 
-/*
- * We need to reset current_hint_retrieved flag always when a command execution
- * is finished. This is true even for a pure utility command that doesn't
- * involve planning phase.
- */
-static void
-pg_hint_plan_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
-					bool readOnlyTree, ProcessUtilityContext context,
-					ParamListInfo params, QueryEnvironment *queryEnv,
-					DestReceiver *dest, QueryCompletion *qc)
-{
-	if (prev_ProcessUtility_hook)
-		prev_ProcessUtility_hook(pstmt, queryString, readOnlyTree, context, params, queryEnv,
-								 dest, qc);
-	else
-		standard_ProcessUtility(pstmt, queryString, readOnlyTree, context, params, queryEnv,
-								 dest, qc);
-
-	if (plpgsql_recurse_level == 0)
-		current_hint_retrieved = false;
+	/*
+	 * Jumble state is required when hint table is used.  This is the only
+	 * chance to have one already generated in-core.  If it's not the case, no
+	 * use to do the work now and pg_hint_plan_planner() will do the all work.
+	 */
+	if (jstate)
+		get_current_hint_string(query, pstate->p_sourcetext, jstate);
 }
 
 /*
  * Read and set up hint information
  */
 static PlannedStmt *
-pg_hint_plan_planner(Query *parse, const char *query_string,
-	int cursorOptions, ParamListInfo boundParams, OptimizerOptions *optimizer_options)
+pg_hint_plan_planner(Query *parse, const char *query_string, int cursorOptions, ParamListInfo boundParams,
+					 OptimizerOptions *optimizer_options)
 {
 	int				save_nestlevel;
 	PlannedStmt	   *result;
+	HintState	   *hstate;
 	const char 	   *prev_hint_str = NULL;
 
 	/*
@@ -3131,49 +3138,65 @@ pg_hint_plan_planner(Query *parse, const char *query_string,
 	if (!pg_hint_plan_enable_hint || hint_inhibit_level > 0)
 	{
 		if (debug_level > 1)
+		{
 			ereport(pg_hint_plan_debug_message_level,
 					(errmsg ("pg_hint_plan%s: planner: enable_hint=%d,"
 							 " hint_inhibit_level=%d",
 							 qnostr, pg_hint_plan_enable_hint,
 							 hint_inhibit_level),
 					 errhidestmt(msgqno != qno)));
-		msgqno = qno;
+			msgqno = qno;
+		}
 
 		goto standard_planner_proc;
 	}
 
 	/*
-	 * Support for nested plpgsql functions. This is quite ugly but this is the
-	 * only point I could find where I can get the query string.
+	 * SQL commands invoked in plpgsql functions may also have hints. In that
+	 * case override the upper level hint by the new hint.
 	 */
-	if (plpgsql_recurse_level > 0 &&
-		error_context_stack && error_context_stack->arg)
+	if (plpgsql_recurse_level > 0)
 	{
-		MemoryContext oldcontext;
+		const char	 *tmp_hint_str = current_hint_str;
 
-		oldcontext = MemoryContextSwitchTo(TopMemoryContext);
-		current_hint_str =
-			get_hints_from_comment((char *)error_context_stack->arg);
-		MemoryContextSwitchTo(oldcontext);
+		/* don't let get_current_hint_string free this string */
+		current_hint_str = NULL;
+
+		current_hint_retrieved = false;
+
+		get_current_hint_string(parse, query_string, NULL);
+
+		/*
+		 * CBDB: a statement without a hint must not inherit the preceding
+		 * statement's hint.  Upstream keeps it, but that only shows up when
+		 * query IDs are not computed; with them, post_parse_analyze has
+		 * already reset the hint string.
+		 */
+		if (tmp_hint_str != NULL)
+			pfree((void *)tmp_hint_str);
 	}
+	else
+		get_current_hint_string(parse, query_string, NULL);
 
-	/*
-	 * Query execution in extended protocol can be started without the analyze
-	 * phase. In the case retrieve hint string here.
-	 */
-	if (!current_hint_str)
-		get_current_hint_string(NULL, parse);
-
-	/* No hint, go the normal way */
+	/* No hints, go the normal way */
 	if (!current_hint_str)
 		goto standard_planner_proc;
 
 	/* parse the hint into hint state struct */
 	hstate = create_hintstate(parse, pstrdup(current_hint_str));
 
-	/* run standard planner if the statement has not valid hint */
+	/* run standard planner if we're given with no valid hints */
 	if (!hstate)
+	{
+		/* forget invalid hint string */
+		if (current_hint_str)
+		{
+			pfree((void *)current_hint_str);
+			current_hint_str = NULL;
+		}
+
 		goto standard_planner_proc;
+	}
 
 	/*
 	 * Push new hint struct to the hint stack to disable previous hint context.
@@ -3235,18 +3258,45 @@ pg_hint_plan_planner(Query *parse, const char *query_string,
 		}
 
 		if (prev_planner)
-			result = (*prev_planner) (parse, query_string, cursorOptions, boundParams, optimizer_options);
+			result = (*prev_planner) (parse, query_string,
+									  cursorOptions, boundParams,
+									  optimizer_options);
 		else
-			result = standard_planner(parse, query_string, cursorOptions, boundParams, optimizer_options);
+			result = standard_planner(parse, query_string,
+									  cursorOptions, boundParams,
+									  optimizer_options);
 
 		current_hint_str = prev_hint_str;
 		recurse_level--;
+
+		/*
+		 * current_hint_str is useless after planning of the top-level query.
+		 * There's a case where the caller has multiple queries. This causes
+		 * hint parsing multiple times for the same string but we don't have a
+		 * simple and reliable way to distinguish that case from the case
+		 * where of separate queries.
+		 */
+		if (recurse_level < 1)
+			current_hint_retrieved = false;
+
+		/*
+		 * Print hint in debug mode.  CBDB: only when the plan comes from the
+		 * Postgres planner; ORCA prints its own hint report.
+		 */
+		if (result->planGen == PLANGEN_PLANNER)
+		{
+			if (debug_level == 1)
+				HintStateDump(current_hint_state);
+			else if (debug_level > 1)
+				HintStateDump2(current_hint_state);
+		}
 	}
 	PG_CATCH();
 	{
 		/*
 		 * Rollback changes of GUC parameters, and pop current hint context
-		 * from hint stack to rewind the state.
+		 * from hint stack to rewind the state. current_hint_str will be freed
+		 * by context deletion.
 		 */
 		current_hint_str = prev_hint_str;
 		recurse_level--;
@@ -3255,27 +3305,6 @@ pg_hint_plan_planner(Query *parse, const char *query_string,
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
-
-
-	/*
-	 * current_hint_str is useless after planning of the top-level query.
-	 */
-	if (recurse_level < 1 && current_hint_str)
-	{
-		pfree((void *)current_hint_str);
-		current_hint_str = NULL;
-		current_hint_retrieved = false;
-	}
-
-	/* Print hint logs if Planner is used */
-	if (result->planGen == PLANGEN_PLANNER)
-	{
-		/* Print hint in debug mode. */
-		if (debug_level == 1)
-			HintStateDump(current_hint_state);
-		else if (debug_level > 1)
-			HintStateDump2(current_hint_state);
-	}
 
 	/*
 	 * Rollback changes of GUC parameters, and pop current hint context from
@@ -3297,9 +3326,13 @@ standard_planner_proc:
 	}
 	current_hint_state = NULL;
 	if (prev_planner)
-		result =  (*prev_planner) (parse, query_string, cursorOptions, boundParams, optimizer_options);
+		result =  (*prev_planner) (parse, query_string,
+								   cursorOptions, boundParams,
+								   optimizer_options);
 	else
-		result = standard_planner(parse, query_string, cursorOptions, boundParams, optimizer_options);
+		result = standard_planner(parse, query_string,
+								  cursorOptions, boundParams,
+								  optimizer_options);
 
 	/* The upper-level planner still needs the current hint state */
 	if (HintStateStack != NIL)
@@ -3711,7 +3744,7 @@ restrict_indexes(PlannerInfo *root, ScanMethodHint *hint, RelOptInfo *rel,
 		pfree(indexname);
 	}
 
-	if (debug_level == 1)
+	if (debug_level > 0)
 	{
 		StringInfoData  rel_buf;
 		char *disprelname = "";
@@ -3935,7 +3968,7 @@ setup_hint_enforcement(PlannerInfo *root, RelOptInfo *rel,
 
 				parentrel_oid =
 					root->simple_rte_array[current_hint_state->parent_relid]->relid;
-				parent_rel = heap_open(parentrel_oid, NoLock);
+				parent_rel = table_open(parentrel_oid, NoLock);
 
 				/* Search the parent relation for indexes match the hint spec */
 				foreach(l, RelationGetIndexList(parent_rel))
@@ -3959,7 +3992,7 @@ setup_hint_enforcement(PlannerInfo *root, RelOptInfo *rel,
 						lappend(current_hint_state->parent_index_infos,
 								parent_index_info);
 				}
-				heap_close(parent_rel, NoLock);
+				table_close(parent_rel, NoLock);
 			}
 		}
 	}
@@ -4102,25 +4135,47 @@ find_relid_aliasname(PlannerInfo *root, char *aliasname, List *initial_rels,
  * Return join hint which matches given joinrelids.
  */
 static JoinMethodHint *
-find_join_hint(PlannerInfo *root, Relids joinrelids)
+find_join_hint(Relids joinrelids)
 {
 	List	   *join_hint;
 	ListCell   *l;
-	Bitmapset  *baseRelSet;
-	
-	baseRelSet = bms_intersect(joinrelids, root->all_baserels);
-	join_hint = current_hint_state->join_hint_level[bms_num_members(baseRelSet)];
+
+	join_hint = current_hint_state->join_hint_level[bms_num_members(joinrelids)];
 
 	foreach(l, join_hint)
 	{
 		JoinMethodHint *hint = (JoinMethodHint *) lfirst(l);
 
-		if (bms_equal(baseRelSet, hint->joinrelids))
+		if (bms_equal(joinrelids, hint->joinrelids))
 			return hint;
 	}
 
 	return NULL;
 }
+
+
+/*
+ * Return memoize hint which matches given joinrelids.
+ */
+static JoinMethodHint *
+find_memoize_hint(Relids joinrelids)
+{
+	List	   *join_hint;
+	ListCell   *l;
+
+	join_hint = current_hint_state->memoize_hint_level[bms_num_members(joinrelids)];
+
+	foreach(l, join_hint)
+	{
+		JoinMethodHint *hint = (JoinMethodHint *) lfirst(l);
+
+		if (bms_equal(joinrelids, hint->joinrelids))
+			return hint;
+	}
+
+	return NULL;
+}
+
 
 static Relids
 OuterInnerJoinCreate(OuterInnerRels *outer_inner, LeadingHint *leading_hint,
@@ -4159,6 +4214,12 @@ OuterInnerJoinCreate(OuterInnerRels *outer_inner, LeadingHint *leading_hint,
 
 	join_relids = bms_add_members(outer_relids, inner_relids);
 
+	/*
+	 * join_relids may include outer-join relids since PostgreSQL 16, so
+	 * filter them out as hints can only handle base relations.
+	 */
+	join_relids = bms_intersect(join_relids, root->all_baserels);
+
 	if (bms_num_members(join_relids) > nbaserel)
 		return join_relids;
 
@@ -4166,7 +4227,7 @@ OuterInnerJoinCreate(OuterInnerRels *outer_inner, LeadingHint *leading_hint,
 	 * If we don't have join method hint, create new one for the
 	 * join combination with all join methods are enabled.
 	 */
-	hint = find_join_hint(root, join_relids);
+	hint = find_join_hint(join_relids);
 	if (hint == NULL)
 	{
 		/*
@@ -4275,6 +4336,24 @@ transform_join_hints(HintState *hstate, PlannerInfo *root, int nbaserel,
 
 		hstate->join_hint_level[hint->nrels] =
 			lappend(hstate->join_hint_level[hint->nrels], hint);
+	}
+
+	/* ditto for memoize hints */
+	for (i = 0; i < hstate->num_hints[HINT_TYPE_MEMOIZE]; i++)
+	{
+		JoinMethodHint *hint = hstate->memoize_hints[i];
+
+		if (!hint_state_enabled(hint) || hint->nrels > nbaserel)
+			continue;
+
+		hint->joinrelids = create_bms_of_relids(&(hint->base), root,
+									 initial_rels, hint->nrels, hint->relnames);
+
+		if (hint->joinrelids == NULL || hint->base.state == HINT_STATE_ERROR)
+			continue;
+
+		hstate->memoize_hint_level[hint->nrels] =
+			lappend(hstate->memoize_hint_level[hint->nrels], hint);
 	}
 
 	/*
@@ -4391,7 +4470,7 @@ transform_join_hints(HintState *hstate, PlannerInfo *root, int nbaserel,
 			 * If we don't have join method hint, create new one for the
 			 * join combination with all join methods are enabled.
 			 */
-			hint = find_join_hint(root, joinrelids);
+			hint = find_join_hint(joinrelids);
 			if (hint == NULL)
 			{
 				/*
@@ -4449,8 +4528,11 @@ transform_join_hints(HintState *hstate, PlannerInfo *root, int nbaserel,
 		{
 			if (hstate->join_hint_level[i] != NIL)
 			{
-				foreach(l, hstate->join_hint_level[i]) {
+				foreach (l, hstate->join_hint_level[i])
+				{
+
 					JoinMethodHint *hint = (JoinMethodHint *)lfirst(l);
+
 					if (hint->inner_nrels == 0 &&
 						!(bms_intersect(hint->joinrelids, joinrelids) == NULL ||
 						  bms_equal(bms_union(hint->joinrelids, joinrelids),
@@ -4468,304 +4550,132 @@ transform_join_hints(HintState *hstate, PlannerInfo *root, int nbaserel,
 
 	if (hint_state_enabled(lhint))
 	{
-		set_join_config_options(DISABLE_ALL_JOIN, current_hint_state->context);
+		set_join_config_options(DISABLE_ALL_JOIN, false,
+								current_hint_state->context);
 		return true;
 	}
 	return false;
 }
 
-
 /*
- * Generate a normalized version of the query string that will be used to
- * represent all similar queries.
- *
- * Note that the normalized representation may well vary depending on
- * just which "equivalent" query is used to create the hashtable entry.
- * We assume this is OK.
- *
- * If query_loc > 0, then "query" has been advanced by that much compared to
- * the original string start, so we need to translate the provided locations
- * to compensate.  (This lets us avoid re-scanning statements before the one
- * of interest, so it's worth doing.)
- *
- * *query_len_p contains the input string length, and is updated with
- * the result string length on exit.  The resulting string might be longer
- * or shorter depending on what happens with replacement of constants.
- *
- * Returns a palloc'd string.
+ * CBDB: call the core (or the previously hooked) make_join_rel().
  */
-static char *
-generate_normalized_query(JumbleState *jstate, const char *query,
-						  int query_loc, int *query_len_p, int encoding)
+static RelOptInfo *
+call_make_join_rel(PlannerInfo *root, RelOptInfo *rel1, RelOptInfo *rel2)
 {
-	char	   *norm_query;
-	int			query_len = *query_len_p;
-	int			i,
-				norm_query_buflen,	/* Space allowed for norm_query */
-				len_to_wrt,		/* Length (in bytes) to write */
-				quer_loc = 0,	/* Source query byte location */
-				n_quer_loc = 0, /* Normalized query byte location */
-				last_off = 0,	/* Offset from start for previous tok */
-				last_tok_len = 0;	/* Length (in bytes) of that tok */
+	if (prev_make_join_rel_hook)
+		return prev_make_join_rel_hook(root, rel1, rel2);
 
-	/*
-	 * Get constants' lengths (core system only gives us locations).  Note
-	 * this also ensures the items are sorted by location.
-	 */
-	fill_in_constant_lengths(jstate, query, query_loc);
-
-	/*
-	 * Allow for $n symbols to be longer than the constants they replace.
-	 * Constants must take at least one byte in text form, while a $n symbol
-	 * certainly isn't more than 11 bytes, even if n reaches INT_MAX.  We
-	 * could refine that limit based on the max value of n for the current
-	 * query, but it hardly seems worth any extra effort to do so.
-	 */
-	norm_query_buflen = query_len + jstate->clocations_count * 10;
-
-	/* Allocate result buffer */
-	norm_query = palloc(norm_query_buflen + 1);
-
-	for (i = 0; i < jstate->clocations_count; i++)
-	{
-		int			off,		/* Offset from start for cur tok */
-					tok_len;	/* Length (in bytes) of that tok */
-
-		off = jstate->clocations[i].location;
-		/* Adjust recorded location if we're dealing with partial string */
-		off -= query_loc;
-
-		tok_len = jstate->clocations[i].length;
-
-		if (tok_len < 0)
-			continue;			/* ignore any duplicates */
-
-		/* Copy next chunk (what precedes the next constant) */
-		len_to_wrt = off - last_off;
-		len_to_wrt -= last_tok_len;
-
-		Assert(len_to_wrt >= 0);
-		memcpy(norm_query + n_quer_loc, query + quer_loc, len_to_wrt);
-		n_quer_loc += len_to_wrt;
-
-		/*
-		 * PG_HINT_PLAN: DON'T TAKE IN a6f22e8356 so that the designed behavior
-		 * is kept stable.
-		 */
-		/* And insert a '?' in place of the constant token */
-		norm_query[n_quer_loc++] = '?';
-
-		quer_loc = off + tok_len;
-		last_off = off;
-		last_tok_len = tok_len;
-	}
-
-	/*
-	 * We've copied up until the last ignorable constant.  Copy over the
-	 * remaining bytes of the original query string.
-	 */
-	len_to_wrt = query_len - quer_loc;
-
-	Assert(len_to_wrt >= 0);
-	memcpy(norm_query + n_quer_loc, query + quer_loc, len_to_wrt);
-	n_quer_loc += len_to_wrt;
-
-	Assert(n_quer_loc <= norm_query_buflen);
-	norm_query[n_quer_loc] = '\0';
-
-	*query_len_p = n_quer_loc;
-	return norm_query;
+	return make_join_relation(root, rel1, rel2);
 }
 
 /*
- * Given a valid SQL string and an array of constant-location records,
- * fill in the textual lengths of those constants.
- *
- * The constants may use any allowed constant syntax, such as float literals,
- * bit-strings, single-quoted strings and dollar-quoted strings.  This is
- * accomplished by using the public API for the core scanner.
- *
- * It is the caller's job to ensure that the string is a valid SQL statement
- * with constants at the indicated locations.  Since in practice the string
- * has already been parsed, and the locations that the caller provides will
- * have originated from within the authoritative parser, this should not be
- * a problem.
- *
- * Duplicate constant pointers are possible, and will have their lengths
- * marked as '-1', so that they are later ignored.  (Actually, we assume the
- * lengths were initialized as -1 to start with, and don't change them here.)
- *
- * If query_loc > 0, then "query" has been advanced by that much compared to
- * the original string start, so we need to translate the provided locations
- * to compensate.  (This lets us avoid re-scanning statements before the one
- * of interest, so it's worth doing.)
- *
- * N.B. There is an assumption that a '-' character at a Const location begins
- * a negative numeric constant.  This precludes there ever being another
- * reason for a constant to start with a '-'.
+ * CBDB: call the core (or the previously hooked) add_paths_to_joinrel().
  */
 static void
-fill_in_constant_lengths(JumbleState *jstate, const char *query,
-						 int query_loc)
+call_add_paths_to_joinrel(PlannerInfo *root,
+						  RelOptInfo *joinrel,
+						  RelOptInfo *outerrel,
+						  RelOptInfo *innerrel,
+						  JoinType jointype,
+						  SpecialJoinInfo *sjinfo,
+						  List *restrictlist)
 {
-	LocationLen *locs;
-	core_yyscan_t yyscanner;
-	core_yy_extra_type yyextra;
-	core_YYSTYPE yylval;
-	YYLTYPE		yylloc;
-	int			last_loc = -1;
-	int			i;
-
-	/*
-	 * Sort the records by location so that we can process them in order while
-	 * scanning the query text.
-	 */
-	if (jstate->clocations_count > 1)
-		qsort(jstate->clocations, jstate->clocations_count,
-			  sizeof(LocationLen), comp_location);
-	locs = jstate->clocations;
-
-	/* initialize the flex scanner --- should match raw_parser() */
-	yyscanner = scanner_init(query,
-							 &yyextra,
-							 &ScanKeywords,
-							 ScanKeywordTokens);
-
-	/* we don't want to re-emit any escape string warnings */
-	yyextra.escape_string_warning = false;
-
-	/* Search for each constant, in sequence */
-	for (i = 0; i < jstate->clocations_count; i++)
-	{
-		int			loc = locs[i].location;
-		int			tok;
-
-		/* Adjust recorded location if we're dealing with partial string */
-		loc -= query_loc;
-
-		Assert(loc >= 0);
-
-		if (loc <= last_loc)
-			continue;			/* Duplicate constant, ignore */
-
-		/* Lex tokens until we find the desired constant */
-		for (;;)
-		{
-			tok = core_yylex(&yylval, &yylloc, yyscanner);
-
-			/* We should not hit end-of-string, but if we do, behave sanely */
-			if (tok == 0)
-				break;			/* out of inner for-loop */
-
-			/*
-			 * We should find the token position exactly, but if we somehow
-			 * run past it, work with that.
-			 */
-			if (yylloc >= loc)
-			{
-				if (query[loc] == '-')
-				{
-					/*
-					 * It's a negative value - this is the one and only case
-					 * where we replace more than a single token.
-					 *
-					 * Do not compensate for the core system's special-case
-					 * adjustment of location to that of the leading '-'
-					 * operator in the event of a negative constant.  It is
-					 * also useful for our purposes to start from the minus
-					 * symbol.  In this way, queries like "select * from foo
-					 * where bar = 1" and "select * from foo where bar = -2"
-					 * will have identical normalized query strings.
-					 */
-					tok = core_yylex(&yylval, &yylloc, yyscanner);
-					if (tok == 0)
-						break;	/* out of inner for-loop */
-				}
-
-				/*
-				 * We now rely on the assumption that flex has placed a zero
-				 * byte after the text of the current token in scanbuf.
-				 */
-				locs[i].length = strlen(yyextra.scanbuf + loc);
-				break;			/* out of inner for-loop */
-			}
-		}
-
-		/* If we hit end-of-string, give up, leaving remaining lengths -1 */
-		if (tok == 0)
-			break;
-
-		last_loc = loc;
-	}
-
-	scanner_finish(yyscanner);
-}
-
-/*
- * comp_location: comparator for qsorting LocationLen structs by location
- */
-static int
-comp_location(const void *a, const void *b)
-{
-	int			l = ((const LocationLen *) a)->location;
-	int			r = ((const LocationLen *) b)->location;
-
-	if (l < r)
-		return -1;
-	else if (l > r)
-		return +1;
+	if (prev_add_paths_to_joinrel_hook)
+		prev_add_paths_to_joinrel_hook(root, joinrel, outerrel, innerrel,
+									   jointype, sjinfo, restrictlist);
 	else
-		return 0;
+		add_paths_to_join_relation(root, joinrel, outerrel, innerrel,
+								   jointype, sjinfo, restrictlist);
 }
 
 /*
- * hook of make_join_rel()
+ * wrapper of make_join_rel()
  *
  * call make_join_rel() after changing enable_* parameters according to given
  * hints.
+ *
+ * CBDB: this is installed as make_join_rel_hook, so it is called for every
+ * join the core planner builds, not only from pg_hint_plan_join_search().
+ * Pass through unless join hints have been set up for the current join
+ * search.
  */
 static RelOptInfo *
-pg_hint_plan_make_join_rel(PlannerInfo *root, RelOptInfo *rel1, RelOptInfo *rel2)
+make_join_rel_wrapper(PlannerInfo *root, RelOptInfo *rel1, RelOptInfo *rel2)
 {
 	Relids			joinrelids;
-	JoinMethodHint *hint;
+	JoinMethodHint *join_hint;
+	JoinMethodHint *memoize_hint;
 	RelOptInfo	   *rel;
 	int				save_nestlevel;
 
-	if (!current_hint_state) {
-		return prev_make_join_rel_hook ? prev_make_join_rel_hook(root, rel1, rel2) : make_join_relation(root, rel1, rel2);
-	}
+	if (!current_hint_state || !current_hint_state->join_hint_level)
+		return call_make_join_rel(root, rel1, rel2);
 
 	joinrelids = bms_union(rel1->relids, rel2->relids);
-	hint = find_join_hint(root, joinrelids);
+
+	/*
+	 * joinrelids may include outer-join relids since PostgreSQL 16, so
+	 * filter them out as hints can only handle base relations.
+	 */
+	joinrelids = bms_intersect(joinrelids, root->all_baserels);
+
+	join_hint = find_join_hint(joinrelids);
+	memoize_hint = find_memoize_hint(joinrelids);
 	bms_free(joinrelids);
 
-	if (!hint)
-		return prev_make_join_rel_hook ? prev_make_join_rel_hook(root, rel1, rel2) : make_join_relation(root, rel1, rel2);
+	/* reject non-matching hints */
+	if (join_hint && join_hint->inner_nrels != 0)
+		join_hint = NULL;
 
-	if (hint->inner_nrels == 0)
+	if (memoize_hint && memoize_hint->inner_nrels != 0)
+		memoize_hint = NULL;
+
+	if (join_hint || memoize_hint)
 	{
 		save_nestlevel = NewGUCNestLevel();
 
-		set_join_config_options(hint->enforce_mask,
-								current_hint_state->context);
+		if (join_hint)
+			set_join_config_options(join_hint->enforce_mask, false,
+									current_hint_state->context);
 
-		rel = prev_make_join_rel_hook ? prev_make_join_rel_hook(root, rel1, rel2) : make_join_relation(root, rel1, rel2);
-		hint->base.state = HINT_STATE_USED;
+		if (memoize_hint)
+		{
+			bool memoize =
+				memoize_hint->base.hint_keyword == HINT_KEYWORD_MEMOIZE;
+			set_config_option_noerror("enable_memoize",
+									  memoize ? "true" : "false",
+									  current_hint_state->context,
+									  PGC_S_SESSION, GUC_ACTION_SAVE,
+									  true, ERROR);
+		}
+	}
 
-		/*
-		 * Restore the GUC variables we set above.
-		 */
+	/* do the work */
+	rel = call_make_join_rel(root, rel1, rel2);
+
+	/* Restore the GUC variables we set above. */
+	if (join_hint || memoize_hint)
+	{
+		if (join_hint)
+			join_hint->base.state = HINT_STATE_USED;
+
+		if (memoize_hint)
+			memoize_hint->base.state = HINT_STATE_USED;
+
 		AtEOXact_GUC(true, save_nestlevel);
 	}
-	else
-		rel = prev_make_join_rel_hook ? prev_make_join_rel_hook(root, rel1, rel2) : make_join_relation(root, rel1, rel2);
 
 	return rel;
 }
 
+/*
+ * wrapper of add_paths_to_joinrel()
+ *
+ * CBDB: installed as add_paths_to_joinrel_hook; see make_join_rel_wrapper().
+ */
 static void
-pg_hint_plan_add_paths_to_joinrel(PlannerInfo *root,
+add_paths_to_joinrel_wrapper(PlannerInfo *root,
 							 RelOptInfo *joinrel,
 							 RelOptInfo *outerrel,
 							 RelOptInfo *innerrel,
@@ -4775,69 +4685,76 @@ pg_hint_plan_add_paths_to_joinrel(PlannerInfo *root,
 {
 	Relids			joinrelids;
 	JoinMethodHint *join_hint;
+	JoinMethodHint *memoize_hint;
 	int				save_nestlevel;
 
-	// no hint 
-	if (!current_hint_state) {
-		if(prev_add_paths_to_joinrel_hook) {
-			prev_add_paths_to_joinrel_hook(root, joinrel, outerrel, innerrel, jointype,
-								 sjinfo, restrictlist);
-		} else {
-			add_paths_to_join_relation(root, joinrel, outerrel, innerrel, jointype,
-								 sjinfo, restrictlist);
-		}
+	if (!current_hint_state || !current_hint_state->join_hint_level)
+	{
+		call_add_paths_to_joinrel(root, joinrel, outerrel, innerrel,
+								  jointype, sjinfo, restrictlist);
 		return;
 	}
 
 	joinrelids = bms_union(outerrel->relids, innerrel->relids);
-	join_hint = find_join_hint(root, joinrelids);
+
+	/*
+	 * joinrelids may include outer-join relids since PostgreSQL 16, so
+	 * filter them out as hints can only handle base relations.
+	 */
+	joinrelids = bms_intersect(joinrelids, root->all_baserels);
+
+	join_hint = find_join_hint(joinrelids);
+	memoize_hint = find_memoize_hint(joinrelids);
 	bms_free(joinrelids);
 
-	if (join_hint && join_hint->inner_nrels != 0)
+	/* reject the found hints if they don't match this join */
+	if (join_hint && join_hint->inner_nrels == 0)
+		join_hint = NULL;
+
+	if (memoize_hint && memoize_hint->inner_nrels == 0)
+		memoize_hint = NULL;
+
+	/* set up configuration if needed */
+	if (join_hint || memoize_hint)
 	{
 		save_nestlevel = NewGUCNestLevel();
 
-		if (bms_equal(join_hint->inner_joinrelids, innerrel->relids))
+		if (join_hint)
 		{
-
-			set_join_config_options(join_hint->enforce_mask,
-									current_hint_state->context);
-
-			if(prev_add_paths_to_joinrel_hook) {
-				prev_add_paths_to_joinrel_hook(root, joinrel, outerrel, innerrel, jointype,
-								 sjinfo, restrictlist);
-			} else {
-				add_paths_to_join_relation(root, joinrel, outerrel, innerrel, jointype,
-								 sjinfo, restrictlist);
-			}
-			join_hint->base.state = HINT_STATE_USED;
-		}
-		else
-		{
-			set_join_config_options(DISABLE_ALL_JOIN,
-									current_hint_state->context);
-			if(prev_add_paths_to_joinrel_hook) {
-				prev_add_paths_to_joinrel_hook(root, joinrel, outerrel, innerrel, jointype,
-								 sjinfo, restrictlist);
-			} else {
-				add_paths_to_join_relation(root, joinrel, outerrel, innerrel, jointype,
-								 sjinfo, restrictlist);
-			}
+			if (bms_equal(join_hint->inner_joinrelids, innerrel->relids))
+				set_join_config_options(join_hint->enforce_mask, false,
+										current_hint_state->context);
+			else
+				set_join_config_options(DISABLE_ALL_JOIN, false,
+										current_hint_state->context);
 		}
 
-		/*
-		 * Restore the GUC variables we set above.
-		 */
-		AtEOXact_GUC(true, save_nestlevel);
+		if (memoize_hint)
+		{
+			bool memoize =
+				memoize_hint->base.hint_keyword == HINT_KEYWORD_MEMOIZE;
+			set_config_option_noerror("enable_memoize",
+									  memoize ? "true" : "false",
+									  current_hint_state->context,
+									  PGC_S_SESSION, GUC_ACTION_SAVE,
+									  true, ERROR);
+		}
 	}
-	else {
-		if(prev_add_paths_to_joinrel_hook) {
-			prev_add_paths_to_joinrel_hook(root, joinrel, outerrel, innerrel, jointype,
-							sjinfo, restrictlist);
-		} else {
-			add_paths_to_join_relation(root, joinrel, outerrel, innerrel, jointype,
-							sjinfo, restrictlist);
-		}
+
+	/* generate paths */
+	call_add_paths_to_joinrel(root, joinrel, outerrel, innerrel, jointype,
+							  sjinfo, restrictlist);
+
+	/* restore GUC variables */
+	if (join_hint || memoize_hint)
+	{
+		if (join_hint)
+			join_hint->base.state = HINT_STATE_USED;
+
+		if (memoize_hint)
+			memoize_hint->base.state = HINT_STATE_USED;
+
+		AtEOXact_GUC(true, save_nestlevel);
 	}
 }
 
@@ -4884,32 +4801,26 @@ pg_hint_plan_join_search(PlannerInfo *root, int levels_needed,
 	{
 		if (prev_join_search)
 			return (*prev_join_search) (root, levels_needed, initial_rels);
-#if 0
-		else if (enable_geqo && levels_needed >= geqo_threshold)
-			return geqo(root, levels_needed, initial_rels);
-#endif
+		/* CBDB: GEQO is not supported, standard_join_search() is always used */
 		else
 			return standard_join_search(root, levels_needed, initial_rels);
 	}
-
-#if 0
-	/*
-	 * In the case using GEQO, only scan method hints and Set hints have
-	 * effect.  Join method and join order is not controllable by hints.
-	 */
-	if (enable_geqo && levels_needed >= geqo_threshold)
-		return geqo(root, levels_needed, initial_rels);
-#endif
 
 	nbaserel = get_num_baserels(initial_rels);
 	current_hint_state->join_hint_level =
 		palloc0(sizeof(List *) * (nbaserel + 1));
 	join_method_hints = palloc0(sizeof(JoinMethodHint *) * (nbaserel + 1));
+	current_hint_state->memoize_hint_level =
+		palloc0(sizeof(List *) * (nbaserel + 1));
 
 	leading_hint_enable = transform_join_hints(current_hint_state,
 											   root, nbaserel,
 											   initial_rels, join_method_hints);
 
+	/*
+	 * CBDB: the core join search reaches make_join_rel_wrapper() and
+	 * add_paths_to_joinrel_wrapper() through hooks.
+	 */
 	rel = standard_join_search(root, levels_needed, initial_rels);
 
 	/*
@@ -4956,37 +4867,18 @@ pg_hint_plan_join_search(PlannerInfo *root, int levels_needed,
 	pfree(current_hint_state->join_hint_level);
 	pfree(join_method_hints);
 
+	/* CBDB: tell the join hooks that the hinted join search is over */
+	current_hint_state->join_hint_level = NULL;
+	for (i = 2; i <= nbaserel; i++)
+		list_free(current_hint_state->memoize_hint_level[i]);
+	pfree(current_hint_state->memoize_hint_level);
+	current_hint_state->memoize_hint_level = NULL;
+
 	if (leading_hint_enable)
-		set_join_config_options(current_hint_state->init_join_mask,
+		set_join_config_options(current_hint_state->init_join_mask, true,
 								current_hint_state->context);
 
 	return rel;
-}
-
-static void
-set_plain_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
-{
-	Relids		required_outer;
-
-	/*
-	 * We don't support pushing join clauses into the quals of a seqscan, but
-	 * it could still have required parameterization due to LATERAL refs in
-	 * its tlist.
-	 */
-	required_outer = rel->lateral_relids;
-
-	/* Consider sequential scan */
-	add_path(rel, create_seqscan_path(root, rel, required_outer, 0), root);
-
-	/* If appropriate, consider parallel sequential scan */
-	if (rel->consider_parallel && required_outer == NULL)
-		create_plain_partial_paths(root, rel);
-
-	/* Consider index scans */
-	create_index_paths(root, rel);
-
-	/* Consider TID scans */
-	create_tidscan_paths(root, rel);
 }
 
 /*
@@ -5036,12 +4928,16 @@ pg_hint_plan_set_rel_pathlist(PlannerInfo * root, RelOptInfo *rel,
 
 		foreach(lc, rel->partial_pathlist)
 		{
-			ListCell *lcp;
-			AppendPath *apath = (AppendPath *) lfirst(lc);
-			int		parallel_workers = 0;
+			ListCell   *lcp;
+			Node	   *path = (Node *) lfirst(lc);
+			AppendPath *apath;
+			int			parallel_workers;
 
-			if (!IsA(apath, AppendPath))
+			if (!IsA(path, AppendPath))
 				continue;
+
+			apath = (AppendPath *) path;
+			parallel_workers = apath->path.parallel_workers;
 
 			foreach (lcp, apath->subpaths)
 			{
@@ -5052,7 +4948,8 @@ pg_hint_plan_set_rel_pathlist(PlannerInfo * root, RelOptInfo *rel,
 					parallel_workers = spath->parallel_workers;
 			}
 
-			apath->path.parallel_workers = parallel_workers;
+			if (apath->path.parallel_workers < parallel_workers)
+				apath->path.parallel_workers = parallel_workers;
 			inhibit_nonparallel = true;
 		}
 
@@ -5171,10 +5068,13 @@ pg_hint_plan_set_rel_pathlist(PlannerInfo * root, RelOptInfo *rel,
 					}
 				}
 
-				/* Generate gather paths */
+				/*
+				 * Generate gather paths.  However, if this is an inheritance
+				 * child, skip it.
+				 */
 				if (rel->reloptkind == RELOPT_BASEREL &&
-					bms_membership(root->all_baserels) != BMS_SINGLETON)
-					generate_gather_paths(root, rel, false);
+					!bms_equal(rel->relids, root->all_baserels))
+					generate_useful_gather_paths(root, rel, false);
 			}
 		}
 	}
@@ -5182,82 +5082,58 @@ pg_hint_plan_set_rel_pathlist(PlannerInfo * root, RelOptInfo *rel,
 	reset_hint_enforcement();
 }
 
-
 /*
- * stmt_beg callback is called when each query in PL/pgSQL function is about
- * to be executed.  At that timing, we save query string in the global variable
- * plpgsql_query_string to use it in planner hook.  It's safe to use one global
- * variable for the purpose, because its content is only necessary until
- * planner hook is called for the query, so recursive PL/pgSQL function calls
- * don't harm this mechanism.
+ * set_plain_rel_pathlist
+ *	  Build access paths for a plain relation (no subquery, no inheritance)
+ *
+ * CBDB: copied from src/backend/optimizer/path/allpaths.c, where it is static.
+ * Upstream gets it from core.c, which Cloudberry does not carry; the join
+ * search code it holds is replaced by make_join_rel_hook and
+ * add_paths_to_joinrel_hook.
  */
 static void
-pg_hint_plan_plpgsql_stmt_beg(PLpgSQL_execstate *estate, PLpgSQL_stmt *stmt)
+set_plain_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 {
-	plpgsql_recurse_level++;
-}
-
-/*
- * stmt_end callback is called then each query in PL/pgSQL function has
- * finished.  At that timing, we clear plpgsql_query_string to tell planner
- * hook that next call is not for a query written in PL/pgSQL block.
- */
-static void
-pg_hint_plan_plpgsql_stmt_end(PLpgSQL_execstate *estate, PLpgSQL_stmt *stmt)
-{
+	Relids		required_outer;
 
 	/*
-	 * If we come here, we should have gone through the statement begin
-	 * callback at least once.
+	 * We don't support pushing join clauses into the quals of a seqscan, but
+	 * it could still have required parameterization due to LATERAL refs in
+	 * its tlist.
 	 */
-	if (plpgsql_recurse_level > 0)
-		plpgsql_recurse_level--;
-}
+	required_outer = rel->lateral_relids;
 
-void plpgsql_query_erase_callback(ResourceReleasePhase phase,
-								  bool isCommit,
-								  bool isTopLevel,
-								  void *arg)
-{
-	/* Cleanup is just applied once all the locks are released */
-	if (phase != RESOURCE_RELEASE_AFTER_LOCKS)
-		return;
+	/* Consider sequential scan */
+	add_path(rel, create_seqscan_path(root, rel, required_outer, 0), root);
 
-	if (isTopLevel)
-	{
-		/* Cancel recurse level */
-		plpgsql_recurse_level = 0;
-	}
-	else if (plpgsql_recurse_level > 0)
-	{
-		/*
-		 * This applies when a transaction is aborted for a PL/pgSQL query,
-		 * like when a transaction triggers an exception, or for an internal
-		 * commit.
-		 */
-		plpgsql_recurse_level--;
-	}
+	/* If appropriate, consider parallel sequential scan */
+	if (rel->consider_parallel && required_outer == NULL)
+		create_plain_partial_paths(root, rel);
+
+	/* Consider index and bitmap scans */
+	create_index_paths(root, rel);
+
+	create_tidscan_paths(root, rel);
 }
 
 #ifdef USE_ORCA
 /*
- * This function hook allows external code (i.e. backend) to parse a query into
- * hint structures.
+ * CBDB: plan_hint_hook.  ORCA is called from inside standard_planner(), after
+ * pg_hint_plan_planner() has parsed the hints of the query and pushed them on
+ * the hint stack, so hand that state over.  ORCA translates it into its own
+ * hint structures (see optimizer/hints.h, which mirrors the structures in this
+ * file).
  */
 static void *
-external_plan_hint_hook(Query *parse)
+pg_hint_plan_plan_hint_hook(Query *parse)
 {
-	if (parse == NULL)
+	if (parse == NULL || current_hint_state == NULL)
 		return NULL;
 
-	current_hint_retrieved = false;
-	get_current_hint_string(NULL, parse);
+	current_hint_state->log_level = debug_level;
 
-	if (!current_hint_str)
-		return NULL;
-
-	if(hstate)
-		hstate->log_level = debug_level;
-	return hstate;
+	return current_hint_state;
 }
 #endif
+
+#include "pg_stat_statements.c"

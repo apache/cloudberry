@@ -1,0 +1,330 @@
+# LANGUAGE message translation file for pg_hint_plan hint list.
+# Copyright (C) 2012-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+# This file is distributed under the same license as the pg_hint_plan
+# package.
+# Julien Rouhaud <rjuju123@gmail.com>, 2023.
+# Tatsuro Yamada <yamatattsu@gmail.com>, 2023.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: pg_hint_plan\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-03-20 16:24+0900\n"
+"PO-Revision-Date: 2023-07-14 14:57+0900\n"
+"Last-Translator: Tatsuro Yamada <yamatattsu@gmail.com>\n"
+"Language-Team: \n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.12.1\n"
+"X-Generator: Poedit 3.3.1\n"
+
+#: ../../hint_list.md:2 1413cb85416e498c8aaaff6b62daa9d2
+msgid "Hints list"
+msgstr "ヒント一覧"
+
+#: ../../hint_list.md:4 46d1b07bb54546d58c5786d83870adf2
+msgid "The available hints are listed below."
+msgstr "使用可能なヒントは以下の通りです。"
+
+#: ../../hint_list.md db9659cd2526419a89676ff6ca5d6e1f
+msgid "Group"
+msgstr "グループ"
+
+#: ../../hint_list.md eba61297968c4b788a46bde69cda4760
+msgid "Format"
+msgstr "書式"
+
+#: ../../hint_list.md 2e4e6a7a7b6542b58c870d963db8cea2
+msgid "Description"
+msgstr "説明"
+
+#: ../../hint_list.md 1168c0824df04b2296aa82164de23ada
+msgid "Scan method"
+msgstr "スキャン方法"
+
+#: ../../hint_list.md 69d089f1ca1e426a9f770b9813c9f373
+msgid "`SeqScan(table)`"
+msgstr "`SeqScan(テーブル)`"
+
+#: ../../hint_list.md 7f920c34598e41c4abbfeebfa0ec8871
+msgid "Forces sequential scan on the table"
+msgstr "指定されたテーブルにシーケンシャルスキャンを強制します。"
+
+#: ../../hint_list.md 3d91d6fbac2140b894d5bca6291216ad
+msgid "`TidScan(table)`"
+msgstr "`TidScan(テーブル)`"
+
+#: ../../hint_list.md 7370bfd7f6134bc089ca1829f1dd161b
+msgid "Forces TID scan on the table."
+msgstr ""
+"指定されたテーブルにTid スキャンを強制します。検索条件にctidを指定した場合にのみ"
+"有効です。"
+
+#: ../../hint_list.md 0997f45a936d496baa32ca3b4792b082
+msgid "`IndexScan(table[ index...])`"
+msgstr "`IndexScan(テーブル[ インデックス...])`"
+
+#: ../../hint_list.md 924f8a0bc9c44adba0472db377107fa5
+msgid "Forces index scan on the table. Restricts to specified indexes if any."
+msgstr ""
+"指定されたテーブルにインデックススキャンを強制します。指定されたインデックスがあ"
+"る場合は、そのインデックスに限定されます。"
+
+#: ../../hint_list.md 630c0aaa32e240a9aebbf6f0d6927b2b
+msgid "`IndexOnlyScan(table[ index...])`"
+msgstr "`IndexOnlyScan(テーブル[ インデックス...])`"
+
+#: ../../hint_list.md d8dbbcdae0d64097bd27d5a44512a2a8
+msgid ""
+"Forces index only scan on the table. Rstricts to specfied indexes if any. Index "
+"scan may be used if index only scan is not available. Available for PostgreSQL "
+"9.2 and later."
+msgstr ""
+"指定されたテーブルにインデックスオンリースキャンを強制します。指定されたインデッ"
+"クスがある場合は、そのインデックスに限定されます。インデックスオンリースキャンが"
+"利用できない場合、インデックススキャンが使用されることがあります。PostgreSQL 9.2"
+"以降で利用可能です。"
+
+#: ../../hint_list.md faf1f1c88f6a42a1b94e9ba8bbdfc6ed
+msgid "`BitmapScan(table[ index...])`"
+msgstr "`BitmapScan(テーブル[ インデックス...])`"
+
+#: ../../hint_list.md d6ab022dbdc046c78505847c00d1b4ed
+msgid "Forces bitmap scan on the table. Restoricts to specfied indexes if any."
+msgstr ""
+"指定されたテーブルにビットマップスキャンを強制します。指定されたインデックスがあ"
+"る場合は、そのインデックスに限定されます。"
+
+#: ../../hint_list.md 065a48f89a414a49a3d80e7781e8b756
+msgid ""
+"`IndexScanRegexp(table[ POSIX Regexp...])` `IndexOnlyScanRegexp(table[ POSIX "
+"Regexp...])` `BitmapScanRegexp(table[ POSIX Regexp...])`"
+msgstr ""
+"`IndexScanRegexp(テーブル[ POSIX正規表現...])` `IndexOnlyScanRegexp(テーブル"
+"[ POSIX正規表現...])` B`itmapScanRegexp(テーブル[ POSIX正規表現...])`"
+
+#: ../../hint_list.md 746cae5da6bb405bbb29cdf022f06a02
+msgid ""
+"Forces index scan or index only scan (For PostgreSQL 9.2 and later) or bitmap "
+"scan on the table. Restricts to indexes that matches the specified POSIX "
+"regular expression pattern"
+msgstr ""
+"指定されたテーブルにインデックススキャン、インデックスオンリースキャン"
+"（PostgreSQL 9.2以降）、ビットマップスキャンを強制します。指定されたPOSIX正規表"
+"現パターンに一致するインデックスに限定されます。"
+
+#: ../../hint_list.md 58887d5a7c3f4c6b8eaa45c2cb4ea7a2
+msgid "`NoSeqScan(table)`"
+msgstr "`NoSeqScan(テーブル)`"
+
+#: ../../hint_list.md 2c091bbb207d4f7fac9f128bee79238a
+msgid "Forces not to do sequential scan on the table."
+msgstr "指定されたテーブルにシーケンシャルスキャンを行わないように強制します。"
+
+#: ../../hint_list.md 26a8333a1b2c49c891ecacc60f1d8948
+msgid "`NoTidScan(table)`"
+msgstr "`NoTidScan(テーブル)`"
+
+#: ../../hint_list.md 157cf450e29f4601b3f4b6f2b07dd554
+msgid "Forces not to do TID scan on the table."
+msgstr "指定されたテーブルにTIDスキャンを行わないように強制します。"
+
+#: ../../hint_list.md 475fd42ff95e426598c786cf451e13ee
+msgid "`NoIndexScan(table)`"
+msgstr "`NoIndexScan(テーブル)`"
+
+#: ../../hint_list.md 733e3b00409f4ff0aa081d76f805bce4
+msgid ""
+"Forces not to do index scan and index only scan (For PostgreSQL 9.2 and later) "
+"on the table."
+msgstr ""
+"指定されたテーブルに対してインデックススキャン、インデックスオンリースキャン"
+"（PostgreSQL 9.2以降）を行わないように強制します。"
+
+#: ../../hint_list.md c25cd00bac584bb3b5d5533b3b0abbcf
+msgid "`NoIndexOnlyScan(table)`"
+msgstr "`NoIndexOnlyScan(テーブル)`"
+
+#: ../../hint_list.md db740f34a70443b995ad0c1d4c03f02a
+msgid ""
+"Forces not to do index only scan on the table. Available for PostgreSQL 9.2 and "
+"later."
+msgstr ""
+"指定されたテーブルにインデックスオンリースキャンを行わないように強制します。"
+"PostgreSQL 9.2以降で利用可能です。"
+
+#: ../../hint_list.md 38fe8e8cf87b404cab12a8094bb4af8a
+msgid "`NoBitmapScan(table)`"
+msgstr "`NoBitmapScan(テーブル)`"
+
+#: ../../hint_list.md 91c0bdc352d34cea9cf5e55c029f8be8
+msgid "Forces not to do bitmap scan on the table."
+msgstr "指定されたテーブルにビットマップスキャンを行わないように強制します。"
+
+#: ../../hint_list.md 72dfbf1afe674a58b3edec26c593413e
+msgid "Join method"
+msgstr "結合方法"
+
+#: ../../hint_list.md 0a05e92b87ab4945a326b57170e96309
+msgid "`NestLoop(table table[ table...])`"
+msgstr "`NestLoop(テーブル テーブル[ テーブル...])`"
+
+#: ../../hint_list.md a2dabc91f3cc4d79b1bb4248359806ce
+msgid "Forces nested loop for the joins consist of the specifiled tables."
+msgstr "指定されたテーブルで構成された結合にネステッドループ結合を強制します。"
+
+#: ../../hint_list.md 5d30da1c221540a8b87dd81e6c7eeec6
+msgid "`HashJoin(table table[ table...])`"
+msgstr "`HashJoin(テーブル テーブル[ テーブル...])`"
+
+#: ../../hint_list.md effcc9a4c6a04b70b7747d7220501685
+msgid "Forces hash join for the joins consist of the specifiled tables."
+msgstr "指定されたテーブルで構成された結合にハッシュ結合を強制します。"
+
+#: ../../hint_list.md 16c4fbcddc294a318cae6ca8c5f937a5
+msgid "`MergeJoin(table table[ table...])`"
+msgstr "`MergeJoin(テーブル テーブル[ テーブル...])`"
+
+#: ../../hint_list.md bf5200a3a8064ad2846aa15e41347678
+msgid "Forces merge join for the joins consist of the specifiled tables."
+msgstr "指定されたテーブルで構成された結合にマージ結合を強制します。"
+
+#: ../../hint_list.md 86a179c45c5746d69f616ffbd596732e
+msgid "`NoNestLoop(table table[ table...])`"
+msgstr "`NoNestLoop(テーブル テーブル[ テーブル...])`"
+
+#: ../../hint_list.md de1c5f2f54fb40dfb216d79602ab8ba3
+msgid ""
+"Forces not to do nested loop for the joins consist of the specifiled tables."
+msgstr ""
+"指定されたテーブルで構成する結合にネステッドループ結合が行われないように強制しま"
+"す。"
+
+#: ../../hint_list.md 83ca91534dc047b9802427739c982d39
+msgid "`NoHashJoin(table table[ table...])`"
+msgstr "`NoHashJoin(テーブル テーブル[ テーブル...])`"
+
+#: ../../hint_list.md c5190909839b405f976eb9a4577a62f5
+msgid "Forces not to do hash join for the joins consist of the specifiled tables."
+msgstr ""
+"指定されたテーブルで構成する結合にハッシュ結合が行われないように強制します。"
+
+#: ../../hint_list.md 7391503375834468a238e9cbbf2f4d8d
+msgid "`NoMergeJoin(table table[ table...])`"
+msgstr "`NoMergeJoin(テーブル テーブル[ テーブル...])`"
+
+#: ../../hint_list.md 75d038d3264647ef9ed3cccb4c0500c1
+msgid ""
+"Forces not to do merge join for the joins consist of the specifiled tables."
+msgstr ""
+"指定されたテーブルで構成する結合にマージ結合が行われないように強制します。"
+
+#: ../../hint_list.md f1b4eeed9580475f806023bc8637f4da
+msgid "Join order"
+msgstr "結合順序"
+
+#: ../../hint_list.md 217b3910fa25410c98bfcc3e5bf84667
+msgid "`Leading(table table[ table...])`"
+msgstr "`Leading(テーブル テーブル[ テーブル...])`"
+
+#: ../../hint_list.md 211e2292dd7044558afdefd4ebe073cc
+msgid "Forces join order as specified."
+msgstr "指定された結合順序に強制します。"
+
+#: ../../hint_list.md a601d2fcdabf45328c36c963d1a6c19b
+msgid "`Leading(<join pair>)`"
+msgstr "`Leading(<結合のペア>)`"
+
+#: ../../hint_list.md 1936d1297a294f5681842f6c41ed2c3b
+msgid ""
+"Forces join order and directions as specified. A join pair is a pair of tables "
+"and/or other join pairs enclosed by parentheses, which can make a nested "
+"structure."
+msgstr ""
+"指定された結合順序と方向を強制する。結合ペアは、括弧で囲まれたテーブルや他の結合"
+"ペアのペアであり、入れ子構造を作ることができます。"
+
+#: ../../hint_list.md 95863faa28434880931d9d8b59ed2e28
+msgid "Behavior control on Join"
+msgstr "結合時の挙動制御"
+
+#: ../../hint_list.md 531dc40687f8428aa27c3c37fd879b23
+msgid "`Memoize(table table[ table...])`"
+msgstr "`Memoize(テーブル テーブル[ テーブル...])`"
+
+#: ../../hint_list.md 87f89ceb23f14d93ab188f7a3320dc36
+msgid ""
+"Allow the topmost join of a join among the specified tables to memoize the "
+"inner result. (Note that this doesn't enforce.)"
+msgstr ""
+"指定されたテーブル間の結合の最上位の結合が、内部表の結果をメモすることを許可す"
+"る (これは強制ではないことに注意)。"
+
+#: ../../hint_list.md e795ca8346da48889cf64803b3c33c57
+msgid "`NoMemoize(table table[ table...])`"
+msgstr "`NoMemoize(テーブル テーブル[ テーブル...])`"
+
+#: ../../hint_list.md 6be8443991d1487887915652a8de0225
+msgid ""
+"Inhibit the topmost join of a join among the specified tables from memoizing "
+"the inner result."
+msgstr ""
+"指定されたテーブル間の結合の最上位の結合が、内部表の結果をメモすることを禁止しま"
+"す。"
+
+#: ../../hint_list.md 584e43a7d7a7486794f2883ce3917846
+msgid "Row number correction"
+msgstr "見積り行数の補正"
+
+#: ../../hint_list.md d0f5ca6f324e46f593e7bc3ad4444ccc
+msgid "`Rows(table table[ table...] correction)`"
+msgstr "`Rows(テーブル テーブル[ テーブル...] 行数補正)`"
+
+#: ../../hint_list.md 6fe388b4092c4029acd7d4afb79df8cb
+msgid ""
+"Corrects row number of a result of the joins consist of the specfied tables. "
+"The available correction methods are absolute (#<n>), addition (+<n>), subtract "
+"(-<n>) and multiplication (*<n>). <n> should be a string that strtod() can read."
+msgstr ""
+"指定されたテーブルの結合結果の見積り行数を補正します。補正方法は、絶対値(#<n>)、"
+"加算(+<n>)、減算(-<n>)、乗算(*<n>)です。<n>はstrtod()が読み込める文字列でなけれ"
+"ばなりません。"
+
+#: ../../hint_list.md aad2c1c5fa9a4c8dbd622799eb4fe2ea
+msgid "Parallel query configuration"
+msgstr "パラレルクエリの設定"
+
+#: ../../hint_list.md 22110dff7c3e47bd9d93187994aee370
+msgid "`Parallel(table <# of workers> [soft|hard])`"
+msgstr "`Parallel(table <ワーカー数> [soft|hard])`"
+
+#: ../../hint_list.md a4bab43927c64dab88a8178cd90be51b
+msgid ""
+"Enforce or inhibit parallel execution of specfied table. <# of workers> is the "
+"desired number of parallel workers, where zero means inhibiting parallel "
+"execution. If the third parameter is soft (default), it just changes "
+"max_parallel_workers_per_gather and leave everything else to planner. Hard "
+"means enforcing the specified number of workers."
+msgstr ""
+"指定されたテーブルの並列実行を強制または禁止します。<ワーカー数>は希望する並列"
+"ワーカー数で、0は並列実行を禁止することを意味します。第3パラメータがsoft（デフォ"
+"ルト）の場合、max_parallel_workers_per_gatherを変更するだけで、その他すべては"
+"plannerに任せます。hardは指定された数のワーカーを強制することを意味します。"
+
+#: ../../hint_list.md 4cdb0ede7ade4a5a83f290cbacb2e911
+msgid "GUC"
+msgstr "GUCパラメータ"
+
+#: ../../hint_list.md 4b61016be4784214b9878bf8c76664f5
+msgid "`Set(GUC-param value)`"
+msgstr "`Set(GUCパラメータ 値)`"
+
+#: ../../hint_list.md b2bf66afa23c4cd89339b17bde923280
+msgid "Set the GUC parameter to the value while planner is running."
+msgstr "プランナが実行中の間、GUCパラメータの値を設定します。"
+
+#~ msgid "copyright (c) 2012-2023, nippon telegraph and telephone corporation"
+#~ msgstr "copyright (c) 2012-2023, nippon telegraph and telephone corporation"

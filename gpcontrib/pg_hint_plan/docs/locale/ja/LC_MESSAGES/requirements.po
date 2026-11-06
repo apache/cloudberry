@@ -1,0 +1,78 @@
+# LANGUAGE message translation file for pg_hint_plan requirements.
+# Copyright (C) 2012-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+# This file is distributed under the same license as the pg_hint_plan
+# package.
+# Julien Rouhaud <rjuju123@gmail.com>, 2023.
+# Tatsuro Yamada <yamatattsu@gmail.com>, 2023.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: pg_hint_plan\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-03-02 12:25+0800\n"
+"PO-Revision-Date: 2023-06-05 16:07+0900\n"
+"Last-Translator: Tatsuro Yamada <yamatattsu@gmail.com>\n"
+"Language-Team: \n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.12.1\n"
+"X-Generator: Poedit 3.3.1\n"
+
+#: ../../requirements.md:1 68a32e7085974f1e910660f736a6dfec
+msgid "Requirements"
+msgstr "動作環境"
+
+#: ../../requirements.md:3 3e0ef43c79334e4b8818ab973f0b8e8b
+msgid "pg_hint_plan 1.6 requires PostgreSQL 16."
+msgstr "pg_hint_plan 1.6 は PostgreSQL 16 のみをサポートします。"
+
+#: ../../requirements.md:6 d30d4c9f346147fa85c1103448fcf5a6
+msgid "PostgreSQL versions tested"
+msgstr "テスト済みのPostgreSQLバージョン"
+
+#: ../../requirements.md:8 454cb93d64d74a68adbb68d0627fbe57
+msgid "Version 16"
+msgstr "バージョン 16"
+
+#: ../../requirements.md:10 9c91df10a07a47309edd0401d0d87c2a
+msgid "OS versions tested"
+msgstr "テスト済みのOSバージョン"
+
+#: ../../requirements.md:12 fc18a166243b42e2a3066aaf4059bb64
+msgid "CentOS 8.5"
+msgstr "CentOS 8.5"
+
+#: ../../requirements.md:14 d9dc1776bac04d808fe625969d4ae98a
+msgid "See also"
+msgstr "関連項目"
+
+#: ../../requirements.md:17 3415b19f8d7a4e4ab5a28944d6c57ea8
+msgid "PostgreSQL documents"
+msgstr "PostgreSQLドキュメント"
+
+#: ../../requirements.md:19 edb6d92b6a774ef29d69a1547025766e
+msgid "[EXPLAIN](http://www.postgresql.org/docs/current/static/sql-explain.html)"
+msgstr "[EXPLAIN](http://www.postgresql.org/docs/current/static/sql-explain.html)"
+
+#: ../../requirements.md:20 cf2ad6532eb149d28aad3e2a8f23f30b
+msgid "[SET](http://www.postgresql.org/docs/current/static/sql-set.html)"
+msgstr "[SET](http://www.postgresql.org/docs/current/static/sql-set.html)"
+
+#: ../../requirements.md:21 709e880d2b554e8a9dc6df98b7897b2e
+msgid ""
+"[Server Config](http://www.postgresql.org/docs/current/static/runtime-config."
+"html)"
+msgstr ""
+"[Server Config](http://www.postgresql.org/docs/current/static/runtime-config."
+"html)"
+
+#: ../../requirements.md:22 56a36dfb4f7c4680ae9479a0ed07f17d
+msgid ""
+"[Parallel Plans](http://www.postgresql.org/docs/current/static/parallel-plans."
+"html)"
+msgstr ""
+"[Parallel Plans](http://www.postgresql.org/docs/current/static/parallel-plans."
+"html)"

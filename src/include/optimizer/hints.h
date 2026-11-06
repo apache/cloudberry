@@ -4,9 +4,10 @@
  *
  *  This file duplicates some internal structures from pg_hint_plan.c so
  *  that the parser can be leveraged by callers outside the pg_hint_plan
- *  extension.
+ *  extension.  It must be kept in sync with
+ *  gpcontrib/pg_hint_plan/pg_hint_plan.c, currently pg_hint_plan 1.6.3.
  *
- * Copyright (c) 2012-2020, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ * Copyright (c) 2012-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  *
  *-------------------------------------------------------------------------
  */
@@ -47,6 +48,8 @@ typedef enum HintKeyword
 	HINT_KEYWORD_SET,
 	HINT_KEYWORD_ROWS,
 	HINT_KEYWORD_PARALLEL,
+	HINT_KEYWORD_MEMOIZE,
+	HINT_KEYWORD_NOMEMOIZE,
 
 	HINT_KEYWORD_UNRECOGNIZED
 } HintKeyword;
@@ -69,11 +72,9 @@ typedef Hint *(*HintCreateFunction) (const char *hint_str,
 typedef void (*HintDeleteFunction) (Hint *hint);
 typedef void (*HintDescFunction) (Hint *hint, StringInfo buf, bool nolf);
 typedef int (*HintCmpFunction) (const Hint *a, const Hint *b);
-typedef const char *(*HintParseFunction) (Hint *hint, HintState *hstate,
-										  Query *parse, const char *str);
+typedef const char *(*HintParseFunction) (Hint *hint, const char *str);
 
 /* hint types */
-#define NUM_HINT_TYPE	6
 typedef enum HintType
 {
 	HINT_TYPE_SCAN_METHOD,
@@ -81,7 +82,10 @@ typedef enum HintType
 	HINT_TYPE_LEADING,
 	HINT_TYPE_SET,
 	HINT_TYPE_ROWS,
-	HINT_TYPE_PARALLEL
+	HINT_TYPE_PARALLEL,
+	HINT_TYPE_MEMOIZE,
+
+	NUM_HINT_TYPE
 } HintType;
 
 typedef enum HintTypeBitmap
@@ -238,12 +242,14 @@ struct HintState
 	JoinMethodHint **join_hints;		/* parsed join hints */
 	int				init_join_mask;		/* initial value join parameter */
 	List		  **join_hint_level;
+	List		  **memoize_hint_level;
 	LeadingHint	  **leading_hint;		/* parsed Leading hints */
 	SetHint		  **set_hints;			/* parsed Set hints */
 	GucContext		context;			/* which GUC parameters can we set? */
 	RowsHint	  **rows_hints;			/* parsed Rows hints */
 	ParallelHint  **parallel_hints;		/* parsed Parallel hints */
-	int				log_level;  /* debug_print log level */
+	JoinMethodHint **memoize_hints;		/* parsed Memoize hints */
+	int				log_level;			/* debug_print log level */
 };
 
 #endif	// !OPTIMIZER_HINTS_H
