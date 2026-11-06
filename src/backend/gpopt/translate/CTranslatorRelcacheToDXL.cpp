@@ -711,7 +711,8 @@ CTranslatorRelcacheToDXL::RetrieveRelColumns(CMemoryPool *mp,
 
 		CMDColumn *md_col = GPOS_NEW(mp)
 			CMDColumn(md_colname, att->attnum, mdid_col, att->atttypmod,
-					  !att->attnotnull, att->attisdropped, col_len);
+					  !att->attnotnull, att->attisdropped, col_len,
+					  att->attcollation);
 
 		mdcol_array->Append(md_col);
 	}
@@ -1327,7 +1328,8 @@ CTranslatorRelcacheToDXL::RetrieveType(CMemoryPool *mp, IMDId *mdid)
 		mdid_part_opfamily, mdid_op_eq, mdid_op_neq, mdid_op_lt, mdid_op_leq,
 		mdid_op_gt, mdid_op_geq, mdid_op_cmp, mdid_min, mdid_max, mdid_avg,
 		mdid_sum, mdid_count, is_hashable, is_merge_joinable, is_composite_type,
-		is_text_related_type, mdid_type_relid, mdid_type_array, ptce->typlen);
+		is_text_related_type, mdid_type_relid, mdid_type_array, ptce->typlen,
+		ptce->typcollation);
 }
 
 
@@ -2885,6 +2887,28 @@ CTranslatorRelcacheToDXL::IsIndexSupported(Relation index_rel)
 							BRIN_AM_OID == index_rel->rd_rel->relam);
 	if (index_supported)
 	{
+		// ORCA does not track index collations and assumes an index orders
+		// and compares its keys like the indexed columns do. Hide indexes
+		// whose key collation differs from the column's, e.g.
+		// CREATE INDEX ON t (c COLLATE "default") on a COLLATE "C" column,
+		// so that they are not used for predicates or orderings they cannot
+		// answer.
+		Form_pg_index form_pg_index = index_rel->rd_index;
+		for (int i = 0; i < form_pg_index->indnkeyatts; i++)
+		{
+			Oid index_collation = index_rel->rd_indcollation[i];
+			if (!OidIsValid(index_collation))
+			{
+				continue;
+			}
+
+			Oid column_collation = gpdb::GetAttCollation(
+				form_pg_index->indrelid, form_pg_index->indkey.values[i]);
+			if (index_collation != column_collation)
+			{
+				return false;
+			}
+		}
 		return true;
 	}
 

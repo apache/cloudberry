@@ -59,11 +59,15 @@ private:
 	// is the column a partition col
 	BOOL m_is_part_col;
 
+	// collation OID
+	OID m_collation;
+
 public:
 	// ctor
 	CColumnDescriptor(CMemoryPool *mp, const IMDType *pmdtype,
 					  INT type_modifier, const CName &name, INT attno,
-					  BOOL is_nullable, ULONG ulWidth = gpos::ulong_max);
+					  BOOL is_nullable, ULONG ulWidth = gpos::ulong_max,
+					  OID collation = 0);
 
 	// dtor
 	~CColumnDescriptor() override;
@@ -115,6 +119,13 @@ public:
 	Width() const
 	{
 		return m_width;
+	}
+
+	// collation of the column
+	OID
+	Collation() const
+	{
+		return m_collation;
 	}
 
 	// is this a distribution column

@@ -186,17 +186,35 @@ gpdb::ExprCollation(Node *expr)
 	{
 		if (expr && IsA(expr, List))
 		{
-			// GPDB_91_MERGE_FIXME: collation
+			/*
+			 * Resolve common collation for a list of expressions,
+			 * matching PostgreSQL's merge_collation_state() rule:
+			 * non-default implicit collation always beats default.
+			 */
 			List *exprlist = (List *) expr;
 			ListCell *lc;
 
 			Oid collation = InvalidOid;
 			foreach (lc, exprlist)
 			{
-				Node *expr = (Node *) lfirst(lc);
-				if ((collation = exprCollation(expr)) != InvalidOid)
+				Node *child = (Node *) lfirst(lc);
+				Oid child_coll = exprCollation(child);
+				if (!OidIsValid(child_coll))
+					continue;
+				if (!OidIsValid(collation))
 				{
-					break;
+					collation = child_coll;
+				}
+				else if (child_coll != collation)
+				{
+					/*
+					 * Non-default beats default, matching PG's rule.
+					 * If both are non-default and differ, keep the first
+					 * (the parser would have detected a true conflict
+					 * before ORCA sees the query).
+					 */
+					if (collation == DEFAULT_COLLATION_OID)
+						collation = child_coll;
 				}
 			}
 			return collation;
@@ -222,6 +240,22 @@ gpdb::TypeCollation(Oid type)
 	}
 	GP_WRAP_END;
 	return 0;
+}
+
+Oid
+gpdb::GetAttCollation(Oid relid, AttrNumber attnum)
+{
+	GP_WRAP_START;
+	{
+		Oid typid;
+		int32 typmod;
+		Oid collid;
+
+		get_atttypetypmodcoll(relid, attnum, &typid, &typmod, &collid);
+		return collid;
+	}
+	GP_WRAP_END;
+	return InvalidOid;
 }
 
 void
@@ -1466,12 +1500,12 @@ gpdb::MakeTargetEntry(Expr *expr, AttrNumber resno, char *resname, bool resjunk)
 
 Var *
 gpdb::MakeVar(Index varno, AttrNumber varattno, Oid vartype, int32 vartypmod,
-			  Index varlevelsup)
+			  Oid varcollid, Index varlevelsup)
 {
 	GP_WRAP_START;
 	{
-		// GPDB_91_MERGE_FIXME: collation
-		Oid collation = TypeCollation(vartype);
+		Oid collation =
+			OidIsValid(varcollid) ? varcollid : TypeCollation(vartype);
 		return makeVar(varno, varattno, vartype, vartypmod, collation,
 					   varlevelsup);
 	}

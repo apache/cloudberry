@@ -249,6 +249,11 @@ public:
 											 const CColRefSet *pcrs,
 											 BOOL fIncludesNull);
 
+	// can an interval be derived from comparing the column with a constant
+	// using the given comparison type
+	static BOOL FColConstCmpSupported(const CColRef *colref,
+									  IMDType::ECmpType cmp_type);
+
 	// helper for create interval from comparison between a column and a constant
 	static CConstraintInterval *PciIntervalFromColConstCmp(
 		CMemoryPool *mp, CColRef *colref, IMDType::ECmpType cmp_type,

@@ -543,7 +543,7 @@ CQueryMutators::FixGroupingCols(Node *node, TargetEntry *orginal_target_entry,
 	Var *new_var = gpdb::MakeVar(
 		1,	// varno
 		(AttrNumber) arity, gpdb::ExprType((Node *) orginal_target_entry->expr),
-		gpdb::ExprTypeMod((Node *) orginal_target_entry->expr),
+		gpdb::ExprTypeMod((Node *) orginal_target_entry->expr), InvalidOid,
 		0  // query levelsup
 	);
 
@@ -897,7 +897,7 @@ CQueryMutators::MakeVarInDerivedTable(Node *node,
 	// to the original tlist.
 	Var *new_var =
 		gpdb::MakeVar(1 /* varno */, attno, gpdb::ExprType((Node *) node),
-					  gpdb::ExprTypeMod((Node *) node),
+					  gpdb::ExprTypeMod((Node *) node), InvalidOid,
 					  context->m_current_query_level /* varlevelsup */);
 
 	return new_var;
@@ -925,6 +925,7 @@ CQueryMutators::FindNodeInGroupByTargetList(Node *node,
 			gpdb::MakeVar(1 /* varno */, found_tle->resno,
 						  gpdb::ExprType((Node *) found_tle->expr),
 						  gpdb::ExprTypeMod((Node *) found_tle->expr),
+						  InvalidOid,
 						  context->m_current_query_level /* varlevelsup */);
 
 		found_tle->resjunk = false;
@@ -1141,7 +1142,7 @@ CQueryMutators::MakeTopLevelTargetEntry(TargetEntry *old_target_entry,
 {
 	Var *new_var = gpdb::MakeVar(
 		1, (AttrNumber) attno, gpdb::ExprType((Node *) old_target_entry->expr),
-		gpdb::ExprTypeMod((Node *) old_target_entry->expr),
+		gpdb::ExprTypeMod((Node *) old_target_entry->expr), InvalidOid,
 		0  // query levelsup
 	);
 
@@ -1339,7 +1340,7 @@ CQueryMutators::EliminateDistinctClause(const Query *query)
 				gpdb::MakeVar(1, target_entry->resno,
 							  gpdb::ExprType((Node *) target_entry->expr),
 							  gpdb::ExprTypeMod((Node *) target_entry->expr),
-							  0	 // query levels up
+							  InvalidOid, 0  // query levels up
 				);
 			TargetEntry *new_target_entry =
 				gpdb::MakeTargetEntry((Expr *) new_var, (AttrNumber) resno,
@@ -1521,7 +1522,7 @@ CQueryMutators::NormalizeWindowProjList(CMemoryPool *mp,
 					1, lower_target_entry->resno,
 					gpdb::ExprType((Node *) target_entry->expr),
 					gpdb::ExprTypeMod((Node *) target_entry->expr),
-					0  // query levels up
+					InvalidOid, 0  // query levels up
 				);
 				TargetEntry *upper_target_entry = gpdb::MakeTargetEntry(
 					(Expr *) new_var, ulResNoNew, target_entry->resname,
@@ -1624,7 +1625,7 @@ CQueryMutators::RunWindowProjListMutator(Node *node,
 		Var *new_var = gpdb::MakeVar(
 			1,	// derived query which is now the only table in FROM expression
 			(AttrNumber) resno, gpdb::ExprType(node), gpdb::ExprTypeMod(node),
-			0  // query levelsup
+			InvalidOid, 0  // query levelsup
 		);
 
 		return (Node *) new_var;

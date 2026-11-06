@@ -26,11 +26,12 @@ using namespace gpdxl;
 //
 //---------------------------------------------------------------------------
 CDXLColRef::CDXLColRef(CMDName *mdname, ULONG id, IMDId *mdid_type,
-					   INT type_modifier)
+					   INT type_modifier, IMDId *mdid_collation)
 	: m_mdname(mdname),
 	  m_id(id),
 	  m_mdid_type(mdid_type),
-	  m_iTypeModifer(type_modifier)
+	  m_iTypeModifer(type_modifier),
+	  m_mdid_collation(mdid_collation)
 {
 	GPOS_ASSERT(m_mdid_type->IsValid());
 }
@@ -47,6 +48,10 @@ CDXLColRef::~CDXLColRef()
 {
 	GPOS_DELETE(m_mdname);
 	m_mdid_type->Release();
+	if (m_mdid_collation)
+	{
+		m_mdid_collation->Release();
+	}
 }
 
 //---------------------------------------------------------------------------
@@ -81,6 +86,12 @@ INT
 CDXLColRef::TypeModifier() const
 {
 	return m_iTypeModifer;
+}
+
+IMDId *
+CDXLColRef::MdidCollation() const
+{
+	return m_mdid_collation;
 }
 
 //---------------------------------------------------------------------------

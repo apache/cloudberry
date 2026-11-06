@@ -29,7 +29,8 @@ using namespace gpmd;
 //---------------------------------------------------------------------------
 CColRefTable::CColRefTable(const CColumnDescriptor *pcoldesc, ULONG id,
 						   const CName *pname, ULONG ulOpSource)
-	: CColRef(pcoldesc->RetrieveType(), pcoldesc->TypeModifier(), id, pname),
+	: CColRef(pcoldesc->RetrieveType(), pcoldesc->TypeModifier(), id, pname,
+			  pcoldesc->Collation()),
 	  m_iAttno(0),
 	  m_ulSourceOpId(ulOpSource),
 	  m_width(pcoldesc->Width())
