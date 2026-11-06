@@ -1489,9 +1489,16 @@ jobs:
                 continue
               fi
 
-              # Source configuration results
-              # shellcheck source=/dev/null
-              . "test_results.${{ matrix.test }}.$i.txt"
+              # Read result fields as data, not shell commands. Reset optional
+              # fields on each iteration so they cannot leak from a prior suite.
+              STATUS= TOTAL_TESTS= PASSED_TESTS= FAILED_TESTS= IGNORED_TESTS=
+              FAILED_TEST_NAMES= IGNORED_TEST_NAMES=
+              while IFS='=' read -r key value; do
+                case "$key" in
+                  STATUS|TOTAL_TESTS|PASSED_TESTS|FAILED_TESTS|IGNORED_TESTS|FAILED_TEST_NAMES|IGNORED_TEST_NAMES)
+                    printf -v "$key" '%s' "$value" ;;
+                esac
+              done < "test_results.${{ matrix.test }}.$i.txt"
 
               # Rest of the code remains the same...
               # Display status with emoji
