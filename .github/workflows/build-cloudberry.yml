@@ -377,6 +377,9 @@ jobs:
               },
               {"test":"ic-walrep",
                "make_configs":["src/test/walrep:installcheck"]
+              },
+              {"test":"ic-libpq-pipeline",
+               "make_configs":["src/test/modules/libpq_pipeline:all installcheck"]
               }
             ]
           }'
