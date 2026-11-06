@@ -144,7 +144,7 @@ int main(int argc, char *argv[])
 		read_data(newsockfd, (char*) &value4, sizeof(value4));
 		if (n == 0)
 		{
-			fprintf(stderr, "%s: invalid record format recieved\n", argv[0]);
+			fprintf(stderr, "%s: invalid record format received\n", argv[0]);
 			exit(1);
 		}
 
@@ -165,7 +165,7 @@ int main(int argc, char *argv[])
 	}
 	if (n > 0)
 	{
-		fprintf(stderr, "%s: invalid record format recieved\n", argv[0]);
+		fprintf(stderr, "%s: invalid record format received\n", argv[0]);
 		exit(1);
 	}
 
