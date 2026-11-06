@@ -2167,7 +2167,13 @@ BaseBackup(char *compression_algorithm, char *compression_detail,
 	{
 		/* Receive a single tar stream with everything. */
 		ReceiveArchiveStream(conn, client_compress);
-		WriteInternalConfFile();
+
+		/*
+		 * Cloudberry: write internal.auto.conf only into a plain format
+		 * backup in a local directory, as before the REL_16_9 merge.
+		 */
+		if (backup_target == NULL && format == 'p')
+			WriteInternalConfFile();
 	}
 	else
 	{
@@ -2200,8 +2206,10 @@ BaseBackup(char *compression_algorithm, char *compression_detail,
 			ReceiveTarFile(conn, archive_name, spclocation, i,
 						   client_compress);
 		}
-		
-		WriteInternalConfFile();
+
+		/* Cloudberry: see the comment for the single archive stream. */
+		if (backup_target == NULL && format == 'p')
+			WriteInternalConfFile();
 
 		
 		/*
