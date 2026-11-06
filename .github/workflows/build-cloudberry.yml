@@ -377,6 +377,9 @@ jobs:
               },
               {"test":"ic-walrep",
                "make_configs":["src/test/walrep:installcheck"]
+              },
+              {"test":"ic-plpython",
+               "make_configs":["src/pl/plpython:installcheck"]
               }
             ]
           }'

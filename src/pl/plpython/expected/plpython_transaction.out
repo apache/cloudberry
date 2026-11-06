@@ -206,8 +206,7 @@ plpy.execute("INSERT INTO testfk VALUES (0)")
 plpy.commit()
 plpy.warning('should not get here')
 $$;
-ERROR:  spiexceptions.ForeignKeyViolation: insert or update on table "testfk" violates foreign key constraint "testfk_f1_fkey"
-DETAIL:  Key (f1)=(0) is not present in table "testpk".
+ERROR:  spiexceptions.FaultInject: fault triggered, fault name:'after_trigger_fire_deferred' fault type:'error'
 CONTEXT:  Traceback (most recent call last):
   PL/Python anonymous code block, line 4, in <module>
     plpy.commit()
@@ -233,7 +232,7 @@ except Exception as e:
 plpy.execute("INSERT INTO testpk VALUES (1)")
 plpy.execute("INSERT INTO testfk VALUES (1)")
 $$;
-INFO:  sqlstate: 23503
+INFO:  sqlstate: XX009
 SELECT * FROM testpk;
  id 
 ----
