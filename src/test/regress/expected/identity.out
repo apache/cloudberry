@@ -368,19 +368,30 @@ ERROR:  identity column type must be smallint, integer, or bigint
 -- check that unlogged propagates to sequence
 CREATE UNLOGGED TABLE itest17 (a int NOT NULL, b text);
 ALTER TABLE itest17 ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY;
-ERROR:  unlogged sequences are not supported
 ALTER TABLE itest17 ADD COLUMN c int GENERATED ALWAYS AS IDENTITY;
-ERROR:  unlogged sequences are not supported
 \d itest17
-          Unlogged table "public.itest17"
- Column |  Type   | Collation | Nullable | Default 
---------+---------+-----------+----------+---------
- a      | integer |           | not null | 
+                    Unlogged table "public.itest17"
+ Column |  Type   | Collation | Nullable |           Default            
+--------+---------+-----------+----------+------------------------------
+ a      | integer |           | not null | generated always as identity
  b      | text    |           |          | 
+ c      | integer |           | not null | generated always as identity
 Distributed by: (a)
 
 \d itest17_a_seq
+                   Sequence "public.itest17_a_seq"
+  Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache 
+---------+-------+---------+------------+-----------+---------+-------
+ integer |     1 |       1 | 2147483647 |         1 | no      |     1
+Sequence for identity column: public.itest17.a
+
 \d itest17_c_seq
+                   Sequence "public.itest17_c_seq"
+  Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache 
+---------+-------+---------+------------+-----------+---------+-------
+ integer |     1 |       1 | 2147483647 |         1 | no      |     1
+Sequence for identity column: public.itest17.c
+
 CREATE TABLE itest18 (a int NOT NULL, b text);
 ALTER TABLE itest18 SET UNLOGGED, ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY;
 \d itest18
@@ -391,7 +402,7 @@ ALTER TABLE itest18 SET UNLOGGED, ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTIT
  b      | text    |           |          | 
 
 \d itest18_a_seq
-               Unlogged sequence "public.itest18_a_seq"
+                   Sequence "public.itest18_a_seq"
   Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache 
 ---------+-------+---------+------------+-----------+---------+-------
  integer |     1 |       1 | 2147483647 |         1 | no      |     1
@@ -421,7 +432,7 @@ ALTER TABLE itest18 SET UNLOGGED;
  b      | text    |           |          | 
 
 \d itest18_a_seq
-               Unlogged sequence "public.itest18_a_seq"
+                   Sequence "public.itest18_a_seq"
   Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache 
 ---------+-------+---------+------------+-----------+---------+-------
  integer |     1 |       1 | 2147483647 |         1 | no      |     1
@@ -681,14 +692,14 @@ DROP TABLE itest16;
 CREATE TABLE identity_dump_logged (a INT GENERATED ALWAYS AS IDENTITY);
 ALTER SEQUENCE identity_dump_logged_a_seq SET UNLOGGED;
 CREATE UNLOGGED TABLE identity_dump_unlogged (a INT GENERATED ALWAYS AS IDENTITY);
-ERROR:  unlogged sequences are not supported
 ALTER SEQUENCE identity_dump_unlogged_a_seq SET LOGGED;
-ERROR:  relation "identity_dump_unlogged_a_seq" does not exist
 SELECT relname, relpersistence FROM pg_class
   WHERE relname ~ '^identity_dump_' ORDER BY 1;
-          relname           | relpersistence 
-----------------------------+----------------
- identity_dump_logged       | p
- identity_dump_logged_a_seq | u
-(2 rows)
+           relname            | relpersistence 
+------------------------------+----------------
+ identity_dump_logged         | p
+ identity_dump_logged_a_seq   | u
+ identity_dump_unlogged       | u
+ identity_dump_unlogged_a_seq | p
+(4 rows)
 
