@@ -367,6 +367,7 @@ my %tests = (
 		like => { binary_upgrade => 1, },
 	},
 
+	# Cloudberry: the default sequence cache is 20, not 1.
 	'CREATE SEQUENCE regress_pg_dump_seq' => {
 		regexp => qr/^
                     \QCREATE SEQUENCE public.regress_pg_dump_seq\E
@@ -374,16 +375,18 @@ my %tests = (
                     \n\s+\QINCREMENT BY 1\E
                     \n\s+\QNO MINVALUE\E
                     \n\s+\QNO MAXVALUE\E
-                    \n\s+\QCACHE 1;\E
+                    \n\s+\QCACHE 20;\E
                     \n/xm,
 		like => { binary_upgrade => 1, },
 	},
 
+	# Cloudberry: nextval() takes a whole cache of 20 values, so the sequence
+	# is at 20.
 	'SETVAL SEQUENCE regress_seq_dumpable' => {
 		create_order => 6,
 		create_sql   => qq{SELECT nextval('regress_seq_dumpable');},
 		regexp       => qr/^
-			\QSELECT pg_catalog.setval('public.regress_seq_dumpable', 1, true);\E
+			\QSELECT pg_catalog.setval('public.regress_seq_dumpable', 20, true);\E
 			\n/xm,
 		like => {
 			%full_runs,
@@ -597,6 +600,7 @@ my %tests = (
 		like => { binary_upgrade => 1, },
 	},
 
+	# Cloudberry: the default sequence cache is 20, not 1.
 	'CREATE SEQUENCE regress_pg_dump_schema.test_seq' => {
 		regexp => qr/^
                     \QCREATE SEQUENCE regress_pg_dump_schema.test_seq\E
@@ -604,7 +608,7 @@ my %tests = (
                     \n\s+\QINCREMENT BY 1\E
                     \n\s+\QNO MINVALUE\E
                     \n\s+\QNO MAXVALUE\E
-                    \n\s+\QCACHE 1;\E
+                    \n\s+\QCACHE 20;\E
                     \n/xm,
 		like => { binary_upgrade => 1, },
 	},
@@ -635,10 +639,11 @@ my %tests = (
 		like => { binary_upgrade => 1, },
 	},
 
+	# Cloudberry: pg_dump also writes the SQL data access of the function.
 	'CREATE FUNCTION regress_pg_dump_schema.test_func' => {
 		regexp => qr/^
             \QCREATE FUNCTION regress_pg_dump_schema.test_func() RETURNS integer\E
-            \n\s+\QLANGUAGE sql\E
+            \n\s+\QLANGUAGE sql CONTAINS SQL\E
             \n/xm,
 		like => { binary_upgrade => 1, },
 	},
