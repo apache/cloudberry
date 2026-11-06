@@ -852,6 +852,16 @@ WHERE t1_issue_2047.a > (
  4 | 1
 (1 row)
 
+CREATE TEMP TABLE t_out AS SELECT 1 a, 2 b DISTRIBUTED BY (b);
+CREATE TEMP TABLE t_in AS SELECT v.a FROM (VALUES (1),(1),(2)) v(a) DISTRIBUTED BY (a);
+ANALYZE t_out, t_in;
+SELECT * FROM t_out
+WHERE t_out.b IN (SELECT count(*) OVER () FROM t_in WHERE t_in.a = t_out.a);
+ a | b 
+---+---
+ 1 | 2
+(1 row)
+
 -- start_ignore
 drop table if exists bfv_planner_x;
 drop table if exists testbadsql;
