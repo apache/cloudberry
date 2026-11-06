@@ -7158,8 +7158,12 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 		/*
 		 * Also change persistence of owned sequences, so that it matches the
 		 * table persistence.
+		 *
+		 * Cloudberry does not support unlogged sequences, so the owned
+		 * sequences of a table that becomes unlogged stay logged.
 		 */
-		if (tab->chgPersistence)
+		if (tab->chgPersistence &&
+			tab->newrelpersistence != RELPERSISTENCE_UNLOGGED)
 		{
 			List	   *seqlist = getOwnedSequences(tab->relid);
 			ListCell   *lc;
