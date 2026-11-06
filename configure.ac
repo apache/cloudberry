@@ -513,6 +513,26 @@ else
   BITCODE_CXXFLAGS="-O2 $BITCODE_CXXFLAGS"
 fi
 
+# We use C constructs that became invalid in C23.  Check if the compiler
+# reports a standard higher than C17, with the flags selected above (so the
+# user can control the language level explicitly to avoid the gcc/clang-only
+# fallback logic below if preferred).
+AC_MSG_CHECKING([whether $CC reports a C standard higher than ISO C17])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [@%:@if __STDC_VERSION__ > 201710L
+choke me
+@%:@endif])], [POSTC17=no], [POSTC17=yes])
+AC_MSG_RESULT(${POSTC17})
+
+# If a too recent standard was detected with the user's CFLAGS, try asking for
+# C17 with GNU extensions explicitly.
+if test "$POSTC17" = yes; then
+  old_CFLAGS="$CFLAGS"
+  PGAC_PROG_CC_CFLAGS_OPT([-std=gnu17])
+  if test "$CFLAGS" = "$old_CFLAGS"; then
+    AC_MSG_ERROR([cannot proceed])
+  fi
+fi
+
 # C[XX]FLAGS we determined above will be added back at the end
 user_CFLAGS=$CFLAGS
 CFLAGS=""
@@ -1943,8 +1963,6 @@ fi
 ## Header files
 ##
 
-AC_HEADER_STDBOOL
-
 AC_CHECK_HEADERS(m4_normalize([
 	atomic.h
 	copyfile.h
@@ -2355,14 +2373,11 @@ if test "$ac_cv_sizeof_off_t" -lt 8 -a "$segsize" != "1"; then
    AC_MSG_ERROR([Large file support is not enabled. Segment size cannot be larger than 1GB.])
 fi
 
-AC_CHECK_SIZEOF([bool], [],
-[#ifdef HAVE_STDBOOL_H
-#include <stdbool.h>
-#endif])
+AC_CHECK_SIZEOF([bool], [], [#include <stdbool.h>])
 
-dnl We use <stdbool.h> if we have it and it declares type bool as having
-dnl size 1.  Otherwise, c.h will fall back to declaring bool as unsigned char.
-if test "$ac_cv_header_stdbool_h" = yes -a "$ac_cv_sizeof_bool" = 1; then
+dnl We use <stdbool.h> if bool has size 1 after including it.  Otherwise, c.h
+dnl will fall back to declaring bool as unsigned char.
+if test "$ac_cv_sizeof_bool" = 1; then
   AC_DEFINE([PG_USE_STDBOOL], 1,
             [Define to 1 to use <stdbool.h> to define type bool.])
 fi

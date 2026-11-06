@@ -34,7 +34,7 @@ make_item_pointer(BlockId block_id, OffsetNumber offset_number)
  * Cloudberry append-only tables allow for the full 16 bits of OffsetNumber
  */
 static void
-test_compress_gin_posting_list_with_item_pointer_with_offset_larger_than_eleven_bits()
+test_compress_gin_posting_list_with_item_pointer_with_offset_larger_than_eleven_bits(void **state)
 {
 	OffsetNumber offset_number_larger_than_11_bits = 3000;
 	int number_of_item_pointers = 1;
@@ -59,7 +59,7 @@ test_compress_gin_posting_list_with_item_pointer_with_offset_larger_than_eleven_
 }
 
 static void
-test_compress_gin_posting_list_with_multiple_item_pointers()
+test_compress_gin_posting_list_with_multiple_item_pointers(void **state)
 {
 	OffsetNumber offset_number_with_all_bits_on = 65535;
 	OffsetNumber offset_number_larger_than_11_bits = 5000;

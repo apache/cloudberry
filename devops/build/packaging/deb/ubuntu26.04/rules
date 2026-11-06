@@ -1,0 +1,64 @@
+#!/usr/bin/make -f
+
+DH_VERBOSE = 1
+DPKG_EXPORT_BUILDFLAGS = 1
+
+CBDB_BIN_PATH := /usr/local/cloudberry-db
+DEBIAN_DESTINATION := $(shell pwd)/debian/build
+
+# assumes that CWD is root of cbdb source
+CBDB_PKG_VERSION := $(CBDB_PKG_VERSION)
+PACKAGE_CBDB := $(shell cat debian/control | egrep "^Package: " | cut -d " " -f 2)
+PATH := ${DEBIAN_DESTINATION}/bin:${PATH}
+
+.PHONY: gpinstall
+
+include /usr/share/dpkg/default.mk
+
+%:
+	dh $@ --parallel
+
+gpinstall:
+	# If the build staging directory is empty, copy from the pre-installed location.
+	# In CI, BUILD_DESTINATION already points here so it will be populated.
+	# For local manual packaging, copy from the installed Cloudberry path.
+	@mkdir -p ${DEBIAN_DESTINATION}
+	@if [ -z "$$(ls -A ${DEBIAN_DESTINATION} 2>/dev/null)" ]; then \
+		echo "Copying pre-built binaries from ${CBDB_BIN_PATH} to ${DEBIAN_DESTINATION}..."; \
+		cp -a ${CBDB_BIN_PATH}/* ${DEBIAN_DESTINATION}/; \
+	else \
+		echo "Build staging directory already populated, skipping copy."; \
+	fi
+	# Copy Apache compliance files into the build staging directory
+	cp -a LICENSE NOTICE DISCLAIMER ${DEBIAN_DESTINATION}/
+	cp -a licenses ${DEBIAN_DESTINATION}/
+	# Create debian/copyright for Debian policy compliance
+	mkdir -p $(shell pwd)/debian
+	cat LICENSE NOTICE > $(shell pwd)/debian/copyright
+
+override_dh_auto_install: gpinstall
+	# the staging directory for creating a debian is NOT the right GPHOME.
+	# change GPHOME to point to the post-install target install directory.
+	sed -i "s#GPHOME=.*#GPHOME=${CBDB_BIN_PATH}#g" ${DEBIAN_DESTINATION}/cloudberry-env.sh
+
+override_dh_auto_build:
+	echo "Skipping build"
+
+override_dh_auto_clean:
+	echo "Skipping clean"
+
+override_dh_auto_configure:
+	echo "Skipping configure"
+
+override_dh_auto_test:
+	echo "Skipping auto test"
+
+override_dh_gencontrol:
+	echo "using version ${CBDB_PKG_VERSION} for binary Cloudberry"
+	dh_gencontrol -- -v${CBDB_PKG_VERSION} -p${PACKAGE_CBDB}
+
+override_dh_shlibdeps:
+	LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/$(DEB_HOST_MULTIARCH)/libfakeroot:${DEBIAN_DESTINATION}/lib dh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info
+
+clean_dev_local:
+	rm -rf ${DEBIAN_DESTINATION}
