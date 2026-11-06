@@ -316,6 +316,9 @@ select gp_inject_fault('get_shareinput_reference_delay_writer', 'reset', dbid) f
 -- Wait for the query to finish
 select wait_until_query_output_to_file('/tmp/bfv_cte.out');
 -- start_matchsubs
+-- # Normalize elapsed time, preserving the DONE message and reader count.
+-- m/^LOG:  SISC WRITER .*: got DONE message from \d+ readers after/
+-- s/after \d+\.\d+ ms/after <time> ms/
 -- m/SISC READER \(shareid=0, slice=2\)/
 -- s/SISC READER \(shareid=0, slice=2\)/SISC READER (shareid=0, slice={2|4})/g
 -- m/SISC READER \(shareid=0, slice=4\)/

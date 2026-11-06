@@ -140,6 +140,7 @@ inline constexpr std::array log_tbl_desc = {
  LogDesc{"instrumentation_blk_write_time",    "query_metrics.instrumentation.blk_write_time", FLOAT8OID},  
  LogDesc{"instrumentation_startup_time",      "query_metrics.instrumentation.startup_time",   FLOAT8OID},  
  LogDesc{"instrumentation_inherited_time",    "query_metrics.instrumentation.inherited_time", FLOAT8OID},  
+ LogDesc{"instrumentation_cross_slice_wait_ms", "query_metrics.instrumentation.cross_slice_wait_ms", FLOAT8OID},
  LogDesc{"datetime",            "datetime",                       TIMESTAMPTZOID},  
  LogDesc{"submit_time",         "submit_time",                    TIMESTAMPTZOID},  
  LogDesc{"start_time",          "start_time",                     TIMESTAMPTZOID},  

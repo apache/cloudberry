@@ -480,6 +480,9 @@ select wait_until_query_output_to_file('/tmp/bfv_cte.out');
 (1 row)
 
 -- start_matchsubs
+-- # Normalize elapsed time, preserving the DONE message and reader count.
+-- m/^LOG:  SISC WRITER .*: got DONE message from \d+ readers after/
+-- s/after \d+\.\d+ ms/after <time> ms/
 -- m/SISC READER \(shareid=0, slice=2\)/
 -- s/SISC READER \(shareid=0, slice=2\)/SISC READER (shareid=0, slice={2|4})/g
 -- m/SISC READER \(shareid=0, slice=4\)/
@@ -500,7 +503,7 @@ LOG:  SISC READER (shareid=0, slice=2): wrote notify_done  (seg2 slice2 127.0.1.
 LOG:  SISC WRITER (shareid=0, slice=4): initializing because squelched  (seg2 slice4 127.0.1.1:7004 pid=1049114)
 LOG:  SISC WRITER (shareid=0, slice=4): No tuplestore yet, creating tuplestore  (seg2 slice4 127.0.1.1:7004 pid=1049114)
 LOG:  SISC WRITER (shareid=0, slice=4): wrote notify_ready  (seg2 slice4 127.0.1.1:7004 pid=1049114)
-LOG:  SISC WRITER (shareid=0, slice=4): got DONE message from 1 readers  (seg2 slice4 127.0.1.1:7004 pid=1049114)
+LOG:  SISC WRITER (shareid=0, slice=4): got DONE message from 1 readers after <time> ms  (seg2 slice4 127.0.1.1:7004 pid=1049114)
 LOG:  SISC (shareid=0, slice=4): removed xslice state  (seg2 slice4 127.0.1.1:7004 pid=1049114)
 SET
  a | a 

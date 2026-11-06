@@ -267,3 +267,64 @@ WITH
 
 RESET statement_timeout;
 DROP TABLE ss_t1, ss_t2;
+-- Cross-slice ShareInputScan wait accounting.
+--
+-- A consumer that blocks waiting for a slow producer slice reports the wait
+-- in EXPLAIN ANALYZE ("Cross-slice wait: N ms max ..."). Force a
+-- deterministic, above-threshold wait by making the producer sleep, and
+-- assert the line appears. The wrapper hides the non-deterministic timing
+-- value, returning only whether the line is present, so the test is stable.
+create table sisw_foo (a int, b int) distributed by (a);
+create table sisw_bar (c int, d int) distributed by (c);
+insert into sisw_foo values (1, 2);
+insert into sisw_bar select i, i from generate_series(1, 100) i;
+analyze sisw_foo;
+analyze sisw_bar;
+create function sisw_wait_reported(q text, fmt text default 'text') returns boolean as $fn$
+declare ln text;
+begin
+  for ln in execute format('explain (analyze, timing off, costs off, format %I) %s', fmt, q) loop
+    if fmt = 'json' then
+      return jsonb_path_exists(ln::jsonb,
+        '$.**."cross-slice-wait" ? (@."Max Wait (ms)" >= 1 && @."Avg Wait (ms)" > 0 && @."Avg Wait (ms)" <= @."Max Wait (ms)" && @.Workers > 0)');
+    end if;
+    if strpos(ln, 'Cross-slice wait:') > 0 then return true; end if;
+  end loop;
+  return false;
+end; $fn$ language plpgsql;
+set optimizer = off;
+set gp_cte_sharing = on;
+select sisw_wait_reported($q$
+  with cte as (select a, b, pg_sleep(0.5)::text as s from sisw_foo)
+  select x.a from cte x
+  union all
+  select y.a from cte y join sisw_bar on y.b = sisw_bar.c
+$q$);
+ sisw_wait_reported 
+--------------------
+ t
+(1 row)
+
+-- Structured output carries numeric statistics, including with TIMING OFF.
+select sisw_wait_reported($q$
+  with cte as (select a, b, pg_sleep(0.5)::text as s from sisw_foo)
+  select x.a from cte x
+  union all
+  select y.a from cte y join sisw_bar on y.b = sisw_bar.c
+$q$, 'json');
+ sisw_wait_reported 
+--------------------
+ t
+(1 row)
+
+-- Nodes without a cross-slice wait must not acquire the property.
+select sisw_wait_reported('select 1', 'json');
+ sisw_wait_reported 
+--------------------
+ f
+(1 row)
+
+reset gp_cte_sharing;
+reset optimizer;
+drop function sisw_wait_reported(text, text);
+drop table sisw_foo, sisw_bar;
