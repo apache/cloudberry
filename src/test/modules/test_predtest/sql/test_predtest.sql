@@ -1,5 +1,9 @@
 CREATE EXTENSION test_predtest;
 
+-- Cloudberry: test_predtest() checks the quals in the plan that the
+-- Postgres planner makes.  GPORCA makes different plans, so turn it off.
+SET optimizer TO off;
+
 -- Make output more legible
 \pset expanded on
 
