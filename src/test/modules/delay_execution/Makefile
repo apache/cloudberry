@@ -7,8 +7,9 @@ OBJS = \
 	$(WIN32RES) \
 	delay_execution.o
 
-ISOLATION = partition-addition \
-	    partition-removal-1
+# Cloudberry: partition-removal-1 is not run.  It tests ALTER TABLE ...
+# DETACH PARTITION ... CONCURRENTLY, which Cloudberry does not support.
+ISOLATION = partition-addition
 
 ifdef USE_PGXS
 PG_CONFIG = pg_config
