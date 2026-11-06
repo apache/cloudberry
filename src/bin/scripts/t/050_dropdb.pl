@@ -32,9 +32,11 @@ $node->command_fails([ 'dropdb', 'nonexistent' ],
 	'fails with nonexistent database');
 
 # check that invalid database can be dropped with dropdb
+# Cloudberry: DML on a system catalog needs allow_system_table_mods.
 $node->safe_psql(
 	'postgres', q(
 	CREATE DATABASE regression_invalid;
+	SET allow_system_table_mods = on;
 	UPDATE pg_database SET datconnlimit = -2 WHERE datname = 'regression_invalid';
 ));
 $node->command_ok([ 'dropdb', 'regression_invalid' ],
