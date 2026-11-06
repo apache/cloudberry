@@ -10,6 +10,8 @@
 /.deps/
 /orafce.sql
 /orafce.sql.in
+/regression.diffs
+/regression.out
 /results
 [Oo]bj/
 [Bb]in/

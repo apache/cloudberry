@@ -17,9 +17,15 @@
 
 #include "utils/wait_event.h"
 
-#elif PG_VERSION_NUM >= 130000
+#else
 
 #include "pgstat.h"
+
+#endif
+
+#if PG_VERSION_NUM >= 190000
+
+#include "portability/instr_time.h"
 
 #endif
 
@@ -39,25 +45,19 @@ PG_FUNCTION_INFO_V1(dbms_alert_waitone);
 PG_FUNCTION_INFO_V1(dbms_alert_waitany_maxwait);
 PG_FUNCTION_INFO_V1(dbms_alert_waitone_maxwait);
 
-extern int sid;
-extern LWLockId shmem_lockid;
-
-#if PG_VERSION_NUM >= 130000
-
 extern ConditionVariable *alert_cv;
-
-#endif
 
 typedef struct alert_signal_data
 {
 	text	   *event;
 	text	   *message;
+	SubTransactionId subid;
 	struct alert_signal_data *next;
 } alert_signal_data;
 
-MemoryContext local_buf_cxt;
-LocalTransactionId local_buf_lxid = InvalidTransactionId;
-alert_signal_data *signals;
+static MemoryContext local_buf_cxt;
+static LocalTransactionId local_buf_lxid = InvalidTransactionId;
+static alert_signal_data *signals;
 
 #ifndef _GetCurrentTimestamp
 #define _GetCurrentTimestamp()		GetCurrentTimestamp()
@@ -74,21 +74,28 @@ alert_signal_data *signals;
 /* in sec 1000 days */
 #define MAXWAIT		86400000
 
+#if PG_VERSION_NUM >= 170000
+
+#define CURRENT_LXID	(MyProc->vxid.lxid)
+
+#else
+
+#define CURRENT_LXID	(MyProc->lxid)
+
+#endif
+
 
 static void unregister_event(int event_id, int sid);
-static char* find_and_remove_message_item(int message_id, int sid,
-							 bool all, bool remove_all,
-							 bool filter_message,
-							 int *sleep, char **event_name);
+static char *find_and_remove_message_item(int message_id, int sid,
+										  bool all, bool remove_all,
+										  bool filter_message,
+										  int *sleep, char **event_name);
 
 /*
  * There are maximum 30 events and 255 collaborating sessions
  *
  */
-alert_event *events;
-alert_lock  *locks;
-
-alert_lock *session_lock = NULL;
+static alert_lock *session_lock = NULL;
 
 #define NOT_FOUND  -1
 #define NOT_USED -1
@@ -103,8 +110,8 @@ textcmpm(text *txt, char *str)
 	char	   *p;
 	int			len;
 
-	len = VARSIZE(txt) - VARHDRSZ;
-	p = VARDATA(txt);
+	len = VARSIZE_ANY_EXHDR(txt);
+	p = VARDATA_ANY(txt);
 
 	while (len-- && *p != '\0')
 	{
@@ -145,15 +152,15 @@ purge_shared_alert_mem()
 
 		if (proc == NULL)
 		{
-			int		j;
-			int		invalid_sid = locks[i].sid;
+			int			j;
+			int			invalid_sid = locks[i].sid;
 
 			for (j = 0; j < MAX_EVENTS; j++)
 			{
 				if (events[j].event_name != NULL)
 				{
 					find_and_remove_message_item(j, invalid_sid,
-											false, true, true, NULL, NULL);
+												 false, true, true, NULL, NULL);
 					unregister_event(j, invalid_sid);
 				}
 			}
@@ -169,7 +176,7 @@ purge_shared_alert_mem()
  * find or create event rec
  *
  */
-static alert_lock*
+static alert_lock *
 find_lock(int sid, bool create)
 {
 	int			i;
@@ -212,24 +219,24 @@ find_lock(int sid, bool create)
 		}
 		else
 			ereport(ERROR,
-				(errcode(ERRCODE_ORA_PACKAGES_LOCK_REQUEST_ERROR),
-				 errmsg("lock request error"),
+					(errcode(ERRCODE_ORA_PACKAGES_LOCK_REQUEST_ERROR),
+					 errmsg("lock request error"),
 					 errdetail("Failed to create session lock."),
-				 errhint("There are too many collaborating sessions. Increase MAX_LOCKS in 'pipe.h'.")));
+					 errhint("There are too many collaborating sessions. Increase MAX_LOCKS in 'pipe.h'.")));
 	}
 
 	return NULL;
 }
 
 
-static alert_event*
+static alert_event *
 find_event(text *event_name, bool create, int *event_id)
 {
 	int			i;
 
-	for (i = 0; i < MAX_EVENTS;i++)
+	for (i = 0; i < MAX_EVENTS; i++)
 	{
-		if (events[i].event_name != NULL && textcmpm(event_name,events[i].event_name) == 0)
+		if (events[i].event_name != NULL && textcmpm(event_name, events[i].event_name) == 0)
 		{
 			if (event_id != NULL)
 				*event_id = i;
@@ -239,7 +246,7 @@ find_event(text *event_name, bool create, int *event_id)
 
 	if (create)
 	{
-		for (i=0; i < MAX_EVENTS; i++)
+		for (i = 0; i < MAX_EVENTS; i++)
 		{
 			if (events[i].event_name == NULL)
 			{
@@ -282,27 +289,27 @@ register_event(text *event_name)
 	for (i = 0; i < ev->max_receivers; i++)
 	{
 		if (ev->receivers[i] == sid)
-			return;   /* event is registered */
+			return;				/* event is registered */
 		if (ev->receivers[i] == NOT_USED && first_free == NOT_FOUND)
 			first_free = i;
 	}
 
 	/*
-	 * I can have a maximum of MAX_LOCKS receivers for one event.
-	 * Array receivers is increased for 16 fields
+	 * I can have a maximum of MAX_LOCKS receivers for one event. Array
+	 * receivers is increased for 16 fields
 	 */
 	if (first_free == NOT_FOUND)
 	{
 		if (ev->max_receivers + 16 > MAX_LOCKS)
 			ereport(ERROR,
-				(errcode(ERRCODE_ORA_PACKAGES_LOCK_REQUEST_ERROR),
-				 errmsg("lock request error"),
+					(errcode(ERRCODE_ORA_PACKAGES_LOCK_REQUEST_ERROR),
+					 errmsg("lock request error"),
 					 errdetail("Failed to create session lock."),
-				 errhint("There are too many collaborating sessions. Increase MAX_LOCKS in 'pipe.h'.")));
+					 errhint("There are too many collaborating sessions. Increase MAX_LOCKS in 'pipe.h'.")));
 
 		/* increase receiver's array */
 
-		new_receivers = (int*)salloc((ev->max_receivers + 16)*sizeof(int));
+		new_receivers = (int *) salloc((ev->max_receivers + 16) * sizeof(int));
 
 		for (i = 0; i < ev->max_receivers + 16; i++)
 		{
@@ -399,7 +406,7 @@ remove_receiver(message_item *msg, int sid)
  * all others messages than message_id.
  *
  */
-static char*
+static char *
 find_and_remove_message_item(int message_id, int sid,
 							 bool all, bool remove_all,
 							 bool filter_message,
@@ -407,7 +414,8 @@ find_and_remove_message_item(int message_id, int sid,
 {
 	alert_lock *alck;
 
-	char *result = NULL;
+	char	   *result = NULL;
+
 	if (sleep != NULL)
 		*sleep = 0;
 
@@ -419,7 +427,8 @@ find_and_remove_message_item(int message_id, int sid,
 	if (alck != NULL && alck->echo != NULL)
 	{
 		/* if I have registered and created item */
-		struct _message_echo *echo, *last_echo;
+		struct _message_echo *echo,
+				   *last_echo;
 
 		echo = alck->echo;
 		last_echo = NULL;
@@ -429,7 +438,7 @@ find_and_remove_message_item(int message_id, int sid,
 			char	   *message_text;
 			int			_message_id;
 
-			bool destroy_msg_item = false;
+			bool		destroy_msg_item = false;
 
 			if (filter_message && echo->message_id != message_id)
 			{
@@ -515,7 +524,9 @@ create_message(text *event_name, text *message)
 	{
 		if (ev->receivers_number > 0)
 		{
-			int			i,j,k;
+			int			i,
+						j,
+						k;
 
 			msg_item = ev->messages;
 			while (msg_item != NULL)
@@ -524,7 +535,7 @@ create_message(text *event_name, text *message)
 					return;
 
 				if (msg_item->message != NULL && message != NULL)
-					if (0 == textcmpm(message,msg_item->message))
+					if (0 == textcmpm(message, msg_item->message))
 						return;
 
 				msg_item = msg_item->next_message;
@@ -532,7 +543,7 @@ create_message(text *event_name, text *message)
 
 			msg_item = salloc(sizeof(message_item));
 
-			msg_item->receivers = salloc(ev->receivers_number*sizeof(int));
+			msg_item->receivers = salloc(ev->receivers_number * sizeof(int));
 			msg_item->receivers_number = ev->receivers_number;
 
 			if (message != NULL)
@@ -552,6 +563,7 @@ create_message(text *event_name, text *message)
 							/* create echo */
 
 							message_echo *echo = salloc(sizeof(message_echo));
+
 							echo->message = msg_item;
 							echo->message_id = event_id;
 							echo->next_echo = NULL;
@@ -561,6 +573,7 @@ create_message(text *event_name, text *message)
 							else
 							{
 								message_echo *p;
+
 								p = locks[k].echo;
 
 								while (p->next_echo != NULL)
@@ -623,7 +636,7 @@ dbms_alert_register(PG_FUNCTION_ARGS)
 	float8		timeout = 2;
 
 	WATCH_PRE(timeout, endtime, cycle);
-	if (ora_lock_shmem(SHMEMMSGSZ, MAX_PIPES, MAX_EVENTS, MAX_LOCKS, false))
+	if (ora_lock_shmem(orafce_shmemmsgsz, MAX_PIPES, MAX_EVENTS, MAX_LOCKS, false))
 	{
 		register_event(name);
 		LWLockRelease(shmem_lockid);
@@ -652,7 +665,7 @@ dbms_alert_remove(PG_FUNCTION_ARGS)
 	float8		timeout = 2;
 
 	WATCH_PRE(timeout, endtime, cycle);
-	if (ora_lock_shmem(SHMEMMSGSZ, MAX_PIPES,MAX_EVENTS,MAX_LOCKS,false))
+	if (ora_lock_shmem(orafce_shmemmsgsz, MAX_PIPES, MAX_EVENTS, MAX_LOCKS, false))
 	{
 		alert_event *ev;
 
@@ -660,7 +673,7 @@ dbms_alert_remove(PG_FUNCTION_ARGS)
 		if (NULL != ev)
 		{
 			find_and_remove_message_item(ev_id, sid,
-							 false, true, true, NULL, NULL);
+										 false, true, true, NULL, NULL);
 			unregister_event(ev_id, sid);
 		}
 		LWLockRelease(shmem_lockid);
@@ -686,7 +699,7 @@ dbms_alert_removeall(PG_FUNCTION_ARGS)
 	float8		timeout = 2;
 
 	WATCH_PRE(timeout, endtime, cycle);
-	if (ora_lock_shmem(SHMEMMSGSZ, MAX_PIPES,MAX_EVENTS,MAX_LOCKS,false))
+	if (ora_lock_shmem(orafce_shmemmsgsz, MAX_PIPES, MAX_EVENTS, MAX_LOCKS, false))
 	{
 		alert_lock *alck;
 		int			i;
@@ -696,7 +709,7 @@ dbms_alert_removeall(PG_FUNCTION_ARGS)
 			if (events[i].event_name != NULL)
 			{
 				find_and_remove_message_item(i, sid,
-								 false, true, true, NULL, NULL);
+											 false, true, true, NULL, NULL);
 				unregister_event(i, sid);
 			}
 		}
@@ -733,18 +746,11 @@ _dbms_alert_waitany(int timeout, FunctionCallInfo fcinfo)
 	instr_time	start_time;
 	TupleDesc	btupdesc;
 
-#if PG_VERSION_NUM < 130000
-
-	long		cycle = 0;
-
-#endif
-
-
 	INSTR_TIME_SET_CURRENT(start_time);
 
 	for (;;)
 	{
-		if (ora_lock_shmem(SHMEMMSGSZ, MAX_PIPES, MAX_EVENTS, MAX_LOCKS, false))
+		if (ora_lock_shmem(orafce_shmemmsgsz, MAX_PIPES, MAX_EVENTS, MAX_LOCKS, false))
 		{
 			str[1] = find_and_remove_message_item(-1, sid,
 												  true, false, false, NULL, &str[0]);
@@ -770,8 +776,6 @@ _dbms_alert_waitany(int timeout, FunctionCallInfo fcinfo)
 			if (cur_timeout <= 0)
 				break;
 
-#if PG_VERSION_NUM >= 130000
-
 			if (cur_timeout > 1000)
 				cur_timeout = 1000;
 
@@ -785,34 +789,12 @@ _dbms_alert_waitany(int timeout, FunctionCallInfo fcinfo)
 				if (cur_timeout <= 0)
 					break;
 			}
-
-#else
-
-			if (cycle++ % 10)
-				CHECK_FOR_INTERRUPTS();
-
-			pg_usleep(10000L);
-
-			/* exit on timeout */
-			INSTR_TIME_SET_CURRENT(cur_time);
-			INSTR_TIME_SUBTRACT(cur_time, start_time);
-
-			cur_timeout = timeout * 1000L - (long) INSTR_TIME_GET_MILLISEC(cur_time);
-			if (cur_timeout <= 0)
-				break;
-
-#endif
-
 		}
 		else
 			break;
 	}
 
-#if PG_VERSION_NUM >= 130000
-
 	ConditionVariableCancelSleep();
-
-#endif
 
 	get_call_result_type(fcinfo, NULL, &tupdesc);
 
@@ -850,8 +832,7 @@ dbms_alert_waitany(PG_FUNCTION_ARGS)
 	if (!PG_ARGISNULL(0))
 	{
 		/*
-		 * cannot to change SQL API now, so use not well choosed
-		 * float.
+		 * cannot to change SQL API now, so use not well choosed float.
 		 */
 		timeout = (int) PG_GETARG_FLOAT8(0);
 
@@ -889,27 +870,21 @@ _dbms_alert_waitone(text *name, int timeout, FunctionCallInfo fcinfo)
 	HeapTuple	tuple;
 	Datum		result;
 	int			message_id;
-	char	   *str[2] = {NULL,"1"};
+	char	   *str[2] = {NULL, "1"};
 	char	   *event_name;
 	instr_time	start_time;
 	TupleDesc	btupdesc;
-
-#if PG_VERSION_NUM < 130000
-
-	long		cycle = 0;
-
-#endif
 
 	INSTR_TIME_SET_CURRENT(start_time);
 
 	for (;;)
 	{
-		if (ora_lock_shmem(SHMEMMSGSZ, MAX_PIPES, MAX_EVENTS, MAX_LOCKS, false))
+		if (ora_lock_shmem(orafce_shmemmsgsz, MAX_PIPES, MAX_EVENTS, MAX_LOCKS, false))
 		{
 			if (NULL != find_event(name, false, &message_id))
 			{
 				str[0] = find_and_remove_message_item(message_id, sid,
-													  false, false, false, NULL, &event_name);
+													  false, false, true, NULL, &event_name);
 				if (event_name != NULL)
 				{
 					str[1] = "0";
@@ -934,8 +909,6 @@ _dbms_alert_waitone(text *name, int timeout, FunctionCallInfo fcinfo)
 			if (cur_timeout <= 0)
 				break;
 
-#if PG_VERSION_NUM >= 130000
-
 			if (cur_timeout > 1000)
 				cur_timeout = 1000;
 
@@ -949,34 +922,12 @@ _dbms_alert_waitone(text *name, int timeout, FunctionCallInfo fcinfo)
 				if (cur_timeout <= 0)
 					break;
 			}
-
-#else
-
-			if (cycle++ % 10)
-				CHECK_FOR_INTERRUPTS();
-
-			pg_usleep(10000L);
-
-			/* exit on timeout */
-			INSTR_TIME_SET_CURRENT(cur_time);
-			INSTR_TIME_SUBTRACT(cur_time, start_time);
-
-			cur_timeout = timeout * 1000L - (long) INSTR_TIME_GET_MILLISEC(cur_time);
-			if (cur_timeout <= 0)
-				break;
-
-#endif
-
 		}
 		else
 			break;
 	}
 
-#if PG_VERSION_NUM >= 130000
-
 	ConditionVariableCancelSleep();
-
-#endif
 
 	get_call_result_type(fcinfo, NULL, &tupdesc);
 
@@ -1017,8 +968,7 @@ dbms_alert_waitone(PG_FUNCTION_ARGS)
 	if (!PG_ARGISNULL(1))
 	{
 		/*
-		 * cannot to change SQL API now, so use not well choosed
-		 * float.
+		 * cannot to change SQL API now, so use not well choosed float.
 		 */
 		timeout = (int) PG_GETARG_FLOAT8(1);
 
@@ -1070,9 +1020,9 @@ Datum
 dbms_alert_set_defaults(PG_FUNCTION_ARGS)
 {
 	ereport(ERROR,
-		(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-		 errmsg("feature not supported"),
-		 errdetail("Sensitivity isn't supported.")));
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 errmsg("feature not supported"),
+			 errdetail("Sensitivity isn't supported.")));
 
 	PG_RETURN_VOID();
 }
@@ -1087,12 +1037,12 @@ orafce_xact_cb(XactEvent event, void *arg)
 		 * MyProc->lxid already invalided. So we need to invalid pointer to
 		 * obsolete buffer here.
 		 */
-		if (local_buf_lxid != MyProc->lxid)
+		if (local_buf_lxid != CURRENT_LXID)
 			signals = NULL;
 	}
 	else if (event == XACT_EVENT_COMMIT && signals)
 	{
-		if (ora_lock_shmem(SHMEMMSGSZ, MAX_PIPES, MAX_EVENTS, MAX_LOCKS, false))
+		if (ora_lock_shmem(orafce_shmemmsgsz, MAX_PIPES, MAX_EVENTS, MAX_LOCKS, false))
 		{
 			alert_signal_data *signal = signals;
 
@@ -1106,21 +1056,57 @@ orafce_xact_cb(XactEvent event, void *arg)
 
 			LWLockRelease(shmem_lockid);
 
-#if PG_VERSION_NUM >= 130000
-
 			ConditionVariableBroadcast(alert_cv);
-
-#endif
-
 		}
+	}
+
+	if (event == XACT_EVENT_COMMIT || event == XACT_EVENT_ABORT ||
+		event == XACT_EVENT_PREPARE)
+	{
+		signals = NULL;
+		local_buf_cxt = NULL;
+		local_buf_lxid = InvalidTransactionId;
+	}
+}
+
+void
+orafce_subxact_cb(SubXactEvent event, SubTransactionId mySubid,
+				 SubTransactionId parentSubid, void *arg)
+{
+	alert_signal_data **link = &signals;
+
+	if (local_buf_lxid != CURRENT_LXID ||
+		(event != SUBXACT_EVENT_COMMIT_SUB && event != SUBXACT_EVENT_ABORT_SUB))
+		return;
+
+	while (*link)
+	{
+		alert_signal_data *signal = *link;
+
+		if (signal->subid == mySubid)
+		{
+			if (event == SUBXACT_EVENT_ABORT_SUB)
+			{
+				*link = signal->next;
+				pfree(signal->event);
+				if (signal->message)
+					pfree(signal->message);
+				pfree(signal);
+				continue;
+			}
+
+			signal->subid = parentSubid;
+		}
+
+		link = &signal->next;
 	}
 }
 
 static bool
 text_eq(const text *p1, const text *p2)
 {
-	int		len1,
-			len2;
+	int			len1,
+				len2;
 
 	Assert(p1 && p2);
 
@@ -1151,23 +1137,24 @@ dbms_alert_signal(PG_FUNCTION_ARGS)
 	text	   *message;
 	alert_signal_data *new_signal;
 	alert_signal_data *last_signal = NULL;
+	SubTransactionId subid = GetCurrentSubTransactionId();
 	MemoryContext oldcxt;
 
 	if (PG_ARGISNULL(0))
 		ereport(ERROR,
-			(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			 errmsg("event name is NULL"),
-			 errdetail("Eventname may not be NULL.")));
+				(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+				 errmsg("event name is NULL"),
+				 errdetail("Eventname may not be NULL.")));
 
 	event = PG_GETARG_TEXT_P(0);
 	message = (!PG_ARGISNULL(1)) ? PG_GETARG_TEXT_P(1) : NULL;
 
-	if (local_buf_lxid != MyProc->lxid)
+	if (local_buf_lxid != CURRENT_LXID)
 	{
 		local_buf_cxt = AllocSetContextCreate(TopTransactionContext,
 											  "dbms_alert local buffer",
 											  ALLOCSET_START_SMALL_SIZES);
-		local_buf_lxid = MyProc->lxid;
+		local_buf_lxid = CURRENT_LXID;
 
 		signals = NULL;
 		last_signal = NULL;
@@ -1181,13 +1168,14 @@ dbms_alert_signal(PG_FUNCTION_ARGS)
 		{
 			last_signal = s;
 
-			if (text_eq(s->event, event) == 0)
+			/* A signal in another subtransaction can still be rolled back. */
+			if (s->subid == subid && text_eq(s->event, event))
 			{
 				if (!message && !s->message)
 					PG_RETURN_VOID();
 
 				if (message && s->message &&
-					 text_eq(message, s->message) == 0)
+					text_eq(message, s->message))
 					PG_RETURN_VOID();
 			}
 
@@ -1200,6 +1188,7 @@ dbms_alert_signal(PG_FUNCTION_ARGS)
 	new_signal = palloc(sizeof(alert_signal_data));
 	new_signal->event = TextPCopy(event);
 	new_signal->message = message ? TextPCopy(message) : NULL;
+	new_signal->subid = subid;
 	new_signal->next = NULL;
 
 	MemoryContextSwitchTo(oldcxt);

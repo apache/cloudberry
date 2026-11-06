@@ -1,0 +1,34 @@
+-- The utl_file_dir checks must not depend on the caller's search_path: a
+-- user's own "=" operator must not let utl_file open files outside the
+-- allowed directories.
+INSERT INTO utl_file.utl_file_dir(dir, dirname) VALUES(utl_file.tmpdir(), 'GP_TMP');
+CREATE ROLE regress_gp_utl_file;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE SCHEMA regress_gp_utl_file AUTHORIZATION regress_gp_utl_file;
+SET ROLE regress_gp_utl_file;
+CREATE FUNCTION regress_gp_utl_file.always(text, text) RETURNS bool
+  LANGUAGE sql IMMUTABLE AS 'SELECT true';
+CREATE OPERATOR regress_gp_utl_file.= (LEFTARG = text, RIGHTARG = text,
+                                       FUNCTION = regress_gp_utl_file.always);
+SET search_path = regress_gp_utl_file, pg_catalog;
+SELECT 'a'::text = 'b'::text AS own_operator_used;
+ own_operator_used 
+-------------------
+ t
+(1 row)
+
+SELECT utl_file.fopen('/etc', 'passwd', 'r');
+ERROR:  UTL_FILE_INVALID_PATH
+DETAIL:  you cannot access locality
+HINT:  locality is not found in utl_file_dir table
+SELECT utl_file.fopen('GP_TMP', 'passwd', 'r');
+ERROR:  UTL_FILE_INVALID_PATH
+DETAIL:  No such file or directory
+RESET search_path;
+RESET ROLE;
+DROP SCHEMA regress_gp_utl_file CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function regress_gp_utl_file.always(text,text)
+drop cascades to operator regress_gp_utl_file.=(text,text)
+DROP ROLE regress_gp_utl_file;
+DELETE FROM utl_file.utl_file_dir WHERE dirname = 'GP_TMP';

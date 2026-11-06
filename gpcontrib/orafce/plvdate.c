@@ -1,15 +1,15 @@
 /*
-  This code implements one part of functonality of
-  free available library PL/Vision. Please look www.quest.com
-
-  This library isn't optimalized for big numbers, for working
-  with n days (n > 10000), can be slow (on my P4 31ms).
-
-  Original author: Steven Feuerstein, 1996 - 2002
-  PostgreSQL implementation author: Pavel Stehule, 2006-2023
-
-  This module is under BSD Licence
-*/
+ * This code implements one part of functonality of
+ * free available library PL/Vision. Please look www.quest.com
+ *
+ * This library isn't optimalized for big numbers, for working
+ * with n days (n > 10000), can be slow (on my P4 31ms).
+ *
+ * Original author: Steven Feuerstein, 1996 - 2002
+ * PostgreSQL implementation author: Pavel Stehule, 2006-2026
+ *
+ * This module is under BSD Licence
+ */
 
 #define PLVDATE_VERSION  "PostgreSQL PLVdate, version 3.7, October 2018"
 
@@ -18,8 +18,25 @@
 #include "utils/builtins.h"
 #include <sys/time.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <limits.h>
 #include "orafce.h"
 #include "builtins.h"
+#include "miscadmin.h"
+#include "lib/stringinfo.h"
+#include "utils/guc.h"
+
+/*
+ * date + POSTGRES_EPOCH_JDATE overflows for +/-infinity, so the functions
+ * that need a calendar date reject infinite input.
+ */
+#define CHECK_FINITE_DATE(day) \
+	do { \
+		if (DATE_NOT_FINITE(day)) \
+			ereport(ERROR, \
+					(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE), \
+					 errmsg("date is out of range"))); \
+	} while (0)
 
 #if PG_VERSION_NUM >= 160000
 
@@ -71,125 +88,383 @@ static unsigned char nonbizdays = SUNDAY | SATURDAY;
 static bool use_easter = true;
 static bool use_great_friday = true;
 static bool include_start = true;
-static int country_id = -1;			/* unknown */
+static int	country_id = -1;	/* unknown */
 
 #define MAX_holidays   30
 #define MAX_EXCEPTIONS 50
 
-typedef struct {
-	char day;
-	char month;
+typedef struct
+{
+	char		day;
+	char		month;
 } holiday_desc;
 
-typedef struct {
+typedef struct
+{
 	unsigned char nonbizdays;
-	bool use_easter;
-	bool use_great_friday;
+	bool		use_easter;
+	bool		use_great_friday;
 	holiday_desc *holidays;
-	int holidays_c;
+	int			holidays_c;
 } cultural_info;
 
-static holiday_desc holidays[MAX_holidays];  /* sorted array */
-static DateADT exceptions[MAX_EXCEPTIONS];   /* sorted array */
+static holiday_desc holidays[MAX_holidays]; /* sorted array */
+static DateADT exceptions[MAX_EXCEPTIONS];	/* sorted array */
 
-static int holidays_c = 0;
-static int exceptions_c = 0;
+static int	holidays_c = 0;
+static int	exceptions_c = 0;
 
-static holiday_desc czech_holidays[] = {
-	{1,1}, // Novy rok
-	{1,5}, // Svatek prace
-	{8,5}, // Den osvobozeni
-	{5,7}, // Den slovanskych verozvestu
-	{6,7}, // Den upaleni mistra Jana Husa
-	{28,9}, // Den ceske statnosti
-	{28,10}, // Den vzniku samostatneho ceskoslovenskeho statu
-	{17,11}, // Den boje za svobodu a demokracii
-	{24,12}, // Stedry den
-	{25,12}, // 1. svatek vanocni
-	{26,12}  // 2. svatek vanocni
+static void plvdate_sync(void);
+
+static holiday_desc czech_holidays[] =
+{
+	{
+		1, 1
+	}, //Novy rok
+	{
+		1, 5
+	}, //Svatek prace
+	{
+		8, 5
+	}, //Den osvobozeni
+	{
+		5, 7
+	}, //Den slovanskych verozvestu
+	{
+		6, 7
+	}, //Den upaleni mistra Jana Husa
+	{
+		28, 9
+	}, //Den ceske statnosti
+	{
+		28, 10
+	}, //Den vzniku samostatneho ceskoslovenskeho statu
+	{
+		17, 11
+	}, //Den boje za svobodu a demokracii
+	{
+		24, 12
+	}, //Stedry den
+	{
+		25, 12
+	}, //1. svatek vanocni
+	{
+		26, 12
+	} //2. svatek vanocni
 };
 
 
-static holiday_desc germany_holidays[] = {
-	{1,1},{1,5},{25,5},{4,6},{5,6},
-	{15,8},{3,10},{25,12},{26,12}
+static holiday_desc germany_holidays[] =
+{
+	{
+		1, 1
+	},
+	{
+		1, 5
+	},
+	{
+		25, 5
+	},
+	{
+		4, 6
+	},
+	{
+		5, 6
+	},
+	{
+		15, 8
+	},
+	{
+		3, 10
+	},
+	{
+		25, 12
+	},
+	{
+		26, 12
+	}
 };
 
-static holiday_desc poland_holidays[] = {
-	{1,1},{1,5},{3,5},{15,6},{15,8},
-	{1,11},{11,11},{25,12},{26,12}
+static holiday_desc poland_holidays[] =
+{
+	{
+		1, 1
+	},
+	{
+		1, 5
+	},
+	{
+		3, 5
+	},
+	{
+		15, 6
+	},
+	{
+		15, 8
+	},
+	{
+		1, 11
+	},
+	{
+		11, 11
+	},
+	{
+		25, 12
+	},
+	{
+		26, 12
+	}
 };
 
-static holiday_desc austria_holidays[] = {
-	{1,1},{6,1},{1,5},{25,5},{4,6},
-	{5,6},{15,6},{15,8},{26,10},{1,11},
-	{8,12},{25,12},{26,12}
+static holiday_desc austria_holidays[] =
+{
+	{
+		1, 1
+	},
+	{
+		6, 1
+	},
+	{
+		1, 5
+	},
+	{
+		25, 5
+	},
+	{
+		4, 6
+	},
+	{
+		5, 6
+	},
+	{
+		15, 6
+	},
+	{
+		15, 8
+	},
+	{
+		26, 10
+	},
+	{
+		1, 11
+	},
+	{
+		8, 12
+	},
+	{
+		25, 12
+	},
+	{
+		26, 12
+	}
 };
 
-static holiday_desc slovakia_holidays[] = {
-	{1,1},{6,1},{1,5},{8,5},{5,7},
-	{29,8},{1,9},{15,9},{1,11},{17,11},
-	{24,12},{25,12},{26,12}
+static holiday_desc slovakia_holidays[] =
+{
+	{
+		1, 1
+	},
+	{
+		6, 1
+	},
+	{
+		1, 5
+	},
+	{
+		8, 5
+	},
+	{
+		5, 7
+	},
+	{
+		29, 8
+	},
+	{
+		1, 9
+	},
+	{
+		15, 9
+	},
+	{
+		1, 11
+	},
+	{
+		17, 11
+	},
+	{
+		24, 12
+	},
+	{
+		25, 12
+	},
+	{
+		26, 12
+	}
 };
 
-static holiday_desc russian_holidays[] = {
-	{1,1},{2,1},{3,1},{4,1},{5,1},
-	{7,1},{23,2},{8,3},{1,5},{9,5},
-	{12,6}, {4,11}
+static holiday_desc russian_holidays[] =
+{
+	{
+		1, 1
+	},
+	{
+		2, 1
+	},
+	{
+		3, 1
+	},
+	{
+		4, 1
+	},
+	{
+		5, 1
+	},
+	{
+		7, 1
+	},
+	{
+		23, 2
+	},
+	{
+		8, 3
+	},
+	{
+		1, 5
+	},
+	{
+		9, 5
+	},
+	{
+		12, 6
+	},
+	{
+		4, 11
+	}
 };
 
-static holiday_desc england_holidays[] = {
-	{1,1},{2,1},{1,5},{29,5},{28,8},
-	{25,12},{26,12}
+static holiday_desc england_holidays[] =
+{
+	{
+		1, 1
+	},
+	{
+		2, 1
+	},
+	{
+		1, 5
+	},
+	{
+		29, 5
+	},
+	{
+		28, 8
+	},
+	{
+		25, 12
+	},
+	{
+		26, 12
+	}
 };
 
-static holiday_desc usa_holidays[] = {
-	{1,1},{16,1},{20,2},{29,5},{4,7},
-	{4,9},{9,10},{11,11},{23,11},{25,12}
+static holiday_desc usa_holidays[] =
+{
+	{
+		1, 1
+	},
+	{
+		16, 1
+	},
+	{
+		20, 2
+	},
+	{
+		29, 5
+	},
+	{
+		4, 7
+	},
+	{
+		4, 9
+	},
+	{
+		9, 10
+	},
+	{
+		11, 11
+	},
+	{
+		23, 11
+	},
+	{
+		25, 12
+	}
 };
 
-cultural_info defaults_ci[] = {
-	{SUNDAY | SATURDAY, true, true, czech_holidays, 11},
-	{SUNDAY | SATURDAY, true, true, germany_holidays, 9},
-	{SUNDAY | SATURDAY, true, false, poland_holidays, 9},
-	{SUNDAY | SATURDAY, true, false, austria_holidays, 13},
-	{SUNDAY | SATURDAY, true, true, slovakia_holidays, 13},
-	{SUNDAY | SATURDAY, false, false, russian_holidays, 12},
-	{SUNDAY | SATURDAY, true, true, england_holidays, 7},
-	{SUNDAY | SATURDAY, false, false, usa_holidays, 10}
+static cultural_info defaults_ci[] =
+{
+	{
+		SUNDAY | SATURDAY, true, true, czech_holidays, 11
+	},
+	{
+		SUNDAY | SATURDAY, true, true, germany_holidays, 9
+	},
+	{
+		SUNDAY | SATURDAY, true, false, poland_holidays, 9
+	},
+	{
+		SUNDAY | SATURDAY, true, false, austria_holidays, 13
+	},
+	{
+		SUNDAY | SATURDAY, true, true, slovakia_holidays, 13
+	},
+	{
+		SUNDAY | SATURDAY, false, false, russian_holidays, 12
+	},
+	{
+		SUNDAY | SATURDAY, true, true, england_holidays, 7
+	},
+	{
+		SUNDAY | SATURDAY, false, false, usa_holidays, 10
+	}
 };
 
-STRING_PTR_FIELD_TYPE states[] = {
+static STRING_PTR_FIELD_TYPE states[] =
+{
 	"Czech", "Germany", "Poland",
-	"Austria", "Slovakia", "Russia",
-	"Gb", "Usa",
-	NULL,
+		"Austria", "Slovakia", "Russia",
+		"Gb", "Usa",
+		NULL,
 };
 
 static int
-dateadt_comp(const void* a, const void* b)
+dateadt_comp(const void *a, const void *b)
 {
-	DateADT *_a = (DateADT*)a;
-	DateADT *_b = (DateADT*)b;
+	DateADT    *_a = (DateADT *) a;
+	DateADT    *_b = (DateADT *) b;
 
 	return *_a - *_b;
 }
 
 static int
-holiday_desc_comp(const void* a, const void* b)
+holiday_desc_comp(const void *a, const void *b)
 {
-	int result;
-	if (0 == (result = ((holiday_desc*)a)->month - ((holiday_desc*)b)->month))
-		result = ((holiday_desc*)a)->day - ((holiday_desc*)b)->day;
+	int			result;
+
+	if (0 == (result = ((holiday_desc *) a)->month - ((holiday_desc *) b)->month))
+		result = ((holiday_desc *) a)->day - ((holiday_desc *) b)->day;
 
 	return result;
 }
 
 
 static void
-calc_easter_sunday(int year, int* dd, int* mm)
+calc_easter_sunday(int year, int *dd, int *mm)
 {
-	int b, d, e, q;
+	int			b,
+				d,
+				e,
+				q;
 
 	if (year < 1900 || year > 2099)
 		ereport(ERROR,
@@ -199,16 +474,19 @@ calc_easter_sunday(int year, int* dd, int* mm)
 
 	b = 255 - 11 * (year % 19);
 	d = ((b - 21) % 30) + 21;
-	if (d > 38) d -= 1;
-	e = (year + year/4 + d + 1) % 7;
+	if (d > 38)
+		d -= 1;
+	e = (year + year / 4 + d + 1) % 7;
 	q = d + 7 - e;
 	if (q < 32)
 	{
-		*dd = q; *mm = 3;
+		*dd = q;
+		*mm = 3;
 	}
 	else
 	{
-		*dd = q - 31; *mm = 4;
+		*dd = q - 31;
+		*mm = 4;
 	}
 }
 
@@ -223,9 +501,9 @@ easter_holidays(DateADT day, int y, int m)
 	{
 		if (m == 3 || m == 4)
 		{
-			int easter_sunday_day;
-			int easter_sunday_month;
-			int easter_sunday;
+			int			easter_sunday_day;
+			int			easter_sunday_month;
+			int			easter_sunday;
 
 			calc_easter_sunday(y, &easter_sunday_day, &easter_sunday_month);
 			easter_sunday = date2j(y, easter_sunday_month, easter_sunday_day) - POSTGRES_EPOCH_JDATE;
@@ -253,17 +531,26 @@ easter_holidays(DateADT day, int y, int m)
 static DateADT
 ora_add_bizdays(DateADT day, int ndays)
 {
-	int d, dx;
-	int y, m, auxd;
+	int			d,
+				dx;
+	int			y,
+				m,
+				auxd;
 	holiday_desc hd;
 
-	d = j2day(day+POSTGRES_EPOCH_JDATE);
-	dx = ndays > 0? 1 : -1;
+	/* adding business days to infinity gives infinity */
+	if (DATE_NOT_FINITE(day))
+		return day;
+
+	d = j2day(day + POSTGRES_EPOCH_JDATE);
+	dx = ndays > 0 ? 1 : -1;
 
 	while (ndays != 0)
 	{
-		d = (d+dx) % 7;
-		d = (d < 0) ? 6:d;
+		CHECK_FOR_INTERRUPTS();
+
+		d = (d + dx) % 7;
+		d = (d < 0) ? 6 : d;
 		day += dx;
 		if ((1 << d) & nonbizdays)
 			continue;
@@ -293,30 +580,41 @@ ora_add_bizdays(DateADT day, int ndays)
 static int
 ora_diff_bizdays(DateADT day1, DateADT day2)
 {
-	int d, ndays;
-	int y, m, auxd;
+	int			d,
+				ndays;
+	int			y,
+				m,
+				auxd;
 	holiday_desc hd;
 
-	int loops = 0;
-	bool start_is_bizday = false;
+	int			loops = 0;
+	bool		start_is_bizday = false;
+
+	if (DATE_NOT_FINITE(day1) || DATE_NOT_FINITE(day2))
+		ereport(ERROR,
+				(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+				 errmsg("date is out of range")));
 
 	if (day1 > day2)
 	{
-		DateADT 	aux_day;
+		DateADT		aux_day;
 
 		aux_day = day1;
-		day1 = day2; day2 = aux_day;
+		day1 = day2;
+		day2 = aux_day;
 	}
 
 	/* d is incremented on start of cycle, so now I have to decrease one */
-	d = j2day(day1+POSTGRES_EPOCH_JDATE-1);
+	d = j2day(day1 + POSTGRES_EPOCH_JDATE - 1);
 	ndays = 0;
 
 	while (day1 <= day2)
 	{
+		CHECK_FOR_INTERRUPTS();
+
 		loops++;
 		day1 += 1;
-		d = (d+1) % 7;
+		d = (d + 1) % 7;
 
 		if ((1 << d) & nonbizdays)
 			continue;
@@ -344,10 +642,10 @@ ora_diff_bizdays(DateADT day1, DateADT day2)
 	}
 
 	/*
-	 * decrease result when first day was bizday, but we don't want
-	 * calculate first day.
+	 * decrease result when first day was bizday, but we don't want calculate
+	 * first day.
 	 */
-	if ( start_is_bizday && !include_start && ndays > 0)
+	if (start_is_bizday && !include_start && ndays > 0)
 		ndays -= 1;
 
 	return ndays;
@@ -367,12 +665,12 @@ ora_diff_bizdays(DateADT day1, DateADT day2)
 
 
 Datum
-plvdate_add_bizdays (PG_FUNCTION_ARGS)
+plvdate_add_bizdays(PG_FUNCTION_ARGS)
 {
-	DateADT day = PG_GETARG_DATEADT(0);
-	int ndays = PG_GETARG_INT32(1);
+	DateADT		day = PG_GETARG_DATEADT(0);
+	int			ndays = PG_GETARG_INT32(1);
 
-	PG_RETURN_DATEADT(ora_add_bizdays(day,ndays));
+	PG_RETURN_DATEADT(ora_add_bizdays(day, ndays));
 }
 
 
@@ -388,10 +686,12 @@ plvdate_add_bizdays (PG_FUNCTION_ARGS)
  ****************************************************************/
 
 Datum
-plvdate_nearest_bizday (PG_FUNCTION_ARGS)
+plvdate_nearest_bizday(PG_FUNCTION_ARGS)
 {
-	DateADT dt = PG_GETARG_DATEADT(0);
-	DateADT d1, d2, res;
+	DateADT		dt = PG_GETARG_DATEADT(0);
+	DateADT		d1,
+				d2,
+				res;
 
 	d1 = ora_add_bizdays(dt, -1);
 	d2 = ora_add_bizdays(dt, 1);
@@ -417,11 +717,11 @@ plvdate_nearest_bizday (PG_FUNCTION_ARGS)
  ****************************************************************/
 
 Datum
-plvdate_next_bizday (PG_FUNCTION_ARGS)
+plvdate_next_bizday(PG_FUNCTION_ARGS)
 {
-	DateADT day = PG_GETARG_DATEADT(0);
+	DateADT		day = PG_GETARG_DATEADT(0);
 
-	PG_RETURN_DATEADT(ora_add_bizdays(day,1));
+	PG_RETURN_DATEADT(ora_add_bizdays(day, 1));
 }
 
 
@@ -438,12 +738,12 @@ plvdate_next_bizday (PG_FUNCTION_ARGS)
  ****************************************************************/
 
 Datum
-plvdate_bizdays_between (PG_FUNCTION_ARGS)
+plvdate_bizdays_between(PG_FUNCTION_ARGS)
 {
-	DateADT day1 = PG_GETARG_DATEADT(0);
-	DateADT day2 = PG_GETARG_DATEADT(1);
+	DateADT		day1 = PG_GETARG_DATEADT(0);
+	DateADT		day2 = PG_GETARG_DATEADT(1);
 
-	PG_RETURN_INT32(ora_diff_bizdays(day1,day2));
+	PG_RETURN_INT32(ora_diff_bizdays(day1, day2));
 }
 
 
@@ -460,11 +760,11 @@ plvdate_bizdays_between (PG_FUNCTION_ARGS)
  ****************************************************************/
 
 Datum
-plvdate_prev_bizday (PG_FUNCTION_ARGS)
+plvdate_prev_bizday(PG_FUNCTION_ARGS)
 {
-	DateADT day = PG_GETARG_DATEADT(0);
+	DateADT		day = PG_GETARG_DATEADT(0);
 
-	PG_RETURN_DATEADT(ora_add_bizdays(day,-1));
+	PG_RETURN_DATEADT(ora_add_bizdays(day, -1));
 }
 
 
@@ -480,13 +780,17 @@ plvdate_prev_bizday (PG_FUNCTION_ARGS)
  ****************************************************************/
 
 Datum
-plvdate_isbizday (PG_FUNCTION_ARGS)
+plvdate_isbizday(PG_FUNCTION_ARGS)
 {
-	DateADT day = PG_GETARG_DATEADT(0);
-	int y, m, d;
+	DateADT		day = PG_GETARG_DATEADT(0);
+	int			y,
+				m,
+				d;
 	holiday_desc hd;
 
-	if (0 != ((1 << j2day(day+POSTGRES_EPOCH_JDATE)) & nonbizdays))
+	CHECK_FINITE_DATE(day);
+
+	if (0 != ((1 << j2day(day + POSTGRES_EPOCH_JDATE)) & nonbizdays))
 		return false;
 
 	if (NULL != bsearch(&day, exceptions, exceptions_c,
@@ -494,13 +798,14 @@ plvdate_isbizday (PG_FUNCTION_ARGS)
 		return false;
 
 	j2date(day + POSTGRES_EPOCH_JDATE, &y, &m, &d);
-	hd.month = m; hd.day = d;
+	hd.month = m;
+	hd.day = d;
 
 	if (easter_holidays(day, y, m))
 		return false;
 
-	PG_RETURN_BOOL (NULL == bsearch(&hd, holidays, holidays_c,
-									sizeof(holiday_desc), holiday_desc_comp));
+	PG_RETURN_BOOL(NULL == bsearch(&hd, holidays, holidays_c,
+								   sizeof(holiday_desc), holiday_desc_comp));
 }
 
 
@@ -516,25 +821,27 @@ plvdate_isbizday (PG_FUNCTION_ARGS)
  ****************************************************************/
 
 Datum
-plvdate_set_nonbizday_dow (PG_FUNCTION_ARGS)
+plvdate_set_nonbizday_dow(PG_FUNCTION_ARGS)
 {
 	unsigned char check;
 
-	text *day_txt = PG_GETARG_TEXT_PP(0);
+	text	   *day_txt = PG_GETARG_TEXT_PP(0);
 
-	int d = ora_seq_search(VARDATA_ANY(day_txt), ora_days, VARSIZE_ANY_EXHDR(day_txt));
+	int			d = ora_seq_search(VARDATA_ANY(day_txt), ora_days, VARSIZE_ANY_EXHDR(day_txt));
+
 	CHECK_SEQ_SEARCH(d, "DAY/Day/day");
 
 	check = nonbizdays | (1 << d);
 	if (check == 0x7f)
 		ereport(ERROR,
-			    (errcode(ERRCODE_DATA_EXCEPTION),
-			     errmsg("nonbizday registration error"),
-			     errdetail("Constraint violation."),
-			     errhint("One day in week have to be bizday.")));
+				(errcode(ERRCODE_DATA_EXCEPTION),
+				 errmsg("nonbizday registration error"),
+				 errdetail("Constraint violation."),
+				 errhint("One day in week have to be bizday.")));
 
 	nonbizdays = nonbizdays | (1 << d);
 
+	plvdate_sync();
 	PG_RETURN_VOID();
 }
 
@@ -550,15 +857,17 @@ plvdate_set_nonbizday_dow (PG_FUNCTION_ARGS)
  ****************************************************************/
 
 Datum
-plvdate_unset_nonbizday_dow (PG_FUNCTION_ARGS)
+plvdate_unset_nonbizday_dow(PG_FUNCTION_ARGS)
 {
-	text *day_txt = PG_GETARG_TEXT_PP(0);
+	text	   *day_txt = PG_GETARG_TEXT_PP(0);
 
-	int d = ora_seq_search(VARDATA_ANY(day_txt), ora_days, VARSIZE_ANY_EXHDR(day_txt));
+	int			d = ora_seq_search(VARDATA_ANY(day_txt), ora_days, VARSIZE_ANY_EXHDR(day_txt));
+
 	CHECK_SEQ_SEARCH(d, "DAY/Day/day");
 
 	nonbizdays = (nonbizdays | (1 << d)) ^ (1 << d);
 
+	plvdate_sync();
 	PG_RETURN_VOID();
 }
 
@@ -576,30 +885,35 @@ plvdate_unset_nonbizday_dow (PG_FUNCTION_ARGS)
  ****************************************************************/
 
 Datum
-plvdate_set_nonbizday_day (PG_FUNCTION_ARGS)
+plvdate_set_nonbizday_day(PG_FUNCTION_ARGS)
 {
-	DateADT arg1 = PG_GETARG_DATEADT(0);
-	bool arg2 = PG_GETARG_BOOL(1);
-	int y, m, d;
+	DateADT		arg1 = PG_GETARG_DATEADT(0);
+	bool		arg2 = PG_GETARG_BOOL(1);
+	int			y,
+				m,
+				d;
 	holiday_desc hd;
+
+	CHECK_FINITE_DATE(arg1);
 
 	if (arg2)
 	{
 		if (holidays_c == MAX_holidays)
 			ereport(ERROR,
-				    (errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				     errmsg("nonbizday registration error"),
-				     errdetail("Too much registered nonbizdays."),
-				     errhint("Increase MAX_holidays in 'plvdate.c'.")));
+					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+					 errmsg("nonbizday registration error"),
+					 errdetail("Too much registered nonbizdays."),
+					 errhint("Increase MAX_holidays in 'plvdate.c'.")));
 
 		j2date(arg1 + POSTGRES_EPOCH_JDATE, &y, &m, &d);
-		hd.month = m; hd.day = d;
+		hd.month = m;
+		hd.day = d;
 
 		if (NULL != bsearch(&hd, holidays, holidays_c, sizeof(holiday_desc), holiday_desc_comp))
 			ereport(ERROR,
-				    (errcode(ERRCODE_DUPLICATE_OBJECT),
-				     errmsg("nonbizday registration error"),
-				     errdetail("Date is registered.")));
+					(errcode(ERRCODE_DUPLICATE_OBJECT),
+					 errmsg("nonbizday registration error"),
+					 errdetail("Date is registered.")));
 
 		holidays[holidays_c].month = m;
 		holidays[holidays_c].day = d;
@@ -611,21 +925,22 @@ plvdate_set_nonbizday_day (PG_FUNCTION_ARGS)
 	{
 		if (exceptions_c == MAX_EXCEPTIONS)
 			ereport(ERROR,
-				    (errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				     errmsg("nonbizday registration error"),
-				     errdetail("Too much registered nonrepeated nonbizdays."),
-				     errhint("Increase MAX_EXCEPTIONS in 'plvdate.c'.")));
+					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+					 errmsg("nonbizday registration error"),
+					 errdetail("Too much registered nonrepeated nonbizdays."),
+					 errhint("Increase MAX_EXCEPTIONS in 'plvdate.c'.")));
 
 		if (NULL != bsearch(&arg1, exceptions, exceptions_c, sizeof(DateADT), dateadt_comp))
 			ereport(ERROR,
-				    (errcode(ERRCODE_DUPLICATE_OBJECT),
-				     errmsg("nonbizday registration error"),
-				     errdetail("Date is registered.")));
+					(errcode(ERRCODE_DUPLICATE_OBJECT),
+					 errmsg("nonbizday registration error"),
+					 errdetail("Date is registered.")));
 
 		exceptions[exceptions_c++] = arg1;
 		qsort(exceptions, exceptions_c, sizeof(DateADT), dateadt_comp);
 	}
 
+	plvdate_sync();
 	PG_RETURN_VOID();
 }
 
@@ -643,13 +958,17 @@ plvdate_set_nonbizday_day (PG_FUNCTION_ARGS)
  ****************************************************************/
 
 Datum
-plvdate_unset_nonbizday_day (PG_FUNCTION_ARGS)
+plvdate_unset_nonbizday_day(PG_FUNCTION_ARGS)
 {
-	DateADT arg1 = PG_GETARG_DATEADT(0);
-	bool arg2 = PG_GETARG_BOOL(1);
-	int y, m, d;
-	bool found = false;
-	int i;
+	DateADT		arg1 = PG_GETARG_DATEADT(0);
+	bool		arg2 = PG_GETARG_BOOL(1);
+	int			y,
+				m,
+				d;
+	bool		found = false;
+	int			i;
+
+	CHECK_FINITE_DATE(arg1);
 
 	if (arg2)
 	{
@@ -660,8 +979,8 @@ plvdate_unset_nonbizday_day (PG_FUNCTION_ARGS)
 				found = true;
 			else if (found)
 			{
-				holidays[i-1].month = holidays[i].month;
-				holidays[i-1].day = holidays[i].day;
+				holidays[i - 1].month = holidays[i].month;
+				holidays[i - 1].day = holidays[i].day;
 			}
 		}
 		if (found)
@@ -673,16 +992,17 @@ plvdate_unset_nonbizday_day (PG_FUNCTION_ARGS)
 			if (!found && exceptions[i] == arg1)
 				found = true;
 			else if (found)
-				exceptions[i-1] = exceptions[i];
+				exceptions[i - 1] = exceptions[i];
 		if (found)
 			exceptions_c -= 1;
 	}
 	if (!found)
 		ereport(ERROR,
-			    (errcode(ERRCODE_UNDEFINED_OBJECT),
-			     errmsg("nonbizday unregistration error"),
-			     errdetail("Nonbizday not found.")));
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("nonbizday unregistration error"),
+				 errdetail("Nonbizday not found.")));
 
+	plvdate_sync();
 	PG_RETURN_VOID();
 }
 
@@ -701,10 +1021,11 @@ plvdate_unset_nonbizday_day (PG_FUNCTION_ARGS)
  ****************************************************************/
 
 Datum
-plvdate_use_easter (PG_FUNCTION_ARGS)
+plvdate_use_easter(PG_FUNCTION_ARGS)
 {
 	use_easter = PG_GETARG_BOOL(0);
 
+	plvdate_sync();
 	PG_RETURN_VOID();
 }
 
@@ -721,7 +1042,7 @@ plvdate_use_easter (PG_FUNCTION_ARGS)
  ****************************************************************/
 
 Datum
-plvdate_using_easter (PG_FUNCTION_ARGS)
+plvdate_using_easter(PG_FUNCTION_ARGS)
 {
 	PG_RETURN_BOOL(use_easter);
 }
@@ -741,10 +1062,11 @@ plvdate_using_easter (PG_FUNCTION_ARGS)
  ****************************************************************/
 
 Datum
-plvdate_use_great_friday (PG_FUNCTION_ARGS)
+plvdate_use_great_friday(PG_FUNCTION_ARGS)
 {
 	use_great_friday = PG_GETARG_BOOL(0);
 
+	plvdate_sync();
 	PG_RETURN_VOID();
 }
 
@@ -761,7 +1083,7 @@ plvdate_use_great_friday (PG_FUNCTION_ARGS)
  ****************************************************************/
 
 Datum
-plvdate_using_great_friday (PG_FUNCTION_ARGS)
+plvdate_using_great_friday(PG_FUNCTION_ARGS)
 {
 	PG_RETURN_BOOL(use_great_friday);
 }
@@ -781,10 +1103,11 @@ plvdate_using_great_friday (PG_FUNCTION_ARGS)
  ****************************************************************/
 
 Datum
-plvdate_include_start (PG_FUNCTION_ARGS)
+plvdate_include_start(PG_FUNCTION_ARGS)
 {
 	include_start = PG_GETARG_BOOL(0);
 
+	plvdate_sync();
 	PG_RETURN_VOID();
 }
 
@@ -801,7 +1124,7 @@ plvdate_include_start (PG_FUNCTION_ARGS)
  ****************************************************************/
 
 Datum
-plvdate_including_start (PG_FUNCTION_ARGS)
+plvdate_including_start(PG_FUNCTION_ARGS)
 {
 	PG_RETURN_BOOL(include_start);
 }
@@ -813,9 +1136,9 @@ plvdate_including_start (PG_FUNCTION_ARGS)
  */
 
 Datum
-plvdate_default_holidays (PG_FUNCTION_ARGS)
+plvdate_default_holidays(PG_FUNCTION_ARGS)
 {
-	text *country = PG_GETARG_TEXT_PP(0);
+	text	   *country = PG_GETARG_TEXT_PP(0);
 
 	country_id = ora_seq_search(VARDATA_ANY(country), states, VARSIZE_ANY_EXHDR(country));
 	CHECK_SEQ_SEARCH(country_id, "STATE/State/state");
@@ -826,8 +1149,9 @@ plvdate_default_holidays (PG_FUNCTION_ARGS)
 	exceptions_c = 0;
 
 	holidays_c = defaults_ci[country_id].holidays_c;
-	memcpy(holidays, defaults_ci[country_id].holidays, holidays_c*sizeof(holiday_desc));
+	memcpy(holidays, defaults_ci[country_id].holidays, holidays_c * sizeof(holiday_desc));
 
+	plvdate_sync();
 	PG_RETURN_VOID();
 }
 
@@ -836,7 +1160,7 @@ plvdate_default_holidays (PG_FUNCTION_ARGS)
  */
 
 Datum
-plvdate_version (PG_FUNCTION_ARGS)
+plvdate_version(PG_FUNCTION_ARGS)
 {
 	PG_RETURN_CSTRING(PLVDATE_VERSION);
 }
@@ -856,13 +1180,17 @@ plvdate_version (PG_FUNCTION_ARGS)
 Datum
 plvdate_days_inmonth(PG_FUNCTION_ARGS)
 {
-	DateADT day = PG_GETARG_DATEADT(0);
-	int result;
-	int y, m, d;
+	DateADT		day = PG_GETARG_DATEADT(0);
+	int			result;
+	int			y,
+				m,
+				d;
+
+	CHECK_FINITE_DATE(day);
 
 	j2date(day + POSTGRES_EPOCH_JDATE, &y, &m, &d);
 
-	result = date2j(y, m+1, 1) - date2j(y, m, 1);
+	result = date2j(y, m + 1, 1) - date2j(y, m, 1);
 
 	PG_RETURN_INT32(result);
 }
@@ -882,12 +1210,16 @@ plvdate_days_inmonth(PG_FUNCTION_ARGS)
 Datum
 plvdate_isleapyear(PG_FUNCTION_ARGS)
 {
-	DateADT day = PG_GETARG_DATEADT(0);
-	int y, m, d;
-	bool result;
+	DateADT		day = PG_GETARG_DATEADT(0);
+	int			y,
+				m,
+				d;
+	bool		result;
+
+	CHECK_FINITE_DATE(day);
 
 	j2date(day + POSTGRES_EPOCH_JDATE, &y, &m, &d);
-	result = ((( y % 4) == 0) && ((y % 100) != 0)) || ((y % 400) == 0);
+	result = (((y % 4) == 0) && ((y % 100) != 0)) || ((y % 400) == 0);
 
 	PG_RETURN_BOOL(result);
 }
@@ -926,3 +1258,202 @@ plvdate_isleapyear(PG_FUNCTION_ARGS)
  *   Show current calendar
  *
  ****************************************************************/
+
+
+/*
+ * Cloudberry: the calendar set by the functions above lives in backend
+ * memory, so the segments, which evaluate plvdate functions over table data,
+ * would not see it.  Every change is therefore also written to the hidden
+ * GUC orafce.plvdate_state with set_config(), which sends it to the
+ * segments; the GUC is marked GUC_GPDB_NEED_SYNC so that gangs created later
+ * get it too.  The assign hook rebuilds the calendar from the GUC, so a
+ * rolled back change is undone as well.
+ *
+ * Format: "nonbizdays,use_easter,use_great_friday,include_start,country_id;
+ * day/month,...;date,...", dates as DateADT.  An empty string is the default
+ * calendar.
+ */
+typedef struct
+{
+	unsigned char nonbizdays;
+	bool		use_easter;
+	bool		use_great_friday;
+	bool		include_start;
+	int			country_id;
+	int			holidays_c;
+	holiday_desc holidays[MAX_holidays];
+	int			exceptions_c;
+	DateADT		exceptions[MAX_EXCEPTIONS];
+} plvdate_state;
+
+char	   *orafce_plvdate_state = NULL;
+
+static void
+plvdate_sync(void)
+{
+	StringInfoData str;
+	int			i;
+
+	initStringInfo(&str);
+	appendStringInfo(&str, "%d,%d,%d,%d,%d;",
+					 (int) nonbizdays, (int) use_easter,
+					 (int) use_great_friday, (int) include_start,
+					 country_id);
+	for (i = 0; i < holidays_c; i++)
+		appendStringInfo(&str, "%s%d/%d", i > 0 ? "," : "",
+						 (int) holidays[i].day, (int) holidays[i].month);
+	appendStringInfoChar(&str, ';');
+	for (i = 0; i < exceptions_c; i++)
+		appendStringInfo(&str, "%s%d", i > 0 ? "," : "", (int) exceptions[i]);
+
+	orafce_set_config("orafce.plvdate_state", str.data);
+	pfree(str.data);
+}
+
+/* reads an integer and the character after it */
+static bool
+plvdate_state_int(char **ptr, int *value, char *sep)
+{
+	char	   *end;
+	long		l;
+
+	errno = 0;
+	l = strtol(*ptr, &end, 10);
+	if (end == *ptr || errno != 0 || l < INT_MIN || l > INT_MAX)
+		return false;
+
+	*value = (int) l;
+	*sep = *end;
+	*ptr = *end ? end + 1 : end;
+
+	return true;
+}
+
+bool
+orafce_plvdate_state_check_hook(char **newval, void **extra, GucSource source)
+{
+	plvdate_state *st;
+	char	   *ptr = *newval;
+	char		sep;
+	int			v[5];
+	int			i;
+
+#if PG_VERSION_NUM >= 160000
+
+	st = (plvdate_state *) guc_malloc(LOG, sizeof(plvdate_state));
+
+#else
+
+	st = (plvdate_state *) malloc(sizeof(plvdate_state));
+
+#endif
+
+	if (!st)
+		return false;
+
+	/* the default calendar */
+	st->nonbizdays = SUNDAY | SATURDAY;
+	st->use_easter = true;
+	st->use_great_friday = true;
+	st->include_start = true;
+	st->country_id = -1;
+	st->holidays_c = 0;
+	st->exceptions_c = 0;
+
+	if (ptr == NULL || *ptr == '\0')
+	{
+		*extra = st;
+		return true;
+	}
+
+	for (i = 0; i < 5; i++)
+	{
+		if (!plvdate_state_int(&ptr, &v[i], &sep) || sep != (i < 4 ? ',' : ';'))
+			goto invalid;
+	}
+
+	if (v[0] < 0 || v[0] > 127 ||
+		v[1] < 0 || v[1] > 1 || v[2] < 0 || v[2] > 1 || v[3] < 0 || v[3] > 1 ||
+		v[4] < -1 || v[4] >= (int) lengthof(defaults_ci))
+		goto invalid;
+
+	st->nonbizdays = (unsigned char) v[0];
+	st->use_easter = v[1];
+	st->use_great_friday = v[2];
+	st->include_start = v[3];
+	st->country_id = v[4];
+
+	/* holidays: day/month,... */
+	while (*ptr != ';')
+	{
+		int			d,
+					m;
+
+		if (st->holidays_c == MAX_holidays ||
+			!plvdate_state_int(&ptr, &d, &sep) || sep != '/' ||
+			!plvdate_state_int(&ptr, &m, &sep) || (sep != ',' && sep != ';') ||
+			d < 1 || d > 31 || m < 1 || m > 12)
+			goto invalid;
+
+		st->holidays[st->holidays_c].day = (char) d;
+		st->holidays[st->holidays_c].month = (char) m;
+		st->holidays_c++;
+
+		if (sep == ';')
+		{
+			ptr--;
+			break;
+		}
+	}
+	ptr++;
+
+	/* exceptions: date,... */
+	while (*ptr != '\0')
+	{
+		int			d;
+
+		if (st->exceptions_c == MAX_EXCEPTIONS ||
+			!plvdate_state_int(&ptr, &d, &sep) || (sep != ',' && sep != '\0') ||
+			DATE_NOT_FINITE(d) || !IS_VALID_DATE(d))
+			goto invalid;
+
+		st->exceptions[st->exceptions_c++] = (DateADT) d;
+	}
+
+	qsort(st->holidays, st->holidays_c, sizeof(holiday_desc), holiday_desc_comp);
+	qsort(st->exceptions, st->exceptions_c, sizeof(DateADT), dateadt_comp);
+
+	*extra = st;
+	return true;
+
+invalid:
+	GUC_check_errdetail("Invalid plvdate calendar.");
+
+#if PG_VERSION_NUM >= 160000
+
+	guc_free(st);
+
+#else
+
+	free(st);
+
+#endif
+
+	return false;
+}
+
+void
+orafce_plvdate_state_assign_hook(const char *newval, void *extra)
+{
+	plvdate_state *st = (plvdate_state *) extra;
+
+	nonbizdays = st->nonbizdays;
+	use_easter = st->use_easter;
+	use_great_friday = st->use_great_friday;
+	include_start = st->include_start;
+	country_id = st->country_id;
+	holidays_c = st->holidays_c;
+	memcpy(holidays, st->holidays, sizeof(holiday_desc) * st->holidays_c);
+	exceptions_c = st->exceptions_c;
+	memcpy(exceptions, st->exceptions, sizeof(DateADT) * st->exceptions_c);
+}

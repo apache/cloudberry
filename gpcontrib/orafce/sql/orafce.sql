@@ -18,8 +18,8 @@ SELECT add_months (date '2008-02-28', 1);
 SELECT add_months (date '2008-02-29', 1);
 SELECT add_months (date '2008-01-31', 12);
 SELECT add_months (date '2008-01-31', -12);
-SELECT add_months (date '2008-01-31', 95903);
-SELECT add_months (date '2008-01-31', -80640);
+SELECT add_months (date '2008-01-31', 95903), (date '2008-01-31')::timestamp + interval '95903 months' AS expr;
+SELECT add_months (date '2008-01-31', -80640), (date '2008-01-31')::timestamp - interval '80640 months' AS expr;
 SELECT add_months (date '03-21-2008',3);
 SELECT add_months (date '21-MAR-2008',3);
 SELECT add_months (date '21-MAR-08',3);
@@ -28,6 +28,7 @@ SELECT add_months (date 'March 21,2008',3);
 SELECT add_months(date '03/21/2008',3);
 SELECT add_months(date '20080321',3);
 SELECT add_months(date '080321',3);
+SELECT add_months(date '0001-01-31', -1);
 
 SELECT add_months ('2003-08-01 10:12:21', 3);
 SELECT add_months ('2003-08-01 10:21:21', -3);
@@ -102,6 +103,12 @@ SELECT months_between ('2008-02-29 10:11:13', '2008-03-31 10:12:11');
 SELECT months_between ('2008-02-29 111111', '2008-04-30 12:12:12');
 SELECT trunc(months_between('21-feb-2008 12:11:11', '2008-02-29 11:11:11'));
 
+SELECT sys_extract_utc(timestamptz '2024-08-17 00:41:26.655376+02');
+
+SET timezone to 'europe/prague';
+SELECT sys_extract_utc(oracle.date '2024-08-17 00:41:26.655376');
+SET timezone to default;
+
 select length('jmenuji se Pavel Stehule'),dbms_pipe.pack_message('jmenuji se Pavel Stehule');
 select length('a bydlim ve Skalici'),dbms_pipe.pack_message('a bydlim ve Skalici');
 select dbms_pipe.send_message('pavel',0,1);
@@ -169,6 +176,25 @@ select PLVstr.betwn('Harry and Sally are very happy', 'a', 'ry', 2,1,TRUE,FALSE)
 select PLVstr.betwn('Harry and Sally are very happy', 'a', 'y', 2,1);
 select PLVstr.betwn('Harry and Sally are very happy', 'a', 'a', 2, 2);
 select PLVstr.betwn('Harry and Sally are very happy', 'a', 'a', 2, 3, FALSE,FALSE);
+select PLVstr.betwn('abcdef', -8, -1);
+select PLVstr.betwn('abcdef', -30, -1);
+select PLVstr.betwn('abcdef', -8, -4);
+select PLVstr.betwn('abcdef', -7, -4);
+select PLVstr.betwn('abcdef', -9, -7);
+select PLVstr.betwn('abcdef', -10, -8);
+select PLVstr.betwn('abcdef', 2, 4);
+select PLVstr.betwn('abcdef', 2, 4, false);
+select PLVstr.betwn('abcdef', -6, -1);
+select PLVstr.betwn('abcdef', -3, -1);
+select PLVstr.betwn('abcdef', 3, 3);
+select PLVstr.betwn('abcdef', 3, 3, false);
+select PLVstr.betwn('Harry and Sally are very happy', 7, 9);
+select PLVstr.swap('abcdef', 'XY', 2, 2);
+select PLVstr.swap('abcdef', 'XY', 3, 2);
+select PLVstr.swap('abcdef', 'XY', 8, 2);
+select PLVstr.swap('abcdef', 'XY', -6, 2);
+select PLVstr.swap('abcdef', 'XY', -7, 2);
+select PLVstr.swap('abcdef', 'XY', -8, 2);
 
 select plvsubst.string('My name is %s %s.', ARRAY['Pavel','Stěhule']);
 select plvsubst.string('My name is % %.', ARRAY['Pavel','Stěhule'], '%');
@@ -293,6 +319,9 @@ select nvl(NULL::text, 'B');
 select nvl(NULL::text, NULL);
 select nvl(1, 2);
 select nvl(NULL::int, 2);
+select nvl(NULL::double precision, 1);
+select nvl(1.1::double precision, 1);
+select nvl(1.1::numeric, 1);
 select nvl2('A'::text, 'B', 'C');
 select nvl2(NULL::text, 'B', 'C');
 select nvl2('A'::text, NULL, 'C');
@@ -491,12 +520,14 @@ select PLVstr.rvrs ('alphabet', -2, -5);
 select PLVstr.rvrs ('alphabet', -2);
 select PLVstr.rvrs ('alphabet', 2, 200);
 select PLVstr.rvrs ('alphabet', 20, 200);
+select PLVstr.rvrs ('l', -2, -5);
 select PLVstr.lstrip ('*val1|val2|val3|*', '*') = 'val1|val2|val3|*';
 select PLVstr.lstrip (',,,val1,val2,val3,', ',', 3)= 'val1,val2,val3,';
 select PLVstr.lstrip ('WHERE WHITE = ''FRONT'' AND COMP# = 1500', 'WHERE ') = 'WHITE = ''FRONT'' AND COMP# = 1500';
 select plvstr.left('Příliš žluťoučký kůň',4) = pg_catalog.substr('Příl', 1, 4);
 
 select pos,token from plvlex.tokens('select * from a.b.c join d ON x=y', true, true);
+select pos, token from plvlex.tokens('select '' a + b ', true, true);
 
 SET lc_numeric TO 'C';
 select to_char(22);
@@ -536,6 +567,15 @@ SELECT to_number(1210::bigint, 9999::bigint);
 SELECT to_number(1210.73::numeric, 9999.99::numeric);
 
 SELECT to_date('2009-01-02');
+SELECT to_date('', 'yyyy-mm-dd');
+SELECT to_date('112012', 'J');
+SELECT to_date('1003/03/15', 'yyyy/mm/dd');
+SELECT oracle.to_date('', 'yyyy-mm-dd');
+SELECT oracle.to_date('112012', 'J');
+SELECT oracle.to_date('1003-03-15', 'yyyy-mm-dd');
+SET orafce.oracle_compatibility_date_limit TO off;
+SELECT oracle.to_date('112012', 'J');
+SELECT oracle.to_date('1003/03/15', 'yyyy/mm/dd');
 
 SELECT bitand(5,1), bitand(5,2), bitand(5,4);
 SELECT sinh(1.570796)::numeric(10, 8), cosh(1.570796)::numeric(10, 8), tanh(4)::numeric(10, 8);
@@ -558,12 +598,25 @@ select dbms_assert.enquote_name('''"AAA', false);
 select dbms_assert.noop('some string');
 select dbms_assert.qualified_sql_name('aaa.bbb.ccc."aaaa""aaa"');
 select dbms_assert.qualified_sql_name('aaa.bbb.cc%c."aaaa""aaa"');
+select dbms_assert.qualified_sql_name('"ahoj"  dddd');
+select dbms_assert.qualified_sql_name('"x", 2 AS y');
+select dbms_assert.qualified_sql_name('"x" UNION SELECT 1');
+select dbms_assert.qualified_sql_name('"x"; DROP TABLE t');
+select dbms_assert.qualified_sql_name('"x" -- c');
+select dbms_assert.qualified_sql_name('"x"'),
+       dbms_assert.qualified_sql_name('"s"."t"'),
+       dbms_assert.qualified_sql_name('schema.table');
+
 select dbms_assert.schema_name('dbms_assert');
 select dbms_assert.schema_name('jabadabado');
 select dbms_assert.simple_sql_name('"Aaa dghh shsh"');
 select dbms_assert.simple_sql_name('ajajaj -- ajaj');
 select dbms_assert.object_name('pg_catalog.pg_class');
 select dbms_assert.object_name('dbms_assert.fooo');
+select dbms_assert.qualified_sql_name('1broken');
+select dbms_assert.simple_sql_name('1broken');
+select dbms_assert.simple_sql_name('broken;');
+select dbms_assert.simple_sql_name('broken''');
 
 select dbms_assert.enquote_literal(NULL);
 select dbms_assert.enquote_name(NULL);
@@ -931,6 +984,17 @@ SELECT '|' || oracle.rpad('あbcd'::nvarchar2(5), 10, 'xい'::text) || '|';
 SELECT '|' || oracle.rpad('あbcd'::nvarchar2(5), 10, 'xい'::varchar2(5)) || '|';
 SELECT '|' || oracle.rpad('あbcd'::nvarchar2(5), 10, 'xい'::nvarchar2(5)) || '|';
 
+-- should not hangs
+SELECT oracle.rpad('x', 10, U&'\0301');
+SELECT oracle.lpad('x', 10, U&'\0301');
+
+SELECT oracle.rpad('ab', 5, E'\n') = '';
+SELECT oracle.lpad('ab', 5, E'\n') = '';
+SELECT oracle.rpad('ab', 5, E'\t*') = E'ab\t*\t*\t*';
+SELECT oracle.lpad('ab', 5, E'\t*') = E'\t*\t*\t*ab';
+SELECT oracle.rpad(E'\n\nab', 5, '*') = E'\n\nab***';
+SELECT oracle.rpad('ab', 5, '*') = 'ab***' AND oracle.lpad('ab', 5, '*') = '***ab';
+
 --
 -- test TRIM family of functions
 --
@@ -1014,15 +1078,15 @@ SELECT pos, token, class, mod FROM plvlex.tokens('select * from a.b.c join d on 
 -- trigger functions
 --
 
-CREATE TABLE trg_test(a varchar, b int, c varchar, d date, e int);
+CREATE TABLE trg_test(a varchar, b int, c varchar, d date, e int, f char(10));
 
 CREATE TRIGGER trg_test_xx BEFORE INSERT OR UPDATE
   ON trg_test FOR EACH ROW EXECUTE PROCEDURE oracle.replace_empty_strings(true);
 
 \pset null ***
 
-INSERT INTO trg_test VALUES('',10, 'AHOJ', NULL, NULL);
-INSERT INTO trg_test VALUES('AHOJ', NULL, '', '2020-01-01', 100);
+INSERT INTO trg_test VALUES('',10, 'AHOJ', NULL, NULL, '   ');
+INSERT INTO trg_test VALUES('AHOJ', NULL, '', '2020-01-01', 100, 'Ahoj');
 
 SELECT * FROM trg_test;
 
@@ -1033,10 +1097,11 @@ DROP TRIGGER trg_test_xx ON trg_test;
 CREATE TRIGGER trg_test_xx BEFORE INSERT OR UPDATE
   ON trg_test FOR EACH ROW EXECUTE PROCEDURE oracle.replace_null_strings();
 
-INSERT INTO trg_test VALUES(NULL, 10, 'AHOJ', NULL, NULL);
-INSERT INTO trg_test VALUES('AHOJ', NULL, NULL, '2020-01-01', 100);
+INSERT INTO trg_test VALUES(NULL, 10, 'AHOJ', NULL, NULL, NULL);
+INSERT INTO trg_test VALUES('AHOJ', NULL, NULL, '2020-01-01', 100, 'AHOJ');
 
 SELECT * FROM trg_test;
+SELECT f::bytea FROM trg_test;
 
 DROP TABLE trg_test;
 
@@ -1107,3 +1172,209 @@ SELECT v1, v2, oracle.remainder(v1::bigint, v2::bigint) FROM testorafce_remainde
 SELECT v1, v2, oracle.remainder(v1::numeric, v2::numeric) FROM testorafce_remainder;
 
 DROP TABLE testorafce_remainder;
+
+select oracle.MONTHS_BETWEEN(oracle.TO_date('10/02/2025 00:00:00', 'mm/dd/yyyy HH24:MI:SS'), oracle.TO_date('10/02/2025 00:00:00', 'mm/dd/yyyy HH24:MI:SS'));
+select oracle.MONTHS_BETWEEN(oracle.TO_date('10/01/2025 00:00:00', 'mm/dd/yyyy HH24:MI:SS'), oracle.TO_date('01/01/2022 00:00:00', 'mm/dd/yyyy HH24:MI:SS'));
+select oracle.MONTHS_BETWEEN(oracle.TO_date('10/10/2025 00:00:00', 'mm/dd/yyyy HH24:MI:SS'), oracle.TO_date('01/10/2022 00:00:00', 'mm/dd/yyyy HH24:MI:SS'));
+select oracle.MONTHS_BETWEEN(oracle.TO_date('10/02/2025 00:00:00', 'mm/dd/yyyy HH24:MI:SS'), oracle.TO_date('01/01/2022 00:00:00', 'mm/dd/yyyy HH24:MI:SS'));
+select oracle.MONTHS_BETWEEN(oracle.TO_date('10/02/2025 12:00:00', 'mm/dd/yyyy HH24:MI:SS'), oracle.TO_date('01/01/2022 12:00:00', 'mm/dd/yyyy HH24:MI:SS'));
+select oracle.MONTHS_BETWEEN(oracle.TO_date('10/02/2025 10:00:00', 'mm/dd/yyyy HH24:MI:SS'), oracle.TO_date('01/01/2022 10:00:00', 'mm/dd/yyyy HH24:MI:SS'));
+select oracle.MONTHS_BETWEEN(oracle.TO_date('10/02/2025 10:00:00', 'mm/dd/yyyy HH24:MI:SS'), oracle.TO_date('01/01/2022 10:30:00', 'mm/dd/yyyy HH24:MI:SS'));
+select oracle.MONTHS_BETWEEN(oracle.TO_date('10/02/2025 00:00:00', 'mm/dd/yyyy HH24:MI:SS'), oracle.TO_date('01/01/2022 10:30:00', 'mm/dd/yyyy HH24:MI:SS'));
+select oracle.MONTHS_BETWEEN(oracle.TO_date('10/02/2025 00:00:00', 'mm/dd/yyyy HH24:MI:SS'), oracle.TO_date('01/01/2022 10:00:00', 'mm/dd/yyyy HH24:MI:SS'));
+
+select oracle.MONTHS_BETWEEN(to_timestamp('10/02/2025 00:00:00', 'mm/dd/yyyy HH24:MI:SS'), to_timestamp('10/02/2025 00:00:00', 'mm/dd/yyyy HH24:MI:SS'));
+select oracle.MONTHS_BETWEEN(to_timestamp('10/01/2025 00:00:00', 'mm/dd/yyyy HH24:MI:SS'), to_timestamp('01/01/2022 00:00:00', 'mm/dd/yyyy HH24:MI:SS'));
+select oracle.MONTHS_BETWEEN(to_timestamp('10/10/2025 00:00:00', 'mm/dd/yyyy HH24:MI:SS'), to_timestamp('01/10/2022 00:00:00', 'mm/dd/yyyy HH24:MI:SS'));
+select oracle.MONTHS_BETWEEN(to_timestamp('10/02/2025 00:00:00', 'mm/dd/yyyy HH24:MI:SS'), to_timestamp('01/01/2022 00:00:00', 'mm/dd/yyyy HH24:MI:SS'));
+select oracle.MONTHS_BETWEEN(to_timestamp('10/02/2025 12:00:00', 'mm/dd/yyyy HH24:MI:SS'), to_timestamp('01/01/2022 12:00:00', 'mm/dd/yyyy HH24:MI:SS'));
+select oracle.MONTHS_BETWEEN(to_timestamp('10/02/2025 10:00:00', 'mm/dd/yyyy HH24:MI:SS'), to_timestamp('01/01/2022 10:00:00', 'mm/dd/yyyy HH24:MI:SS'));
+select oracle.MONTHS_BETWEEN(to_timestamp('10/02/2025 10:00:00', 'mm/dd/yyyy HH24:MI:SS'), to_timestamp('01/01/2022 10:30:00', 'mm/dd/yyyy HH24:MI:SS'));
+select oracle.MONTHS_BETWEEN(to_timestamp('10/02/2025 00:00:00', 'mm/dd/yyyy HH24:MI:SS'), to_timestamp('01/01/2022 10:30:00', 'mm/dd/yyyy HH24:MI:SS'));
+select oracle.MONTHS_BETWEEN(to_timestamp('10/02/2025 00:00:00', 'mm/dd/yyyy HH24:MI:SS'), to_timestamp('01/01/2022 10:00:00', 'mm/dd/yyyy HH24:MI:SS'));
+
+select oracle.months_between(oracle.to_date('2024-10-01 12:34:56', 'yyyy-mm-dd hh24:mi:ss'),
+                             oracle.to_date('2024-09-01 00:00:00', 'yyyy-mm-dd hh24:mi:ss')) same_day_diff_time,
+       oracle.months_between(oracle.to_date('2024-10-02 00:00:00', 'yyyy-mm-dd hh24:mi:ss'),
+                             oracle.to_date('2024-09-01 00:00:00', 'yyyy-mm-dd hh24:mi:ss')) diff_day_same_time,
+       oracle.months_between(oracle.to_date('2024-10-02 12:34:45', 'yyyy-mm-dd hh24:mi:ss'),
+                             oracle.to_date( '2024-09-01 00:00:00', 'yyyy-mm-dd hh24:mi:ss')) diff_day_diff_time;
+
+select oracle.months_between(to_timestamp('2024-10-01 12:34:56', 'yyyy-mm-dd hh24:mi:ss'),
+                             to_timestamp('2024-09-01 00:00:00', 'yyyy-mm-dd hh24:mi:ss')) same_day_diff_time,
+       oracle.months_between(to_timestamp('2024-10-02 00:00:00', 'yyyy-mm-dd hh24:mi:ss'),
+                             to_timestamp('2024-09-01 00:00:00', 'yyyy-mm-dd hh24:mi:ss')) diff_day_same_time,
+       oracle.months_between(to_timestamp('2024-10-02 12:34:45', 'yyyy-mm-dd hh24:mi:ss'),
+                             to_timestamp('2024-09-01 00:00:00', 'yyyy-mm-dd hh24:mi:ss')) diff_day_diff_time;
+
+-- one character, three bytes in utf8.
+select octet_length('€'::text) as euro_bytes, length('€'::text) as euro_chars;
+
+-- taking one byte of it yields a value that is not valid text.
+select octet_length(oracle.substrb('€'::oracle.varchar2, 1, 1)::text) as sliced_bytes;
+
+-- ... and every text operation on it fails.
+select length(oracle.substrb('€'::oracle.varchar2, 1, 1)::text) as should_not_error;
+
+select upper(oracle.substrb('€'::oracle.varchar2, 1, 1)::text) as should_not_error;
+
+-- the broken value can even be stored, so it outlives the session.
+create temp table substrb_repro (a oracle.varchar2);
+insert into substrb_repro
+select oracle.substrb('€'::oracle.varchar2, 1, 1);
+
+select octet_length(a::text) as stored_bytes from substrb_repro;
+select length(a::text)       as should_not_error from substrb_repro;
+
+-- control: an ordinary out-of-range start returns the empty string
+select quote_literal(plvstr.rvrs('abcde', -6, -6)) as start_minus_6;
+
+-- should to return empty string
+select quote_literal(plvstr.rvrs('abcde', -2147483648, -2147483648)) as start_int32_min;
+
+-- the two-argument form reaches the same code path
+select quote_literal(plvstr.rvrs('abcde', -2147483648)) as start_int32_min_2arg;
+
+-- and so does an empty input string
+select quote_literal(plvstr.rvrs('', -2147483648, -2147483648)) as empty_input;
+
+-- the functions that were already hardened, so that the checks below test the
+-- three that were not rather than a server that rejects every infinite date.
+select oracle.add_months(date 'infinity', 1) = date 'infinity';
+select oracle.add_months(date '-infinity', 1) = date '-infinity';
+select oracle.trunc(date 'infinity') = date 'infinity';
+select oracle.round(date 'infinity') = date 'infinity';
+
+SET client_min_messages = notice;
+
+-- next_day() and last_day() have to do the same.  before the fix both
+-- infinities collapsed onto one and the same finite day.
+do $$
+declare
+	nd_pos	date := oracle.next_day(date 'infinity', 1);
+	nd_neg	date := oracle.next_day(date '-infinity', 1);
+	nt_pos	date := oracle.next_day(date 'infinity', 'monday');
+	ld_pos	date := oracle.last_day(date 'infinity');
+	ld_neg	date := oracle.last_day(date '-infinity');
+begin
+	raise notice '%', nd_pos = date 'infinity';
+	raise notice '%', nd_neg = date '-infinity';
+	raise notice '%', nt_pos = date 'infinity';
+	raise notice '%', ld_pos = date 'infinity';
+	raise notice '%', ld_neg = date '-infinity';
+end
+$$;
+
+-- whatever the three return, the value has to be a date.  rendering it and
+-- reading it back is the check that a dump and a restore would make.
+do $$
+declare
+	expr	text;
+	failed	text[] := '{}';
+	shown	text;
+	exprs	text[] := array[
+		'oracle.next_day(date ''infinity'', 1)',
+		'oracle.next_day(date ''-infinity'', 1)',
+		'oracle.next_day(date ''infinity'', ''monday'')',
+		'oracle.last_day(date ''infinity'')',
+		'oracle.last_day(date ''-infinity'')'];
+begin
+	foreach expr in array exprs loop
+		execute format('select (%s)::text', expr) into shown;
+		begin
+			execute format('select %L::date', shown);
+		exception when others then
+			failed := failed || format('%s -> %s', expr, shown);
+		end;
+	end loop;
+
+	raise notice '%', array_to_string(failed, ';');
+end
+$$;
+
+-- core reports an out of range date instead of walking past the end of the
+-- range, and next_day() has to do the same.
+do $$
+declare
+	maxdate	date := date '5874897-12-31';
+	expr	text;
+	failed	text[] := '{}';
+	raised	boolean;
+	state	text;
+	exprs	text[] := array[
+		'oracle.next_day(date ''5874897-12-31'', 1)',
+		'oracle.next_day(date ''5874897-12-31'', ''monday'')'];
+begin
+	-- the precondition: core refuses the same step
+	begin
+		perform maxdate + 1;
+		raised := false;
+	exception when others then
+		raised := true;
+	end;
+
+	raise notice '%', raised;
+
+	foreach expr in array exprs loop
+		begin
+			execute format('select %s', expr);
+			failed := failed || expr;
+		exception when others then
+			state := sqlstate;
+			if state <> '22008' then
+				failed := failed || format('%s raised %s', expr, state);
+			end if;
+
+		end;
+	end loop;
+
+	raise notice '%', array_to_string(failed, ';');
+end
+$$;
+
+-- months_between() subtracts two dates, and core refuses to subtract infinite
+-- dates rather than returning a distance between them.  before the fix
+-- months_between(-infinity, infinity) answered 0.032258064516129.
+do $$
+declare
+	expr	text;
+	failed	text[] := '{}';
+	shown	text;
+	state	text;
+	exprs	text[] := array[
+		'oracle.months_between(date ''infinity'', date ''2024-01-01'')',
+		'oracle.months_between(date ''2024-01-01'', date ''infinity'')',
+		'oracle.months_between(date ''-infinity'', date ''infinity'')',
+		'oracle.months_between(date ''infinity'', date ''infinity'')'];
+begin
+	begin
+		perform date 'infinity' - date '2024-01-01';
+		failed := failed || 'core subtracted two dates one of which is infinite';
+	exception when others then
+		null;
+	end;
+
+	foreach expr in array exprs loop
+		begin
+			execute format('select (%s)::text', expr) into shown;
+			failed := failed || format('%s -> %s', expr, shown);
+		exception when others then
+			state := sqlstate;
+			if state <> '22008' then
+				failed := failed || format('%s raised %s', expr, state);
+			end if;
+		end;
+	end loop;
+
+	raise notice '%', array_to_string(failed, ';');
+end
+$$;
+
+-- the ordinary results must not move.
+select oracle.next_day(date '2024-02-29', 1) = date '2024-03-03';
+select oracle.next_day(date '2024-02-29', 'monday') = date '2024-03-04';
+select oracle.last_day(date '2024-02-15') = date '2024-02-29';
+select oracle.last_day(date '4713-01-01 bc') = date '4713-01-31 bc';
+select oracle.months_between(date '2024-03-31', date '2024-02-29') = 1;
+select oracle.months_between(date '2024-01-01', date '2024-03-01') = -2;
+
