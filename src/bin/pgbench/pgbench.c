@@ -6647,7 +6647,7 @@ main(int argc, char **argv)
 		{"max-tries", required_argument, NULL, 14},
 		{"verbose-errors", no_argument, NULL, 15},
 		/* Cloudberry-specific */
-		{"use-non-unique-keys", no_argument, NULL, 13},
+		{"use-non-unique-keys", no_argument, NULL, 16},
 		{NULL, 0, NULL, 0}
 	};
 
@@ -6985,7 +6985,7 @@ main(int argc, char **argv)
 				benchmarking_option_set = true;
 				verbose_errors = true;
 				break;
-			case 16:
+			case 16:			/* use-non-unique-keys */
 				use_unique_key = 0;
 				break;
 			default:
