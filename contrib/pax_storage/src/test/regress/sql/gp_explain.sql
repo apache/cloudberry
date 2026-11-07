@@ -45,6 +45,30 @@ begin
 end;
 $$ language plpgsql;
 
+-- Run EXPLAIN ANALYZE BUFFERS retaining the position of every Buffers: line
+create or replace function explain_buffers_filter(explain_query text) returns setof text as
+$$
+declare
+  explainrow text;
+begin
+  for explainrow in execute
+    'EXPLAIN (ANALYZE, BUFFERS, COSTS OFF, TIMING OFF, SUMMARY OFF) ' || explain_query
+  loop
+    if explainrow ~ '^\s*Buffers:' then
+      explainrow := regexp_replace(explainrow, 'Buffers:.*$', 'Buffers: N');
+    else
+      explainrow := regexp_replace(explainrow,
+                                   '\m\d+([kK]B?)\M', 'N\1', 'g');
+      explainrow := regexp_replace(explainrow,
+                                   '\m\d+(x)', 'N\1', 'g');
+      explainrow := regexp_replace(explainrow,
+                                   '-?\m\d+\M', 'N', 'g');
+    end if;
+    return next explainrow;
+  end loop;
+end;
+$$ language plpgsql;
+
 -- Test explain wal option
 CREATE TABLE explainwal (id int4);
 
@@ -93,6 +117,14 @@ select
 CREATE TABLE explaintest (id int4);
 INSERT INTO explaintest SELECT generate_series(1, 10);
 ANALYZE explaintest;
+
+-- Compare normalized buffer placement without automatic EXPLAIN processing.
+-- explain_processing_off
+SELECT plan_line
+FROM explain_buffers_filter($$
+  SELECT * FROM explaintest;
+$$) WITH ORDINALITY AS plan(plan_line, line_number)
+ORDER BY line_number;
 
 EXPLAIN ANALYZE SELECT * FROM explaintest;
 
