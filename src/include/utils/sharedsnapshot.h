@@ -43,6 +43,7 @@ typedef struct SharedSnapshotSlot
 
 	volatile dsm_handle		snapshot_handle;
 	uint32					snapshot_sz;
+	/* When both locks are needed, acquire SharedSnapshotLock first. */
 	LWLock					*slotLock;
 
 	volatile int			cur_dump_id;
