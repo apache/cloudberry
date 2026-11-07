@@ -18,6 +18,8 @@ INFO:  SP-GiST leaf data type text does not match declared type name
 (1 row)
 
 create table t(f1 name, f2 integer, f3 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index on t using spgist(f1) include(f2, f3);
 \d+ t_f1_f2_f3_idx
                  Index "public.t_f1_f2_f3_idx"
@@ -37,13 +39,16 @@ explain (costs off)
 select * from t
   where f1 > 'binary_upgrade_set_n' and f1 < 'binary_upgrade_set_p'
   order by 1;
-                                            QUERY PLAN                                             
----------------------------------------------------------------------------------------------------
- Sort
-   Sort Key: f1
-   ->  Index Only Scan using t_f1_f2_f3_idx on t
-         Index Cond: ((f1 > 'binary_upgrade_set_n'::name) AND (f1 < 'binary_upgrade_set_p'::name))
-(4 rows)
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: f1
+   ->  Sort
+         Sort Key: f1
+         ->  Index Only Scan using t_f1_f2_f3_idx on t
+               Index Cond: ((f1 > 'binary_upgrade_set_n'::name) AND (f1 < 'binary_upgrade_set_p'::name))
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 select * from t
   where f1 > 'binary_upgrade_set_n' and f1 < 'binary_upgrade_set_p'
@@ -52,20 +57,21 @@ select * from t
 ------------------------------------------------------+----+------------------------------------------------------
  binary_upgrade_set_next_array_pg_type_oid            |    | binary_upgrade_set_next_array_pg_type_oid
  binary_upgrade_set_next_heap_pg_class_oid            |    | binary_upgrade_set_next_heap_pg_class_oid
- binary_upgrade_set_next_index_pg_class_oid           |  1 | binary_upgrade_set_next_index_pg_class_oid
- binary_upgrade_set_next_multirange_array_pg_type_oid |  1 | binary_upgrade_set_next_multirange_array_pg_type_oid
- binary_upgrade_set_next_multirange_pg_type_oid       |  1 | binary_upgrade_set_next_multirange_pg_type_oid
+ binary_upgrade_set_next_index_pg_class_oid           |  3 | binary_upgrade_set_next_index_pg_class_oid
+ binary_upgrade_set_next_multirange_array_pg_type_oid |  3 | binary_upgrade_set_next_multirange_array_pg_type_oid
+ binary_upgrade_set_next_multirange_pg_type_oid       |  3 | binary_upgrade_set_next_multirange_pg_type_oid
  binary_upgrade_set_next_pg_authid_oid                |    | binary_upgrade_set_next_pg_authid_oid
  binary_upgrade_set_next_pg_enum_oid                  |    | binary_upgrade_set_next_pg_enum_oid
+ binary_upgrade_set_next_pg_namespace_oid             |  2 | binary_upgrade_set_next_pg_namespace_oid
+ binary_upgrade_set_next_pg_tablespace_oid            |    | binary_upgrade_set_next_pg_tablespace_oid
  binary_upgrade_set_next_pg_type_oid                  |    | binary_upgrade_set_next_pg_type_oid
- binary_upgrade_set_next_toast_pg_class_oid           |  1 | binary_upgrade_set_next_toast_pg_class_oid
-(9 rows)
+ binary_upgrade_set_next_toast_pg_class_oid           |  3 | binary_upgrade_set_next_toast_pg_class_oid
+(11 rows)
 
 -- Verify clean failure when INCLUDE'd columns result in overlength tuple
 -- The error message details are platform-dependent, so show only SQLSTATE
 \set VERBOSITY sqlstate
 insert into t values(repeat('xyzzy', 12), 42, repeat('xyzzy', 4000));
-ERROR:  54000
 \set VERBOSITY default
 drop index t_f1_f2_f3_idx;
 create index on t using spgist(f1 name_ops_old) include(f2, f3);
@@ -82,13 +88,16 @@ explain (costs off)
 select * from t
   where f1 > 'binary_upgrade_set_n' and f1 < 'binary_upgrade_set_p'
   order by 1;
-                                            QUERY PLAN                                             
----------------------------------------------------------------------------------------------------
- Sort
-   Sort Key: f1
-   ->  Index Only Scan using t_f1_f2_f3_idx on t
-         Index Cond: ((f1 > 'binary_upgrade_set_n'::name) AND (f1 < 'binary_upgrade_set_p'::name))
-(4 rows)
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: f1
+   ->  Sort
+         Sort Key: f1
+         ->  Index Only Scan using t_f1_f2_f3_idx on t
+               Index Cond: ((f1 > 'binary_upgrade_set_n'::name) AND (f1 < 'binary_upgrade_set_p'::name))
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 select * from t
   where f1 > 'binary_upgrade_set_n' and f1 < 'binary_upgrade_set_p'
@@ -97,16 +106,17 @@ select * from t
 ------------------------------------------------------+----+------------------------------------------------------
  binary_upgrade_set_next_array_pg_type_oid            |    | binary_upgrade_set_next_array_pg_type_oid
  binary_upgrade_set_next_heap_pg_class_oid            |    | binary_upgrade_set_next_heap_pg_class_oid
- binary_upgrade_set_next_index_pg_class_oid           |  1 | binary_upgrade_set_next_index_pg_class_oid
- binary_upgrade_set_next_multirange_array_pg_type_oid |  1 | binary_upgrade_set_next_multirange_array_pg_type_oid
- binary_upgrade_set_next_multirange_pg_type_oid       |  1 | binary_upgrade_set_next_multirange_pg_type_oid
+ binary_upgrade_set_next_index_pg_class_oid           |  3 | binary_upgrade_set_next_index_pg_class_oid
+ binary_upgrade_set_next_multirange_array_pg_type_oid |  3 | binary_upgrade_set_next_multirange_array_pg_type_oid
+ binary_upgrade_set_next_multirange_pg_type_oid       |  3 | binary_upgrade_set_next_multirange_pg_type_oid
  binary_upgrade_set_next_pg_authid_oid                |    | binary_upgrade_set_next_pg_authid_oid
  binary_upgrade_set_next_pg_enum_oid                  |    | binary_upgrade_set_next_pg_enum_oid
+ binary_upgrade_set_next_pg_namespace_oid             |  2 | binary_upgrade_set_next_pg_namespace_oid
+ binary_upgrade_set_next_pg_tablespace_oid            |    | binary_upgrade_set_next_pg_tablespace_oid
  binary_upgrade_set_next_pg_type_oid                  |    | binary_upgrade_set_next_pg_type_oid
- binary_upgrade_set_next_toast_pg_class_oid           |  1 | binary_upgrade_set_next_toast_pg_class_oid
-(9 rows)
+ binary_upgrade_set_next_toast_pg_class_oid           |  3 | binary_upgrade_set_next_toast_pg_class_oid
+(11 rows)
 
 \set VERBOSITY sqlstate
 insert into t values(repeat('xyzzy', 12), 42, repeat('xyzzy', 4000));
-ERROR:  54000
 \set VERBOSITY default
