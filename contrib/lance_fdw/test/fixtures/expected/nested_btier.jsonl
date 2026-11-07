@@ -1,0 +1,4 @@
+{"id":0,"c_struct_b":{"ok":1,"bad":0}}
+{"id":1,"c_struct_b":null}
+{"id":2,"c_struct_b":{"ok":null,"bad":18446744073709551615}}
+{"id":3,"c_struct_b":{"ok":-1,"bad":null}}

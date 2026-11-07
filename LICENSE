@@ -624,6 +624,12 @@ Apache Cloudberry includes codes from
       contrib/pax_storage/src/cpp/contrib/googlebench
       see licenses/LICENSE-googlebench.txt
 
+      Apache Arrow nanoarrow 0.7.0, copyright 2023 The Apache Software
+      Foundation, vendored by lance_fdw:
+      contrib/lance_fdw/third_party/nanoarrow
+      (see the Apache License above; also shipped in-tree as
+       contrib/lance_fdw/third_party/nanoarrow/LICENSE.txt)
+
 ----------------------------
    MIT LICENSE
 
