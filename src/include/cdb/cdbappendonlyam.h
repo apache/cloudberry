@@ -53,6 +53,18 @@
 #define MAX_APPENDONLY_BLOCK_SIZE			 (2 * 1024 * 1024)
 #define DEFAULT_VARBLOCK_TEMPSPACE_LEN   	 (4 * 1024)
 #define DEFAULT_FS_SAFE_WRITE_SIZE			 (0)
+/*
+ * Chunk sizing for parallel scans of AO row and AOCS tables.  Like heap's
+ * PARALLEL_SEQSCAN_NCHUNKS, a scan is split into about
+ * APPENDONLY_PARALLEL_SCAN_NCHUNKS chunks.  Chunks are counted in rows, with
+ * their size in bytes bounded using the average row size.  The minimum keeps
+ * the cost of positioning at a chunk small.  The maximum is much smaller than
+ * heap's, since a process positions itself by reading the blocks of other
+ * processes' chunks; small chunks keep those pages in the OS cache.
+ */
+#define APPENDONLY_PARALLEL_SCAN_NCHUNKS			2048
+#define APPENDONLY_PARALLEL_SCAN_MIN_CHUNK_BYTES	(16 * DEFAULT_APPENDONLY_BLOCK_SIZE)
+#define APPENDONLY_PARALLEL_SCAN_MAX_CHUNK_BYTES	(INT64CONST(32) * 1024 * 1024)
 
 extern AppendOnlyBlockDirectory *GetAOBlockDirectory(Relation relation);
 
@@ -261,6 +273,28 @@ typedef struct AppendOnlyScanDescData
 	 */
 	int64				segrowsprocessed;
 
+	/*
+	 * Parallel scan state, used only when rs_base.rs_parallel is set.
+	 *
+	 * Every process computes the chunk layout from its own aos_segfile_arr[]:
+	 * rows_per_chunk, and seg_first_chunk[i], the number of the first chunk
+	 * of aos_segfile_arr[i].  The shared ParallelBlockTableScanDesc holds
+	 * only the total number of chunks and the number handed out so far.
+	 *
+	 * cur_seg is the index in aos_segfile_arr[] of the segment file being
+	 * read, the one of the current chunk, or -1, as in AOCSScanDesc.
+	 * [chunk_start_row, chunk_end_row) are the ordinals of the chunk's rows;
+	 * chunk_end_row is PG_INT64_MAX for the last chunk of a segment file,
+	 * which is read to the end of the file.
+	 * A block belongs to the chunk that holds its first row; segrowsprocessed
+	 * is the ordinal of the first row of the next block in the file.
+	 */
+	int64				rows_per_chunk;
+	uint64			   *seg_first_chunk;
+	int32				cur_seg;
+	int64				chunk_start_row;
+	int64				chunk_end_row;
+
 	AOBlkDirScan		blkdirscan;
 
 	/* scan current state */
@@ -451,7 +485,7 @@ typedef struct IndexFetchAppendOnlyData
  * ----------------
  */
 
-extern AppendOnlyScanDesc appendonly_beginrangescan(Relation relation, 
+extern AppendOnlyScanDesc appendonly_beginrangescan(Relation relation,
 		Snapshot snapshot,
 		Snapshot appendOnlyMetaDataSnapshot, 
 		int *segfile_no_arr, int segfile_count,
@@ -521,6 +555,10 @@ extern bool AppendOnlyExecutorReadBlock_ScanNextTuple(AppendOnlyExecutorReadBloc
 										  TupleTableSlot *slot);
 
 extern void AppendOnlyExecutorReadBlock_GetContents(AppendOnlyExecutorReadBlock *executorReadBlock);
+
+extern BlockNumber appendonly_parallelscan_compute_chunks(Relation rel,
+														  FileSegInfo **seginfo,
+														  int total_seg);
 /*
  * Update total bytes read for the entire scan. If the block was compressed,
  * update it with the compressed length. If the block was not compressed, update
@@ -552,6 +590,33 @@ AppendOnlyScanDesc_TotalTupCount(AppendOnlyScanDesc scan)
 	}
 
 	return totalrows;
+}
+
+/*
+ * Return the number of rows in each chunk of a parallel scan, given the number
+ * of rows the scan reads and their uncompressed size in bytes.  The last chunk
+ * of a segment file may be shorter.
+ */
+static inline int64
+AppendOnlyParallelScan_RowsPerChunk(int64 total_rows, int64 total_bytes)
+{
+	int64		row_bytes;
+	int64		rows_per_chunk;
+
+	/* no rows to scan, so no chunks */
+	if (total_rows == 0)
+		return 1;
+
+	/* an estimated bytes per row */
+	row_bytes = Max(total_bytes / total_rows, 1);
+
+	rows_per_chunk = Max(total_rows / APPENDONLY_PARALLEL_SCAN_NCHUNKS,
+						 APPENDONLY_PARALLEL_SCAN_MIN_CHUNK_BYTES / row_bytes);
+	rows_per_chunk = Min(rows_per_chunk,
+						 APPENDONLY_PARALLEL_SCAN_MAX_CHUNK_BYTES / row_bytes);
+
+	/* a row larger than the minimum chunk size is a chunk of its own */
+	return Max(rows_per_chunk, 1);
 }
 
 #endif   /* CDBAPPENDONLYAM_H */
