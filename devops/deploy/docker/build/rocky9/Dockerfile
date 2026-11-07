@@ -114,8 +114,8 @@ RUN dnf makecache && \
     dnf install -y \
         apr-devel \
         bzip2-devel \
-        java-11-openjdk \
-        java-11-openjdk-devel \
+        java-17-openjdk \
+        java-17-openjdk-devel \
         krb5-devel \
         libcurl-devel \
         libssh2-devel \
