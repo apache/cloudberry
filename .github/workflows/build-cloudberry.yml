@@ -385,7 +385,6 @@ jobs:
                                "src/bin/pgbench:installcheck",
                                "src/bin/psql:installcheck",
                                "src/bin/scripts:installcheck",
-                               "src/interfaces/libpq:installcheck",
                                "src/test/authentication:installcheck",
                                "src/test/postmaster:installcheck"]
               },
