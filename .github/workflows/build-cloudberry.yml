@@ -1984,7 +1984,7 @@ jobs:
                 echo "FAILED_TESTS=0"
                 echo "PASSED_TESTS=0"
                 echo "IGNORED_TESTS=0"
-              } > "test_results.$i.txt"
+              } > "test_results.${{ matrix.test }}.$i.txt"
               overall_status=1
               continue
             fi
@@ -2044,7 +2044,7 @@ jobs:
                   ;;
             esac
 
-            echo "Results stored in test_results.$i.txt"
+            echo "Results stored in test_results.${{ matrix.test }}.$i.txt"
             echo "=== End parsing for configuration $((i+1)) ==="
             echo ""
           done

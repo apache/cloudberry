@@ -90,7 +90,7 @@ fi
 perl "${SCRIPT_DIR}/parse-results.pl" "$LOG_FILE"
 perl_exit_code=$?
 
-# Check if results file exists and source it if it does
+# Check if the results file exists
 if [ ! -f test_results.txt ]; then
     echo "Error: No results file generated"
     exit 2
