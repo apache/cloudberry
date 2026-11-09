@@ -148,3 +148,31 @@ WITH
   LIMIT 1;
 RESET statement_timeout;
 DROP TABLE ss_t1, ss_t2;
+
+-- A Shared Scan below a Partition Selector must be processed like any other
+-- Shared Scan. PartitionSelector used to be missed by is_plan_node(), so the
+-- shared input walker didn't descend into its subtree, and executing the
+-- query failed with "cannot execute alien Share Input Scan".
+CREATE TABLE ss_pt (a int, b int) DISTRIBUTED BY (a)
+  PARTITION BY RANGE (b) (START (0) END (10) EVERY (1));
+CREATE TABLE ss_t (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO ss_pt SELECT i, i % 10 FROM generate_series(1, 1000) i;
+INSERT INTO ss_t SELECT i, i % 3 FROM generate_series(1, 30) i;
+ANALYZE ss_pt;
+ANALYZE ss_t;
+
+SET optimizer = off;
+SET gp_cte_sharing = on;
+EXPLAIN (COSTS OFF)
+WITH c AS (SELECT a, b FROM ss_t WHERE a < 20)
+SELECT count(*) FROM ss_pt JOIN c ON ss_pt.b = c.b
+UNION ALL
+SELECT count(*) FROM c;
+WITH c AS (SELECT a, b FROM ss_t WHERE a < 20)
+SELECT count(*) FROM ss_pt JOIN c ON ss_pt.b = c.b
+UNION ALL
+SELECT count(*) FROM c
+ORDER BY 1;
+RESET gp_cte_sharing;
+RESET optimizer;
+DROP TABLE ss_pt, ss_t;
