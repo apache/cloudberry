@@ -393,8 +393,8 @@ PortalCleanup(Portal portal)
 		}
 	}
 
-	/* 
-	 * If resource scheduling is enabled, release the resource lock. 
+	/*
+	 * If resource scheduling is enabled, release the resource lock.
 	 */
 	if (IsResQueueLockedForPortal(portal))
 	{
@@ -410,6 +410,18 @@ PortalCleanup(Portal portal)
 	{
 		BackoffBackendEntryExit();
 	}
+
+	/*
+	 * If this was a PARALLEL RETRIEVE CURSOR and no others remain, stop
+	 * the periodic check timer immediately rather than waiting for the
+	 * next stray SIGALRM to find a zero count and quiet itself.
+	 * queryDesc was set to NULL above, so the now-cleaned portal is no
+	 * longer counted by GetNumOfParallelRetrieveCursors().
+	 */
+	if (PortalIsParallelRetrieveCursor(portal) &&
+		Gp_role == GP_ROLE_DISPATCH &&
+		GetNumOfParallelRetrieveCursors() == 0)
+		disable_parallel_retrieve_cursor_check_timeout();
 }
 
 /*
