@@ -597,10 +597,13 @@ BEGIN
   RETURN 7;
 END $$;
 
+-- Cloudberry cannot execute DDL in a function running on a segment.
+-- start_ignore
 UPDATE compositetable_holder SET c.a = abs(compositetable_grow());
 
 SELECT c::text FROM compositetable_holder;
 
+-- end_ignore
 CREATE OR REPLACE FUNCTION compositetable_grow() RETURNS int VOLATILE LANGUAGE plpgsql AS $$
 BEGIN
   FOR i IN 1..100 LOOP
@@ -609,10 +612,13 @@ BEGIN
   RETURN 7;
 END $$;
 
+-- Cloudberry cannot execute DDL in a function running on a segment.
+-- start_ignore
 UPDATE compositetable_holder SET c.a = abs(compositetable_grow());
 
 SELECT c::text FROM compositetable_holder;
 
+-- end_ignore
 DROP FUNCTION compositetable_grow();
 DROP TABLE compositetable_holder;
 DROP TABLE compositetable_type;
@@ -631,10 +637,13 @@ BEGIN
   RETURN 7;
 END $$;
 
+-- Cloudberry cannot execute DDL in a function running on a segment.
+-- start_ignore
 UPDATE compositetable_holder SET c[1].a = abs(compositetable_grow());
 
 SELECT c::text FROM compositetable_holder;
 
+-- end_ignore
 DROP FUNCTION compositetable_grow();
 DROP TABLE compositetable_holder;
 DROP TABLE compositetable_type;
@@ -656,10 +665,13 @@ END $$;
 -- This time we start with a NULL value to trigger the NULL case in
 -- ExecEvalFieldStoreDeForm. Mutate the type from the WHERE clause,
 -- because the new value won't be evaluated when starting from a NULL.
+-- Cloudberry cannot execute DDL in a function running on a segment.
+-- start_ignore
 UPDATE compositetable_holder SET c.a = 1 WHERE abs(compositetable_grow()) > 5;
 
 SELECT c::text FROM compositetable_holder;
 
+-- end_ignore
 DROP FUNCTION compositetable_grow();
 DROP TABLE compositetable_holder;
 DROP TABLE compositetable_type;
@@ -678,10 +690,13 @@ BEGIN
   RETURN 7;
 END $$;
 
+-- Cloudberry cannot execute DDL in a function running on a segment.
+-- start_ignore
 UPDATE compositetable_holder SET c.b.a = abs(compositetable_grow());
 
 SELECT c::text FROM compositetable_holder;
 
+-- end_ignore
 DROP FUNCTION compositetable_grow();
 DROP TABLE compositetable_holder;
 DROP TABLE compositetable_type_2;
@@ -699,11 +714,35 @@ BEGIN
 END $$;
 
 -- assign to v.b while b is dropped - the value disappears
+-- Cloudberry cannot execute DDL in a function running on a segment.
+-- start_ignore
 UPDATE compositetable_holder SET v.b = compositetable_drop();
 
 -- 12345 is nowhere to be found
 SELECT v::text AS stored_value FROM compositetable_holder;
 
+-- end_ignore
 DROP FUNCTION compositetable_drop();
 DROP TABLE compositetable_holder;
 DROP TABLE compositetable_type_1;
+
+--
+-- Tests for expanded records built from a flat composite datum, which core
+-- code never does, see make_expanded_record_from_datum().
+--
+
+CREATE TYPE expanded_comp AS (a int, b text);
+
+-- A named rowtype must keep typmod -1, a RECORD must keep its blessed typmod.
+SELECT expanded_record_info(ROW(1, 'named')::expanded_comp);
+SELECT expanded_record_info(ROW(2, 'anonymous'));
+
+-- Round-tripping through an expanded record must preserve the value.
+SELECT expanded_record_identity(ROW(3, 'roundtrip')::expanded_comp);
+SELECT expanded_record_identity(ROW(4, 'anonymous roundtrip'));
+
+-- Reading a field forces a deform against the resolved descriptor.
+SELECT expanded_record_field_text(ROW(5, 'field')::expanded_comp, 1),
+       expanded_record_field_text(ROW(5, 'field')::expanded_comp, 2);
+
+DROP TYPE expanded_comp;
