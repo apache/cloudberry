@@ -69,6 +69,8 @@ test: fk-deadlock2
 #test: eval-plan-qual
 test: fk-snapshot
 test: subxid-overflow
+test: eval-plan-qual-dropped-column
+test: eval-plan-qual-resjunk
 test: eval-plan-qual-trigger
 test: inplace-inval
 #test: intra-grant-inplace
