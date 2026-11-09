@@ -24,10 +24,8 @@ AC_INIT([Apache Cloudberry], [2.2.0-incubating], [dev@cloudberry.apache.org], []
 [PG_PACKAGE_VERSION=14.10]
 AC_SUBST(PG_PACKAGE_VERSION)
 
-dnl m4_if(m4_defn([m4_PACKAGE_VERSION]), [2.69], [], [m4_fatal([Autoconf version 2.69 is required.
-dnl Untested combinations of 'autoconf' and PostgreSQL versions are not
-dnl recommended.  You can remove the check from 'configure.in' but it is then
-dnl your responsibility whether the result works or not.])])
+m4_if(m4_defn([m4_PACKAGE_VERSION]), [2.69], [],
+      [m4_fatal([Autoconf version 2.69 is required.])])dnl
 AC_COPYRIGHT([Copyright (c) 1996-2021, PostgreSQL Global Development Group])
 AC_CONFIG_SRCDIR([src/backend/access/common/heaptuple.c])
 AC_CONFIG_AUX_DIR(config)
