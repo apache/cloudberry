@@ -342,6 +342,8 @@ RESET debug_discard_caches;
 -- altered again, the same number of times.
 CREATE TABLE rta_tab (a bytea, b bytea);
 INSERT INTO rta_tab VALUES ('\x4649584d45', '\x464958544f4f');
+-- Cloudberry cannot alter the type of a distribution key.
+-- start_ignore
 DO $$
 DECLARE
   r record;
@@ -356,6 +358,7 @@ BEGIN
   RAISE NOTICE 'r after rollback: %', r;
 END;
 $$;
+-- end_ignore
 DROP TABLE rta_tab;
 
 -- Assigning a new value to a variable holding a datum formed before the
@@ -406,8 +409,11 @@ END;
 $$;
 CREATE TRIGGER rta_trig BEFORE INSERT ON rta_tab
   FOR EACH ROW EXECUTE FUNCTION rta_trig();
+-- Cloudberry cannot execute DDL in a trigger running on a segment.
+-- start_ignore
 INSERT INTO rta_tab VALUES (0, NULL);
 SELECT * FROM rta_tab;
+-- end_ignore
 DROP TABLE rta_tab;
 DROP FUNCTION rta_trig();
 DROP TYPE rta_type;
@@ -1284,8 +1290,11 @@ CREATE INDEX ON rta_tab (k, gate);
 INSERT INTO rta_tab VALUES (ROW(convert_from('\x4649584d45', 'UTF8')), 1);
 PREPARE rta_stmt(text, integer) AS
   SELECT 1 FROM rta_tab WHERE k = $1::rta_type AND gate = $2::rta_dom;
+-- Cloudberry cannot execute DDL in a function running on a segment.
+-- start_ignore
 EXPLAIN (COSTS OFF) EXECUTE rta_stmt('(\\x4649584d45)', 1);
 EXECUTE rta_stmt('(\\x4649584d45)', 1);
+-- end_ignore
 DEALLOCATE rta_stmt;
 RESET enable_seqscan;
 RESET enable_bitmapscan;
@@ -1345,8 +1354,11 @@ END;
 $$;
 SELECT (r).b, length((r).ext)
   FROM (SELECT ROW(0, b, ext)::rta_type AS r FROM rta_toast OFFSET 0) s;
+-- Cloudberry cannot execute DDL in a function running on a segment.
+-- start_ignore
 SELECT split_part(r::text, ',', 2)
   FROM (SELECT ROW(rta_func(), b, ext)::rta_type AS r FROM rta_toast OFFSET 0) s;
+-- end_ignore
 DROP FUNCTION rta_func();
 DROP TYPE rta_type;
 
