@@ -148,7 +148,7 @@ test: publication subscription
 # Another group of parallel tests
 # select_views depends on create_view
 # ----------
-test: select_views portals_p2 cluster dependency guc bitmapops combocid tsearch tsdicts foreign_data xmlmap functional_deps advisory_lock indirect_toast equivclass
+test: select_views portals_p2 cluster dependency guc bitmapops combocid tsearch tsdicts foreign_data xmlmap functional_deps advisory_lock indirect_toast equivclass alter_column_type
 ignore: window
 # 'foreign_key' test is disabled, because it contains several tables with
 # multiple UNIQUE constraints, which is not supported in GPDB.
