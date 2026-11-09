@@ -180,7 +180,7 @@ test: rowtypes_alter
 # ----------
 # Another group of parallel tests
 # ----------
-test: partition_join partition_prune reloptions hash_part indexing partition_aggregate partition_info tuplesort explain compression memoize
+test: partition_join partition_prune reloptions hash_part indexing partition_aggregate partition_info tuplesort explain compression memoize attribute_version
 
 # tese the partition table with append
 test: partition_append_setup
