@@ -6656,7 +6656,8 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 		 * constraints, so it's not necessary/appropriate to enforce them just
 		 * during ALTER.)
 		 */
-		if (tab->newvals != NIL || tab->rewrite > 0)
+		if (tab->newvals != NIL ||
+			(tab->rewrite & (AT_REWRITE_DEFAULT_VAL | AT_REWRITE_COLUMN_REWRITE)) != 0)
 		{
 			Relation	rel;
 
