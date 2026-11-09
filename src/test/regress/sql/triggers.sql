@@ -2641,6 +2641,8 @@ create table merge_part_target_table (a int, b text) partition by list (a);
 create table merge_part_target_table_p1 partition of merge_part_target_table
   for values in (1, 2);
 create index on merge_part_target_table (a);
+-- Cloudberry does not support statement triggers.
+-- start_ignore
 create trigger merge_part_target_table_update_trig
   after update on merge_part_target_table
   referencing old table as old_table new table as new_table
@@ -2658,14 +2660,17 @@ when not matched then
 
 select * from merge_part_target_table order by a;
 
+-- end_ignore
 drop table merge_part_target_table;
 
 --
 -- Same again, but with a partition whose column order differs from the
 -- root, so that a child-to-root conversion is required.
 --
-create table merge_conv_table (a int, b text) partition by range (a);
-create table merge_conv_table_p (b text, a int);
+create table merge_conv_table (a int, b text) partition by range (a) distributed by (a);
+create table merge_conv_table_p (b text, a int) distributed by (a);
+-- Cloudberry does not support statement triggers.
+-- start_ignore
 alter table merge_conv_table attach partition merge_conv_table_p
   for values from (0) to (100);
 create index on merge_conv_table (a);
@@ -2701,7 +2706,9 @@ commit;
 
 select * from merge_conv_table order by a;
 
+-- end_ignore
 drop table merge_conv_table;
+drop table if exists merge_conv_table_p;
 
 -- cleanup
 drop function dump_insert();
@@ -2954,3 +2961,40 @@ alter trigger parenttrig on parent rename to anothertrig;
 
 drop table parent, child;
 drop function f();
+
+--
+-- Test a trigger on a partition table where a columns NOT NULLness differs
+-- between parent and child. In a WIP patch, this mismatch caused a spurious
+-- error that was not detected by any existing tests. Therefore a test seems
+-- appropriate.
+--
+
+CREATE TABLE trignulldiff_parent (key int, childnotnull int, parentnotnull int NOT NULL)
+  PARTITION BY LIST (key);
+CREATE TABLE trignulldiff_child PARTITION OF trignulldiff_parent
+  FOR VALUES IN (1, 2);
+ALTER TABLE trignulldiff_child ALTER COLUMN childnotnull SET NOT NULL;
+CREATE FUNCTION trignulldiff_return_parent() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  -- Returns a row of the parent type (which is not NOT NULL), even when
+  -- invoked on the child table. This verifies we handle that difference
+  -- correctly.
+  RETURN ROW(NEW.key, NEW.childnotnull, NEW.parentnotnull)::trignulldiff_parent;
+END $$;
+CREATE TRIGGER trignulldiff_return_parent BEFORE INSERT ON trignulldiff_parent
+  FOR EACH ROW EXECUTE FUNCTION trignulldiff_return_parent();
+
+-- test not inserting NULLs
+INSERT INTO trignulldiff_parent VALUES (1,11, 111) RETURNING *;
+INSERT INTO trignulldiff_child VALUES (1,22, 222) RETURNING *;
+INSERT INTO trignulldiff_parent VALUES (1,33, 333) RETURNING *;
+INSERT INTO trignulldiff_child VALUES (1,44, 444) RETURNING *;
+
+-- test inserting NULLs
+INSERT INTO trignulldiff_parent VALUES (2, NULL, 111) RETURNING *;
+INSERT INTO trignulldiff_child VALUES (2, NULL, 222) RETURNING *;
+INSERT INTO trignulldiff_parent VALUES (2, 33, NULL) RETURNING *;
+INSERT INTO trignulldiff_child VALUES (2, 444, NULL) RETURNING *;
+
+DROP TABLE IF EXISTS trignulldiff_parent CASCADE;
+DROP FUNCTION IF EXISTS trignulldiff_return_parent();
