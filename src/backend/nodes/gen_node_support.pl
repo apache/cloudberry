@@ -1433,11 +1433,11 @@ _read${n}(void)
 	}
 ! unless $no_read;
 
-			# for out and read fast
+			# for out and read fast: the binary format has no field labels,
+			# and the reader below expects a length-prefixed string.
 			print $ofaf q{
 	/* CustomName is a key to lookup CustomScanMethods */
-	appendStringInfoString(str, " :methods ");
-	outToken(str, node->methods->CustomName);
+	WRITE_STRING_VAR(node->methods->CustomName);
 };
 			print $rfaf q!
 	{
