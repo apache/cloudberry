@@ -93,7 +93,8 @@ CColumnFactory::Initialize()
 //
 //---------------------------------------------------------------------------
 CColRef *
-CColumnFactory::PcrCreate(const IMDType *pmdtype, INT type_modifier)
+CColumnFactory::PcrCreate(const IMDType *pmdtype, INT type_modifier,
+						  OID collation)
 {
 	// increment atomic counter
 	ULONG id = m_aul++;
@@ -103,7 +104,7 @@ CColumnFactory::PcrCreate(const IMDType *pmdtype, INT type_modifier)
 	CAutoP<CWStringDynamic> a_pstrTempName(pstrTempName);
 	pstrTempName->AppendFormat(wszFmt, id);
 	CWStringConst strName(pstrTempName->GetBuffer());
-	return PcrCreate(pmdtype, type_modifier, id, CName(&strName));
+	return PcrCreate(pmdtype, type_modifier, id, CName(&strName), collation);
 }
 
 
@@ -117,11 +118,11 @@ CColumnFactory::PcrCreate(const IMDType *pmdtype, INT type_modifier)
 //---------------------------------------------------------------------------
 CColRef *
 CColumnFactory::PcrCreate(const IMDType *pmdtype, INT type_modifier,
-						  const CName &name)
+						  const CName &name, OID collation)
 {
 	ULONG id = m_aul++;
 
-	return PcrCreate(pmdtype, type_modifier, id, name);
+	return PcrCreate(pmdtype, type_modifier, id, name, collation);
 }
 
 
@@ -137,13 +138,13 @@ CColumnFactory::PcrCreate(const IMDType *pmdtype, INT type_modifier,
 //---------------------------------------------------------------------------
 CColRef *
 CColumnFactory::PcrCreate(const IMDType *pmdtype, INT type_modifier, ULONG id,
-						  const CName &name)
+						  const CName &name, OID collation)
 {
 	CName *pnameCopy = GPOS_NEW(m_mp) CName(m_mp, name);
 	CAutoP<CName> a_pnameCopy(pnameCopy);
 
-	CColRef *colref =
-		GPOS_NEW(m_mp) CColRefComputed(pmdtype, type_modifier, id, pnameCopy);
+	CColRef *colref = GPOS_NEW(m_mp)
+		CColRefComputed(pmdtype, type_modifier, id, pnameCopy, collation);
 	(void) a_pnameCopy.Reset();
 	CAutoP<CColRef> a_pcr(colref);
 
@@ -209,14 +210,15 @@ CColRef *
 CColumnFactory::PcrCreate(const IMDType *pmdtype, INT type_modifier,
 						  BOOL mark_as_used, IMDId *mdid_table, INT attno,
 						  BOOL is_nullable, ULONG id, const CName &name,
-						  ULONG ulOpSource, BOOL isDistCol, ULONG ulWidth)
+						  ULONG ulOpSource, BOOL isDistCol, ULONG ulWidth,
+						  OID collation)
 {
 	CName *pnameCopy = GPOS_NEW(m_mp) CName(m_mp, name);
 	CAutoP<CName> a_pnameCopy(pnameCopy);
 
 	CColRef *colref = GPOS_NEW(m_mp)
 		CColRefTable(pmdtype, type_modifier, attno, is_nullable, id, pnameCopy,
-					 ulOpSource, isDistCol, ulWidth);
+					 ulOpSource, isDistCol, ulWidth, collation);
 	(void) a_pnameCopy.Reset();
 	CAutoP<CColRef> a_pcr(colref);
 
@@ -264,7 +266,8 @@ CColumnFactory::PcrCopy(const CColRef *colref)
 	CName name(colref->Name());
 	if (CColRef::EcrtComputed == colref->Ecrt())
 	{
-		return PcrCreate(colref->RetrieveType(), colref->TypeModifier(), name);
+		return PcrCreate(colref->RetrieveType(), colref->TypeModifier(), name,
+						 colref->Collation());
 	}
 
 	GPOS_ASSERT(CColRef::EcrtTable == colref->Ecrt());
@@ -276,7 +279,8 @@ CColumnFactory::PcrCopy(const CColRef *colref)
 					 colref->GetUsage(true, true) == CColRef::EUsed,
 					 colref->GetMdidTable(), pcrTable->AttrNum(),
 					 pcrTable->IsNullable(), id, name, pcrTable->UlSourceOpId(),
-					 colref->IsDistCol(), pcrTable->Width());
+					 colref->IsDistCol(), pcrTable->Width(),
+					 colref->Collation());
 }
 
 //---------------------------------------------------------------------------

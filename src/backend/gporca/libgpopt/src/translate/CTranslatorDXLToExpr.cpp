@@ -997,6 +997,13 @@ CTranslatorDXLToExpr::BuildSetOpChild(
 
 		const IMDType *pmdtype = m_pmda->RetrieveType(mdid_dest);
 		INT type_modifier = pdxlcdOutput->TypeModifier();
+		OID collation = colref->Collation();
+		if (nullptr != pdxlcdOutput->MdidCollation() &&
+			pdxlcdOutput->MdidCollation()->IsValid())
+		{
+			collation =
+				CMDIdGPDB::CastMdid(pdxlcdOutput->MdidCollation())->Oid();
+		}
 
 		BOOL fEqualTypes = IMDId::MDIdCompare(pmdidSource, mdid_dest);
 		BOOL fFirstChild = (0 == child_index);
@@ -1006,8 +1013,9 @@ CTranslatorDXLToExpr::BuildSetOpChild(
 			// input column is an outer reference, add a project element for input column
 
 			// add the colref to the hash map between DXL ColId and colref as they can used above the setop
-			CColRef *new_colref = PcrCreate(colref, pmdtype, type_modifier,
-											fFirstChild, pdxlcdOutput->Id());
+			CColRef *new_colref =
+				PcrCreate(colref, pmdtype, type_modifier, collation,
+						  fFirstChild, pdxlcdOutput->Id());
 			(*ppdrgpcrChild)->Append(new_colref);
 
 			CExpression *pexprChildProjElem = nullptr;
@@ -1039,8 +1047,9 @@ CTranslatorDXLToExpr::BuildSetOpChild(
 		else
 		{
 			// add the colref to the hash map between DXL ColId and colref as they can used above the setop
-			CColRef *new_colref = PcrCreate(colref, pmdtype, type_modifier,
-											fFirstChild, pdxlcdOutput->Id());
+			CColRef *new_colref =
+				PcrCreate(colref, pmdtype, type_modifier, collation,
+						  fFirstChild, pdxlcdOutput->Id());
 			(*ppdrgpcrChild)->Append(new_colref);
 
 			// introduce cast expression for input column
@@ -1193,12 +1202,13 @@ CTranslatorDXLToExpr::LookupColRef(ULONG colid, BOOL mark_used)
 //---------------------------------------------------------------------------
 CColRef *
 CTranslatorDXLToExpr::PcrCreate(const CColRef *colref, const IMDType *pmdtype,
-								INT type_modifier, BOOL fStoreMapping,
-								ULONG colid)
+								INT type_modifier, OID collation,
+								BOOL fStoreMapping, ULONG colid)
 {
 	// generate a new column reference
 	CName name(colref->Name().Pstr());
-	CColRef *new_colref = m_pcf->PcrCreate(pmdtype, type_modifier, name);
+	CColRef *new_colref =
+		m_pcf->PcrCreate(pmdtype, type_modifier, name, collation);
 
 	if (fStoreMapping)
 	{
@@ -1232,9 +1242,15 @@ CTranslatorDXLToExpr::Pdrgpcr(const CDXLColDescrArray *dxl_col_descr_array)
 		const IMDType *pmdtype = m_pmda->RetrieveType(mdid);
 
 		CName name(pdxlcd->MdName()->GetMDName());
+		OID collation = 0;
+		if (nullptr != pdxlcd->MdidCollation() &&
+			pdxlcd->MdidCollation()->IsValid())
+		{
+			collation = CMDIdGPDB::CastMdid(pdxlcd->MdidCollation())->Oid();
+		}
 		// generate a new column reference
 		CColRef *colref =
-			m_pcf->PcrCreate(pmdtype, pdxlcd->TypeModifier(), name);
+			m_pcf->PcrCreate(pmdtype, pdxlcd->TypeModifier(), name, collation);
 		pdrgpcrOutput->Append(colref);
 	}
 

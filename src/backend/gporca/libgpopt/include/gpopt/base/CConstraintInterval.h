@@ -230,6 +230,9 @@ public:
 	CConstraint *PcnstrRemapForColumn(CMemoryPool *mp,
 									  CColRef *colref) const override;
 
+	// can the constraint be remapped exactly to the given column
+	BOOL FRemapIsExact(const CColRef *colref) const override;
+
 	// converts to an array in expression
 	bool FConvertsToNotIn() const;
 
@@ -253,6 +256,9 @@ public:
 	// using the given comparison type
 	static BOOL FColConstCmpSupported(const CColRef *colref,
 									  IMDType::ECmpType cmp_type);
+
+	// do range bounds on the column compare like the column itself
+	static BOOL FCollationMatchesType(const CColRef *colref);
 
 	// helper for create interval from comparison between a column and a constant
 	static CConstraintInterval *PciIntervalFromColConstCmp(

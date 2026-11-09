@@ -602,12 +602,12 @@ WITH ranked AS (
 SELECT * FROM ranked ORDER BY rn;
  name |  val   | rn 
 ------+--------+----
- abc  | apple  |  1
- ABC  | APPLE  |  2
- def  | banana |  3
- DEF  | BANANA |  4
- ghi  | cherry |  5
- GHI  | CHERRY |  6
+ ABC  | APPLE  |  1
+ DEF  | BANANA |  2
+ GHI  | CHERRY |  3
+ abc  | apple  |  4
+ def  | banana |  5
+ ghi  | cherry |  6
 (6 rows)
 
 -- Correlated subquery
@@ -1145,6 +1145,231 @@ SELECT count(*) FROM t_default_idx WHERE name < 'b';
 
 DROP TABLE t_default_idx;
 RESET enable_seqscan;
+-- ======================================================================
+-- Test: collations of CTE, computed and set operation columns
+-- ======================================================================
+CREATE TABLE t_c_cols (id int, name text COLLATE "C") DISTRIBUTED BY (id);
+INSERT INTO t_c_cols VALUES (1, 'abc'), (2, 'ABC'), (3, 'def'), (4, 'DEF'),
+	(5, 'Zz'), (6, '_x');
+CREATE TABLE t_default_cols (id int, name text) DISTRIBUTED BY (id);
+INSERT INTO t_default_cols SELECT * FROM t_c_cols;
+ANALYZE t_c_cols;
+ANALYZE t_default_cols;
+-- CTE consumers keep the collation of the producer's columns
+WITH w AS (SELECT name FROM t_c_cols)
+SELECT a.name FROM w a JOIN w b USING (name) WHERE a.name < 'a' ORDER BY a.name;
+ name 
+------
+ ABC
+ DEF
+ Zz
+ _x
+(4 rows)
+
+WITH w AS (SELECT name FROM t_c_cols)
+SELECT (SELECT min(name) FROM w), (SELECT max(name) FROM w);
+ min | max 
+-----+-----
+ ABC | def
+(1 row)
+
+WITH w AS (SELECT id, name FROM t_c_cols)
+SELECT a.name, rank() OVER (ORDER BY a.name) FROM w a JOIN w b ON a.id = b.id
+ORDER BY 2;
+ name | rank 
+------+------
+ ABC  |    1
+ DEF  |    2
+ Zz   |    3
+ _x   |    4
+ abc  |    5
+ def  |    6
+(6 rows)
+
+WITH w AS (SELECT id, name FROM t_c_cols)
+SELECT (SELECT string_agg(name, ',' ORDER BY name) FROM w),
+	(SELECT count(*) FROM w);
+      string_agg       | count 
+-----------------------+-------
+ ABC,DEF,Zz,_x,abc,def |     6
+(1 row)
+
+-- a CTE referenced once is inlined
+WITH w AS (SELECT name FROM t_c_cols)
+SELECT name FROM w WHERE name < 'a' ORDER BY 1;
+ name 
+------
+ ABC
+ DEF
+ Zz
+ _x
+(4 rows)
+
+-- no range constraints on columns of unknown collation: the predicate below
+-- is not a contradiction in the C collation
+EXPLAIN (COSTS OFF)
+SELECT x FROM (SELECT name || '' AS x FROM t_c_cols) s
+WHERE x > 'Z' AND x < 'a';
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Result
+         Filter: ((((name || ''::text)) > 'Z'::text) AND (((name || ''::text)) < 'a'::text))
+         ->  Seq Scan on t_c_cols
+ Optimizer: GPORCA
+(5 rows)
+
+SELECT x FROM (SELECT name || '' AS x FROM t_c_cols) s
+WHERE x > 'Z' AND x < 'a' ORDER BY 1;
+ x  
+----
+ Zz
+ _x
+(2 rows)
+
+-- set operations, grouping sets
+SELECT x FROM (SELECT name || '' AS x FROM t_c_cols WHERE id < 3
+	UNION ALL SELECT name FROM t_c_cols WHERE id >= 3) s ORDER BY 1;
+  x  
+-----
+ ABC
+ DEF
+ Zz
+ _x
+ abc
+ def
+(6 rows)
+
+SELECT min(x), max(x) FROM (SELECT name || '' AS x FROM t_c_cols
+	UNION ALL SELECT name FROM t_c_cols) s;
+ min | max 
+-----+-----
+ ABC | def
+(1 row)
+
+SELECT name, count(*) FROM t_c_cols GROUP BY ROLLUP (name) ORDER BY 1;
+ name | count 
+------+-------
+ ABC  |     1
+ DEF  |     1
+ Zz   |     1
+ _x   |     1
+ abc  |     1
+ def  |     1
+      |     6
+(7 rows)
+
+-- ORDER BY arguments do not determine the collation of an aggregate
+SELECT min(d.name ORDER BY c.name), max(d.name ORDER BY c.name)
+FROM t_c_cols c JOIN t_default_cols d USING (id);
+ min | max 
+-----+-----
+ abc | Zz
+(1 row)
+
+-- range predicates are not carried over to an equivalent column with a
+-- different collation, equalities are
+EXPLAIN (COSTS OFF)
+SELECT c.name FROM t_c_cols c JOIN t_default_cols d ON c.name = d.name
+WHERE d.name > 'a';
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (d.name = c.name)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: d.name
+               ->  Seq Scan on t_default_cols d
+                     Filter: (name > 'a'::text)
+         ->  Hash
+               ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                     Hash Key: c.name
+                     ->  Seq Scan on t_c_cols c
+ Optimizer: GPORCA
+(12 rows)
+
+SELECT c.name FROM t_c_cols c JOIN t_default_cols d ON c.name = d.name
+WHERE d.name > 'a' ORDER BY 1;
+ name 
+------
+ ABC
+ DEF
+ Zz
+ _x
+ abc
+ def
+(6 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT c.name FROM t_c_cols c JOIN t_default_cols d ON c.name = d.name
+WHERE d.name = 'ABC';
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (c.name = d.name)
+         ->  Seq Scan on t_c_cols c
+               Filter: (name = 'ABC'::text)
+         ->  Hash
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on t_default_cols d
+                           Filter: (name = 'ABC'::text)
+ Optimizer: GPORCA
+(10 rows)
+
+SELECT c.name FROM t_c_cols c JOIN t_default_cols d ON c.name = d.name
+WHERE d.name = 'ABC';
+ name 
+------
+ ABC
+(1 row)
+
+-- an explicit COLLATE on a constant overriding the column's collation falls
+-- back to the Postgres planner
+SELECT name FROM t_c_cols WHERE name < 'b' COLLATE "default" ORDER BY 1;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
+ name 
+------
+ ABC
+ abc
+(2 rows)
+
+SELECT name FROM t_c_cols WHERE name BETWEEN 'A' AND 'b' COLLATE "default"
+ORDER BY 1;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
+ name 
+------
+ ABC
+ abc
+(2 rows)
+
+SELECT name FROM t_c_cols WHERE name < ANY (ARRAY['b' COLLATE "default"])
+ORDER BY 1;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
+ name 
+------
+ ABC
+ abc
+(2 rows)
+
+SELECT greatest(name, 'b' COLLATE "default") FROM t_c_cols ORDER BY 1;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
+ greatest 
+----------
+ b
+ b
+ def
+ DEF
+ _x
+ Zz
+(6 rows)
+
+DROP TABLE t_c_cols;
+DROP TABLE t_default_cols;
 -- ======================================================================
 -- Cleanup
 -- ======================================================================

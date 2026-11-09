@@ -1622,7 +1622,8 @@ CTranslatorExprToDXL::PdxlnAppendTableScan(
 			{
 				const CColumnDescriptor *cd = part_tabdesc->Pcoldesc(ul_col);
 				CColRef *cr = m_pcf->PcrCreate(cd->RetrieveType(),
-											   cd->TypeModifier(), cd->Name());
+											   cd->TypeModifier(), cd->Name(),
+											   cd->Collation());
 				part_colrefs->Append(cr);
 			}
 
@@ -1766,7 +1767,8 @@ CTranslatorExprToDXL::PdxlnParallelAppendTableScan(
 		{
 			const CColumnDescriptor *cd = part_tabdesc->Pcoldesc(ul_col);
 			CColRef *cr = m_pcf->PcrCreate(cd->RetrieveType(),
-										   cd->TypeModifier(), cd->Name());
+										   cd->TypeModifier(), cd->Name(),
+										   cd->Collation());
 			part_colrefs->Append(cr);
 		}
 
@@ -1911,7 +1913,8 @@ CTranslatorExprToDXL::PdxlnDynamicScanToAppend(CExpression *pexprDTS,
 		{
 			const CColumnDescriptor *cd = part_tabdesc->Pcoldesc(ul_col);
 			CColRef *cr = m_pcf->PcrCreate(cd->RetrieveType(),
-										cd->TypeModifier(), cd->Name());
+										cd->TypeModifier(), cd->Name(),
+										cd->Collation());
 			part_colrefs->Append(cr);
 		}
 
@@ -2016,7 +2019,8 @@ CDXLNode *CTranslatorExprToDXL::PdxlnDynamicIndexScanToAppend(CExpression *pexpr
 		{
 			const CColumnDescriptor *cd = part_tabdesc->Pcoldesc(ul);
 			CColRef *cr = m_pcf->PcrCreate(cd->RetrieveType(),
-											cd->TypeModifier(), cd->Name());
+											cd->TypeModifier(), cd->Name(),
+											cd->Collation());
 			part_colrefs->Append(cr);
 		}
 
@@ -2151,7 +2155,8 @@ CTranslatorExprToDXL::PdxlnDynamicBitmapScanToAppend(
 		{
 			const CColumnDescriptor *cd = part_tabdesc->Pcoldesc(ul);
 			CColRef *cr = m_pcf->PcrCreate(cd->RetrieveType(),
-										   cd->TypeModifier(), cd->Name());
+										   cd->TypeModifier(), cd->Name(),
+										   cd->Collation());
 			part_colrefs->Append(cr);
 		}
 
@@ -6061,8 +6066,9 @@ CTranslatorExprToDXL::PdxlnCTAS(CExpression *pexpr,
 		const CColumnDescriptor *pcd = ptabdesc->Pcoldesc(ul);
 
 		CMDName *pmdnameCol = GPOS_NEW(m_mp) CMDName(m_mp, pcd->Name().Pstr());
-		CColRef *colref = m_pcf->PcrCreate(pcd->RetrieveType(),
-										   pcd->TypeModifier(), pcd->Name());
+		CColRef *colref =
+			m_pcf->PcrCreate(pcd->RetrieveType(), pcd->TypeModifier(),
+							 pcd->Name(), pcd->Collation());
 
 		// use the col ref id for the corresponding output output column as
 		// colid for the dxl column
@@ -7785,7 +7791,7 @@ CTranslatorExprToDXL::MakeDXLTableDescr(
 		else
 		{
 			colref = m_pcf->PcrCreate(pcd->RetrieveType(), pcd->TypeModifier(),
-									  pcd->Name());
+									  pcd->Name(), pcd->Collation());
 		}
 
 		CMDName *pmdnameCol = GPOS_NEW(m_mp) CMDName(m_mp, pcd->Name().Pstr());

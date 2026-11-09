@@ -58,7 +58,7 @@ private:
 
 	// implementation of factory methods
 	CColRef *PcrCreate(const IMDType *pmdtype, INT type_modifier, ULONG id,
-					   const CName &name);
+					   const CName &name, OID collation = 0);
 	CColRef *PcrCreate(const CColumnDescriptor *pcoldesc, ULONG id,
 					   const CName &name, ULONG ulOpSource,
 					   BOOL mark_as_used = true, IMDId *mdid_table = nullptr);
@@ -76,11 +76,12 @@ public:
 	void Initialize();
 
 	// create a column reference given only its type and type modifier, used for computed columns
-	CColRef *PcrCreate(const IMDType *pmdtype, INT type_modifier);
+	CColRef *PcrCreate(const IMDType *pmdtype, INT type_modifier,
+					   OID collation = 0);
 
 	// create column reference given its type, type modifier, and name
 	CColRef *PcrCreate(const IMDType *pmdtype, INT type_modifier,
-					   const CName &name);
+					   const CName &name, OID collation = 0);
 
 	// create a column reference given its descriptor and name
 	CColRef *PcrCreate(const CColumnDescriptor *pcoldescr, const CName &name,
@@ -91,13 +92,15 @@ public:
 					   BOOL mark_as_used, IMDId *mdid_table, INT attno,
 					   BOOL is_nullable, ULONG id, const CName &name,
 					   ULONG ulOpSource, BOOL isDistCol,
-					   ULONG ulWidth = gpos::ulong_max);
+					   ULONG ulWidth = gpos::ulong_max, OID collation = 0);
 
-	// create a column reference with the same type as passed column reference
+	// create a column reference with the same type and collation as passed
+	// column reference
 	CColRef *
 	PcrCreate(const CColRef *colref)
 	{
-		return PcrCreate(colref->RetrieveType(), colref->TypeModifier());
+		return PcrCreate(colref->RetrieveType(), colref->TypeModifier(),
+						 colref->Collation());
 	}
 
 	// add mapping between computed column to its used columns

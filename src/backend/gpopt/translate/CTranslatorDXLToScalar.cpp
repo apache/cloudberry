@@ -790,12 +790,32 @@ CTranslatorDXLToScalar::TranslateDXLScalarAggrefToScalar(
 	aggref->aggtranstype = aggtranstype;
 
 	// Set aggregate collation from input arguments when available,
-	// so that min/max etc. use the correct column-level collation.
-	aggref->inputcollid = gpdb::ExprCollation((Node *) args);
-	aggref->aggcollid =
-		OidIsValid(aggref->inputcollid)
-			? aggref->inputcollid
-			: gpdb::TypeCollation(aggref->aggtype);
+	// so that min/max etc. use the correct column-level collation. Like
+	// the parser, only consider the aggregated arguments, which come first
+	// (one per entry of aggargtypes), and not the ORDER BY-only expressions
+	// appended after them.
+	{
+		List *agg_args = NIL;
+		const int num_agg_args = gpdb::ListLength(aggref->aggargtypes);
+		ListCell *lc_arg;
+		int arg_idx;
+		ForEachWithCount(lc_arg, args, arg_idx)
+		{
+			if (arg_idx >= num_agg_args)
+			{
+				break;
+			}
+			agg_args = gpdb::LAppend(agg_args, lfirst(lc_arg));
+		}
+		aggref->inputcollid = gpdb::ExprCollation((Node *) agg_args);
+	}
+	{
+		Oid rtc = gpdb::TypeCollation(aggref->aggtype);
+		aggref->aggcollid =
+			OidIsValid(rtc)
+				? (OidIsValid(aggref->inputcollid) ? aggref->inputcollid : rtc)
+				: InvalidOid;
+	}
 
 	return (Expr *) aggref;
 }

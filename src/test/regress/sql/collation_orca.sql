@@ -541,6 +541,77 @@ DROP TABLE t_default_idx;
 RESET enable_seqscan;
 
 -- ======================================================================
+-- Test: collations of CTE, computed and set operation columns
+-- ======================================================================
+
+CREATE TABLE t_c_cols (id int, name text COLLATE "C") DISTRIBUTED BY (id);
+INSERT INTO t_c_cols VALUES (1, 'abc'), (2, 'ABC'), (3, 'def'), (4, 'DEF'),
+	(5, 'Zz'), (6, '_x');
+CREATE TABLE t_default_cols (id int, name text) DISTRIBUTED BY (id);
+INSERT INTO t_default_cols SELECT * FROM t_c_cols;
+ANALYZE t_c_cols;
+ANALYZE t_default_cols;
+
+-- CTE consumers keep the collation of the producer's columns
+WITH w AS (SELECT name FROM t_c_cols)
+SELECT a.name FROM w a JOIN w b USING (name) WHERE a.name < 'a' ORDER BY a.name;
+WITH w AS (SELECT name FROM t_c_cols)
+SELECT (SELECT min(name) FROM w), (SELECT max(name) FROM w);
+WITH w AS (SELECT id, name FROM t_c_cols)
+SELECT a.name, rank() OVER (ORDER BY a.name) FROM w a JOIN w b ON a.id = b.id
+ORDER BY 2;
+WITH w AS (SELECT id, name FROM t_c_cols)
+SELECT (SELECT string_agg(name, ',' ORDER BY name) FROM w),
+	(SELECT count(*) FROM w);
+-- a CTE referenced once is inlined
+WITH w AS (SELECT name FROM t_c_cols)
+SELECT name FROM w WHERE name < 'a' ORDER BY 1;
+
+-- no range constraints on columns of unknown collation: the predicate below
+-- is not a contradiction in the C collation
+EXPLAIN (COSTS OFF)
+SELECT x FROM (SELECT name || '' AS x FROM t_c_cols) s
+WHERE x > 'Z' AND x < 'a';
+SELECT x FROM (SELECT name || '' AS x FROM t_c_cols) s
+WHERE x > 'Z' AND x < 'a' ORDER BY 1;
+
+-- set operations, grouping sets
+SELECT x FROM (SELECT name || '' AS x FROM t_c_cols WHERE id < 3
+	UNION ALL SELECT name FROM t_c_cols WHERE id >= 3) s ORDER BY 1;
+SELECT min(x), max(x) FROM (SELECT name || '' AS x FROM t_c_cols
+	UNION ALL SELECT name FROM t_c_cols) s;
+SELECT name, count(*) FROM t_c_cols GROUP BY ROLLUP (name) ORDER BY 1;
+
+-- ORDER BY arguments do not determine the collation of an aggregate
+SELECT min(d.name ORDER BY c.name), max(d.name ORDER BY c.name)
+FROM t_c_cols c JOIN t_default_cols d USING (id);
+
+-- range predicates are not carried over to an equivalent column with a
+-- different collation, equalities are
+EXPLAIN (COSTS OFF)
+SELECT c.name FROM t_c_cols c JOIN t_default_cols d ON c.name = d.name
+WHERE d.name > 'a';
+SELECT c.name FROM t_c_cols c JOIN t_default_cols d ON c.name = d.name
+WHERE d.name > 'a' ORDER BY 1;
+EXPLAIN (COSTS OFF)
+SELECT c.name FROM t_c_cols c JOIN t_default_cols d ON c.name = d.name
+WHERE d.name = 'ABC';
+SELECT c.name FROM t_c_cols c JOIN t_default_cols d ON c.name = d.name
+WHERE d.name = 'ABC';
+
+-- an explicit COLLATE on a constant overriding the column's collation falls
+-- back to the Postgres planner
+SELECT name FROM t_c_cols WHERE name < 'b' COLLATE "default" ORDER BY 1;
+SELECT name FROM t_c_cols WHERE name BETWEEN 'A' AND 'b' COLLATE "default"
+ORDER BY 1;
+SELECT name FROM t_c_cols WHERE name < ANY (ARRAY['b' COLLATE "default"])
+ORDER BY 1;
+SELECT greatest(name, 'b' COLLATE "default") FROM t_c_cols ORDER BY 1;
+
+DROP TABLE t_c_cols;
+DROP TABLE t_default_cols;
+
+-- ======================================================================
 -- Cleanup
 -- ======================================================================
 

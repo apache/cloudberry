@@ -951,6 +951,30 @@ CConstraint::Phmcolconstr(CMemoryPool *mp, CColRefSet *pcrs,
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CConstraint::FRemapIsExact
+//
+//	@doc:
+//		Can all the given constraints be remapped exactly to the given column
+//
+//---------------------------------------------------------------------------
+BOOL
+CConstraint::FRemapIsExact(const CConstraintArray *pdrgpcnstr,
+						   const CColRef *colref)
+{
+	const ULONG length = pdrgpcnstr->Size();
+	for (ULONG ul = 0; ul < length; ul++)
+	{
+		if (!(*pdrgpcnstr)[ul]->FRemapIsExact(colref))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CConstraint::PcnstrConjDisjRemapForColumn
 //
 //	@doc:

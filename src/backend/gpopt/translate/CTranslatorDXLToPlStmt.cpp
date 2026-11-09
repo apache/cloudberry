@@ -1027,7 +1027,8 @@ TranslateDXLIndexTList(const IMDRelation *md_rel, const IMDIndex *md_index,
 		Expr *indexvar = (Expr *) gpdb::MakeVar(
 			new_varno, col->AttrNum(),
 			CMDIdGPDB::CastMdid(col->MdidType())->Oid(),
-			col->TypeModifier() /*vartypmod*/, InvalidOid, 0 /*varlevelsup*/);
+			col->TypeModifier() /*vartypmod*/, col->Collation(),
+			0 /*varlevelsup*/);
 		target_entry->expr = indexvar;
 
 		// Fix up proj list. Since index only scan does not read full tuples,
@@ -1063,7 +1064,8 @@ TranslateDXLIndexTList(const IMDRelation *md_rel, const IMDIndex *md_index,
 		Expr *indexvar = (Expr *) gpdb::MakeVar(
 			new_varno, col->AttrNum(),
 			CMDIdGPDB::CastMdid(col->MdidType())->Oid(),
-			col->TypeModifier() /*vartypmod*/, InvalidOid, 0 /*varlevelsup*/);
+			col->TypeModifier() /*vartypmod*/, col->Collation(),
+			0 /*varlevelsup*/);
 		target_entry->expr = indexvar;
 
 		for (ULONG j = 0; j < table_descr->Arity(); j++)
@@ -2935,8 +2937,8 @@ CTranslatorDXLToPlStmt::TranslateDXLRedistributeMotionToResultHashFilters(
 			TargetEntry *te = (TargetEntry *) lfirst(lc);
 			Var *var = gpdb::MakeVar(
 				OUTER_VAR, te->resno, gpdb::ExprType((Node *) te->expr),
-				gpdb::ExprTypeMod((Node *) te->expr), InvalidOid,
-				0 /* varlevelsup */);
+				gpdb::ExprTypeMod((Node *) te->expr),
+				gpdb::ExprCollation((Node *) te->expr), 0 /* varlevelsup */);
 			TargetEntry *new_te =
 				gpdb::MakeTargetEntry((Expr *) var, ul, /* resno */
 									  te->resname, te->resjunk);
@@ -4456,6 +4458,40 @@ CTranslatorDXLToPlStmt::TranslateDXLFilterList(
 
 //---------------------------------------------------------------------------
 //	@function:
+//		GetAppendOutputCollation
+//
+//	@doc:
+//		Collation of an Append output column: the one recorded on the column
+//		reference, or else the one of the corresponding column of the first
+//		child (e.g. when the first branch of a UNION computes the column)
+//
+//---------------------------------------------------------------------------
+static Oid
+GetAppendOutputCollation(const CDXLScalarIdent *sc_ident_dxlop,
+						 List *appendplans, AttrNumber attno)
+{
+	if (nullptr != sc_ident_dxlop->MdidCollation() &&
+		sc_ident_dxlop->MdidCollation()->IsValid())
+	{
+		return CMDIdGPDB::CastMdid(sc_ident_dxlop->MdidCollation())->Oid();
+	}
+
+	if (NIL != appendplans)
+	{
+		List *child_tlist = ((Plan *) gpdb::ListNth(appendplans, 0))->targetlist;
+		if (attno <= gpdb::ListLength(child_tlist))
+		{
+			TargetEntry *te =
+				(TargetEntry *) gpdb::ListNth(child_tlist, attno - 1);
+			return gpdb::ExprCollation((Node *) te->expr);
+		}
+	}
+
+	return InvalidOid;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CTranslatorDXLToPlStmt::TranslateDXLAppend
 //
 //	@doc:
@@ -4547,10 +4583,7 @@ CTranslatorDXLToPlStmt::TranslateDXLAppend(
 			idxVarno, attno,
 			CMDIdGPDB::CastMdid(sc_ident_dxlop->MdidType())->Oid(),
 			sc_ident_dxlop->TypeModifier(),
-					  (nullptr != sc_ident_dxlop->MdidCollation() &&
-					   sc_ident_dxlop->MdidCollation()->IsValid())
-						  ? CMDIdGPDB::CastMdid(sc_ident_dxlop->MdidCollation())->Oid()
-						  : InvalidOid,
+			GetAppendOutputCollation(sc_ident_dxlop, append->appendplans, attno),
 			0  // varlevelsup
 		);
 
@@ -4689,10 +4722,7 @@ CTranslatorDXLToPlStmt::TranslateDXLParallelAppend(
 			idxVarno, attno,
 			CMDIdGPDB::CastMdid(sc_ident_dxlop->MdidType())->Oid(),
 			sc_ident_dxlop->TypeModifier(),
-					  (nullptr != sc_ident_dxlop->MdidCollation() &&
-					   sc_ident_dxlop->MdidCollation()->IsValid())
-						  ? CMDIdGPDB::CastMdid(sc_ident_dxlop->MdidCollation())->Oid()
-						  : InvalidOid,
+			GetAppendOutputCollation(sc_ident_dxlop, append->appendplans, attno),
 			0  // varlevelsup
 		);
 
@@ -4918,10 +4948,27 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 			CDXLScalarIdent::Cast(sc_ident_dxlnode->GetOperator());
 		OID oid_type = CMDIdGPDB::CastMdid(sc_ident_dxlop->MdidType())->Oid();
 
-		Var *var =
-			gpdb::MakeVar(OUTER_VAR, varattno, oid_type,
-						  sc_ident_dxlop->TypeModifier(), InvalidOid,
-						  0 /* varlevelsup */);
+		// The consumer returns the producer's tuples, so its columns have the
+		// collations of the producer's target list.
+		Oid collation = InvalidOid;
+		List *producer_tlist =
+			share_input_scan_cte_producer->scan.plan.targetlist;
+		if (varattno <= gpdb::ListLength(producer_tlist))
+		{
+			TargetEntry *producer_te =
+				(TargetEntry *) gpdb::ListNth(producer_tlist, varattno - 1);
+			collation = gpdb::ExprCollation((Node *) producer_te->expr);
+		}
+		else if (nullptr != sc_ident_dxlop->MdidCollation() &&
+				 sc_ident_dxlop->MdidCollation()->IsValid())
+		{
+			collation =
+				CMDIdGPDB::CastMdid(sc_ident_dxlop->MdidCollation())->Oid();
+		}
+
+		Var *var = gpdb::MakeVar(OUTER_VAR, varattno, oid_type,
+								 sc_ident_dxlop->TypeModifier(), collation,
+								 0 /* varlevelsup */);
 
 		CHAR *resname = CTranslatorUtils::CreateMultiByteCharStringFromWCString(
 			sc_proj_elem_dxlop->GetMdNameAlias()->GetMDName()->GetBuffer());
@@ -6352,7 +6399,8 @@ CTranslatorDXLToPlStmt::TranslateDXLProjectListToHashTargetList(
 		// create a Var expression for this target list entry expression
 		Var *var =
 			gpdb::MakeVar(OUTER_VAR, te_child->resno, oid_type, type_modifier,
-						  InvalidOid, 0  // varlevelsup
+						  gpdb::ExprCollation((Node *) te_child->expr),
+						  0	 // varlevelsup
 			);
 
 		// set old varno and varattno since makeVar does not set them
@@ -6853,7 +6901,8 @@ CTranslatorDXLToPlStmt::AddJunkTargetEntryForColId(
 	INT type_modifier = gpdb::ExprTypeMod((Node *) target_entry->expr);
 	Var *var =
 		gpdb::MakeVar(OUTER_VAR, target_entry->resno, expr_oid, type_modifier,
-					  InvalidOid, 0  // varlevelsup
+					  gpdb::ExprCollation((Node *) target_entry->expr),
+					  0	 // varlevelsup
 		);
 	ULONG resno = gpdb::ListLength(*target_list) + 1;
 	CHAR *resname_str = PStrDup(resname);
@@ -7516,7 +7565,8 @@ CTranslatorDXLToPlStmt::CreateDirectCopyTargetList(List *target_list)
 		Node *expr = (Node *) te->expr;
 
 		Var *var = gpdb::MakeVar(OUTER_VAR, te->resno, gpdb::ExprType(expr),
-				gpdb::ExprTypeMod(expr), InvalidOid, 0 /* varlevelsup */);
+				gpdb::ExprTypeMod(expr), gpdb::ExprCollation(expr),
+				0 /* varlevelsup */);
 		TargetEntry *new_te = gpdb::MakeTargetEntry((Expr *) var, te->resno, te->resname, te->resjunk);
 
 		result_target_list = gpdb::LAppend(result_target_list, new_te);

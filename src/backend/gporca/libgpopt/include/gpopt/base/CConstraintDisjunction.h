@@ -85,6 +85,13 @@ public:
 	CConstraint *PcnstrRemapForColumn(CMemoryPool *mp,
 									  CColRef *colref) const override;
 
+	// can the constraint be remapped exactly to the given column
+	BOOL
+	FRemapIsExact(const CColRef *colref) const override
+	{
+		return CConstraint::FRemapIsExact(m_pdrgpcnstr, colref);
+	}
+
 	// print
 	IOstream &
 	OsPrint(IOstream &os) const override
