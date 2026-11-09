@@ -296,6 +296,8 @@ static split_rollup_data *make_new_rollups_for_hash_grouping_set(PlannerInfo *ro
 																 Path *path,
 																 grouping_sets_data *gd);
 
+static void compute_jit_flags(PlannedStmt *pstmt);
+
 static void create_partial_window_path(PlannerInfo *root,
 											RelOptInfo *window_rel,
 											Path *path,
@@ -440,7 +442,10 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 		}
 
 		if (result)
+		{
+			compute_jit_flags(result);
 			return result;
+		}
 	}
 
 	/*
@@ -832,30 +837,8 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 	result->stmt_location = parse->stmt_location;
 	result->stmt_len = parse->stmt_len;
 
-	result->jitFlags = PGJIT_NONE;
-	if (jit_enabled && jit_above_cost >= 0 &&
-		top_plan->total_cost > jit_above_cost)
-	{
-		result->jitFlags |= PGJIT_PERFORM;
-
-		/*
-		 * Decide how much effort should be put into generating better code.
-		 */
-		if (jit_optimize_above_cost >= 0 &&
-			top_plan->total_cost > jit_optimize_above_cost)
-			result->jitFlags |= PGJIT_OPT3;
-		if (jit_inline_above_cost >= 0 &&
-			top_plan->total_cost > jit_inline_above_cost)
-			result->jitFlags |= PGJIT_INLINE;
-
-		/*
-		 * Decide which operations should be JITed.
-		 */
-		if (jit_expressions)
-			result->jitFlags |= PGJIT_EXPR;
-		if (jit_tuple_deforming)
-			result->jitFlags |= PGJIT_DEFORM;
-	}
+	/* GPDB: shared with ORCA, see compute_jit_flags() */
+	compute_jit_flags(result);
 
 	if (glob->partition_directory != NULL)
 		DestroyPartitionDirectory(glob->partition_directory);
@@ -9269,4 +9252,61 @@ create_partial_window_path(PlannerInfo *root,
 	}
 
 	add_partial_path(window_rel, path);
+}
+
+/*
+ * Decide JIT settings for the given plan and record them in
+ * PlannedStmt.jitFlags.
+ *
+ * GPDB: moved out of standard_planner(), so that plans from ORCA get them too;
+ * before, ORCA returned its plan without ever setting jitFlags, and with the
+ * default optimizer=on nothing was JIT-compiled.  ORCA's costs are on a
+ * different scale from the planner's, so its plans are compared against the
+ * optimizer_jit_*_above_cost thresholds.  "jit" switches both.
+ */
+static void
+compute_jit_flags(PlannedStmt *pstmt)
+{
+	Plan	   *top_plan = pstmt->planTree;
+	double		above_cost;
+	double		inline_above_cost;
+	double		optimize_above_cost;
+
+	if (pstmt->planGen == PLANGEN_OPTIMIZER)
+	{
+		above_cost = optimizer_jit_above_cost;
+		inline_above_cost = optimizer_jit_inline_above_cost;
+		optimize_above_cost = optimizer_jit_optimize_above_cost;
+	}
+	else
+	{
+		above_cost = jit_above_cost;
+		inline_above_cost = jit_inline_above_cost;
+		optimize_above_cost = jit_optimize_above_cost;
+	}
+
+	pstmt->jitFlags = PGJIT_NONE;
+	if (jit_enabled && above_cost >= 0 &&
+		top_plan->total_cost > above_cost)
+	{
+		pstmt->jitFlags |= PGJIT_PERFORM;
+
+		/*
+		 * Decide how much effort should be put into generating better code.
+		 */
+		if (optimize_above_cost >= 0 &&
+			top_plan->total_cost > optimize_above_cost)
+			pstmt->jitFlags |= PGJIT_OPT3;
+		if (inline_above_cost >= 0 &&
+			top_plan->total_cost > inline_above_cost)
+			pstmt->jitFlags |= PGJIT_INLINE;
+
+		/*
+		 * Decide which operations should be JITed.
+		 */
+		if (jit_expressions)
+			pstmt->jitFlags |= PGJIT_EXPR;
+		if (jit_tuple_deforming)
+			pstmt->jitFlags |= PGJIT_DEFORM;
+	}
 }
