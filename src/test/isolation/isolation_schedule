@@ -71,6 +71,7 @@ test: fk-snapshot
 test: subxid-overflow
 test: eval-plan-qual-dropped-column
 test: eval-plan-qual-resjunk
+test: eval-plan-qual-rowtype-alter
 test: eval-plan-qual-trigger
 test: inplace-inval
 #test: intra-grant-inplace
@@ -125,6 +126,7 @@ test: alter-table-2
 #test: alter-table-4
 #test: create-trigger
 test: sequence-ddl
+test: rowtypes-alter
 test: async-notify
 # vacuum-reltuples uses a cursor to keep page pinned, but in GPDB that doesn't
 # keep it pinned.
