@@ -54,8 +54,9 @@ CColRefTable::CColRefTable(const CColumnDescriptor *pcoldesc, ULONG id,
 //---------------------------------------------------------------------------
 CColRefTable::CColRefTable(const IMDType *pmdtype, INT type_modifier, INT attno,
 						   BOOL is_nullable, ULONG id, const CName *pname,
-						   ULONG ulOpSource, BOOL is_dist_col, ULONG ulWidth)
-	: CColRef(pmdtype, type_modifier, id, pname),
+						   ULONG ulOpSource, BOOL is_dist_col, ULONG ulWidth,
+						   OID collation)
+	: CColRef(pmdtype, type_modifier, id, pname, collation),
 	  m_iAttno(attno),
 	  m_is_nullable(is_nullable),
 	  m_ulSourceOpId(ulOpSource),

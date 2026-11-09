@@ -240,6 +240,15 @@ CMappingColIdVarPlStmt::VarFromDXLNodeScId(const CDXLScalarIdent *dxlop)
 	{
 		varcollid = CMDIdGPDB::CastMdid(dxlop->MdidCollation())->Oid();
 	}
+	else if (nullptr == target_entry && nullptr != m_base_table_context &&
+			 0 < attno && OidIsValid(m_base_table_context->GetOid()))
+	{
+		// The column comes straight from the base table (e.g. an inlined CTE
+		// consumer whose column reference carries no collation): use the
+		// collation of the table attribute.
+		varcollid =
+			gpdb::GetAttCollation(m_base_table_context->GetOid(), attno);
+	}
 	else if (nullptr != target_entry)
 	{
 		// CDXLScalarIdent has no explicit collation (e.g., computed columns

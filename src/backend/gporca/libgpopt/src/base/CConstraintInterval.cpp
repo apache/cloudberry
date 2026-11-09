@@ -129,8 +129,13 @@ CConstraint *
 CConstraintInterval::PcnstrCopyWithRemappedColumns(
 	CMemoryPool *mp, UlongToColRefMap *colref_mapping, BOOL must_exist)
 {
+	// the mapped columns are copies of the original ones (e.g. CTE consumer
+	// or partition columns) and compare the same way, so the ranges carry
+	// over as they are
 	CColRef *colref = CUtils::PcrRemap(m_pcr, colref_mapping, must_exist);
-	return PcnstrRemapForColumn(mp, colref);
+	m_pdrgprng->AddRef();
+	return GPOS_NEW(mp)
+		CConstraintInterval(mp, colref, m_pdrgprng, m_fIncludesNull);
 }
 
 //---------------------------------------------------------------------------
@@ -617,11 +622,32 @@ CConstraintInterval::FColConstCmpSupported(const CColRef *colref,
 		return true;
 	}
 
-	OID col_collation = colref->Collation();
+	return FCollationMatchesType(colref);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CConstraintInterval::FCollationMatchesType
+//
+//	@doc:
+//		Do range bounds on the column, which are ordered by the default
+//		collation of its type, compare like the column itself. A column of a
+//		collatable type without a known collation (e.g. a computed column)
+//		may compare differently, so it does not qualify.
+//
+//---------------------------------------------------------------------------
+BOOL
+CConstraintInterval::FCollationMatchesType(const CColRef *colref)
+{
 	OID type_collation = colref->RetrieveType()->TypeCollation();
 
-	return 0 == col_collation || 0 == type_collation ||
-		   col_collation == type_collation;
+	// not a collatable type, or metadata without collation information
+	if (0 == type_collation)
+	{
+		return true;
+	}
+
+	return colref->Collation() == type_collation;
 }
 
 //---------------------------------------------------------------------------
@@ -1276,9 +1302,50 @@ CConstraintInterval::PcnstrRemapForColumn(CMemoryPool *mp,
 										  CColRef *colref) const
 {
 	GPOS_ASSERT(nullptr != colref);
+
+	if (!FRemapIsExact(colref))
+	{
+		// the ranges are ordered by a collation the new column does not
+		// compare with; keep only the knowledge about NULLs
+		return PciUnbounded(mp, colref, m_fIncludesNull);
+	}
+
 	m_pdrgprng->AddRef();
 	return GPOS_NEW(mp)
 		CConstraintInterval(mp, colref, m_pdrgprng, m_fIncludesNull);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CConstraintInterval::FRemapIsExact
+//
+//	@doc:
+//		Can the interval be remapped to the given column without changing its
+//		meaning. Equivalent columns (e.g. both sides of an equality join) may
+//		have different collations: the points of the interval hold for both,
+//		but its ranges only hold for a column comparing like the original one.
+//
+//---------------------------------------------------------------------------
+BOOL
+CConstraintInterval::FRemapIsExact(const CColRef *colref) const
+{
+	if (m_pcr->Collation() == colref->Collation() ||
+		0 == colref->RetrieveType()->TypeCollation())
+	{
+		return true;
+	}
+
+	const ULONG length = m_pdrgprng->Size();
+	for (ULONG ul = 0; ul < length; ul++)
+	{
+		CRange *prange = (*m_pdrgprng)[ul];
+		if (!prange->FPoint() && !prange->IsConstraintUnbounded())
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 //---------------------------------------------------------------------------

@@ -1500,12 +1500,19 @@ CTranslatorUtils::GetColumnDescrAt(CMemoryPool *mp, TargetEntry *target_entry,
 	// create a column descriptor
 	OID type_oid = gpdb::ExprType((Node *) target_entry->expr);
 	INT type_modifier = gpdb::ExprTypeMod((Node *) target_entry->expr);
+	OID collation = gpdb::ExprCollation((Node *) target_entry->expr);
 	CMDIdGPDB *col_type = GPOS_NEW(mp) CMDIdGPDB(IMDId::EmdidGeneral, type_oid);
-	CDXLColDescr *dxl_col_descr =
-		GPOS_NEW(mp) CDXLColDescr(mdname, colid, pos,	   /* attno */
-								  col_type, type_modifier, /* type_modifier */
-								  false					   /* fColDropped */
-		);
+	IMDId *mdid_collation = nullptr;
+	if (OidIsValid(collation))
+	{
+		mdid_collation = GPOS_NEW(mp) CMDIdGPDB(IMDId::EmdidGeneral, collation);
+	}
+	CDXLColDescr *dxl_col_descr = GPOS_NEW(mp)
+		CDXLColDescr(mdname, colid, pos,		 /* attno */
+					 col_type, type_modifier, /* type_modifier */
+					 false,					 /* fColDropped */
+					 gpos::ulong_max,		 /* width */
+					 mdid_collation);
 
 	return dxl_col_descr;
 }
