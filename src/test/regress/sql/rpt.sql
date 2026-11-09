@@ -273,6 +273,26 @@ select * from foo;
 delete from foo where y = 1;
 select * from foo;
 
+-- MERGE into a replicated table must broadcast the source to every segment,
+-- like UPDATE/DELETE, otherwise each replica only sees the source rows stored
+-- on its own segment and the replicas diverge.
+create table rpt_merge_tgt(k int, v int) distributed replicated;
+create table rpt_merge_src(k int, v int) distributed by (k);
+insert into rpt_merge_tgt select g, 0 from generate_series(1, 10) g;
+insert into rpt_merge_src select g, 1 from generate_series(6, 15) g;
+explain (costs off)
+merge into rpt_merge_tgt t using rpt_merge_src s on t.k = s.k
+  when matched then update set v = s.v
+  when not matched then insert values (s.k, s.v);
+merge into rpt_merge_tgt t using rpt_merge_src s on t.k = s.k
+  when matched then update set v = s.v
+  when not matched then insert values (s.k, s.v);
+select count(*), count(*) filter (where v = 1) as v_is_1 from rpt_merge_tgt;
+-- every replica must hold the same 15 rows
+select gp_execution_segment() as seg, count(*), count(*) filter (where v = 1) as v_is_1
+from gp_dist_random('rpt_merge_tgt') group by 1 order by 1;
+drop table rpt_merge_tgt, rpt_merge_src;
+
 -- Test replicate table within init plan
 insert into foo values (1, 1), (2, 1);
 select * from bar where exists (select * from foo);
@@ -434,6 +454,12 @@ explain (costs off) update t_replicate_volatile set a = 1 from t_hashdist x wher
 explain (costs off) delete from t_replicate_volatile where a < random();
 explain (costs off) delete from t_replicate_volatile using t_replicate_volatile x where t_replicate_volatile.a + x.b < random();
 explain (costs off) update t_replicate_volatile set a = random();
+
+-- merge: volatile functions in MERGE actions are evaluated by ModifyTable,
+-- not in the subplan targetlist, but must be rejected all the same
+explain (costs off) merge into t_replicate_volatile using t_hashdist x on x.a = t_replicate_volatile.a when matched then update set b = random();
+explain (costs off) merge into t_replicate_volatile using t_hashdist x on x.a = t_replicate_volatile.a when not matched then insert values (x.a, random());
+explain (costs off) merge into t_replicate_volatile using t_hashdist x on x.a = t_replicate_volatile.a when matched and random() < 0.5 then delete;
 
 -- limit
 explain (costs off) insert into t_replicate_volatile select * from t_replicate_volatile limit random();
