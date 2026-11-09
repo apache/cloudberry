@@ -64,7 +64,7 @@ public:
 	// ctor/dtor
 	CDXLPhysicalAppend(CMemoryPool *mp, BOOL fIsTarget, BOOL fIsZapped);
 
-	// ctor for partitioned table scan
+	// ctor for paritioned table scan
 	CDXLPhysicalAppend(CMemoryPool *mp, BOOL fIsTarget, BOOL fIsZapped,
 					   ULONG scan_id, CDXLTableDescr *dxl_table_desc,
 					   ULongPtrArray *selector_ids);

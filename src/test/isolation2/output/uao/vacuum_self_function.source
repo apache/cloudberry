@@ -11,11 +11,20 @@ INSERT 100
 DELETE FROM ao WHERE a <= 30;
 DELETE 30
 
-create or replace function myfunc() returns bigint as $$ begin  /* inside a function */ perform pg_sleep(10); /* inside a function */ return (select count(*) from ao);  /* inside a function */ end;  /* inside a function */ $$ stable language plpgsql;
+create or replace function myfunc() returns bigint as $$ begin  /* inside a function */ perform pg_advisory_xact_lock(4242); /* inside a function */ return (select count(*) from ao);  /* inside a function */ end;  /* inside a function */ $$ stable language plpgsql;
 CREATE
+
+-- Session 2 holds an advisory lock that myfunc() waits for. The function's
+-- snapshot is taken when the query starts, before it blocks on the lock.
+2: DO $$ BEGIN PERFORM pg_advisory_lock(4242); END $$;
+DO
 
 -- Launch function into the background.
 1&: select myfunc();  <waiting ...>
+-- Wait until session 1 is blocked on the lock, so its snapshot is in place
+-- before we DELETE and VACUUM. Sleeping instead was racy.
+2: DO $$ BEGIN WHILE NOT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND objid = 4242 AND NOT granted) LOOP PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO
 
 -- Meanwhile, DELETE some rows and VACUUM. VACUUM should not recycle the
 -- old tuple versions that are still needed by the function later. It will
@@ -48,6 +57,11 @@ VACUUM
 -- start_ignore
 
 -- end_ignore
+2: SELECT pg_advisory_unlock(4242);
+ pg_advisory_unlock 
+--------------------
+ t                  
+(1 row)
 1<:  <... completed>
  myfunc 
 --------

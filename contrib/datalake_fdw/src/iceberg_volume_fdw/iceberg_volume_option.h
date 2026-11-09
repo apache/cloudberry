@@ -37,6 +37,8 @@
 #include "postgres.h"
 
 #include "common/dl_option_util.h"
+#include "common/datalake_location.h"
+#include "common/dl_kv.h"
 #include "foreign/foreign.h"
 #include "nodes/pg_list.h"
 
@@ -142,5 +144,15 @@ extern void parse_iceberg_foreign_volume_options(IcebergForeignVolumeOptions *op
  * receives that instead of re-parsing a URI.
  */
 extern IcebergVolumeOptions *get_iceberg_volume_options(ForeignServer *server);
+
+/*
+ * Resolve a volume by name into the location its data lives at and the
+ * options a storage backend needs to reach it.  Reports through ereport: the
+ * server has to exist and the user has to be allowed to use it.  A user
+ * mapping is optional, so an empty credential set is a valid answer.
+ */
+extern void iceberg_volume_resolve(const char *server_name, Oid userid,
+								   DatalakeLocation *location_out,
+								   DlKeyValue **kv_out, int *nkv_out);
 
 #endif							/* ICEBERG_VOLUME_OPTION_H */

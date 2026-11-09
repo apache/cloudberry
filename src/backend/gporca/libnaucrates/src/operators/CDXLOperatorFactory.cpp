@@ -31,6 +31,7 @@
 #include "naucrates/dxl/operators/CDXLPhysicalParallelTableScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalAgg.h"
 #include "naucrates/dxl/operators/CDXLPhysicalAppend.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelAppend.h"
 #include "naucrates/dxl/operators/CDXLPhysicalBroadcastMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalGatherMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalHashJoin.h"
@@ -406,6 +407,48 @@ CDXLOperatorFactory::MakeDXLAppend(CDXLMemoryManager *dxl_memory_manager,
 											
 	return GPOS_NEW(mp) CDXLPhysicalAppend(mp, is_target, is_zapped, scan_id,
 												   nullptr, selector_ids);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CDXLOperatorFactory::MakeDXLParallelAppend
+//	@doc:
+//		Construct a Parallel Append operator
+//
+//---------------------------------------------------------------------------
+CDXLPhysical *
+CDXLOperatorFactory::MakeDXLParallelAppend(CDXLMemoryManager *dxl_memory_manager,
+										   const Attributes &attrs)
+{
+	// get the memory pool from the memory manager
+	CMemoryPool *mp = dxl_memory_manager->Pmp();
+
+	BOOL is_target = ExtractConvertAttrValueToBool(dxl_memory_manager, attrs,
+												   EdxltokenAppendIsTarget,
+												   EdxltokenPhysicalParallelAppend);
+
+	BOOL is_zapped = ExtractConvertAttrValueToBool(dxl_memory_manager, attrs,
+												   EdxltokenAppendIsZapped,
+												   EdxltokenPhysicalParallelAppend);
+
+	ULONG scan_id = ExtractConvertAttrValueToUlong(dxl_memory_manager, attrs, EdxltokenPartIndexId,
+												   EdxltokenPhysicalParallelAppend, true /* is_optional */,
+												   gpos::ulong_max /* default_value */);
+
+	ULONG parallel_workers = ExtractConvertAttrValueToUlong(dxl_memory_manager, attrs, EdxltokenParallelWorkers,
+														    EdxltokenPhysicalParallelAppend, true,
+														    0);
+
+	ULongPtrArray *selector_ids = nullptr;
+	if (scan_id != gpos::ulong_max)
+	{
+		selector_ids = ExtractConvertValuesToArray(dxl_memory_manager, attrs,
+												   EdxltokenSelectorIds,
+												   EdxltokenPhysicalParallelAppend);
+	}
+
+	return GPOS_NEW(mp) CDXLPhysicalParallelAppend(mp, is_target, is_zapped, scan_id,
+												   nullptr, selector_ids, parallel_workers);
 }
 
 //---------------------------------------------------------------------------
@@ -1116,6 +1159,9 @@ CDXLOperatorFactory::MakeDXLAggFunc(CDXLMemoryManager *dxl_memory_manager,
 	BOOL is_agg_star = ExtractConvertAttrValueToBool(dxl_memory_manager, attrs,
 		EdxltokenAggrefIsAggStar,
 		EdxltokenScalarAggref);
+	BOOL is_presorted = ExtractConvertAttrValueToBool(
+		dxl_memory_manager, attrs, EdxltokenAggrefIsPresorted,
+		EdxltokenScalarAggref, true /*is_optional*/, false /*default_value*/);
 
 	const XMLCh *agg_kind_xml =
 		ExtractAttrValue(attrs, EdxltokenAggrefKind, EdxltokenScalarAggref);
@@ -1196,9 +1242,12 @@ CDXLOperatorFactory::MakeDXLAggFunc(CDXLMemoryManager *dxl_memory_manager,
 			dxl_memory_manager, attrs, EdxltokenTypeId, EdxltokenScalarAggref);
 	}
 
-	return GPOS_NEW(mp)
-		CDXLScalarAggref(mp, agg_mdid, resolved_rettype, is_distinct, agg_stage,
-						 agg_kind, argtypelist, is_agg_star);
+	CDXLScalarAggref *dxl_op =
+		GPOS_NEW(mp) CDXLScalarAggref(mp, agg_mdid, resolved_rettype, is_distinct,
+									  agg_stage, agg_kind, argtypelist, is_agg_star);
+	dxl_op->SetPresorted(is_presorted);
+
+	return dxl_op;
 }
 
 //---------------------------------------------------------------------------

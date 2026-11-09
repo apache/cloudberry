@@ -262,6 +262,8 @@ List *ExtractNodesExpression(Node *node, int node_tag,
 // intermediate result type of given aggregate
 Oid GetAggIntermediateResultType(Oid aggid);
 
+bool IsAggFinalFuncVolatile(Oid aggid);
+
 // Identify the specific datatypes passed to an aggregate call.
 int GetAggregateArgTypes(Aggref *aggref, Oid *inputTypes);
 
@@ -300,6 +302,9 @@ bool IsRepSafeAgg(Oid aggid);
 
 // does aggregate have a combine function (and serial/deserial functions, if needed)
 bool IsAggPartialCapable(Oid aggid);
+
+// is the result of the aggregate independent of the order of its input
+bool IsAggOrderInsensitive(Oid aggid);
 
 // intermediate result type of given aggregate
 Oid GetAggregate(const char *agg, Oid type_oid);
@@ -805,9 +810,6 @@ bool TestexprIsHashable(Node *testexpr, List *param_ids);
 
 RTEPermissionInfo *
 GetRTEPermissionInfo(List *rteperminfos, const RangeTblEntry *rte);
-
-gpos::BOOL WalkQueryTree(Query *query, bool (*walker)(), void *context,
-						 int flags);
 
 }  //namespace gpdb
 

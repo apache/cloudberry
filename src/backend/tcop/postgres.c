@@ -83,6 +83,7 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/ps_status.h"
+#include "utils/resgroup.h"
 #include "utils/snapmgr.h"
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
@@ -1659,10 +1660,29 @@ CheckDebugDtmActionSqlCommandTag(const char *sqlCommandTag)
 static void
 restore_guc_to_QE(void )
 {
-	Assert(Gp_role == GP_ROLE_DISPATCH && gp_guc_restore_list);
-	ListCell *lc;
+	ListCell 	*lc;
+	bool		saved_resgroup_bypass = gp_resource_group_bypass;
 
-	start_xact_command();
+	Assert(Gp_role == GP_ROLE_DISPATCH && gp_guc_restore_list);
+
+	/* debug_query_string (which is used to make a bypass decision) is
+	 * unavailable in this context meaning that we won't bypass resource
+	 * group here.
+	 * To forse the bypass we temporarily set gp_resource_group_bypass manually.
+	 *
+	 */
+	PG_TRY();
+	{
+		gp_resource_group_bypass = true;
+		start_xact_command();
+	}
+	PG_CATCH();
+	{
+		gp_resource_group_bypass = saved_resgroup_bypass;
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+	gp_resource_group_bypass = saved_resgroup_bypass;
 
 	foreach(lc, gp_guc_restore_list)
 	{

@@ -298,10 +298,9 @@ static OP  *pp_require_safe(pTHX);
 static void activate_interpreter(plperl_interp_desc *interp_desc);
 
 #if defined(WIN32) && PERL_VERSION_LT(5, 28, 0)
-static char *setlocale_perl(int category, char *locale);
-#else
+#error "PL/Perl on Windows requires Perl 5.28 or later"
+#endif
 #define setlocale_perl(a,b)  Perl_setlocale(a,b)
-#endif							/* defined(WIN32) && PERL_VERSION_LT(5, 28, 0) */
 
 /*
  * Decrement the refcount of the given SV within the active Perl interpreter
@@ -729,8 +728,8 @@ plperl_init_interp(void)
 	 * subsequent calls to the interpreter don't mess with the locale
 	 * settings.
 	 *
-	 * We restore them using setlocale_perl(), defined below, so that Perl
-	 * doesn't have a different idea of the locale from Postgres.
+	 * We restore them using setlocale_perl(), which maps to Perl_setlocale(),
+	 * so that Perl doesn't have a different idea of the locale from Postgres.
 	 *
 	 */
 
@@ -4173,80 +4172,3 @@ plperl_inline_callback(void *arg)
 {
 	errcontext("PL/Perl anonymous code block");
 }
-
-
-/*
- * Perl's own setlocale(), copied from POSIX.xs
- * (needed because of the calls to new_*())
- *
- * Starting in 5.28, perl exposes Perl_setlocale to do so.
- */
-#if defined(WIN32) && PERL_VERSION_LT(5, 28, 0)
-static char *
-setlocale_perl(int category, char *locale)
-{
-	dTHX;
-	char	   *RETVAL = SETLOCALE(category, locale);
-
-	if (RETVAL)
-	{
-#ifdef USE_LOCALE_CTYPE
-		if (category == LC_CTYPE
-#ifdef LC_ALL
-			|| category == LC_ALL
-#endif
-			)
-		{
-			char	   *newctype;
-
-#ifdef LC_ALL
-			if (category == LC_ALL)
-				newctype = SETLOCALE(LC_CTYPE, NULL);
-			else
-#endif
-				newctype = RETVAL;
-			new_ctype(newctype);
-		}
-#endif							/* USE_LOCALE_CTYPE */
-#ifdef USE_LOCALE_COLLATE
-		if (category == LC_COLLATE
-#ifdef LC_ALL
-			|| category == LC_ALL
-#endif
-			)
-		{
-			char	   *newcoll;
-
-#ifdef LC_ALL
-			if (category == LC_ALL)
-				newcoll = SETLOCALE(LC_COLLATE, NULL);
-			else
-#endif
-				newcoll = RETVAL;
-			new_collate(newcoll);
-		}
-#endif							/* USE_LOCALE_COLLATE */
-
-#ifdef USE_LOCALE_NUMERIC
-		if (category == LC_NUMERIC
-#ifdef LC_ALL
-			|| category == LC_ALL
-#endif
-			)
-		{
-			char	   *newnum;
-
-#ifdef LC_ALL
-			if (category == LC_ALL)
-				newnum = SETLOCALE(LC_NUMERIC, NULL);
-			else
-#endif
-				newnum = RETVAL;
-			new_numeric(newnum);
-		}
-#endif							/* USE_LOCALE_NUMERIC */
-	}
-
-	return RETVAL;
-}
-#endif							/* defined(WIN32) && PERL_VERSION_LT(5, 28, 0) */

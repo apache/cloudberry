@@ -45,6 +45,8 @@ class PaxVecBpCharColumn final : public PaxVecNonFixedEncodingColumn {
 
   PaxColumnTypeInMem GetPaxColumnTypeInMem() const override;
 
+  // Do not hide the base class GetBuffer() overload.
+  using PaxVecNonFixedEncodingColumn::GetBuffer;
   std::pair<char *, size_t> GetBuffer(size_t position) override;
 
  private:

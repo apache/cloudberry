@@ -14,7 +14,8 @@ DROP TABLE IF EXISTS
   dlskel_bad_tablespace, dlskel_bad_missing_server,
   dlskel_bad_wrong_catalog, dlskel_bad_no_catalog,
   dlskel_bad_reloption, dlskel_bad_engine, dlskel_r_new, dlskel_heap,
-  dlskel_bad_repl, dlskel_bad_purge
+  dlskel_bad_repl, dlskel_bad_purge, dlskel_bad_numeric, dlskel_bad_varchar,
+  dlskel_bad_char, dlskel_bad_like, dlskel_types
   CASCADE;
 DROP SERVER IF EXISTS dlskel_cat CASCADE;
 DROP SERVER IF EXISTS dlskel_cat2 CASCADE;
@@ -148,6 +149,36 @@ CREATE TABLE dlskel_bad_tablespace (a int)
 
 CREATE TABLE dlskel_bad USING iceberg AS SELECT 1;
 CREATE MATERIALIZED VIEW dlskel_mv USING iceberg AS SELECT 1;
+
+-- A column type a data file cannot hold is refused when the table is created,
+-- not at its first write: nothing can ALTER a lake table's columns, so a table
+-- accepted with one would be a table nothing can ever be put in.  The rule is
+-- the format layer's, asked through the same function the writer asks.
+CREATE TABLE dlskel_bad_numeric (a int, n numeric)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol');
+-- A length limit has nowhere to live in a lake table, whose only string type is
+-- unbounded, and a file written by anything else could break it.
+CREATE TABLE dlskel_bad_varchar (a int, v varchar(16))
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol');
+CREATE TABLE dlskel_bad_char (a int, c char(5))
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol');
+-- LIKE copies its columns after this check has run, so it is refused rather
+-- than let through unchecked.
+CREATE TABLE dlskel_bad_like (LIKE dlskel_heap)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol');
+-- Every type a data file can hold, in one table; unbounded varchar included.
+CREATE TABLE dlskel_types (
+  c_bool boolean, c_int2 smallint, c_int4 integer, c_int8 bigint,
+  c_float4 real, c_float8 double precision, c_text text, c_varchar varchar,
+  c_bytea bytea, c_date date, c_time time, c_ts timestamp,
+  c_tstz timestamptz, c_uuid uuid, c_serial serial)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol');
+DROP TABLE dlskel_types;
 
 -- Converting a heap into a lake table has to be refused too: the relation is
 -- still a heap when the statement arrives, so the guard above does not see it.
@@ -323,6 +354,14 @@ CREATE SERVER dlskel_bad_userinfo
 CREATE SERVER dlskel_bad_bucket
   FOREIGN DATA WRAPPER iceberg_volume_fdw
   OPTIONS (base_path 's3://UPPER_case/p');
+-- What stands before "://" is quoted back only when it is a scheme.  Anything
+-- else there may be userinfo or a query typed in front of it, and is masked.
+CREATE SERVER dlskel_bad_scheme_userinfo
+  FOREIGN DATA WRAPPER iceberg_volume_fdw
+  OPTIONS (base_path 'user:hunter2@evil://x/y');
+CREATE SERVER dlskel_bad_scheme_query
+  FOREIGN DATA WRAPPER iceberg_volume_fdw
+  OPTIONS (base_path '?token=hunter2://b/c');
 
 -- The metadata engine is not selectable, so naming one is an unknown option.
 CREATE TABLE dlskel_bad_engine (a int)
@@ -339,7 +378,8 @@ DROP TABLE IF EXISTS
   dlskel_bad_tablespace, dlskel_bad_missing_server,
   dlskel_bad_wrong_catalog, dlskel_bad_no_catalog,
   dlskel_bad_reloption, dlskel_bad_engine, dlskel_r_new, dlskel_heap,
-  dlskel_bad_repl, dlskel_bad_purge
+  dlskel_bad_repl, dlskel_bad_purge, dlskel_bad_numeric, dlskel_bad_varchar,
+  dlskel_bad_char, dlskel_bad_like, dlskel_types
   CASCADE;
 DROP SERVER IF EXISTS dlskel_cat CASCADE;
 DROP SERVER IF EXISTS dlskel_cat2 CASCADE;

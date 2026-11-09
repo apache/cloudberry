@@ -548,7 +548,7 @@ nodeRead(const char *token, int tok_len)
 			}
 			else
 			{
-				elog(ERROR, "unrecognized token: \"%.*s\"", tok_len, token);
+				elog(PANIC, "unrecognized token: \"%.*s\"", tok_len, token);
 				result = NULL;	/* keep compiler happy */
 			}
 			break;

@@ -22,12 +22,13 @@
 #include "cdb/cdbconn.h"		/* SegmentDatabaseDescriptor */
 #include "cdb/cdbdisp.h"                /* CheckDispatchResult() */
 #include "cdb/cdbdispatchresult.h"	/* CdbDispatchResults */
-#include "cdb/cdbexplain.h"		/* me */
+#include "cdb/cdbexplain.h"
 #include "cdb/cdbpathlocus.h"
 #include "cdb/cdbutil.h"
 #include "cdb/cdbvars.h"		/* GpIdentity.segindex */
 #include "cdb/cdbendpoint.h"
 #include "cdb/memquota.h"
+#include "commands/explain_gp.h"
 #include "libpq/pqformat.h"		/* pq_beginmessage() etc. */
 #include "miscadmin.h"
 #include "utils/resscheduler.h"
@@ -35,78 +36,8 @@
 #include "utils/memutils.h"		/* MemoryContextGetPeakSpace() */
 #include "utils/vmem_tracker.h"
 
-#include "cdb/cdbexplain.h"             /* cdbexplain_recvExecStats */
-
 /* Convert bytes into kilobytes */
 #define kb(x) (floor((x + 1023.0) / 1024.0))
-
-/* EXPLAIN ANALYZE statistics for one plan node of a slice */
-typedef struct CdbExplain_StatInst
-{
-	NodeTag		pstype;			/* PlanState node type */
-
-	/* fields from Instrumentation struct */
-	instr_time	starttime;		/* Start time of current iteration of node */
-	instr_time	counter;		/* Accumulated runtime for this node */
-	double		firsttuple;		/* Time for first tuple of this cycle */
-	double		startup;		/* Total startup time (in seconds) */
-	double		total;			/* Total total time (in seconds) */
-	double		ntuples;		/* Total tuples produced */
-	double		ntuples2;
-	double		nloops;			/* # of run cycles for this node */
-	double		nfiltered1;
-	double		nfiltered2;
-	bool		prf_work;
-	double		nfilteredPRF;
-	double		execmemused;	/* executor memory used (bytes) */
-	double		workmemused;	/* work_mem actually used (bytes) */
-	double		workmemwanted;	/* work_mem to avoid workfile i/o (bytes) */
-	bool		workfileCreated;	/* workfile created in this node */
-	instr_time	firststart;		/* Start time of first iteration of node */
-	int			numPartScanned; /* Number of part tables scanned */
-
-	TuplesortInstrumentation sortstats; /* Sort stats, if this is a Sort node */
-	HashInstrumentation hashstats; /* Hash stats, if this is a Hash node */
-	IncrementalSortGroupInfo fullsortGroupInfo; /* Full sort group info for Incremental Sort node */
-	IncrementalSortGroupInfo prefixsortGroupInfo; /* Prefix sort group info for Incremental Sort node */
-	int			bnotes;			/* Offset to beginning of node's extra text */
-	int			enotes;			/* Offset to end of node's extra text */
-	int 		nworkers_launched; /* Number of workers launched for this node */
-	WalUsage	walusage;		/* add WAL usage */
-} CdbExplain_StatInst;
-
-
-/* EXPLAIN ANALYZE statistics for one process working on one slice */
-typedef struct CdbExplain_SliceWorker
-{
-	double		peakmemused;	/* bytes alloc in per-query mem context tree */
-	double		vmem_reserved;	/* vmem reserved by a QE */
-	int 		nworkers_launched; /* Number of workers launched for this slice */
-} CdbExplain_SliceWorker;
-
-
-/* Header of EXPLAIN ANALYZE statistics message sent from qExec to qDisp */
-typedef struct CdbExplain_StatHdr
-{
-	NodeTag		type;			/* T_CdbExplain_StatHdr */
-	int			segindex;		/* segment id */
-	int			nInst;			/* num of StatInst entries following StatHdr */
-	int			bnotes;			/* offset to extra text area */
-	int			enotes;			/* offset to end of extra text area */
-
-	CdbExplain_SliceWorker worker;	/* qExec's overall stats for slice */
-
-	/*
-	 * During serialization, we use this as a temporary StatInst and save
-	 * "one-at-a-time" StatInst into this variable. We then write this
-	 * variable into buffer (serialize it) and then "recycle" the same inst
-	 * for next plan node's StatInst. During deserialization, an Array
-	 * [0..nInst-1] of StatInst entries is appended starting here.
-	 */
-	CdbExplain_StatInst inst[1];
-
-	/* extra text is appended after that */
-} CdbExplain_StatHdr;
 
 
 /* Dispatch status summarized over workers in a slice */
@@ -885,6 +816,7 @@ cdbexplain_collectStatsFromNode(PlanState *planstate, CdbExplain_SendStatCtx *ct
 	si->ntuples = instr->ntuples;
 	si->ntuples2 = instr->ntuples2;
 	si->nloops = instr->nloops;
+	si->bufusage = instr->bufusage;
 	si->nfiltered1 = instr->nfiltered1;
 	si->nfiltered2 = instr->nfiltered2;
 	si->prf_work     = instr->prf_work;
@@ -1020,7 +952,6 @@ cdbexplain_depStatAcc_saveText(CdbExplain_DepStatAcc *acc,
 	}
 }								/* cdbexplain_depStatAcc_saveText */
 
-
 /*
  * cdbexplain_depositStatsToNode
  *
@@ -1061,6 +992,7 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 	CdbExplain_DepStatAcc vmem_reserved;
 	CdbExplain_DepStatAcc totalPartTableScanned;
 	CdbExplain_DepStatAcc sortSpaceUsed[NUM_SORT_SPACE_TYPE][NUM_SORT_METHOD];
+	BufferUsage bufusage;
 	int			imsgptr;
 	int			nInst;
 
@@ -1085,6 +1017,7 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 	cdbexplain_depStatAcc_init0(&workmemwanted);
 	cdbexplain_depStatAcc_init0(&totalWorkfileCreated);
 	cdbexplain_depStatAcc_init0(&totalPartTableScanned);
+	memset(&bufusage, 0, sizeof(bufusage));
 	for (int i = 0; i < NUM_SORT_METHOD; i++)
 	{
 		for (int j = 0; j < NUM_SORT_SPACE_TYPE; j++)
@@ -1130,6 +1063,7 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 		cdbexplain_depStatAcc_upd(&workmemwanted, rsi->workmemwanted, rsh, rsi, nsi);
 		cdbexplain_depStatAcc_upd(&totalWorkfileCreated, (rsi->workfileCreated ? 1 : 0), rsh, rsi, nsi);
 		cdbexplain_depStatAcc_upd(&totalPartTableScanned, rsi->numPartScanned, rsh, rsi, nsi);
+		BufferUsageAdd(&bufusage, &rsi->bufusage);
 		Assert(rsi->sortstats.sortMethod < NUM_SORT_METHOD);
 		Assert(rsi->sortstats.spaceType < NUM_SORT_SPACE_TYPE);
 		if (rsi->sortstats.sortMethod != SORT_TYPE_STILL_IN_PROGRESS)
@@ -1200,6 +1134,9 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 		instr->workfileCreated = nodeAcc->nsimax->workfileCreated;
 		instr->firststart = nodeAcc->nsimax->firststart;
 	 }
+
+	/* Buffer usage is summed across all workers, not taken from the winner. */
+	instr->bufusage = bufusage;
 
 	/* Save extra message text for the most interesting winning qExecs. */
 	if (ctx->extratextbuf)

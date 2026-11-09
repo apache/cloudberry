@@ -79,3 +79,7 @@ lib*.pc
 /.cache/
 /install/
 /portlock/
+
+# Windows Explorer thumbnail caches
+Thumbs.db
+ehthumbs.db

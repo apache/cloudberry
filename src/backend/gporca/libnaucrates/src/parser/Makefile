@@ -12,6 +12,7 @@ include $(top_srcdir)/src/backend/gporca/gporca.mk
 
 OBJS        = CParseHandlerAgg.o \
               CParseHandlerAppend.o \
+              CParseHandlerParallelAppend.o \
               CParseHandlerArray.o \
               CParseHandlerAssert.o \
               CParseHandlerBase.o \

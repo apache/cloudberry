@@ -18,8 +18,11 @@
 # contrib/datalake_fdw/Makefile
 
 MODULE_big = datalake_fdw
-EXTENSION = datalake_fdw
-DATA = datalake_fdw--1.0.sql
+
+# A second extension, so that installing datalake_fdw does not put the test
+# entry points in a production database.  One library, so they reach internals.
+EXTENSION = datalake_fdw datalake_fdw_test
+DATA = datalake_fdw--1.0.sql datalake_fdw_test--1.0.sql
 
 OBJS = \
 	src/am_iceberg/pg_iceberg_am_handler.o \
@@ -36,20 +39,120 @@ OBJS = \
 	src/meta/meta_engine_init.o \
 	src/meta/engine_stub/stub_engine.o \
 	src/format/format_registry.o \
+	src/format/arrow_support.o \
+	src/format/arrow_memory_pool.o \
+	src/format/arrow_builder.o \
+	src/format/arrow_decode.o \
+	src/format/parquet/parquet_format.o \
+	src/format/parquet/parquet_read.o \
+	src/format/parquet/parquet_write.o \
 	src/common/dl_err.o \
+	src/common/dl_resource.o \
 	src/common/dl_option_util.o \
 	src/common/parser_option.o \
 	src/common/file_system_wrapper.o \
+	src/common/local_file_system.o \
 	src/common/s3_file_system.o \
-	src/common/backend_registry.o
+	src/common/backend_registry.o \
+	src/test/storage_bad_registration.o \
+	src/test/datalake_fdw_test.o
+
+HEADERS = \
+	src/common/storage_backend.h \
+	src/common/storage_backend_register.h \
+	src/common/datalake_location.h \
+	src/common/dl_kv.h \
+	src/common/dl_err.h
+
+# libparquet is written in terms of Arrow's types, so linking one links both.
+PKG_CONFIG ?= pkg-config
+ARROW_MODULES = arrow parquet
+HAVE_ARROW := $(shell $(PKG_CONFIG) --exists $(ARROW_MODULES) 2>/dev/null && echo yes)
+# Without the filter, whichever C++ standard Arrow's .pc file names wins: these
+# land in CPPFLAGS, which pgxs.mk puts after CXXFLAGS on the command line.  The
+# Arrow project's own packages say -std=c++11, and their headers then fail to
+# compile against themselves.
+ARROW_CPPFLAGS := $(filter-out -std=%,\
+	$(shell $(PKG_CONFIG) --cflags $(ARROW_MODULES) 2>/dev/null))
+ARROW_LIBS := $(shell $(PKG_CONFIG) --libs $(ARROW_MODULES) 2>/dev/null)
+
+# Arrow 23 moved its headers to C++20 (std::span, std::bit_width); older ones
+# are written for C++17, which every compiler this builds with has.  C++20
+# deprecates ++ and -- on a volatile, and the server's own headers do that
+# (HOLD_INTERRUPTS in miscadmin.h), so that one warning is not ours to fix.
+ARROW_VERSION_MAJOR := $(firstword $(subst ., ,\
+	$(shell $(PKG_CONFIG) --modversion arrow 2>/dev/null)))
+ifeq ($(shell test "0$(ARROW_VERSION_MAJOR)" -ge 23 && echo yes),yes)
+DL_CXX_STD = -std=c++20 -Wno-volatile
+else
+DL_CXX_STD = -std=c++17
+endif
+
+# This has to refuse at parse time.  A recipe hung off `all` would run after
+# pgxs.mk's own all-lib, so the compiler would fail on a missing arrow/api.h
+# first and this would never be reached.  Not for the clean targets, because
+# contrib/Makefile recurses here for those even when the module is not
+# configured in.
+ifneq ($(HAVE_ARROW),yes)
+ifeq ($(filter clean distclean maintainer-clean,$(MAKECMDGOALS)),)
+$(error datalake_fdw needs the Apache Arrow and Parquet C++ libraries, and \
+pkg-config found neither "arrow" nor "parquet".  They are libarrow-devel and \
+parquet-libs-devel on Rocky and RHEL, libarrow-dev and libparquet-dev on \
+Debian and Ubuntu)
+endif
+endif
+
+# The AWS SDK for C++, which the s3 backend is built on.  No distribution
+# packages it, so it is found by prefix rather than by pkg-config: either the
+# one named on the command line, or the usual places a hand-built one lands.
+# Without it the module still builds, and opening an s3:// location is what
+# reports that it was left out.
+AWS_SDK_SEARCH = /usr/local /opt/datalake
+ifeq ($(origin AWS_SDK_PREFIX),undefined)
+AWS_SDK_PREFIX := $(firstword $(foreach d,$(AWS_SDK_SEARCH),\
+	$(if $(wildcard $(d)/include/aws/s3/S3Client.h),$(d))))
+else
+# Named explicitly and wrong is a mistake to report, not to work around.
+ifeq ($(wildcard $(AWS_SDK_PREFIX)/include/aws/s3/S3Client.h),)
+ifeq ($(filter clean distclean maintainer-clean,$(MAKECMDGOALS)),)
+$(error AWS_SDK_PREFIX=$(AWS_SDK_PREFIX) has no include/aws/s3/S3Client.h)
+endif
+endif
+endif
+
+ifneq ($(AWS_SDK_PREFIX),)
+AWS_SDK_CPPFLAGS = -DDL_HAVE_AWS_SDK -I$(AWS_SDK_PREFIX)/include
+# One group, because these static archives refer to each other both ways.
+# -Bstatic, because a prefix that also holds shared SDK libraries would
+# otherwise bind those, and this module promises to add no runtime dependency
+# beyond the system libraries the SDK itself needs.
+AWS_SDK_LIBS = -L$(AWS_SDK_PREFIX)/lib64 -L$(AWS_SDK_PREFIX)/lib \
+	-Wl,-Bstatic \
+	-Wl,--start-group \
+	-laws-cpp-sdk-s3 -laws-cpp-sdk-core \
+	-laws-crt-cpp -laws-c-s3 -laws-c-auth -laws-c-http -laws-c-io \
+	-laws-c-cal -laws-c-compression -laws-c-mqtt -laws-c-event-stream \
+	-laws-c-sdkutils -laws-c-common -laws-checksums -ls2n \
+	-Wl,--end-group \
+	-Wl,-Bdynamic \
+	-lssl -lcrypto -lz -lcurl
+else
+AWS_SDK_CPPFLAGS =
+AWS_SDK_LIBS =
+ifeq ($(filter clean distclean maintainer-clean,$(MAKECMDGOALS)),)
+$(info NOTICE: the AWS SDK for C++ was not found in $(AWS_SDK_SEARCH), so \
+datalake_fdw is being built without the s3 storage backend.  Point \
+AWS_SDK_PREFIX at an installed SDK to build with it.)
+endif
+endif
 
 # Use the documented PGXS knobs: pgxs.mk appends these AFTER the flags configure
 # chose, so optimization/warning settings survive.  A pre-include
 # "override CFLAGS +=" would give CFLAGS override origin and silently discard
 # Makefile.global's own "CFLAGS = @CFLAGS@" assignment.
 PG_CFLAGS = -fvisibility=hidden
-PG_CXXFLAGS = -fvisibility=hidden -fvisibility-inlines-hidden -std=c++17
-PG_CPPFLAGS = -I$(srcdir)/src
+PG_CXXFLAGS = -fvisibility=hidden -fvisibility-inlines-hidden $(DL_CXX_STD)
+PG_CPPFLAGS = -I$(srcdir)/src $(ARROW_CPPFLAGS) $(AWS_SDK_CPPFLAGS)
 
 # The regression cases live with the rest of the test material rather than in a
 # second place of their own; pg_regress is pointed at them.  REGRESS_OPTS is
@@ -64,6 +167,24 @@ PG_CPPFLAGS = -I$(srcdir)/src
 REGRESS = iceberg_am_ddl iceberg_am_reject iceberg_am_acl
 REGRESS_OPTS = --temp-config=$(srcdir)/datalake_fdw.conf \
 	--inputdir=$(srcdir)/test/automation/sqlrepo/smoke/iceberg_am
+
+# A second category, and pg_regress takes one --inputdir, so it is a second run.
+FORMAT_PARQUET_REGRESS = parquet_roundtrip
+FORMAT_PARQUET_INPUTDIR = $(srcdir)/test/automation/sqlrepo/smoke/format_parquet
+STORAGE_LOCAL_REGRESS = storage_local
+STORAGE_LOCAL_INPUTDIR = $(srcdir)/test/automation/sqlrepo/smoke/storage_local
+# The s3 category needs a service to talk to, so it runs where one is named.
+STORAGE_S3_REGRESS = storage_s3
+# Thousands of requests, so it runs where someone asked for it rather than on
+# every build; CI does, a local gate does not.
+ifneq ($(DATALAKE_TEST_S3_PAGINATION),)
+STORAGE_S3_REGRESS += storage_s3_pagination
+endif
+STORAGE_S3_INPUTDIR = $(srcdir)/test/automation/sqlrepo/smoke/storage_s3
+# One body of storage behaviour, run against each backend that can be reached.
+STORAGE_CONFORMANCE_REGRESS = conformance_file conformance_dltest volume_resolve
+STORAGE_CONFORMANCE_S3_REGRESS = conformance_s3
+STORAGE_CONFORMANCE_INPUTDIR = $(srcdir)/test/automation/sqlrepo/smoke/storage_conformance
 
 EXTRA_CLEAN = exports_darwin.list exports.map
 
@@ -87,10 +208,10 @@ endif
 
 # Shared libraries are linked with $(CC) (see src/Makefile.shlib COMPILER), so a
 # module containing C++ translation units must pull in the C++ runtime itself.
-SHLIB_LINK += -lstdc++
+SHLIB_LINK += -lstdc++ $(ARROW_LIBS) $(AWS_SDK_LIBS)
 
-# Arrow and other C++ dependencies land in this module later; the export list is
-# the single place that decides what stays visible, so the mechanism ships now.
+# The export list is the single place that decides what stays visible -- which
+# now also means none of Arrow's symbols become symbols this module offers.
 ifeq ($(PORTNAME), darwin)
 EXPORT_LIST = exports_darwin.list
 SHLIB_LINK += -Wl,-exported_symbols_list,exports_darwin.list
@@ -107,3 +228,121 @@ endif
 
 all: $(EXPORT_LIST)
 $(shlib): $(EXPORT_LIST)
+
+# A backend in a library of its own, which the regression suite preloads and a
+# production server never has.  It is a module rather than another object here
+# because that is the only way it can prove what it exists to prove: that a
+# backend outside this library, built against the installed headers alone, can
+# register and be used.  Its cases -- storage_local and conformance_dltest --
+# therefore need it in shared_preload_libraries beside datalake_fdw.
+#
+# The module shares this library's headers, so it is compiled to the same C++
+# standard; it is handed down rather than chosen twice.
+DLTEST_MAKE = $(MAKE) -C dltest $(if $(USE_PGXS),USE_PGXS=1 PG_CONFIG=$(PG_CONFIG),) \
+	DL_CXX_STD='$(DL_CXX_STD)'
+
+all: dltest-all
+install: dltest-install
+clean distclean maintainer-clean: dltest-clean
+
+# The "+" marks these as recursive: make looks for $(MAKE) in the recipe text
+# to decide whether to hand down the jobserver, and it is behind a variable
+# here, so without it a parallel build warns and drops to -j1.
+dltest-all:
+	+$(DLTEST_MAKE) all
+
+# After dltest-all, not beside it: install also depends on all, and under -j
+# the two recursive makes would otherwise build the same objects at once.
+dltest-install: dltest-all
+	+$(DLTEST_MAKE) install
+
+dltest-clean:
+	+$(DLTEST_MAKE) clean
+
+.PHONY: dltest-all dltest-install dltest-clean
+
+# Hung off check and installcheck so that both get both categories.  REGRESS_OPTS
+# has to come along: pgxs.mk is where --dbname=$(CONTRIB_TESTDB) is added to it,
+# and without that pg_regress falls back to "regression" -- which it DROPs and
+# recreates, taking the core suite's database with it.  The second --inputdir
+# wins over the one in REGRESS_OPTS.  submake and REGRESS_PREP are the same
+# prerequisites pgxs.mk gives its own targets, so that a parallel make cannot
+# start pg_regress before it has been built.
+# Each category is a separate pg_regress run against the same database, so
+# they have to go one at a time: "make -j" would otherwise start both, and
+# two runs creating the same extension in the same database race.  The
+# categories are chained through their prerequisites rather than listed side
+# by side, which is what keeps the order under a parallel make.
+installcheck: installcheck-storage-conformance
+
+installcheck-format-parquet: submake $(REGRESS_PREP)
+	$(pg_regress_installcheck) $(REGRESS_OPTS) \
+		--inputdir=$(FORMAT_PARQUET_INPUTDIR) $(FORMAT_PARQUET_REGRESS)
+
+.PHONY: installcheck-format-parquet
+
+installcheck-storage-local: submake $(REGRESS_PREP) installcheck-format-parquet
+	$(pg_regress_installcheck) $(REGRESS_OPTS) \
+		--inputdir=$(STORAGE_LOCAL_INPUTDIR) $(STORAGE_LOCAL_REGRESS)
+
+.PHONY: installcheck-storage-local
+
+installcheck-storage-s3: submake $(REGRESS_PREP) installcheck-storage-local
+ifeq ($(DATALAKE_TEST_S3_ENDPOINT),)
+	@echo "NOTICE: DATALAKE_TEST_S3_ENDPOINT is not set, skipping the s3 storage tests"
+else
+	$(pg_regress_installcheck) $(REGRESS_OPTS) \
+		--inputdir=$(STORAGE_S3_INPUTDIR) $(STORAGE_S3_REGRESS)
+endif
+
+.PHONY: installcheck-storage-s3
+
+installcheck-storage-conformance: submake $(REGRESS_PREP) installcheck-storage-s3
+	$(pg_regress_installcheck) $(REGRESS_OPTS) \
+		--inputdir=$(STORAGE_CONFORMANCE_INPUTDIR) $(STORAGE_CONFORMANCE_REGRESS)
+ifneq ($(DATALAKE_TEST_S3_ENDPOINT),)
+	$(pg_regress_installcheck) $(REGRESS_OPTS) \
+		--inputdir=$(STORAGE_CONFORMANCE_INPUTDIR) $(STORAGE_CONFORMANCE_S3_REGRESS)
+endif
+
+.PHONY: installcheck-storage-conformance
+
+# "make check" is in-tree only -- under PGXS pgxs.mk refuses the target -- and
+# it is the only run that supplies the temp-config that preloads this module.
+ifndef USE_PGXS
+# Chained for the same reason as installcheck above, and here it matters more:
+# every category would otherwise start its own temp instance in ./tmp_check.
+check: check-storage-conformance
+
+check-format-parquet: submake $(REGRESS_PREP)
+	$(pg_regress_check) $(REGRESS_OPTS) \
+		--inputdir=$(FORMAT_PARQUET_INPUTDIR) $(FORMAT_PARQUET_REGRESS)
+
+.PHONY: check-format-parquet
+
+check-storage-local: submake $(REGRESS_PREP) check-format-parquet
+	$(pg_regress_check) $(REGRESS_OPTS) \
+		--inputdir=$(STORAGE_LOCAL_INPUTDIR) $(STORAGE_LOCAL_REGRESS)
+
+.PHONY: check-storage-local
+
+check-storage-s3: submake $(REGRESS_PREP) check-storage-local
+ifeq ($(DATALAKE_TEST_S3_ENDPOINT),)
+	@echo "NOTICE: DATALAKE_TEST_S3_ENDPOINT is not set, skipping the s3 storage tests"
+else
+	$(pg_regress_check) $(REGRESS_OPTS) \
+		--inputdir=$(STORAGE_S3_INPUTDIR) $(STORAGE_S3_REGRESS)
+endif
+
+.PHONY: check-storage-s3
+
+check-storage-conformance: submake $(REGRESS_PREP) check-storage-s3
+	$(pg_regress_check) $(REGRESS_OPTS) \
+		--inputdir=$(STORAGE_CONFORMANCE_INPUTDIR) $(STORAGE_CONFORMANCE_REGRESS)
+ifneq ($(DATALAKE_TEST_S3_ENDPOINT),)
+	$(pg_regress_check) $(REGRESS_OPTS) \
+		--inputdir=$(STORAGE_CONFORMANCE_INPUTDIR) $(STORAGE_CONFORMANCE_S3_REGRESS)
+endif
+
+.PHONY: check-storage-conformance
+endif

@@ -27,8 +27,7 @@ link_directories(${CMAKE_INSTALL_PREFIX}/lib)
 #set source files
 add_executable(gpfdist gpfdist.c gpfdist_helper.c
     ${GPDB_SRC_DIR}/src/backend/utils/misc/fstream/gfile.c
-    ${GPDB_SRC_DIR}/src/backend/utils/misc/fstream/fstream.c
-    ${GPDB_SRC_DIR}/src/port/glob.c)
+    ${GPDB_SRC_DIR}/src/backend/utils/misc/fstream/fstream.c)
 
 SET_SOURCE_FILES_PROPERTIES(gpfdist.c ${GPDB_SRC_DIR}/src/backend/utils/misc/fstream/gfile.c PROPERTIES COMPILE_DEFINITIONS "FRONTEND")
 

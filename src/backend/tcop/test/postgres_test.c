@@ -13,7 +13,7 @@
 #define PG_RE_THROW() siglongjmp(*PG_exception_stack, 1)
 
 static void
-_errfinish_impl()
+_errfinish_impl(void *arg)
 {
 	PG_RE_THROW();
 }

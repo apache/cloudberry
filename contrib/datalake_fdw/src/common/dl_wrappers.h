@@ -48,18 +48,39 @@
  *    a best-effort WARNING only outside error cleanup and otherwise swallows.
  * 4. C++ calling PG APIs: DL_WRAP_START; ... DL_WRAP_END; converts a PG longjmp
  *    to DlPgError so the C++ caller can handle it without crossing the ABI.
+ *    The error is taken off PostgreSQL's error stack on the way, and its
+ *    message travels in the exception, so catching one is all a caller does.
  */
 
 #ifdef __cplusplus
 
 #include <exception>
 
+/* Fixed storage, like dl_error_set(): it is filled where nothing may raise. */
 class DlPgError : public std::exception {
 public:
+	DlPgError()
+	{
+		message_[0] = '\0';
+	}
+
+	char *buffer()
+	{
+		return message_;
+	}
+
+	size_t buffer_size() const
+	{
+		return sizeof(message_);
+	}
+
 	const char *what() const noexcept override
 	{
-		return "PostgreSQL error";
+		return message_[0] != '\0' ? message_ : "PostgreSQL error";
 	}
+
+private:
+	char message_[DL_ERR_MSG_LEN];
 };
 
 /* Save and restore PG's longjmp targets around a C++ call site. */
@@ -136,15 +157,36 @@ dl_can_log_cleanup_warning(void)
 					 errmsg("datalake_fdw: %s", dl_error_msg_))); \
 	} while (0)
 
+/*
+ * Class 2 guards record what happened as well as that it happened.
+ *
+ * The detail is one per-backend record, and dl_error_report() decides whether
+ * it belongs to the failure being reported by comparing codes -- which cannot
+ * tell this DL_ERR_INTERNAL from an earlier one.  A guard that set the code and
+ * recorded nothing would therefore report the previous statement's message as
+ * the cause of this one.  So it always records, and what a C++ exception has to
+ * say is the only description of it there is going to be.  PAX takes the same
+ * line in CBDB_END_TRY(), where an unnamed failure falls back to the function
+ * it happened in rather than to whatever was there before.
+ *
+ * `operation` names the call, the way the metadata engine's dispatch does.
+ */
 #define DL_ABI_GUARD_BEGIN \
 	try \
 	{
 
-#define DL_ABI_GUARD_END(errvar) \
+#define DL_ABI_GUARD_END(errvar, operation) \
+	} \
+	catch (const std::exception &e) \
+	{ \
+		(errvar) = DL_ERR_INTERNAL; \
+		dl_error_set(DL_ERR_INTERNAL, (operation), NULL, e.what()); \
 	} \
 	catch (...) \
 	{ \
 		(errvar) = DL_ERR_INTERNAL; \
+		dl_error_set(DL_ERR_INTERNAL, (operation), NULL, \
+					 "unknown C++ exception"); \
 	}
 
 #define DL_CLEANUP_GUARD_BEGIN \
@@ -172,6 +214,7 @@ dl_can_log_cleanup_warning(void)
 /* Modeled on the PAX CBDB_WRAP_START/END saved-exception-stack pattern. */
 #define DL_WRAP_START \
 	sigjmp_buf dl_local_sigjmp_buf; \
+	MemoryContext dl_wrap_context_ = CurrentMemoryContext; \
 	{ \
 		DlPgExceptionStack dl_exception_stack( \
 			reinterpret_cast<void **>(&PG_exception_stack), \
@@ -184,7 +227,11 @@ dl_can_log_cleanup_warning(void)
 		} \
 		else \
 		{ \
-			throw DlPgError(); \
+			DlPgError	dl_pg_error_; \
+\
+			dl_error_take_pg_error(dl_wrap_context_, dl_pg_error_.buffer(), \
+								   dl_pg_error_.buffer_size()); \
+			throw dl_pg_error_; \
 		} \
 	}
 

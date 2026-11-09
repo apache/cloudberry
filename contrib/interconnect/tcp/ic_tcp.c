@@ -183,7 +183,6 @@ setupTCPListeningSocket(int backlog, int *listenerSocketFd, int32 *listenerPort)
 	 * this machine supports IPv6 and IPv6 is enabled, but we don't know that.
 	 */
 
-#ifdef HAVE_IPV6
 	if (addrs->ai_family == AF_INET && addrs->ai_next != NULL && addrs->ai_next->ai_family == AF_INET6)
 	{
 		/*
@@ -201,7 +200,6 @@ setupTCPListeningSocket(int backlog, int *listenerSocketFd, int32 *listenerPort)
 		temp->ai_next = addrs;	/* point second node to first */
 		addrs = temp;			/* start the list with the old second node */
 	}
-#endif
 
 	for (rp = addrs; rp != NULL; rp = rp->ai_next)
 	{

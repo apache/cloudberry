@@ -111,6 +111,7 @@ CParseHandlerFactory::Init(CMemoryPool *mp)
 		{EdxltokenPhysicalLimit, &CreateLimitParseHandler},
 		{EdxltokenPhysicalSort, &CreateSortParseHandler},
 		{EdxltokenPhysicalAppend, &CreateAppendParseHandler},
+		{EdxltokenPhysicalParallelAppend, &CreateParallelAppendParseHandler},
 		{EdxltokenPhysicalMaterialize, &CreateMaterializeParseHandler},
 		{EdxltokenPhysicalDynamicTableScan, &CreateDTSParseHandler},
 		{EdxltokenPhysicalDynamicIndexScan, &CreateDynamicIdxScanParseHandler},
@@ -819,6 +820,16 @@ CParseHandlerFactory::CreateAppendParseHandler(
 {
 	return GPOS_NEW(mp)
 		CParseHandlerAppend(mp, parse_handler_mgr, parse_handler_root);
+}
+
+// creates a parse handler for parsing a parallel append operator
+CParseHandlerBase *
+CParseHandlerFactory::CreateParallelAppendParseHandler(
+	CMemoryPool *mp, CParseHandlerManager *parse_handler_mgr,
+	CParseHandlerBase *parse_handler_root)
+{
+	return GPOS_NEW(mp)
+		CParseHandlerParallelAppend(mp, parse_handler_mgr, parse_handler_root);
 }
 
 // creates a parse handler for parsing a materialize operator

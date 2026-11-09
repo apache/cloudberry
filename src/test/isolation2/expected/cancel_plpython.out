@@ -100,3 +100,38 @@ PL/Python function "pynestsleep2"
 7q: ... <quitting>
 -- end_ignore
 
+-- A timeout must deliver only one KeyboardInterrupt and let its handler
+-- finish.  The handler makes a call so that, on any Python version, a
+-- duplicate callback would run inside it.
+CREATE OR REPLACE FUNCTION pysleephandler() RETURNS text AS $$ import time try: while True: time.sleep(0.1) except KeyboardInterrupt: time.sleep(0.1) GD['stage'] = 'handled' raise $$ LANGUAGE plpython3u;
+CREATE
+
+CREATE OR REPLACE FUNCTION pystage() RETURNS text AS $$ return GD.get('stage') $$ LANGUAGE plpython3u;
+CREATE
+
+SET statement_timeout = '1s';
+SET
+SELECT pysleephandler();
+ERROR:  canceling statement due to statement timeout
+CONTEXT:  PL/Python function "pysleephandler"
+RESET statement_timeout;
+RESET
+SELECT pystage();
+ pystage 
+---------
+ handled 
+(1 row)
+
+-- Once a KeyboardInterrupt has been raised, a later SIGINT must raise
+-- another one.
+CREATE OR REPLACE FUNCTION pycancelhandler() RETURNS text AS $$ import os import signal try: os.kill(os.getpid(), signal.SIGINT) while True: pass except KeyboardInterrupt: pass try: os.kill(os.getpid(), signal.SIGINT) except KeyboardInterrupt: GD['stage'] = 'cancelled twice' raise GD['stage'] = 'second cancel ignored' $$ LANGUAGE plpython3u;
+CREATE
+
+SELECT pycancelhandler();
+ERROR:  canceling statement due to user request
+CONTEXT:  PL/Python function "pycancelhandler"
+SELECT pystage();
+ pystage         
+-----------------
+ cancelled twice 
+(1 row)

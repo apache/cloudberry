@@ -10,6 +10,7 @@
 #include "postgres_fe.h"
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -368,16 +369,34 @@ main(int argc, char **argv)
 
 #ifdef FAULT_INJECTOR
 	/*
-	 * SUSPEND_PG_REWIND is used for testing purposes. If set to true, the pg_rewind process will be
-	 * suspended for 120 seconds, so that it's entry can be checked in the pg_stat_activity table.
+	 * SUSPEND_PG_REWIND is used for testing purposes. If set to an int, the pg_rewind process will be
+	 * suspended for set amount of time(secs), so that it's entry can be checked in the pg_stat_activity table.
 	 * The goal being that we can run another instance of gprecoverseg and assert that it ignores
 	 * recovery for segments that already have an active pg_rewind process.
 	 */
 	char* suspend_pg_rewind = getenv("SUSPEND_PG_REWIND");
-	if(suspend_pg_rewind != NULL && strcmp(suspend_pg_rewind, "true") == 0)
+	if(suspend_pg_rewind != NULL)
 	{
-		pg_log_info("pg_rewind suspended");
-		sleep(120);
+		char	   *end;
+		long		secs;
+
+		/*
+		 * Not atoi(): it reports 0 for anything it cannot parse. This
+		 * variable used to be the literal string "true", so a caller that
+		 * has not caught up would get a silent no-op and then a timeout in
+		 * whatever was waiting to observe the suspended process -- with
+		 * nothing anywhere saying why. A negative value is worse: sleep()
+		 * takes an unsigned int, so -1 becomes a sleep of some decades.
+		 */
+		errno = 0;
+		secs = strtol(suspend_pg_rewind, &end, 10);
+		if (*suspend_pg_rewind == '\0' || *end != '\0' ||
+			errno != 0 || secs < 0 || secs > INT_MAX)
+			pg_fatal("SUSPEND_PG_REWIND must be a non-negative number of seconds, not \"%s\"",
+					 suspend_pg_rewind);
+
+		pg_log_info("pg_rewind suspended for %ld seconds", secs);
+		sleep((unsigned int) secs);
 	}
 #endif
 

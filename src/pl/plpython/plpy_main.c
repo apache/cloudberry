@@ -60,6 +60,8 @@ void PLy_handle_cancel_interrupt(void);
 
 bool PLy_enter_python_intepreter = false;
 
+static volatile sig_atomic_t plpy_cancel_callback_queued = false;
+
 void
 _PG_init(void)
 {
@@ -147,6 +149,12 @@ PLy_initialize(void)
 int
 PLy_python_cancel_handler(void *arg)
 {
+	plpy_cancel_callback_queued = false;
+
+	/* A queued callback can outlive the cancellation that scheduled it. */
+	if (!QueryCancelPending)
+		return 0;
+
 	PyErr_SetNone(PyExc_KeyboardInterrupt);
 
 	/* return -1 to indicate that we set an exception. */
@@ -166,11 +174,17 @@ PLy_handle_cancel_interrupt(void)
 	 * We can't do much in a signal handler, so just tell the Python
 	 * interpreter to call us back when possible.
 	 *
-	 * We don't bother to check the return value, as there's nothing we could
-	 * do if it fails for some reason.
+	 * A single timeout or cancel request can deliver SIGINT twice, to the
+	 * process group and to the backend itself.  Keep at most one callback
+	 * queued, so that a duplicate KeyboardInterrupt cannot abort the Python
+	 * code handling the first one.
 	 */
-	if (PLy_enter_python_intepreter)
-		(void) Py_AddPendingCall(PLy_python_cancel_handler, NULL);
+	if (PLy_enter_python_intepreter && !plpy_cancel_callback_queued)
+	{
+		plpy_cancel_callback_queued = true;
+		if (Py_AddPendingCall(PLy_python_cancel_handler, NULL) != 0)
+			plpy_cancel_callback_queued = false;
+	}
 
 	if (prev_cancel_pending_hook)
 		prev_cancel_pending_hook();

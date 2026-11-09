@@ -140,6 +140,7 @@ RUN apt-get update && \
             debhelper \
             libaprutil1-dev \
             libcgroup1 \
+            meson \
             ninja-build \
             quilt \
             unzip && \

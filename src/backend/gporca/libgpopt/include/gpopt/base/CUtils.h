@@ -269,6 +269,9 @@ public:
 	// check if given expression has a count(*)/count(Any) agg
 	static BOOL FHasCountAgg(CExpression *pexpr, CColRef **ppcrCount);
 
+	// check for an aggregate with an empty grouping set in a logical tree
+	static BOOL FHasScalarAgg(CExpression *pexpr);
+
 	// check if given expression has count matching the given column, returns the Logical GroupBy Agg above
 	static BOOL FHasCountAggMatchingColumn(const CExpression *pexpr,
 										   const CColRef *colref,
@@ -972,6 +975,14 @@ public:
 
 	// return true if given expression contains window aggregate function
 	static BOOL FHasAggWindowFunc(CExpression *pexpr);
+
+	// return true if the given aggregate function has an ORDER BY clause,
+	// e.g. string_agg(x, ',' ORDER BY x)
+	static BOOL FAggHasOrderBy(CExpression *pexprAggFunc);
+
+	// return true if the result of the aggregate function may depend on the
+	// order of its input, e.g. string_agg()
+	static BOOL FOrderSensitiveAgg(IMDId *agg_mdid);
 
 	// return true if given expression contains an ordered aggregate function
 	// that should be split to an internal gp_percentile aggregate

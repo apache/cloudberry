@@ -790,9 +790,6 @@ extern void write_log(const char *fmt,...) pg_attribute_printf(1, 2);
 
 extern void increment_command_count(void);
 
-/* default to RANDOM distribution for CREATE TABLE without DISTRIBUTED BY */
-extern bool gp_create_table_random_default_distribution;
-
 /* Functions in guc_gp.c to lookup values in enum GUCs */
 extern const char * lookup_autostats_mode_by_value(GpAutoStatsModeValue val);
 

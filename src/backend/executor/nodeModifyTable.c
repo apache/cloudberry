@@ -755,6 +755,28 @@ ExecInitUpdateProjection(ModifyTableState *mtstate,
 								  resultRelInfo->ri_newTupleSlot,
 								  &mtstate->ps);
 
+	/*
+	 * The projection copies a column from the old tuple whenever the subplan
+	 * does not assign it.  Record whether that happens at all: when the
+	 * subplan assigns every live column the old tuple is never read, and the
+	 * caller can skip fetching it.  ORCA emits such a target list for a
+	 * non-split UPDATE, which is the only way an append-optimized table can
+	 * run one, since it cannot fetch a tuple by tid.
+	 */
+	resultRelInfo->ri_projectNewNeedsOldTuple = false;
+	for (int attno = 1; attno <= relDesc->natts; attno++)
+	{
+		Form_pg_attribute attr = TupleDescAttr(relDesc, attno - 1);
+
+		if (attr->attisdropped)
+			continue;
+		if (!list_member_int(updateColnos, attno))
+		{
+			resultRelInfo->ri_projectNewNeedsOldTuple = true;
+			break;
+		}
+	}
+
 	resultRelInfo->ri_projectNewInfoValid = true;
 }
 
@@ -3971,9 +3993,6 @@ ExecModifyTable(PlanState *pstate)
 	HeapTuple	oldtuple;
 	ItemPointer tupleid;
 	bool		tuplock;
-	List	   *relinfos = NIL;
-	ListCell   *lc;
-	PartitionTupleRouting *proute = node->mt_partition_tuple_routing;
 
 	CHECK_FOR_INTERRUPTS();
 
@@ -4319,6 +4338,17 @@ ExecModifyTable(PlanState *pstate)
 						/* Use the wholerow junk attr as the old tuple. */
 						ExecForceStoreHeapTuple(oldtuple, oldSlot, false);
 					}
+					else if (!resultRelInfo->ri_projectNewNeedsOldTuple &&
+							 RelationIsNonblockRelation(resultRelInfo->ri_RelationDesc))
+					{
+						/*
+						 * The plan slot already carries every column, so the
+						 * old tuple is not read.  Skipping the fetch is what
+						 * lets append-optimized tables run a non-split UPDATE
+						 * at all: they cannot fetch a tuple by tid.
+						 */
+						ExecStoreAllNullTuple(oldSlot);
+					}
 					else
 					{
 						/* Fetch the most recent version of old tuple. */
@@ -4465,28 +4495,8 @@ ExecModifyTable(PlanState *pstate)
 	/*
 	 * Insert remaining tuples for batch insert.
 	 */
-	if (proute)
-		relinfos = estate->es_tuple_routing_result_relations;
-	else
-		relinfos = estate->es_opened_result_relations;
-
-	/* GPDB_14_MERGE_FIXME:
-	 * We have switched resultRelInfo in INSERT phase of split-update,
-	 * It may cause some issues when executing the batch insert.
-	 * But, when we pass the root resultRelInfo in the INSERT phase of
-	 * split-update, the partition route will find the target resultRelInfo,
-	 * i.e. the resultRelInfo we saved before.
-	 */
-	foreach(lc, relinfos)
-	{
-		resultRelInfo = lfirst(lc);
-		if (resultRelInfo->ri_NumSlots > 0)
-			ExecBatchInsert(node, resultRelInfo,
-							resultRelInfo->ri_Slots,
-							resultRelInfo->ri_PlanSlots,
-							resultRelInfo->ri_NumSlots,
-							estate, node->canSetTag);
-	}
+	if (estate->es_insert_pending_result_relations != NIL)
+		ExecPendingInserts(estate);
 
 	/*
 	 * We're done, but fire AFTER STATEMENT triggers before exiting.

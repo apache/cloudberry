@@ -289,7 +289,7 @@ jobs:
           # Determine ubuntu versions
           UBUNTU_INPUT="${{ github.event.inputs.ubuntu_version }}"
           if [[ "$UBUNTU_INPUT" == "all" || -z "$UBUNTU_INPUT" ]]; then
-            UBUNTU_VERSIONS_JSON='["22.04","24.04"]'
+            UBUNTU_VERSIONS_JSON='["22.04","24.04","26.04"]'
           else
             UBUNTU_VERSIONS_JSON=$(echo "$UBUNTU_INPUT" | jq -R 'split(",") | map(gsub("\\s+";"")) | map(select(length > 0)) | unique')
           fi
@@ -378,7 +378,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ubuntu_version: ['22.04', '24.04']
+        ubuntu_version: ['22.04', '24.04', '26.04']
 
     container:
       image: apache/incubator-cloudberry:cbdb-build-ubuntu${{ matrix.ubuntu_version }}-latest
@@ -706,7 +706,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ubuntu_version: ['22.04', '24.04']
+        ubuntu_version: ['22.04', '24.04', '26.04']
 
     container:
       image: apache/incubator-cloudberry:cbdb-test-ubuntu${{ matrix.ubuntu_version }}-latest

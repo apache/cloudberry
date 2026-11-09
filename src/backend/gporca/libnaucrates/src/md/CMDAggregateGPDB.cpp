@@ -33,7 +33,9 @@ CMDAggregateGPDB::CMDAggregateGPDB(CMemoryPool *mp, IMDId *mdid,
 								   CMDName *mdname, IMDId *result_type_mdid,
 								   IMDId *intermediate_result_type_mdid,
 								   BOOL fOrdered, BOOL is_splittable,
-								   BOOL is_hash_agg_capable, BOOL is_repsafe)
+								   BOOL is_hash_agg_capable, BOOL is_repsafe,
+								   BOOL is_final_func_volatile,
+								   BOOL is_order_insensitive)
 	: m_mp(mp),
 	  m_mdid(mdid),
 	  m_mdname(mdname),
@@ -42,7 +44,9 @@ CMDAggregateGPDB::CMDAggregateGPDB(CMemoryPool *mp, IMDId *mdid,
 	  m_is_ordered(fOrdered),
 	  m_is_splittable(is_splittable),
 	  m_hash_agg_capable(is_hash_agg_capable),
-	  m_is_repsafe(is_repsafe)
+	  m_is_repsafe(is_repsafe),
+	  m_is_final_func_volatile(is_final_func_volatile),
+	  m_is_order_insensitive(is_order_insensitive)
 {
 	GPOS_ASSERT(mdid->IsValid());
 }
@@ -166,6 +170,18 @@ CMDAggregateGPDB::Serialize(CXMLSerializer *xml_serializer) const
 		xml_serializer->AddAttribute(
 			CDXLTokens::GetDXLTokenStr(EdxltokenGPDBIsAggRepSafe),
 			m_is_repsafe);
+	}
+	if (m_is_final_func_volatile)
+	{
+		xml_serializer->AddAttribute(
+			CDXLTokens::GetDXLTokenStr(EdxltokenGPDBAggFinalFuncVolatile),
+			m_is_final_func_volatile);
+	}
+	if (m_is_order_insensitive)
+	{
+		xml_serializer->AddAttribute(
+			CDXLTokens::GetDXLTokenStr(EdxltokenGPDBAggOrderInsensitive),
+			m_is_order_insensitive);
 	}
 
 	xml_serializer->AddAttribute(

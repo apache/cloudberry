@@ -36,13 +36,10 @@
 #include "utils/pg_lsn.h"
 #include "utils/tuplestore.h"
 
-/*
- * In PostgreSQL, this is a dynamically loaded module, because PostgreSQL
- * doesn't want to link libpq statically into the backend.  In GPDB, we have
- * a statically linked copy of libpq in the backend, anyway, so this is
- * compiled and linked directly as part of the postgres binary, like any
- * other backend .c file.
- */
+
+PG_MODULE_MAGIC;
+
+void		_PG_init(void);
 
 struct WalReceiverConn
 {
@@ -117,7 +114,7 @@ static char *stringlist_to_identifierstr(PGconn *conn, List *strings);
  * Module initialization function
  */
 void
-libpqwalreceiver_PG_init(void)
+_PG_init(void)
 {
 	if (WalReceiverFunctions != NULL)
 		elog(ERROR, "libpqwalreceiver already loaded");

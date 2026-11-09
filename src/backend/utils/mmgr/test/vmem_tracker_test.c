@@ -22,7 +22,7 @@
  * back to the next available PG_CATCH();
  */
 static
-void _ExceptionalCondition()
+void _ExceptionalCondition(void *arg)
 {
      PG_RE_THROW();
 }
@@ -314,7 +314,7 @@ void test__VmemTracker_ReserveVmem__TrackedBytesSanity(void **state)
  * trackedBytes during runaway detector for a particular reservation.
  */
 static
-void RedZoneHandler_DetectRunawaySession_TrackedBytesSanity()
+void RedZoneHandler_DetectRunawaySession_TrackedBytesSanity(void *arg)
 {
 	assert_true(0 != trackedBytes && trackedBytes == preAllocTrackedBytes);
 }

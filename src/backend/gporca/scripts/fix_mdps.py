@@ -95,9 +95,9 @@ def processLogFile(logFileLines):
                 print("Log file contains partial plans for %s, please update this file by hand" % (current_file))
                 read_plan = 0
         elif actualSizeMatch:
-            actualSize = re.search('Actual size: (\d+)', line).group(1)
+            actualSize = re.search('Actual size: (\\d+)', line).group(1)
         elif expectedSizeMatch:
-            expectedSize = re.search('Expected size: (\d+)', line).group(1)
+            expectedSize = re.search('Expected size: (\\d+)', line).group(1)
             if not dryrun:
                 replacePlanSize(current_file, actualSize, expectedSize)
                 print("Changed plan size in %s \n" % (current_file))

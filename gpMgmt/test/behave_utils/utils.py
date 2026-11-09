@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import fileinput
 import os
-import pipes
+import shlex
 import re
 import signal
 import stat
@@ -217,6 +217,22 @@ def stop_database_if_started(context):
 def stop_database(context):
     run_gpcommand(context, 'gpstop -M fast -a')
     if context.exception:
+        # Some gpinitsystem scenarios intentionally generate pg_hba.conf that
+        # blocks gpstop's coordinator connection. Fall back to local pg_ctl so
+        # later scenarios still start from a clean cluster.
+        stop_output = '%s\n%s' % (context.error_message or '', context.stdout_message or '')
+        if 'no pg_hba.conf entry' in stop_output:
+            coordinator_data_dir = get_coordinatordatadir()
+            subprocess.check_call([
+                'bash', '-lc',
+                'source %s/cloudberry-env.sh && pg_ctl stop -m fast -D %s' % (
+                    shlex.quote(os.environ.get("GPHOME")),
+                    shlex.quote(coordinator_data_dir),
+                )
+            ])
+            context.exception = None
+            context.ret_code = 0
+            return
         raise context.exception
 
 
@@ -232,7 +248,7 @@ def stop_primary(context, content_id):
     # Thus, need to add pg_ctl to the path when ssh'ing to a demo cluster.
     subprocess.check_call(['ssh', seg_host,
                            'source %s/cloudberry-env.sh && pg_ctl stop -m fast -D %s' % (
-                               pipes.quote(os.environ.get("GPHOME")), pipes.quote(seg_data_dir))
+                               shlex.quote(os.environ.get("GPHOME")), shlex.quote(seg_data_dir))
                            ])
 
 
@@ -679,7 +695,7 @@ def modify_sql_file(file, hostport):
     if os.path.isfile(file):
         for line in fileinput.FileInput(file, inplace=1):
             if line.find("gpfdist") >= 0:
-                line = re.sub('(\d+)\.(\d+)\.(\d+)\.(\d+)\:(\d+)', hostport, line)
+                line = re.sub(r'(\d+)\.(\d+)\.(\d+)\.(\d+)\:(\d+)', hostport, line)
             print(str(re.sub('\n', '', line)))
 
 

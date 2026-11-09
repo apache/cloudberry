@@ -1042,7 +1042,7 @@ pgfdw_xact_callback(XactEvent event, void *arg)
 					entry->have_error = false;
 					break;
 				case XACT_EVENT_PRE_PREPARE:
-
+				case XACT_EVENT_PREPARE:
 					/*
 					 * FDW update is not the same as Cloudberry segments update,
 					 * doesn't need the two-phase commit.
@@ -1053,7 +1053,6 @@ pgfdw_xact_callback(XactEvent event, void *arg)
 					break;
 				case XACT_EVENT_PARALLEL_COMMIT:
 				case XACT_EVENT_COMMIT:
-				case XACT_EVENT_PREPARE:
 					/* Pre-commit should have closed the open transaction */
 					elog(ERROR, "missed cleaning up connection during pre-commit");
 					break;
@@ -1086,7 +1085,8 @@ pgfdw_xact_callback(XactEvent event, void *arg)
 			Assert(cancel_requested == NIL);
 			pgfdw_finish_pre_commit_cleanup(pending_entries);
 		}
-		else
+		else if (event != XACT_EVENT_PREPARE &&
+				 event != XACT_EVENT_PRE_PREPARE)
 		{
 			Assert(event == XACT_EVENT_PARALLEL_ABORT ||
 				   event == XACT_EVENT_ABORT);
@@ -1100,7 +1100,8 @@ pgfdw_xact_callback(XactEvent event, void *arg)
 	 * transaction.  (Note: if we are here during PRE_COMMIT or PRE_PREPARE,
 	 * this saves a useless scan of the hashtable during COMMIT or PREPARE.)
 	 */
-	xact_got_connection = false;
+	if (event != XACT_EVENT_PREPARE && event != XACT_EVENT_PRE_PREPARE)
+		xact_got_connection = false;
 
 	/* Also reset cursor numbering for next transaction */
 	cursor_number = 0;

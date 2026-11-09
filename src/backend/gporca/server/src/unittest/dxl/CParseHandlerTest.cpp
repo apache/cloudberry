@@ -117,6 +117,7 @@ const CHAR *CParseHandlerTest::m_rgszStatsDXLFileNames[] = {
 
 // files for the metadata tests
 const CHAR *CParseHandlerTest::m_rgszMetadataDXLFileNames[] = {
+	"../data/dxl/parse_tests/AggregateFinalFuncVolatile.xml",
 	"../data/dxl/parse_tests/q26-Metadata.xml",
 };
 

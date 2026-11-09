@@ -19,12 +19,6 @@ def impl(context):
         fp.write("full:5: 1164848/1371715 kB (84%), 0/1 tablespace (...t1/demoDataDir0/base/16384/40962)\n")
         fp.write("incremental:6: 1/1371875 kB (1%)")
 
-@then('a sample gprecoverseg.lock directory is created in coordinator_data_directory')
-@given('a sample gprecoverseg.lock directory is created in coordinator_data_directory')
-def impl(context):
-    gprecoverseg_lock_dir = os.path.join(get_coordinatordatadir() + '/gprecoverseg.lock')
-    os.mkdir(gprecoverseg_lock_dir)
-
 @then('a sample {lock_file} directory is created using the background pid in coordinator_data_directory')
 @given('a sample {lock_file} directory is created using the background pid in coordinator_data_directory')
 def impl(context, lock_file):
@@ -76,7 +70,7 @@ def impl(context, recovery_types, contents):
     for index, seg_to_display in enumerate(segments_to_display):
         hostname = seg_to_display.getSegmentHostName()
         port = seg_to_display.getSegmentPort()
-        expected_msg = "{}[ \t]+{}[ \t]+{}[ \t]+[0-9]+[ \t]+[0-9]+[ \t]+[0-9]+\%".format(hostname, port,
+        expected_msg = "{}[ \t]+{}[ \t]+{}[ \t]+[0-9]+[ \t]+[0-9]+[ \t]+[0-9]+\\%".format(hostname, port,
                                                                                          recovery_types[index])
         check_stdout_msg(context, expected_msg)
 

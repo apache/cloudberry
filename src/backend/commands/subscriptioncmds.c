@@ -672,16 +672,17 @@ CreateSubscription(ParseState *pstate, CreateSubscriptionStmt *stmt,
 		opts.synchronous_commit = "off";
 
 	conninfo = stmt->conninfo;
+	/*
+	 * conninfo can be an empty string, but the serialization
+	 * doesn't distinguish an empty string from NULL. The
+	 * code that executes the command in't prepared for a NULL.
+	 */
+	if (conninfo == NULL)
+		conninfo = pstrdup("");
 	publications = stmt->publication;
 
 	/* Load the library providing us libpq calls. */
-	/*
-	 * In GPDB, we build libpqwalreceiver functions, as well as a copy of
-	 * libpq into the backend itself, to support QD-QE communication. See
-	 * src/backend/libpq.
-	 */
-	if (!WalReceiverFunctions)
-		libpqwalreceiver_PG_init();
+	load_file("libpqwalreceiver", false);
 
 	/* Check the connection info string. */
 	walrcv_check_conninfo(conninfo, opts.passwordrequired && !superuser());
@@ -894,13 +895,7 @@ AlterSubscription_refresh(Subscription *sub, bool copy_data,
 	bool		must_use_password;
 
 	/* Load the library providing us libpq calls. */
-	/*
-	 * In GPDB, we build libpqwalreceiver functions, as well as a copy of
-	 * libpq into the backend itself, to support QD-QE communication. See
-	 * src/backend/libpq.
-	 */
-	if (!WalReceiverFunctions)
-		libpqwalreceiver_PG_init();
+	load_file("libpqwalreceiver", false);
 
 	/* Try to connect to the publisher. */
 	must_use_password = !superuser_arg(sub->owner) && sub->passwordrequired;
@@ -1280,13 +1275,8 @@ AlterSubscription(ParseState *pstate, AlterSubscriptionStmt *stmt,
 
 		case ALTER_SUBSCRIPTION_CONNECTION:
 			/* Load the library providing us libpq calls. */
-			/*
-			 * In GPDB, we build libpqwalreceiver functions, as well as a copy of
-			 * libpq into the backend itself, to support QD-QE communication. See
-			 * src/backend/libpq.
-			 */
-			if (!WalReceiverFunctions)
-				libpqwalreceiver_PG_init();
+			load_file("libpqwalreceiver", false);
+
 			/* Check the connection info string. */
 			walrcv_check_conninfo(stmt->conninfo,
 								  sub->passwordrequired && !superuser_arg(sub->owner));
@@ -1750,13 +1740,8 @@ DropSubscription(DropSubscriptionStmt *stmt, bool isTopLevel)
 	 * doing the database operations we won't be able to rollback dropped
 	 * slot.
 	 */
-	/*
-	 * In GPDB, we build libpqwalreceiver functions, as well as a copy of
-	 * libpq into the backend itself, to support QD-QE communication. See
-	 * src/backend/libpq.
-	 */
-	if (!WalReceiverFunctions)
-		libpqwalreceiver_PG_init();
+
+	load_file("libpqwalreceiver", false);
 
 	wrconn = walrcv_connect(conninfo, true, must_use_password,
 							subname, &err);
@@ -1840,14 +1825,7 @@ ReplicationSlotDropAtPubNode(WalReceiverConn *wrconn, char *slotname, bool missi
 
 	Assert(wrconn);
 
-	/*
-	 * Cloudberry: libpqwalreceiver is linked directly into the backend
-	 * (not a separate shared library), so call libpqwalreceiver_PG_init()
-	 * directly instead of load_file(). Guard against double-init since
-	 * callers may have already initialized it.
-	 */
-	if (WalReceiverFunctions == NULL)
-		libpqwalreceiver_PG_init();
+	load_file("libpqwalreceiver", false);
 
 	initStringInfo(&cmd);
 	appendStringInfo(&cmd, "DROP_REPLICATION_SLOT %s WAIT", quote_identifier(slotname));

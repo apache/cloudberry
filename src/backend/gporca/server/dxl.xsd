@@ -412,6 +412,7 @@
 		<xsd:attributeGroup ref="dxl:MetadataIdAttributes"/>
 		<xsd:attribute name="Name" type="xsd:string" use="required"/>
 		<xsd:attribute name="IsOrdered" type="xsd:boolean" use="optional"/>
+		<xsd:attribute name="FinalFuncVolatile" type="xsd:boolean" use="optional"/>
 	</xsd:complexType>	
 	
 	<xsd:complexType name="MDGPDBTriggerType">

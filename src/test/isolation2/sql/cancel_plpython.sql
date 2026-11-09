@@ -75,3 +75,47 @@ FROM pg_stat_activity WHERE query LIKE 'select pynestsleep2()%' ORDER BY pid LIM
 7q:
 -- end_ignore
 
+-- A timeout must deliver only one KeyboardInterrupt and let its handler
+-- finish.  The handler makes a call so that, on any Python version, a
+-- duplicate callback would run inside it.
+CREATE OR REPLACE FUNCTION pysleephandler() RETURNS text AS $$
+import time
+try:
+    while True:
+        time.sleep(0.1)
+except KeyboardInterrupt:
+    time.sleep(0.1)
+    GD['stage'] = 'handled'
+    raise
+$$ LANGUAGE plpython3u;
+
+CREATE OR REPLACE FUNCTION pystage() RETURNS text AS $$
+return GD.get('stage')
+$$ LANGUAGE plpython3u;
+
+SET statement_timeout = '1s';
+SELECT pysleephandler();
+RESET statement_timeout;
+SELECT pystage();
+
+-- Once a KeyboardInterrupt has been raised, a later SIGINT must raise
+-- another one.
+CREATE OR REPLACE FUNCTION pycancelhandler() RETURNS text AS $$
+import os
+import signal
+try:
+    os.kill(os.getpid(), signal.SIGINT)
+    while True:
+        pass
+except KeyboardInterrupt:
+    pass
+try:
+    os.kill(os.getpid(), signal.SIGINT)
+except KeyboardInterrupt:
+    GD['stage'] = 'cancelled twice'
+    raise
+GD['stage'] = 'second cancel ignored'
+$$ LANGUAGE plpython3u;
+
+SELECT pycancelhandler();
+SELECT pystage();

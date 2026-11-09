@@ -31,6 +31,7 @@
 
 extern char *iceberg_default_catalog;
 extern char *iceberg_default_volume;
+extern int	iceberg_batch_rows;
 
 extern void pg_iceberg_define_gucs(void);
 

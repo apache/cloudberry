@@ -29,6 +29,7 @@
 #include "gpopt/operators/CPhysicalIndexOnlyScan.h"
 #include "gpopt/operators/CPhysicalIndexScan.h"
 #include "gpopt/operators/CPhysicalParallelTableScan.h"
+#include "gpopt/operators/CPhysicalParallelAppendTableScan.h"
 #include "gpopt/operators/CPhysicalMotion.h"
 #include "gpopt/operators/CPhysicalMotionBroadcast.h"
 #include "gpopt/operators/CPhysicalPartitionSelector.h"
@@ -1823,8 +1824,12 @@ CCostModelGPDB::GetCommonIndexData(T *ptr, ULONG &ulIndexKeys,
 	const IMDIndex *pmdindex =
 		md_accessor->RetrieveIndex(ptr->Pindexdesc()->MDId());
 
-	pdrgpcrIndexColumns = CXformUtils::PdrgpcrIndexKeys(
-		mp, ptr->PdrgpcrOutput(), pmdindex, pmdrel);
+	// Costing has always weighed every column stored in the index (keys and
+	// INCLUDE columns alike) in ComputeUnusedIndexWeight; keep that behavior
+	// here so plan costs are unaffected by PdrgpcrIndexKeys becoming key-only.
+	pdrgpcrIndexColumns = CXformUtils::PdrgpcrIndexColumns(
+		mp, ptr->PdrgpcrOutput(), pmdindex, pmdrel,
+		CXformUtils::EicKeyAndIncluded);
 
 	stats = ptr->PstatsBaseTable();
 }
@@ -2385,7 +2390,9 @@ CCostModelGPDB::CostScan(CMemoryPool *,	 // mp
 				COperator::EopPhysicalDynamicTableScan == op_id ||
 				COperator::EopPhysicalForeignScan == op_id ||
 				COperator::EopPhysicalDynamicForeignScan == op_id ||
-				COperator::EopPhysicalParallelTableScan == op_id);
+				COperator::EopPhysicalParallelTableScan == op_id ||
+				COperator::EopPhysicalAppendTableScan == op_id ||
+				COperator::EopPhysicalParallelAppendTableScan == op_id);
 
 	const CDouble dInitScan =
 		pcmgpdb->GetCostModelParams()
@@ -2408,6 +2415,8 @@ CCostModelGPDB::CostScan(CMemoryPool *,	 // mp
 		case COperator::EopPhysicalForeignScan:
 		case COperator::EopPhysicalDynamicForeignScan:
 		case COperator::EopPhysicalParallelTableScan:
+		case COperator::EopPhysicalAppendTableScan:
+		case COperator::EopPhysicalParallelAppendTableScan:
 			// table scan cost considers only retrieving tuple cost,
 			// since we scan the entire table here, the cost is correlated with table rows and table width,
 			// since Scan's parent operator may be a filter that will be pushed into Scan node in GPDB plan,
@@ -2440,12 +2449,22 @@ CCostModelGPDB::CostParallelTableScan(CMemoryPool *mp,
 	GPOS_ASSERT(nullptr != pci);
 
 	COperator *pop = exprhdl.Pop();
-	GPOS_ASSERT(COperator::EopPhysicalParallelTableScan == pop->Eopid());
+	GPOS_ASSERT(COperator::EopPhysicalParallelTableScan == pop->Eopid() ||
+		    COperator::EopPhysicalParallelAppendTableScan == pop->Eopid());
 
-	// Get the parallel table scan operator
-	CPhysicalParallelTableScan *popParallelScan =
-		CPhysicalParallelTableScan::PopConvert(pop);
-	ULONG ulWorkers = popParallelScan->UlParallelWorkers();
+	// Get the parallel table scan operatora
+	ULONG ulWorkers = 0;
+
+	if (COperator::EopPhysicalParallelTableScan == pop->Eopid())
+	{
+		CPhysicalParallelTableScan *popParallelScan = CPhysicalParallelTableScan::PopConvert(pop);
+		ulWorkers = popParallelScan->UlParallelWorkers();
+	}
+	else if(COperator::EopPhysicalParallelAppendTableScan == pop->Eopid())
+	{
+		CPhysicalParallelAppendTableScan *popParallelScan = CPhysicalParallelAppendTableScan::PopConvert(pop);
+		ulWorkers = popParallelScan->UlParallelWorkers();
+	}
 
 	// If only 1 worker, use regular scan cost
 	if (ulWorkers <= 1)
@@ -2609,11 +2628,13 @@ CCostModelGPDB::Cost(
 		case COperator::EopPhysicalDynamicTableScan:
 		case COperator::EopPhysicalForeignScan:
 		case COperator::EopPhysicalDynamicForeignScan:
+		case COperator::EopPhysicalAppendTableScan:
 		{
 			return CostScan(m_mp, exprhdl, this, pci);
 		}
 
 		case COperator::EopPhysicalParallelTableScan:
+		case COperator::EopPhysicalParallelAppendTableScan:
 		{
 			return CostParallelTableScan(m_mp, exprhdl, this, pci);
 		}

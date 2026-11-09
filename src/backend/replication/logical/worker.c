@@ -4480,13 +4480,6 @@ void
 InitializeApplyWorker(void)
 {
 	MemoryContext oldctx;
-	/*
-	 * In GPDB, we build libpqwalreceiver functions, as well as a copy of
-	 * libpq into the backend itself, to support QD-QE communication. See
-	 * src/backend/libpq.
-	 */
-	if (!WalReceiverFunctions)
-		libpqwalreceiver_PG_init();
 
 	/* Run as replica session replication role. */
 	SetConfigOption("session_replication_role", "replica",
@@ -4587,11 +4580,9 @@ ApplyWorkerMain(Datum main_arg)
 	MyLogicalRepWorker->last_send_time = MyLogicalRepWorker->last_recv_time =
 		MyLogicalRepWorker->reply_time = GetCurrentTimestamp();
 
-	/*
-	 * Cloudberry: libpqwalreceiver is linked directly into the backend
-	 * (not a separate shared library), so skip load_file() and let
-	 * InitializeApplyWorker() call libpqwalreceiver_PG_init() instead.
-	 */
+	/* Load the libpq-specific functions */
+	load_file("libpqwalreceiver", false);
+
 	InitializeApplyWorker();
 
 	/*

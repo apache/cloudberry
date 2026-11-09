@@ -36,7 +36,7 @@ try:
 except:
     import subprocess
 import threading
-import pipes  # for shell-quoting, pipes.quote()
+import shlex  # for shell-quoting, shlex.quote()
 import time
 import os
 from collections import defaultdict
@@ -78,7 +78,7 @@ Mirror  Location: %s' % (self.getName(), self.host, self.port, self.datname,
                                           self.ploc, self.mloc)
 
     def wait_for_wal_sync(self):
-        cmd = "PGOPTIONS='-c gp_role=utility' psql -h %s -p %s -d %s -t -A -c \"SELECT pg_current_wal_lsn() AS master_wal, replay_lsn AS standby_wal, pg_current_wal_lsn() = replay_lsn AS are_equal FROM pg_stat_replication;\"" % (self.host, self.port, pipes.quote(self.datname))
+        cmd = "PGOPTIONS='-c gp_role=utility' psql -h %s -p %s -d %s -t -A -c \"SELECT pg_current_wal_lsn() AS master_wal, replay_lsn AS standby_wal, pg_current_wal_lsn() = replay_lsn AS are_equal FROM pg_stat_replication;\"" % (self.host, self.port, shlex.quote(self.datname))
         while True:
             try:
                 output = subprocess.check_output(cmd, shell=True).decode().strip().split("\n")

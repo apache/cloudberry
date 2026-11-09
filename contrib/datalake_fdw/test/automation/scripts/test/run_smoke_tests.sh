@@ -37,9 +37,10 @@ dl_load_config
 # category:services   -- an empty service list means "no external dependency"
 CATEGORY_SERVICES="
 iceberg_am:
+format_parquet:
 "
 
-categories="${CATEGORIES:-iceberg_am}"
+categories="${CATEGORIES:-iceberg_am format_parquet}"
 
 services_for()
 {
@@ -74,8 +75,16 @@ service_is_available()
 run_iceberg_am()
 {
 	# These cases are expected-output cases, so pg_regress runs them; the module
-	# Makefile already points it at sqlrepo/smoke/iceberg_am.
+	# Makefile already points it at sqlrepo/smoke/iceberg_am.  That target also
+	# runs format_parquet, so running both categories here runs it twice --
+	# which is what "make test CATEGORIES=format_parquet" has to keep working.
 	make -C "$module_dir" USE_PGXS=1 installcheck
+}
+
+run_format_parquet()
+{
+	# pg_regress takes one --inputdir, so each category is a run of its own.
+	make -C "$module_dir" USE_PGXS=1 installcheck-format-parquet
 }
 
 failed=0
@@ -105,6 +114,7 @@ for category in $categories; do
 	dl_info "RUN  $category"
 	case "$category" in
 		iceberg_am) run_iceberg_am ;;
+		format_parquet) run_format_parquet ;;
 		*) dl_warn "category \"$category\" has no runner"; false ;;
 	esac
 

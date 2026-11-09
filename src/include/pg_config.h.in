@@ -880,6 +880,9 @@
    (--enable-link-postgres-with-shared) */
 #undef USE_LINK_POSTGRES_WITH_SHARED
 
+/* Define to 1 to build with COPY TO/FROM PROGRAM support. (--with-copy-program) */
+#undef USE_COPY_PROGRAM
+
 /* Define to 1 to build with LLVM based JIT support. (--with-llvm) */
 #undef USE_LLVM
 
@@ -888,9 +891,6 @@
 
 /* Define to 1 to build with MDB locales. (--with-mdblocales) */
 #undef USE_MDBLOCALES
-
-/* Define to 1 to build with Mapreduce capabilities (--enable-mapreduce) */
-#undef USE_MAPREDUCE
 
 /* Define to select named POSIX semaphores. */
 #undef USE_NAMED_POSIX_SEMAPHORES

@@ -43,6 +43,8 @@
 #ifndef DL_ERR_H
 #define DL_ERR_H
 
+#include <stddef.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -55,6 +57,9 @@ typedef enum DlErrCode {
 	DL_ERR_ALREADY_EXISTS,
 	DL_ERR_IO,
 	DL_ERR_INTERNAL,
+	DL_ERR_OUT_OF_MEMORY,		/* the memory limit, not the machine: Arrow's
+								 * allocations are reserved with the vmem
+								 * tracker, and this is what it refused */
 } DlErrCode;
 
 #define DL_ERR_FIELD_LEN	128
@@ -94,6 +99,14 @@ extern void dl_error_set(DlErrCode code, const char *operation,
 /* Record the implementation's own numeric code, when it reports one. */
 extern void dl_error_set_remote_code(int remote_code);
 
+/*
+ * Remember a value that must never be shown.  Every error recorded afterwards
+ * has it replaced with "***", whichever layer produced the text -- a backend,
+ * an SDK, or an exception nobody expected.  NULL and empty values are ignored;
+ * there is no minimum length.
+ */
+extern void dl_error_add_secret(const char *value);
+
 /* Record a stack from the failing implementation. */
 extern void dl_error_set_stack(const char *stack);
 
@@ -109,9 +122,31 @@ extern const char *dl_err_message(DlErrCode code);
  * when the session asked for log-level detail -- a stack is for whoever is
  * debugging the implementation, not for whoever ran the statement.
  *
- * Detail recorded against a different code is ignored rather than misattributed.
+ * Detail recorded against a different code is ignored rather than misattributed,
+ * and reporting consumes what it used.  Matching on the code alone cannot tell
+ * this failure's detail from an earlier failure's with the same code, so the
+ * record is not left behind for the next one to inherit.
  */
 extern void dl_error_report(int elevel, DlErrCode code, const char *prefix);
+
+/*
+ * Take the PostgreSQL error that DL_WRAP_END caught off PostgreSQL's error
+ * stack, copying its message into `message` for the C++ exception that carries
+ * it on.  `context` is the memory context the wrapped code ran in, and is
+ * current again afterwards.  Never raises.
+ */
+extern void dl_error_take_pg_error(void *context, char *message,
+								   size_t message_size);
+
+/*
+ * An argument that was not what it had to be.  A caller reporting the code
+ * alone would say "invalid parameter" about a call the user never wrote, so
+ * this names the entry point instead -- there is no user error to describe,
+ * only which one of ours was called wrongly.
+ */
+#define DL_ARG_ERROR(operation) \
+	(dl_error_set(DL_ERR_INVALID_OPTION, (operation), NULL, \
+				  "a required argument was missing"), DL_ERR_INVALID_OPTION)
 
 #ifdef __cplusplus
 }

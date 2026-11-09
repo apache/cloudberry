@@ -90,7 +90,7 @@ test: transactions
 # ----------
 # Another group of parallel tests
 # ----------
-test: brin gin gist spgist privileges init_privs security_label collate matview lock replica_identity rowsecurity object_address tablesample groupingsets drop_operator password identity generated join_hash appendonly_sample aocs_sample
+test: brin gin gist spgist privileges init_privs genfile_privileges security_label collate matview lock replica_identity rowsecurity object_address tablesample groupingsets drop_operator password identity generated join_hash appendonly_sample aocs_sample
 
 # ----------
 # Additional BRIN tests
@@ -107,7 +107,7 @@ test: task
 # psql depends on create_am
 # amutils depends on geometry, create_index_spgist, hash_index, brin
 # ----------
-test: create_table_like alter_generic alter_operator misc async dbsize misc_functions sysviews tsrf tid tidscan tidrangescan collate.icu.utf8 incremental_sort
+test: create_table_like alter_generic alter_operator misc async dbsize merge misc_functions sysviews tsrf tid tidscan tidrangescan collate.icu.utf8 incremental_sort
 # test: incremental_matview
 
 # ----------
@@ -202,6 +202,7 @@ test: constraints_check
 
 # test of tag
 # test: tag
+test: orca_agg_order_by
 
 # run tablespace test at the end because it drops the tablespace created during
 # setup that other tests may use.

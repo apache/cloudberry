@@ -20,12 +20,14 @@
 #include "funcapi.h"
 #include "libpq-fe.h"
 #include "libpq-int.h"
+#include "catalog/pg_proc.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "nodes/pg_list.h"
 #include "pgstat.h"
 #include "storage/proc.h"
 #include "storage/procarray.h"
+#include "utils/acl.h"
 #include "utils/builtins.h"
 
 #include "cdb/cdbdisp_query.h"
@@ -33,6 +35,8 @@
 #include "cdb/cdbutil.h"
 #include "cdb/cdbvars.h"
 #include "utils/elog.h"
+#include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
 #include "utils/palloc.h"
 
 /* ----------
@@ -229,6 +233,26 @@ gp_log_backend_memory_contexts(PG_FUNCTION_ARGS)
 	int32			resultCount = 0;
 	List			*dispatchedSegments = NIL;
 	List			*returnedSegments = NIL;
+	AclResult		aclresult;
+
+	/*
+	 * The segments end up calling pg_log_backend_memory_contexts() directly
+	 * for every backend of the target session, which bypasses the EXECUTE
+	 * privilege of that function - its only protection: it is revoked from
+	 * PUBLIC by default and can be granted to other roles.  Require the same
+	 * privilege here, on the coordinator and on every segment, so that this
+	 * wrapper cannot be used to signal the backends of other sessions by a
+	 * role that may not call pg_log_backend_memory_contexts() itself.
+	 */
+	aclresult = object_aclcheck(ProcedureRelationId,
+								F_PG_LOG_BACKEND_MEMORY_CONTEXTS, GetUserId(),
+								ACL_EXECUTE);
+	if (aclresult != ACLCHECK_OK)
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("permission denied for function %s",
+						get_func_name(F_PG_LOG_BACKEND_MEMORY_CONTEXTS)),
+				 errhint("gp_log_backend_memory_contexts() requires EXECUTE privilege on pg_log_backend_memory_contexts(integer).")));
 
 	if (Gp_role == GP_ROLE_UTILITY)
 	{

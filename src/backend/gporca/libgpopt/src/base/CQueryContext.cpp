@@ -240,8 +240,8 @@ CQueryContext::PqcGenerate(CMemoryPool *mp, CExpression *pexpr,
 		GPOS_NEW(mp) CEnfdRewindability(prs, CEnfdRewindability::ErmSatisfy);
 	CEnfdPartitionPropagation *pepp = GPOS_NEW(mp)
 		CEnfdPartitionPropagation(ppps, CEnfdPartitionPropagation::EppmSatisfy);
-
-	// Required CTEs are obtained from the CTEInfo global information in the optimizer context
+  
+  	// Required CTEs are obtained from the CTEInfo global information in the optimizer context
 	CCTEReq *pcter = poptctxt->Pcteinfo()->PcterProducers(mp);
 
 	// NB: Partition propagation requirements are not initialized here.  They are

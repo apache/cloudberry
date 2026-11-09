@@ -76,7 +76,10 @@ CJoinStatsProcessor::JoinHistograms(
 		// the join cardinality to be the max of the two rows.
 		// In other words, the scale factor is equivalent to the
 		// min of the two rows.
-		*scale_factor = std::min(num_rows1, num_rows2);
+		// Correlated inputs may have fewer than one estimated row. Keep
+		// selectivity at most one even when a computed column has no stats.
+		*scale_factor =
+			std::max(CStatistics::MinRows, std::min(num_rows1, num_rows2));
 	}
 	else if (CHistogram::JoinPredCmpTypeIsSupported(stats_cmp_type))
 	{
@@ -474,8 +477,12 @@ CJoinStatsProcessor::CalcJoinCardinality(
 {
 	GPOS_ASSERT(nullptr != stats_config);
 	GPOS_ASSERT(nullptr != join_conds_scale_factors);
+	// Correlated inputs can have fractional row estimates. The NDV-based
+	// upper bound must still allow a scale factor of one: a join predicate
+	// cannot increase cardinality above the Cartesian product.
 	CDouble limit_for_result_scale_factor(
-		std::max(left_num_rows.Get(), right_num_rows.Get()));
+		std::max(CStatistics::MinRows.Get(),
+				 std::max(left_num_rows.Get(), right_num_rows.Get())));
 
 	CDouble scale_factor = CScaleFactorUtils::CumulativeJoinScaleFactor(
 		mp, stats_config, join_conds_scale_factors,

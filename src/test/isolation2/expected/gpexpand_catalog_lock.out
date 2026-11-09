@@ -247,3 +247,41 @@ ROLLBACK
 
 10: end;
 END
+
+--
+-- the catalog lock and the version bump are reserved to superusers
+--
+
+create role regress_gpexpand_user;
+CREATE
+
+-- a regular role is denied at the privilege layer ...
+40: set session authorization regress_gpexpand_user;
+SET
+40: select gp_expand_lock_catalog();
+ERROR:  permission denied for function gp_expand_lock_catalog
+40: select gp_expand_bump_version();
+ERROR:  permission denied for function gp_expand_bump_version
+40: reset session authorization;
+RESET
+
+-- ... and, with EXECUTE granted as on a cluster upgraded without initdb,
+-- by the functions themselves
+grant execute on function gp_expand_lock_catalog() to regress_gpexpand_user;
+GRANT
+grant execute on function gp_expand_bump_version() to regress_gpexpand_user;
+GRANT
+40: set session authorization regress_gpexpand_user;
+SET
+40: select gp_expand_lock_catalog();
+ERROR:  must be superuser to lock the catalog for gpexpand
+40: select gp_expand_bump_version();
+ERROR:  must be superuser to bump the gpexpand version
+40q: ... <quitting>
+
+revoke execute on function gp_expand_lock_catalog() from regress_gpexpand_user;
+REVOKE
+revoke execute on function gp_expand_bump_version() from regress_gpexpand_user;
+REVOKE
+drop role regress_gpexpand_user;
+DROP

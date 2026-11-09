@@ -26,6 +26,7 @@
 #include "catalog/pg_statistic.h"
 #include "cdb/cdbutil.h"
 #include "cdb/cdbvars.h"
+#include "miscadmin.h"
 #include "postmaster/fts.h"
 #include "storage/lock.h"
 #include "utils/builtins.h"
@@ -79,10 +80,18 @@ GetGpExpandVersion(void)
  * a gpexpand version change also prevent concurrent changes to catalog
  * during gpexpand (see gp_expand_lock_catalog)
  *
+ * Only superusers may call it: a version change makes every other session
+ * rebuild its view of the cluster and disconnects the sessions that hold
+ * temporary tables.
  */
 Datum
 gp_expand_bump_version(PG_FUNCTION_ARGS)
 {
+	if (!superuser())
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("must be superuser to bump the gpexpand version")));
+
 	*gp_expand_version += 1;
 	PG_RETURN_VOID();
 }
@@ -90,11 +99,18 @@ gp_expand_bump_version(PG_FUNCTION_ARGS)
 /*
  * Lock the catalog lock in exclusive mode.
  *
- * This should only be called by gpexpand.
+ * This should only be called by gpexpand, and is therefore restricted to
+ * superusers: while the lock is held, every catalog change in the cluster
+ * fails (see gp_expand_protect_catalog_changes).
  */
 Datum
 gp_expand_lock_catalog(PG_FUNCTION_ARGS)
 {
+	if (!superuser())
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("must be superuser to lock the catalog for gpexpand")));
+
 	(void) LockAcquire(&gp_expand_locktag, AccessExclusiveLock, false, false);
 
 	PG_RETURN_VOID();

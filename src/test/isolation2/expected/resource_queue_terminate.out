@@ -254,6 +254,76 @@ END
  1             | 0             
 (1 row)
 
+--
+-- Scenario 7: Terminate a backend that is waiting inside a subtransaction.
+--
+-- The wait has to be cancelled before abort processing releases any portal of
+-- this backend. Otherwise subtransaction cleanup drops the waiting portal,
+-- which releases the LOCALLOCK and PROCLOCK that the wait still points to, and
+-- the top-level cleanup then works on freed lock table entries.
+--
+11:SET ROLE role_terminate;
+SET
+11:BEGIN;
+BEGIN
+11:DECLARE cs9 CURSOR FOR SELECT 0;
+DECLARE
+12:SET ROLE role_terminate;
+SET
+12:BEGIN;
+BEGIN
+12:SAVEPOINT sp;
+SAVEPOINT
+12&:SELECT 331767;  <waiting ...>
+
+-- Suspend the terminated backend at the start of the top-level abort, which is
+-- reached after the subtransaction has been cleaned up.
+0:SELECT gp_inject_fault('transaction_abort_failure', 'suspend', '', '', '', 1, 1, 0, c.dbid, a.sess_id) FROM gp_segment_configuration c, pg_stat_activity a WHERE c.content = -1 AND c.role = 'p' AND a.query = 'SELECT 331767;';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+0:SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE query='SELECT 331767;';
+ pg_terminate_backend 
+----------------------
+ t                    
+(1 row)
+0:SELECT gp_wait_until_triggered_fault('transaction_abort_failure', 1, dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+
+-- Sanity check: Ensure that the wait has already been cancelled, so that no
+-- stale wait refers to the lock entries released by subtransaction cleanup.
+0:SELECT rsqcountlimit, rsqcountvalue, rsqwaiters FROM pg_resqueue_status WHERE rsqname = 'rq_terminate';
+ rsqcountlimit | rsqcountvalue | rsqwaiters 
+---------------+---------------+------------
+ 1             | 1             | 0          
+(1 row)
+
+0:SELECT gp_inject_fault('transaction_abort_failure', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+12<:  <... completed>
+FATAL:  terminating connection due to administrator command
+server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+11:END;
+END
+
+-- Sanity check: Ensure that the resource queue is now empty.
+0:SELECT rsqcountlimit, rsqcountvalue, rsqwaiters FROM pg_resqueue_status WHERE rsqname = 'rq_terminate';
+ rsqcountlimit | rsqcountvalue | rsqwaiters 
+---------------+---------------+------------
+ 1             | 0             | 0          
+(1 row)
+
 -- Cleanup
 0:DROP ROLE role_terminate;
 DROP

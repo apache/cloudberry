@@ -28,7 +28,7 @@ def create_cluster(context, with_mirrors=True):
     cd ../gpAux/gpdemo; \
         export DEMO_PORT_BASE={port_base} && \
         export NUM_PRIMARY_MIRROR_PAIRS={num_primary_mirror_pairs} && \
-        export WITH_MIRRORS={with_mirrors} && \A
+        export WITH_MIRRORS={with_mirrors} && \
         ./demo_cluster.sh -d && ./demo_cluster.sh -c && \
         ./demo_cluster.sh
     """.format(port_base=os.getenv('PORT_BASE', 15432),
@@ -87,7 +87,7 @@ def step_impl(context):
 
     # NOTE that these commands are manually escaped; beware when adding dollar
     # signs or double-quotes!
-    cmd = "ps aux | grep '[p]ostgres .* %s' | awk '{print \$2}' | xargs kill -9" % datadir
+    cmd = r"ps aux | grep '[p]ostgres .* %s' | awk '{print \$2}' | xargs kill -9" % datadir
     cmd = 'ssh %s "%s"' % (host, cmd)
     run_command(context, cmd)
 
@@ -112,7 +112,7 @@ def step_impl(context):
     )
 
     if result_cursor.rowcount != context.current_cluster_size:
-        raise Exception("expected all %d primaries to have replication slots, only %d have slots" % (context.current_cluster_size, results.rowcount))
+        raise Exception("expected all %d primaries to have replication slots, only %d have slots" % (context.current_cluster_size, result_cursor.rowcount))
 
     for content_id, result in enumerate(result_cursor.fetchall()):
         pg_rep_slot = result[0]

@@ -153,6 +153,8 @@ bool		enable_parallel_semi_join = true;
 bool		enable_parallel_dedup_semi_join = true;
 bool		enable_parallel_dedup_semi_reverse_join = true;
 bool		parallel_query_use_streaming_hashagg = false;
+bool		optimizer_enable_child_opt_memo = true;
+bool		optimizer_verify_child_opt_memo = false;
 bool		gp_use_streaming_hashagg = true;
 bool		optimizer_use_streaming_hashagg = true;
 int			gp_appendonly_insert_files = 0;
@@ -170,7 +172,7 @@ bool		Debug_datumstream_block_read_check_integrity = false;
 bool		Debug_datumstream_block_write_check_integrity = false;
 bool		Debug_datumstream_read_print_varlena_info = false;
 bool		Debug_datumstream_write_use_small_initial_buffers = false;
-bool		gp_create_table_random_default_distribution = true;
+bool		gp_create_table_random_default_distribution = false;
 bool		gp_allow_non_uniform_partitioning_ddl = true;
 bool		gp_print_create_gang_time = false;
 int			dtx_phase2_retry_second = 0;
@@ -333,6 +335,7 @@ bool		optimizer_enable_motion_gather;
 bool		optimizer_enable_motion_redistribute;
 bool		optimizer_enable_sort;
 bool		optimizer_enable_materialize;
+bool		optimizer_enable_parallel_append;
 bool		optimizer_enable_partition_propagation;
 bool		optimizer_enable_partition_selection;
 bool		optimizer_enable_outerjoin_rewrite;
@@ -428,6 +431,7 @@ bool		optimizer_enable_range_predicate_dpe;
 bool		optimizer_enable_use_distribution_in_dqa;
 bool		optimizer_enable_push_join_below_union_all;
 bool		optimizer_enable_orderedagg;
+bool		optimizer_enable_presorted_agg;
 bool		optimizer_disable_dynamic_table_scan;
 
 /* Analyze related GUCs for Optimizer */
@@ -2273,6 +2277,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"optimizer_enable_parallel_append", PGC_USERSET, DEVELOPER_OPTIONS,
+		 gettext_noop("Enable parallel append for seq/bitmap/index scan in partition table."),
+		 NULL,
+		 GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_parallel_append,
+		false,
+		NULL, NULL, NULL
+	},
+	{
 		{"optimizer_enable_partition_propagation", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Enable plans with Partition Propagation operators in the optimizer."),
 			NULL,
@@ -3061,6 +3075,18 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"optimizer_enable_presorted_agg", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enable sorting the input of order sensitive aggregates "
+						 "with ORDER BY, e.g. string_agg(), on the segments, for "
+						 "aggregates without GROUP BY."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_presorted_agg,
+		true,
+		NULL, NULL, NULL
+	},
+	{
 		{"optimizer_enable_eageragg", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Enable Eager Agg transform for pushing aggregate below an innerjoin."),
 			NULL,
@@ -3236,6 +3262,26 @@ struct config_bool ConfigureNamesBool_gp[] =
 		true,
 		NULL, NULL, NULL
 	},
+	{
+		{"optimizer_enable_child_opt_memo", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Reuse the child contexts that the same request of a group expression reached under another context."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_child_opt_memo,
+		true, NULL, NULL
+	},
+
+	{
+		{"optimizer_verify_child_opt_memo", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Optimize the children of requests that could reuse child contexts and report differences."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_verify_child_opt_memo,
+		false, NULL, NULL
+	},
+
 	{
 		{"parallel_query_use_streaming_hashagg", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("allow to use of streaming hashagg in parallel query for DISTINCT."),
@@ -4075,7 +4121,7 @@ struct config_int ConfigureNamesInt_gp[] =
 			gettext_noop("Used by the fts-probe process."),
 		},
 		&gp_fts_probe_retries,
-		5, 0, 100,
+		60, 0, 100,
 		NULL, NULL, NULL
 	},
 
@@ -4086,7 +4132,7 @@ struct config_int ConfigureNamesInt_gp[] =
 			GUC_UNIT_S
 		},
 		&gp_fts_probe_timeout,
-		20, 0, 3600,
+		40, 0, 3600,
 		NULL, NULL, NULL
 	},
 

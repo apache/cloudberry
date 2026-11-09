@@ -119,7 +119,7 @@ class MigratePackagesTestCase(GpTestCase):
         self.args['to_gphome'] = '/wrong/gphome'
         subject = MigratePackages(**self.args)
 
-        expected_raise = "The target GPHOME, %s, must match the current \$GPHOME used to launch gppkg." % self.args['to_gphome']
+        expected_raise = r"The target GPHOME, %s, must match the current \$GPHOME used to launch gppkg." % self.args['to_gphome']
         with self.assertRaisesRegex(ExceptionNoStackTraceNeeded, expected_raise):
             subject.execute()
 

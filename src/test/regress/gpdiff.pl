@@ -252,7 +252,7 @@ if (1)
         "man" => sub { lazy_pod2usage(-msg => $pmsg, -exitstatus => 0, -verbose => 2) },
         "help" => sub { lazy_pod2usage(-msg => $pmsg, -exitstatus => 1) },
         "version|v" => \&print_version ,
-        "verbose|Verbose" => \$glob_atmsort_args{VERBOSE},
+        "verbose" => \$glob_atmsort_args{VERBOSE},
         "gpd_ignore_plans|gp_ignore_plans" => \$glob_atmsort_args{IGNORE_PLANS},
         "gpd_init|gp_init_file=s" => \@{$glob_atmsort_args{INIT_FILES}}
     );

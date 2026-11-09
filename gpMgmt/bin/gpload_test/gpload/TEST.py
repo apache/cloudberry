@@ -319,20 +319,20 @@ def modify_sql_file(num):
     if os.path.isfile(file):
         for line in fileinput.FileInput(file,inplace=1):
             if platform.system() in ['Windows', 'Microsoft']:
-                line = line.replace("\!gpload ","\!gpload.py")
+                line = line.replace(r"\!gpload ",r"\!gpload.py")
                 line = line.replace("gpload ","gpload.py ")
             else:
                 line = line.replace("gpload.py ","gpload ")
             # using absolute path
             line = re.sub('-h WinnBook.local', '-h '+get_hostname(), line)
             line = line.replace("-h localhost",'-h '+get_hostname())
-            line = re.sub('-p \d+', '-p '+get_port(), line)
+            line = re.sub(r'-p \d+', '-p '+get_port(), line)
             line = re.sub('-p$', '-p '+get_port(), line)
-            line = re.sub('-h (\d+)\.(\d+)\.(\d+)\.(\d+)', '-h '+get_hostname(), line)
+            line = re.sub(r'-h (\d+)\.(\d+)\.(\d+)\.(\d+)', '-h '+get_hostname(), line)
             if num == 12 or num == 13 or num == 14 or num == 15 or num == 176:
-                line = re.sub('-U \w+', '-U fake_user', line)
+                line = re.sub(r'-U \w+', '-U fake_user', line)
             else:
-                line = re.sub('-U \w+', '-U '+user, line)
+                line = re.sub(r'-U \w+', '-U '+user, line)
             print((str(re.sub('\n','',line))))
 
 def windows_path(command):
@@ -350,9 +350,9 @@ def get_port():
     if os.path.isfile(file):
         f = open(file)
         for line in f:
-            match = re.search('port=\d+',line)
+            match = re.search(r'port=\d+',line)
             if match:
-                match1 = re.search('\d+', match.group())
+                match1 = re.search(r'\d+', match.group())
                 if match1:
                     return match1.group()
         f.close()
@@ -407,7 +407,7 @@ class GPLoad_Env_TestCase(unittest.TestCase):
         "0  gpload setup"
         for num in range(1,6):
            f = open(mkpath('query%d.sql' % num),'w')
-           f.write("\! gpload -f "+mkpath('config/config_file')+ " -d gptest")
+           f.write(r"\! gpload -f "+mkpath('config/config_file')+ " -d gptest")
            f.close()
 
     def testQuery01(self):

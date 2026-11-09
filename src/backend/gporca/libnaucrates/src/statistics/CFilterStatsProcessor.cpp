@@ -461,9 +461,6 @@ CFilterStatsProcessor::MakeHistHashMapConjFilter(
 	// scaling factor of the last predicate
 	scale_factors->Append(GPOS_NEW(mp) CDouble(last_scale_factor));
 
-	GPOS_ASSERT(nullptr != scale_factors);
-	CScaleFactorUtils::SortScalingFactor(scale_factors, true /* fDescending */);
-
 	*scale_factor = CScaleFactorUtils::CalcScaleFactorCumulativeConj(
 		stats_config, scale_factors);
 
