@@ -128,6 +128,10 @@ s/Hash Cond: \(pg_temp_\d+/Hash Cond: \(pg_temp_#####/
 m/\d+ was concurrently dropped/
 s/\d+ was concurrently dropped/##### was concurrently dropped/
 
+# The same internal error can move as tablecmds.c changes.
+m/^ERROR:  unexpected object depending on column: .+ \(tablecmds\.c:\d+\)$/
+s/ \(tablecmds\.c:\d+\)$//
+
 # Mask out linenumber of the erroring file
 m/ERROR:  ANALYZE cannot merge since not all non-empty leaf partitions have consistent hyperloglog statistics for merge.*/
 s/ERROR:  ANALYZE cannot merge since not all non-empty leaf partitions have consistent hyperloglog statistics for merge.*/ERROR:  ANALYZE cannot merge since not all non-empty leaf partitions have consistent hyperloglog statistics for merge (analyze.c:XXX)/
