@@ -65,6 +65,20 @@ also be used for large-scale analytics and AI/ML workloads.
 You can follow [these guides](https://cloudberry.apache.org/docs/deployment/) to build Cloudberry on
 Linux OS (including RHEL/Rocky Linux, and Ubuntu) and macOS.
 
+The untrusted PL/Python and PL/Perl extensions are installed by default when
+building the corresponding language modules. To omit their extension files,
+configure the build with either or both options:
+
+```bash
+./configure [other options] --disable-plpythonu-extension --disable-plperlu-extension
+```
+
+The Python option controls `plpython2u` or `plpython3u` for the selected Python
+version and, with Python 2, `plpythonu`. The Perl option controls `plperlu` and
+its transform extensions. These options control installation of extension
+files; `--with-python` and `--with-perl` control building the language modules.
+Some tests require these extensions, so use the default settings for those tests.
+
 ### Try out quickly
 
 Welcome to try out Cloudberry via building [one Docker-based
