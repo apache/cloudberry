@@ -1006,6 +1006,31 @@ CheckNamespaceLockedByMe(Oid schemaOid, LOCKMODE lockmode, bool orstronger)
 #endif
 
 /*
+ * Block operations that would put a temporary-table namespace (defined per
+ * isAnyTempNamespace()) in search_path.  Extension scripts assume they can
+ * create a function and find it via search_path, but creating in a temp
+ * namespace stifles that.
+ *
+ * Block operations that would otherwise put "$user" in search_path as though
+ * that resolved to the schema having nspname='$user'.  More generally, block
+ * any name that is special to the search_path interpreter.  Checking
+ * "pg_"-prefixed special names is not obligatory, because such schemas won't
+ * exist without allow_system_table_mods intervention.
+ */
+static void
+extension_search_path_element_check(const char *name)
+{
+	if (strncmp(name, "pg_temp_", 8) == 0 ||
+		strncmp(name, "pg_toast_temp_", 14) == 0 ||
+		strcmp(name, "pg_temp") == 0 ||
+		strcmp(name, "$user") == 0)
+		ereport(ERROR,
+				(errcode(ERRCODE_RESERVED_NAME),
+				 errmsg("unacceptable extension schema name \"%s\"",
+						name)));
+}
+
+/*
  * Execute the appropriate script file for installing or updating the extension
  *
  * If from_version isn't NULL, it's an update
@@ -1129,6 +1154,7 @@ execute_extension_script(Node *stmt,
 	 */
 	Assert(CheckNamespaceLockedByMe(schemaOid, AccessShareLock, false));
 	initStringInfo(&pathbuf);
+	extension_search_path_element_check(schemaName);
 	appendStringInfoString(&pathbuf, quote_identifier(schemaName));
 	foreach(lc, requiredSchemas)
 	{
@@ -1148,6 +1174,7 @@ execute_extension_script(Node *stmt,
 		if (!reqname)
 			elog(ERROR, "cache lookup failed for schema %u", reqschema);
 
+		extension_search_path_element_check(reqname);
 		if (strcmp(reqname, "pg_catalog") != 0)
 			appendStringInfo(&pathbuf, ", %s", quote_identifier(reqname));
 	}
@@ -1834,15 +1861,6 @@ CreateExtensionInternal(char *extensionName,
 		list_free(search_path);
 	}
 
-#if 0 /* Upstream code not applicable to GPDB */
-	/*
-	 * Make note if a temporary namespace has been accessed in this
-	 * transaction.
-	 */
-	if (isTempNamespace(schemaOid))
-		MyXactFlags |= XACT_FLAGS_ACCESSEDTEMPNAMESPACE;
-#endif
-
 	/*
 	 * We don't check creation rights on the target namespace here.  If the
 	 * extension script actually creates any objects there, it will fail if
@@ -1952,6 +1970,8 @@ CreateExtensionInternal(char *extensionName,
 							  versionName, updateVersions,
 							  origSchemaName, cascade, is_create);
 	}
+
+	Assert(!isTempNamespace(schemaOid));	/* expect earlier failure */
 
 	return address;
 }
