@@ -697,6 +697,9 @@ GRANT USAGE ON TYPE priv_testtype1 TO regress_priv_user2;
 GRANT USAGE ON TYPE _priv_testtype1 TO regress_priv_user2; -- fail
 GRANT USAGE ON DOMAIN priv_testtype1 TO regress_priv_user2; -- fail
 
+CREATE FUNCTION cons_priv_testtype1(a int, b text) RETURNS priv_testtype1 LANGUAGE SQL
+  AS $$ SELECT row(a, b) $$ IMMUTABLE;
+
 CREATE DOMAIN priv_testdomain1 AS int;
 REVOKE USAGE on DOMAIN priv_testdomain1 FROM PUBLIC;
 GRANT USAGE ON DOMAIN priv_testdomain1 TO regress_priv_user2;
@@ -741,6 +744,13 @@ CREATE TABLE test11a AS (SELECT 1::priv_testdomain1 AS a);
 
 REVOKE ALL ON TYPE priv_testtype1 FROM PUBLIC;
 
+CREATE TABLE test12 (c int DEFAULT 0 CHECK (c > 0 AND '(0,1)'::priv_testtype1 IS NOT NULL));
+CREATE TABLE test13 (c int DEFAULT ('(0,1)'::priv_testtype1).a);
+
+CREATE TABLE test_tbl_with_idx (c int, d text);
+CREATE INDEX ON test_tbl_with_idx ((cons_priv_testtype1(c, d)));
+DROP TABLE test_tbl_with_idx;
+
 SET SESSION AUTHORIZATION regress_priv_user2;
 
 -- commands that should succeed
@@ -778,6 +788,23 @@ CREATE TABLE test11b AS (SELECT 1::priv_testdomain1 AS a);
 
 REVOKE ALL ON TYPE priv_testtype1 FROM PUBLIC;
 
+CREATE TABLE test12 (c int DEFAULT 0 CHECK (c > 0 AND '(0,1)'::priv_testtype1 IS NOT NULL));
+CREATE TABLE test13 (c int DEFAULT ('(0,1)'::priv_testtype1).a);
+
+CREATE TABLE test_tbl_with_idx (c int, d text);
+CREATE INDEX ON test_tbl_with_idx ((cons_priv_testtype1(c, d)));
+DROP TABLE test_tbl_with_idx;
+
+-- new stored expressions require USAGE on types, rebuilds do not
+\c -
+REVOKE USAGE ON TYPE priv_testtype1 FROM regress_priv_user2;
+SET SESSION AUTHORIZATION regress_priv_user2;
+ALTER TABLE test12 ALTER COLUMN c TYPE bigint;
+ALTER TYPE test8b ALTER ATTRIBUTE a TYPE bigint CASCADE;
+ALTER TABLE test12 ALTER COLUMN c SET DEFAULT ('(0,1)'::priv_testtype1).a;
+CREATE TABLE test14 (LIKE test12 INCLUDING CONSTRAINTS);
+CREATE TABLE test15 (LIKE test13 INCLUDING DEFAULTS);
+
 \c -
 DROP AGGREGATE priv_testagg1b(priv_testdomain1);
 DROP DOMAIN priv_testdomain2b;
@@ -795,7 +822,10 @@ DROP CAST (priv_testdomain1 AS priv_testdomain3b);
 DROP FUNCTION castfunc(int) CASCADE;
 DROP DOMAIN priv_testdomain3b;
 DROP TABLE test11b;
+DROP TABLE test12;
+DROP TABLE test13;
 
+DROP FUNCTION cons_priv_testtype1; -- ok
 DROP TYPE priv_testtype1; -- ok
 DROP DOMAIN priv_testdomain1; -- ok
 
