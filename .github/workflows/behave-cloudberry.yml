@@ -751,7 +751,7 @@ jobs:
           behave_cmd="behave --tags ~@needs_fix ${{ matrix.behave_args || '' }} ${{ join(matrix.behave_features, ' ') }}"
           if [ ! -f "$config_log" ]; then
             {
-              echo "MAKE_COMMAND=${behave_cmd}"
+              echo "MAKE_COMMAND=\"${behave_cmd}\""
               echo "STATUS=missing_log"
               echo "TOTAL_TESTS=0"
               echo "FAILED_TESTS=0"
@@ -767,7 +767,7 @@ jobs:
 
           if [[ -z "$scenarios_line" ]]; then
             {
-              echo "MAKE_COMMAND=${behave_cmd}"
+              echo "MAKE_COMMAND=\"${behave_cmd}\""
               echo "STATUS=parse_error"
               echo "TOTAL_TESTS=0"
               echo "FAILED_TESTS=0"
@@ -783,7 +783,7 @@ jobs:
           total_scenarios=$((scenarios_passed + scenarios_failed + scenarios_skipped))
 
           {
-            echo "MAKE_COMMAND=${behave_cmd}"
+            echo "MAKE_COMMAND=\"${behave_cmd}\""
             if [[ "$scenarios_failed" -eq 0 ]]; then
               echo "STATUS=passed"
             else
@@ -794,9 +794,9 @@ jobs:
             echo "PASSED_TESTS=${scenarios_passed}"
             echo "IGNORED_TESTS=${scenarios_skipped}"
             echo "BEHAVE_UNTESTED_SCENARIOS=${scenarios_untested}"
-            echo "BEHAVE_FEATURES_SUMMARY=${features_line:-unavailable}"
-            echo "BEHAVE_SCENARIOS_SUMMARY=${scenarios_line}"
-            echo "BEHAVE_STEPS_SUMMARY=${steps_line:-unavailable}"
+            echo "BEHAVE_FEATURES_SUMMARY=\"${features_line:-unavailable}\""
+            echo "BEHAVE_SCENARIOS_SUMMARY=\"${scenarios_line}\""
+            echo "BEHAVE_STEPS_SUMMARY=\"${steps_line:-unavailable}\""
           } | tee "test_results.${{ matrix.test }}.0.txt"
 
           if [[ "$scenarios_failed" -eq 0 ]]; then
