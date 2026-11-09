@@ -399,6 +399,83 @@ explain select * from csq_pullup t0 where 1= (select count(*) from csq_pullup t1
 
 select * from csq_pullup t0 where 1= (select count(*) from csq_pullup t1 where t0.n + t1.n =t1.i);
 
+--
+-- Correlated aggregate subqueries are converted to an inner join with a
+-- grouped derived table. An outer row with no matching group is then
+-- dropped, so the conversion is only correct if the original WHERE clause
+-- would have rejected that row anyway.
+--
+create table csq_agg_outer(a int, b int) distributed by (a);
+create table csq_agg_inner(x int, y int) distributed by (x);
+insert into csq_agg_outer values (1, 1), (5, 2), (0, 3);
+insert into csq_agg_inner values (10, 1), (20, 1), (3, 2);
+analyze csq_agg_outer;
+analyze csq_agg_inner;
+
+-- count() returns 0 for empty input, and 0 >= 0 is true for b = 3: must not
+-- be converted, and must return (0, 3)
+explain (costs off) select * from csq_agg_outer o where a >= (select count(*) from csq_agg_inner i where i.y = o.b);
+select * from csq_agg_outer o where a >= (select count(*) from csq_agg_inner i where i.y = o.b) order by 1;
+select * from csq_agg_outer o where a >= (select coalesce(sum(x), 0) from csq_agg_inner i where i.y = o.b) order by 1;
+select * from csq_agg_outer o where 0 = (select count(*) from csq_agg_inner i where i.y = o.b) order by 1;
+
+-- the sublink can be wrapped in strict operators, on either side
+explain (costs off) select * from csq_agg_outer o where a * 10 > 1.2 * (select avg(x) from csq_agg_inner i where i.y = o.b);
+select * from csq_agg_outer o where a * 10 > 1.2 * (select avg(x) from csq_agg_inner i where i.y = o.b) order by 1;
+explain (costs off) select * from csq_agg_outer o where (select avg(x) from csq_agg_inner i where i.y = o.b) / 2 < a * 10;
+select * from csq_agg_outer o where (select avg(x) from csq_agg_inner i where i.y = o.b) / 2 < a * 10 order by 1;
+
+-- but not in a non-strict one: coalesce(NULL, 0) is not NULL
+explain (costs off) select * from csq_agg_outer o where a >= coalesce((select avg(x) from csq_agg_inner i where i.y = o.b), 0);
+select * from csq_agg_outer o where a >= coalesce((select avg(x) from csq_agg_inner i where i.y = o.b), 0) order by 1;
+
+-- evaluating the conjunct with count() = 0 must not raise an error at plan
+-- time; this query does raise the error at run time, though
+explain (costs off) select * from csq_agg_outer o where 1 = (select 100 / count(*) from csq_agg_inner i where i.y = o.b);
+select * from csq_agg_outer o where 1 = (select 100 / count(*) from csq_agg_inner i where i.y = o.b);
+
+drop table csq_agg_outer;
+drop table csq_agg_inner;
+
+-- The conversion assumes that built-in aggregates with a final function
+-- return NULL for empty input, even if their final function isn't strict or
+-- their initial state isn't NULL (see aggref_is_null_on_empty_input()).
+-- Check that for each of them, with concrete types for polymorphic
+-- arguments. A new one that returns something else must be excluded there.
+create function csq_agg_not_null_on_empty() returns setof text language plpgsql as $$
+declare
+  r record;
+  args text;
+  t text;
+  q text;
+  is_null bool;
+begin
+  for r in select a.aggfnoid::regproc::text as name, p.proargtypes
+           from pg_aggregate a
+           join pg_proc f on f.oid = a.aggfinalfn
+           join pg_proc p on p.oid = a.aggfnoid
+           where a.aggkind = 'n' and a.aggfnoid < 10000
+             and not (a.agginitval is null and f.proisstrict)
+  loop
+    args := '';
+    for i in 0 .. array_length(r.proargtypes::oid[], 1) - 1 loop
+      t := format_type(r.proargtypes[i], null);
+      t := case t when 'anyelement' then 'integer' when 'anynonarray' then 'integer'
+                  when 'anyarray' then 'integer[]' when 'anyrange' then 'int4range'
+                  when 'anymultirange' then 'int4multirange' when '"any"' then 'integer'
+                  else t end;
+      args := args || case when i > 0 then ', ' else '' end || 'null::' || t;
+    end loop;
+    q := format('select %s(%s) is null from (select 1 where false) s', r.name, args);
+    execute q into is_null;
+    if not is_null then
+      return next q;
+    end if;
+  end loop;
+end $$;
+select * from csq_agg_not_null_on_empty();
+drop function csq_agg_not_null_on_empty();
+
 
 --
 -- NOT EXISTS CSQs to joins
