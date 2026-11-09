@@ -37,6 +37,7 @@ test__DistributedSnapshotWithLocalMapping_CommittedTest(void **state)
 	 */
 	{
 		expect_any_count(DistributedLog_CommittedCheck, distribXid, -1);
+		expect_any_count(DistributedLog_CommittedCheck, xminAllDistributedSnapshots, -1);
 		will_return_count(DistributedLog_CommittedCheck, true, -1);
 
 		expect_value(DistributedLog_CommittedCheck, localXid, 10);

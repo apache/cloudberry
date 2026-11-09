@@ -1,0 +1,48 @@
+-- Distributed log truncation and hot standby reads
+--
+-- DistributedLog_Truncate() runs on the primaries and removes distributed log
+-- segments below the cutoff, emitting a TRUNCATE WAL record.  Its redo branch
+-- must advance the mirror's in-memory oldestXmin horizon along with the
+-- segment removal; otherwise a standby reader resolving a pre-truncation gxid
+-- on a mirror first passes the stale-horizon guard and then fails with a hard
+-- "Could not open file pg_distributedlog/NNNN" error on the removed segment.
+-- With the horizon advanced, those gxids resolve to not-found and take the
+-- soft in-doubt path instead.
+--
+-- start_matchsubs
+--
+-- m/(seg\d+ slice\d+ [\d.]+:\d+ pid \d+)/
+-- s/(seg\d+ slice\d+ [\d.]+:\d+ pid \d+)/seg<ID> slice<SID> <ADDRESS> pid <PID>/
+--
+-- m/(seg\d+ [\d.]+:\d+ pid \d+)/
+-- s/(seg\d+ [\d.]+:\d+ pid \d+)/seg<ID> <ADDRESS> pid <PID>/
+--
+-- end_matchsubs
+
+1: create table hs_dlog_trunc(a int, msg text);
+1: insert into hs_dlog_trunc select g, 'row ' || g from generate_series(1, 10) g;
+
+-- Burn more than one distributed-log segment worth of segment-local xids on
+-- every primary (32 SLRU pages * 4096 entries per page = 131072 xids per
+-- segment), so that the next horizon advance truncates the pages backing the
+-- rows inserted above.  txid_current() allocates an xid without touching any
+-- table, so the burn leaves no distributed state behind.
+!\retcode sh -ec 'export PGDATABASE=postgres; F=$(mktemp); trap "rm -f $F" EXIT; printf "SELECT txid_current();\n" > $F; for p in $(psql -Atqc "select port from gp_segment_configuration where role = chr(112) and content >= 0 order by content"); do PGOPTIONS="-c gp_role=utility" pgbench -n -p $p -c 2 -j 2 -t 70000 -f $F > /dev/null; done';
+
+-- Run a few dispatched statements so the primaries advance the distributed
+-- log horizon and emit the TRUNCATE record.
+1: create table hs_dlog_dummy(a int);
+1: drop table hs_dlog_dummy;
+
+-- Wait until every mirror has replayed the truncation (the first remaining
+-- segment moves past 0000).  Without this the read could race the replay and
+-- the test would not exercise the removed-segment path deterministically.
+!\retcode sh -ec 'export PGDATABASE=postgres; for i in $(seq 1 120); do gone=1; for d in $(psql -Atqc "select datadir from gp_segment_configuration where role = chr(109) and content >= 0"); do f=$(ls $d/pg_distributedlog 2>/dev/null | sort | head -1); [ "$f" = "0000" ] && gone=0; done; [ $gone -eq 1 ] && exit 0; sleep 1; done; exit 1';
+
+-- The standby reader resolves the pre-truncation gxids of the rows committed
+-- above.  It must return the rows (or defer cleanly), never fail on the
+-- removed distributed log segment.
+-1S: select * from hs_dlog_trunc order by a;
+-1Sq:
+
+1: drop table hs_dlog_trunc;
