@@ -1804,6 +1804,9 @@ recordDependencyOnSingleRelExpr(const ObjectAddress *depender,
 	find_expr_references_context context;
 	RangeTblEntry rte;
 
+	if (expr == NULL)
+		return;
+
 	context.addrs = new_object_addresses();
 
 	/* We gin up a rather bogus rangetable list to handle Vars */
@@ -1818,6 +1821,21 @@ recordDependencyOnSingleRelExpr(const ObjectAddress *depender,
 
 	/* Scan the expression tree for referenceable objects */
 	find_expr_references_walker(expr, &context);
+
+	/* Also add a dependency to the result type */
+	if (IsA(expr, List))
+	{
+		ListCell   *l;
+
+		foreach(l, (List *) expr)
+		{
+			add_object_address(OCLASS_TYPE, exprType(lfirst(l)), 0,
+							   context.addrs);
+		}
+	}
+	else
+		add_object_address(OCLASS_TYPE, exprType(expr), 0,
+						   context.addrs);
 
 	/* Remove any duplicates */
 	eliminate_duplicate_dependencies(context.addrs);
@@ -1881,6 +1899,102 @@ recordDependencyOnSingleRelExpr(const ObjectAddress *depender,
 							   context.addrs->refs, context.addrs->numrefs,
 							   behavior);
 
+	free_object_addresses(context.addrs);
+}
+
+/*
+ * We require USAGE on a type to store a dependency on it.  This helper
+ * function does the appropriate privilege checks.
+ *
+ * NB: Other objects have privileges of their own, but recording those
+ * dependencies doesn't require holding them.  For example, an expression may
+ * reference a function for which the user lacks EXECUTE.  Instead, EXECUTE is
+ * checked when the function is executed.
+ */
+static void
+check_usage_on_types(ObjectAddresses *addrs, Oid roleid)
+{
+	for (int i = 0; i < addrs->numrefs; i++)
+	{
+		ObjectAddress *ref = &addrs->refs[i];
+		AclResult	aclresult;
+
+		if (ref->classId != TypeRelationId)
+			continue;
+
+		aclresult = pg_type_aclcheck(ref->objectId,
+									 roleid, ACL_USAGE);
+		if (aclresult != ACLCHECK_OK)
+			aclcheck_error_type(aclresult, ref->objectId);
+	}
+}
+
+/*
+ * CheckUsageOnTypesInExpr - require USAGE on all types named by an expression
+ *
+ * rtable is the rangetable for interpreting Vars (or NIL if none are
+ * expected).  roleid is the role whose USAGE is required.
+ */
+void
+CheckUsageOnTypesInExpr(Node *expr, List *rtable, Oid roleid)
+{
+	find_expr_references_context context;
+
+	context.addrs = new_object_addresses();
+
+	/* Set up interpretation for Vars at varlevelsup = 0 */
+	context.rtables = list_make1(rtable);
+
+	find_expr_references_walker(expr, &context);
+	eliminate_duplicate_dependencies(context.addrs);
+	check_usage_on_types(context.addrs, roleid);
+	free_object_addresses(context.addrs);
+}
+
+/*
+ * CheckUsageOnTypesInSingleRelExpr - as above, for a single-rel expression
+ *
+ * Like recordDependencyOnSingleRelExpr(), this handles expressions whose Vars
+ * all refer to one relation.  roleid is the role whose USAGE is required.
+ */
+void
+CheckUsageOnTypesInSingleRelExpr(Node *expr, Oid relId, Oid roleid)
+{
+	find_expr_references_context context;
+	RangeTblEntry rte = {0};
+
+	if (expr == NULL)
+		return;
+
+	context.addrs = new_object_addresses();
+
+	/* We gin up a rather bogus rangetable list to handle Vars */
+	rte.type = T_RangeTblEntry;
+	rte.rtekind = RTE_RELATION;
+	rte.relid = relId;
+	rte.relkind = RELKIND_RELATION;
+	rte.rellockmode = AccessShareLock;
+	context.rtables = list_make1(list_make1(&rte));
+
+	find_expr_references_walker(expr, &context);
+
+	/* Also check USAGE on the result type */
+	if (IsA(expr, List))
+	{
+		ListCell   *l;
+
+		foreach(l, (List *) expr)
+		{
+			add_object_address(OCLASS_TYPE, exprType(lfirst(l)), 0,
+							   context.addrs);
+		}
+	}
+	else
+		add_object_address(OCLASS_TYPE, exprType(expr), 0,
+						   context.addrs);
+
+	eliminate_duplicate_dependencies(context.addrs);
+	check_usage_on_types(context.addrs, roleid);
 	free_object_addresses(context.addrs);
 }
 

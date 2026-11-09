@@ -195,6 +195,10 @@ extern void recordDependencyOnSingleRelExpr(const ObjectAddress *depender,
 
 extern ObjectClass getObjectClass(const ObjectAddress *object);
 
+extern void CheckUsageOnTypesInExpr(Node *expr, List *rtable, Oid roleid);
+
+extern void CheckUsageOnTypesInSingleRelExpr(Node *expr, Oid relId, Oid roleid);
+
 extern bool CheckTypeDependencyInExpr(Node *expr, List *rtable, Oid typeId);
 
 extern bool CheckTypeDependencyInSingleRelExpr(Node *expr, Oid relId, Oid typeId);
