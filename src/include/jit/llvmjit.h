@@ -21,6 +21,7 @@
 
 #include <llvm-c/Types.h>
 #ifdef USE_LLVM_BACKPORT_SECTION_MEMORY_MANAGER
+#undef PM
 #include <llvm-c/OrcEE.h>
 #endif
 
