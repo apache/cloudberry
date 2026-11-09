@@ -575,3 +575,59 @@ ALTER TABLE at_old_viol ALTER COLUMN a TYPE bigint,
 SELECT * FROM at_old_viol;
 
 DROP TABLE at_old_ck, at_old_idx, at_old_viol;
+
+--------------------------------------------------------------------------------
+-- ALTER COLUMN TYPE over a segfile with more than one hole in its row numbers
+--
+-- Every INSERT reserves its own range of row numbers, so a segfile written by
+-- several INSERTs has gaps between their rows.  The column-only rewrite has to
+-- leave the same gaps in the column it writes, or the rows past a gap are
+-- stored under row numbers their tids do not carry.  It used to count every
+-- block after the first gap twice, and so missed the next gap whenever the
+-- block before it held more rows than the gap was wide: an index fetch then
+-- read the rewritten column from another row, or found nothing at all.  All
+-- rows go to one segment so they share a segfile, and the index makes the
+-- block directory record every block.
+--------------------------------------------------------------------------------
+CREATE TABLE at_holes(k int, a int, b int) USING ao_column DISTRIBUTED BY (k);
+CREATE INDEX at_holes_a ON at_holes (a);
+INSERT INTO at_holes SELECT 1, i, i * 10 FROM generate_series(1, 60) i;
+INSERT INTO at_holes SELECT 1, i, i * 10 FROM generate_series(61, 120) i;
+INSERT INTO at_holes SELECT 1, i, i * 10 FROM generate_series(121, 180) i;
+CREATE TEMP TABLE at_holes_before AS
+SELECT pg_relation_filenode('at_holes') AS fn DISTRIBUTED BY (fn);
+ALTER TABLE at_holes ALTER COLUMN b TYPE bigint;
+SELECT pg_relation_filenode('at_holes') = fn AS not_rewritten FROM at_holes_before;
+
+-- the rewritten column's blocks start at the same row numbers as the others'
+SELECT count(*) AS columns, count(DISTINCT blocks) AS layouts
+  FROM (SELECT columngroup_no,
+               array_agg(first_row_no || '+' || row_count ORDER BY first_row_no) AS blocks
+          FROM (SELECT (gp_toolkit.__gp_aoblkdir('at_holes'::regclass)).*
+                  FROM gp_dist_random('gp_id')) d
+         GROUP BY columngroup_no) l;
+
+-- and a fetch by tid finds every row with its own value
+SET enable_seqscan = off;
+SELECT count(*) AS n, count(*) FILTER (WHERE b <> a * 10) AS wrong
+  FROM at_holes WHERE a BETWEEN 1 AND 180;
+SELECT a, b FROM at_holes WHERE a IN (125, 170) ORDER BY a;
+RESET enable_seqscan;
+
+-- Once the rewritten column is the anchor -- the complete column with the
+-- smallest eof, which smallint makes b -- a sequential scan takes its row
+-- numbers from it as well, so a DELETE through a sequential scan has to mark
+-- the very row an index fetch finds under that tid.
+ALTER TABLE at_holes ALTER COLUMN b TYPE smallint;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+DELETE FROM at_holes WHERE a = 170;
+RESET enable_indexscan;
+RESET enable_bitmapscan;
+SET enable_seqscan = off;
+SELECT count(*) AS n, count(*) FILTER (WHERE b <> a * 10) AS wrong,
+       count(*) FILTER (WHERE a = 170) AS deleted
+  FROM at_holes WHERE a BETWEEN 1 AND 180;
+RESET enable_seqscan;
+
+DROP TABLE at_holes;

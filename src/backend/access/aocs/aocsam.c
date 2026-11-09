@@ -4325,12 +4325,21 @@ aocs_writecol_rewritesegfiles(
 					 * We encountered a break in sequence of row
 					 * numbers (hole), replicate it in the new
 					 * segfiles.
+					 *
+					 * expectedFRN restarts at the block's first row
+					 * number and nothing more: it is advanced once per
+					 * row at the bottom of the loop.  Adding the block's
+					 * rowCount here as well counted the block twice, ran
+					 * expectedFRN past the start of the next block, and
+					 * so missed the next hole whenever this block held
+					 * more rows than that hole was wide.  The rows after
+					 * it were then written under row numbers their tids
+					 * do not carry, and an index fetch read them from
+					 * other rows or not at all.
 					 */
 					expectedFRN =
 						scanDesc->columnScanInfo.ds[colno]->ao_read.current.firstRowNum;
-					aocs_writecol_endblock(idesc,
-										   scanDesc->columnScanInfo.ds[colno]->ao_read.current.firstRowNum);
-					expectedFRN = scanDesc->columnScanInfo.ds[colno]->ao_read.current.firstRowNum + scanDesc->columnScanInfo.ds[colno]->ao_read.current.rowCount;
+					aocs_writecol_endblock(idesc, expectedFRN);
 				}
 			}
 		}
@@ -4467,6 +4476,14 @@ aocs_writecol_rewritesegfiles(
 									RelationGetRelationName(idesc->rel))));
 			}
 		}
+
+		/*
+		 * The new datum is stored under row number expectedFRN.  It has to be
+		 * the row number in the row's tid, which is what the indexes and the
+		 * visibility map refer to it by.
+		 */
+		Assert(!scanDesc->columnScanInfo.ds[colno]->ao_read.current.hasFirstRowNum ||
+			   AOTupleIdGet_rowNum((AOTupleId *) &scanDesc->cdb_fake_ctid) == expectedFRN);
 
 		aocs_writecol_insert_datum(idesc,
 								   newslot->tts_values,
