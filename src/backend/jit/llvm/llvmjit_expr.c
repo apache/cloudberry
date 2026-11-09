@@ -1611,7 +1611,7 @@ llvm_compile_expr(ExprState *state)
 
 			case EEOP_CURRENTOFEXPR:
 				build_EvalXFunc(b, mod, "ExecEvalCurrentOfExpr",
-								v_state, op);
+								v_state, op, v_econtext);
 				LLVMBuildBr(b, opblocks[opno + 1]);
 				break;
 
