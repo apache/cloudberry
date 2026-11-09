@@ -1950,10 +1950,16 @@ llvm_compile_expr(ExprState *state)
 					LLVMValueRef v_group_id_p;
 					LLVMValueRef v_group_id;
 
-					/* Copy aggstate->group_id to the result */
+					/*
+					 * Copy aggstate->group_id to the result.  The field is
+					 * 32 bits wide: load that and widen it as Int32GetDatum()
+					 * does, since a Datum-wide load would bring the next field
+					 * along in the high half.
+					 */
 					v_group_id_p = l_ptr_const(&aggstate->group_id,
-											  l_ptr(TypeSizeT));
-					v_group_id = l_load(b, TypeSizeT, v_group_id_p, "v_group_id");
+											  l_ptr(LLVMInt32TypeInContext(lc)));
+					v_group_id = l_load(b, LLVMInt32TypeInContext(lc), v_group_id_p, "");
+					v_group_id = LLVMBuildSExt(b, v_group_id, TypeSizeT, "v_group_id");
 
 					/* and store result */
 					LLVMBuildStore(b, v_group_id, v_resvaluep);
@@ -1969,10 +1975,16 @@ llvm_compile_expr(ExprState *state)
 					LLVMValueRef v_gset_id_p;
 					LLVMValueRef v_gset_id;
 
-					/* Copy aggstate->gset_id to the result */
+					/*
+					 * Copy aggstate->gset_id to the result.  The field is
+					 * 32 bits wide: load that and widen it as Int32GetDatum()
+					 * does, since a Datum-wide load would bring the next field
+					 * along in the high half.
+					 */
 					v_gset_id_p = l_ptr_const(&aggstate->gset_id,
-											  l_ptr(TypeSizeT));
-					v_gset_id = l_load(b, TypeSizeT, v_gset_id_p, "v_gset_id");
+											  l_ptr(LLVMInt32TypeInContext(lc)));
+					v_gset_id = l_load(b, LLVMInt32TypeInContext(lc), v_gset_id_p, "");
+					v_gset_id = LLVMBuildSExt(b, v_gset_id, TypeSizeT, "v_gset_id");
 
 					/* and store result */
 					LLVMBuildStore(b, v_gset_id, v_resvaluep);
@@ -1988,10 +2000,16 @@ llvm_compile_expr(ExprState *state)
 					LLVMValueRef v_currentExprId_p;
 					LLVMValueRef v_currentExprId;
 
-					/* Copy tsstate->currentExprId to the result */
+					/*
+					 * Copy tsstate->currentExprId to the result.  The field is
+					 * 32 bits wide: load that and widen it as Int32GetDatum()
+					 * does, since a Datum-wide load would bring the next field
+					 * along in the high half.
+					 */
 					v_currentExprId_p = l_ptr_const(&tsstate->currentExprId,
-											  l_ptr(TypeSizeT));
-					v_currentExprId = l_load(b, TypeSizeT, v_currentExprId_p, "v_currentExprId");
+											  l_ptr(LLVMInt32TypeInContext(lc)));
+					v_currentExprId = l_load(b, LLVMInt32TypeInContext(lc), v_currentExprId_p, "");
+					v_currentExprId = LLVMBuildSExt(b, v_currentExprId, TypeSizeT, "v_currentExprId");
 
 					/* and store result */
 					LLVMBuildStore(b, v_currentExprId, v_resvaluep);
