@@ -13,6 +13,8 @@
 #ifndef APPENDONLY_COMPACTION_H
 #define APPENDONLY_COMPACTION_H
 
+#include "datatype/timestamp.h"
+#include "pgstat.h"
 #include "nodes/pg_list.h"
 #include "access/appendonly_visimap.h"
 #include "utils/rel.h"
@@ -21,6 +23,15 @@
 
 #define APPENDONLY_COMPACTION_SEGNO_INVALID (-1)
 
+/* Optional resource counters for VACUUM VERBOSE and extensions. */
+typedef struct AOVacuumExtStats
+{
+	PgStat_CommonCounts phases[PGSTAT_NUM_AO_PHASES];
+	/* Index resources of the current phase, cleared after subtraction. */
+	PgStat_CommonCounts indexes;
+	PgStat_CommonCounts index_inserts;
+} AOVacuumExtStats;
+
 /*
  * Stats for progress reporting.
  * This is AO/AOCO counterpart of LVRelStats for Heap. It lives throughout
@@ -28,11 +39,30 @@
  */
 typedef struct AOVacuumRelStats
 {
-	int		nbytes_truncated;	/* current # of bytes truncated from segment file */
-	int		num_dead_tuples;	/* current # of dead tuples */
+	int64	nbytes_truncated;	/* current # of bytes truncated from segment file */
+	int64	num_dead_tuples;	/* current # of dead tuples */
 	int		num_index_vacuumed; /* current # of indexes been vacuumed */
+	int64		live_tuples;
+	int64		dead_tuples;
+	int64		pages_scanned;
+	int64		total_file_segs;
+	int64		awaiting_drop_segments;
+	int64		compacted_segments;
+	int64		tuples_moved;
+
+	/* the relation these stats were started for */
+	Oid			relid;
+	/*
+	 * Resource usage for set_report_vacuum_hook, accumulated over the phases:
+	 * separately for each phase, after subtracting its index passes. Index
+	 * resources are reported per index and excluded from the table's totals.
+	 */
+	AOVacuumExtStats *extstats; /* allocated for VERBOSE or an installed hook */
 } AOVacuumRelStats;
 
+extern void ao_vacuum_insert_index_tuples(struct ResultRelInfo *resultRelInfo,
+										 TupleTableSlot *slot, struct EState *estate,
+										 AOVacuumRelStats *vacrelstats);
 extern Bitmapset *AppendOptimizedCollectDeadSegments(Relation aorel);
 extern void AppendOptimizedDropDeadSegments(Relation aorel, Bitmapset *segnos, AOVacuumRelStats *vacrelstats);
 extern void AppendOnlyCompact(Relation aorel,
