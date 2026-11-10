@@ -289,6 +289,247 @@ check_multi_subquery_correlated(PlannerInfo *root, Var *var)
 	return;
 }
 
+
+/*
+ * GPDB: compute identical scalar subqueries only once
+ *
+ * A statement can contain the same uncorrelated scalar subquery several
+ * times, e.g. TPC-DS query 14 compares each of three UNION ALL branches
+ * with "(SELECT average_sales FROM avg_sales)". Planned separately, each
+ * occurrence would become its own initplan, in the subquery where it occurs,
+ * and be computed again. Instead, we compute it once: the first occurrence
+ * is made into an initplan as usual, but attached to the top query level,
+ * so that its result Param is available in every subquery. Later
+ * occurrences just use that Param.
+ *
+ * Occurrences are compared with equal(), after "normalizing" references to
+ * CTEs defined outside the subquery: the subqueries can be at different
+ * query levels, and query levels change during planning (e.g. when a UNION
+ * ALL is flattened), so ctelevelsup is reset to 0. Instead, we check that the
+ * CTE references resolve to the very same CTE definitions. The subquery must
+ * not contain any other reference to outer query levels, and no volatile
+ * functions.
+ */
+typedef struct DedupWalkerContext
+{
+	int			depth;			/* query level, 0 is the subquery itself */
+	bool		outer_ref;		/* found a reference to an outer level? */
+	List	   *outer_ctes;		/* RTEs of CTEs from outer levels */
+	List	   *outer_cte_ups;	/* levels above the subquery, for each */
+} DedupWalkerContext;
+
+static bool
+dedup_walker(Node *node, DedupWalkerContext *ctx)
+{
+	if (node == NULL)
+		return false;
+	if (IsA(node, RangeTblEntry))
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) node;
+
+		if (rte->rtekind == RTE_CTE && rte->ctelevelsup > ctx->depth)
+		{
+			ctx->outer_ctes = lappend(ctx->outer_ctes, rte);
+			ctx->outer_cte_ups = lappend_int(ctx->outer_cte_ups,
+											 rte->ctelevelsup - ctx->depth);
+		}
+		return false;
+	}
+	if (IsA(node, Var))
+	{
+		if (((Var *) node)->varlevelsup > ctx->depth)
+			ctx->outer_ref = true;
+		return false;
+	}
+	if (IsA(node, Aggref))
+	{
+		if (((Aggref *) node)->agglevelsup > ctx->depth)
+			ctx->outer_ref = true;
+	}
+	else if (IsA(node, GroupingFunc))
+	{
+		if (((GroupingFunc *) node)->agglevelsup > ctx->depth)
+			ctx->outer_ref = true;
+	}
+	else if (IsA(node, PlaceHolderVar))
+	{
+		if (((PlaceHolderVar *) node)->phlevelsup > ctx->depth)
+			ctx->outer_ref = true;
+	}
+	else if (IsA(node, Param))
+	{
+		/* PARAM_EXEC etc. shouldn't appear in a parse tree; be safe */
+		if (((Param *) node)->paramkind != PARAM_EXTERN)
+			ctx->outer_ref = true;
+		return false;
+	}
+	else if (IsA(node, Query))
+	{
+		bool		result;
+
+		ctx->depth++;
+		result = query_tree_walker((Query *) node, dedup_walker, (void *) ctx,
+								   QTW_EXAMINE_RTES_BEFORE);
+		ctx->depth--;
+		return result;
+	}
+	return expression_tree_walker(node, dedup_walker, (void *) ctx);
+}
+
+/*
+ * Examine a scalar subquery. Returns false if it refers to outer query levels
+ * other than through CTE references, or contains volatile functions.
+ * Otherwise returns a normalized copy in *normalized, and the RTEs of the
+ * outer CTE references and how many levels above the subquery they point to.
+ */
+static bool
+examine_dedup_subquery(Query *subquery, Query **normalized,
+					   List **outer_ctes, List **outer_cte_ups)
+{
+	DedupWalkerContext ctx;
+	Query	   *copy;
+	ListCell   *lc;
+
+	if (contain_volatile_functions((Node *) subquery))
+		return false;
+
+	copy = copyObject(subquery);
+	ctx.depth = -1;
+	ctx.outer_ref = false;
+	ctx.outer_ctes = NIL;
+	ctx.outer_cte_ups = NIL;
+	(void) dedup_walker((Node *) copy, &ctx);
+	if (ctx.outer_ref)
+		return false;
+
+	foreach(lc, ctx.outer_ctes)
+		((RangeTblEntry *) lfirst(lc))->ctelevelsup = 0;
+
+	*normalized = copy;
+	if (outer_ctes)
+		*outer_ctes = ctx.outer_ctes;
+	if (outer_cte_ups)
+		*outer_cte_ups = ctx.outer_cte_ups;
+	return true;
+}
+
+typedef struct CollectSublinksContext
+{
+	List	   *subqueries;		/* normalized subqueries of EXPR sublinks */
+} CollectSublinksContext;
+
+static bool
+collect_expr_sublinks_walker(Node *node, CollectSublinksContext *ctx)
+{
+	if (node == NULL)
+		return false;
+	if (IsA(node, SubLink) && ((SubLink *) node)->subLinkType == EXPR_SUBLINK)
+	{
+		Query	   *normalized;
+
+		if (examine_dedup_subquery((Query *) ((SubLink *) node)->subselect,
+								   &normalized, NULL, NULL))
+			ctx->subqueries = lappend(ctx->subqueries, normalized);
+		/* fall through, to look for sublinks inside it too */
+	}
+	if (IsA(node, Query))
+		return query_tree_walker((Query *) node, collect_expr_sublinks_walker,
+								 (void *) ctx, 0);
+	return expression_tree_walker(node, collect_expr_sublinks_walker, (void *) ctx);
+}
+
+/*
+ * Return the (normalized) uncorrelated scalar subqueries that occur more
+ * than once in the statement.
+ */
+List *
+find_duplicate_expr_sublinks(Query *parse)
+{
+	CollectSublinksContext ctx;
+	List	   *result = NIL;
+	ListCell   *lc;
+
+	ctx.subqueries = NIL;
+	(void) query_tree_walker(parse, collect_expr_sublinks_walker, (void *) &ctx, 0);
+
+	foreach(lc, ctx.subqueries)
+	{
+		Query	   *q = (Query *) lfirst(lc);
+		ListCell   *lc2;
+		int			n = 0;
+
+		if (list_member(result, q))
+			continue;
+		foreach(lc2, ctx.subqueries)
+		{
+			if (equal(q, lfirst(lc2)))
+				n++;
+		}
+		if (n >= 2)
+			result = lappend(result, q);
+	}
+	return result;
+}
+
+/*
+ * Resolve the outer CTE references of a subquery that occurs in query level
+ * 'root' to the CommonTableExprs they refer to. Returns false if one can't be
+ * found.
+ */
+static bool
+resolve_outer_ctes(PlannerInfo *root, List *outer_ctes, List *outer_cte_ups,
+				   List **result)
+{
+	ListCell   *lc1,
+			   *lc2;
+
+	*result = NIL;
+	forboth(lc1, outer_ctes, lc2, outer_cte_ups)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc1);
+		int			up = lfirst_int(lc2);
+		PlannerInfo *level = root;
+		CommonTableExpr *found = NULL;
+		ListCell   *lc;
+
+		/* up = 1 is the level that contains the sublink, i.e. root */
+		for (int i = 1; i < up && level; i++)
+			level = level->parent_root;
+		if (level == NULL)
+			return false;
+		foreach(lc, level->parse->cteList)
+		{
+			CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
+
+			if (strcmp(cte->ctename, rte->ctename) == 0)
+			{
+				found = cte;
+				break;
+			}
+		}
+		if (found == NULL)
+			return false;
+		*result = lappend(*result, found);
+	}
+	return true;
+}
+
+static bool
+same_pointers(List *a, List *b)
+{
+	ListCell   *lc1,
+			   *lc2;
+
+	if (list_length(a) != list_length(b))
+		return false;
+	forboth(lc1, a, lc2, b)
+	{
+		if (lfirst(lc1) != lfirst(lc2))
+			return false;
+	}
+	return true;
+}
+
 /*
  * Convert a SubLink (as created by the parser) into a SubPlan.
  *
@@ -325,6 +566,40 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 	Plan	   *plan;
 	List	   *plan_params;
 	Node	   *result;
+	Query	   *dedup_query = NULL;
+	List	   *dedup_ctes = NIL;
+
+	/*
+	 * GPDB: If the same scalar subquery has already been made into an
+	 * initplan elsewhere in the statement, just use its result. See
+	 * find_duplicate_expr_sublinks().
+	 */
+	if (subLinkType == EXPR_SUBLINK && root->glob->dedupInitplanCandidates != NIL)
+	{
+		Query	   *normalized;
+		List	   *outer_ctes;
+		List	   *outer_cte_ups;
+
+		if (examine_dedup_subquery(orig_subquery, &normalized,
+								   &outer_ctes, &outer_cte_ups) &&
+			list_member(root->glob->dedupInitplanCandidates, normalized) &&
+			resolve_outer_ctes(root, outer_ctes, outer_cte_ups, &dedup_ctes))
+		{
+			ListCell   *lq,
+					   *lc,
+					   *lp;
+
+			forthree(lq, root->glob->dedupInitplanQueries,
+					 lc, root->glob->dedupInitplanCtes,
+					 lp, root->glob->dedupInitplanParams)
+			{
+				if (equal(lfirst(lq), normalized) &&
+					same_pointers((List *) lfirst(lc), dedup_ctes))
+					return (Node *) copyObject(lfirst(lp));
+			}
+			dedup_query = normalized;
+		}
+	}
 
 	/*
 	 * Copy the source Query node.  This is a quick and dirty kluge to resolve
@@ -469,6 +744,39 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 	result = build_subplan(root, plan, subroot, plan_params,
 						   subLinkType, subLinkId,
 						   testexpr, NIL, isTopQual);
+
+	/*
+	 * GPDB: If this scalar subquery occurs again elsewhere in the statement,
+	 * and it became an initplan, attach the initplan to the top query level,
+	 * so that its result is available everywhere, and remember it for the
+	 * other occurrences.
+	 */
+	if (dedup_query && IsA(result, Param) && root->init_plans != NIL)
+	{
+		SubPlan    *splan = (SubPlan *) llast(root->init_plans);
+		Param	   *param = (Param *) result;
+
+		if (splan->is_initplan && plan_params == NIL &&
+			param->paramkind == PARAM_EXEC &&
+			list_member_int(splan->setParam, param->paramid))
+		{
+			PlannerInfo *top = root;
+
+			while (top->parent_root)
+				top = top->parent_root;
+			if (top != root)
+			{
+				root->init_plans = list_delete_last(root->init_plans);
+				top->init_plans = lappend(top->init_plans, splan);
+			}
+			root->glob->dedupInitplanQueries =
+				lappend(root->glob->dedupInitplanQueries, dedup_query);
+			root->glob->dedupInitplanCtes =
+				lappend(root->glob->dedupInitplanCtes, dedup_ctes);
+			root->glob->dedupInitplanParams =
+				lappend(root->glob->dedupInitplanParams, copyObject(param));
+		}
+	}
 
 	/*
 	 * If it's a correlated EXISTS with an unimportant targetlist, we might be

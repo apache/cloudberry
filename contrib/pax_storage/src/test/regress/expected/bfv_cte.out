@@ -658,9 +658,6 @@ from t1_cte join t2 on t1_cte.b = t2.b;
    InitPlan 1 (returns $0)  (slice4)
      ->  Gather Motion 1:1  (slice5; segments: 1)
            ->  Seq Scan on rep
-   InitPlan 2 (returns $1)  (slice6)
-     ->  Gather Motion 1:1  (slice7; segments: 1)
-           ->  Seq Scan on rep rep_1
    ->  Hash Join
          Hash Cond: (t1.b = t2.b)
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
@@ -671,7 +668,7 @@ from t1_cte join t2 on t1_cte.b = t2.b;
                      Hash Key: t2.b
                      ->  Seq Scan on t2
  Optimizer: Postgres query optimizer
-(17 rows)
+(14 rows)
 
 with t1_cte as (select b from t1),
 rep_cte as (select a from rep)
@@ -716,29 +713,27 @@ set allow_system_table_mods=true;
 update pg_class set relpages = 1::int, reltuples = 12.0::real where relname = 'a_table';
 reset allow_system_table_mods;
 explain select * from a_table join cte_view on a_table.a = (select a from cte_view) where cte_view.a = 2024;
-NOTICE:  One or more columns in the following table(s) do not have statistics: a_table
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
-                                                 QUERY PLAN                                                  
--------------------------------------------------------------------------------------------------------------
+                                             QUERY PLAN                                             
+----------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000003.49..10000000005.66 rows=3 width=4)
+   InitPlan 1 (returns $0)  (slice3)
+     ->  Gather Motion 3:1  (slice4; segments: 3)  (cost=0.00..1.20 rows=12 width=2)
+           ->  Seq Scan on a_table a_table_2  (cost=0.00..1.04 rows=4 width=2)
    InitPlan 2 (returns $1)  (slice5)
-     ->  Gather Motion 3:1  (slice6; segments: 3)  (cost=1.20..2.29 rows=3 width=2)
+     ->  Gather Motion 3:1  (slice6; segments: 3)  (cost=0.00..1.09 rows=3 width=2)
            ->  Seq Scan on a_table a_table_3  (cost=0.00..1.05 rows=1 width=2)
                  Filter: (a = $0)
-                 InitPlan 1 (returns $0)  (slice7)
-                   ->  Gather Motion 3:1  (slice8; segments: 3)  (cost=0.00..1.20 rows=12 width=2)
-                         ->  Seq Scan on a_table a_table_2  (cost=0.00..1.04 rows=4 width=2)
-   ->  Nested Loop  (cost=10000000001.20..10000000003.33 rows=1 width=4)
+   InitPlan 3 (returns $2)  (slice7)
+     ->  Gather Motion 3:1  (slice8; segments: 3)  (cost=0.00..1.20 rows=12 width=2)
+           ->  Seq Scan on a_table a_table_4  (cost=0.00..1.04 rows=4 width=2)
+   ->  Nested Loop  (cost=10000000000.00..10000000002.13 rows=1 width=4)
          ->  Seq Scan on a_table  (cost=0.00..1.05 rows=1 width=2)
                Filter: (a = $1)
-         ->  Materialize  (cost=1.20..2.27 rows=1 width=2)
-               ->  Redistribute Motion 1:3  (slice2; segments: 1)  (cost=1.20..2.27 rows=1 width=2)
+         ->  Materialize  (cost=0.00..1.07 rows=1 width=2)
+               ->  Redistribute Motion 1:3  (slice2; segments: 1)  (cost=0.00..1.07 rows=1 width=2)
                      Hash Key: $1
-                     ->  Result  (cost=1.20..2.25 rows=1 width=2)
+                     ->  Result  (cost=0.00..1.05 rows=1 width=2)
                            One-Time Filter: ($2 = 2024)
-                           InitPlan 3 (returns $2)  (slice3)
-                             ->  Gather Motion 3:1  (slice4; segments: 3)  (cost=0.00..1.20 rows=12 width=2)
-                                   ->  Seq Scan on a_table a_table_4  (cost=0.00..1.04 rows=4 width=2)
                            ->  Seq Scan on a_table a_table_1  (cost=0.00..1.05 rows=1 width=2)
                                  Filter: (a = 2024)
  Optimizer: Postgres query optimizer

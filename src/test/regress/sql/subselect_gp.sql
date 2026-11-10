@@ -493,6 +493,51 @@ end $$;
 select * from csq_agg_not_null_on_empty();
 drop function csq_agg_not_null_on_empty();
 
+--
+-- The same uncorrelated scalar subquery occurring more than once in a
+-- statement, here in two UNION ALL branches like in TPC-DS query 14, is
+-- computed by a single initplan.
+--
+set optimizer = off;
+create table dedup_initplan (a int, b int) distributed by (a);
+insert into dedup_initplan select i, i % 10 from generate_series(1, 1000) i;
+analyze dedup_initplan;
+
+explain (costs off)
+with avg_a as (select avg(a) as v from dedup_initplan)
+select * from (
+  select 'x' as c, b, sum(a) from dedup_initplan where b < 5 group by b
+    having sum(a) > (select v from avg_a)
+  union all
+  select 'y' as c, b, sum(a) from dedup_initplan where b >= 5 group by b
+    having sum(a) > (select v from avg_a)) s;
+with avg_a as (select avg(a) as v from dedup_initplan)
+select * from (
+  select 'x' as c, b, sum(a) from dedup_initplan where b < 5 group by b
+    having sum(a) > (select v from avg_a)
+  union all
+  select 'y' as c, b, sum(a) from dedup_initplan where b >= 5 group by b
+    having sum(a) > (select v from avg_a)) s
+order by c, b;
+
+-- The same text, but referring to different CTEs: must not be merged
+with c as (select 1 as v)
+select (select v from c) as outer_c,
+       (with c as (select 2 as v) select (select v from c)) as inner_c;
+
+-- Volatile functions: must not be merged
+explain (costs off)
+select (select random() from dedup_initplan limit 1) as r1,
+       (select random() from dedup_initplan limit 1) as r2;
+
+-- Correlated: must not be merged
+select b, (select max(a) from dedup_initplan d2 where d2.b = d1.b) as m1,
+          (select max(a) from dedup_initplan d2 where d2.b = d1.b) as m2
+from dedup_initplan d1 where a <= 3 order by b;
+
+reset optimizer;
+drop table dedup_initplan;
+
 
 --
 -- NOT EXISTS CSQs to joins
