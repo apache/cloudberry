@@ -927,16 +927,21 @@ BEGIN
   INSERT INTO rta_sink VALUES (r);
 END;
 $$;
-SELECT c FROM rta_sink;
 ERROR:  row type of datum tuple was altered after the datum's creation
 HINT:  See server log for additional details.
+CONTEXT:  SQL statement "INSERT INTO rta_sink VALUES (r)"
+PL/pgSQL function inline_code_block line 10 at SQL statement
+SELECT c FROM rta_sink;
+ c 
+---
+(0 rows)
+
 -- remove the potentially stored outdated datum
 UPDATE rta_sink SET c = NULL;
 SELECT c IS NULL FROM rta_sink;
  ?column? 
 ----------
- t
-(1 row)
+(0 rows)
 
 DROP TABLE rta_sink;
 DROP TYPE rta_type;
@@ -954,15 +959,20 @@ BEGIN
   INSERT INTO rta_sink VALUES (r);
 END;
 $$;
-SELECT c FROM rta_sink;
 ERROR:  row type of datum tuple was altered after the datum's creation
 HINT:  See server log for additional details.
+CONTEXT:  SQL statement "INSERT INTO rta_sink VALUES (r)"
+PL/pgSQL function inline_code_block line 10 at SQL statement
+SELECT c FROM rta_sink;
+ c 
+---
+(0 rows)
+
 UPDATE rta_sink SET c = NULL;
 SELECT c IS NULL FROM rta_sink;
  ?column? 
 ----------
- t
-(1 row)
+(0 rows)
 
 DROP TABLE rta_sink;
 DROP TYPE rta_type;

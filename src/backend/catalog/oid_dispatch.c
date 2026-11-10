@@ -79,6 +79,7 @@
 #include "postgres.h"
 
 #include "catalog/catalog.h"
+#include "catalog/heap.h"
 #include "catalog/indexing.h"
 #include "catalog/gp_storage_server.h"
 #include "catalog/gp_storage_user_mapping.h"
@@ -409,6 +410,68 @@ GetPreassignedOid(OidAssignment *searchkey)
 	}
 
 	return InvalidOid;
+}
+
+/*
+ * Attribute versions describe a logical row type, so all nodes must use the
+ * coordinator's WAL position rather than their independent WAL positions.
+ * Share the OID assignment queue's dispatch, subtransaction and lifetime rules,
+ * but keep the full-width version in a separate payload and key space.
+ *
+ * attnum is zero for a new relation, whose attributes initially share a
+ * version. For ALTER, it identifies the added or changed attribute. Repeated
+ * changes to the same attribute consume matching assignments in FIFO order.
+ */
+XLogRecPtr
+GetNewOrPreassignedAttributeVersion(Oid relationOid, AttrNumber attnum)
+{
+	OidAssignment assignment = {0};
+	MemoryContext oldcontext;
+	ListCell   *lc;
+
+	Assert(OidIsValid(relationOid));
+	Assert(attnum >= 0);
+
+	/* Binary upgrade restores each node locally, without OID dispatch. */
+	if (!IsNormalProcessingMode() || IsBinaryUpgrade ||
+		Gp_role == GP_ROLE_UTILITY)
+		return GetNextAttributeVersion();
+
+	if (Gp_role == GP_ROLE_EXECUTE)
+	{
+		foreach(lc, preassigned_oids)
+		{
+			OidAssignment *p = lfirst(lc);
+			XLogRecPtr version;
+
+			if (p->catalog != ATTRIBUTE_VERSION_ASSIGNMENT ||
+				p->namespaceOid != relationOid || p->keyOid1 != (Oid) attnum)
+				continue;
+
+			version = p->attributeVersion;
+			preassigned_oids = foreach_delete_current(preassigned_oids, lc);
+			pfree(p);
+			if (version == InvalidXLogRecPtr)
+				elog(ERROR, "invalid pre-assigned attribute version");
+			return version;
+		}
+
+		elog(ERROR, "no pre-assigned attribute version for relation %u, attribute %d",
+			 relationOid, attnum);
+	}
+
+	assignment.attributeVersion = GetNextAttributeVersion();
+	if (Gp_role == GP_ROLE_DISPATCH)
+	{
+		assignment.type = T_OidAssignment;
+		assignment.catalog = ATTRIBUTE_VERSION_ASSIGNMENT;
+		assignment.namespaceOid = relationOid;
+		assignment.keyOid1 = attnum;
+		oldcontext = MemoryContextSwitchTo(get_oids_context());
+		dispatch_oids = lappend(dispatch_oids, copyObject(&assignment));
+		MemoryContextSwitchTo(oldcontext);
+	}
+	return assignment.attributeVersion;
 }
 
 /* ----------------------------------------------------------------

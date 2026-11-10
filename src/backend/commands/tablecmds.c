@@ -9510,7 +9510,8 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 	Assert(HasVersionedAttributes(rel) || allowSystemTableMods);
 	if (HasVersionedAttributes(rel))
 	{
-		XLogRecPtr	attversion = GetNextAttributeVersion();
+		XLogRecPtr	attversion =
+			GetNewOrPreassignedAttributeVersion(myrelid, newattnum);
 
 		/*
 		 * We rely on the version to be monotonic, so make sure that's true,
@@ -16268,7 +16269,7 @@ ATExecAlterColumnType(AlteredTableInfo *tab, Relation rel,
 	{
 		HeapTuple	newTup;
 
-		attversion = GetNextAttributeVersion();
+		attversion = GetNewOrPreassignedAttributeVersion(RelationGetRelid(rel), attnum);
 
 		newTup = SetAttributeVersionInTuple(attrelation,
 											heapTup,

@@ -405,3 +405,6 @@ test: gp_log_mem_dispatch
 
 # Distributed ANALYZE sampling must not leave an unstarted query portal.
 test: analyze_portal
+
+# Attribute versions must agree between coordinator and segments.
+test: mpp_attribute_version

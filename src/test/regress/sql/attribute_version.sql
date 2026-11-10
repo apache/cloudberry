@@ -20,10 +20,16 @@ CREATE FUNCTION make_tuple_unversioned(anyelement)
   AS :'regresslib' LANGUAGE C STRICT;
 
 
-CREATE FUNCTION make_type_unversioned(p_rt regtype)
-  RETURNS void
+-- Test-only legacy catalog fixture. Reset the logical type on every node,
+-- with catalog-write permission scoped to these functions, not the session.
+CREATE FUNCTION make_type_unversioned_on_segments(p_rt regtype)
+  RETURNS SETOF boolean
   LANGUAGE plpgsql
   STRICT
+  EXECUTE ON ALL SEGMENTS
+  SET allow_system_table_mods = on
+  SET allow_segment_DML = on
+  SET search_path = pg_catalog, pg_temp
   AS $$
 DECLARE
    p_rc regclass;
@@ -32,6 +38,26 @@ BEGIN
 
    -- assume that there are no column options here, simplifies the code
    UPDATE pg_catalog.pg_attribute SET attoptions = NULL WHERE attrelid = p_rc;
+   RETURN NEXT true;
+END;
+$$;
+
+CREATE FUNCTION make_type_unversioned(p_rt regtype)
+  RETURNS void
+  LANGUAGE plpgsql
+  STRICT
+  SET allow_system_table_mods = on
+  SET allow_segment_DML = on
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+DECLARE
+   p_rc regclass;
+BEGIN
+   SELECT typrelid INTO STRICT p_rc FROM pg_type WHERE typtype = 'c' AND oid = p_rt;
+
+   -- assume that there are no column options here, simplifies the code
+   UPDATE pg_catalog.pg_attribute SET attoptions = NULL WHERE attrelid = p_rc;
+   PERFORM * FROM public.make_type_unversioned_on_segments(p_rt);
 END;
 $$;
 
@@ -188,6 +214,16 @@ DECLARE c2_wrongver CURSOR WITH HOLD FOR
 DECLARE c2_ver0 CURSOR WITH HOLD FOR
   SELECT c FROM rowold_tbl WHERE key = '2-cols-ver0';
 
+-- Cloudberry cannot scan a cursor backwards. Keep independent snapshots
+-- for the reads before DDL, after DDL, and after rollback.
+DECLARE c3_before CURSOR WITH HOLD FOR
+  SELECT c FROM rowold_tbl WHERE key = '3-cols-ver';
+DECLARE c2_after CURSOR WITH HOLD FOR
+  SELECT c FROM rowold_tbl WHERE key = '2-cols-unver';
+DECLARE c3_after CURSOR WITH HOLD FOR
+  SELECT c FROM rowold_tbl WHERE key = '3-cols-ver';
+DECLARE c2_ver0_after CURSOR WITH HOLD FOR
+  SELECT c FROM rowold_tbl WHERE key = '2-cols-ver0';
 DECLARE c3_ver CURSOR WITH HOLD FOR
   SELECT c FROM rowold_tbl WHERE key = '3-cols-ver';
 COMMIT;
@@ -196,7 +232,7 @@ COMMIT;
 BEGIN;
 
 -- Should succeed, is versioned and the version is [for now] correct.
-FETCH FIRST FROM c3_ver;
+FETCH NEXT FROM c3_before;
 
 
 DROP TABLE rowold_tbl;
@@ -205,36 +241,35 @@ ALTER TYPE rowold_comp ALTER ATTRIBUTE c2 TYPE text;
 SAVEPOINT after_ddl;
 
 -- Should succeed, c1 should still have version 0 after the ALTER of c2.
-FETCH FIRST FROM c1_unver;
+FETCH NEXT FROM c1_unver;
 
 -- Should fail, from before version reset
-FETCH FIRST FROM c1_wrongver;
+FETCH NEXT FROM c1_wrongver;
 ROLLBACK TO SAVEPOINT after_ddl;
 
 -- Should error out, was changed, unversioned is interpreted as version 0,
 -- which does not match anymore
-FETCH FIRST FROM c2_unver;
+FETCH NEXT FROM c2_unver;
 ROLLBACK TO SAVEPOINT after_ddl;
 
 -- Should fail, from before version reset
-FETCH FIRST FROM c2_wrongver;
+FETCH NEXT FROM c2_wrongver;
 ROLLBACK TO SAVEPOINT after_ddl;
 
 -- Should error out like c2_unver, version 0 does not match anymore
-FETCH FIRST FROM c2_ver0;
+FETCH NEXT FROM c2_ver0;
 ROLLBACK TO SAVEPOINT after_ddl;
 
 -- Should error out, schema was changed, version is wrong
-FETCH FIRST FROM c3_ver;
+FETCH NEXT FROM c3_ver;
 ROLLBACK TO SAVEPOINT after_ddl;
 
 ROLLBACK;
 
--- Now that the DDL is rolled back, we should be able to again look at cursors
--- that failed due to the DDL
-FETCH FIRST FROM c2_unver;
-FETCH FIRST FROM c3_ver;
-FETCH FIRST FROM c2_ver0;
+-- After rollback, read the same pre-DDL datums from independent held cursors.
+FETCH NEXT FROM c2_after;
+FETCH NEXT FROM c3_after;
+FETCH NEXT FROM c2_ver0_after;
 
 
 --
@@ -268,17 +303,21 @@ SELECT (make_tuple_unversioned(ROW(1, 2)::rowdirect_ver_comp)).b;
 --
 CREATE TYPE rowignore_comp AS (a bytea, b bytea);
 BEGIN;
-DECLARE c_ignore SCROLL CURSOR WITH HOLD FOR
+DECLARE c_ignore_warn CURSOR WITH HOLD FOR
+  SELECT ROW('\x4649584d45', '\x464958544f4f')::rowignore_comp;
+DECLARE c_ignore_disabled CURSOR WITH HOLD FOR
+  SELECT ROW('\x4649584d45', '\x464958544f4f')::rowignore_comp;
+DECLARE c_ignore CURSOR WITH HOLD FOR
   SELECT ROW('\x4649584d45', '\x464958544f4f')::rowignore_comp;
 COMMIT;
 ALTER TYPE rowignore_comp ALTER ATTRIBUTE a TYPE bytea;
 SHOW composite_type_mismatch;
 SET composite_type_mismatch = warn;
-FETCH FIRST FROM c_ignore;
+FETCH NEXT FROM c_ignore_warn;
 SET composite_type_mismatch = disabled;
-FETCH FIRST FROM c_ignore;
+FETCH NEXT FROM c_ignore_disabled;
 RESET composite_type_mismatch;
-FETCH FIRST FROM c_ignore;
+FETCH NEXT FROM c_ignore;
 
 CREATE ROLE regress_av_nosuper;
 SET ROLE regress_av_nosuper;
@@ -338,6 +377,7 @@ DROP TABLE IF EXISTS rowfunc_tbl;
 DROP TABLE IF EXISTS rowself_tbl, rowself_def;
 
 DROP FUNCTION IF EXISTS make_type_unversioned(p_rt regtype);
+DROP FUNCTION make_type_unversioned_on_segments(regtype);
 DROP FUNCTION IF EXISTS type_versions(p_rt regtype);
 DROP FUNCTION make_tuple_unversioned(anyelement);
 
