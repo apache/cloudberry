@@ -385,8 +385,6 @@ code or new licensing patterns.
             <exclude>contrib/intarray/_int_gist.c</exclude>
             <exclude>contrib/intarray/_int_op.c</exclude>
             <exclude>contrib/intarray/_int_tool.c</exclude>
-            <exclude>contrib/intarray/package/gppkg_spec.yml.in</exclude>
-            <exclude>contrib/intarray/package/intarray.spec</exclude>
 
             <exclude>contrib/sasdemo/test/**</exclude>
             <exclude>contrib/sasdemo/sender/sassender.c</exclude>
@@ -461,8 +459,6 @@ code or new licensing patterns.
             <exclude>contrib/pgcrypto/openssl_redirect.c</exclude>
             <exclude>contrib/pgcrypto/crypt-gensalt.c</exclude>
             <exclude>contrib/pgcrypto/crypt-blowfish.c</exclude>
-            <exclude>contrib/pgcrypto/package/gppkg_spec.yml.in</exclude>
-            <exclude>contrib/pgcrypto/package/pgcrypto.spec</exclude>
 
             <exclude>contrib/citext/citext.c</exclude>
 
@@ -536,13 +532,6 @@ code or new licensing patterns.
             <exclude>gpAux/gpdemo/lalshell</exclude>
             <exclude>gpAux/gpdemo/generate_certs.sh</exclude>
             <exclude>gpAux/gpdemo/probe_config.sh</exclude>
-            <exclude>gpAux/BUILD_INSTRUCTIONS</exclude>
-            <exclude>gpAux/Makefile.global</exclude>
-            <exclude>gpAux/Makefile</exclude>
-            <exclude>gpAux/Makefile.thirdparty</exclude>
-            <exclude>gpAux/releng/set_bld_arch.sh</exclude>
-            <exclude>gpAux/releng/gppkg.mk</exclude>
-            <exclude>gpAux/client/scripts/cloudberry_clients_path.sh</exclude>
 
             <exclude>doc/**</exclude>
 
