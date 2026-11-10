@@ -20,6 +20,10 @@ set enable_incremental_sort=on;
 set optimizer_segments = 3;
 
 set optimizer_enable_master_only_queries = on;
+
+-- Some plans below cost more than jit_above_cost, where a server built
+-- --with-llvm adds a JIT summary to EXPLAIN's output.
+set jit = off;
 -- master only tables
 
 create schema orca;
