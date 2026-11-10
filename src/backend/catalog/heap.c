@@ -2069,7 +2069,7 @@ heap_create_with_catalog(const char *relname,
 		if (IsBinaryUpgrade)
 			SetBinaryUpgradeAttributeVersions(new_rel_desc->rd_att, relname);
 		else
-			attversion = GetNextAttributeVersion();
+			attversion = GetNewOrPreassignedAttributeVersion(relid, 0);
 	}
 
 	/*
