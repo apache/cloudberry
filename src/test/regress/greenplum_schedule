@@ -402,3 +402,6 @@ test: dboptions
 test: gp_log_mem_dispatch
 
 # end of tests
+
+# Distributed ANALYZE sampling must not leave an unstarted query portal.
+test: analyze_portal
