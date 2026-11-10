@@ -655,6 +655,7 @@ extern bool gp_dynamic_partition_pruning;
 
 /* Sharing of plan fragments for common table expressions */
 extern bool gp_cte_sharing;
+extern bool gp_cte_sharing_auto;
 /* Enable RECURSIVE clauses in common table expressions */
 extern bool gp_recursive_cte;
 

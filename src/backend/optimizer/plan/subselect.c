@@ -389,6 +389,7 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 		 * See github issue: https://github.com/greenplum-db/gpdb/issues/12701
 		 */
 		config->gp_cte_sharing = false;
+		config->gp_cte_sharing_auto = false;
 	}
 	/*
 	 * Strictly speaking, the order of rows in a subquery doesn't matter.
