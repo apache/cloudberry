@@ -170,6 +170,9 @@ CXformDynamicGet2ParallelAppendTableScan::Transform(CXformContext *pxfctxt,
 		ulParallelWorkers = (ULONG)max_parallel_workers_per_gather;
 	}
 
+	// Mark that we have parallel operators in the query
+	COptCtxt::PoctxtFromTLS()->SetHasParallelOperators();
+
 	// create alternative expression
 	CExpression *pexprAlt = GPOS_NEW(mp) CExpression(
 		mp, GPOS_NEW(mp) CPhysicalParallelAppendTableScan(

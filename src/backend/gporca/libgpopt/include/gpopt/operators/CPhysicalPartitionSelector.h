@@ -212,6 +212,10 @@ public:
 		return dynamic_cast<CPhysicalPartitionSelector *>(pop);
 	}
 
+	// check if optimization context is valid
+	BOOL FValidContext(CMemoryPool *mp, COptimizationContext *poc,
+					   COptimizationContextArray *pdrgpocChild) const override;
+
 	// debug print
 	IOstream &OsPrint(IOstream &os) const override;
 

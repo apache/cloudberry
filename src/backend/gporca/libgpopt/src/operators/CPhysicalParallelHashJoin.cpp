@@ -41,6 +41,7 @@
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/base/CUtils.h"
 #include "gpopt/operators/CExpressionHandle.h"
+#include "gpopt/operators/CPhysicalParallelAppendTableScan.h"
 #include "gpopt/operators/CPhysicalParallelTableScan.h"
 #include "gpopt/search/CGroupProxy.h"
 
@@ -70,6 +71,11 @@ CPhysicalParallelHashJoin::CPhysicalParallelHashJoin(
 	// from child groups when optimization contexts are available
 	ULONG ulDistrReqs = 1 + NumDistrReq();
 	SetDistrRequests(ulDistrReqs);
+
+	// A partition selector cannot sit on worker-split input (see
+	// CPhysicalPartitionSelector::FValidContext), so the DPE request alone
+	// may leave no valid plan. Also generate the request without DPE.
+	SetPartPropagateRequests(2);
 }
 
 //---------------------------------------------------------------------------
@@ -119,6 +125,13 @@ CPhysicalParallelHashJoin::UlExtractWorkersFromGroupInternal(
 		{
 			CPhysicalParallelTableScan *popScan =
 				CPhysicalParallelTableScan::PopConvert(popChild);
+			return popScan->UlParallelWorkers();
+		}
+
+		if (COperator::EopPhysicalParallelAppendTableScan == popChild->Eopid())
+		{
+			CPhysicalParallelAppendTableScan *popScan =
+				CPhysicalParallelAppendTableScan::PopConvert(popChild);
 			return popScan->UlParallelWorkers();
 		}
 
