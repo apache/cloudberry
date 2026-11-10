@@ -23,8 +23,25 @@
 #include "cdb/cdbsubplan.h"
 #include "cdb/cdbvars.h"		/* currentSliceId */
 #include "utils/tuplestore.h"
+#include "cdb/cdbdisp.h"
+#include "cdb/cdbdispatchresult.h"
+#include "cdb/cdbtm.h"			/* isCurrentDtxActivated */
+#include "cdb/cdbmotion.h"
+#include "cdb/ml_ipc.h"
+#include "nodes/pg_list.h"
 
 static bool isParamExecutableNow(SubPlanState *spstate, ParamExecData *prmList, Bitmapset *setparams);
+static int	initplan_root_slice(QueryDesc *queryDesc, SubPlanState *sps);
+static int	count_qe_slices(SliceTable *sliceTable, int sliceIndex);
+static void run_initplans_together(QueryDesc *queryDesc, List *group);
+
+/*
+ * The most QE slices that run_initplans_together() dispatches at once. Each
+ * QE slice needs a gang of its own. Run one at a time, initplans can reuse
+ * the same gangs; run together, they need as many gangs as they have QE
+ * slices. So larger groups of initplans are split into batches.
+ */
+#define MAX_INITPLAN_GROUP_SLICES	8
 
 /*
  * Function preprocess_initplans() is called from ExecutorRun running a
@@ -107,6 +124,85 @@ preprocess_initplans(QueryDesc *queryDesc)
 	 * order, i.e. if a subplan x has a sublan y, then y will come before x in
 	 * the es_param_exec_vals array.
 	 */
+
+	/*
+	 * CDB: Initplans that don't depend on any other param are independent of
+	 * each other, so instead of dispatching and running them one at a time,
+	 * we can dispatch them all at once and let their QE slices run
+	 * concurrently. Their root slices still run one after another on the QD,
+	 * but by then the QEs have done most of the work. To bound the number of
+	 * gangs, they are dispatched in batches of at most
+	 * MAX_INITPLAN_GROUP_SLICES QE slices. Whatever is left, or isn't safe to
+	 * run that way, is handled by the loop below as before.
+	 */
+	if (queryDesc->plannedstmt->subplan_sliceIds)
+	{
+		List	   *group = NIL;
+		List	   *batch = NIL;
+		int			batchSlices = 0;
+		ListCell   *lc;
+
+		for (i = 0; i < nParamExec; i++)
+		{
+			ParamExecData *prm = &estate->es_param_exec_vals[i];
+			SubPlanState *sps = (SubPlanState *) prm->execPlan;
+
+			if (!sps || list_member_ptr(group, sps))
+				continue;
+			if (sps->subplan->extParam != NIL ||
+				sps->subplan->subLinkType == INITPLAN_FUNC_SUBLINK)
+				continue;
+			/*
+			 * The param values are sent with the dispatch, before any
+			 * initplan in the group has run. So none of them may use the
+			 * output of another initplan anywhere in its plan tree. Note
+			 * that extParam doesn't tell: when an initplan uses the result of
+			 * a nested initplan, e.g. "WHERE x = (SELECT min(y) ...)" inside
+			 * it, that param is not external to it.
+			 */
+			if (bms_overlap(sps->planstate->plan->allParam, setparams))
+				continue;
+			/*
+			 * With EXPLAIN ANALYZE, ExecSetParamPlan() collects the QE
+			 * statistics of each initplan from its own dispatch; we don't
+			 * handle that for a shared dispatch.
+			 */
+			if (sps->planstate->instrument && sps->planstate->instrument->need_cdb)
+				continue;
+			if (initplan_root_slice(queryDesc, sps) <= 0)
+				continue;
+			group = lappend(group, sps);
+		}
+
+		elog(DEBUG1, "preprocess_initplans: found %d independent initplans to run together",
+			 list_length(group));
+		if (list_length(group) >= 2)
+		{
+			foreach(lc, group)
+			{
+				SubPlanState *sps = (SubPlanState *) lfirst(lc);
+				int			nslices;
+
+				nslices = count_qe_slices(estate->es_sliceTable,
+										  initplan_root_slice(queryDesc, sps));
+				if (batch != NIL && batchSlices + nslices > MAX_INITPLAN_GROUP_SLICES)
+				{
+					if (list_length(batch) >= 2)
+						run_initplans_together(queryDesc, batch);
+					list_free(batch);
+					batch = NIL;
+					batchSlices = 0;
+				}
+				batch = lappend(batch, sps);
+				batchSlices += nslices;
+			}
+			if (list_length(batch) >= 2)
+				run_initplans_together(queryDesc, batch);
+			list_free(batch);
+		}
+		list_free(group);
+	}
+
 	for (i = 0; i < nParamExec; i++)
 	{
 		ParamExecData *prm;
@@ -170,6 +266,194 @@ preprocess_initplans(QueryDesc *queryDesc)
 		queryDesc->estate->es_sliceTable->localSlice = originalSlice;
 		currentSliceId = originalSlice;
 	}
+}
+
+/* Does no slice in the tree under 'sliceIndex' write? */
+static bool
+slice_tree_is_read_only(SliceTable *sliceTable, int sliceIndex)
+{
+	ExecSlice  *slice = &sliceTable->slices[sliceIndex];
+	ListCell   *lc;
+
+	if (slice->gangType == GANGTYPE_PRIMARY_WRITER)
+		return false;
+	foreach(lc, slice->children)
+	{
+		if (!slice_tree_is_read_only(sliceTable, lfirst_int(lc)))
+			return false;
+	}
+	return true;
+}
+
+/*
+ * Return the index of the QD root slice of an initplan, if it's one that
+ * run_initplans_together() can handle: it must run on the QD and have QE
+ * slices below it, none of which writes. Otherwise return -1.
+ */
+static int
+initplan_root_slice(QueryDesc *queryDesc, SubPlanState *sps)
+{
+	PlannedStmt *stmt = queryDesc->plannedstmt;
+	SliceTable *sliceTable = queryDesc->estate->es_sliceTable;
+	int			sliceIndex;
+	ExecSlice  *slice;
+
+	sliceIndex = stmt->subplan_sliceIds[sps->subplan->plan_id - 1];
+	if (sliceIndex <= 0 || stmt->slices[sliceIndex].parentIndex != -1)
+		return -1;
+
+	slice = &sliceTable->slices[sliceIndex];
+	if (slice->gangType != GANGTYPE_UNALLOCATED || slice->children == NIL)
+		return -1;
+	if (!slice_tree_is_read_only(sliceTable, sliceIndex))
+		return -1;
+
+	return sliceIndex;
+}
+
+/* Number of QE slices in the tree under the QD slice 'sliceIndex' */
+static int
+count_qe_slices(SliceTable *sliceTable, int sliceIndex)
+{
+	ExecSlice  *slice = &sliceTable->slices[sliceIndex];
+	ListCell   *lc;
+	int			n = 0;
+
+	foreach(lc, slice->children)
+		n += 1 + count_qe_slices(sliceTable, lfirst_int(lc));
+	return n;
+}
+
+static void
+set_slice_tree_root(SliceTable *sliceTable, int sliceIndex, int rootIndex,
+					List **saved)
+{
+	ExecSlice  *slice = &sliceTable->slices[sliceIndex];
+	ListCell   *lc;
+
+	*saved = lappend_int(*saved, sliceIndex);
+	*saved = lappend_int(*saved, slice->rootIndex);
+	slice->rootIndex = rootIndex;
+	foreach(lc, slice->children)
+		set_slice_tree_root(sliceTable, lfirst_int(lc), rootIndex, saved);
+}
+
+/*
+ * Run a group of independent initplans with a single dispatch.
+ *
+ * The dispatcher and the interconnect both work on the slice tree under one
+ * root slice. So we temporarily graft the QE slices of all the initplans in
+ * the group under the root slice of the first one: they are dispatched
+ * together, start running concurrently, and send their results to the QD.
+ * The QD then runs the root slice of each initplan in turn, each reading
+ * from its own Motions, which are identified by the sending slice. Finally
+ * we tear down the interconnect, wait for the QEs, and restore the slice
+ * table, which the main plan's dispatch uses afterwards.
+ */
+static void
+run_initplans_together(QueryDesc *queryDesc, List *group)
+{
+	EState	   *estate = queryDesc->estate;
+	SliceTable *sliceTable = estate->es_sliceTable;
+	int			originalSlice = sliceTable->localSlice;
+	int			firstRoot = -1;
+	ExecSlice  *rootSlice = NULL;
+	List	   *savedRootChildren = NIL;
+	List	   *grafted = NIL;		/* (slice, old parentIndex) pairs */
+	List	   *savedRoots = NIL;	/* (slice, old rootIndex) pairs */
+	ListCell   *lc;
+
+	foreach(lc, group)
+	{
+		SubPlanState *sps = (SubPlanState *) lfirst(lc);
+		int			sliceIndex = initplan_root_slice(queryDesc, sps);
+		ListCell   *lc2;
+
+		if (firstRoot < 0)
+		{
+			firstRoot = sliceIndex;
+			rootSlice = &sliceTable->slices[firstRoot];
+			savedRootChildren = list_copy(rootSlice->children);
+			continue;
+		}
+		foreach(lc2, sliceTable->slices[sliceIndex].children)
+		{
+			int			child = lfirst_int(lc2);
+
+			grafted = lappend_int(grafted, child);
+			grafted = lappend_int(grafted, sliceTable->slices[child].parentIndex);
+			sliceTable->slices[child].parentIndex = firstRoot;
+			rootSlice->children = lappend_int(rootSlice->children, child);
+			set_slice_tree_root(sliceTable, child, firstRoot, &savedRoots);
+		}
+	}
+
+	sliceTable->localSlice = firstRoot;
+	currentSliceId = firstRoot;
+
+	PG_TRY();
+	{
+		CdbDispatchPlan(queryDesc, estate->es_param_exec_vals,
+						isCurrentDtxActivated(), true);
+		CurrentMotionIPCLayer->SetupInterconnect(estate);
+		UpdateMotionExpectedReceivers(estate->motionlayer_context, sliceTable);
+
+		foreach(lc, group)
+		{
+			SubPlanState *sps = (SubPlanState *) lfirst(lc);
+
+			if (sps->planstate->ps_ExprContext == NULL)
+				sps->planstate->ps_ExprContext = CreateExprContext(estate);
+			ExecSetParamPlanPredispatched(sps, sps->planstate->ps_ExprContext, queryDesc);
+		}
+
+		CurrentMotionIPCLayer->TeardownInterconnect(estate->interconnect_context, false);
+		estate->interconnect_context = NULL;
+		estate->es_interconnect_is_setup = false;
+
+		if (estate->dispatcherState && estate->dispatcherState->primaryResults)
+		{
+			CdbDispatcherState *ds = estate->dispatcherState;
+			ErrorData  *qeError = NULL;
+
+			cdbdisp_checkDispatchResult(ds, DISPATCH_WAIT_NONE);
+			cdbdisp_getDispatchResults(ds, &qeError);
+			estate->dispatcherState = NULL;
+			if (qeError)
+			{
+				FlushErrorState();
+				ThrowErrorData(qeError);
+			}
+			cdbdisp_destroyDispatcherState(ds);
+		}
+	}
+	PG_CATCH();
+	{
+		if (estate->es_interconnect_is_setup)
+		{
+			CurrentMotionIPCLayer->TeardownInterconnect(estate->interconnect_context, true);
+			estate->interconnect_context = NULL;
+			estate->es_interconnect_is_setup = false;
+		}
+		if (estate->dispatcherState)
+		{
+			CdbDispatcherState *ds = estate->dispatcherState;
+
+			estate->dispatcherState = NULL;
+			CdbDispatchHandleError(ds);
+		}
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	/* Restore the slice table */
+	rootSlice->children = savedRootChildren;
+	for (int i = 0; i < list_length(grafted); i += 2)
+		sliceTable->slices[list_nth_int(grafted, i)].parentIndex = list_nth_int(grafted, i + 1);
+	for (int i = 0; i < list_length(savedRoots); i += 2)
+		sliceTable->slices[list_nth_int(savedRoots, i)].rootIndex = list_nth_int(savedRoots, i + 1);
+	sliceTable->localSlice = originalSlice;
+	currentSliceId = originalSlice;
 }
 
 /*

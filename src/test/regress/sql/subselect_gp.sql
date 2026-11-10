@@ -493,6 +493,56 @@ end $$;
 select * from csq_agg_not_null_on_empty();
 drop function csq_agg_not_null_on_empty();
 
+--
+-- Independent initplans are dispatched together and run concurrently.
+-- Results must be the same as when they run one after another.
+--
+set optimizer = off;
+create table par_initplan (a int, b int) distributed by (a);
+insert into par_initplan select i, i % 10 from generate_series(1, 1000) i;
+analyze par_initplan;
+
+-- independent initplans, like TPC-DS query 9
+select case when (select count(*) from par_initplan where b < 5) > 400
+            then (select avg(a) from par_initplan where b < 5)
+            else (select avg(b) from par_initplan where b < 5) end as bucket1,
+       (select max(a) from par_initplan where b = 9) as m;
+
+-- more QE slices than are dispatched at once: run in batches
+select (select max(a) from par_initplan where b = 0) as m0,
+       (select max(a) from par_initplan where b = 1) as m1,
+       (select max(a) from par_initplan where b = 2) as m2,
+       (select max(a) from par_initplan where b = 3) as m3,
+       (select max(a) from par_initplan where b = 4) as m4,
+       (select max(a) from par_initplan where b = 5) as m5,
+       (select max(a) from par_initplan where b = 6) as m6,
+       (select max(a) from par_initplan where b = 7) as m7,
+       (select max(a) from par_initplan where b = 8) as m8,
+       (select max(a) from par_initplan where b = 9) as m9;
+
+-- an initplan that uses the result of a nested initplan must not be
+-- dispatched before that result is known
+select (select count(*) from par_initplan where a > (select max(b) from par_initplan)) as dep,
+       (select min(a) from par_initplan) as indep1,
+       (select max(a) from par_initplan where b = 1) as indep2;
+
+create table par_initplan_upd (k int, v int) distributed randomly;
+insert into par_initplan_upd values (1, 0), (2, 0);
+update par_initplan_upd set v = 42
+where k = (select min(b) + 1 from par_initplan
+           where a = (select min(a) from par_initplan where b = (select min(b) + 1 from par_initplan)));
+select * from par_initplan_upd order by k;
+
+-- an error in one of the initplans run together is reported, and the
+-- session can go on
+select (select a from par_initplan where b = 1) as err,
+       (select max(a) from par_initplan) as ok;
+select (select min(a) from par_initplan) as a1, (select max(a) from par_initplan) as a2;
+
+reset optimizer;
+drop table par_initplan;
+drop table par_initplan_upd;
+
 
 --
 -- NOT EXISTS CSQs to joins

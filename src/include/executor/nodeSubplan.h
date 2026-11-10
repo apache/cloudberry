@@ -27,6 +27,7 @@ extern void ExecReScanSetParamPlan(SubPlanState *node, PlanState *parent);
  * MPP Change: Added a parameter (ParamListInfo p) to this function.  See comments in nodeSubplan.cpp
  */
 extern void ExecSetParamPlan(SubPlanState *node, ExprContext *econtext, QueryDesc *gbl_queryDesc);
+extern void ExecSetParamPlanPredispatched(SubPlanState *node, ExprContext *econtext, QueryDesc *gbl_queryDesc);
 
 extern void ExecSetParamPlanMulti(const Bitmapset *params, ExprContext *econtext, QueryDesc *gbl_queryDesc);
 
