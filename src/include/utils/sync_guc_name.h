@@ -19,6 +19,7 @@
 		"client_min_messages",
 		"commit_delay",
 		"commit_siblings",
+		"composite_type_mismatch",
 		"coredump_on_memerror",
 		"DateStyle",
 		"Debug_appendonly_print_append_block",
