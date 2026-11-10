@@ -1223,6 +1223,117 @@ select * from csq_agg_not_null_on_empty();
 
 drop function csq_agg_not_null_on_empty();
 --
+-- The same uncorrelated scalar subquery occurring more than once in a
+-- statement, here in two UNION ALL branches like in TPC-DS query 14, is
+-- computed by a single initplan.
+--
+set optimizer = off;
+create table dedup_initplan (a int, b int) distributed by (a);
+insert into dedup_initplan select i, i % 10 from generate_series(1, 1000) i;
+analyze dedup_initplan;
+explain (costs off)
+with avg_a as (select avg(a) as v from dedup_initplan)
+select * from (
+  select 'x' as c, b, sum(a) from dedup_initplan where b < 5 group by b
+    having sum(a) > (select v from avg_a)
+  union all
+  select 'y' as c, b, sum(a) from dedup_initplan where b >= 5 group by b
+    having sum(a) > (select v from avg_a)) s;
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   InitPlan 1 (returns $0)  (slice4)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice5; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Seq Scan on dedup_initplan dedup_initplan_2
+   ->  Append
+         ->  Finalize HashAggregate
+               Group Key: dedup_initplan.b
+               Filter: ((sum(dedup_initplan.a))::numeric > $0)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: dedup_initplan.b
+                     ->  Streaming Partial HashAggregate
+                           Group Key: dedup_initplan.b
+                           ->  Seq Scan on dedup_initplan
+                                 Filter: (b < 5)
+         ->  Finalize HashAggregate
+               Group Key: dedup_initplan_1.b
+               Filter: ((sum(dedup_initplan_1.a))::numeric > $0)
+               ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                     Hash Key: dedup_initplan_1.b
+                     ->  Streaming Partial HashAggregate
+                           Group Key: dedup_initplan_1.b
+                           ->  Seq Scan on dedup_initplan dedup_initplan_1
+                                 Filter: (b >= 5)
+ Optimizer: Postgres query optimizer
+(26 rows)
+
+with avg_a as (select avg(a) as v from dedup_initplan)
+select * from (
+  select 'x' as c, b, sum(a) from dedup_initplan where b < 5 group by b
+    having sum(a) > (select v from avg_a)
+  union all
+  select 'y' as c, b, sum(a) from dedup_initplan where b >= 5 group by b
+    having sum(a) > (select v from avg_a)) s
+order by c, b;
+ c | b |  sum  
+---+---+-------
+ x | 0 | 50500
+ x | 1 | 49600
+ x | 2 | 49700
+ x | 3 | 49800
+ x | 4 | 49900
+ y | 5 | 50000
+ y | 6 | 50100
+ y | 7 | 50200
+ y | 8 | 50300
+ y | 9 | 50400
+(10 rows)
+
+-- The same text, but referring to different CTEs: must not be merged
+with c as (select 1 as v)
+select (select v from c) as outer_c,
+       (with c as (select 2 as v) select (select v from c)) as inner_c;
+ outer_c | inner_c 
+---------+---------
+       1 |       2
+(1 row)
+
+-- Volatile functions: must not be merged
+explain (costs off)
+select (select random() from dedup_initplan limit 1) as r1,
+       (select random() from dedup_initplan limit 1) as r2;
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Result
+   InitPlan 1 (returns $0)  (slice1)
+     ->  Limit
+           ->  Gather Motion 3:1  (slice2; segments: 3)
+                 ->  Limit
+                       ->  Seq Scan on dedup_initplan
+   InitPlan 2 (returns $1)  (slice3)
+     ->  Limit
+           ->  Gather Motion 3:1  (slice4; segments: 3)
+                 ->  Limit
+                       ->  Seq Scan on dedup_initplan dedup_initplan_1
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+-- Correlated: must not be merged
+select b, (select max(a) from dedup_initplan d2 where d2.b = d1.b) as m1,
+          (select max(a) from dedup_initplan d2 where d2.b = d1.b) as m2
+from dedup_initplan d1 where a <= 3 order by b;
+ b | m1  | m2  
+---+-----+-----
+ 1 | 991 | 991
+ 2 | 992 | 992
+ 3 | 993 | 993
+(3 rows)
+
+reset optimizer;
+drop table dedup_initplan;
+--
 -- NOT EXISTS CSQs to joins
 --
 --

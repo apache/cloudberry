@@ -599,6 +599,10 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 	else
 		top_slice = NULL;
 
+	/* GPDB: find scalar subqueries that occur more than once */
+	if (Gp_role == GP_ROLE_DISPATCH)
+		glob->dedupInitplanCandidates = find_duplicate_expr_sublinks(parse);
+
 	/* primary planning entry point (may recurse for subqueries) */
 	root = subquery_planner(glob, parse, NULL,
 							false, tuple_fraction, config);
