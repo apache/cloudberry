@@ -485,6 +485,7 @@ hashbulkdelete(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 	Bucket		orig_maxbucket;
 	Bucket		cur_maxbucket;
 	Bucket		cur_bucket;
+	BlockNumber pages_freed = 0;
 	Buffer		metabuf = InvalidBuffer;
 	HashMetaPage metap;
 	HashMetaPage cachedmetap;
@@ -564,7 +565,7 @@ loop_top:
 
 		bucket_buf = buf;
 
-		hashbucketcleanup(rel, cur_bucket, bucket_buf, blkno, info->strategy,
+		pages_freed += hashbucketcleanup(rel, cur_bucket, bucket_buf, blkno, info->strategy,
 						  cachedmetap->hashm_maxbucket,
 						  cachedmetap->hashm_highmask,
 						  cachedmetap->hashm_lowmask, &tuples_removed,
@@ -650,6 +651,7 @@ loop_top:
 	stats->estimated_count = false;
 	stats->num_index_tuples = num_index_tuples;
 	stats->tuples_removed += tuples_removed;
+	stats->pages_newly_deleted += pages_freed;
 	/* hashvacuumcleanup will fill in num_pages */
 
 	return stats;
@@ -697,9 +699,9 @@ hashvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
  * ideal, so we might want to look for a better solution at some point.)
  *
  * We need to retain a pin on the primary bucket to ensure that no concurrent
- * split can start.
+ * split can start.  Returns the number of overflow pages released.
  */
-void
+BlockNumber
 hashbucketcleanup(Relation rel, Bucket cur_bucket, Buffer bucket_buf,
 				  BlockNumber bucket_blkno, BufferAccessStrategy bstrategy,
 				  uint32 maxbucket, uint32 highmask, uint32 lowmask,
@@ -732,7 +734,7 @@ hashbucketcleanup(Relation rel, Bucket cur_bucket, Buffer bucket_buf,
 		bool		retain_pin = false;
 		bool		clear_dead_marking = false;
 
-		vacuum_delay_point();
+		vacuum_delay_point(false);
 
 		page = BufferGetPage(buf);
 		opaque = HashPageGetOpaque(page);
@@ -931,8 +933,10 @@ hashbucketcleanup(Relation rel, Bucket cur_bucket, Buffer bucket_buf,
 	 * ordering of tuples for a scan that has started before it.
 	 */
 	if (bucket_dirty && IsBufferCleanupOK(bucket_buf))
-		_hash_squeezebucket(rel, cur_bucket, bucket_blkno, bucket_buf,
+		return _hash_squeezebucket(rel, cur_bucket, bucket_blkno, bucket_buf,
 							bstrategy);
 	else
 		LockBuffer(bucket_buf, BUFFER_LOCK_UNLOCK);
+
+	return 0;
 }

@@ -40,12 +40,14 @@
 -1U: INSERT INTO ao_foo SELECT generate_series(1,10);
 -- Insert data (AOCO)
 -1U: INSERT INTO aoco_foo SELECT generate_series(1,10), generate_series(1,10);
+-- Vacuum both tables in a fixed order so the WAL sequence does not depend
+-- on their physical order in pg_class.
 -- Delete data and run vacuum (AO)
 -1U: DELETE FROM ao_foo WHERE n > 5;
--1U: VACUUM;
+-1U: VACUUM ao_foo, aoco_foo;
 -- Delete data and run vacuum (AOCO)
 -1U: DELETE FROM aoco_foo WHERE n > 5;
--1U: VACUUM;
+-1U: VACUUM ao_foo, aoco_foo;
 -1Uq:
 
 -- Validate wal records
@@ -66,10 +68,10 @@
 -1U: INSERT INTO aoco_foo SELECT generate_series(1,10), generate_series(1,10);
 -- Delete data and run vacuum (AO)
 -1U: DELETE FROM ao_foo WHERE n > 5;
--1U: VACUUM;
+-1U: VACUUM ao_foo, aoco_foo;
 -- Delete data and run vacuum (AOCO)
 -1U: DELETE FROM aoco_foo WHERE n > 5;
--1U: VACUUM;
+-1U: VACUUM ao_foo, aoco_foo;
 
 -- Validate wal records
 ! last_wal_file=$(psql -At -c "SELECT pg_walfile_name(pg_current_wal_lsn())" postgres) && pg_waldump ${last_wal_file} -p ${COORDINATOR_DATA_DIRECTORY}/pg_wal -r appendonly;
