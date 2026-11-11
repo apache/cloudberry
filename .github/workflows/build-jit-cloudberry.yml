@@ -1,0 +1,270 @@
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+# CI with the LLVM JIT
+# --------------------------------------------------------------------
+name: LLVM JIT CI Pipeline
+
+on:
+  push:
+    branches: [REL_2_STABLE]
+  pull_request:
+    branches: [REL_2_STABLE]
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  LOG_RETENTION_DAYS: 7
+
+jobs:
+  check-skip:
+    runs-on: ubuntu-22.04
+    outputs:
+      should_skip: ${{ steps.skip-check.outputs.should_skip }}
+    steps:
+      - id: skip-check
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_TITLE: ${{ github.event.pull_request.title || '' }}
+          PR_BODY: ${{ github.event.pull_request.body || '' }}
+        run: |
+          echo "should_skip=false" >> "$GITHUB_OUTPUT"
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            MESSAGE="${PR_TITLE}\n${PR_BODY}"
+
+            ESCAPED_MESSAGE=$(printf "%s" "$MESSAGE")
+
+            echo "Checking PR title and body (escaped): $ESCAPED_MESSAGE"
+
+            if echo -e "$ESCAPED_MESSAGE" | grep -qEi '\[skip[ -]ci\]|\[ci[ -]skip\]|\[no[ -]ci\]'; then
+              echo "should_skip=true" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "Skip logic is not applied for $EVENT_NAME events."
+          fi
+
+      - name: Report Skip Status
+        if: steps.skip-check.outputs.should_skip == 'true'
+        run: |
+          echo "CI Skip flag detected in PR - skipping all checks."
+          exit 0
+
+  build-and-test:
+    name: Build and test with LLVM JIT (${{ matrix.image }})
+    needs: [check-skip]
+    if: needs.check-skip.outputs.should_skip != 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['rocky8', 'rocky9', 'rocky10', 'ubuntu22.04', 'ubuntu24.04']
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-${{ matrix.image }}-latest
+      options: >-
+        --user root
+        --hostname cdw
+        --shm-size=2gb
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
+
+    env:
+      BUILD_DESTINATION: /usr/local/cloudberry-db
+
+    steps:
+      - name: Free Disk Space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
+
+          # Remove pre-installed tools from host to free disk space
+          rm -rf /host_opt/hostedtoolcache || true
+          rm -rf /host_usr_local/lib/android || true
+          rm -rf /host_usr_share/dotnet || true
+          rm -rf /host_opt/ghc || true
+          rm -rf /host_usr_local/.ghcup || true
+          rm -rf /host_usr_share/swift || true
+          rm -rf /host_usr_local/share/powershell || true
+          rm -rf /host_usr_local/share/chromium || true
+          rm -rf /host_usr_share/miniconda || true
+          rm -rf /host_opt/az || true
+          rm -rf /host_usr_share/sbt || true
+
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
+      - name: Checkout Apache Cloudberry
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          submodules: true
+
+      - name: Install LLVM and clang
+        shell: bash
+        run: |
+          set -eo pipefail
+          . /etc/os-release
+          case "${ID}" in
+            rocky)
+              dnf install -y --setopt=retries=10 llvm-devel clang
+              ;;
+            ubuntu)
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y llvm-dev clang
+              ;;
+            *)
+              echo "::error::No LLVM packages known for ${PRETTY_NAME}"
+              exit 1
+              ;;
+          esac
+
+          {
+            echo "## ${PRETTY_NAME}"
+            echo "- LLVM: $(llvm-config --version)"
+            echo "- clang: $(clang --version | head -n1)"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Cloudberry Environment Initialization
+        shell: bash
+        env:
+          LOGS_DIR: build-logs
+        run: |
+          set -eo pipefail
+          if ! su - gpadmin -c "/tmp/init_system.sh"; then
+            echo "::error::Container initialization failed"
+            exit 1
+          fi
+
+          mkdir -p "${LOGS_DIR}/details"
+          chown -R gpadmin:gpadmin .
+          chmod -R 755 .
+          chmod 777 "${LOGS_DIR}"
+
+          echo "SRC_DIR=${GITHUB_WORKSPACE}" | tee -a "$GITHUB_ENV"
+
+      - name: Run Apache Cloudberry configure script with ENABLE_LLVM=true
+        shell: bash
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ENABLE_LLVM=true ${SRC_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"; then
+            echo "::error::Configure script failed"
+            exit 1
+          fi
+
+      - name: Run Apache Cloudberry build script
+        shell: bash
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/build-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/build-cloudberry.sh"; then
+            echo "::error::Build script failed"
+            exit 1
+          fi
+
+      - name: Check that the JIT was built
+        shell: bash
+        run: |
+          set -eo pipefail
+          pkglibdir=$("${BUILD_DESTINATION}"/bin/pg_config --pkglibdir)
+          if [ ! -f "${pkglibdir}/llvmjit.so" ] || [ ! -f "${pkglibdir}/bitcode/postgres.index.bc" ]; then
+            echo "::error::llvmjit.so or its bitcode was not installed in ${pkglibdir}"
+            exit 1
+          fi
+          ldd "${pkglibdir}/llvmjit.so" | tee build-logs/details/llvmjit-ldd.log
+          if grep -q 'not found' build-logs/details/llvmjit-ldd.log; then
+            echo "::error::llvmjit.so does not find all of its libraries"
+            exit 1
+          fi
+          echo "- llvmjit.so links $(awk '/libLLVM/ {print $1}' build-logs/details/llvmjit-ldd.log)" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Run installcheck-jit with optimizer=off and with optimizer=on
+        shell: bash
+        run: |
+          set -o pipefail
+          scripts="${SRC_DIR}/devops/build/automation/cloudberry/scripts"
+
+          installcheck_jit() {
+            local optimizer=$1 name="ic-jit-opt-$1" status verdict
+
+            if [ -f gpAux/gpdemo/gpdemo-env.sh ]; then
+              if ! su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${scripts}/destroy-cloudberry-demo-cluster.sh"; then
+                echo "::error::Demo cluster removal failed"
+                return 1
+              fi
+            fi
+            if ! su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${scripts}/create-cloudberry-demo-cluster.sh" \
+                 2>&1 | tee "build-logs/details/${name}-cluster.log"; then
+              echo "::error::Demo cluster creation failed"
+              return 1
+            fi
+
+            su - gpadmin -c "cd ${SRC_DIR} && \
+                 MAKE_NAME=${name} \
+                 MAKE_TARGET=installcheck-jit \
+                 MAKE_DIRECTORY='-C src/test/regress' \
+                 PGOPTIONS='-c optimizer=${optimizer}' \
+                 SRC_DIR=${SRC_DIR} \
+                 ${scripts}/test-cloudberry.sh" \
+                 2>&1 | tee "build-logs/details/make-${name}.log"
+            status=$?
+
+            verdict=$(grep -E -o '(All [0-9]+ tests passed|[0-9]+ of [0-9]+ tests failed)' "build-logs/details/make-${name}.log" | tail -n 1)
+            echo "- installcheck-jit, optimizer=${optimizer}: ${verdict:-no result}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+            if [ "${status}" -eq 0 ] && grep -q -E '^All [1-9][0-9]* tests passed$' <<< "${verdict}"; then
+              return 0
+            fi
+
+            grep -E '\.\.\. FAILED' "build-logs/details/make-${name}.log" | sed 's/^/  - /' | tee -a "$GITHUB_STEP_SUMMARY"
+            if [ -f src/test/regress/regression.diffs ]; then
+              cp src/test/regress/regression.diffs "build-logs/${name}.diffs"
+              head -n 500 "build-logs/${name}.diffs"
+            fi
+            find gpAux/gpdemo/datadirs -type d -name log -print0 2>/dev/null |
+              tar -czf "build-logs/${name}-server-logs.tar.gz" --null -T - || true
+            echo "::error::installcheck-jit failed with optimizer=${optimizer}"
+            return 1
+          }
+
+          overall_status=0
+          installcheck_jit off || overall_status=1
+          installcheck_jit on || overall_status=1
+          exit ${overall_status}
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jit-logs-${{ matrix.image }}
+          path: |
+            build-logs/
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
