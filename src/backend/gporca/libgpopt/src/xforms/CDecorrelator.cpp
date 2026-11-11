@@ -768,6 +768,7 @@ CDecorrelator::FProcessProject(CMemoryPool *mp, CExpression *pexpr,
 		return false;
 	}
 
+	CExpression *pexprRelational = nullptr;
 	if (COperator::EopLogicalSequenceProject == op_id)
 	{
 		CExpressionHandle exprhdl(mp);
@@ -788,18 +789,78 @@ CDecorrelator::FProcessProject(CMemoryPool *mp, CExpression *pexpr,
 		if (CLogicalSequenceProject::PopConvert(pexpr->Pop())
 				->FHasLocalReferencesTo(outerRefsToRemove) ||
 			!CUtils::FHasAggWindowFunc(pexprPrjList))
+ 		{
+ 			return false;
+ 		}
+
+
+		// decorrelate the child, collecting its correlations separately
+		CExpressionArray *pdrgpexprChildCorr = GPOS_NEW(mp) CExpressionArray(mp);
+		if (!FProcess(mp, (*pexpr)[0], fEqualityOnly, &pexprRelational,
+					  pdrgpexprChildCorr, outerRefsToRemove))
 		{
+			GPOS_ASSERT(nullptr == pexprRelational);
+			pdrgpexprChildCorr->Release();
 			return false;
 		}
-	}
 
-	// decorrelate relational child
-	CExpression *pexprRelational = nullptr;
-	if (!FProcess(mp, (*pexpr)[0], fEqualityOnly, &pexprRelational,
-				  pdrgpexprCorrelations, outerRefsToRemove))
+		const ULONG ulCorr = pdrgpexprChildCorr->Size();
+		if (0 < ulCorr)
+		{
+			// Pull-up is safe when every inner column used in pdrgpexprChildCorr
+			// is used in PARTITION BY too
+
+			// get columns from PARTITION BY
+			CColRefSet *pcrsPartBy = nullptr;
+			CDistributionSpec *pds = CLogicalSequenceProject::PopConvert(pexpr->Pop())->Pds();
+			if (CDistributionSpec::EdtHashed == pds->Edt())
+				pcrsPartBy = CDistributionSpecHashed::PdsConvert(pds)->PcrsUsed(mp);
+
+			// When OVER () does not contain PARTITION BY then Edt returns
+			// EdtSingleton. In this case there are no partition columns
+			// (pcrsPartBy is nullptr), and any correlated predicate makes pull-up
+			// unsafe
+
+			CColRefSet *pcrsOuter = pexpr->DeriveOuterReferences();
+			BOOL fSafe = true;
+			for (ULONG ul = 0; fSafe && ul < ulCorr; ul++)
+			{
+				CExpression *pexprCorr = (*pdrgpexprChildCorr)[ul];
+				CColRefSet *pcrsInner = GPOS_NEW(mp)
+					CColRefSet(mp, *pexprCorr->DeriveUsedColumns());
+				pcrsInner->Exclude(pcrsOuter);
+
+				fSafe = (nullptr == pcrsPartBy) ?
+						(0 == pcrsInner->Size()) :
+						pcrsPartBy->ContainsAll(pcrsInner);
+
+				pcrsInner->Release();
+			}
+
+			if (nullptr != pcrsPartBy)
+				pcrsPartBy->Release();
+
+			if (!fSafe)
+			{
+				pexprRelational->Release();
+				pdrgpexprChildCorr->Release();
+				return false;
+			}
+		}
+
+		// pass correlations up
+		CUtils::AddRefAppend(pdrgpexprCorrelations, pdrgpexprChildCorr);
+		pdrgpexprChildCorr->Release();
+	}
+	else // EopLogicalProject
 	{
-		GPOS_ASSERT(nullptr == pexprRelational);
-		return false;
+		// decorrelate relational child
+		if (!FProcess(mp, (*pexpr)[0], fEqualityOnly, &pexprRelational,
+					  pdrgpexprCorrelations, outerRefsToRemove))
+		{
+			GPOS_ASSERT(nullptr == pexprRelational);
+			return false;
+		}
 	}
 
 	// assemble new project
