@@ -38,6 +38,20 @@ FROM gp_segment_configuration WHERE content=-1 and role='p';
 1<:
 
 -- Verify if basebackup completed successfully
+-- pg_basebackup() returns once the client is done, but the walsender that
+-- served it may still be on its way out and show up in pg_stat_replication
+-- for a moment. Wait for it to go away.
+DO $$
+begin
+   for i in 1..1200 loop
+      if not exists (select 1 from pg_stat_replication where application_name = 'pg_basebackup') then
+         return; /* in func */
+      end if; /* in func */
+      perform pg_sleep(0.1); /* in func */
+      perform pg_stat_clear_snapshot(); /* in func */
+   end loop; /* in func */
+end; /* in func */
+$$;
 -- See if recovery.conf exists (Yes - Pass)
 SELECT application_name, state FROM pg_stat_replication;
 !\retcode ls /tmp/master_wal_switch_test/postgresql.auto.conf /tmp/master_wal_switch_test/standby.signal;
