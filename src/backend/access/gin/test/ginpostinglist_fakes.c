@@ -64,4 +64,5 @@ repalloc(void *pointer, Size size)
 int
 pg_fprintf(FILE *stream, const char *fmt,...)
 {
+	return 0;
 }
