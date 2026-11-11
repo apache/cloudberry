@@ -591,7 +591,7 @@ ginbulkdelete(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 		 * and cleanup any pending inserts
 		 */
 		ginInsertCleanup(&gvs.ginstate, !IsAutoVacuumWorkerProcess(),
-						 false, true, stats);
+						 false, true, false, stats);
 	}
 
 	/* we'll re-count the tuples each time */
@@ -663,12 +663,12 @@ ginbulkdelete(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 			UnlockReleaseBuffer(buffer);
 		}
 
-		vacuum_delay_point();
+		vacuum_delay_point(false);
 
 		for (i = 0; i < nRoot; i++)
 		{
 			ginVacuumPostingTree(&gvs, rootOfPostingTree[i]);
-			vacuum_delay_point();
+			vacuum_delay_point(false);
 		}
 
 		if (blkno == InvalidBlockNumber)	/* rightmost page */
@@ -704,7 +704,7 @@ ginvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 		if (IsAutoVacuumWorkerProcess())
 		{
 			initGinState(&ginstate, index);
-			ginInsertCleanup(&ginstate, false, true, true, stats);
+			ginInsertCleanup(&ginstate, false, true, true, true, stats);
 		}
 		return stats;
 	}
@@ -718,7 +718,7 @@ ginvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 		stats = (IndexBulkDeleteResult *) palloc0(sizeof(IndexBulkDeleteResult));
 		initGinState(&ginstate, index);
 		ginInsertCleanup(&ginstate, !IsAutoVacuumWorkerProcess(),
-						 false, true, stats);
+						 false, true, false, stats);
 	}
 
 	memset(&idxStat, 0, sizeof(idxStat));
@@ -749,7 +749,7 @@ ginvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 		Buffer		buffer;
 		Page		page;
 
-		vacuum_delay_point();
+		vacuum_delay_point(false);
 
 		buffer = ReadBufferExtended(index, MAIN_FORKNUM, blkno,
 									RBM_NORMAL, info->strategy);
