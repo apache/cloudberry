@@ -41,9 +41,9 @@ CStatisticsConfig::CStatisticsConfig(CMemoryPool *mp,
 	  m_max_stats_buckets(max_stats_buckets),
 	  m_phsmdidcolinfo(nullptr)
 {
-	GPOS_ASSERT(CDouble(0.0) < damping_factor_filter);
+	GPOS_ASSERT(CDouble(0.0) <= damping_factor_filter);
 	GPOS_ASSERT(CDouble(0.0) <= damping_factor_join);
-	GPOS_ASSERT(CDouble(0.0) < damping_factor_groupby);
+	GPOS_ASSERT(CDouble(0.0) <= damping_factor_groupby);
 	GPOS_ASSERT(0 < max_stats_buckets);
 
 	//m_phmmdidcolinfo = New(m_mp) HMMDIdMissingstatscol(m_mp);
