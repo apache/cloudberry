@@ -66,6 +66,12 @@
 #                 When true, add option:
 #                   --with-mdblocales
 #
+#   ENABLE_LLVM - Build the LLVM JIT (true/false, defaults to false).
+#                 Needs LLVM and clang.
+#
+#                 When true, add option:
+#                   --with-llvm
+#
 # Prerequisites:
 #   - System dependencies must be installed:
 #     * xerces-c development files
@@ -156,6 +162,11 @@ if [ "${ENABLE_ANSER:-false}" = "true" ]; then
     CONFIGURE_ANSER_OPTS="--with-anser"
 fi
 
+CONFIGURE_LLVM_OPTS=""
+if [ "${ENABLE_LLVM:-false}" = "true" ]; then
+    CONFIGURE_LLVM_OPTS="--with-llvm"
+fi
+
 # Configure build
 log_section "Configure"
 execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
@@ -185,6 +196,7 @@ execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
             --with-openssl \
             --with-uuid=e2fs \
             ${CONFIGURE_MDBLOCALES_OPTS} \
+            ${CONFIGURE_LLVM_OPTS} \
             --with-includes=/usr/local/xerces-c/include \
             --with-libraries=${BUILD_DESTINATION}/lib || exit 4
 log_section_end "Configure"
