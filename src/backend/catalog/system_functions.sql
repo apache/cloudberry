@@ -659,6 +659,13 @@ REVOKE EXECUTE ON FUNCTION pg_current_logfile(text) FROM public;
 
 REVOKE EXECUTE ON FUNCTION pg_promote(boolean, integer) FROM public;
 
+CREATE OR REPLACE FUNCTION pg_stat_reset_vacuum_stats(relid oid DEFAULT NULL)
+RETURNS void
+LANGUAGE internal VOLATILE PARALLEL UNSAFE
+AS 'pg_stat_reset_vacuum_stats';
+
+REVOKE EXECUTE ON FUNCTION pg_stat_reset_vacuum_stats(oid) FROM public;
+
 REVOKE EXECUTE ON FUNCTION pg_stat_reset() FROM public;
 
 REVOKE EXECUTE ON FUNCTION pg_stat_reset_shared(text) FROM public;

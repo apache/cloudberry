@@ -708,6 +708,13 @@ select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, he
  Success:                      
  Success:                      
 (3 rows)
+-- Committed compaction work is visible before the replacement worker finishes.
+SELECT bool_and(tuples_deleted > 0 AND pages_scanned > 0 AND compacted_segments > 0 AND tuples_moved > 0) AS phase_work_saved FROM gp_stat_vacuum_tables WHERE relname = 'vacuum_progress_ao_row' AND gp_segment_id > -1;
+ phase_work_saved 
+------------------
+ t
+(1 row)
+
 -- now seg1's mirror is marked as down
 2: SELECT content, role, preferred_role, mode, status FROM gp_segment_configuration WHERE content > -1;
  content | role | preferred_role | mode | status 
