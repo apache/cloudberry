@@ -557,6 +557,8 @@ SharedSnapshotRemove(volatile SharedSnapshotSlot *slot, char *creatorDescription
 	slot->segmateSync = 0;
 	slot->snapshot_handle = DSM_HANDLE_INVALID;
 	slot->snapshot_sz = 0;
+	MemSet(slot->dump, 0, sizeof(slot->dump));
+	slot->cur_dump_id = 0;
 
 	sharedSnapshotArray->numSlots -= 1;
 
