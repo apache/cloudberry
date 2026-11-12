@@ -643,7 +643,6 @@ dumpSharedLocalSnapshot_forCursor(void)
 	if (pDump->handle != DSM_HANDLE_INVALID)
 	{
 		old_segment = dsm_find_mapping(pDump->handle);
-		Assert(old_segment != NULL);
 	}
 
 	/* Readers finish restoring under slotLock before we reuse the old dump. */
