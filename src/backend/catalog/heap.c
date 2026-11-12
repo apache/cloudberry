@@ -623,6 +623,10 @@ CheckAttributeNamesTypes(TupleDesc tupdesc, char relkind,
  * flags can also control the phrasing of the error messages.  If
  * CHKATYPE_IS_PARTKEY is specified, "attname" should be a partition key
  * column number as text, not a real column name.
+ *
+ * attname can be NULL when checking an expression that has no column name,
+ * such as an extended statistics expression. This can't be combined with
+ * CHKATYPE_IS_PARTKEY.
  * --------------------------------
  */
 void
@@ -642,6 +646,8 @@ CheckAttributeType(const char *attname,
 		 */
 		return;
 	}
+
+	Assert(attname != NULL || (flags & CHKATYPE_IS_PARTKEY) == 0);
 
 	/* since this function recurses, it could be driven to stack overflow */
 	check_stack_depth();
@@ -668,11 +674,16 @@ CheckAttributeType(const char *attname,
 				/* translator: first %s is an integer not a name */
 						 errmsg("partition key column %s has pseudo-type %s",
 								attname, format_type_be(atttypid))));
-			else
+			else if (attname)
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 						 errmsg("column \"%s\" has pseudo-type %s",
 								attname, format_type_be(atttypid))));
+			else
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+						 errmsg("expression has pseudo-type %s",
+								format_type_be(atttypid))));
 		}
 	}
 	else if (att_typtype == TYPTYPE_DOMAIN)
@@ -707,6 +718,11 @@ CheckAttributeType(const char *attname,
 
 		containing_rowtypes = lappend_oid(containing_rowtypes, atttypid);
 
+		/*
+		 * Lock the composite type relation to prevent its attributes from
+		 * being modified in an incompatible way until we record the
+		 * dependency to it and commit.
+		 */
 		relation = relation_open(get_typ_typrelid(atttypid), AccessShareLock);
 
 		tupdesc = RelationGetDescr(relation);
@@ -723,7 +739,7 @@ CheckAttributeType(const char *attname,
 							   flags & ~CHKATYPE_IS_PARTKEY);
 		}
 
-		relation_close(relation, AccessShareLock);
+		relation_close(relation, NoLock);
 
 		containing_rowtypes = list_delete_last(containing_rowtypes);
 	}
@@ -760,11 +776,17 @@ CheckAttributeType(const char *attname,
 					 errmsg("no collation was derived for partition key column %s with collatable type %s",
 							attname, format_type_be(atttypid)),
 					 errhint("Use the COLLATE clause to set the collation explicitly.")));
-		else
+		else if (attname)
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 					 errmsg("no collation was derived for column \"%s\" with collatable type %s",
 							attname, format_type_be(atttypid)),
+					 errhint("Use the COLLATE clause to set the collation explicitly.")));
+		else
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+					 errmsg("no collation was derived for expression with collatable type %s",
+							format_type_be(atttypid)),
 					 errhint("Use the COLLATE clause to set the collation explicitly.")));
 	}
 }
@@ -2668,6 +2690,9 @@ SetAttrMissing(Oid relid, char *attname, char *value)
  * in the pg_class entry for the relation.
  *
  * The OID of the new constraint is returned.
+ *
+ * NB: Caller is responsible for ensuring the user has USAGE on all types expr
+ * depends on.
  */
 static Oid
 StoreRelCheck(Relation rel, const char *ccname, Node *expr,
@@ -2929,6 +2954,10 @@ AddRelationNewConstraints(Relation rel,
 			 castNode(Const, expr)->constisnull))
 			continue;
 
+		/* Check the types before storing the default and its dependencies. */
+		if (!is_internal)
+			CheckUsageOnTypesInSingleRelExpr(expr, RelationGetRelid(rel), GetUserId());
+
 		/* If the DEFAULT is volatile we cannot use a missing value */
 		if (colDef->missingMode && contain_volatile_functions((Node *) expr))
 			colDef->missingMode = false;
@@ -2977,6 +3006,14 @@ AddRelationNewConstraints(Relation rel,
 			 */
 			expr = cookConstraint(pstate, cdef->raw_expr,
 								  RelationGetRelationName(rel));
+
+			/*
+			 * The below call to StoreRelCheck() calls CreateConstraintEntry(),
+			 * which adds the dependencies on types.  We are responsible for
+			 * checking USAGE.
+			 */
+			if (!is_internal)
+				CheckUsageOnTypesInSingleRelExpr(expr, RelationGetRelid(rel), GetUserId());
 		}
 		else
 		{
@@ -4045,12 +4082,16 @@ StorePartitionKey(Relation rel,
 	 * columns, i.e. they become internally dependent on the whole table.
 	 */
 	if (partexprs)
+	{
+		CheckUsageOnTypesInSingleRelExpr((Node *) partexprs, RelationGetRelid(rel),
+										 GetUserId());
 		recordDependencyOnSingleRelExpr(&myself,
 										(Node *) partexprs,
 										RelationGetRelid(rel),
 										DEPENDENCY_NORMAL,
 										DEPENDENCY_INTERNAL,
 										true /* reverse the self-deps */ );
+	}
 
 	/*
 	 * We must invalidate the relcache so that the next

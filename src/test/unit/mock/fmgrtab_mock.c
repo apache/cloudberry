@@ -13,3 +13,12 @@
 const FmgrBuiltin fmgr_builtins[] = { };
 
 const int fmgr_nbuiltins = 0;
+
+/*
+ * fmgr_isbuiltin() looks up an OID in this index (PG13 and later), so an
+ * empty table still needs both of these: no OID is built in here, and the
+ * index has the one entry the lookup of OID 0 may touch.
+ */
+const Oid	fmgr_last_builtin_oid = 0;
+
+const uint16 fmgr_builtin_oid_index[1] = {InvalidOidBuiltinMapping};
