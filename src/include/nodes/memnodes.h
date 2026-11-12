@@ -64,7 +64,7 @@ typedef struct MemoryContextMethods
 	void		(*free_p) (void *pointer);
 	void	   *(*realloc) (void *pointer, Size size);
 	void		(*reset) (MemoryContext context);
-	void		(*delete_context) (MemoryContext context, MemoryContext parent);
+	void		(*delete_context) (MemoryContext context);
 	MemoryContext (*get_chunk_context) (void *pointer);
 	Size		(*get_chunk_space) (void *pointer);
 	bool		(*is_empty) (MemoryContext context);
@@ -72,16 +72,43 @@ typedef struct MemoryContextMethods
 						  MemoryStatsPrintFunc printfunc, void *passthru,
 						  MemoryContextCounters *totals,
 						  bool print_to_stderr);
-	void		(*declare_accounting_root) (MemoryContext context);
-	Size		(*get_current_usage) (MemoryContext context);
-	Size		(*get_peak_usage) (MemoryContext context);
-	Size		(*set_peak_usage) (MemoryContext context, Size nbytes);
 
 #ifdef MEMORY_CONTEXT_CHECKING
 	void		(*check) (MemoryContext context);
 #endif
 } MemoryContextMethods;
 
+/*
+ * MemoryContextPeakTrackerGroupData is used to track peak usage of all memory
+ * allocations and de-allocations performed within the MemoryContext belongs
+ * to the same group based on context->mem_allocated.
+ */
+typedef struct MemoryContextPeakTrackerGroupData *MemoryContextPeakTrackerGroup;	/* forward reference */
+
+/*
+ * MemoryContextPeakTrackerGroupData fields
+ *
+ * owner: context owner of current peak tracker group (don't get confused
+ * owner doesn't store the structure in self area, just pointer to it).
+ *
+ * parentGroup: the group that belongs to parent/ancestor context for context
+ * owner of the child group (may be NULL). Usage info is propagated from child
+ * to parent.
+ *
+ * currentUsage: tracks the current bytes allocated in all
+ * of the MemoryContexts belongs to the same group.
+ *
+ * peakUsage: Maximum 'currentUsage' value ever held in the
+ * lifetime of this group.
+ */
+typedef struct MemoryContextPeakTrackerGroupData
+{
+
+	MemoryContextPeakTrackerGroup parentGroup;
+	MemoryContext owner;
+	Size		currentUsage;
+	Size		peakUsage;
+} MemoryContextPeakTrackerGroupData;
 
 typedef struct MemoryContextData
 {
@@ -106,6 +133,7 @@ typedef struct MemoryContextData
 #endif
 
 	MemoryContextCallback *reset_cbs;	/* list of reset/delete callbacks */
+	MemoryContextPeakTrackerGroup trackerGroup;
 } MemoryContextData;
 
 /* utils/palloc.h contains typedef struct MemoryContextData *MemoryContext */
