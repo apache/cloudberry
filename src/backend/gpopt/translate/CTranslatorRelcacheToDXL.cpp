@@ -1211,9 +1211,12 @@ CTranslatorRelcacheToDXL::RetrieveType(CMemoryPool *mp, IMDId *mdid)
 	INT iFlags = TYPECACHE_EQ_OPR | TYPECACHE_LT_OPR | TYPECACHE_GT_OPR |
 				 TYPECACHE_CMP_PROC | TYPECACHE_EQ_OPR_FINFO |
 				 TYPECACHE_CMP_PROC_FINFO | TYPECACHE_TUPDESC;
-	// special case for range type: fetch HASH_PROC that handles ranges as a
-	// container and returns the hash proc if the underlying element has one
-	if (gpdb::IsTypeRange(oid_type))
+	// special case for range and multirange types: fetch HASH_PROC that
+	// handles them as a container and returns the hash proc only if the
+	// underlying element has one
+	BOOL is_range_or_multirange =
+		gpdb::IsTypeRange(oid_type) || gpdb::IsTypeMultirange(oid_type);
+	if (is_range_or_multirange)
 	{
 		iFlags |= TYPECACHE_HASH_PROC;
 	}
@@ -1251,8 +1254,9 @@ CTranslatorRelcacheToDXL::RetrieveType(CMemoryPool *mp, IMDId *mdid)
 		GPOS_NEW(mp) CMDIdGPDB(IMDId::EmdidGeneral, ptce->cmp_proc);
 
 	BOOL is_hashable = false;
-	// decide if range operator is hashable based on returned hash proc
-	if (gpdb::IsTypeRange(oid_type))
+	// decide if range or multirange operator is hashable based on returned
+	// hash proc
+	if (is_range_or_multirange)
 	{
 		is_hashable = OidIsValid(ptce->hash_proc);
 	}

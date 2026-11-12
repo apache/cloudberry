@@ -802,6 +802,8 @@ TargetEntry *FlatCopyTargetEntry(TargetEntry *src_tle);
 
 bool IsTypeRange(Oid typid);
 
+bool IsTypeMultirange(Oid typid);
+
 char *GetRelAmName(Oid reloid);
 
 IndexAmRoutine *GetIndexAmRoutineFromAmHandler(Oid am_handler);
