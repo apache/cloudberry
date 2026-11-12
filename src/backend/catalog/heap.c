@@ -2139,6 +2139,9 @@ RemoveAttributeById(Oid relid, AttrNumber attnum)
 	 */
 	rel = relation_open(relid, AccessExclusiveLock);
 
+	if (attnum > 0)
+		check_rowtype_distribution(rel);
+
 	set_random_distribution_if_drop_distkey(rel, attnum);
 
 	attr_rel = table_open(AttributeRelationId, RowExclusiveLock);

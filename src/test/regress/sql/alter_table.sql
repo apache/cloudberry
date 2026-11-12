@@ -326,7 +326,7 @@ ALTER TABLE attdrop_test ALTER COLUMN toadd SET (n_distinct = 99);
 CREATE TABLE attfd (id int, a int);
 INSERT INTO attfd VALUES (1, 10);
 ALTER TABLE attfd ADD COLUMN x int DEFAULT 4;   -- fast default: on-disk rows stay narrow
-CREATE TABLE attfd_store (r attfd);
+CREATE TABLE attfd_store (r attfd) DISTRIBUTED RANDOMLY;
 CREATE FUNCTION attfd_cap() RETURNS trigger LANGUAGE plpgsql AS
   $$ BEGIN INSERT INTO attfd_store VALUES (OLD); RETURN NEW; END $$;
 CREATE TRIGGER attfd_tr BEFORE UPDATE ON attfd
@@ -348,7 +348,7 @@ DROP FUNCTION attfd_cap();
 CREATE TYPE atexprec AS (a int, b int);
 CREATE FUNCTION atexprec_make() RETURNS atexprec LANGUAGE plpgsql AS
   $$ DECLARE v atexprec; BEGIN v.a := 1; RETURN v; END $$;
-CREATE TABLE atexprec_store (r atexprec);
+CREATE TABLE atexprec_store (r atexprec) DISTRIBUTED RANDOMLY;
 INSERT INTO atexprec_store SELECT atexprec_make();
 SELECT r FROM atexprec_store;
 ALTER TYPE atexprec ADD ATTRIBUTE c int;
@@ -2278,7 +2278,7 @@ DROP TYPE test_typex;
 -- behind a table to test pg_upgrade with. The table has a composite type
 -- column in it, and the composite type has a dropped attribute.
 CREATE TYPE test_type3 AS (a int);
-CREATE TABLE test_tbl3 (c) AS SELECT '(1)'::test_type3;
+CREATE TABLE test_tbl3 (c) AS SELECT '(1)'::test_type3 DISTRIBUTED RANDOMLY;
 ALTER TYPE test_type3 DROP ATTRIBUTE a, ADD ATTRIBUTE b int;
 
 CREATE TYPE test_type_empty AS ();

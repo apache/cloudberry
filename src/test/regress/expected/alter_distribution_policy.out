@@ -1521,6 +1521,58 @@ select policytype, distkey, distclass from gp_distribution_policy where localoid
  p          |         | 
 (1 row)
 
+-- A generic array operator class also needs hashable element types.
+CREATE TABLE distpol_array_typechange (k int[]) DISTRIBUTED BY (k);
+INSERT INTO distpol_array_typechange VALUES (ARRAY[1, 2]);
+ALTER TABLE distpol_array_typechange ALTER COLUMN k TYPE money[] USING k::money[];
+ERROR:  cannot alter type of a column used in a distribution policy
+SELECT pg_typeof(k), k FROM distpol_array_typechange;
+ pg_typeof |   k   
+-----------+-------
+ integer[] | {1,2}
+(1 row)
+
+SELECT policytype, distkey FROM gp_distribution_policy
+  WHERE localoid = 'distpol_array_typechange'::regclass;
+ policytype | distkey 
+------------+---------
+ p          | 1
+(1 row)
+
+-- Compatible, hashable element types must still be allowed on nonempty tables.
+ALTER TABLE distpol_array_typechange ALTER COLUMN k TYPE bigint[] USING k::bigint[];
+SELECT pg_typeof(k), k FROM distpol_array_typechange;
+ pg_typeof |   k   
+-----------+-------
+ bigint[]  | {1,2}
+(1 row)
+
+SELECT policytype, distkey FROM gp_distribution_policy
+  WHERE localoid = 'distpol_array_typechange'::regclass;
+ policytype | distkey 
+------------+---------
+ p          | 1
+(1 row)
+
+-- On an empty table, an unhashable element type must cause random distribution.
+TRUNCATE distpol_array_typechange;
+ALTER TABLE distpol_array_typechange ALTER COLUMN k TYPE money[] USING k::money[];
+SELECT policytype, distkey, distclass FROM gp_distribution_policy
+  WHERE localoid = 'distpol_array_typechange'::regclass;
+ policytype | distkey | distclass 
+------------+---------+-----------
+ p          |         | 
+(1 row)
+
+INSERT INTO distpol_array_typechange VALUES (ARRAY[1::money, 2::money]);
+SELECT k::numeric[] = ARRAY[1, 2]::numeric[] AS values_preserved
+  FROM distpol_array_typechange;
+ values_preserved 
+------------------
+ t
+(1 row)
+
+DROP TABLE distpol_array_typechange;
 -- Similar case, but with CREATE UNIQUE INDEX, rather than ALTER TABLE.
 -- Creating a unique index on a completely empty table automatically updates
 -- the distribution key to match the unique index.  (This allows the common
@@ -1775,3 +1827,130 @@ HINT:  consider separating into multiple statements
 ALTER TABLE atsdby_multiple SET WITH (reorganize=true), ADD COLUMN k int;
 ERROR:  cannot alter distribution with other subcommands for relation "atsdby_multiple"
 HINT:  consider separating into multiple statements
+
+-- Changing a row type must not invalidate tables distributed by that type.
+SET client_min_messages = warning;
+CREATE TYPE dist_shape AS (a int, b text);
+CREATE TABLE dist_shape_tab (k dist_shape, v int) DISTRIBUTED BY (k);
+-- Reject an unhashable addition even when the dependent table is empty.
+ALTER TYPE dist_shape ADD ATTRIBUTE m money;
+ERROR:  cannot alter type "dist_shape" because column "k" of relation "dist_shape_tab" uses it in a distribution key
+INSERT INTO dist_shape_tab VALUES (ROW(1, 'one')::dist_shape, 1);
+-- Adding a hashable attribute, or dropping an attribute, changes hash_record too.
+ALTER TYPE dist_shape ADD ATTRIBUTE n int;
+ERROR:  cannot alter type "dist_shape" because column "k" of relation "dist_shape_tab" uses it in a distribution key
+ALTER TYPE dist_shape DROP ATTRIBUTE b;
+ERROR:  cannot alter type "dist_shape" because column "k" of relation "dist_shape_tab" uses it in a distribution key
+SELECT k, v FROM dist_shape_tab;
+    k    | v 
+---------+---
+ (1,one) | 1
+(1 row)
+
+-- A rename does not change the hash.
+ALTER TYPE dist_shape RENAME ATTRIBUTE b TO label;
+INSERT INTO dist_shape_tab VALUES (ROW(2, 'two')::dist_shape, 2);
+SELECT count(*) FROM dist_shape_tab;
+ count 
+-------
+     2
+(1 row)
+
+-- The user can change the distribution policy before changing the type.
+ALTER TABLE dist_shape_tab SET DISTRIBUTED RANDOMLY;
+ALTER TYPE dist_shape ADD ATTRIBUTE m money;
+ALTER TYPE dist_shape DROP ATTRIBUTE label;
+SELECT (k).a, v FROM dist_shape_tab ORDER BY v;
+ a | v 
+---+---
+ 1 | 1
+ 2 | 2
+(2 rows)
+
+DROP TABLE dist_shape_tab;
+DROP TYPE dist_shape;
+-- Follow nested composites, arrays and domains, including non-first key columns.
+CREATE TYPE dist_leaf AS (a int, b int);
+CREATE DOMAIN dist_array_domain AS dist_leaf[];
+CREATE TYPE dist_wrapper AS (items dist_array_domain);
+CREATE TABLE dist_nested (id int, k dist_wrapper) DISTRIBUTED BY (id, k);
+ALTER TYPE dist_leaf ADD ATTRIBUTE m money;
+ERROR:  cannot alter type "dist_leaf" because column "k" of relation "dist_nested" uses it in a distribution key
+ALTER TYPE dist_leaf DROP ATTRIBUTE b;
+ERROR:  cannot alter type "dist_leaf" because column "k" of relation "dist_nested" uses it in a distribution key
+DROP TABLE dist_nested;
+DROP TYPE dist_wrapper;
+DROP DOMAIN dist_array_domain;
+-- A stored column outside the distribution key is still allowed to change.
+CREATE TABLE dist_nonkey (id int, k dist_leaf) DISTRIBUTED BY (id);
+INSERT INTO dist_nonkey VALUES (1, ROW(1, 2)::dist_leaf);
+ALTER TYPE dist_leaf ADD ATTRIBUTE m money;
+ALTER TYPE dist_leaf DROP ATTRIBUTE b;
+SELECT (k).a, id FROM dist_nonkey;
+ a | id 
+---+----
+ 1 |  1
+(1 row)
+
+DROP TABLE dist_nonkey;
+DROP TYPE dist_leaf;
+-- Table row types, not just standalone composite types, can be distribution keys.
+CREATE TABLE dist_row_source (a int, b int) DISTRIBUTED BY (a);
+CREATE TABLE dist_row_use (k dist_row_source) DISTRIBUTED BY (k);
+ALTER TABLE dist_row_source ADD COLUMN c int;
+ERROR:  cannot alter type "dist_row_source" because column "k" of relation "dist_row_use" uses it in a distribution key
+ALTER TABLE dist_row_source DROP COLUMN b;
+ERROR:  cannot alter type "dist_row_source" because column "k" of relation "dist_row_use" uses it in a distribution key
+ALTER TABLE dist_row_source ADD COLUMN IF NOT EXISTS b int;
+ALTER TABLE dist_row_source DROP COLUMN IF EXISTS absent;
+DROP TABLE dist_row_use;
+ALTER TABLE dist_row_source ADD COLUMN c int;
+ALTER TABLE dist_row_source DROP COLUMN b;
+DROP TABLE dist_row_source;
+-- A cascading attribute deletion must obey the same rule.
+CREATE DOMAIN dist_attr_domain AS int;
+CREATE TYPE dist_cascade AS (a int, b dist_attr_domain);
+CREATE TABLE dist_cascade_tab (k dist_cascade) DISTRIBUTED BY (k);
+DROP DOMAIN dist_attr_domain CASCADE;
+ERROR:  cannot alter type "dist_cascade" because column "k" of relation "dist_cascade_tab" uses it in a distribution key
+DROP TABLE dist_cascade_tab;
+DROP TYPE dist_cascade;
+DROP DOMAIN dist_attr_domain;
+-- Random and replicated tables impose no hash requirement on their columns.
+CREATE TYPE dist_plain AS (a int);
+CREATE TABLE dist_random (k dist_plain) DISTRIBUTED RANDOMLY;
+CREATE TABLE dist_replicated (k dist_plain) DISTRIBUTED REPLICATED;
+INSERT INTO dist_random VALUES (ROW(1)::dist_plain);
+INSERT INTO dist_replicated VALUES (ROW(2)::dist_plain);
+ALTER TYPE dist_plain ADD ATTRIBUTE m money;
+ALTER TYPE dist_plain DROP ATTRIBUTE m;
+SELECT k FROM dist_random;
+  k  
+-----
+ (1)
+(1 row)
+
+SELECT k FROM dist_replicated;
+  k  
+-----
+ (2)
+(1 row)
+
+DROP TABLE dist_random, dist_replicated;
+DROP TYPE dist_plain;
+-- A domain default mentioning the type does not make it a container of that type.
+CREATE TYPE dist_default_source AS (a int);
+CREATE DOMAIN dist_default_domain AS int DEFAULT (ROW(1)::dist_default_source).a;
+CREATE TABLE dist_default_tab (k dist_default_domain) DISTRIBUTED BY (k);
+ALTER TYPE dist_default_source ADD ATTRIBUTE b int;
+INSERT INTO dist_default_tab DEFAULT VALUES;
+SELECT * FROM dist_default_tab;
+ k 
+---
+ 1
+(1 row)
+
+DROP TABLE dist_default_tab;
+DROP DOMAIN dist_default_domain;
+DROP TYPE dist_default_source;
+RESET client_min_messages;

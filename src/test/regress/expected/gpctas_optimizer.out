@@ -472,3 +472,57 @@ DROP FUNCTION public.exception_func();
 DROP TABLE test_tmp1;
 DROP TABLE test_tmp2;
 reset optimizer_trace_fallback;
+
+-- A source distribution key need not have a usable default hash opclass.
+-- In particular, money supports legacy distribution but no default hash opclass.
+SET optimizer = off;
+SET gp_use_legacy_hashops = on;
+SET client_min_messages = warning;
+CREATE TABLE ctas_legacy_money (m money, x int) DISTRIBUTED BY (m);
+CREATE TABLE ctas_legacy_empty AS SELECT * FROM ctas_legacy_money;
+INSERT INTO ctas_legacy_money SELECT i::money, i FROM generate_series(1, 20) i;
+CREATE TABLE ctas_legacy_full AS SELECT * FROM ctas_legacy_money;
+SELECT count(*), sum(x) FROM ctas_legacy_full;
+ count | sum 
+-------+-----
+    20 | 210
+(1 row)
+
+SELECT distkey, opcname FROM gp_distribution_policy p
+  JOIN pg_opclass o ON o.oid = p.distclass[0]
+  WHERE localoid = 'ctas_legacy_full'::regclass;
+ distkey |     opcname      
+---------+------------------
+ 1       | cdbhash_cash_ops
+(1 row)
+
+-- With legacy hashops disabled, use another hashable column or random distribution.
+SET gp_use_legacy_hashops = off;
+CREATE TABLE ctas_modern_money AS SELECT * FROM ctas_legacy_money;
+CREATE TABLE ctas_only_money AS SELECT m FROM ctas_legacy_money;
+SELECT count(*), sum(x) FROM ctas_modern_money;
+ count | sum 
+-------+-----
+    20 | 210
+(1 row)
+
+SELECT count(*) FROM ctas_only_money;
+ count 
+-------
+    20
+(1 row)
+
+SELECT localoid::regclass, distkey FROM gp_distribution_policy
+  WHERE localoid IN ('ctas_modern_money'::regclass, 'ctas_only_money'::regclass)
+  ORDER BY localoid::regclass::text;
+     localoid      | distkey 
+-------------------+---------
+ ctas_modern_money | 2
+ ctas_only_money   | 
+(2 rows)
+
+DROP TABLE ctas_legacy_money, ctas_legacy_empty, ctas_legacy_full,
+           ctas_modern_money, ctas_only_money;
+RESET client_min_messages;
+RESET gp_use_legacy_hashops;
+RESET optimizer;
