@@ -130,3 +130,22 @@ SELECT pg_reload_conf();
 
 !\retcode gprecoverseg -av;
 SELECT wait_until_all_segments_synchronized();
+
+-- Test 3: Full Page Images compressed with wal_compression must be
+-- replayable on the mirrors.  RestoreBlockImage() used to run the zstd
+-- decompressor on every compressed image, so pglz images stopped mirror
+-- replay.
+!\retcode gpconfig -c wal_compression -v pglz --skipvalidation;
+!\retcode gpstop -u;
+CREATE TABLE wal_compression_fpi(a int, b text) DISTRIBUTED BY (a);
+INSERT INTO wal_compression_fpi SELECT i, repeat('x', 100) FROM generate_series(1, 1000) i;
+-- the first change to each page after a checkpoint writes an FPI
+CHECKPOINT;
+UPDATE wal_compression_fpi SET b = repeat('y', 100);
+SELECT content, wait_for_replication_replay(content, 600) FROM gp_segment_configuration
+  WHERE role = 'p' AND content >= 0 ORDER BY content;
+SELECT count(*) FROM gp_segment_configuration WHERE status = 'd';
+
+!\retcode gpconfig -r wal_compression --skipvalidation;
+!\retcode gpstop -u;
+DROP TABLE wal_compression_fpi;
