@@ -32,7 +32,7 @@ ALTER
 SELECT rolresgroup FROM pg_authid WHERE rolname = 'rg_test_role_super';
  rolresgroup 
 -------------
- 6438        
+ 6437        
 (1 row)
 
 ALTER ROLE rg_test_role RESOURCE GROUP none;

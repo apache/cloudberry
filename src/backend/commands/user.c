@@ -1449,22 +1449,19 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 
 		roleResgroup = heap_getattr(tuple, Anum_pg_authid_rolresgroup,
 								   pg_authid_dsc, &isNull);
-		if (!isNull)
+		if (!isNull && should_be_super == 0 &&
+		    roleResgroup == ADMINRESGROUP_OID && resgroup == NULL)
 		{
 			/*
 			 * change the default resource group accordingly: admin_group
-			 * for superuser and default_group for non-superuser
+			 * for superuser.
 			 */
-			if (should_be_super == 0 && roleResgroup == ADMINRESGROUP_OID)
-			{
-				new_record[Anum_pg_authid_rolresgroup - 1] = ObjectIdGetDatum(DEFAULTRESGROUP_OID);
-				new_record_repl[Anum_pg_authid_rolresgroup - 1] = true;
-			}
-			else if (should_be_super > 0 && roleResgroup == DEFAULTRESGROUP_OID)
-			{
-				new_record[Anum_pg_authid_rolresgroup - 1] = ObjectIdGetDatum(ADMINRESGROUP_OID);
-				new_record_repl[Anum_pg_authid_rolresgroup - 1] = true;
-			}
+			if (IsResGroupActivated() && Gp_role == GP_ROLE_DISPATCH)
+				ereport(NOTICE,
+					(errmsg("role \"%s\" is no longer a superuser, moving it to \"default_group\"",
+						rolename)));
+			new_record[Anum_pg_authid_rolresgroup - 1] = ObjectIdGetDatum(DEFAULTRESGROUP_OID);
+			new_record_repl[Anum_pg_authid_rolresgroup - 1] = true;
 		}
 
 		/* get current superuser status */
