@@ -1790,7 +1790,7 @@ class gpload:
                 # Get GPDB version
                 curs = self.db.query("SELECT version()")
                 self.gpdb_version = GpVersion(curs.getresult()[0][0])
-                self.log(self.DEBUG, "GPDB version is: %s" % self.gpdb_version)
+                self.log(self.DEBUG, "Cloudberry version is: %s" % self.gpdb_version)
 
         except Exception as e:
             errorMessage = str(e)
