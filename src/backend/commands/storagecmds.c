@@ -38,6 +38,7 @@
 #include "catalog/oid_dispatch.h"
 #include "cdb/cdbdisp_query.h"
 #include "cdb/cdbvars.h"
+#include "commands/comment.h"
 #include "commands/defrem.h"
 #include "commands/storagecmds.h"
 #include "executor/execdesc.h"
@@ -410,6 +411,9 @@ CreateStorageServer(CreateStorageServerStmt *stmt)
 
 	heap_freetuple(tuple);
 
+	/* Keep the shared object's owner dependency in sync with ALTER OWNER. */
+	recordDependencyOnOwner(StorageServerRelationId, srvId, ownerId);
+
 	/* Post creation hook for new storage server */
 	InvokeObjectPostCreateHook(StorageServerRelationId, srvId, 0);
 
@@ -617,6 +621,7 @@ RemoveStorageServer(DropStorageServerStmt *stmt)
 	 * Delete shared dependency references related to this server object.
 	 */
 	deleteSharedDependencyRecordsFor(StorageServerRelationId, serverId, 0);
+	DeleteSharedComments(serverId, StorageServerRelationId);
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{

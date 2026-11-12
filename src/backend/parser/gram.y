@@ -10500,6 +10500,15 @@ CommentStmt:
 					n->comment = $6;
 					$$ = (Node *) n;
 				}
+			| COMMENT ON STORAGE SERVER name IS comment_text
+				{
+					CommentStmt *n = makeNode(CommentStmt);
+
+					n->objtype = OBJECT_STORAGE_SERVER;
+					n->object = (Node *) makeString($5);
+					n->comment = $7;
+					$$ = (Node *) n;
+				}
 			| COMMENT ON COLUMN any_name IS comment_text
 				{
 					CommentStmt *n = makeNode(CommentStmt);
@@ -14048,6 +14057,15 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 					n->objectType = OBJECT_FOREIGN_SERVER;
 					n->object = (Node *) makeString($3);
 					n->newowner = $6;
+					$$ = (Node *) n;
+				}
+			| ALTER STORAGE SERVER name OWNER TO RoleSpec
+				{
+					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
+
+					n->objectType = OBJECT_STORAGE_SERVER;
+					n->object = (Node *) makeString($4);
+					n->newowner = $7;
 					$$ = (Node *) n;
 				}
 			| ALTER EVENT TRIGGER name OWNER TO RoleSpec

@@ -1,0 +1,79 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+
+<refentry id="sql-alterstorageserver">
+ <indexterm zone="sql-alterstorageserver">
+  <primary>ALTER STORAGE SERVER</primary>
+ </indexterm>
+
+ <refmeta>
+  <refentrytitle>ALTER STORAGE SERVER</refentrytitle>
+  <manvolnum>7</manvolnum>
+  <refmiscinfo>SQL - Language Statements</refmiscinfo>
+ </refmeta>
+
+ <refnamediv>
+  <refname>ALTER STORAGE SERVER</refname>
+  <refpurpose>change the definition of a storage server</refpurpose>
+ </refnamediv>
+
+ <refsynopsisdiv>
+<synopsis>
+ALTER STORAGE SERVER <replaceable>name</replaceable> OPTIONS ( [ ADD | SET | DROP ] <replaceable>option</replaceable> [ '<replaceable>value</replaceable>' ] [, ... ] )
+ALTER STORAGE SERVER <replaceable>name</replaceable> OWNER TO { <replaceable>new_owner</replaceable> | CURRENT_ROLE | CURRENT_USER | SESSION_USER }
+</synopsis>
+ </refsynopsisdiv>
+
+ <refsect1>
+  <title>Description</title>
+  <para>
+   <command>ALTER STORAGE SERVER</command> changes a storage server's options
+   or owner. Storage servers are shared by all databases in the cluster.
+  </para>
+  <para>
+   You must own the storage server to alter it. To change its owner, you must
+   also be able to <command>SET ROLE</command> to the new owning role.
+   A superuser can change the owner
+   of any storage server. Changing ownership preserves the server's options
+   and adjusts its access privileges for the new owner.
+  </para>
+  <para>
+   Use <command>COMMENT ON STORAGE SERVER</command> to add or replace a
+   description. The comment is visible from every database in the cluster.
+   The storage server's owner or a superuser can change its comment; specifying
+   <literal>NULL</literal> or an empty string removes the comment.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>Examples</title>
+<programlisting>
+ALTER STORAGE SERVER archive OWNER TO archive_admin;
+COMMENT ON STORAGE SERVER archive IS 'Storage for archived files';
+COMMENT ON STORAGE SERVER archive IS NULL;
+</programlisting>
+ </refsect1>
+
+ <refsect1>
+  <title>Compatibility</title>
+  <para>
+   <command>ALTER STORAGE SERVER</command> is an Apache Cloudberry extension.
+  </para>
+ </refsect1>
+</refentry>
