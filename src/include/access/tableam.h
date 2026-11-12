@@ -706,6 +706,17 @@ typedef struct TableAmRoutine
 	void		(*relation_copy_data) (Relation rel,
 									   const RelFileLocator *newrlocator);
 
+	/* See table_relation_add_columns(). */
+	void 		(*relation_add_columns) (Relation rel,
+									List *newvals,
+									TupleDesc oldDesc);
+
+	/* See table_relation_rewrite_columns(). */
+	void 		(*relation_rewrite_columns) (Relation rel,
+									List *newvals,
+									List *constraints,
+									TupleDesc oldDesc);
+
 	/* See table_relation_copy_for_cluster() */
 	void		(*relation_copy_for_cluster) (Relation OldTable,
 											  Relation NewTable,
@@ -1895,6 +1906,45 @@ table_relation_copy_data(Relation rel, const RelFileLocator *newrlocator)
 }
 
 /*
+ * Add new columns, or rewrite existing ones, in place -- without rewriting the
+ * rest of the relation.  Only ao_column implements these; every other access
+ * method (heap, ao_row and PAX among them) leaves the callbacks NULL and has
+ * to rewrite the whole table instead.
+ *
+ * Callers select this path by setting AT_REWRITE_NEW_COLUMNS_ONLY or
+ * AT_REWRITE_REWRITE_COLUMNS_ONLY, which they only do under
+ * RelationIsAoCols().  Check again here rather than calling through a NULL
+ * pointer: getting that guard wrong in any one of those places would
+ * otherwise crash the backend instead of reporting an unsupported operation.
+ */
+static inline void
+table_relation_add_columns(Relation rel, List *newvals, TupleDesc oldDesc)
+{
+	if (rel->rd_tableam->relation_add_columns == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot add columns to relation \"%s\" in place",
+						RelationGetRelationName(rel)),
+				 errdetail("Its access method does not support adding columns without rewriting the relation.")));
+
+	rel->rd_tableam->relation_add_columns(rel, newvals, oldDesc);
+}
+
+static inline void
+table_relation_rewrite_columns(Relation rel, List *newvals, List *constraints,
+							   TupleDesc oldDesc)
+{
+	if (rel->rd_tableam->relation_rewrite_columns == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot rewrite columns of relation \"%s\" in place",
+						RelationGetRelationName(rel)),
+				 errdetail("Its access method does not support rewriting columns without rewriting the relation.")));
+
+	rel->rd_tableam->relation_rewrite_columns(rel, newvals, constraints, oldDesc);
+}
+
+/*
  * Copy data from `OldTable` into `NewTable`, as part of a CLUSTER or VACUUM
  * FULL.
  *
@@ -2078,6 +2128,9 @@ table_index_build_scan(Relation table_rel,
  * When "anyvisible" mode is requested, all tuples visible to any transaction
  * are indexed and counted as live, including those inserted or deleted by
  * transactions that are still in progress.
+ *
+ * GPDB: For a partial range scan, the caller needs to guarantee that the range
+ * [start_blockno, start_blockno + numblocks) lies in a single BlockSequence.
  */
 static inline double
 table_index_build_range_scan(Relation table_rel,

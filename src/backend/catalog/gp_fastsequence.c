@@ -17,6 +17,7 @@
 #include "access/appendonlywriter.h"
 #include "access/htup_details.h"
 #include "catalog/gp_fastsequence.h"
+#include "catalog/pg_attribute_encoding.h"
 #include "catalog/indexing.h"
 #include "utils/relcache.h"
 #include "utils/fmgroids.h"
@@ -341,11 +342,35 @@ int64 ReadLastSequence(Oid objid, int64 objmod)
 	return lastSequence;
 }
 
+/*
+ * ReadAllLastSequences
+ *
+ * Convenient function to read lastsequence of every objmod.
+ * Record the sequence numbers in the passed-in array.
+ * All the returned numbers should be non-negative.
+ */
+void ReadAllLastSequences(Oid objid, int64 *seqs)
+{
+	Assert(seqs);
+
+	for (int objmod = 0; objmod < MAX_AOREL_CONCURRENCY; objmod++)
+	{
+		seqs[objmod] = ReadLastSequence(objid, objmod);
+ 		/* 
+		 * ReadLastSequence() is expected to return 0 if the seg doesn't 
+		 * exist. Otherwise, it should return a positive number.
+		 */
+		Assert(seqs[objmod] >= 0);
+	}
+}
 
 /*
  * RemoveFastSequenceEntry
  *
  * Remove all entries associated with the given object id.
+ * And, since gp_fastsequence is cleared, the existing 
+ * pg_attribute_encoding.lastrownum does not make sense anymore.
+ * Clear them too based on the AO relation OID.
  *
  * If the given objid is an invalid OID, this function simply
  * returns.
@@ -354,7 +379,7 @@ int64 ReadLastSequence(Oid objid, int64 objmod)
  * gp_fastsequence.
  */
 void
-RemoveFastSequenceEntry(Oid objid)
+RemoveFastSequenceEntry(Oid relid, Oid objid)
 {
 	Relation	rel;
 	ScanKeyData scankey;
@@ -381,4 +406,16 @@ RemoveFastSequenceEntry(Oid objid)
 
 	systable_endscan(sscan);
 	table_close(rel, RowExclusiveLock);
+
+	/*
+	 * GPDB_PORT: upstream clears unconditionally, but this is also reached
+	 * while dropping a table (RemoveAppendonlyEntry()), by which point its
+	 * pg_class entry can already be gone -- an ON COMMIT DROP temp table then
+	 * fails at commit with "could not open relation with OID".  There is
+	 * nothing to clear in that case: the relation's pg_attribute_encoding rows
+	 * go away along with it.  The ao_row-only check this guard used to carry is
+	 * gone: ao_column uses lastrownums too as of this commit.
+	 */
+	if (SearchSysCacheExists1(RELOID, ObjectIdGetDatum(relid)))
+		ClearAttributeEncodingLastrownums(relid);
 }

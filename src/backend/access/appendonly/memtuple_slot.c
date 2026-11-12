@@ -57,7 +57,12 @@ tts_memtuple_bind(MemTupleTableSlot *mslot)
 		MemoryContext oldcontext;
 
 		oldcontext = MemoryContextSwitchTo(mslot->base.tts_mcxt);
-		mslot->mt_bind = create_memtuple_binding(mslot->base.tts_tupleDescriptor);
+		/*
+		 * No scan supplied one, so the tuple can only be one this slot
+		 * formed itself, which carries every attribute of the descriptor.
+		 */
+		mslot->mt_bind = create_memtuple_binding(mslot->base.tts_tupleDescriptor,
+												 mslot->base.tts_tupleDescriptor->natts);
 		MemoryContextSwitchTo(oldcontext);
 
 		mslot->own_bind = true;
@@ -169,12 +174,16 @@ tts_memtuple_materialize(TupleTableSlot *slot)
 	/*
 	 * A borrowed binding belongs to the scan, which frees it in
 	 * AppendOnlyExecutorReadBlock_Finish(), so the tuple would become
-	 * unreadable once the scan ends.  Build one of our own, which is
-	 * equivalent because both are derived from this tuple descriptor.
+	 * unreadable once the scan ends.  Build one of our own, matching the
+	 * borrowed one: a fast ADD COLUMN leaves the tuple narrower than the
+	 * descriptor, and only the binding records how wide it really is.
 	 */
 	if (!mslot->own_bind)
 	{
-		mslot->mt_bind = create_memtuple_binding(slot->tts_tupleDescriptor);
+		mslot->mt_bind = create_memtuple_binding(slot->tts_tupleDescriptor,
+												 mslot->mt_bind ?
+												 mslot->mt_bind->natts :
+												 slot->tts_tupleDescriptor->natts);
 		mslot->own_bind = true;
 	}
 

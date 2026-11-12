@@ -325,18 +325,6 @@ AppendOnlyStorageRead_OpenFile(AppendOnlyStorageRead *storageRead,
 	Assert(filePathName != NULL);
 	Assert(storageRead->smgrAO);
 
-	/*
-	 * The EOF must be greater than 0, otherwise we risk transactionally
-	 * created segment files from disappearing if a concurrent write
-	 * transaction aborts.
-	 */
-	if (logicalEof == 0)
-		ereport(ERROR,
-				(errcode(ERRCODE_INTERNAL_ERROR),
-				 errmsg("append-only storage read segment file '%s' EOF must be > 0 for relation '%s'",
-						filePathName,
-						storageRead->relationName)));
-
 	file = AppendOnlyStorageRead_DoOpenFile(storageRead,
 											filePathName);
 	if (file < 0)
@@ -421,6 +409,27 @@ AppendOnlyStorageRead_SetTemporaryRange(AppendOnlyStorageRead *storageRead,
 	BufferedReadSetTemporaryRange(&storageRead->bufferedRead,
 								  beginFileOffset,
 								  afterFileOffset);
+}
+
+/*
+ * This is similar in spirit to AppendOnlyStorageRead_SetTemporaryRange(),
+ * except that we want to kick off a random read from 'beginFileOffset', with
+ * the intention to keep reading beyond 'afterFileOffset'.
+ *
+ * 'beginFileOffset' and 'afterFileOffset' must delimit the varblock we intend
+ * to start reading from.
+ */
+void
+AppendOnlyStorageRead_SetTemporaryStart(AppendOnlyStorageRead *storageRead,
+										int64 beginFileOffset,
+										int64 afterFileOffset)
+{
+	AppendOnlyStorageRead_SetTemporaryRange(storageRead,
+											beginFileOffset,
+											afterFileOffset);
+
+	/* This ensures that we don't limit the scan to afterFileOffset */
+	storageRead->bufferedRead.haveTemporaryLimitInEffect = false;
 }
 
 /*

@@ -876,6 +876,11 @@ datumstreamread_close_file(DatumStreamRead * ds)
 {
 	AppendOnlyStorageRead_CloseFile(&ds->ao_read);
 
+	/*
+	 * Reset blockRowCount as file being closed,
+	 * which also helps to direct to next segfile
+	 * reading in sampling scenario.
+	 */
 	ds->blockRowCount = 0;
 	ds->need_close_file = false;
 }
@@ -980,8 +985,7 @@ datumstreamwrite_block_dense(DatumStreamWrite * acc)
 int64
 datumstreamwrite_block(DatumStreamWrite *acc,
 					   AppendOnlyBlockDirectory *blockDirectory,
-					   int columnGroupNo,
-					   bool addColAction)
+					   int columnGroupNo)
 {
 	int64 writesz;
 	int itemCount = DatumStreamBlockWrite_Nth(&acc->blockWrite);
@@ -1016,8 +1020,7 @@ datumstreamwrite_block(DatumStreamWrite *acc,
 		columnGroupNo,
 		acc->blockFirstRowNum,
 		AppendOnlyStorageWrite_LogicalBlockStartOffset(&acc->ao_write),
-		itemCount,
-		addColAction);
+		itemCount);
 
 	return writesz;
 }
@@ -1032,11 +1035,10 @@ datumstreamwrite_print_large_varlena_info(
 }
 
 int64
-datumstreamwrite_lob(DatumStreamWrite * acc,
+datumstreamwrite_lob(DatumStreamWrite *acc,
 					 Datum d,
 					 AppendOnlyBlockDirectory *blockDirectory,
-					 int colGroupNo,
-					 bool addColAction)
+					 int colGroupNo)
 {
 	uint8	   *p;
 	int32		varLen;
@@ -1120,8 +1122,7 @@ datumstreamwrite_lob(DatumStreamWrite * acc,
 		colGroupNo,
 		acc->blockFirstRowNum,
 		AppendOnlyStorageWrite_LogicalBlockStartOffset(&acc->ao_write),
-		1, /*itemCount -- always just the lob just inserted */
-		addColAction);
+		1);
 
 
 	if (FileEncryptionEnabled)
@@ -1429,8 +1430,7 @@ datumstreamread_block(DatumStreamRead * acc,
 											 colGroupNo,
 											 acc->blockFirstRowNum,
 											 acc->blockFileOffset,
-											 acc->blockRowCount,
-											 false);
+											 acc->blockRowCount);
 	}
 
 	return 0;
