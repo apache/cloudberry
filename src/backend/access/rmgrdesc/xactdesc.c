@@ -286,7 +286,12 @@ ParsePrepareRecord(uint8 info, xl_xact_prepare *xlrec, xl_xact_parsed_prepare *p
 	parsed->nsubxacts = xlrec->nsubxacts;
 	parsed->nrels = xlrec->ncommitrels;
 	parsed->nabortrels = xlrec->nabortrels;
+	parsed->ndeldbs = xlrec->ncommitdbs;
+	parsed->nabortdbs = xlrec->nabortdbs;
+	parsed->nstats = xlrec->ncommitstats;
+	parsed->nabortstats = xlrec->nabortstats;
 	parsed->nmsgs = xlrec->ninvalmsgs;
+	parsed->tablespace_oid_to_delete_on_commit = xlrec->tablespace_oid_to_delete_on_commit;
 
 	strncpy(parsed->twophase_gid, bufptr, xlrec->gidlen);
 	bufptr += MAXALIGN(xlrec->gidlen);
@@ -299,6 +304,13 @@ ParsePrepareRecord(uint8 info, xl_xact_prepare *xlrec, xl_xact_parsed_prepare *p
 
 	parsed->abortlocators = (RelFileNodePendingDelete *) bufptr;
 	bufptr += MAXALIGN(xlrec->nabortrels * sizeof(RelFileNodePendingDelete));
+
+	/* GPDB: delete-on-commit / delete-on-abort databases, see StartPrepare() */
+	parsed->deldbs = (DbDirNode *) bufptr;
+	bufptr += MAXALIGN(xlrec->ncommitdbs * sizeof(DbDirNode));
+
+	parsed->abortdbs = (DbDirNode *) bufptr;
+	bufptr += MAXALIGN(xlrec->nabortdbs * sizeof(DbDirNode));
 
 	parsed->stats = (xl_xact_stats_item *) bufptr;
 	bufptr += MAXALIGN(xlrec->ncommitstats * sizeof(xl_xact_stats_item));
@@ -326,6 +338,26 @@ xact_desc_relations(StringInfo buf, char *label, int nrels,
 			char	   *path = relpathbackend(xlocators[i].node,
 											  backendId,
 											  MAIN_FORKNUM);
+
+			appendStringInfo(buf, " %s", path);
+			pfree(path);
+		}
+	}
+}
+
+/* GPDB: databases scheduled for deletion, as written by StartPrepare() */
+static void
+xact_desc_dbs(StringInfo buf, char *label, int ndbs, DbDirNode *dbs)
+{
+	int			i;
+
+	if (ndbs > 0)
+	{
+		appendStringInfo(buf, "; %s:", label);
+		for (i = 0; i < ndbs; i++)
+		{
+			char	   *path = GetDatabasePath(dbs[i].database,
+											   dbs[i].tablespace);
 
 			appendStringInfo(buf, " %s", path);
 			pfree(path);
@@ -389,18 +421,7 @@ xact_desc_commit(StringInfo buf, uint8 info, xl_xact_commit *xlrec, RepOriginId 
 	if (XactCompletionApplyFeedback(parsed.xinfo))
 		appendStringInfoString(buf, "; apply_feedback");
 
-	if (parsed.ndeldbs > 0)
-	{
-		appendStringInfoString(buf, "; deldbs:");
-		for (int i = 0; i < parsed.ndeldbs; i++)
-		{
-			char *path =
-					 GetDatabasePath(parsed.deldbs[i].database, parsed.deldbs[i].tablespace);
-
-			appendStringInfo(buf, " %s", path);
-			pfree(path);
-		}
-	}
+	xact_desc_dbs(buf, "deldbs", parsed.ndeldbs, parsed.deldbs);
 	if (xlrec->tablespace_oid_to_delete_on_commit != InvalidOid)
 		appendStringInfo(buf, "; tablespace_oid_to_delete_on_commit: %u", xlrec->tablespace_oid_to_delete_on_commit);
 
@@ -465,18 +486,7 @@ xact_desc_abort(StringInfo buf, uint8 info, xl_xact_abort *xlrec, RepOriginId or
 	xact_desc_stats(buf, "", parsed.nstats, parsed.stats);
 
 
-	if (parsed.ndeldbs > 0)
-	{
-		appendStringInfoString(buf, "; deldbs:");
-		for (int i = 0; i < parsed.ndeldbs; i++)
-		{
-			char *path =
-					GetDatabasePath(parsed.deldbs[i].database, parsed.deldbs[i].tablespace);
-
-			appendStringInfo(buf, " %s", path);
-			pfree(path);
-		}
-	}
+	xact_desc_dbs(buf, "deldbs", parsed.ndeldbs, parsed.deldbs);
 	if (xlrec->tablespace_oid_to_delete_on_abort != InvalidOid)
 		appendStringInfo(buf, "; tablespace_oid_to_delete_on_abort: %u", xlrec->tablespace_oid_to_delete_on_abort);
 
@@ -495,12 +505,21 @@ xact_desc_prepare(StringInfo buf, uint8 info, xl_xact_prepare *xlrec, RepOriginI
 	xact_desc_relations(buf, "rels(commit)", parsed.nrels, parsed.xlocators);
 	xact_desc_relations(buf, "rels(abort)", parsed.nabortrels,
 						parsed.abortlocators);
+	xact_desc_dbs(buf, "dbs(commit)", parsed.ndeldbs, parsed.deldbs);
+	xact_desc_dbs(buf, "dbs(abort)", parsed.nabortdbs, parsed.abortdbs);
 	xact_desc_stats(buf, "commit ", parsed.nstats, parsed.stats);
 	xact_desc_stats(buf, "abort ", parsed.nabortstats, parsed.abortstats);
 	xact_desc_subxacts(buf, parsed.nsubxacts, parsed.subxacts);
 
 	standby_desc_invalidations(buf, parsed.nmsgs, parsed.msgs, parsed.dbId,
 							   parsed.tsId, xlrec->initfileinval);
+
+	if (xlrec->tablespace_oid_to_delete_on_commit != InvalidOid)
+		appendStringInfo(buf, "; tablespace_oid_to_delete_on_commit: %u",
+						 xlrec->tablespace_oid_to_delete_on_commit);
+	if (xlrec->tablespace_oid_to_delete_on_abort != InvalidOid)
+		appendStringInfo(buf, "; tablespace_oid_to_delete_on_abort: %u",
+						 xlrec->tablespace_oid_to_delete_on_abort);
 
 	/*
 	 * Check if the replication origin has been set in this record in the same

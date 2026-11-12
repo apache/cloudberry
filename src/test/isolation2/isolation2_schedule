@@ -303,6 +303,7 @@ test: restore_memory_accounting_default
 test: runaway_query
 
 test: distributed_transactions
+test: prepare_record_desc
 
 # Test for tablespace
 test: concurrent_drop_truncate_tablespace
