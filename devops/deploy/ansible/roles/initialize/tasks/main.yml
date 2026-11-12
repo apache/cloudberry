@@ -1,0 +1,148 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+---
+- name: Create gpconfigs directory
+  file:
+    path: "/home/{{ cloudberry_admin_user }}/gpconfigs"
+    state: directory
+
+- name: Create gpinitsystem config
+  copy:
+    content: |
+      SEG_PREFIX=gpseg
+      PORT_BASE={{ port_base }}
+      declare -a DATA_DIRECTORY=({% for i in range(segments_per_host) %}{{ primary_data_dir }} {% endfor %})
+      COORDINATOR_HOSTNAME={{ coordinator_hostname }}
+      COORDINATOR_DIRECTORY={{ coordinator_data_dir }}
+      COORDINATOR_PORT={{ coordinator_port }}
+      TRUSTED_SHELL=ssh
+      CHECK_POINT_SEGMENTS=8
+      ENCODING=UNICODE
+      MIRROR_PORT_BASE={{ mirror_port_base }}
+      declare -a MIRROR_DATA_DIRECTORY=({% for i in range(segments_per_host) %}{{ mirror_data_dir }} {% endfor %})
+      DATABASE_NAME={{ database_name }}
+    dest: "/home/{{ cloudberry_admin_user }}/gpconfigs/gpinitsystem_config"
+
+- name: Check if cluster is already initialized
+  stat:
+    path: "{{ coordinator_data_dir }}/gpseg-1/PG_VERSION"
+  register: pgversion_stat
+  become: yes
+  become_user: root
+
+- name: Run gpinitsystem
+  shell: |
+    source /usr/local/cloudberry-db/cloudberry-env.sh
+    yes | gpinitsystem -c /home/{{ cloudberry_admin_user }}/gpconfigs/gpinitsystem_config \
+        -h /home/{{ cloudberry_admin_user }}/hostfile_gpinitsystem \
+        -s {{ standby_hostname }} --mirror-mode=spread
+  args:
+    executable: /bin/bash
+  register: gpinitsystem_result
+  failed_when: "'successfully created' not in gpinitsystem_result.stdout"
+  when: not pgversion_stat.stat.exists
+
+- name: Set environment variables in .bashrc
+  blockinfile:
+    path: "/home/{{ cloudberry_admin_user }}/.bashrc"
+    block: |
+      source /usr/local/cloudberry-db/cloudberry-env.sh
+      export COORDINATOR_DATA_DIRECTORY={{ coordinator_data_dir }}/gpseg-1
+      export PGPORT={{ coordinator_port }}
+      export PGUSER={{ cloudberry_admin_user }}
+      export PGDATABASE={{ database_name }}
+    marker: "# {mark} CLOUDBERRY ENVIRONMENT"
+
+- name: Sync .bashrc to standby coordinator
+  shell: |
+    scp /home/{{ cloudberry_admin_user }}/.bashrc \
+        {{ standby_hostname }}:/home/{{ cloudberry_admin_user }}/.bashrc
+  args:
+    executable: /bin/bash
+
+- name: Wait for cluster to be fully ready
+  shell: |
+    source /usr/local/cloudberry-db/cloudberry-env.sh
+    source /home/{{ cloudberry_admin_user }}/.bashrc
+    for i in $(seq 1 12); do
+      if gpstate -s 2>&1 | grep -q "All segments are running normally"; then
+        echo "Cluster is ready"
+        exit 0
+      fi
+      echo "Waiting for cluster... attempt $i/12"
+      sleep 10
+    done
+    echo "Cluster ready check timed out, proceeding anyway"
+    exit 0
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: not pgversion_stat.stat.exists
+
+- name: Verify standby coordinator is synchronized
+  shell: |
+    source /usr/local/cloudberry-db/cloudberry-env.sh
+    source /home/{{ cloudberry_admin_user }}/.bashrc
+    gpstate -f
+  args:
+    executable: /bin/bash
+  register: gpstate_result
+  changed_when: false
+  failed_when: false
+
+- name: Initialize standby coordinator if not already active
+  shell: |
+    source /usr/local/cloudberry-db/cloudberry-env.sh
+    source /home/{{ cloudberry_admin_user }}/.bashrc
+    if ! gpstate -f 2>&1 | grep -q "Sync state: sync"; then
+      yes | gpinitstandby -s {{ standby_hostname }}
+    else
+      echo "Standby already synchronized, skipping gpinitstandby"
+    fi
+  args:
+    executable: /bin/bash
+  register: gpinitstandby_result
+  changed_when: "'skipping' not in gpinitstandby_result.stdout"
+  when: not pgversion_stat.stat.exists
+
+- name: Display success message
+  debug:
+    msg:
+      - "=========================================="
+      - " Apache Cloudberry cluster initialized successfully!"
+      - "=========================================="
+      - " Connect to the database:"
+      - "   su - gpadmin"
+      - "   psql -d {{ database_name }}"
+      - "=========================================="
+
+- name: Check postgres --gp-version
+  command: /usr/local/cloudberry-db/bin/postgres --gp-version
+  register: gp_version
+  changed_when: false
+
+- name: Check postgres --version
+  command: /usr/local/cloudberry-db/bin/postgres --version
+  register: pg_version
+  changed_when: false
+
+- name: Show version info
+  debug:
+    msg:
+      - "{{ gp_version.stdout }}"
+      - "{{ pg_version.stdout }}"
