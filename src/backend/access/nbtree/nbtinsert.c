@@ -2689,14 +2689,6 @@ _bt_delete_or_dedup_one_page(Relation rel, Relation heapRel,
 							 bool simpleonly, bool checkingunique,
 							 bool uniquedup, bool indexUnchanged)
 {
-	/*
-	 * GPDB_14_MERGE_FIXME: when the original RELATION is AO RELATION,
-	 * just skip this optimization, which we expect to implement in the
-	 * future.
-	 */
-	if (RelationIsAppendOptimized(heapRel))
-		return;
-
 	OffsetNumber deletable[MaxIndexTuplesPerPage];
 	int			ndeletable = 0;
 	OffsetNumber offnum,
@@ -2782,8 +2774,13 @@ _bt_delete_or_dedup_one_page(Relation rel, Relation heapRel,
 	 * routines as deduplication internally.  However, it does not merge
 	 * together index tuples, so the same correctness considerations do not
 	 * apply.  We deliberately omit an index-is-allequalimage test here.
+	 *
+	 * GPDB: append-optimized and PAX tables don't support index_delete_tuples,
+	 * so go straight to deduplication.  Simple deletion doesn't need the same
+	 * check, because index tuples of these tables never get LP_DEAD set.
 	 */
 	if ((indexUnchanged || uniquedup) &&
+		!RelationIsNonblockRelation(heapRel) &&
 		_bt_bottomupdel_pass(rel, buffer, heapRel, insertstate->itemsz))
 		return;
 
