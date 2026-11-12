@@ -117,6 +117,12 @@ else
 ALWAYS_SUBDIRS += datalake_fdw
 endif
 
+ifeq ($(with_lance),yes)
+SUBDIRS += lance_fdw
+else
+ALWAYS_SUBDIRS += lance_fdw
+endif
+
 ifeq ($(enable_ic_udp2),yes)
 SUBDIRS += udp2
 else

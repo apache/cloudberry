@@ -1,0 +1,5 @@
+{"id":0,"c_map_utf8_i32":[["a",1],["b",2]],"c_map_i32_utf8":[[1,"x"],[2,"yy"]]}
+{"id":1,"c_map_utf8_i32":[],"c_map_i32_utf8":null}
+{"id":2,"c_map_utf8_i32":null,"c_map_i32_utf8":[]}
+{"id":3,"c_map_utf8_i32":[["k",null]],"c_map_i32_utf8":[[7,null]]}
+{"id":4,"c_map_utf8_i32":[["",0],["\u00fcnic\u00f8de",-1]],"c_map_i32_utf8":[[-1,""],[0,"z"]]}
