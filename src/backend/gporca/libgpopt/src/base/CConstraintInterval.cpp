@@ -296,6 +296,14 @@ CConstraintInterval::PcnstrIntervalFromScalarArrayCmp(CMemoryPool *mp,
 	const IComparator *pcomp = COptCtxt::PoctxtFromTLS()->Pcomp();
 	gpos::CAutoRef<CDatumSortedSet> apdatumsortedset(
 		GPOS_NEW(mp) CDatumSortedSet(mp, pexprArray, pcomp));
+
+	// CDatumSortedSet drops NULLs, so an all-NULL array leaves it empty.
+	// The loops below assume at least one datum.
+	if (0 == apdatumsortedset->Size())
+	{
+		return nullptr;
+	}
+
 	// construct ranges representing IN or NOT IN
 	CRangeArray *prgrng = GPOS_NEW(mp) CRangeArray(mp);
 
