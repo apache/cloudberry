@@ -213,6 +213,40 @@ drop table ao1;
 drop table ao2;
 drop table aocs1;
 
+--
+-- Parallel scan of AOCS columns with RLE compression.  The other cases of
+-- parallel AO row and AOCS scans are in input/uao_dml/ao_parallel_scan.source;
+-- rle_type is AOCS-only.  A parallel process positions every column at the
+-- first row of its chunk, which is inside a block; rle_type packs regular
+-- values densely, so a block holds many rows.  t is mostly 32 bytes, but
+-- every 1000th value is larger than a block.
+--
+begin;
+set local enable_parallel = on;
+set local max_parallel_workers_per_gather = 4;
+create table aocs_rle (k int, a int,
+                       b bigint encoding (compresstype = rle_type, compresslevel = 4),
+                       n numeric encoding (compresstype = rle_type, compresslevel = 1),
+                       t text encoding (compresstype = rle_type, compresslevel = 2))
+  using ao_column with (parallel_workers = 4) distributed by (k);
+insert into aocs_rle
+  select 0, i, i::bigint * 7, i / 4.0,
+         case when i % 1000 = 0 then repeat(md5(i::text), 2000) else md5(i::text) end
+  from generate_series(1, 100000) i;
+-- misaligned counts rows whose columns were read from different rows
+explain(costs off)
+select count(*), sum(a),
+       sum(case when b <> a::bigint * 7 or n <> a / 4.0 or
+                     t <> case when a % 1000 = 0 then repeat(md5(a::text), 2000) else md5(a::text) end
+                then 1 else 0 end) as misaligned
+from aocs_rle;
+select count(*), sum(a),
+       sum(case when b <> a::bigint * 7 or n <> a / 4.0 or
+                     t <> case when a % 1000 = 0 then repeat(md5(a::text), 2000) else md5(a::text) end
+                then 1 else 0 end) as misaligned
+from aocs_rle;
+abort;
+
 -- test Parallel Bitmap Heap Scan
 begin;
 create table t1(c1 int, c2 int) with(parallel_workers=2) distributed by (c1);
@@ -668,7 +702,7 @@ abort;
 --
 -- Test Parallel Hash Left Anti Semi (Not-In) Join(parallel-oblivious).
 --
-create table t1(c1 int, c2 int) using ao_row distributed by (c1);
+create table t1(c1 int, c2 int) using ao_row with(parallel_workers=2) distributed by (c1);
 create table t2(c1 int, c2 int) using ao_row distributed by (c1);
 create table t3_null(c1 int, c2 int) using ao_row distributed by (c1);
 begin;
