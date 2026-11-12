@@ -129,6 +129,7 @@
 #include "cdb/cdbvars.h"
 #include "commands/progress.h"
 #include "commands/vacuum.h"
+#include "executor/executor.h"
 #include "pgstat.h"
 #include "postmaster/autovacuum.h"
 #include "storage/freespace.h"
@@ -161,8 +162,13 @@ static int vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset
 									 BufferAccessStrategy bstrategy, AOVacuumRelStats *vacrelstats);
 static void ao_vacuum_rel_recycle_dead_segments(Relation onerel, VacuumParams *params,
 												BufferAccessStrategy bstrategy, AOVacuumRelStats *vacrelstats);
-static AOVacuumRelStats *init_vacrelstats(void);
+static AOVacuumRelStats *init_vacrelstats(bool instrument);
 static void cleanup_vacrelstats(AOVacuumRelStats **vacrelstatsp);
+static void ao_accum_resources(PgStat_CommonCounts *dst,
+							   const PgStat_CommonCounts *src, bool subtract);
+static void ao_measure_index_resources(Relation indrel,
+									 LVExtStatCounters *counters,
+									 AOVacuumRelStats *vacrelstats, bool verbose);
 
 static void
 ao_vacuum_rel_pre_cleanup(Relation onerel, VacuumParams *params, BufferAccessStrategy bstrategy, AOVacuumRelStats *vacrelstats)
@@ -407,13 +413,15 @@ ao_vacuum_rel_compact(Relation onerel, VacuumParams *params, BufferAccessStrateg
 }
 
 static AOVacuumRelStats *
-init_vacrelstats()
+init_vacrelstats(bool instrument)
 {
 	AOVacuumRelStats *vacrelstats;
 	MemoryContext old_context;
 
 	old_context = MemoryContextSwitchTo(TopMemoryContext);
 	vacrelstats = (AOVacuumRelStats *) palloc0(sizeof(AOVacuumRelStats));
+	if (instrument)
+		vacrelstats->extstats = palloc0(sizeof(AOVacuumExtStats));
 	MemoryContextSwitchTo(old_context);
 
 	return vacrelstats;
@@ -428,10 +436,26 @@ void
 ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy)
 {
 	static AOVacuumRelStats *vacrelstats = NULL;
+	LVExtStatCounters *extcounters;
+	bool		verbose = (params->options & VACOPT_VERBOSE) != 0;
+	PgStat_CommonCounts index_start = {0};
 	Assert(RelationStorageIsAO(rel));
 	Assert(params != NULL);
 
 	int ao_vacuum_phase = (params->options & VACUUM_AO_PHASE_MASK);
+
+	/*
+	 * The phases of one vacuum share these stats and free them at the end of
+	 * the last phase, so a vacuum that failed in between leaves them behind.
+	 * Drop such leftovers: otherwise the counters of the failed vacuum are
+	 * taken for the next one, whose progress is never reported because the
+	 * progress command is only
+	 * started along with the stats.
+	 */
+	if (vacrelstats != NULL &&
+		(ao_vacuum_phase == VACOPT_AO_PRE_CLEANUP_PHASE ||
+		 vacrelstats->relid != RelationGetRelid(rel)))
+		cleanup_vacrelstats(&vacrelstats);
 
 	if (!vacrelstats)
 	{
@@ -449,8 +473,14 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 		}
 
 		pgstat_progress_start_command(PROGRESS_COMMAND_VACUUM, RelationGetRelid(rel));
-		vacrelstats = init_vacrelstats();
+		vacrelstats = init_vacrelstats(verbose);
+		vacrelstats->relid = RelationGetRelid(rel);
 	}
+
+	/* Sample the resource usage of the phase for the extended statistics */
+	extcounters = extvac_stats_start(rel, verbose);
+	if (verbose)
+		index_start = vacrelstats->extstats->indexes;
 
 	/*
 	 * Do the actual work --- either FULL or "lazy" vacuum
@@ -460,14 +490,153 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 	else if (ao_vacuum_phase == VACOPT_AO_COMPACT_PHASE)
 		ao_vacuum_rel_compact(rel, params, bstrategy, vacrelstats);
 	else if (ao_vacuum_phase == VACOPT_AO_POST_CLEANUP_PHASE)
-	{
 		ao_vacuum_rel_post_cleanup(rel, params, bstrategy, vacrelstats);
-		pgstat_progress_end_command();
-		cleanup_vacrelstats(&vacrelstats);
-	}
 	else
 		/* Do nothing here, we will launch the stages later */
 		Assert(ao_vacuum_phase == 0);
+
+	if (verbose && ao_vacuum_phase != 0)
+	{
+		extvac_stats_end(rel, extcounters, &extcounters->report.common);
+		if (Gp_role != GP_ROLE_DISPATCH)
+		{
+			PgStat_CommonCounts phase_usage = extcounters->report.common;
+			PgStat_CommonCounts index_usage = vacrelstats->extstats->indexes;
+			const char *phase_name =
+				ao_vacuum_phase == VACOPT_AO_PRE_CLEANUP_PHASE ? _("AO pre-cleanup (excluding indexes)") :
+				ao_vacuum_phase == VACOPT_AO_COMPACT_PHASE ? _("AO compaction (excluding indexes)") :
+				_("AO post-cleanup (excluding indexes)");
+
+			/* Report relocated tuples' index insertions as one aggregate. */
+			if (ao_vacuum_phase == VACOPT_AO_COMPACT_PHASE)
+				extvac_stats_log(rel, _("AO compaction index inserts (all indexes)"),
+							  &vacrelstats->extstats->index_inserts);
+
+			/* Only index work executed during this phase is excluded. */
+			ao_accum_resources(&index_usage, &index_start, true);
+			ao_accum_resources(&phase_usage, &index_usage, true);
+			extvac_stats_log(rel, phase_name, &phase_usage);
+		}
+	}
+
+	if (ao_vacuum_phase == VACOPT_AO_POST_CLEANUP_PHASE)
+	{
+		pgstat_progress_end_command();
+		cleanup_vacrelstats(&vacrelstats);
+	}
+
+	if (extcounters != NULL)
+		pfree(extcounters);
+}
+
+/*
+ * Add the resource usage counters of src to dst, or subtract them from it.
+ */
+static void
+ao_accum_resources(PgStat_CommonCounts *dst, const PgStat_CommonCounts *src,
+				   bool subtract)
+{
+	if (subtract)
+	{
+		dst->total_blks_read -= src->total_blks_read;
+		dst->total_blks_hit -= src->total_blks_hit;
+		dst->total_blks_dirtied -= src->total_blks_dirtied;
+		dst->total_blks_written -= src->total_blks_written;
+		/* Per-relation block counts do not include the indexes. */
+		dst->blk_read_time -= src->blk_read_time;
+		dst->blk_write_time -= src->blk_write_time;
+		dst->wal_records -= src->wal_records;
+		dst->wal_fpi -= src->wal_fpi;
+		dst->wal_bytes -= src->wal_bytes;
+	}
+	else
+	{
+		dst->total_blks_read += src->total_blks_read;
+		dst->total_blks_hit += src->total_blks_hit;
+		dst->total_blks_dirtied += src->total_blks_dirtied;
+		dst->total_blks_written += src->total_blks_written;
+		dst->blks_fetched += src->blks_fetched;
+		dst->blks_hit += src->blks_hit;
+		dst->blk_read_time += src->blk_read_time;
+		dst->blk_write_time += src->blk_write_time;
+		dst->wal_records += src->wal_records;
+		dst->wal_fpi += src->wal_fpi;
+		dst->wal_bytes += src->wal_bytes;
+	}
+}
+
+/*
+ * Compaction reinserts each surviving tuple into its indexes.  Measure the
+ * complete executor call, including index expressions and predicates, without
+ * allocating or logging once per tuple.  The phase reports these insertions
+ * together, separately from both table work and index vacuum passes.
+ */
+void
+ao_vacuum_insert_index_tuples(ResultRelInfo *resultRelInfo, TupleTableSlot *slot,
+							  EState *estate, AOVacuumRelStats *vacrelstats)
+{
+	LVExtStatCounters counters = {0};
+	PgStat_CommonCounts usage = {0};
+	PgStat_Counter fetched = 0;
+	PgStat_Counter hit = 0;
+
+	if (vacrelstats->extstats != NULL)
+	{
+		for (int i = 0; i < resultRelInfo->ri_NumIndices; i++)
+		{
+			Relation indrel = resultRelInfo->ri_IndexRelationDescs[i];
+
+			if (pgstat_track_counts && indrel->pgstat_info != NULL)
+			{
+				fetched += indrel->pgstat_info->counts.blocks_fetched;
+				hit += indrel->pgstat_info->counts.blocks_hit;
+			}
+		}
+		counters.walusage = pgWalUsage;
+		counters.bufusage = pgBufferUsage;
+	}
+
+	ExecInsertIndexTuples(resultRelInfo, slot, estate, false, false,
+						  NULL, NIL, false);
+
+	if (vacrelstats->extstats != NULL)
+	{
+		extvac_stats_end(resultRelInfo->ri_RelationDesc, &counters, &usage);
+		/* Replace the table's relation counters with the indexes' delta. */
+		usage.blks_fetched = -fetched;
+		usage.blks_hit = -hit;
+		for (int i = 0; i < resultRelInfo->ri_NumIndices; i++)
+		{
+			Relation indrel = resultRelInfo->ri_IndexRelationDescs[i];
+
+			if (pgstat_track_counts && indrel->pgstat_info != NULL)
+			{
+				usage.blks_fetched += indrel->pgstat_info->counts.blocks_fetched;
+				usage.blks_hit += indrel->pgstat_info->counts.blocks_hit;
+			}
+		}
+		ao_accum_resources(&vacrelstats->extstats->index_inserts, &usage, false);
+		ao_accum_resources(&vacrelstats->extstats->indexes, &usage, false);
+	}
+}
+
+/*
+ * Log one index pass and remember its resource usage so the enclosing AO
+ * phase's VERBOSE report does not count the same work again.
+ */
+static void
+ao_measure_index_resources(Relation indrel, LVExtStatCounters *counters,
+						 AOVacuumRelStats *vacrelstats, bool verbose)
+{
+	PgStat_VacuumRelationCounts *report = &counters->report;
+
+	extvac_stats_end(indrel, counters, &report->common);
+	if (verbose)
+		extvac_stats_log(indrel, _("AO index vacuum"), &report->common);
+	report->type = PGSTAT_EXTVAC_INDEX;
+
+	ao_accum_resources(&vacrelstats->extstats->indexes, &report->common, false);
+	pfree(counters);
 }
 
 /*
@@ -574,22 +743,36 @@ vacuum_appendonly_indexes(Relation aoRelation, int options, Bitmapset *dead_segs
 		{
 			for (i = 0; i < nindexes; i++)
 			{
+				LVExtStatCounters *extcounters;
+
+				extcounters = extvac_stats_start(Irel[i], elevel == INFO);
 				scan_index(Irel[i],
 						   aoRelation,
 						   elevel,
 						   bstrategy);
+				if (extcounters != NULL)
+					ao_measure_index_resources(Irel[i], extcounters,
+											 vacrelstats,
+											 elevel == INFO && Gp_role != GP_ROLE_DISPATCH);
 			}
 		}
 		else
 		{
 			for (i = 0; i < nindexes; i++)
 			{
+				LVExtStatCounters *extcounters;
+
+				extcounters = extvac_stats_start(Irel[i], elevel == INFO);
 				vacuum_appendonly_index(Irel[i],
 										aoRelation,
 										dead_segs,
 										elevel,
 										bstrategy,
 										vacrelstats);
+				if (extcounters != NULL)
+					ao_measure_index_resources(Irel[i], extcounters,
+											 vacrelstats,
+											 elevel == INFO && Gp_role != GP_ROLE_DISPATCH);
 			}
 		}
 	}
@@ -780,6 +963,8 @@ vacuum_appendonly_fill_stats(Relation aorel, Snapshot snapshot, int elevel,
 static void
 cleanup_vacrelstats(AOVacuumRelStats **vacrelstats)
 {
+	if ((*vacrelstats)->extstats != NULL)
+		pfree((*vacrelstats)->extstats);
 	pfree(*vacrelstats);
 	*vacrelstats = NULL;
 }
