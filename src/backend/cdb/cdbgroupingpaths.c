@@ -2233,6 +2233,8 @@ recognize_dqa_type(cdb_agg_planning_context *ctx)
 {
 	ListCell    *lc, *lcc;
 	List        *dqaArgs = NIL;
+	DQAType		type = INVALID_DQA;
+
 	ctx->type = INVALID_DQA;
 
 	foreach (lc, ctx->agg_costs->distinctAggrefs)
@@ -2262,15 +2264,15 @@ recognize_dqa_type(cdb_agg_planning_context *ctx)
 		if (dqaArgs == NIL)
 		{
 			dqaArgs = aggref->args;
-			ctx->type = SINGLE_DQA;
+			type = SINGLE_DQA;
 		}
 		/* if there is another dqa with different args, it's MULTI_DQAS */
 		else if (!equal(dqaArgs, aggref->args))
-		{
-			ctx->type = MULTI_DQAS;
-			break;
-		}
+			type = MULTI_DQAS;
 	}
+
+	/* Publish the classification only after every DQA has been validated. */
+	ctx->type = type;
 
 	if (ctx->type != INVALID_DQA)
 	{
