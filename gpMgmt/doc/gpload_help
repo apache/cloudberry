@@ -446,7 +446,7 @@ LOG_ERRORS  - Optional when ERROR_LIMIT is declared. If true(default false),
               gpload would create an internal error table where rows with
               formatting errors will be logged when running in single row error
               isolation mode. You can then examine this error table by using
-              GPDB built-in function gp_read_error_log() to see error rows that
+              the built-in function gp_read_error_log() to see error rows that
               were not loaded (if any). For more information about handling load
               errors, see the "Apache Cloudberry Database Administrator Guide."
               NOTE: LOG_ERRORS is not allowed to use together with ERROR_TABLE.

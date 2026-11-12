@@ -289,7 +289,7 @@ class GpRecoverSegmentProgram:
 
         if not gpArray.hasMirrors and not gpArray.standbyCoordinator:
             raise ExceptionNoStackTraceNeeded(
-                'GPDB Mirroring replication is not configured for this Apache Cloudberry instance.')
+                'Mirroring replication is not configured for this Apache Cloudberry instance.')
 
         num_workers = min(len(gpArray.get_hostlist()), self.__options.parallelDegree)
         hosts = set(gpArray.get_hostlist(includeCoordinator=False))

@@ -345,7 +345,7 @@ class GPDBSession(object):
 
     @classmethod
     def report(cls):
-        print("\n\nGPDB SESSION REPORT")
+        print("\n\nCLOUDBERRY SESSION REPORT")
         print(list(cls.sessions.keys()))
         for k in sorted(cls.sessions.keys()):
             cls.sessions[k]._report()

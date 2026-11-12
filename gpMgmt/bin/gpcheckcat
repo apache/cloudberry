@@ -3638,7 +3638,7 @@ def main():
         GPObjectGraph.clear()
         GV.dbname = dbname
         myprint('')
-        myprint("Connected as user \'%s\' to database '%s', port '%d', gpdb version '%s'" \
+        myprint("Connected as user \'%s\' to database '%s', port '%d', Cloudberry version '%s'" \
                 % (GV.opt['-U'], GV.dbname, GV.report_cfg[-1]['port'], GV.version))
         myprint('-------------------------------------------------------------------')
         myprint('Batch size: %s' % GV.opt['-B'])
