@@ -694,6 +694,8 @@ extern void CheckCmdReplicaIdentity(Relation rel, CmdType cmd);
 
 extern void CheckSubscriptionRelkind(char relkind, const char *nspname,
 									 const char *relname);
+extern void CheckSubscriptionTargetRel(Oid relid, const char *nspname,
+									   const char *relname);
 
 
 extern void fake_outer_params(JoinState *node);
