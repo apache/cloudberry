@@ -25,10 +25,28 @@ package cloudberry.datalake.v1;
 option java_multiple_files = true;
 option java_package = "org.apache.cloudberry.dlagent.proto";
 
-import "google/protobuf/struct.proto";
-import "google/protobuf/timestamp.proto";
+/*
+ * Conventions every message of the contract follows.
+ *
+ * Presence.  A scalar whose zero is also a legal value -- a snapshot id, a
+ * sequence number, a segment -- is `optional`, and absent is what "none" or
+ * "not sent" means; zero is never borrowed for it.
+ *
+ * Numbers inside a google.protobuf.Struct are doubles, exact only up to 2^53.
+ * A 64-bit integer that goes into one -- a snapshot id, a sequence number, a
+ * hash -- is sent as its decimal string.  Iceberg's own objects (a schema, a
+ * partition spec, a sort order) go as Iceberg's JSON text, which keeps every
+ * number as written, not as a Struct.
+ *
+ * Credentials travel only in StorageConfig.credentials, never in a Header or
+ * in a Struct.
+ */
 
-/* HTTP-style header preserved as repeated values. */
+/*
+ * An option of the table's foreign server or user mapping, under
+ * datalake_fdw's name for it.  Never a credential: those go in
+ * StorageConfig.credentials.
+ */
 message Header {
   string key = 1;
   repeated string values = 2;
@@ -50,9 +68,8 @@ message AuditContext {
  * a client whose version, sent in the x-cloudberry-client-version request
  * metadata, is older than min_client_version.  A client rejects a server whose
  * min_client_version is newer than its own version, and a server older than
- * the oldest it was written against: a field the server does not know arrives
- * as its zero value, which for several fields here means "none".  See
- * README.md.
+ * the oldest it was written against.  Both are always set; an empty one is a
+ * server that does not negotiate, and is refused.  See README.md.
  */
 message ResponseHeader {
   string server_version = 1;
@@ -61,39 +78,47 @@ message ResponseHeader {
 
 /* Identifies an Iceberg table. */
 message TableIdentifier {
-  string prefix = 1;                  // optional catalog or tenant scope
+  // The catalog, or the tenant of one, the table is in: what an Iceberg REST
+  // catalog takes as the prefix of its URLs (for Polaris, the catalog's name).
+  // Empty when the server reaches only one catalog, as for the Builtin one.
+  string prefix = 1;
   repeated string namespace = 2;      // v1 requires exactly one segment
   string name = 3;
 }
 
+/*
+ * The three below are Iceberg's JSON serialization of the object, as a table
+ * metadata file holds it (SchemaParser, PartitionSpecParser, SortOrderParser):
+ * ids, identifier fields and default values included, every number exact.
+ * Empty in a request means none: no columns yet, unpartitioned, unsorted.
+ */
 message Schema {
-  int32 schema_id = 1;
-  google.protobuf.Struct fields = 2;
-  repeated int32 identifier_field_ids = 3;
+  reserved 1, 2, 3;                     // schema_id, a Struct of fields, identifier_field_ids
+  string json = 4;
 }
 
 message PartitionSpec {
-  int32 spec_id = 1;
-  google.protobuf.Struct fields = 2;
+  reserved 1, 2;                        // spec_id, a Struct of fields
+  string json = 3;
 }
 
 message SortOrder {
-  int32 order_id = 1;
-  google.protobuf.Struct fields = 2;
+  reserved 1, 2;                        // order_id, a Struct of fields
+  string json = 3;
 }
 
-message Snapshot {
-  int64 snapshot_id = 1;
-  int64 parent_snapshot_id = 2;          // 0 if none
-  int64 sequence_number = 3;
-  google.protobuf.Timestamp committed_at = 4;
-  string manifest_list = 5;
-  map<string, string> summary = 6;
-}
-
-/* Storage configuration kept provider-neutral. */
+/*
+ * Where a table's files are and how to reach them, kept provider-neutral.
+ * Every request that reaches a table's files carries it.
+ */
 message StorageConfig {
-  google.protobuf.Struct config = 1;
+  reserved 1;                           // a Struct of options and credentials together
+  // Options under datalake_fdw's names: endpoint, region, path style.
+  map<string, string> options = 2;
+  // SENSITIVE.  Keys, secrets and tokens, under datalake_fdw's names.  Neither
+  // side writes a value of this map to a log, an error message or a response,
+  // and the server scrubs each from any text it logs while the call runs.
+  map<string, string> credentials = 3;
 }
 
 /*
@@ -109,6 +134,13 @@ message ErrorDetail {
   string correlation_id = 4;
   map<string, string> labels = 5;
   BusinessErrorCode business_code = 6;
+  // Whether sending the same request again, with the same operation_id, can
+  // succeed: the failure was the server's or the network's (unavailable,
+  // overloaded, timed out), not the request's.  A request with an
+  // operation_id is applied at most once however often it is sent, so a
+  // retry of one whose first attempt did land is answered with that
+  // attempt's result.  False: give up and report the error.
+  bool retryable = 7;
 }
 
 enum BusinessErrorCode {

@@ -8,7 +8,7 @@ over gRPC. These files are what the two sides agree on.
 
 | File | Holds |
 |---|---|
-| `common.proto` | identifiers, schema and snapshot shapes, the version header, errors |
+| `common.proto` | identifiers, Iceberg schemas, specs and sort orders, storage and credentials, the version header, errors |
 | `iceberg_catalog.proto` | `IcebergCatalogService`: one RPC per vtable entry |
 | `catalog_mgmt.proto` | `CatalogManagementService`: creating and listing catalogs and namespaces |
 | `contrib/datalake_fdw/src/meta/fragment.proto` | fragments, written-file reports and pushed-down predicates |
@@ -25,6 +25,10 @@ side runs `protoc` when it builds, with both directories as include roots:
 protoc -I contrib/datalake_agent/proto -I contrib/datalake_fdw/src/meta ...
 ```
 
+The files use proto3 `optional` fields, so protoc has to be 3.15 or later, or
+3.12 to 3.14 given `--experimental_allow_proto3_optional`; Rocky 9 ships 3.14,
+and later versions accept the flag and ignore it.
+
 The `datalake proto` workflow runs the C++ and the Java gRPC generators on
 every change to these files, with warnings fatal.
 
@@ -33,6 +37,23 @@ every change to these files, with warnings fatal.
 Fields are only ever appended. A field number is never reused, and a removed
 field's number is `reserved`. A message's meaning does not change under the
 same name; a new meaning is a new message or a new RPC.
+
+## Conventions
+
+Three rules hold for every message; `common.proto` states them at the top.
+
+- **Presence.** A scalar whose zero is a legal value -- a snapshot id, a
+  sequence number (every snapshot of a format v1 table has 0), a segment -- is
+  `optional`. Absent is what "none" or "current" means; zero is never borrowed
+  for it.
+- **Exact numbers.** A `google.protobuf.Struct` holds numbers as doubles,
+  exact only up to 2^53, so a 64-bit integer goes into one as its decimal
+  string. Iceberg's own objects -- schemas, partition specs, sort orders --
+  travel as Iceberg's JSON text, the form a table metadata file holds them in.
+- **Credentials** go only in `StorageConfig.credentials`, which every request
+  that reaches a table's files carries, and never in a `Header` or a `Struct`.
+  Neither side logs a value of that map, and the server scrubs each from any
+  text it logs during the call.
 
 ## Version handshake
 
@@ -48,8 +69,8 @@ The contract described by these files is version **1.0.0**.  Versions are
 - The client refuses a server whose `min_client_version` is newer than its own
   version, and a server older than the oldest one it was written against. The
   second check is the one a rolling upgrade needs: a field an older server
-  does not know arrives as its zero value, and for several fields here zero
-  means "none" -- no snapshot, no filter -- rather than "not sent".
+  does not know arrives absent, and for several fields here absent means
+  "none" -- no snapshot, no filter -- rather than "not sent".
 - A different `MAJOR` on either side is refused outright.
 - Every refusal names both versions.
 
@@ -59,6 +80,16 @@ A failed call ends with a `google.rpc.Status` whose details hold one
 `ErrorDetail`. A client branches on `business_code` (`BusinessErrorCode`);
 `code` repeats the gRPC status name, for logs. Nothing in it is a stack trace:
 that stays in the server's log, where `correlation_id` finds it.
+
+Errors come in two kinds, and `ErrorDetail.retryable` says which. A retryable
+one -- the server unavailable or overloaded, the call timed out -- may go away
+if the same request is sent again with the same `operation_id`; a server
+applies an operation at most once, so a retry of one whose first attempt did
+land gets that attempt's result rather than a second change. Any other error
+is the request's, and is reported. A commit whose outcome the server could not
+learn from its catalog is answered `CommitOutcome.UNKNOWN`, and is resolved
+the same way: retried with the same `operation_id`, or reported as unknown,
+never taken as applied or as rejected.
 
 ## Health
 

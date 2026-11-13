@@ -32,21 +32,42 @@ import "common.proto";
 // write produces, and the predicates a scan pushes down.  Nothing here is
 // specific to the agent; an in-process engine would use the same messages.
 
+// A file's format.  Unspecified is an error wherever a file is described.
+enum FileFormat {
+  FILE_FORMAT_UNSPECIFIED = 0;
+  FILE_FORMAT_PARQUET = 1;
+  FILE_FORMAT_ORC = 2;
+  FILE_FORMAT_AVRO = 3;
+}
+
+// What a file holds.  Unlike Iceberg's own numbering, where data is 0, no
+// kind is the zero value: a file whose sender forgot to say is refused, not
+// taken for a data file -- a position delete file committed as data would
+// add its (path, pos) rows to the table.
+enum FileContent {
+  FILE_CONTENT_UNSPECIFIED = 0;
+  FILE_CONTENT_DATA = 1;
+  FILE_CONTENT_POSITION_DELETES = 2;
+  FILE_CONTENT_EQUALITY_DELETES = 3;
+}
+
 // A delete file that applies to some of a batch's fragments.
 message DeleteFileRef {
   string path = 1;
-  int32  content = 2;                    // Iceberg's content value: 1 = position, 2 = equality
+  reserved 2;                            // an int32 of Iceberg's content value
   int64  record_count = 3;
   repeated string eq_column_names = 4;   // equality key columns, by name: what the reader matches on today
   repeated int32  equality_ids = 5;      // the same columns by field id, which survives a rename
   int64  data_sequence_number = 6;       // whether a delete applies is decided by data sequence number
-  string file_format = 7;
+  reserved 7;                            // the format as a string
+  FileContent content = 8;               // position or equality deletes
+  FileFormat format = 9;
 }
 
 // One unit of a scan: a data file, or a split of one.
 message Fragment {
   string data_file_path = 1;
-  string file_format = 2;
+  reserved 2;                            // the format as a string
   int64  file_size = 3;
   int64  record_count = 4;
   string partition_json = 5;
@@ -56,14 +77,17 @@ message Fragment {
   // returns what it did not consume here.  Absent means fully consumed; a
   // client rechecks every residual it is given.
   FilterExpr residual = 8;
-  int32  assigned_segment = 9;           // filled in by every planning; a cached plan keeps the list before assignment
+  // The segment that reads the fragment.  Absent until a planning assigns
+  // one; a cached plan keeps the list from before.
+  optional int32 assigned_segment = 9;
   int32  spec_id = 10;                   // the data file's own partition spec: a table written elsewhere may be partitioned
   int64  file_sequence_number = 11;
-  int64  split_start = 12;
-  int64  split_length = 13;
+  int64  split_start = 12;               // the split's first byte; 0 for a whole file
+  optional int64 split_length = 13;      // the split's length; absent means to the end of the file
   // Indexes into FragmentBatch.delete_pool.  One out of range, or repeated,
   // is an error at the receiving end.
   repeated int32 delete_indexes = 14;
+  FileFormat format = 15;
 }
 
 message FragmentBatch {
@@ -73,15 +97,39 @@ message FragmentBatch {
   ResponseHeader response_header = 4;      // on every batch, as on every other response message
 }
 
+// What one column of a file holds, as Iceberg records it in the file's
+// manifest entry and as other engines prune by.  A count that is absent is
+// not known; a bound that is absent is not recorded.
+message ColumnStats {
+  int32 field_id = 1;
+  optional int64 value_count = 2;        // values, nulls included
+  optional int64 null_value_count = 3;
+  optional int64 nan_value_count = 4;    // float and double columns only
+  // The least and greatest non-null, non-NaN value, in Iceberg's single-value
+  // binary serialization for the column's type.  A bound may be truncated
+  // (a string's prefix) as long as it still bounds every value.
+  optional bytes lower_bound = 5;
+  optional bytes upper_bound = 6;
+}
+
 // A file one segment wrote, reported up to the dispatcher that commits it.
 message FileMeta {
   string path = 1;
-  string file_format = 2;
+  reserved 2;                            // the format as a string
   int64  file_size = 3;
   int64  record_count = 4;
-  int32  content = 5;                    // 0 = data, 1 = position delete
+  reserved 5;                            // an int32 content, where 0 meant data
   string partition_json = 6;             // empty while writes are to unpartitioned tables only
   reserved 7, 8, 9;                      // per-file audit fields; FileMetaBatch carries them once
+  FileFormat format = 10;
+  FileContent content = 11;              // data or position deletes; required
+  // The partition spec partition_json is in.  Absent means the table's
+  // current spec, which a write that began before the spec changed must not
+  // leave to the server.
+  optional int32 spec_id = 12;
+  // Per column, for the columns the writer measured; a column not listed has
+  // no metrics in the file's manifest entry.
+  repeated ColumnStats column_stats = 13;
 }
 
 // What one segment sends up for one statement against one table.  The
@@ -101,6 +149,26 @@ message FileMetaBatch {
 }
 
 // A predicate pushed down to planning.
+//
+// The server uses it to skip files by their partition and column bounds,
+// which Iceberg compares its own way; a predicate PostgreSQL evaluates
+// differently can skip a file holding a matching row, and a residual recheck
+// cannot bring back a file that was never scanned.  So a client pushes down
+// only what both sides evaluate the same, and leaves the rest to its
+// executor:
+//
+// - Strings: Iceberg compares UTF-8 bytes, PostgreSQL the column's collation.
+//   GT, GTE, LT and LTE on a string column only under the C (or POSIX)
+//   collation; EQ, NEQ, IN and NOT_IN under any deterministic collation.
+// - Floating point: none.  PostgreSQL orders NaN above every number, while
+//   Iceberg's bounds leave NaN out, so x > 5 would skip a file whose only
+//   matching rows are NaN; and a real compared with a double literal rounds
+//   differently on the two sides.
+// - Types: a literal of exactly the column's type.  timestamp against
+//   timestamptz involves a time zone, and a numeric literal of another scale
+//   than a decimal(p,s) column would need rescaling; neither is pushed.  A
+//   value with no Iceberg counterpart never is: timestamp and date
+//   +/-infinity, numeric NaN and +/-Infinity, and nanosecond timestamps.
 message FilterExpr {
   enum Op {
     OP_UNSPECIFIED = 0;                  // the default is deliberately not an operator
