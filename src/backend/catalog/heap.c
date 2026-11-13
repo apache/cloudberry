@@ -1527,10 +1527,10 @@ InsertPgClassTuple(Relation pg_class_desc,
 	HeapTuple	tup;
 
 	/*
-	 * Sanity-check RELKIND_HAS_ROWTYPE, quite likely to detect any
-	 * mismatches.
+	 * A rowtype requires an appropriate relation kind, but some internal
+	 * Cloudberry relations of those kinds deliberately have no rowtype.
 	 */
-	Assert(RELKIND_HAS_ROWTYPE(rd_rel->relkind) == (rd_rel->reltype != InvalidOid));
+	Assert(!OidIsValid(rd_rel->reltype) || RELKIND_HAS_ROWTYPE(rd_rel->relkind));
 
 	/* This is a tad tedious, but way cleaner than what we used to do... */
 	memset(values, 0, sizeof(values));

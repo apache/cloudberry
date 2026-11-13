@@ -292,13 +292,11 @@ HasVersionedAttributes(Relation relation)
 	 * deforming composite datums incompatible with the current type
 	 * definition.
 	 */
-	if (!RELKIND_HAS_ROWTYPE(relation->rd_rel->relkind))
-	{
-		Assert(relation->rd_rel->reltype == InvalidOid);
+	/* Some Cloudberry auxiliary heaps have a table relkind but no rowtype. */
+	if (!OidIsValid(relation->rd_rel->reltype))
 		return false;
-	}
 
-	Assert(relation->rd_rel->reltype != InvalidOid);
+	Assert(RELKIND_HAS_ROWTYPE(relation->rd_rel->relkind));
 
 	/*
 	 * Bootstrapped relations are not versioned, for two reasons:
