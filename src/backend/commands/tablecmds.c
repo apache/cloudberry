@@ -2883,8 +2883,6 @@ truncate_check_rel(Oid relid, Form_pg_class reltuple)
 	 * physical truncation will occur in their case.).
 	 */
 
-	/* GPDB_14_MERGE_FIXME: follow upstream logic, check foreign table first */
-
 	if (reltuple->relkind == RELKIND_FOREIGN_TABLE)
 	{
 		Oid			serverid = GetForeignServerIdByRelId(relid);

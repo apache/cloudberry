@@ -955,8 +955,8 @@
   proname => 'brinhandler', provolatile => 'v',
   prorettype => 'index_am_handler', proargtypes => 'internal',
   prosrc => 'brinhandler' },
-# GPDB_14_MERGE_FIXME: why expose the internal function instead of the original
-# function in upstream.
+# GPDB: these run on all segments; brin_summarize_new_values() and
+# brin_summarize_range() in system_functions.sql wrap them and sum the results.
 { oid => '3952', descr => 'brin: standalone scan new table pages',
   proexeclocation => 's', prorows => '100', proretset => 't',
   proname => 'brin_summarize_new_values_internal', provolatile => 'v',

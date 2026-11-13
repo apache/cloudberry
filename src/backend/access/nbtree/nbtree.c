@@ -366,10 +366,8 @@ btgettuple(IndexScanDesc scan, ScanDirection dir)
 
 /*
  * btgetbitmap() -- construct a TIDBitmap.
- * GPDB_14_MERGE_FIXME: the code of upstream assumes that
- * bmNode is always non-empty and the type of the second
- * argument is TIDBitmap *.
- * It might be possible to align the code with upstream.
+ * GPDB: unlike upstream, the bitmap node may be empty on entry and the second
+ * argument is a Node **, since bitmap indexes also produce a StreamBitmap.
  */
 int64
 btgetbitmap(IndexScanDesc scan, Node **bmNodeP)

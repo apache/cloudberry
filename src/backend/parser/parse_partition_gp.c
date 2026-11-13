@@ -330,7 +330,6 @@ static void
 deduceImplicitRangeBounds(ParseState *pstate, Relation parentrel, List *stmts, CreateStmtOrigin origin)
 {
 	PartitionKey key = RelationGetPartitionKey(parentrel);
-	/* GPDB_14_MERGE_FIXEME: most places use true for new api, need to check */
 	PartitionDesc desc = RelationGetPartitionDesc(parentrel, true);
 
 	list_sort_arg(stmts, qsort_stmt_cmp, key);
