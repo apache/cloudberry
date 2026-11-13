@@ -39,12 +39,21 @@ $node->command_fails(['pg_basebackup', '--target-gp-dbid', '123'],
 	'pg_basebackup needs target directory specified');
 
 # Sanity checks for options
+#
+# Cloudberry: pg_basebackup checks --target-gp-dbid before the compression
+# options, so pass it to reach the checks under test.
 $node->command_fails_like(
-	[ 'pg_basebackup', '-D', "$tempdir/backup", '--compress', 'none:1' ],
+	[
+		'pg_basebackup', '-D', "$tempdir/backup", '--target-gp-dbid', '123',
+		'--compress', 'none:1'
+	],
 	qr/\Qcompression algorithm "none" does not accept a compression level/,
 	'failure if method "none" specified with compression level');
 $node->command_fails_like(
-	[ 'pg_basebackup', '-D', "$tempdir/backup", '--compress', 'none+' ],
+	[
+		'pg_basebackup', '-D', "$tempdir/backup", '--target-gp-dbid', '123',
+		'--compress', 'none+'
+	],
 	qr/\Qunrecognized compression algorithm: "none+"/,
 	'failure on incorrect separator to define compression level');
 
@@ -74,7 +83,7 @@ mkdir("$tempdir/backup")
   or BAIL_OUT("unable to create $tempdir/backup");
 append_to_file("$tempdir/backup/dir-not-empty.txt", "Some data");
 
-$node->command_fails([ @pg_basebackup_defs, '-D', "$tempdir/backup", '-n' ],
+$node->command_fails([ @pg_basebackup_defs, '--target-gp-dbid', '123', '-D', "$tempdir/backup", '-n' ],
 	'failing run with no-clean option');
 
 ok(-d "$tempdir/backup", 'backup directory was created and left behind');
@@ -150,6 +159,8 @@ SKIP:
 			'failure on long mode for gzip'
 		],);
 
+	# Cloudberry: pg_basebackup checks --target-gp-dbid before the compression
+	# options, so pass it to reach the checks under test.
 	for my $cft (@compression_failure_tests)
 	{
 		my $cfail = quotemeta($client_fails . $cft->[1]);
@@ -157,7 +168,7 @@ SKIP:
 		$node->command_fails_like(
 			[
 				'pg_basebackup', '-D',
-				"$tempdir/backup", '--compress',
+				"$tempdir/backup", '--target-gp-dbid', '123', '--compress',
 				$cft->[0]
 			],
 			qr/$cfail/,
@@ -165,7 +176,7 @@ SKIP:
 		$node->command_fails_like(
 			[
 				'pg_basebackup', '-D',
-				"$tempdir/backup", '--compress',
+				"$tempdir/backup", '--target-gp-dbid', '123', '--compress',
 				'server-' . $cft->[0]
 			],
 			qr/$sfail/,
@@ -345,7 +356,7 @@ SKIP:
 	  or die "unable to create file $superlongpath";
 	close $file;
 	$node->command_fails(
-		[ @pg_basebackup_defs, '-D', "$tempdir/tarbackup_l1", '-Ft' ],
+		[ @pg_basebackup_defs, '--target-gp-dbid', '123', '-D', "$tempdir/tarbackup_l1", '-Ft' ],
 		'pg_basebackup tar with long name fails');
 	unlink "$superlongpath";
 }
@@ -610,38 +621,38 @@ $node->command_ok(
 	'pg_basebackup -X stream runs with --no-slot');
 rmtree("$tempdir/backupnoslot");
 $node->command_ok(
-	[ @pg_basebackup_defs, '-D', "$tempdir/backupxf", '-X', 'fetch' ],
+	[ @pg_basebackup_defs, '--target-gp-dbid', '123', '-D', "$tempdir/backupxf", '-X', 'fetch' ],
 	'pg_basebackup -X fetch runs');
 
 $node->command_fails_like(
-	[ @pg_basebackup_defs, '--target', 'blackhole' ],
+	[ @pg_basebackup_defs, '--target-gp-dbid', '123', '--target', 'blackhole' ],
 	qr/WAL cannot be streamed when a backup target is specified/,
 	'backup target requires -X');
 $node->command_fails_like(
-	[ @pg_basebackup_defs, '--target', 'blackhole', '-X', 'stream' ],
+	[ @pg_basebackup_defs, '--target-gp-dbid', '123', '--target', 'blackhole', '-X', 'stream' ],
 	qr/WAL cannot be streamed when a backup target is specified/,
 	'backup target requires -X other than -X stream');
 $node->command_fails_like(
-	[ @pg_basebackup_defs, '--target', 'bogus', '-X', 'none' ],
+	[ @pg_basebackup_defs, '--target-gp-dbid', '123', '--target', 'bogus', '-X', 'none' ],
 	qr/unrecognized target/,
 	'backup target unrecognized');
 $node->command_fails_like(
 	[
-		@pg_basebackup_defs, '--target', 'blackhole', '-X',
+		@pg_basebackup_defs, '--target-gp-dbid', '123', '--target', 'blackhole', '-X',
 		'none', '-D', "$tempdir/blackhole"
 	],
 	qr/cannot specify both output directory and backup target/,
 	'backup target and output directory');
 $node->command_fails_like(
-	[ @pg_basebackup_defs, '--target', 'blackhole', '-X', 'none', '-Ft' ],
+	[ @pg_basebackup_defs, '--target-gp-dbid', '123', '--target', 'blackhole', '-X', 'none', '-Ft' ],
 	qr/cannot specify both format and backup target/,
 	'backup target and output directory');
 $node->command_ok(
-	[ @pg_basebackup_defs, '--target', 'blackhole', '-X', 'none' ],
+	[ @pg_basebackup_defs, '--target-gp-dbid', '123', '--target', 'blackhole', '-X', 'none' ],
 	'backup target blackhole');
 $node->command_ok(
 	[
-		@pg_basebackup_defs, '--target',
+		@pg_basebackup_defs, '--target-gp-dbid', '123', '--target',
 		"server:$tempdir/backuponserver", '-X',
 		'none'
 	],
@@ -654,7 +665,7 @@ $node->command_ok(
 	'create backup user');
 $node->command_ok(
 	[
-		@pg_basebackup_defs, '-U', 'backupuser', '--target',
+		@pg_basebackup_defs, '--target-gp-dbid', '123', '-U', 'backupuser', '--target',
 		"server:$tempdir/backuponserver",
 		'-X', 'none'
 	],
@@ -688,19 +699,19 @@ $node->command_fails(
 	'pg_basebackup fails with -C -S --no-slot');
 $node->command_fails_like(
 	[
-		@pg_basebackup_defs, '--target', 'blackhole', '-D',
+		@pg_basebackup_defs, '--target-gp-dbid', '123', '--target', 'blackhole', '-D',
 		"$tempdir/blackhole"
 	],
 	qr/cannot specify both output directory and backup target/,
 	'backup target and output directory');
 
 $node->command_ok(
-	[ @pg_basebackup_defs, '-D', "$tempdir/backuptr/co", '-X', 'none' ],
+	[ @pg_basebackup_defs, '--target-gp-dbid', '123', '-D', "$tempdir/backuptr/co", '-X', 'none' ],
 	'pg_basebackup -X fetch runs');
 
 $node->command_fails(
 	[
-		@pg_basebackup_defs, '-D',
+		@pg_basebackup_defs, '--target-gp-dbid', '123', '-D',
 		"$tempdir/backupxs_sl_fail", '-X',
 		'stream', '-S',
 		'slot0'
@@ -708,12 +719,12 @@ $node->command_fails(
 	'pg_basebackup fails with nonexistent replication slot');
 
 $node->command_fails(
-	[ @pg_basebackup_defs, '-D', "$tempdir/backupxs_slot", '-C' ],
+	[ @pg_basebackup_defs, '--target-gp-dbid', '123', '-D', "$tempdir/backupxs_slot", '-C' ],
 	'pg_basebackup -C fails without slot name');
 
 $node->command_fails(
 	[
-		@pg_basebackup_defs, '-D',
+		@pg_basebackup_defs, '--target-gp-dbid', '123', '-D',
 		"$tempdir/backupxs_slot", '-C',
 		'-S', 'slot0',
 		'--no-slot'
@@ -855,7 +866,7 @@ SKIP:
 
 	$node->command_ok(
 		[
-			@pg_basebackup_defs, '-D',
+			@pg_basebackup_defs, '--target-gp-dbid', '123', '-D',
 			"$tempdir/backup_gzip", '--compress',
 			'1', '--format',
 			't'
@@ -863,14 +874,14 @@ SKIP:
 		'pg_basebackup with --compress');
 	$node->command_ok(
 		[
-			@pg_basebackup_defs, '-D',
+			@pg_basebackup_defs, '--target-gp-dbid', '123', '-D',
 			"$tempdir/backup_gzip2", '--gzip',
 			'--format', 't'
 		],
 		'pg_basebackup with --gzip');
 	$node->command_ok(
 		[
-			@pg_basebackup_defs, '-D',
+			@pg_basebackup_defs, '--target-gp-dbid', '123', '-D',
 			"$tempdir/backup_gzip3", '--compress',
 			'gzip:1', '--format',
 			't'
@@ -917,7 +928,7 @@ my $sigchld_bb_timeout =
 my ($sigchld_bb_stdin, $sigchld_bb_stdout, $sigchld_bb_stderr) = ('', '', '');
 my $sigchld_bb = IPC::Run::start(
 	[
-		@pg_basebackup_defs, '--wal-method=stream',
+		@pg_basebackup_defs, '--target-gp-dbid', '123', '--wal-method=stream',
 		'-D', "$tempdir/sigchld",
 		'--max-rate=32', '-d',
 		$node->connstr('postgres')
@@ -959,10 +970,9 @@ $node->safe_psql('postgres', "DROP TABLESPACE tblspc2;");
 
 # check that the in-place tablespace exists in the backup
 $backupdir = $node->backup_dir . '/backup3';
-my @dst_tblspc = glob "$backupdir/pg_tblspc/$tblspc_oid/PG_*";
+# Cloudberry: the version directory is GPDB_*, not PG_*.
+my @dst_tblspc = glob "$backupdir/pg_tblspc/$tblspc_oid/GPDB_*";
 is(@dst_tblspc, 1, 'tblspc directory copied');
-
-done_testing();
 
 # Some additional GPDB tests
 my $twenty_characters = '11111111112222222222';
@@ -1066,3 +1076,5 @@ ok(-f "$tempdir/backup/internal.auto.conf", 'internal.auto.conf was created');
 ok(-f "$tempdir/backup/postgresql.auto.conf", 'postgresql.auto.conf was created');
 ok(-f "$tempdir/backup/standby.signal",       'standby.signal was created');
 rmtree("$tempdir/backup");
+
+done_testing();
