@@ -1,0 +1,420 @@
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+# GitHub Actions Workflow: Apache Cloudberry SQLancer Fuzzing
+# --------------------------------------------------------------------
+# Description:
+#
+#   Fuzzes the main branch with SQLancer once a week. See
+#   https://github.com/apache/cloudberry/discussions/1952 for the
+#   background.
+#
+# Workflow Overview:
+# 1. Builds Cloudberry with assertions enabled and creates a demo
+#    cluster without mirrors.
+# 2. Builds SQLancer from a pinned commit and runs each test oracle
+#    for a fixed time against the cluster.
+# 3. Writes the results to the job summary and uploads the SQLancer
+#    reproducers and the server logs as artifacts.
+#
+# Triggers:
+# - Weekly schedule, Saturday 02:00 UTC.
+# - Manual dispatch.
+#
+# Notes:
+# - Never runs on pushes or pull requests and is not a required check.
+# - Runs only in the apache organization; forks are ignored.
+# - The job fails when SQLancer reports a potential bug or a server
+#   logs an assertion failure or a crash. These are raw fuzzer results:
+#   reproduce one before filing an issue for it.
+# --------------------------------------------------------------------
+name: Apache Cloudberry SQLancer Fuzzing
+
+on:
+  schedule:
+  # Saturday 02:00 UTC, 10:00 in UTC+8: the runners are idle and the
+  # results are there on Monday morning.
+  - cron: "0 2 * * 6"
+  workflow_dispatch:
+    inputs:
+      minutes_per_oracle:
+        description: 'Minutes to run each oracle (all oracles together at most 280)'
+        required: false
+        default: '60'
+        type: string
+      oracles:
+        description: 'Space separated SQLancer oracles'
+        required: false
+        default: 'NOREC QUERY_PARTITIONING PQS DQP'
+        type: string
+      sqlancer_ref:
+        description: 'SQLancer commit SHA to build (empty for the pinned one)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  # SQLancer has no releases. Move this pin forward on purpose, after
+  # a manual run with the new commit, so that a change in SQLancer
+  # does not show up as a week of new "bugs" in Cloudberry.
+  SQLANCER_REF: a7d60ee450e6a22ca38599c14e984a49773f4745
+
+jobs:
+  sqlancer:
+    name: SQLancer
+    runs-on: ubuntu-22.04
+    if: ${{ github.repository_owner == 'apache' }}
+    # Build, about 45 minutes, plus at most 280 minutes of fuzzing,
+    # below the 6 hour limit of a hosted runner.
+    timeout-minutes: 350
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+      # Core dumps are off: an assertion that fails once fails all
+      # afternoon, and the cores would fill the disk. The server log
+      # has the assertion and the reproducer has the statements.
+      options: >-
+        --privileged
+        --user root
+        --hostname cdw
+        --shm-size=2gb
+        --ulimit core=0
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
+
+    steps:
+    - name: Free Disk Space
+      run: |
+        echo "=== Disk space before cleanup ==="
+        df -h /
+
+        # Remove pre-installed tools from host to free disk space
+        rm -rf /host_opt/hostedtoolcache || true   # GitHub Actions tool cache
+        rm -rf /host_usr_local/lib/android || true # Android SDK
+        rm -rf /host_usr_share/dotnet || true      # .NET SDK
+        rm -rf /host_opt/ghc || true               # Haskell GHC
+        rm -rf /host_usr_local/.ghcup || true      # Haskell GHCup
+        rm -rf /host_usr_share/swift || true       # Swift
+        rm -rf /host_usr_local/share/powershell || true  # PowerShell
+        rm -rf /host_usr_local/share/chromium || true    # Chromium
+        rm -rf /host_usr_share/miniconda || true   # Miniconda
+        rm -rf /host_opt/az || true                # Azure CLI
+        rm -rf /host_usr_share/sbt || true         # Scala Build Tool
+
+        echo "=== Disk space after cleanup ==="
+        df -h /
+
+    - name: Checkout Apache Cloudberry
+      uses: actions/checkout@v7
+      with:
+        fetch-depth: 1
+        submodules: true
+
+    - name: Resolve parameters
+      env:
+        INPUT_MINUTES: ${{ inputs.minutes_per_oracle }}
+        INPUT_ORACLES: ${{ inputs.oracles }}
+        INPUT_SQLANCER_REF: ${{ inputs.sqlancer_ref }}
+      run: |
+        set -euo pipefail
+        minutes="${INPUT_MINUTES:-60}"
+        oracles="${INPUT_ORACLES:-NOREC QUERY_PARTITIONING PQS DQP}"
+        ref="${INPUT_SQLANCER_REF:-${SQLANCER_REF}}"
+
+        # The values end up on a command line, so accept nothing but
+        # what they are supposed to look like.
+        if ! [[ "${minutes}" =~ ^[1-9][0-9]{0,2}$ ]]; then
+          echo "::error::minutes_per_oracle must be a number, got '${minutes}'"
+          exit 1
+        fi
+        if ! [[ "${oracles}" =~ ^[A-Z_]+(\ [A-Z_]+)*$ ]]; then
+          echo "::error::oracles must be upper-case names separated by single spaces, got '${oracles}'"
+          exit 1
+        fi
+        if ! [[ "${ref}" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "::error::sqlancer_ref must be a full commit SHA, got '${ref}'"
+          exit 1
+        fi
+        count=$(wc -w <<< "${oracles}")
+        if [ $(( minutes * count )) -gt 280 ]; then
+          echo "::error::${count} oracles at ${minutes} minutes each do not fit into one job (280 minutes)"
+          exit 1
+        fi
+
+        {
+          echo "SRC_DIR=${GITHUB_WORKSPACE}"
+          echo "RESULTS_DIR=${GITHUB_WORKSPACE}/sqlancer-results"
+          echo "SQLANCER_REF=${ref}"
+          echo "SQLANCER_ORACLES=${oracles}"
+          echo "SQLANCER_SECONDS=$(( minutes * 60 ))"
+        } | tee -a "$GITHUB_ENV"
+
+    - name: Cloudberry Environment Initialization
+      run: |
+        set -eo pipefail
+        if ! su - gpadmin -c "/tmp/init_system.sh"; then
+          echo "::error::Container initialization failed"
+          exit 1
+        fi
+
+        # The build image has a JDK but no Maven, which SQLancer needs.
+        dnf install -y maven-openjdk11
+
+        mkdir -p build-logs "${RESULTS_DIR}"
+        chown -R gpadmin:gpadmin .
+        chmod -R 755 .
+        chmod 777 build-logs
+
+        df -h /
+        free -h
+
+    - name: Run Apache Cloudberry configure script
+      run: |
+        set -eo pipefail
+        # ENABLE_DEBUG is what turns assertions on.
+        if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ENABLE_DEBUG=true ${SRC_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"; then
+          echo "::error::Configure script failed"
+          exit 1
+        fi
+
+    - name: Run Apache Cloudberry build script
+      run: |
+        set -eo pipefail
+        if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/build-cloudberry.sh"; then
+          echo "::error::Build script failed"
+          exit 1
+        fi
+
+    - name: Create Apache Cloudberry demo cluster
+      run: |
+        set -eo pipefail
+        # Without mirrors a crashed segment is restarted in place by
+        # its postmaster instead of failing over, so the cluster is
+        # usable again without a recovery step. The demo cluster logs
+        # every statement by default, which is most of the log volume
+        # here and adds nothing to the reproducers SQLancer writes.
+        if ! time su - gpadmin -c "cd ${SRC_DIR} && WITH_MIRRORS=false BLDWRAP_POSTGRES_CONF_ADDONS=log_statement=none SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
+          echo "::error::Demo cluster creation failed"
+          exit 1
+        fi
+
+    - name: Build SQLancer
+      run: |
+        set -eo pipefail
+        su - gpadmin -c "set -e
+          git init -q ${SRC_DIR}/sqlancer
+          cd ${SRC_DIR}/sqlancer
+          git fetch -q --depth 1 https://github.com/sqlancer/sqlancer.git ${SQLANCER_REF}
+          git checkout -q --detach FETCH_HEAD
+          mvn -B -q package -DskipTests"
+        ls -l sqlancer/target/sqlancer-*.jar
+
+    - name: Run SQLancer
+      id: fuzz
+      run: |
+        set -eo pipefail
+
+        # Runs as gpadmin. For each oracle, SQLancer is run until the
+        # time is used up: it stops by itself after 100 findings, which
+        # is what a crashed backend looks like from the outside, and is
+        # then started again once the cluster answers.
+        cat > /tmp/run-sqlancer.sh << 'EOF'
+        set -uo pipefail
+        source /usr/local/cloudberry-db/cloudberry-env.sh
+        source "${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh"
+        jar=$(ls "${SRC_DIR}"/sqlancer/target/sqlancer-*.jar | head -n 1)
+
+        cluster_is_up() {
+          timeout 60 psql -X -q -d postgres -Atc \
+            "SELECT count(*) FROM gp_dist_random('gp_id')" > /dev/null 2>&1
+        }
+
+        # Crashes and failed assertions in the server logs, without
+        # what differs between two occurrences of the same one.
+        server_events() {
+          find "${SRC_DIR}/gpAux/gpdemo/datadirs" -path '*/log/*.csv' -print0 |
+            xargs -0 -r grep -ohE '(TRAP:|FailedAssertion|"PANIC",|[a-z ]*process \(PID [0-9]+\) was terminated by signal).*' |
+            sed -E 's/^"PANIC","[A-Z0-9]*","/PANIC: /; s/""/\x01/g; s/".*//; s/\x01/"/g;
+                    s/\(PID [0-9]+\)/(PID N)/' | sort -u
+        }
+
+        # SQLancer connects to this database and creates its own from there.
+        createdb test
+        psql -X -q -d postgres -Atc 'SELECT version()' > "${RESULTS_DIR}/version.txt"
+        printf 'oracle\tround\tseed\tseconds\tfindings\tcluster\n' > "${RESULTS_DIR}/runs.tsv"
+        server_events > /tmp/server-events.seen
+
+        for oracle in ${SQLANCER_ORACLES}; do
+          deadline=$(( $(date +%s) + SQLANCER_SECONDS ))
+          for round in $(seq 1 20); do
+            remaining=$(( deadline - $(date +%s) ))
+            [ "${remaining}" -ge 60 ] || break
+            # SQLancer writes ./logs/cloudberry/<database>.log for a
+            # finding and reuses the database names in the next run.
+            dir="${RESULTS_DIR}/${oracle}/round-${round}"
+            mkdir -p "${dir}"
+            seed=$(date +%s)
+            echo "=== ${oracle} round ${round}: seed ${seed}, ${remaining}s left ==="
+            (cd "${dir}" && timeout -k 30 $(( remaining + 300 )) java -jar "${jar}" \
+              --random-seed "${seed}" --timeout-seconds "${remaining}" \
+              --num-threads 4 --num-queries 1000 --username gpadmin \
+              cloudberry --connection-url "postgresql://localhost:${PGPORT}/test" \
+              --test-collations false --cloudberry-oracle "${oracle}" > sqlancer.out 2>&1)
+            tail -n 2 "${dir}/sqlancer.out"
+
+            findings=$(find "${dir}" -name '*.log' ! -name '*-cur.log' ! -name '*-plan.log' | wc -l)
+            cluster=up
+            if ! cluster_is_up; then
+              # The postmasters restart crashed backends on their own;
+              # give them three minutes before restarting the cluster.
+              cluster=recovered
+              for _ in $(seq 1 18); do sleep 10; cluster_is_up && break; done
+              if ! cluster_is_up; then
+                gpstop -a -M immediate; gpstart -a
+                cluster_is_up && cluster=restarted || cluster=lost
+              fi
+            fi
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "${oracle}" "${round}" "${seed}" \
+              "$(( $(date +%s) - seed ))" "${findings}" "${cluster}" | tee -a "${RESULTS_DIR}/runs.tsv"
+            if [ "${cluster}" = lost ]; then
+              echo "The cluster could not be restarted, giving up"
+              exit 1
+            fi
+          done
+
+          server_events > /tmp/server-events.now
+          comm -13 /tmp/server-events.seen /tmp/server-events.now > "${RESULTS_DIR}/${oracle}/server-events.txt"
+          mv /tmp/server-events.now /tmp/server-events.seen
+        done
+        EOF
+
+        if ! su - gpadmin -c "SRC_DIR=${SRC_DIR} RESULTS_DIR=${RESULTS_DIR} \
+            SQLANCER_ORACLES='${SQLANCER_ORACLES}' SQLANCER_SECONDS=${SQLANCER_SECONDS} \
+            bash /tmp/run-sqlancer.sh"; then
+          echo "::error::SQLancer run did not complete"
+          exit 1
+        fi
+
+    - name: Summarize results
+      id: summary
+      if: ${{ !cancelled() && steps.fuzz.conclusion != 'skipped' }}
+      env:
+        REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+      run: |
+        set -eo pipefail
+        cd "${RESULTS_DIR}"
+
+        finding_logs() {
+          find "$@" -name '*.log' ! -name '*-cur.log' ! -name '*-plan.log' 2> /dev/null | sort
+        }
+
+        # One line per finding that is the same for the same failure:
+        # the server error if there is one, else the first line of the
+        # Java exception, with literals and numbers taken out.
+        signature() {
+          local line
+          line=$(grep -E '^--Caused by: .*(ERROR|FATAL|PANIC):' "$1" | tail -n 1 || true)
+          [ -n "${line}" ] || line=$(head -n 1 "$1")
+          sed -E "s/^.*((ERROR|FATAL|PANIC):)/\1/; s/^--[A-Za-z.]*(Error|Exception): //;
+                  s/'[^']*'/'?'/g; s/[0-9]+(\.[0-9]+)?/N/g; s/\`/'/g" <<< "${line}" | cut -c 1-160
+        }
+
+        findings=$(finding_logs . | wc -l)
+        events=$(cat ./*/server-events.txt 2> /dev/null | sort -u | wc -l)
+
+        {
+          echo "# SQLancer fuzzing results"
+          echo
+          echo "- Apache Cloudberry: [\`${GITHUB_SHA:0:10}\`](${REPO_URL}/commit/${GITHUB_SHA}), debug build with assertions, demo cluster without mirrors"
+          echo "- SQLancer: [\`${SQLANCER_REF:0:10}\`](https://github.com/sqlancer/sqlancer/commit/${SQLANCER_REF}), 4 threads"
+          echo
+          if [ "${findings}" -eq 0 ] && [ "${events}" -eq 0 ]; then
+            echo "**No findings.**"
+          else
+            echo "**${findings} SQLancer finding(s), ${events} distinct server assertion failure(s) or crash(es).**"
+            echo "These are raw fuzzer results: reproduce one before filing an issue for it."
+          fi
+          echo
+          echo "| Oracle | Minutes | SQLancer runs | Findings | Server assertion failures / crashes | Cluster recoveries |"
+          echo "|---|---|---|---|---|---|"
+          for oracle in ${SQLANCER_ORACLES}; do
+            awk -F '\t' -v oracle="${oracle}" -v events="$(cat "${oracle}/server-events.txt" 2> /dev/null | wc -l)" '
+              $1 == oracle { runs++; seconds += $4; findings += $5; if ($6 != "up") recoveries++ }
+              END { if (runs) printf "| %s | %d | %d | %d | %d | %d |\n", oracle, seconds / 60, runs, findings, events, recoveries
+                    else printf "| %s | not run | | | | |\n", oracle }' runs.tsv
+          done
+
+          if [ "${events}" -gt 0 ]; then
+            echo
+            echo "## Server assertion failures and crashes"
+            echo
+            for oracle in ${SQLANCER_ORACLES}; do
+              sed -E "s/\`/'/g; s/^(.{0,300}).*/- \`\1\` (${oracle})/" "${oracle}/server-events.txt" 2> /dev/null || true
+            done
+          fi
+
+          if [ "${findings}" -gt 0 ]; then
+            echo
+            echo "## SQLancer findings"
+            echo
+            echo "Grouped by error message. Each reproducer is a SQL script in the"
+            echo "\`sqlancer-results\` artifact: the error as a comment at the top, then"
+            echo "every statement of that session."
+            echo
+            echo "| Count | Error | Example reproducer |"
+            echo "|---|---|---|"
+            finding_logs . | while read -r log; do
+              printf '%s\t%s\n' "$(signature "${log}")" "${log#./}"
+            done | awk -F '\t' '
+              { count[$1]++; if (!($1 in example)) example[$1] = $2 }
+              END { for (s in count) { e = s; gsub(/\|/, "\\|", e); printf "%d\t| %d | `%s` | `%s` |\n", count[s], count[s], e, example[s] } }' |
+              sort -rn | cut -f 2- | head -n 30
+          fi
+        } > summary.md
+
+        cat summary.md >> "$GITHUB_STEP_SUMMARY"
+        echo "findings=${findings}" >> "$GITHUB_OUTPUT"
+        echo "events=${events}" >> "$GITHUB_OUTPUT"
+
+        # Every statement SQLancer got an error for is in the server
+        # logs, so they are large but compress well.
+        if [ "${findings}" -gt 0 ] || [ "${events}" -gt 0 ]; then
+          (cd "${SRC_DIR}/gpAux/gpdemo/datadirs" && find . -path '*/log/*' -type f -print0 |
+            tar --null -T - -czf "${RESULTS_DIR}/server-logs.tar.gz")
+        fi
+
+    - name: Upload SQLancer results
+      if: ${{ !cancelled() && steps.fuzz.conclusion != 'skipped' }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: sqlancer-results
+        path: |
+          sqlancer-results/
+          build-logs/
+        retention-days: 30
+
+    - name: Fail on findings
+      if: ${{ steps.summary.outcome == 'success' && (steps.summary.outputs.findings != '0' || steps.summary.outputs.events != '0') }}
+      run: |
+        echo "::error::SQLancer: ${{ steps.summary.outputs.findings }} finding(s), ${{ steps.summary.outputs.events }} server assertion failure(s) or crash(es). See the job summary."
+        exit 1
