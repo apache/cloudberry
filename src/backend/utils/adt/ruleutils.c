@@ -2659,7 +2659,7 @@ pg_get_expr_worker(text *expr, Oid relid, int prettyFlags)
 	 */
 	if (OidIsValid(relid))
 	{
-		rel = try_relation_open(relid, AccessShareLock);
+		rel = try_relation_open(relid, AccessShareLock, false);
 		if (rel == NULL)
 			return NULL;
 		context = deparse_context_for(RelationGetRelationName(rel), relid);
