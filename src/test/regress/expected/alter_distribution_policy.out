@@ -1827,7 +1827,6 @@ HINT:  consider separating into multiple statements
 ALTER TABLE atsdby_multiple SET WITH (reorganize=true), ADD COLUMN k int;
 ERROR:  cannot alter distribution with other subcommands for relation "atsdby_multiple"
 HINT:  consider separating into multiple statements
-
 -- Changing a row type must not invalidate tables distributed by that type.
 SET client_min_messages = warning;
 CREATE TYPE dist_shape AS (a int, b text);

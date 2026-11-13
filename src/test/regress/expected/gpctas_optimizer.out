@@ -472,7 +472,6 @@ DROP FUNCTION public.exception_func();
 DROP TABLE test_tmp1;
 DROP TABLE test_tmp2;
 reset optimizer_trace_fallback;
-
 -- A source distribution key need not have a usable default hash opclass.
 -- In particular, money supports legacy distribution but no default hash opclass.
 SET optimizer = off;
