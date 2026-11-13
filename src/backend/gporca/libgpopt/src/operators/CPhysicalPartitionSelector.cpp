@@ -398,6 +398,42 @@ CPhysicalPartitionSelector::EpetOrder(CExpressionHandle &,	// exprhdl,
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CPhysicalPartitionSelector::FValidContext
+//
+//	@doc:
+//		Every process running the selector computes the partitions to scan
+//		from the rows it sees. Reject a child plan that splits the rows of a
+//		segment among parallel workers: a worker would see only part of
+//		them and prune partitions that the other workers still need, and a
+//		parallel append shares the pruned partitions among its workers.
+//
+//---------------------------------------------------------------------------
+BOOL
+CPhysicalPartitionSelector::FValidContext(
+	CMemoryPool *,			  // mp
+	COptimizationContext *,	  // poc
+	COptimizationContextArray *pdrgpocChild) const
+{
+	if (nullptr == pdrgpocChild || 0 == pdrgpocChild->Size())
+	{
+		return true;
+	}
+
+	CCostContext *pccBest = (*pdrgpocChild)[0]->PccBest();
+	if (nullptr == pccBest || nullptr == pccBest->Pdpplan())
+	{
+		return true;
+	}
+
+	CDistributionSpec::EDistributionType edt =
+		pccBest->Pdpplan()->Pds()->Edt();
+
+	return CDistributionSpec::EdtWorkerRandom != edt &&
+		   CDistributionSpec::EdtReplicatedWorkers != edt;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CPhysicalPartitionSelector::OsPrint
 //
 //	@doc:

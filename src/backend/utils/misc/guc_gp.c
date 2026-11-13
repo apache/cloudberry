@@ -333,6 +333,8 @@ bool		optimizer_enable_motions;
 bool		optimizer_enable_motion_broadcast;
 bool		optimizer_enable_motion_gather;
 bool		optimizer_enable_motion_redistribute;
+bool		optimizer_enable_motion_hash_distribute_workers;
+bool		optimizer_enable_motion_broadcast_workers;
 bool		optimizer_enable_sort;
 bool		optimizer_enable_materialize;
 bool		optimizer_enable_parallel_append;
@@ -355,6 +357,7 @@ bool		optimizer_enable_dml;
 bool		optimizer_enable_dml_constraints;
 bool		optimizer_enable_master_only_queries;
 bool		optimizer_enable_hashjoin;
+bool		optimizer_enable_parallel_hashjoin;
 bool		optimizer_enable_dynamictablescan;
 bool		optimizer_enable_dynamicindexscan;
 bool		optimizer_enable_dynamicindexonlyscan;
@@ -2257,6 +2260,26 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"optimizer_enable_motion_hash_distribute_workers", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enable plans with Motion HashDistributeWorkers operators in the optimizer."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_motion_hash_distribute_workers,
+		true,
+		NULL, NULL, NULL
+	},
+	{
+		{"optimizer_enable_motion_broadcast_workers", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enable plans with Motion BroadcastWorkers operators in the optimizer."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_motion_broadcast_workers,
+		true,
+		NULL, NULL, NULL
+	},
+	{
 		{"optimizer_enable_sort", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Enable plans with Sort operators in the optimizer."),
 			NULL,
@@ -2364,6 +2387,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&optimizer_enable_hashjoin,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"optimizer_enable_parallel_hashjoin", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enables the optimizer's use of parallel hash join plans."),
+			NULL,
+			GUC_EXPLAIN | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_parallel_hashjoin,
 		true,
 		NULL, NULL, NULL
 	},

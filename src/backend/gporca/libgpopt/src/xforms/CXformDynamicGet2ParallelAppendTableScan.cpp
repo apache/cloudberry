@@ -80,7 +80,7 @@ CXformDynamicGet2ParallelAppendTableScan::Exfp(CExpressionHandle &exprhdl) const
 	// Sequence are not worker-aware. If a parallel append scan ends up under
 	// one of them, a serial sibling in the same slice is executed by every
 	// worker and its rows are duplicated.
-	if (CXformGet2ParallelTableScan::FHasParallelIncompatibleOps(exprhdl))
+	if (CXformUtils::FHasParallelIncompatibleOps(exprhdl))
 	{
 		return CXform::ExfpNone;
 	}
@@ -169,6 +169,9 @@ CXformDynamicGet2ParallelAppendTableScan::Transform(CXformContext *pxfctxt,
 		// Fall back to GUC setting
 		ulParallelWorkers = (ULONG)max_parallel_workers_per_gather;
 	}
+
+	// Mark that we have parallel operators in the query
+	COptCtxt::PoctxtFromTLS()->SetHasParallelOperators();
 
 	// create alternative expression
 	CExpression *pexprAlt = GPOS_NEW(mp) CExpression(

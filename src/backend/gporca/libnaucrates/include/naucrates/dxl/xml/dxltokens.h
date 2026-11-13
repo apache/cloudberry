@@ -103,6 +103,7 @@ enum Edxltoken
 	EdxltokenPhysicalIndexScan,
 	EdxltokenPhysicalIndexOnlyScan,
 	EdxltokenPhysicalHashJoin,
+	EdxltokenPhysicalParallelHashJoin,
 	EdxltokenPhysicalNLJoin,
 	EdxltokenPhysicalNLJoinIndex,
 	EdxltokenPhysicalMergeJoin,
@@ -111,6 +112,8 @@ enum Edxltoken
 	EdxltokenPhysicalRedistributeMotion,
 	EdxltokenPhysicalRoutedDistributeMotion,
 	EdxltokenPhysicalRandomMotion,
+	EdxltokenPhysicalHashDistributeWorkersMotion,
+	EdxltokenPhysicalBroadcastWorkersMotion,
 	EdxltokenPhysicalSort,
 	EdxltokenPhysicalLimit,
 	EdxltokenPhysicalResult,
@@ -378,6 +381,8 @@ enum Edxltoken
 
 	EdxltokenParamId,
 	EdxltokenParallelWorkers,
+	EdxltokenParallelProbeWorkers,
+	EdxltokenParallelBuildWorkers,
 
 	EdxltokenCtidColName,
 	EdxltokenOidColName,

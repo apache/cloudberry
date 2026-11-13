@@ -34,6 +34,7 @@
 #include "gpopt/base/CUtils.h"
 #include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/operators/CPhysicalMotionHashDistribute.h"
+#include "gpopt/operators/CPhysicalMotionHashDistributeWorkers.h"
 #include "gpopt/operators/CPhysicalMotionRandom.h"
 #include "naucrates/traceflags/traceflags.h"
 
@@ -267,24 +268,43 @@ CDistributionSpecWorkerRandom::AppendEnforcers(CMemoryPool *mp,
 		}
 		case CDistributionSpec::EdtWorkerRandom:
 		{
-			// Required: WorkerRandom distribution -> Generate Random Motion
-			if (GPOS_FTRACE(EopttraceDisableMotionRandom))
+			CDistributionSpecWorkerRandom *random_dist_spec = nullptr;
+
+			// Check base distribution type to select appropriate motion operator
+			if (CDistributionSpec::EdtHashed == m_pdsSegmentBase->Edt())
 			{
-				// Random Motion is disabled
-				pexpr->Release();
-				return;
+				if (GPOS_FTRACE(EopttraceDisableMotionHashDistributeWorkers))
+				{
+					// Hash-distribute-workers Motion is disabled
+					pexpr->Release();
+					return;
+				}
+				// Base is Hashed: use hash-based worker distribution (more efficient)
+				random_dist_spec = PdsCreateWorkerRandom(mp, m_ulWorkers, m_pdsSegmentBase);
+
+				if (fDuplicateHazard)
+				{
+					random_dist_spec->MarkDuplicateSensitive();
+				}
+
+				pexprMotion = GPOS_NEW(mp) CExpression(
+					mp, GPOS_NEW(mp) CPhysicalMotionHashDistributeWorkers(mp, random_dist_spec), pexpr);
 			}
-
-			CDistributionSpecWorkerRandom *random_dist_spec =
-				PdsCreateWorkerRandom(mp, m_ulWorkers, GPOS_NEW(mp) CDistributionSpecRandom());
-
-			if (fDuplicateHazard)
+			else
 			{
-				random_dist_spec->MarkDuplicateSensitive();
-			}
+				// Base is NonSingleton/Random/other: convert to Random for motion
+				// This handles cases where base cannot be used for hash distribution
+				random_dist_spec = PdsCreateWorkerRandom(
+					mp, m_ulWorkers, GPOS_NEW(mp) CDistributionSpecRandom());
 
-			pexprMotion = GPOS_NEW(mp) CExpression(
-				mp, GPOS_NEW(mp) CPhysicalMotionRandom(mp, random_dist_spec), pexpr);
+				if (fDuplicateHazard)
+				{
+					random_dist_spec->MarkDuplicateSensitive();
+				}
+
+				pexprMotion = GPOS_NEW(mp) CExpression(
+					mp, GPOS_NEW(mp) CPhysicalMotionRandom(mp, random_dist_spec), pexpr);
+			}
 			break;
 		}
 

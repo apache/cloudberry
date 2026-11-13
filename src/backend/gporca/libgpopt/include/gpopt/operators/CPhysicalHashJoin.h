@@ -50,7 +50,7 @@ private:
 
 	// array redistribute request sent to the first hash join child
 	CDistributionSpecArray *m_pdrgpdsRedistributeRequests;
-
+protected:
 	// compute a distribution matching the distribution delivered by given child
 	CDistributionSpec *PdsMatch(CMemoryPool *mp, CDistributionSpec *pds,
 								ULONG ulSourceChildIndex) const;
@@ -60,7 +60,7 @@ private:
 		CMemoryPool *mp, CExpressionHandle &exprhdl,
 		CDistributionSpec *pdsOuter, CDistributionSpec *pdsInner) const;
 
-protected:
+
 	// compute required hashed distribution from the n-th child
 	CDistributionSpecHashed *PdshashedRequired(CMemoryPool *mp,
 											   ULONG child_index,
@@ -86,6 +86,7 @@ private:
 		CDistributionSpec *pdsInput, ULONG child_index,
 		CDrvdPropArray *pdrgpdpCtxt, ULONG ulOptReq, CReqdPropPlan *prppInput);
 
+protected:
 	// create a child hashed distribution request based on input hashed distribution,
 	// return NULL if no such request can be created
 	static CDistributionSpecHashed *PdshashedPassThru(
@@ -97,7 +98,6 @@ private:
 	BOOL FNullableHashKey(ULONG ulKey, CColRefSet *pcrsNotNullInner,
 						  BOOL fInner) const;
 
-protected:
 	// helper for computing a hashed distribution matching the given distribution
 	CDistributionSpecHashed *PdshashedMatching(
 		CMemoryPool *mp, CDistributionSpecHashed *pdshashed,
@@ -217,6 +217,10 @@ public:
 	// return order property enforcing type for this operator
 	CEnfdProp::EPropEnforcingType EpetOrder(
 		CExpressionHandle &exprhdl, const CEnfdOrder *peo) const override;
+
+	// check if optimization context is valid
+	BOOL FValidContext(CMemoryPool *mp, COptimizationContext *poc,
+					   COptimizationContextArray *pdrgpocChild) const override;
 
 
 	//-------------------------------------------------------------------------------------

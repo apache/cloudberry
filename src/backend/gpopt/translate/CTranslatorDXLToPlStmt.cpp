@@ -72,6 +72,7 @@ extern "C" {
 #include "naucrates/dxl/operators/CDXLPhysicalDynamicTableScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalGatherMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalHashJoin.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelHashJoin.h"
 #include "naucrates/dxl/operators/CDXLPhysicalIndexOnlyScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalLimit.h"
 #include "naucrates/dxl/operators/CDXLPhysicalMaterialize.h"
@@ -79,6 +80,7 @@ extern "C" {
 #include "naucrates/dxl/operators/CDXLPhysicalNLJoin.h"
 #include "naucrates/dxl/operators/CDXLPhysicalPartitionSelector.h"
 #include "naucrates/dxl/operators/CDXLPhysicalRedistributeMotion.h"
+#include "naucrates/dxl/operators/CDXLPhysicalHashDistributeWorkersMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalResult.h"
 #include "naucrates/dxl/operators/CDXLPhysicalRoutedDistributeMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalSort.h"
@@ -376,6 +378,12 @@ CTranslatorDXLToPlStmt::TranslateDXLOperatorToPlan(
 										ctxt_translation_prev_siblings);
 			break;
 		}
+		case EdxlopPhysicalParallelHashJoin:
+		{
+			plan = TranslateDXLParallelHashJoin(dxlnode, output_context,
+												ctxt_translation_prev_siblings);
+			break;
+		}
 		case EdxlopPhysicalNLJoin:
 		{
 			plan = TranslateDXLNLJoin(dxlnode, output_context,
@@ -390,6 +398,7 @@ CTranslatorDXLToPlStmt::TranslateDXLOperatorToPlan(
 		}
 		case EdxlopPhysicalMotionGather:
 		case EdxlopPhysicalMotionBroadcast:
+		case EdxlopPhysicalMotionBroadcastWorkers:
 		case EdxlopPhysicalMotionRoutedDistribute:
 		{
 			plan = TranslateDXLMotion(dxlnode, output_context,
@@ -398,6 +407,7 @@ CTranslatorDXLToPlStmt::TranslateDXLOperatorToPlan(
 		}
 		case EdxlopPhysicalMotionRedistribute:
 		case EdxlopPhysicalMotionRandom:
+		case EdxlopPhysicalMotionHashDistributeWorkers:
 		{
 			plan = TranslateDXLDuplicateSensitiveMotion(
 				dxlnode, output_context, ctxt_translation_prev_siblings);
@@ -1730,6 +1740,272 @@ CTranslatorDXLToPlStmt::TranslateDXLHashJoin(
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CTranslatorDXLToPlStmt::TranslateDXLParallelHashJoin
+//
+//	@doc:
+//		Translates a DXL parallel hash join node into a parallel HashJoin node
+//
+//---------------------------------------------------------------------------
+Plan *
+CTranslatorDXLToPlStmt::TranslateDXLParallelHashJoin(
+	const CDXLNode *parallel_hj_dxlnode, CDXLTranslateContext *output_context,
+	CDXLTranslationContextArray *ctxt_translation_prev_siblings)
+{
+	GPOS_ASSERT(parallel_hj_dxlnode->GetOperator()->GetDXLOperator() ==
+				EdxlopPhysicalParallelHashJoin);
+	GPOS_ASSERT(parallel_hj_dxlnode->Arity() == EdxlhjIndexSentinel);
+
+	// extract parallel hash join operator (used for join type, not parallel degree)
+	CDXLPhysicalParallelHashJoin *parallel_hashjoin_dxlop =
+		CDXLPhysicalParallelHashJoin::Cast(parallel_hj_dxlnode->GetOperator());
+
+	// create hash join node
+	HashJoin *hashjoin = MakeNode(HashJoin);
+
+	Join *join = &(hashjoin->join);
+	Plan *plan = &(join->plan);
+	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
+
+	// set join type
+	join->jointype =
+		GetGPDBJoinTypeFromDXLJoinType(parallel_hashjoin_dxlop->GetJoinType());
+	join->prefetch_inner = true;
+
+	// translate operator costs
+	TranslatePlanCosts(parallel_hj_dxlnode, plan);
+
+	// translate join children
+	CDXLNode *left_tree_dxlnode = (*parallel_hj_dxlnode)[EdxlhjIndexHashLeft];
+	CDXLNode *right_tree_dxlnode = (*parallel_hj_dxlnode)[EdxlhjIndexHashRight];
+	CDXLNode *project_list_dxlnode = (*parallel_hj_dxlnode)[EdxlhjIndexProjList];
+	CDXLNode *filter_dxlnode = (*parallel_hj_dxlnode)[EdxlhjIndexFilter];
+	CDXLNode *join_filter_dxlnode = (*parallel_hj_dxlnode)[EdxlhjIndexJoinFilter];
+	CDXLNode *hash_cond_list_dxlnode =
+		(*parallel_hj_dxlnode)[EdxlhjIndexHashCondList];
+
+	CDXLTranslateContext left_dxl_translate_ctxt(
+		m_mp, false, output_context->GetColIdToParamIdMap());
+	CDXLTranslateContext right_dxl_translate_ctxt(
+		m_mp, false, output_context->GetColIdToParamIdMap());
+
+	Plan *left_plan =
+		TranslateDXLOperatorToPlan(left_tree_dxlnode, &left_dxl_translate_ctxt,
+								   ctxt_translation_prev_siblings);
+
+	// Use recvslice's parallel_workers to determine parallel degree
+	// This correctly handles Motion nodes which create slice boundaries:
+	// - If Motion collects data from N workers to M segments, recvslice->parallel_workers reflects M
+	// - This ensures we don't use Parallel Hash Join/Hash when data is at segment level
+	PlanSlice *recvslice = m_dxl_to_plstmt_context->GetCurrentSlice();
+	if (recvslice->parallel_workers > 1)
+	{
+		plan->parallel = recvslice->parallel_workers;
+		plan->parallel_aware = true;
+		plan->parallel_safe = true;
+	}
+	else
+	{
+		// No parallel execution in this slice (either no workers or Motion collected data)
+		plan->parallel = 0;
+	}
+
+	// the right side of the join is the one where the hash phase is done
+	CDXLTranslationContextArray *translation_context_arr_with_siblings =
+		GPOS_NEW(m_mp) CDXLTranslationContextArray(m_mp);
+	translation_context_arr_with_siblings->Append(&left_dxl_translate_ctxt);
+	translation_context_arr_with_siblings->AppendArray(
+		ctxt_translation_prev_siblings);
+
+	// translate right side (parallel-aware Hash node)
+	Plan *right_plan = (Plan *) TranslateDXLParallelHash(
+		right_tree_dxlnode, &right_dxl_translate_ctxt,
+		translation_context_arr_with_siblings);
+
+	CDXLTranslationContextArray *child_contexts =
+		GPOS_NEW(m_mp) CDXLTranslationContextArray(m_mp);
+	child_contexts->Append(&left_dxl_translate_ctxt);
+	child_contexts->Append(&right_dxl_translate_ctxt);
+
+	// translate proj list and filter
+	TranslateProjListAndFilter(project_list_dxlnode, filter_dxlnode,
+							   nullptr,	 // translate context for the base table
+							   child_contexts, &plan->targetlist, &plan->qual,
+							   output_context);
+
+	// translate join filter
+	join->joinqual = TranslateDXLFilterToQual(
+		join_filter_dxlnode,
+		nullptr,  // translate context for the base table
+		child_contexts, output_context);
+
+	// translate hash cond
+	List *hash_conditions_list = NIL;
+	BOOL has_is_not_distinct_from_cond = false;
+
+	const ULONG arity = hash_cond_list_dxlnode->Arity();
+	for (ULONG ul = 0; ul < arity; ul++)
+	{
+		CDXLNode *hash_cond_dxlnode = (*hash_cond_list_dxlnode)[ul];
+
+		List *hash_cond_list =
+			TranslateDXLScCondToQual(hash_cond_dxlnode,
+									 nullptr,  // base table translation context
+									 child_contexts, output_context);
+
+		GPOS_ASSERT(1 == gpdb::ListLength(hash_cond_list));
+
+		Expr *expr = (Expr *) LInitial(hash_cond_list);
+		if (IsA(expr, BoolExpr) && ((BoolExpr *) expr)->boolop == NOT_EXPR)
+		{
+			// INDF test
+			GPOS_ASSERT(gpdb::ListLength(((BoolExpr *) expr)->args) == 1 &&
+						(IsA((Expr *) LInitial(((BoolExpr *) expr)->args),
+							 DistinctExpr)));
+			has_is_not_distinct_from_cond = true;
+		}
+		hash_conditions_list =
+			gpdb::ListConcat(hash_conditions_list, hash_cond_list);
+	}
+
+	if (!has_is_not_distinct_from_cond)
+	{
+		// no INDF conditions in the hash condition list
+		hashjoin->hashclauses = hash_conditions_list;
+	}
+	else
+	{
+		// hash conditions contain INDF clauses -> extract equality conditions to
+		// construct the hash clauses list
+		List *hash_clauses_list = NIL;
+
+		for (ULONG ul = 0; ul < arity; ul++)
+		{
+			CDXLNode *hash_cond_dxlnode = (*hash_cond_list_dxlnode)[ul];
+
+			// condition can be either a scalar comparison or a NOT DISTINCT FROM expression
+			GPOS_ASSERT(
+				EdxlopScalarCmp ==
+					hash_cond_dxlnode->GetOperator()->GetDXLOperator() ||
+				EdxlopScalarBoolExpr ==
+					hash_cond_dxlnode->GetOperator()->GetDXLOperator());
+
+			if (EdxlopScalarBoolExpr ==
+				hash_cond_dxlnode->GetOperator()->GetDXLOperator())
+			{
+				// clause is a NOT DISTINCT FROM check -> extract the distinct comparison node
+				GPOS_ASSERT(Edxlnot == CDXLScalarBoolExpr::Cast(
+										   hash_cond_dxlnode->GetOperator())
+										   ->GetDxlBoolTypeStr());
+				hash_cond_dxlnode = (*hash_cond_dxlnode)[0];
+				GPOS_ASSERT(EdxlopScalarDistinct ==
+							hash_cond_dxlnode->GetOperator()->GetDXLOperator());
+			}
+
+			CMappingColIdVarPlStmt colid_var_mapping =
+				CMappingColIdVarPlStmt(m_mp, nullptr, child_contexts,
+									   output_context, m_dxl_to_plstmt_context);
+
+			// translate the DXL scalar or scalar distinct comparison into an equality comparison
+			// to store in the hash clauses
+			Expr *hash_clause_expr =
+				(Expr *)
+					m_translator_dxl_to_scalar->TranslateDXLScalarCmpToScalar(
+						hash_cond_dxlnode, &colid_var_mapping);
+
+			hash_clauses_list =
+				gpdb::LAppend(hash_clauses_list, hash_clause_expr);
+		}
+
+		hashjoin->hashclauses = hash_clauses_list;
+		hashjoin->hashqualclauses = hash_conditions_list;
+	}
+
+	GPOS_ASSERT(NIL != hashjoin->hashclauses);
+
+	CDXLTranslationContextArray *hash_child_contexts =
+		GPOS_NEW(m_mp) CDXLTranslationContextArray(m_mp);
+	hash_child_contexts->Append(&left_dxl_translate_ctxt);
+	left_dxl_translate_ctxt.MergeTcxt(&right_dxl_translate_ctxt);
+	hash_child_contexts->Append(&right_dxl_translate_ctxt);
+
+	List *hashclause_list = NIL;
+
+	for (ULONG ul = 0; ul < arity; ul++)
+	{
+		CDXLNode *hash_cond_dxlnode = (*hash_cond_list_dxlnode)[ul];
+
+		if (EdxlopScalarBoolExpr ==
+			hash_cond_dxlnode->GetOperator()->GetDXLOperator())
+		{
+			// clause is a NOT DISTINCT FROM check -> extract the distinct comparison node
+			GPOS_ASSERT(Edxlnot == CDXLScalarBoolExpr::Cast(
+										hash_cond_dxlnode->GetOperator())
+										->GetDxlBoolTypeStr());
+			hash_cond_dxlnode = (*hash_cond_dxlnode)[0];
+			GPOS_ASSERT(EdxlopScalarDistinct ==
+						hash_cond_dxlnode->GetOperator()->GetDXLOperator());
+		}
+
+		CMappingColIdVarPlStmt hj_colid_var_mapping =
+			CMappingColIdVarPlStmt(m_mp, nullptr, hash_child_contexts,
+								   output_context, m_dxl_to_plstmt_context);
+
+		// translate the DXL scalar or scalar distinct comparison into an equality comparison
+		// to store in the hashclause_list
+		Expr *hash_clause_expr =
+			(Expr *) m_translator_dxl_to_scalar->TranslateDXLToScalar(
+				hash_cond_dxlnode, &hj_colid_var_mapping);
+		hashclause_list = gpdb::LAppend(hashclause_list, hash_clause_expr);
+	}
+
+	List *hashoperators = NIL;
+	List *hashcollations = NIL;
+	List *inner_hashkeys = NIL;
+	List *outer_hashkeys = NIL;
+	ListCell *lc;
+
+	Hash *hash = (Hash *) right_plan;
+
+	ForEach (lc, hashclause_list)
+	{
+		Node *clause = (Node *) lfirst(lc);
+		GPOS_ASSERT((IsA(clause, OpExpr) || IsA(clause, DistinctExpr)));
+		OpExpr *hclause = (OpExpr *) clause;
+
+		hashoperators = gpdb::LAppendOid(hashoperators, hclause->opno);
+		hashcollations = gpdb::LAppendOid(hashcollations, hclause->inputcollid);
+
+		outer_hashkeys = gpdb::LAppend(outer_hashkeys, linitial(hclause->args));
+		inner_hashkeys = gpdb::LAppend(inner_hashkeys, lsecond(hclause->args));
+	}
+
+	hashjoin->hashoperators = hashoperators;
+	hashjoin->hashcollations = hashcollations;
+	hashjoin->hashkeys = outer_hashkeys;
+	hash->hashkeys = inner_hashkeys;
+
+	plan->lefttree = left_plan;
+	plan->righttree = right_plan;
+
+	// Adjust row count to per-worker statistics for parallel execution
+	// Use plan->parallel (inherited from probe side) to ensure consistency
+	if (plan->parallel > 1)
+	{
+		plan->plan_rows = ceil(plan->plan_rows / plan->parallel);
+		hashjoin->batch0_barrier = true;
+		hashjoin->outer_motionhazard = true;
+	}
+
+	// cleanup
+	translation_context_arr_with_siblings->Release();
+	child_contexts->Release();
+	hash_child_contexts->Release();
+
+	return (Plan *) hashjoin;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CTranslatorDXLToPlStmt::TranslateDXLTvf
 //
 //	@doc:
@@ -2404,6 +2680,78 @@ CTranslatorDXLToPlStmt::TranslateDXLHash(
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CTranslatorDXLToPlStmt::TranslateDXLParallelHash
+//
+//	@doc:
+//		Translates a DXL physical operator node into a parallel-aware Hash node
+//
+//---------------------------------------------------------------------------
+Plan *
+CTranslatorDXLToPlStmt::TranslateDXLParallelHash(
+	const CDXLNode *dxlnode, CDXLTranslateContext *output_context,
+	CDXLTranslationContextArray *ctxt_translation_prev_siblings)
+{
+	Hash *hash = MakeNode(Hash);
+
+	Plan *plan = &(hash->plan);
+	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
+
+	// set parallel execution properties
+	// plan->parallel_aware = true;
+	// plan->parallel_safe = true;
+	// hash->sync_barrier = true;
+
+	// translate dxl node
+	CDXLTranslateContext dxl_translate_ctxt(
+		m_mp, false, output_context->GetColIdToParamIdMap());
+
+	Plan *left_plan = TranslateDXLOperatorToPlan(
+		dxlnode, &dxl_translate_ctxt, ctxt_translation_prev_siblings);
+
+	// Check recvslice's parallel_workers to determine if we should use parallel Hash
+	// If Motion collected data to segment level, recvslice->parallel_workers will be <= 1
+	PlanSlice *recvslice = m_dxl_to_plstmt_context->GetCurrentSlice();
+	if (recvslice->parallel_workers > 1)
+	{
+		// Recvslice has parallel workers - use Parallel Hash
+		plan->parallel = recvslice->parallel_workers;
+		plan->parallel_aware = true;
+		plan->parallel_safe = true;
+		hash->sync_barrier = true;
+	}
+	else
+	{
+		// No parallel workers in recvslice (Motion collected data or no parallelism)
+		// Reset to regular Hash
+		plan->parallel = 0;
+	}
+
+	GPOS_ASSERT(0 < dxlnode->Arity());
+
+	// create a reference to each entry in the child project list to create the target list of
+	// the hash node
+	CDXLNode *project_list_dxlnode = (*dxlnode)[0];
+	List *target_list = TranslateDXLProjectListToHashTargetList(
+		project_list_dxlnode, &dxl_translate_ctxt, output_context);
+
+	// copy costs from child node; the startup cost for the hash node is the total cost
+	// of the child plan, see make_hash in createplan.c
+	plan->startup_cost = left_plan->total_cost;
+	plan->total_cost = left_plan->total_cost;
+	plan->plan_rows = left_plan->plan_rows;
+	plan->plan_width = left_plan->plan_width;
+
+	plan->targetlist = target_list;
+	plan->lefttree = left_plan;
+	plan->righttree = nullptr;
+	plan->qual = NIL;
+	hash->rescannable = false;
+
+	return (Plan *) hash;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CTranslatorDXLToPlStmt::TranslateDXLDuplicateSensitiveMotion
 //
 //	@doc:
@@ -2516,6 +2864,7 @@ CTranslatorDXLToPlStmt::TranslateDXLMotion(
 		if (supports_parallel)
 		{
 			sendslice->parallel_workers = child_parallel_workers;
+			//plan->parallel_safe = true;
 		}
 		else
 		{
@@ -2583,7 +2932,9 @@ CTranslatorDXLToPlStmt::TranslateDXLMotion(
 	if (motion_dxlop->GetDXLOperator() == EdxlopPhysicalMotionRedistribute ||
 		motion_dxlop->GetDXLOperator() ==
 			EdxlopPhysicalMotionRoutedDistribute ||
-		motion_dxlop->GetDXLOperator() == EdxlopPhysicalMotionRandom)
+		motion_dxlop->GetDXLOperator() == EdxlopPhysicalMotionRandom ||
+		motion_dxlop->GetDXLOperator() ==
+			EdxlopPhysicalMotionHashDistributeWorkers)
 	{
 		// translate hash expr list
 		List *hash_expr_list = NIL;
@@ -2594,6 +2945,17 @@ CTranslatorDXLToPlStmt::TranslateDXLMotion(
 		{
 			CDXLNode *hash_expr_list_dxlnode =
 				(*motion_dxlnode)[EdxlrmIndexHashExprList];
+
+			TranslateHashExprList(hash_expr_list_dxlnode, &child_context,
+								  &hash_expr_list, &hash_expr_opfamilies,
+								  output_context);
+		}
+		else if (EdxlopPhysicalMotionHashDistributeWorkers ==
+				 motion_dxlop->GetDXLOperator())
+		{
+			// For Worker-level hash distribute, hash expr list is REQUIRED
+			CDXLNode *hash_expr_list_dxlnode =
+				(*motion_dxlnode)[EdxlhashworkersIndexHashExprList];
 
 			TranslateHashExprList(hash_expr_list_dxlnode, &child_context,
 								  &hash_expr_list, &hash_expr_opfamilies,
@@ -2654,6 +3016,7 @@ CTranslatorDXLToPlStmt::TranslateDXLMotion(
 		}
 		case EdxlopPhysicalMotionRedistribute:
 		case EdxlopPhysicalMotionRandom:
+		case EdxlopPhysicalMotionHashDistributeWorkers:
 		{
 			motion->motionType = MOTIONTYPE_HASH;
 			motion->numHashSegments =
@@ -2664,6 +3027,11 @@ CTranslatorDXLToPlStmt::TranslateDXLMotion(
 		case EdxlopPhysicalMotionBroadcast:
 		{
 			motion->motionType = MOTIONTYPE_BROADCAST;
+			break;
+		}
+		case EdxlopPhysicalMotionBroadcastWorkers:
+		{
+			motion->motionType = MOTIONTYPE_BROADCAST_WORKERS;
 			break;
 		}
 		case EdxlopPhysicalMotionRoutedDistribute:
@@ -7533,6 +7901,13 @@ CTranslatorDXLToPlStmt::ExtractParallelWorkersFromDXL(const CDXLNode *dxlnode)
 			CDXLPhysicalParallelAppend::Cast(dxlop);
 		return parallel_append_dxlop->UlParallelWorkers();
 	}
+	else if (EdxlopPhysicalParallelHashJoin == dxlop->GetDXLOperator())
+	{
+		// Parallel Hash Join operator - return its parallel workers
+		CDXLPhysicalParallelHashJoin *parallel_hashjoin_dxlop =
+			CDXLPhysicalParallelHashJoin::Cast(dxlop);
+		return parallel_hashjoin_dxlop->BuildWorkers();
+	}
 	else if (EdxlopPhysicalTableScan == dxlop->GetDXLOperator() ||
 			 EdxlopPhysicalDynamicTableScan == dxlop->GetDXLOperator() ||
 			 EdxlopPhysicalIndexScan == dxlop->GetDXLOperator() ||
@@ -7552,13 +7927,15 @@ CTranslatorDXLToPlStmt::ExtractParallelWorkersFromDXL(const CDXLNode *dxlnode)
 	}
 	else if (EdxlopPhysicalMotionGather == dxlop->GetDXLOperator() ||
 			 EdxlopPhysicalMotionBroadcast == dxlop->GetDXLOperator() ||
+			 EdxlopPhysicalMotionBroadcastWorkers == dxlop->GetDXLOperator() ||
 			 EdxlopPhysicalMotionRedistribute == dxlop->GetDXLOperator() ||
 			 EdxlopPhysicalMotionRandom == dxlop->GetDXLOperator() ||
-			 EdxlopPhysicalMotionRoutedDistribute == dxlop->GetDXLOperator())
+			 EdxlopPhysicalMotionRoutedDistribute == dxlop->GetDXLOperator() ||
+			 EdxlopPhysicalMotionHashDistributeWorkers == dxlop->GetDXLOperator())
 	{
 		// Motion node creates a slice boundary - do not recurse into child
 		// The child's parallel workers belong to the sending slice, not receiving slice
-		// Return 0 to indicate the receiving slice (current slice) has no parallel workers
+		// Return 1 to indicate the receiving slice (current slice) has no parallel workers
 		return 1;
 	}
 

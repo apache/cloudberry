@@ -79,8 +79,8 @@ select count(*) from pa_ao where d = 42;
 explain (costs off) select count(*) from pa_empty;
 select count(*) from pa_empty;
 
--- dynamic partition elimination: the partition selector stays on the
--- hash side, the parallel append consumes its selector id
+-- a partition selector cannot sit on input split among workers, so the
+-- parallel hash join has no partition selector and scans every partition
 explain (costs off)
 select count(*) from pa_ao join pa_dim using (d) where pa_dim.name = 'two';
 select count(*) from pa_ao join pa_dim using (d) where pa_dim.name = 'two';

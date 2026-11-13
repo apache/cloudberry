@@ -85,6 +85,7 @@ CLogicalLeftOuterJoin::PxfsCandidates(CMemoryPool *mp) const
 	(void) xform_set->ExchangeSet(CXform::ExfLeftJoin2RightJoin);
 	(void) xform_set->ExchangeSet(CXform::ExfPushJoinBelowLeftUnionAll);
 	(void) xform_set->ExchangeSet(CXform::ExfPushJoinBelowRightUnionAll);
+	(void) xform_set->ExchangeSet(CXform::ExfLeftOuterJoin2ParallelHashJoin);
 
 	return xform_set;
 }

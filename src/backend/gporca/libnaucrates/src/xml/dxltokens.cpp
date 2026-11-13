@@ -121,6 +121,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenPhysicalIndexOnlyScan, GPOS_WSZ_LIT("IndexOnlyScan")},
 		{EdxltokenScalarBitmapIndexProbe, GPOS_WSZ_LIT("BitmapIndexProbe")},
 		{EdxltokenPhysicalHashJoin, GPOS_WSZ_LIT("HashJoin")},
+		{EdxltokenPhysicalParallelHashJoin, GPOS_WSZ_LIT("ParallelHashJoin")},
 		{EdxltokenPhysicalNLJoin, GPOS_WSZ_LIT("NestedLoopJoin")},
 		{EdxltokenPhysicalNLJoinIndex, GPOS_WSZ_LIT("IndexNestedLoopJoin")},
 		{EdxltokenPhysicalMergeJoin, GPOS_WSZ_LIT("MergeJoin")},
@@ -131,6 +132,10 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenPhysicalRoutedDistributeMotion,
 		 GPOS_WSZ_LIT("RoutedDistributeMotion")},
 		{EdxltokenPhysicalRandomMotion, GPOS_WSZ_LIT("RandomMotion")},
+		{EdxltokenPhysicalHashDistributeWorkersMotion,
+		 GPOS_WSZ_LIT("HashDistributeWorkersMotion")},
+		{EdxltokenPhysicalBroadcastWorkersMotion,
+		 GPOS_WSZ_LIT("BroadcastWorkersMotion")},
 		{EdxltokenPhysicalLimit, GPOS_WSZ_LIT("Limit")},
 		{EdxltokenPhysicalSort, GPOS_WSZ_LIT("Sort")},
 		{EdxltokenPhysicalAggregate, GPOS_WSZ_LIT("Aggregate")},
@@ -424,6 +429,8 @@ CDXLTokens::Init(CMemoryPool *mp)
 
 		{EdxltokenParamId, GPOS_WSZ_LIT("ParamId")},
 		{EdxltokenParallelWorkers, GPOS_WSZ_LIT("ParallelWorkers")},
+		{EdxltokenParallelProbeWorkers, GPOS_WSZ_LIT("ParallelProbeWorkers")},
+		{EdxltokenParallelBuildWorkers, GPOS_WSZ_LIT("ParallelBuildWorkers")},
 
 		{EdxltokenCtidColName, GPOS_WSZ_LIT("ctid")},
 		{EdxltokenOidColName, GPOS_WSZ_LIT("oid")},

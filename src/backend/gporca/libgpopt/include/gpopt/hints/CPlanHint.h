@@ -81,6 +81,11 @@ public:
 	// Check whether an expression was created using a directed hint.
 	bool WasCreatedViaDirectedHint(CExpression *pexpr);
 
+	bool HasJoinHints() const
+	{
+		return nullptr != m_join_hints && m_join_hints->Size() > 0;
+	}
+
 	IOstream &OsPrint(IOstream &os) const;
 
 	void Serialize(CXMLSerializer *xml_serializer) const;

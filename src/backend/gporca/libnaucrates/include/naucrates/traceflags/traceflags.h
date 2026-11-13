@@ -124,6 +124,12 @@ enum EOptTraceFlag
 	// Disable MotionHashRoutedDistribute nodes
 	EopttraceDisableMotionRountedDistribute = 103008,
 
+	// Disable MotionHashDistributeWorkers nodes (parallel worker hash distribution)
+	EopttraceDisableMotionHashDistributeWorkers = 103057,
+
+	// Disable MotionBroadcastWorkers nodes (parallel worker broadcast)
+	EopttraceDisableMotionBroadcastWorkers = 103058,
+
 	// Disable Sort nodes
 	EopttraceDisableSort = 103009,
 
@@ -260,6 +266,9 @@ enum EOptTraceFlag
 	// e.g. string_agg(), on the segments for aggregates without GROUP BY,
 	// so that they don't need to sort it themselves on the coordinator
 	EopttraceDisablePresortedAgg = 103055,
+
+	// disable parallel hash join alternatives
+	EopttraceDisableParallelHashJoin = 103056,
 
 	// reuse the child contexts that the same request of a group expression
 	// reached under another context, instead of optimizing the children again

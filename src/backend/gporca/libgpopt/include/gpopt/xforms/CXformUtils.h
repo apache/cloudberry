@@ -291,6 +291,12 @@ public:
 	static CXform::EXformPromise ExfpExpandJoinOrder(CExpressionHandle &exprhdl,
 													 const CXform *xform);
 
+	// check if memo contains operations incompatible with parallel execution
+	static BOOL FHasParallelIncompatibleOps(CMemo *pmemo);
+
+	// check if memo (extracted from expression handle) contains operations incompatible with parallel execution
+	static BOOL FHasParallelIncompatibleOps(CExpressionHandle &exprhdl);
+
 	// extract foreign key
 	static CColRefSet *PcrsFKey(CMemoryPool *mp, CExpressionArray *pdrgpexpr,
 								CColRefSet *prcsOutput, CColRefSet *pcrsKey);

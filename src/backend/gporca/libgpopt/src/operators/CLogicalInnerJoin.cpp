@@ -69,6 +69,7 @@ CLogicalInnerJoin::PxfsCandidates(CMemoryPool *mp) const
 	CXformSet *xform_set = GPOS_NEW(mp) CXformSet(mp);
 
 	(void) xform_set->ExchangeSet(CXform::ExfImplementInnerJoin);
+	(void) xform_set->ExchangeSet(CXform::ExfInnerJoin2ParallelHashJoin);
 	(void) xform_set->ExchangeSet(CXform::ExfSubqJoin2Apply);
 	(void) xform_set->ExchangeSet(CXform::ExfJoin2BitmapIndexGetApply);
 	(void) xform_set->ExchangeSet(CXform::ExfJoin2IndexGetApply);

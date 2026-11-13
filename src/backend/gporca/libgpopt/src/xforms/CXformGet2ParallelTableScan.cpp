@@ -36,9 +36,10 @@
 #include "gpopt/operators/CLogicalGet.h"
 #include "gpopt/operators/CPhysicalParallelTableScan.h"
 #include "gpopt/optimizer/COptimizerConfig.h"
-#include "naucrates/md/IMDRelation.h"
 #include "gpopt/search/CGroupProxy.h"
 #include "gpopt/search/CMemo.h"
+#include "gpopt/xforms/CXformUtils.h"
+#include "naucrates/md/IMDRelation.h"
 
 
 // Use gpdbwrappers for parallel checks
@@ -50,80 +51,6 @@ namespace gpdb {
 }
 
 using namespace gpopt;
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CXformGet2ParallelTableScan::FHasParallelIncompatibleOps
-//
-//	@doc:
-//		Check if memo contains logical operators that are incompatible
-//		with parallel execution (CTE, Dynamic scans, Foreign scans, etc.)
-//
-//---------------------------------------------------------------------------
-BOOL
-CXformGet2ParallelTableScan::FHasParallelIncompatibleOps(CExpressionHandle &exprhdl)
-{
-	CGroupExpression *pgexprHandle = exprhdl.Pgexpr();
-	if (nullptr == pgexprHandle)
-	{
-		return false;
-	}
-
-	CGroup *pgroup = pgexprHandle->Pgroup();
-	if (nullptr == pgroup)
-	{
-		return false;
-	}
-
-	CMemo *pmemo = pgroup->Pmemo();
-	if (nullptr == pmemo)
-	{
-		return false;
-	}
-
-	// Iterate through all groups in memo to check for parallel-incompatible operations
-	const ULONG_PTR ulGroups = pmemo->UlpGroups();
-	for (ULONG_PTR ul = 0; ul < ulGroups; ul++)
-	{
-		CGroup *pgroupCurrent = pmemo->Pgroup(ul);
-		if (nullptr == pgroupCurrent)
-		{
-			continue;
-		}
-
-		// Check all group expressions in this group using CGroupProxy
-		CGroupProxy gp(pgroupCurrent);
-		CGroupExpression *pgexpr = gp.PgexprFirst();
-		while (nullptr != pgexpr)
-		{
-			COperator::EOperatorId eopid = pgexpr->Pop()->Eopid();
-
-			// Check for CTE-related operators (incompatible with parallel execution)
-			if (COperator::EopLogicalCTEProducer == eopid ||
-				COperator::EopLogicalCTEConsumer == eopid ||
-				COperator::EopLogicalSequence == eopid ||
-				COperator::EopLogicalSequenceProject == eopid)
-			{
-				return true;
-			}
-
-			if (COperator::EopLogicalUnion == eopid ||
-				COperator::EopLogicalUnionAll == eopid ||
-				COperator::EopLogicalIntersect == eopid ||
-				COperator::EopLogicalIntersectAll == eopid ||
-				COperator::EopLogicalDifference == eopid ||
-				COperator::EopLogicalDifferenceAll == eopid)
-			{
-				// Set operations are not supported in parallel plans
-				return true;
-			}
-
-			pgexpr = gp.PgexprNext(pgexpr);
-		}
-	}
-
-	return false;
-}
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -159,7 +86,7 @@ CXformGet2ParallelTableScan::Exfp(CExpressionHandle &exprhdl) const
 	}
 
 	// Check for parallel-incompatible operations that would conflict with parallel scans
-	if (FHasParallelIncompatibleOps(exprhdl))
+	if (CXformUtils::FHasParallelIncompatibleOps(exprhdl))
 	{
 		return CXform::ExfpNone;
 	}
@@ -231,11 +158,14 @@ CXformGet2ParallelTableScan::Transform(CXformContext *pxfctxt, CXformResult *pxf
 		ulParallelWorkers = (ULONG)max_parallel_workers_per_gather;
 	}
 
+	// Mark that we have parallel operators in the query
+	COptCtxt::PoctxtFromTLS()->SetHasParallelOperators();
+
 	// create alternative expression
 	CExpression *pexprAlt = GPOS_NEW(mp) CExpression(
 		mp,
 		GPOS_NEW(mp) CPhysicalParallelTableScan(mp, pname, ptabdesc, pdrgpcrOutput, ulParallelWorkers));
-	
+
 	// add alternative to transformation result
 	pxfres->Add(pexprAlt);
 }
