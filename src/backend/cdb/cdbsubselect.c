@@ -16,9 +16,12 @@
 
 #include "access/htup_details.h"
 #include "access/skey.h"
+#include "access/transam.h"
+#include "catalog/pg_aggregate.h"
 #include "catalog/pg_operator.h"
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/subselect.h"	/* convert_testexpr() */
@@ -29,6 +32,7 @@
 #include "parser/parse_relation.h"	/* addRangeTableEntryForSubquery() */
 #include "parser/parsetree.h"	/* rt_fetch() */
 #include "rewrite/rewriteManip.h"
+#include "utils/builtins.h"	/* TextDatumGetCString() */
 #include "utils/lsyscache.h"	/* get_op_btree_interpretation() */
 #include "utils/syscache.h"
 #include "cdb/cdbsubselect.h"	/* me */
@@ -499,11 +503,355 @@ cdbsubselect_drop_orderby(Query *subselect)
 	}
 }	/* cdbsubselect_drop_orderby */
 
-/**
- * Safe to convert expr sublink to a join
+/*
+ * Does the aggregate return NULL when it has no input rows?
+ *
+ * Without a final function, the result for empty input is the initial
+ * transition value, so the aggregate returns NULL iff agginitval is NULL
+ * (count() and regr_count() have initval 0, for example).
+ *
+ * With a final function, the result is NULL if the transition value starts
+ * out NULL and the final function is strict. Otherwise we cannot tell in
+ * general what a non-strict final function makes of the initial state, but
+ * all built-in aggregates with a final function return NULL for empty input
+ * (see the "Aggregate Functions" chapter in the documentation), so we trust
+ * those. The subselect_gp regression test checks that they do.
+ *
+ * Ordered-set and hypothetical-set aggregates don't follow that rule
+ * (e.g. rank(x) WITHIN GROUP (...) returns 1 for empty input), so they are
+ * never considered NULL-on-empty.
  */
 static bool
-safe_to_convert_EXPR(SubLink *sublink, ConvertSubqueryToJoinContext *ctx1)
+aggref_is_null_on_empty_input(Aggref *aggref)
+{
+	HeapTuple	tup;
+	Form_pg_aggregate aggform;
+	bool		initValueIsNull;
+	bool		result;
+
+	if (aggref->agglevelsup != 0)
+		return false;
+
+	tup = SearchSysCache1(AGGFNOID, ObjectIdGetDatum(aggref->aggfnoid));
+	if (!HeapTupleIsValid(tup))
+		elog(ERROR, "cache lookup failed for aggregate %u", aggref->aggfnoid);
+	aggform = (Form_pg_aggregate) GETSTRUCT(tup);
+
+	(void) SysCacheGetAttr(AGGFNOID, tup, Anum_pg_aggregate_agginitval,
+						   &initValueIsNull);
+
+	if (aggform->aggkind != AGGKIND_NORMAL)
+		result = false;
+	else if (!OidIsValid(aggform->aggfinalfn))
+		result = initValueIsNull;
+	else if (initValueIsNull && func_strict(aggform->aggfinalfn))
+		result = true;
+	else
+		result = (aggref->aggfnoid < FirstGenbkiObjectId);
+
+	ReleaseSysCache(tup);
+
+	return result;
+}
+
+/*
+ * Is 'node' guaranteed to evaluate to NULL, assuming that 'target' evaluates
+ * to NULL?
+ *
+ * If 'target' is NULL, every Aggref in the expression is assumed to see an
+ * empty input instead, i.e. the question becomes "does this aggregate
+ * expression return NULL when there are no input rows?".
+ *
+ * NULL-ness only propagates upwards through strict operators and functions,
+ * so this is conservative: false means "don't know".
+ */
+static bool
+expr_is_null_if_null(Node *node, Node *target)
+{
+	ListCell   *lc;
+	List	   *args;
+
+	if (node == NULL)
+		return false;
+	if (target != NULL && node == target)
+		return true;
+
+	switch (nodeTag(node))
+	{
+		case T_Const:
+			return ((Const *) node)->constisnull;
+
+		case T_Aggref:
+			return target == NULL &&
+				aggref_is_null_on_empty_input((Aggref *) node);
+
+		case T_RelabelType:
+			return expr_is_null_if_null((Node *) ((RelabelType *) node)->arg,
+										target);
+
+		case T_OpExpr:
+			{
+				OpExpr	   *op = (OpExpr *) node;
+
+				set_opfuncid(op);
+				if (op->opretset || !func_strict(op->opfuncid))
+					return false;
+				args = op->args;
+				break;
+			}
+
+		case T_FuncExpr:
+			{
+				FuncExpr   *fe = (FuncExpr *) node;
+
+				if (fe->funcretset || !func_strict(fe->funcid))
+					return false;
+				args = fe->args;
+				break;
+			}
+
+		default:
+			return false;
+	}
+
+	/* A strict operator/function returns NULL if any argument is NULL */
+	foreach(lc, args)
+	{
+		if (expr_is_null_if_null((Node *) lfirst(lc), target))
+			return true;
+	}
+	return false;
+}
+
+/*
+ * Replace 'sublink' (by pointer identity) with 'replacement' in an
+ * expression tree.
+ */
+typedef struct ReplaceSublinkContext
+{
+	SubLink    *sublink;
+	Node	   *replacement;
+} ReplaceSublinkContext;
+
+static Node *
+replace_sublink_mutator(Node *node, ReplaceSublinkContext *ctx)
+{
+	if (node == NULL)
+		return NULL;
+	if (node == (Node *) ctx->sublink)
+		return copyObject(ctx->replacement);
+	return expression_tree_mutator(node, replace_sublink_mutator, (void *) ctx);
+}
+
+/*
+ * Return the value that the aggregate produces for an empty input, as a
+ * Const, or NULL if it cannot be determined.
+ */
+static Const *
+aggref_empty_input_value(Aggref *aggref)
+{
+	HeapTuple	tup;
+	Form_pg_aggregate aggform;
+	Datum		textInitVal;
+	bool		initValueIsNull;
+	Const	   *result = NULL;
+
+	if (aggref_is_null_on_empty_input(aggref))
+		return makeNullConst(aggref->aggtype, -1, aggref->aggcollid);
+
+	if (aggref->agglevelsup != 0)
+		return NULL;
+
+	tup = SearchSysCache1(AGGFNOID, ObjectIdGetDatum(aggref->aggfnoid));
+	if (!HeapTupleIsValid(tup))
+		elog(ERROR, "cache lookup failed for aggregate %u", aggref->aggfnoid);
+	aggform = (Form_pg_aggregate) GETSTRUCT(tup);
+
+	textInitVal = SysCacheGetAttr(AGGFNOID, tup, Anum_pg_aggregate_agginitval,
+								  &initValueIsNull);
+
+	/*
+	 * Without a final function the result for empty input is the initial
+	 * transition value, e.g. 0 for count().
+	 */
+	if (aggform->aggkind == AGGKIND_NORMAL &&
+		!OidIsValid(aggform->aggfinalfn) &&
+		!initValueIsNull &&
+		aggform->aggtranstype == aggref->aggtype)
+	{
+		char	   *strInitVal = TextDatumGetCString(textInitVal);
+		Oid			typinput;
+		Oid			typioparam;
+		int16		typlen;
+		bool		typbyval;
+		Datum		value;
+
+		getTypeInputInfo(aggref->aggtype, &typinput, &typioparam);
+		get_typlenbyval(aggref->aggtype, &typlen, &typbyval);
+		value = OidInputFunctionCall(typinput, strInitVal, typioparam, -1);
+		result = makeConst(aggref->aggtype, -1, aggref->aggcollid,
+						   typlen, value, false, typbyval);
+	}
+
+	ReleaseSysCache(tup);
+
+	return result;
+}
+
+static Node *
+replace_aggrefs_with_empty_values_mutator(Node *node, bool *failed)
+{
+	if (node == NULL)
+		return NULL;
+	if (IsA(node, Aggref))
+	{
+		Const	   *c = aggref_empty_input_value((Aggref *) node);
+
+		if (c == NULL)
+		{
+			*failed = true;
+			return node;
+		}
+		return (Node *) c;
+	}
+	return expression_tree_mutator(node, replace_aggrefs_with_empty_values_mutator,
+								   (void *) failed);
+}
+
+static bool
+func_is_not_leakproof_checker(Oid func_id, void *context)
+{
+	return !get_func_leakproof(func_id);
+}
+
+/*
+ * Can 'node' be safely constant-folded at plan time? We only allow constants
+ * and a few simple node types, and all functions must be leakproof. Leakproof
+ * functions promise not to throw errors that depend on their arguments, so
+ * evaluating them on the subquery's empty-input value cannot raise an error
+ * (think 100 / count(*)) that the original query might never have raised.
+ */
+static bool
+contains_unsafe_to_fold_walker(Node *node, void *context)
+{
+	if (node == NULL)
+		return false;
+
+	switch (nodeTag(node))
+	{
+		case T_Const:
+		case T_RelabelType:
+		case T_BoolExpr:
+		case T_NullTest:
+		case T_List:
+			break;
+		case T_OpExpr:
+		case T_FuncExpr:
+			if (check_functions_in_node(node, func_is_not_leakproof_checker, NULL))
+				return true;
+			break;
+		default:
+			return true;
+	}
+	return expression_tree_walker(node, contains_unsafe_to_fold_walker, context);
+}
+
+/*
+ * Would the conjunct 'opexp' be false or NULL, for every outer row that has
+ * no matching rows in the subquery?
+ *
+ * Two ways to prove that:
+ *
+ * 1. The subquery returns NULL for empty input (avg(), sum(), ...), and NULL
+ *    propagates up to the conjunct through strict operators/functions.
+ *
+ * 2. The subquery's value for empty input is a known constant (e.g. 0 for
+ *    count(*)), the conjunct doesn't otherwise depend on the outer row
+ *    (e.g. "1 = (SELECT count(*) ...)"), and constant-folding it with that
+ *    value yields false or NULL.
+ */
+static bool
+conjunct_rejects_empty_subquery(OpExpr *opexp, SubLink *sublink, Expr *tlexpr)
+{
+	/* 1. */
+	if (expr_is_null_if_null((Node *) tlexpr, NULL) &&
+		expr_is_null_if_null((Node *) opexp, (Node *) sublink))
+		return true;
+
+	/* 2. */
+	bool		failed = false;
+	Node	   *emptyval;
+	Node	   *conj;
+	ReplaceSublinkContext rctx;
+
+	emptyval = replace_aggrefs_with_empty_values_mutator(copyObject((Node *) tlexpr),
+														 &failed);
+	if (failed)
+		return false;
+
+	rctx.sublink = sublink;
+	rctx.replacement = emptyval;
+	conj = replace_sublink_mutator((Node *) opexp, &rctx);
+
+	if (contains_unsafe_to_fold_walker(conj, NULL))
+		return false;
+
+	conj = eval_const_expressions(NULL, conj);
+	if (!IsA(conj, Const))
+		return false;
+
+	return ((Const *) conj)->constisnull ||
+		!DatumGetBool(((Const *) conj)->constvalue);
+}
+
+/*
+ * If 'node' contains exactly one SubLink, and it is an EXPR_SUBLINK, return
+ * it. Otherwise return NULL.
+ */
+typedef struct FindExprSublinkContext
+{
+	SubLink    *sublink;
+	int			nsublinks;
+} FindExprSublinkContext;
+
+static bool
+find_single_expr_sublink_walker(Node *node, FindExprSublinkContext *ctx)
+{
+	if (node == NULL)
+		return false;
+	if (IsA(node, SubLink))
+	{
+		ctx->sublink = (SubLink *) node;
+		ctx->nsublinks++;
+		/* don't recurse into the subquery */
+		return false;
+	}
+	return expression_tree_walker(node, find_single_expr_sublink_walker,
+								  (void *) ctx);
+}
+
+static SubLink *
+find_single_expr_sublink(Node *node)
+{
+	FindExprSublinkContext ctx;
+
+	ctx.sublink = NULL;
+	ctx.nsublinks = 0;
+	(void) find_single_expr_sublink_walker(node, &ctx);
+
+	if (ctx.nsublinks != 1 || ctx.sublink->subLinkType != EXPR_SUBLINK)
+		return NULL;
+	return ctx.sublink;
+}
+
+/**
+ * Safe to convert expr sublink to a join
+ *
+ * 'opexp' is the top-level WHERE (or inner join) conjunct that contains the
+ * sublink.
+ */
+static bool
+safe_to_convert_EXPR(OpExpr *opexp, SubLink *sublink, ConvertSubqueryToJoinContext *ctx1)
 {
 	Assert(ctx1);
 
@@ -574,6 +922,42 @@ safe_to_convert_EXPR(SubLink *sublink, ConvertSubqueryToJoinContext *ctx1)
 	if (subselect->hasWindowFuncs)
 		return false;
 
+	/*
+	 * The rewritten subquery gets a new targetlist, so any ORDER BY or
+	 * DISTINCT referring to the old one would be left dangling.
+	 */
+	if (subselect->sortClause || subselect->distinctClause ||
+		subselect->groupingSets)
+		return false;
+
+	/*
+	 * A volatile function would be evaluated once per group instead of once
+	 * per outer row.
+	 */
+	if (contain_volatile_functions((Node *) subselect))
+		return false;
+
+	TargetEntry *tle = (TargetEntry *) linitial(subselect->targetList);
+
+	/*
+	 * The subquery's output expression becomes a column of a derived table
+	 * that sits beside the outer query, so it must not refer to the outer
+	 * query.
+	 */
+	if (contain_vars_of_level_or_above((Node *) tle->expr, 1))
+		return false;
+
+	/*
+	 * The subquery becomes the inner side of an inner join, grouped by the
+	 * correlation columns. An outer row that has no matching group is
+	 * therefore dropped, whereas originally the subquery would have been
+	 * evaluated over an empty input. That's only equivalent if the conjunct
+	 * would have rejected the row anyway. For example, with count(*) the
+	 * subquery returns 0, and "a >= (SELECT count(*) ...)" is true for a=0.
+	 */
+	if (!conjunct_rejects_empty_subquery(opexp, sublink, tle->expr))
+		return false;
+
 	/**
 	 * Walk the quals of the subquery to do a more fine grained check as to whether this subquery
 	 * may be pulled up. Identify useful fragments to construct join condition if possible to pullup.
@@ -592,23 +976,32 @@ safe_to_convert_EXPR(SubLink *sublink, ConvertSubqueryToJoinContext *ctx1)
 /**
  * convert_EXPR_to_join
  *
- * Method attempts to convert an EXPR_SUBLINK of the form select * from T where a > (select 10*avg(x) from R where T.b=R.y)
+ * Method attempts to convert an EXPR_SUBLINK of the form
+ *   select * from T where a > (select 10*avg(x) from R where T.b=R.y)
+ * The sublink may also be nested inside strict operators or functions on
+ * either side of the comparison, e.g.
+ *   select * from T where a > 1.2 * (select avg(x) from R where T.b=R.y)
+ *
+ * On success, the sublink in 'opexp' is replaced (in place) with a reference
+ * to the aggregate column of the new derived table, and the JoinExpr to add
+ * to the join tree is returned.
  */
 JoinExpr *
 convert_EXPR_to_join(PlannerInfo *root, OpExpr *opexp)
 {
 	Assert(root);
 	Assert(list_length(opexp->args) == 2);
-	Node	   *rarg = list_nth(opexp->args, 1);
 
-	Assert(IsA(rarg, SubLink));
-	SubLink    *sublink = (SubLink *) rarg;
+	SubLink    *sublink = find_single_expr_sublink((Node *) opexp->args);
+
+	if (sublink == NULL)
+		return NULL;
 
 	ConvertSubqueryToJoinContext ctx1;
 
 	InitConvertSubqueryToJoinContext(&ctx1);
 
-	if (safe_to_convert_EXPR(sublink, &ctx1))
+	if (safe_to_convert_EXPR(opexp, sublink, &ctx1))
 	{
 		Query	   *subselect = (Query *) copyObject(sublink->subselect);
 
@@ -669,7 +1062,11 @@ convert_EXPR_to_join(PlannerInfo *root, OpExpr *opexp)
 											 exprCollation((Node *) subselectAggTLE->expr),
 											 0);
 
-		list_nth_replace(opexp->args, 1, aggVar);
+		ReplaceSublinkContext rctx;
+
+		rctx.sublink = sublink;
+		rctx.replacement = (Node *) aggVar;
+		opexp->args = (List *) replace_sublink_mutator((Node *) opexp->args, &rctx);
 
 		return join_expr;
 	}

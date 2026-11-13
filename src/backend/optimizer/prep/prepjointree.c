@@ -851,12 +851,12 @@ pull_up_sublinks_qual_recurse(PlannerInfo *root, Node *node,
 
 		if (list_length(opexp->args) == 2)
 		{
-			/**
-			 * Check if second arg is sublink
+			/*
+			 * Check if either arg contains a sublink, e.g.
+			 * "a > (SELECT ...)" or "a > 1.2 * (SELECT ...)".
+			 * convert_EXPR_to_join() checks whether it can be converted.
 			 */
-			Node *rarg = list_nth(opexp->args, 1);
-
-			if (IsA(rarg, SubLink))
+			if (checkExprHasSubLink((Node *) opexp->args))
 			{
 				j = convert_EXPR_to_join(root, opexp);
 				if (j)
