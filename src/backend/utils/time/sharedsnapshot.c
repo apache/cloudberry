@@ -557,6 +557,8 @@ SharedSnapshotRemove(volatile SharedSnapshotSlot *slot, char *creatorDescription
 	slot->segmateSync = 0;
 	slot->snapshot_handle = DSM_HANDLE_INVALID;
 	slot->snapshot_sz = 0;
+	MemSet(slot->dump, 0, sizeof(slot->dump));
+	slot->cur_dump_id = 0;
 
 	sharedSnapshotArray->numSlots -= 1;
 
@@ -612,6 +614,7 @@ dumpSharedLocalSnapshot_forCursor(void)
 	char	   *dst_address;
 	dsm_segment *src_segment;
 	dsm_segment *dst_segment;
+	dsm_segment *old_segment = NULL;
 	ResourceOwner oldowner;
 	SharedSnapshotSlot *src = NULL;
 	volatile SnapshotDump *pDump;
@@ -637,17 +640,29 @@ dumpSharedLocalSnapshot_forCursor(void)
 	src_segment = dsm_attach(SharedLocalSnapshotSlot->snapshot_handle);
 	src_address = dsm_segment_address(src_segment);
 
-	dst_segment = dsm_create(src->snapshot_sz, 0);
+	if (pDump->handle != DSM_HANDLE_INVALID)
+	{
+		old_segment = dsm_find_mapping(pDump->handle);
+	}
+
+	/* Readers finish restoring under slotLock before we reuse the old dump. */
+	if (old_segment != NULL &&
+		dsm_segment_map_length(old_segment) >= src->snapshot_sz)
+		dst_segment = old_segment;
+	else
+		dst_segment = dsm_create(src->snapshot_sz, 0);
 	dst_address = dsm_segment_address(dst_segment);
 
 	/* Dump shared snapshot to dsm of destination */
 	memcpy(dst_address, src_address, src->snapshot_sz);
 
-	/* FIXME: can we just reuse the src dsm handler? */
 	pDump->handle = dsm_segment_handle(dst_segment);
 	pDump->segmateSync = src->segmateSync;
 	pDump->distributedXid = src->distributedXid;
 	pDump->localXid = src->fullXid;
+
+	if (old_segment != NULL && old_segment != dst_segment)
+		dsm_detach(old_segment);
 
 	dsm_detach(src_segment);
 
