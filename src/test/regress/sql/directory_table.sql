@@ -67,7 +67,7 @@ ALTER STORAGE SERVER oss_server3 OPTIONS(endpoint '192.168.0.1');   -- fail
 ALTER STORAGE SERVER oss_server4 OPTIONS(protocol 'localhost', virtual_host 'true');
 ALTER STORAGE SERVER oss_server4 OPTIONS(protocol 'qingstor');  -- fail
 ALTER STORAGE SERVER oss_server5;   -- fail
-ALTER STORAGE SERVER oss_server6 OWNER TO postgres; -- fail
+ALTER STORAGE SERVER oss_server6 OWNER TO CURRENT_USER;
 ALTER STORAGE SERVER IF EXISTS oss_server7 OPTIONS(endpoint '127.0.0.1:6555');    -- fail
 ALTER STORAGE SERVER IF NOT EXISTS oss_server8 OPTIONS(virtual_host 'true');    -- fail
 

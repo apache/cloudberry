@@ -202,5 +202,6 @@ test: tuplesort
 test: explain
 test: event_trigger
 test: fast_default
+test: storage_server
 #test: stats
 #test: createdb

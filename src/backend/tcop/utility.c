@@ -2956,6 +2956,9 @@ AlterObjectTypeCommandTag(ObjectType objtype)
 		case OBJECT_FOREIGN_SERVER:
 			tag = CMDTAG_ALTER_SERVER;
 			break;
+		case OBJECT_STORAGE_SERVER:
+			tag = CMDTAG_ALTER_STORAGE_SERVER;
+			break;
 		case OBJECT_FOREIGN_TABLE:
 			tag = CMDTAG_ALTER_FOREIGN_TABLE;
 			break;

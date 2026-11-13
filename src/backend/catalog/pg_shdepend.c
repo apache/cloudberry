@@ -1625,6 +1625,7 @@ shdepReassignOwned(List *roleids, Oid newrole)
 					break;
 
 				case UserMappingRelationId:
+				case StorageUserMappingRelationId:
 					/* ditto */
 					break;
 
@@ -1666,6 +1667,7 @@ shdepReassignOwned(List *roleids, Oid newrole)
 				case OperatorClassRelationId:
 				case ExtensionRelationId:
 				case StatisticExtRelationId:
+				case StorageServerRelationId:
 				case TableSpaceRelationId:
 				case TSConfigRelationId:
 				case TSDictionaryRelationId:
