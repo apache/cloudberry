@@ -38,6 +38,7 @@ This directory contains GitHub Actions workflows for Apache Cloudberry CI/CD.
 | `apache-rat-audit.yml` | License header compliance check | Push, PR |
 | `coverity.yml` | Static code analysis with Coverity | Weekly, Manual |
 | `sonarqube.yml` | Code quality analysis with SonarQube | Push to main |
+| `sqlancer-cloudberry.yml` | Fuzzing with SQLancer on a debug build | Weekly, Manual |
 | `docker-cbdb-build-containers.yml` | Build Docker images for CI | Manual |
 | `docker-cbdb-test-containers.yml` | Build test Docker images | Manual |
 
