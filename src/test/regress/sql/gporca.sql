@@ -3762,6 +3762,31 @@ drop table cte_test1;
 drop table cte_test2;
 drop table cte_test3;
 
+--
+-- Array comparison whose elements are all NULL.  NOT IN used to crash in
+-- PcnstrIntervalFromScalarArrayCmp() on the empty datum set.  All of these
+-- match no rows.
+--
+create table orca_null_array (a int, b int) distributed by (a);
+insert into orca_null_array values (1, 1), (2, 2), (3, NULL);
+
+explain (costs off) select * from orca_null_array where b not in (NULL, NULL);
+
+select count(*) from orca_null_array where b not in (NULL, NULL);
+select count(*) from orca_null_array where b not in (NULL);
+select count(*) from orca_null_array where b in (NULL, NULL);
+select count(*) from orca_null_array where b not in (1, NULL);
+
+-- a cast on the column reaches the same code through
+-- FCompareCastIdentToConstArray()
+select count(*) from orca_null_array where b::bigint not in (NULL, NULL);
+
+-- arrays with a real datum still derive their constraint as before
+select count(*) from orca_null_array where b not in (1, 2);
+select count(*) from orca_null_array where b in (1, 2);
+
+drop table orca_null_array;
+
 -- start_ignore
 DROP SCHEMA orca CASCADE;
 -- end_ignore
