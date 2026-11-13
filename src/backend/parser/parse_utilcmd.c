@@ -573,6 +573,15 @@ generateSerialExtraStmts(CreateStmtContext *cxt, ColumnDef *column,
 		else
 			seqpersistence = RELPERSISTENCE_UNLOGGED;
 	}
+	else if (seqpersistence == RELPERSISTENCE_UNLOGGED)
+	{
+		/*
+		 * Cloudberry does not support unlogged sequences.  So the sequence of
+		 * an unlogged table is a logged sequence, as before PostgreSQL 15.
+		 * An explicit UNLOGGED option still gets an error in DefineSequence().
+		 */
+		seqpersistence = RELPERSISTENCE_PERMANENT;
+	}
 
 	/*
 	 * Build a CREATE SEQUENCE command to create the sequence object, and add
