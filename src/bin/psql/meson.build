@@ -66,6 +66,7 @@ tests += {
     'tests': [
       't/001_basic.pl',
       't/010_tab_completion.pl',
+      't/011_cloudberry_tab_completion.pl',
       't/020_cancel.pl',
     ],
   },

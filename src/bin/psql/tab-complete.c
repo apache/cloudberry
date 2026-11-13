@@ -1010,8 +1010,9 @@ static const SchemaQuery Query_for_trigger_of_table = {
 " WHERE spcname LIKE '%s'"
 
 #define Query_for_list_of_tags \
-"SELECT pg_catalog.quote_ident(tagname) FROM pg_catalog.pg_tag " \
-" WHERE substring(pg_catalog.quote_ident(tagname),1,%d)='%s'"
+" SELECT tagname "\
+"   FROM pg_catalog.pg_tag "\
+"  WHERE tagname LIKE '%s'"
 
 #define Query_for_list_of_tasks \
 "SELECT pg_catalog.quote_ident(jobname) FROM pg_catalog.pg_task "\
@@ -1048,9 +1049,9 @@ static const SchemaQuery Query_for_trigger_of_table = {
 " WHERE pg_catalog.lower(name) LIKE pg_catalog.lower('%s')"
 
 #define Query_for_list_of_resgroups \
-" SELECT pg_catalog.quote_ident(rsgname) "\
+" SELECT rsgname "\
 "   FROM pg_catalog.pg_resgroup "\
-"  WHERE substring(pg_catalog.quote_ident(rsgname),1,%d)='%s'"
+"  WHERE rsgname LIKE '%s'"
 
 #define Query_for_list_of_roles \
 " SELECT rolname "\
@@ -1083,9 +1084,9 @@ static const SchemaQuery Query_for_trigger_of_table = {
 "  WHERE usename LIKE '%s'"
 
 #define Query_for_list_of_storage_servers \
-" SELECT pg_catalog.quote_ident(srvname) "\
-"	FROM pg_catalog.gp_storage_server "\
-"  WHERE substring(pg_catalog.quote_ident(srvname),1,%d)='%s'"
+" SELECT srvname "\
+"   FROM pg_catalog.gp_storage_server "\
+"  WHERE srvname LIKE '%s'"
 
 #define Query_for_list_of_access_methods \
 " SELECT amname "\
@@ -1110,8 +1111,9 @@ static const SchemaQuery Query_for_trigger_of_table = {
 "  WHERE extname LIKE '%s'"
 
 #define Query_for_list_of_profiles \
-"SELECT pg_catalog.quote_ident(profilename) FROM pg_catalog.pg_profile "\
-" WHERE substring(pg_catalog.quote_ident(profilename),1,%d)='%s'"
+" SELECT prfname "\
+"   FROM pg_catalog.pg_profile "\
+"  WHERE prfname LIKE '%s'"
 
 #define Query_for_list_of_available_extensions \
 " SELECT name "\
@@ -1885,19 +1887,18 @@ psql_completion(const char *text, int start, int end)
 		else
 			COMPLETE_WITH_FUNCTION_ARG(prev2_wd);
 	}
-	/* ALTER TAG <name > (...) */
+	/* ALTER TAG [IF EXISTS] <name> */
 	else if (Matches("ALTER", "TAG"))
-	{
-		COMPLETE_WITH("IF EXISTS");
-	}
-	else if (Matches("ALTER", "TAG", "IF EXISTS", MatchAny))
-	{
-		COMPLETE_WITH("OWNER TO", "RENAME TO", "UNSET ALLOWED_VALUES", "ADD ALLOWED_VLAUES", "DROP ALLOWED_VLAUES");
-	}
+		COMPLETE_WITH_QUERY_PLUS(Query_for_list_of_tags, "IF EXISTS");
+	else if (Matches("ALTER", "TAG", "IF"))
+		COMPLETE_WITH("EXISTS");
+	else if (Matches("ALTER", "TAG", "IF", "EXISTS"))
+		COMPLETE_WITH_QUERY(Query_for_list_of_tags);
+	else if (Matches("ALTER", "TAG", "IF", "EXISTS", MatchAny))
+		COMPLETE_WITH("ADD ALLOWED_VALUES", "DROP ALLOWED_VALUES", "RENAME TO");
 	else if (Matches("ALTER", "TAG", MatchAny))
-	{
-		COMPLETE_WITH("OWNER TO", "RENAME TO", "UNSET ALLOWED_VALUES", "ADD ALLOWED_VLAUES", "DROP ALLOWED_VLAUES");
-	}
+		COMPLETE_WITH("ADD ALLOWED_VALUES", "DROP ALLOWED_VALUES", "OWNER TO",
+					  "RENAME TO", "UNSET ALLOWED_VALUES");
 	/* ALTER FUNCTION <name> (...) */
 	else if (Matches("ALTER", "FUNCTION", MatchAny, MatchAny))
 	{
@@ -2283,7 +2284,7 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH("VERSION", "OPTIONS", "OWNER TO", "RENAME TO");
 	/* ALTER STORAGE SERVER <name> */
 	else if (Matches("ALTER", "STORAGE", "SERVER", MatchAny))
-		COMPLETE_WITH("OPTIONS", "RENAME TO");
+		COMPLETE_WITH("OPTIONS");
 	/* ALTER SERVER <name> VERSION <version> */
 	else if (Matches("ALTER", "SERVER", MatchAny, "VERSION", MatchAny))
 		COMPLETE_WITH("OPTIONS");
@@ -2875,6 +2876,10 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_foreign_tables);
 	else if (Matches("COMMENT", "ON", "MATERIALIZED", "VIEW"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_matviews);
+	else if (Matches("COMMENT", "ON", "STORAGE"))
+		COMPLETE_WITH("SERVER");
+	else if (Matches("COMMENT", "ON", "STORAGE", "SERVER"))
+		COMPLETE_WITH_QUERY(Query_for_list_of_storage_servers);
 	else if (Matches("COMMENT", "ON", "POLICY"))
 		COMPLETE_WITH_QUERY(Query_for_list_of_policies);
 	else if (Matches("COMMENT", "ON", "POLICY", MatchAny))
@@ -3850,9 +3855,28 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("DROP", "DYNAMIC", "TABLE"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_matviews);
 
+	/* DROP PROFILE [IF EXISTS] */
+	else if (Matches("DROP", "PROFILE"))
+		COMPLETE_WITH_QUERY_PLUS(Query_for_list_of_profiles, "IF EXISTS");
+	else if (Matches("DROP", "PROFILE", "IF"))
+		COMPLETE_WITH("EXISTS");
+	else if (Matches("DROP", "PROFILE", "IF", "EXISTS"))
+		COMPLETE_WITH_QUERY(Query_for_list_of_profiles);
+
+	/* DROP TAG [IF EXISTS] */
+	else if (Matches("DROP", "TAG"))
+		COMPLETE_WITH_QUERY_PLUS(Query_for_list_of_tags, "IF EXISTS");
+	else if (Matches("DROP", "TAG", "IF"))
+		COMPLETE_WITH("EXISTS");
+	else if (Matches("DROP", "TAG", "IF", "EXISTS"))
+		COMPLETE_WITH_QUERY(Query_for_list_of_tags);
+
 	/* DROP STORAGE */
 	else if (Matches("DROP", "STORAGE"))
 		COMPLETE_WITH("SERVER", "USER MAPPING");
+	else if (Matches("DROP", "STORAGE", "SERVER") ||
+			 Matches("DROP", "STORAGE", "SERVER", "IF", "EXISTS"))
+		COMPLETE_WITH_QUERY(Query_for_list_of_storage_servers);
 	/* DROP DIRECTORY TABLE */
 	else if (Matches("DROP", "DIRECTORY"))
 		COMPLETE_WITH("TABLE");
@@ -4809,6 +4833,9 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("CREATE|ALTER", "USER", "MAPPING", "FOR", MatchAny, "SERVER", MatchAny))
 		COMPLETE_WITH("OPTIONS");
 /* STORAGE USER MAPPING */
+	else if (HeadMatches("CREATE|ALTER|DROP", "STORAGE", "USER", "MAPPING") &&
+			 TailMatches("STORAGE", "SERVER"))
+		COMPLETE_WITH_QUERY(Query_for_list_of_storage_servers);
 	else if (Matches("ALTER|CREATE|DROP", "STORAGE", "USER", "MAPPING"))
 		COMPLETE_WITH("FOR");
 	else if (Matches("CREATE", "STORAGE", "USER", "MAPPING", "FOR"))
