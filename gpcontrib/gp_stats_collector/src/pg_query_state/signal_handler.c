@@ -223,12 +223,109 @@ send_msg_by_parts(shm_mq_handle *mqh, Size nbytes, const void *data)
 }
 
 /*
+ * qs_map_node_type -- translate a NodeTag into the wire protocol's stable
+ * QsPlanNodeType.
+ *
+ * NodeTag numbering is a PostgreSQL implementation detail and is not stable
+ * across major versions: PG16 generates it with gen_node_support.pl
+ * (src/include/nodes/nodetags.h), which renumbered every tag relative to PG14
+ * (T_SeqScan 27 -> 395).  Sending nodeTag(plan) raw therefore makes every node
+ * unresolvable on a receiver holding a table for the other version.  Map
+ * explicitly so the protocol is decoupled from the backend's numbering.
+ *
+ * The cases below mirror the node-name switch in ExplainNode(); anything not
+ * listed is reported as UNSPECIFIED rather than guessed.  QS_PLAN_NODE_TYPE_
+ * SPLIT_MERGE has no PostgreSQL 14 counterpart, so it is reserved in the enum
+ * but has no case here.
+ */
+static QsPlanNodeType
+qs_map_node_type(NodeTag tag)
+{
+	switch (tag)
+	{
+		/* control nodes */
+		case T_Result:					return QS_PLAN_NODE_TYPE_RESULT;
+		case T_ProjectSet:				return QS_PLAN_NODE_TYPE_PROJECT_SET;
+		case T_ModifyTable:				return QS_PLAN_NODE_TYPE_MODIFY_TABLE;
+		case T_Append:					return QS_PLAN_NODE_TYPE_APPEND;
+		case T_MergeAppend:				return QS_PLAN_NODE_TYPE_MERGE_APPEND;
+		case T_RecursiveUnion:			return QS_PLAN_NODE_TYPE_RECURSIVE_UNION;
+		case T_BitmapAnd:				return QS_PLAN_NODE_TYPE_BITMAP_AND;
+		case T_BitmapOr:				return QS_PLAN_NODE_TYPE_BITMAP_OR;
+
+		/* scans */
+		case T_SeqScan:					return QS_PLAN_NODE_TYPE_SEQ_SCAN;
+		case T_SampleScan:				return QS_PLAN_NODE_TYPE_SAMPLE_SCAN;
+		case T_IndexScan:				return QS_PLAN_NODE_TYPE_INDEX_SCAN;
+		case T_IndexOnlyScan:			return QS_PLAN_NODE_TYPE_INDEX_ONLY_SCAN;
+		case T_BitmapIndexScan:			return QS_PLAN_NODE_TYPE_BITMAP_INDEX_SCAN;
+		case T_BitmapHeapScan:			return QS_PLAN_NODE_TYPE_BITMAP_HEAP_SCAN;
+		case T_TidScan:					return QS_PLAN_NODE_TYPE_TID_SCAN;
+		case T_TidRangeScan:			return QS_PLAN_NODE_TYPE_TID_RANGE_SCAN;
+		case T_SubqueryScan:			return QS_PLAN_NODE_TYPE_SUBQUERY_SCAN;
+		case T_FunctionScan:			return QS_PLAN_NODE_TYPE_FUNCTION_SCAN;
+		case T_TableFuncScan:			return QS_PLAN_NODE_TYPE_TABLE_FUNC_SCAN;
+		case T_ValuesScan:				return QS_PLAN_NODE_TYPE_VALUES_SCAN;
+		case T_CteScan:					return QS_PLAN_NODE_TYPE_CTE_SCAN;
+		case T_NamedTuplestoreScan:		return QS_PLAN_NODE_TYPE_NAMED_TUPLESTORE_SCAN;
+		case T_WorkTableScan:			return QS_PLAN_NODE_TYPE_WORK_TABLE_SCAN;
+		case T_ForeignScan:				return QS_PLAN_NODE_TYPE_FOREIGN_SCAN;
+		case T_CustomScan:				return QS_PLAN_NODE_TYPE_CUSTOM_SCAN;
+
+		/* joins */
+		case T_NestLoop:				return QS_PLAN_NODE_TYPE_NEST_LOOP;
+		case T_MergeJoin:				return QS_PLAN_NODE_TYPE_MERGE_JOIN;
+		case T_HashJoin:				return QS_PLAN_NODE_TYPE_HASH_JOIN;
+
+		/* materialization, ordering, grouping */
+		case T_Material:				return QS_PLAN_NODE_TYPE_MATERIAL;
+		case T_Memoize:					return QS_PLAN_NODE_TYPE_MEMOIZE;
+		case T_Sort:					return QS_PLAN_NODE_TYPE_SORT;
+		case T_IncrementalSort:			return QS_PLAN_NODE_TYPE_INCREMENTAL_SORT;
+		case T_Group:					return QS_PLAN_NODE_TYPE_GROUP;
+		case T_Agg:						return QS_PLAN_NODE_TYPE_AGG;
+		case T_WindowAgg:				return QS_PLAN_NODE_TYPE_WINDOW_AGG;
+		case T_Unique:					return QS_PLAN_NODE_TYPE_UNIQUE;
+		case T_Hash:					return QS_PLAN_NODE_TYPE_HASH;
+		case T_SetOp:					return QS_PLAN_NODE_TYPE_SET_OP;
+		case T_LockRows:				return QS_PLAN_NODE_TYPE_LOCK_ROWS;
+		case T_Limit:					return QS_PLAN_NODE_TYPE_LIMIT;
+
+		/* intra-node parallelism */
+		case T_Gather:					return QS_PLAN_NODE_TYPE_GATHER;
+		case T_GatherMerge:				return QS_PLAN_NODE_TYPE_GATHER_MERGE;
+
+		/* Cloudberry MPP nodes */
+		case T_Motion:					return QS_PLAN_NODE_TYPE_MOTION;
+		case T_Sequence:				return QS_PLAN_NODE_TYPE_SEQUENCE;
+		case T_ShareInputScan:			return QS_PLAN_NODE_TYPE_SHARE_INPUT_SCAN;
+		case T_SplitUpdate:				return QS_PLAN_NODE_TYPE_SPLIT_UPDATE;
+		case T_AssertOp:				return QS_PLAN_NODE_TYPE_ASSERT_OP;
+		case T_PartitionSelector:		return QS_PLAN_NODE_TYPE_PARTITION_SELECTOR;
+		case T_RuntimeFilter:			return QS_PLAN_NODE_TYPE_RUNTIME_FILTER;
+		case T_TupleSplit:				return QS_PLAN_NODE_TYPE_TUPLE_SPLIT;
+		case T_TableFunctionScan:		return QS_PLAN_NODE_TYPE_TABLE_FUNCTION_SCAN;
+		case T_DynamicSeqScan:			return QS_PLAN_NODE_TYPE_DYNAMIC_SEQ_SCAN;
+		case T_DynamicIndexScan:		return QS_PLAN_NODE_TYPE_DYNAMIC_INDEX_SCAN;
+		case T_DynamicIndexOnlyScan:	return QS_PLAN_NODE_TYPE_DYNAMIC_INDEX_ONLY_SCAN;
+		case T_DynamicBitmapIndexScan:	return QS_PLAN_NODE_TYPE_DYNAMIC_BITMAP_INDEX_SCAN;
+		case T_DynamicBitmapHeapScan:	return QS_PLAN_NODE_TYPE_DYNAMIC_BITMAP_HEAP_SCAN;
+		case T_DynamicForeignScan:		return QS_PLAN_NODE_TYPE_DYNAMIC_FOREIGN_SCAN;
+
+		default:
+			elog(DEBUG1, "pg_query_state: unmapped plan NodeTag %d", (int) tag);
+			return QS_PLAN_NODE_TYPE_UNSPECIFIED;
+	}
+}
+
+/*
  * qs_planstate_walker -- depth-first traversal of a PlanState tree.
  *
  * Visits every node in the tree rooted at `planstate`, calling `executor`
  * on each node before recursing.  Handles all node types that have child
- * plan states (Append, MergeAppend, BitmapAnd/Or, SubqueryScan, CustomScan,
- * init-plans, and sub-plans).
+ * plan states (Append, MergeAppend, Sequence, BitmapAnd/Or, SubqueryScan,
+ * CustomScan, init-plans, and sub-plans) -- keep the switch below in step with
+ * the "special child plans" switch in ExplainNode().
  *
  * Parameters:
  *   planstate     -- root of the subtree to walk (NULL is a no-op)
@@ -306,6 +403,14 @@ qs_planstate_walker(PlanState *planstate,
 									qs_walker_ctx, depth + 1);
 			break;
 		}
+		case T_Sequence:
+		{
+			SequenceState *ss = (SequenceState *) planstate;
+			for (int i = 0; i < ss->numSubplans; i++)
+				qs_planstate_walker(ss->subplans[i], executor,
+									qs_walker_ctx, depth + 1);
+			break;
+		}
 		case T_BitmapAnd:
 		{
 			BitmapAndState *bas = (BitmapAndState *) planstate;
@@ -371,7 +476,7 @@ qs_get_node_stats(PlanState *planstate, QsWalkerContext *qs_walker_ctx)
 	/* Plan-tree position. */
 	nodestat->plan_node_id        = planstate->plan->plan_node_id;
 	nodestat->parent_plan_node_id = qs_walker_ctx->parent_plan_node_id;
-	nodestat->node_tag            = nodeTag(planstate->plan);
+	nodestat->node_type           = qs_map_node_type(nodeTag(planstate->plan));
 	nodestat->slice_id            = qs_walker_ctx->slice_id;
 	nodestat->segindex            = qs_reporting_segid();
 	nodestat->dbid                = GpIdentity.dbid;
@@ -528,23 +633,24 @@ qs_debug_node_sample(GpscNodeSample *s)
 {
 	elog(DEBUG1,
 		 "GpscNodeSample: "
-		 "plan_node_id=%d parent=%d node_tag=%d "
+		 "plan_node_id=%d parent=%d node_type=%d "
 		 "slice_id=%d segindex=%d "
 		 "tmid=%d ssid=%d ccnt=%d "
 		 "plan_rows=%.0f "
 		 "ntuples=%.0f tuplecount=%.0f nloops=%.0f "
 		 "startup=%f total=%f firsttuple=%f "
-		 "shared_blks_hit=%lu shared_blks_read=%lu "
-		 "workfile_created=%d workmem_used=%ld workmem_wanted=%ld "
+		 "shared_blks_hit=" UINT64_FORMAT " shared_blks_read=" UINT64_FORMAT " "
+		 "workfile_created=%d workmem_used=" INT64_FORMAT
+		 " workmem_wanted=" INT64_FORMAT " "
 		 "node_status=%d",
-		 s->plan_node_id, s->parent_plan_node_id, s->node_tag,
+		 s->plan_node_id, s->parent_plan_node_id, (int) s->node_type,
 		 s->slice_id, s->segindex,
 		 s->tmid, s->ssid, s->ccnt,
 		 s->plan_rows,
 		 s->ntuples, s->tuplecount, s->nloops,
 		 s->startup, s->total, s->firsttuple,
-		 s->shared_blks_hit, s->shared_blks_read,
-		 (int) s->workfile_created, (long) s->workmem_used, (long) s->workmem_wanted,
+		 (uint64) s->shared_blks_hit, (uint64) s->shared_blks_read,
+		 (int) s->workfile_created, (int64) s->workmem_used, (int64) s->workmem_wanted,
 		 (int) s->node_status);
 }
 
@@ -642,6 +748,13 @@ emit_node_batch(List *per_node_stats, const char *trace_id)
  * Returns a palloc'd string in the current context, or NULL when queryDesc is
  * NULL.  Intended for the coordinator (QD) only: on a QE the plan subtree can
  * reach child PlanStates from other slices that are not instantiated here.
+ *
+ * Must be called with interrupts already held, which SendQueryState() does for
+ * the whole collection.  Taking a nested hold here would be worse than
+ * redundant: ExplainPrintPlan() can raise an error, and the non-local jump out
+ * would skip the matching RESUME_INTERRUPTS(), leaving the count permanently
+ * elevated once the caller dismisses the error -- and a backend whose holdoff
+ * count never returns to zero can no longer be cancelled or terminated.
  */
 static char *
 build_plan_doc(QueryDesc *queryDesc, ExplainFormat format)
@@ -651,20 +764,18 @@ build_plan_doc(QueryDesc *queryDesc, ExplainFormat format)
 	if (queryDesc == NULL)
 		return NULL;
 
-	HOLD_INTERRUPTS();
-	{
-		es = NewExplainState();
-		es->format  = format;
-		es->verbose = true;
-		es->costs   = true;
-		es->runtime = true;
-		ExplainBeginOutput(es);
-		ExplainOpenGroup("Query", NULL, true, es);
-		ExplainPrintPlan(es, queryDesc);
-		ExplainCloseGroup("Query", NULL, true, es);
-		ExplainEndOutput(es);
-	}
-	RESUME_INTERRUPTS();
+	Assert(InterruptHoldoffCount > 0);
+
+	es = NewExplainState();
+	es->format  = format;
+	es->verbose = true;
+	es->costs   = true;
+	es->runtime = true;
+	ExplainBeginOutput(es);
+	ExplainOpenGroup("Query", NULL, true, es);
+	ExplainPrintPlan(es, queryDesc);
+	ExplainCloseGroup("Query", NULL, true, es);
+	ExplainEndOutput(es);
 
 	return es->str->data;
 }

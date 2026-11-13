@@ -62,7 +62,7 @@ message SetPerNodeBatchReq {
 message BatchNode {
     int32          plan_node_id        = 1;
     int32          parent_plan_node_id = 2;
-    int32          node_type           = 3;   /* raw NodeTag value */
+    PlanNodeType   node_type           = 3;   /* stable; NOT a raw NodeTag */
     int32          slice_id            = 4;
     double         plan_rows           = 5;   /* planner estimate */
     int32          relation_oid        = 6;   /* scan relation OID, 0 otherwise */

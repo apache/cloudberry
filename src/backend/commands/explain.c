@@ -2967,9 +2967,16 @@ ExplainNode(PlanState *planstate, List *ancestors,
 	if (es->wal && planstate->instrument)
 		show_wal_usage(es, &planstate->instrument->walusage);
 
-	/* Show worker detail after query execution */
-	if (es->analyze && es->verbose && planstate->worker_instrument
-		&& !es->runtime)
+	/*
+	 * Prepare per-worker buffer/WAL usage, after query execution.
+	 *
+	 * es->workers_state is NULL when per-worker detail is hidden (see
+	 * es->hide_workers), and ExplainOpenWorker() below requires it, so testing
+	 * it is what keeps this safe -- planstate->worker_instrument alone is not
+	 * enough.
+	 */
+	if (es->workers_state && planstate->worker_instrument &&
+		(es->buffers || es->wal) && es->verbose && !es->runtime)
 	{
 		WorkerInstrumentation *w = planstate->worker_instrument;
 
@@ -4505,16 +4512,27 @@ show_instrumentation_count(const char *qlabel, int which,
 
 	if (!es->analyze || !planstate->instrument)
 		return;
-	nloops = planstate->instrument->nloops;
+
 	if (which == 2)
-		nfiltered = ((nloops > 0) ? planstate->instrument->nfiltered2 / nloops : 0);
+		nfiltered = planstate->instrument->nfiltered2;
 	else
-		nfiltered = ((nloops > 0) ? planstate->instrument->nfiltered1 / nloops : 0);
+		nfiltered = planstate->instrument->nfiltered1;
 	nloops = planstate->instrument->nloops;
 
-	/* In text mode, suppress zero counts; they're not interesting enough */
+	/*
+	 * In text mode, suppress zero counts; they're not interesting enough.
+	 *
+	 * The nloops == 0 case is what runtime mode hits for the whole of the first
+	 * loop, so the counters cannot be averaged there; report 0 rather than
+	 * dividing by zero.
+	 */
 	if (nfiltered > 0 || es->format != EXPLAIN_FORMAT_TEXT)
-		ExplainPropertyFloat(qlabel, NULL, nfiltered, 0, es);
+	{
+		if (nloops > 0)
+			ExplainPropertyFloat(qlabel, NULL, nfiltered / nloops, 0, es);
+		else
+			ExplainPropertyFloat(qlabel, NULL, 0.0, 0, es);
+	}
 }
 
 /*
