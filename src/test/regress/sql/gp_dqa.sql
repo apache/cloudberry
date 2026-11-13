@@ -23,8 +23,6 @@ analyze dqa_t2;
 -- With the default very small cost, the planner often prefer to just Gather
 -- all the rows to the QD. We want to test the more complicated multi-tage DQA
 -- plans here, without using a huge number of rows.
--- GPDB_14_MERGE_FIXME: `DedupCost` seems to be computed wrongly caused by pg's
--- change of get_agg_clause_costs implementation.
 set gp_motion_cost_per_row=2;
 
 set enable_hashagg=on;
@@ -644,3 +642,72 @@ from mdqa_part where b between 0 and 2 group by a;
 
 reset optimizer_enable_multiple_distinct_aggs;
 drop table mdqa_part;
+
+-- Test that the HashAggregates removing the duplicates after a TupleSplit in
+-- a multi-DQA plan are not charged the costs of the aggregates. They only
+-- deduplicate their input and never run an aggregate transition function, so
+-- an expensive transition function must only add to the cost of the Partial
+-- Aggregate above them.
+--
+-- The aggregate costs are checked through a helper that reports, for each
+-- Aggregate node, whether its own cost (its total cost minus the total cost of
+-- its child) includes the cost of the expensive transition function: at
+-- 100000 * cpu_operator_cost per input row, that adds thousands to any node
+-- charged with it, while the other costs here stay well below 1000.
+set optimizer=off;
+set gp_motion_cost_per_row=2;
+set enable_hashagg=on;
+set enable_groupagg=off;
+
+create function dqa_costly_int4_sum(int8, int4) returns int8
+  as 'int84pl' language internal immutable strict cost 100000;
+create aggregate dqa_costly_sum(int4) (
+  sfunc = dqa_costly_int4_sum, stype = int8, combinefunc = int8pl, initcond = 0
+);
+
+create function dqa_agg_node_costs(query text)
+returns table (depth int, node text, charged_agg_cost bool)
+language plpgsql as $$
+declare
+  plan json;
+begin
+  execute 'explain (format json) ' || query into plan;
+  return query
+  with recursive n(depth, p) as (
+    select 0, plan->0->'Plan'
+    union all
+    select n.depth + 1, c from n, json_array_elements(n.p->'Plans') c
+  )
+  select n.depth,
+         concat_ws(' ', n.p->>'Partial Mode', n.p->>'Strategy', n.p->>'Node Type'),
+         (n.p->>'Total Cost')::float8 -
+           coalesce((select max((c->>'Total Cost')::float8)
+                     from json_array_elements(n.p->'Plans') c), 0) > 1000
+  from n
+  where n.p->>'Node Type' = 'Aggregate'
+  order by n.depth;
+end;
+$$;
+
+-- With a GROUP BY, both the streaming and the non-streaming dedup
+-- HashAggregates are created.
+explain (costs off)
+select dqa_costly_sum(distinct d), count(distinct c) from dqa_t1 group by i;
+select * from dqa_agg_node_costs(
+  'select dqa_costly_sum(distinct d), count(distinct c) from dqa_t1 group by i');
+select dqa_costly_sum(distinct d), count(distinct c) from dqa_t1 group by i;
+
+-- Without a GROUP BY, only the streaming dedup HashAggregate is created.
+explain (costs off)
+select dqa_costly_sum(distinct d), count(distinct c) from dqa_t1;
+select * from dqa_agg_node_costs(
+  'select dqa_costly_sum(distinct d), count(distinct c) from dqa_t1');
+select dqa_costly_sum(distinct d), count(distinct c) from dqa_t1;
+
+drop function dqa_agg_node_costs(text);
+drop aggregate dqa_costly_sum(int4);
+drop function dqa_costly_int4_sum(int8, int4);
+reset enable_groupagg;
+reset enable_hashagg;
+reset gp_motion_cost_per_row;
+reset optimizer;
