@@ -895,11 +895,13 @@ main(int argc, char **argv)
 
 	/* archiveFormat specific setup */
 	if (archiveFormat == archNull)
-	{
 		plainText = 1;
-
+	if (archiveFormat == archNull ||
+		archiveFormat == archTar)
+	{
 		/*
 		 * If you don't provide a restrict key, one will be appointed for you.
+		 * tar format uses this for its undocumented restore.sql file.
 		 */
 		if (!dopt.restrict_key)
 			dopt.restrict_key = generate_restrict_key();
@@ -909,7 +911,8 @@ main(int argc, char **argv)
 			pg_fatal("invalid restrict key");
 	}
 	else if (dopt.restrict_key)
-		pg_fatal("option --restrict-key can only be used with --format=plain");
+		pg_fatal("option %s can only be used with %s or %s",
+				 "--restrict-key", "--format=plain", "--format=tar");
 
 	/*
 	 * Custom and directory formats are compressed by default with gzip when
@@ -5438,6 +5441,59 @@ binary_upgrade_set_namespace_oid(Archive *fout, PQExpBuffer upgrade_buffer,
 	destroyPQExpBuffer(upgrade_query);
 }
 
+/*
+ * Clip a name to at most maxlen bytes without splitting a multibyte character,
+ * like pg_mbcliplen() does in the backend.
+ */
+static int
+clip_type_name_len(const char *name, int maxlen, int encoding)
+{
+	int			len = 0;
+
+	while (name[len] != '\0')
+	{
+		int			l = PQmblen(&name[len], encoding);
+
+		if (len + l > maxlen)
+			break;
+		len += l;
+	}
+
+	return len;
+}
+
+/*
+ * The name that makeMultirangeTypeName() generates for a range type.
+ */
+static char *
+make_multirange_type_name(const char *range_name, int encoding)
+{
+	const char *rangestr = strstr(range_name, "range");
+	char	   *buf;
+
+	if (rangestr)
+		buf = psprintf("%.*smulti%s", (int) (rangestr - range_name),
+					   range_name, rangestr);
+	else
+		buf = psprintf("%.*s_multirange", NAMEDATALEN - 12, range_name);
+
+	buf[clip_type_name_len(buf, NAMEDATALEN - 1, encoding)] = '\0';
+
+	return buf;
+}
+
+/*
+ * The name that makeArrayTypeName() generates for a type, assuming there is
+ * no conflict with an existing type.
+ */
+static char *
+make_array_type_name(const char *type_name, int encoding)
+{
+	return psprintf("_%.*s",
+					clip_type_name_len(type_name, NAMEDATALEN - 2, encoding),
+					type_name);
+}
+
 static void
 binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 										 PQExpBuffer upgrade_buffer,
@@ -5559,26 +5615,14 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 			pg_type_multirange_oid = get_next_possible_free_pg_type_oid(fout, upgrade_query);
 			pg_type_multirange_array_oid = get_next_possible_free_pg_type_oid(fout, upgrade_query);
 			/*
-			 * GPDB_14_MERGE_FIXEME:
-			 * namspaceoid: use param pg_type_ns_oid.
-			 * typename: replace param pg_type_name's 'range' with 'multirange' with a '_" prefix
+			 * The new cluster assigns these OIDs by type name and namespace,
+			 * so use the names that CREATE TYPE will generate.
 			 */
 			pg_type_multirange_array_nsoid = pg_type_multirange_nsoid = pg_type_ns_oid;
-			
-			StringInfo strinfo = makeStringInfo();
-
-			appendStringInfoString(strinfo, pg_type_name);
-			replaceStringInfoString(strinfo, "range", "multirange");
-			pg_type_multirange_typename = psprintf("_%s", strinfo->data);
-
-			resetStringInfo(strinfo);
-
-			appendStringInfoString(strinfo, pg_type_name);
-			replaceStringInfoString(strinfo, "range", "multirange_array");
-			pg_type_multirange_array_typename = psprintf("_%s", strinfo->data);
-
-			pfree(strinfo->data);
-			pfree(strinfo);
+			pg_type_multirange_typename =
+				make_multirange_type_name(pg_type_name, fout->encoding);
+			pg_type_multirange_array_typename =
+				make_array_type_name(pg_type_multirange_typename, fout->encoding);
 		}
 
 		appendPQExpBufferStr(upgrade_buffer,

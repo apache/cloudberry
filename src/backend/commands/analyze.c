@@ -2662,9 +2662,10 @@ parse_record_to_string(char *string, TupleDesc tupdesc, char** values, bool *nul
 }
 
 /*
- * Build a querydesc for a sql, set "dest" to portal->holdStore
+ * Build a querydesc for a sql, sending results to the sample tuplestore.
  */
-static QueryDesc *build_querydesc(Portal portal, char *sql)
+static QueryDesc *build_querydesc(Tuplestorestate *sampleStore,
+								MemoryContext sampleContext, char *sql)
 {
 	List	   *raw_parsetree_list;
 	RawStmt	   *parsetree;
@@ -2675,8 +2676,8 @@ static QueryDesc *build_querydesc(Portal portal, char *sql)
 	QueryDesc  *queryDesc = NULL;
 	destReceiver = CreateDestReceiver(DestTuplestore);
 	SetTuplestoreDestReceiverParams(destReceiver,
-									portal->holdStore,
-									portal->holdContext,
+									sampleStore,
+									sampleContext,
 									false, NULL, NULL);
 
 	/*
@@ -2722,7 +2723,7 @@ static QueryDesc *build_querydesc(Portal portal, char *sql)
 }
 
 static int
-process_sample_rows(Portal portal,
+process_sample_rows(Tuplestorestate *sampleStore,
 					QueryDesc  *queryDesc,
 					Relation onerel,
 					HeapTuple *rows,
@@ -2833,7 +2834,7 @@ process_sample_rows(Portal portal,
 
 		CHECK_FOR_INTERRUPTS();
 
-		ok = tuplestore_gettupleslot(portal->holdStore, true, false, slot);
+		ok = tuplestore_gettupleslot(sampleStore, true, false, slot);
 
 		if (!ok)
 			break;
@@ -3013,7 +3014,9 @@ acquire_sample_rows_dispatcher(Relation onerel, bool inh, int elevel,
 	int			perseg_targrows;
 	int			sampleTuples;	/* 32 bit - assume that number of tuples will not > 2B */
 	char	   *sql;
-	Portal		portal;
+	MemoryContext sampleContext;
+	MemoryContext oldContext;
+	Tuplestorestate *sampleStore;
 	QueryDesc  *queryDesc = NULL;
 
 	Assert(targrows > 0.0);
@@ -3064,18 +3067,24 @@ acquire_sample_rows_dispatcher(Relation onerel, bool inh, int elevel,
 	 * Use ExecutorStart|ExecutorRun|ExecutorEnd to execute a plan and store results
 	 * into tuplestore could handle this situation well.
 	 *
-	 * Execute the given query and store the results into portal->holdStore to
+	 * Execute the given query and store the results in a tuplestore to
 	 * avoid memory error.
 	 */
 	elog(elevel, "Executing SQL: %s", str.data);
 	sql = str.data;
-	/* Create a new portal to run the query in */
-	portal = CreateNewPortal();
-	/* Don't display the portal in pg_cursors, it is for internal use only */
-	portal->visible = false;
-	/* use a tuplestore to store received tuples to avoid out of memory error */
-	PortalCreateHoldStore(portal);
-	queryDesc = build_querydesc(portal, sql);
+	/*
+	 * This query runs directly through the executor, not PortalStart/PortalRun.
+	 * A portal used only as a tuplestore owner would remain PORTAL_NEW, which
+	 * correctly cannot be dropped while setup is in progress. Keep sampling
+	 * storage in its own transaction-lifetime context instead.
+	 */
+	sampleContext = AllocSetContextCreate(CurrentMemoryContext,
+										  "Analyze sample store",
+										  ALLOCSET_DEFAULT_SIZES);
+	oldContext = MemoryContextSwitchTo(sampleContext);
+	sampleStore = tuplestore_begin_heap(false, false, work_mem);
+	MemoryContextSwitchTo(oldContext);
+	queryDesc = build_querydesc(sampleStore, sampleContext, sql);
 
 	/* Call ExecutorStart to prepare the plan for execution */
 	ExecutorStart(queryDesc, 0);
@@ -3094,12 +3103,13 @@ acquire_sample_rows_dispatcher(Relation onerel, bool inh, int elevel,
 	/*
 	 * Step3: process results.
 	 */
-	sampleTuples = process_sample_rows(portal, queryDesc, onerel, rows,
+	sampleTuples = process_sample_rows(sampleStore, queryDesc, onerel, rows,
 									targrows, totalrows, totaldeadrows);
 
 	ExecutorEnd(queryDesc);
 	FreeQueryDesc(queryDesc);
-	PortalDrop(portal, false);
+	tuplestore_end(sampleStore);
+	MemoryContextDelete(sampleContext);
 
 	return sampleTuples;
 }

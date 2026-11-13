@@ -205,6 +205,7 @@ jobs:
     if: needs.check-skip.outputs.should_skip != 'true'
     outputs:
       test-matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has-tests: ${{ steps.set-matrix.outputs.has-tests }}
 
     steps:
       - id: set-matrix
@@ -222,6 +223,9 @@ jobs:
           # Define base test configurations
           ALL_TESTS='{
             "include": [
+              {"test":"ic-cbdb-parallel",
+               "make_configs":["src/test/regress:installcheck-cbdb-parallel"]
+              }
             ]
           }'
 
@@ -297,6 +301,7 @@ jobs:
             echo "matrix<<EOF"
             echo "$RESULT"
             echo "EOF"
+            echo "has-tests=$(echo "$RESULT" | jq -r '.include | length > 0')"
           } >> "$GITHUB_OUTPUT"
 
           echo "=== Matrix Preparation Complete ==="
@@ -759,6 +764,7 @@ jobs:
   test:
     name: ${{ matrix.test }}
     needs: [check-skip, build, prepare-test-matrix]
+    if: needs.prepare-test-matrix.outputs.has-tests == 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 120
     # actionlint-allow matrix[*].pg_settings
@@ -776,8 +782,33 @@ jobs:
         --ulimit core=-1
         --cgroupns=host
         -v /sys/fs/cgroup:/sys/fs/cgroup:rw
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
 
     steps:
+      - name: Free Disk Space
+        if: needs.check-skip.outputs.should_skip != 'true'
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
+
+          # Remove pre-installed tools from host to free disk space
+          rm -rf /host_opt/hostedtoolcache || true   # GitHub Actions tool cache
+          rm -rf /host_usr_local/lib/android || true # Android SDK
+          rm -rf /host_usr_share/dotnet || true      # .NET SDK
+          rm -rf /host_opt/ghc || true               # Haskell GHC
+          rm -rf /host_usr_local/.ghcup || true      # Haskell GHCup
+          rm -rf /host_usr_share/swift || true       # Swift
+          rm -rf /host_usr_local/share/powershell || true  # PowerShell
+          rm -rf /host_usr_local/share/chromium || true    # Chromium
+          rm -rf /host_usr_share/miniconda || true   # Miniconda
+          rm -rf /host_opt/az || true                # Azure CLI
+          rm -rf /host_usr_share/sbt || true         # Scala Build Tool
+
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
       - name: Skip Check
         if: needs.check-skip.outputs.should_skip == 'true'
         run: |
@@ -1635,6 +1666,11 @@ jobs:
 
               if [[ "${{ needs.build.result }}" == "success" && "${{ needs.test.result }}" == "success" ]]; then
                 echo "✅ Pipeline completed successfully"
+              elif [[ "${{ needs.build.result }}" == "success" && \
+                      "${{ needs.prepare-test-matrix.result }}" == "success" && \
+                      "${{ needs.prepare-test-matrix.outputs.has-tests }}" == "false" && \
+                      "${{ needs.test.result }}" == "skipped" ]]; then
+                echo "ℹ️ Build completed; no debug tests are configured"
               else
                 echo "⚠️ Pipeline completed with failures"
 
@@ -1654,7 +1690,11 @@ jobs:
       - name: Notify on failure
         if: |
           needs.check-skip.outputs.should_skip != 'true' &&
-          (needs.build.result != 'success' || needs.test.result != 'success')
+          (needs.build.result != 'success' ||
+           (needs.test.result != 'success' &&
+            !(needs.prepare-test-matrix.result == 'success' &&
+              needs.prepare-test-matrix.outputs.has-tests == 'false' &&
+              needs.test.result == 'skipped')))
         run: |
           echo "::error::Build/Test pipeline failed! Check job summaries and logs for details"
           echo "Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"

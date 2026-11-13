@@ -42,9 +42,15 @@ RETURNS BOOL AS $$
     all_info = plpy.execute('''
         SELECT sample::json->'{name}' AS cpu FROM cpu_usage_samples
     '''.format(name=groupname))
-    usage = sum(float(row['cpu']) for row in all_info) / len(all_info)
+    samples = [float(row['cpu']) for row in all_info]
+    usage = sum(samples) / len(samples)
 
-    return abs(usage - expect_cpu_usage) <= err_rate
+    ok = abs(usage - expect_cpu_usage) <= err_rate
+    if not ok:
+        # only printed on failure, so the expected output is unchanged
+        plpy.warning('{}: average cpu usage {:.2f}, expected {} +/- {}, samples {}'.format(
+            groupname, usage, expect_cpu_usage, err_rate, samples))
+    return ok
 $$ LANGUAGE plpython3u;
 
 CREATE OR REPLACE FUNCTION busy() RETURNS void AS $$

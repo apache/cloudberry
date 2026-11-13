@@ -85,8 +85,9 @@ github:
     - fairyfar
     - MutableFire
 
-  # Branch protection rules for the main branch
+  # Branch protection rules
   protected_branches:
+    # Branch protection for the main branch
     main:
       # Require status checks to pass before merging
       required_status_checks:
@@ -146,6 +147,17 @@ github:
 
       # Require conversation threads to be resolved
       required_conversation_resolution: true
+
+    # Branch protection for the branches that we keep for reference only.
+    # An empty rule adds no review or status check requirements, but it
+    # stops force pushes to the branch and the deletion of the branch.
+
+    # Release branch of the 1.x series (before the project joined the ASF)
+    REL_1_STABLE: {}
+
+    # Archive of the main branch (PostgreSQL 14 kernel) before the
+    # PostgreSQL 16 merge
+    PG14_ARCHIVE: {}
 
   # Pull request settings
   pull_requests:

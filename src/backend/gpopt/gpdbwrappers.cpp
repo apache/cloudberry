@@ -2743,6 +2743,19 @@ gpdb::IsTypeRange(Oid typid)
 	return false;
 }
 
+// Returns true if type is a MULTIRANGE
+// pg_type (typtype = 'm')
+bool
+gpdb::IsTypeMultirange(Oid typid)
+{
+	GP_WRAP_START;
+	{
+		return type_is_multirange(typid);
+	}
+	GP_WRAP_END;
+	return false;
+}
+
 char *
 gpdb::GetRelAmName(Oid reloid)
 {

@@ -56,7 +56,6 @@
 #
 #                 When true, enables:
 #                   --enable-debug
-#                   --enable-profiling
 #                   --enable-cassert
 #                   --enable-debug-extensions
 #
@@ -137,7 +136,6 @@ CONFIGURE_DEBUG_OPTS=""
 
 if [ "${ENABLE_DEBUG:-false}" = "true" ]; then
     CONFIGURE_DEBUG_OPTS="--enable-debug \
-                          --enable-profiling \
                           --enable-cassert \
                           --enable-debug-extensions"
 fi

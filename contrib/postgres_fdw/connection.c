@@ -15,6 +15,7 @@
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/pg_user_mapping.h"
+#include "cdb/cdbvars.h"
 #include "commands/defrem.h"
 #include "funcapi.h"
 #include "postgres_fdw.h"
@@ -527,6 +528,19 @@ connect_pg_server(ForeignServer *server, UserMapping *user)
 		/* verify the set of connection parameters */
 		check_conn_params(keywords, values, user);
 
+		/*
+		 * Final security check on proxied keywords. Note that expand_dbname
+		 * is false below; we don't need to worry about parsing dbname itself.
+		 */
+		for (int i = 0; keywords[i]; i++)
+		{
+			if (!libpqsrv_is_valid_proxy_option(keywords[i]))
+				ereport(ERROR,
+						errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+						errmsg("permission denied to set connection option \"%s\"",
+							   keywords[i]));
+		}
+
 		/* OK to make connection */
 		conn = libpqsrv_connect_params(keywords, values,
 									   false,	/* expand_dbname */
@@ -998,6 +1012,31 @@ pgfdw_xact_callback(XactEvent event, void *arg)
 
 			switch (event)
 			{
+				case XACT_EVENT_PRE_PREPARE:
+
+					/*
+					 * We disallow any remote transactions, since it's not
+					 * very reasonable to hold them open until the prepared
+					 * transaction is committed.  For the moment, throw error
+					 * unconditionally; later we might allow read-only cases.
+					 * Note that the error will cause us to come right back
+					 * here with event == XACT_EVENT_ABORT, so we'll clean up
+					 * the connection state at that point.
+					 *
+					 * GPDB: on a segment, PREPARE is the first phase of the
+					 * commit of a distributed transaction that wrote on more
+					 * than one segment, and the local transaction will be
+					 * committed by COMMIT PREPARED, which doesn't come back
+					 * here.  So commit the remote transactions now, as on
+					 * PRE_COMMIT; otherwise they would never be committed.
+					 * Like on PRE_COMMIT, the remote changes stay committed
+					 * if the distributed transaction aborts afterwards.
+					 */
+					if (Gp_role != GP_ROLE_EXECUTE)
+						ereport(ERROR,
+								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								 errmsg("cannot PREPARE a transaction that has operated on postgres_fdw foreign tables")));
+					/* FALLTHROUGH */
 				case XACT_EVENT_PARALLEL_PRE_COMMIT:
 				case XACT_EVENT_PRE_COMMIT:
 
@@ -1041,18 +1080,9 @@ pgfdw_xact_callback(XactEvent event, void *arg)
 					entry->have_prep_stmt = false;
 					entry->have_error = false;
 					break;
-				case XACT_EVENT_PRE_PREPARE:
-				case XACT_EVENT_PREPARE:
-					/*
-					 * FDW update is not the same as Cloudberry segments update,
-					 * doesn't need the two-phase commit.
-					 *
-					 * Besides that, Cloudberry prepares on many cases including
-					 * DTX distributing for MPP usages, just break here.
-					 */
-					break;
 				case XACT_EVENT_PARALLEL_COMMIT:
 				case XACT_EVENT_COMMIT:
+				case XACT_EVENT_PREPARE:
 					/* Pre-commit should have closed the open transaction */
 					elog(ERROR, "missed cleaning up connection during pre-commit");
 					break;
@@ -1080,13 +1110,13 @@ pgfdw_xact_callback(XactEvent event, void *arg)
 	if (pending_entries || cancel_requested)
 	{
 		if (event == XACT_EVENT_PARALLEL_PRE_COMMIT ||
-			event == XACT_EVENT_PRE_COMMIT)
+			event == XACT_EVENT_PRE_COMMIT ||
+			event == XACT_EVENT_PRE_PREPARE)
 		{
 			Assert(cancel_requested == NIL);
 			pgfdw_finish_pre_commit_cleanup(pending_entries);
 		}
-		else if (event != XACT_EVENT_PREPARE &&
-				 event != XACT_EVENT_PRE_PREPARE)
+		else
 		{
 			Assert(event == XACT_EVENT_PARALLEL_ABORT ||
 				   event == XACT_EVENT_ABORT);
@@ -1100,8 +1130,7 @@ pgfdw_xact_callback(XactEvent event, void *arg)
 	 * transaction.  (Note: if we are here during PRE_COMMIT or PRE_PREPARE,
 	 * this saves a useless scan of the hashtable during COMMIT or PREPARE.)
 	 */
-	if (event != XACT_EVENT_PREPARE && event != XACT_EVENT_PRE_PREPARE)
-		xact_got_connection = false;
+	xact_got_connection = false;
 
 	/* Also reset cursor numbering for next transaction */
 	cursor_number = 0;

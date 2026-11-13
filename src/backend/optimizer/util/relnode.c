@@ -376,7 +376,8 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptInfo *parent)
 			}
 
 			if ((root->parse->commandType == CMD_UPDATE ||
-				 root->parse->commandType == CMD_DELETE) &&
+				 root->parse->commandType == CMD_DELETE ||
+				 root->parse->commandType == CMD_MERGE) &&
 				root->parse->resultRelation == relid &&
 				GpPolicyIsReplicated(rel->cdbpolicy))
 			{
