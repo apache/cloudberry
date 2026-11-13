@@ -15085,6 +15085,32 @@ select * from cte2 inner join cte_test3 on cte2.c = cte_test3.a;
 drop table cte_test1;
 drop table cte_test2;
 drop table cte_test3;
+-- Filter estimation with extended statistics must not crash when the memo
+-- group's cached stats were extended incrementally (histograms appended for
+-- columns that the colid -> attno mapping initially lacked). The ROLLUP is
+-- expanded into a CTE whose consumers request different column sets, so the
+-- stats of the dimension table's scan group get appended with the filter
+-- column after the initial derivation.
+create table extstats_dim (d_sk int, d_filter int, d_a int, d_b int, d_c int) distributed by (d_sk);
+create table extstats_fact (f_sk int, f_val int) distributed by (f_sk);
+insert into extstats_dim select g, g % 20, g % 3, g % 4, g % 5 from generate_series(1, 100) g;
+insert into extstats_fact select g % 100 + 1, g from generate_series(1, 1000) g;
+create statistics extstats_dim_nd (ndistinct) on d_a, d_b, d_c from extstats_dim;
+analyze extstats_dim;
+analyze extstats_fact;
+set optimizer = on;
+select count(*) from (
+  select d_a, d_b, d_c, sum(f_val) s
+  from extstats_fact, extstats_dim
+  where f_sk = d_sk and d_filter between 5 and 10
+  group by rollup(d_a, d_b, d_c)) x;
+ count 
+-------
+    34
+(1 row)
+
+reset optimizer;
+drop table extstats_fact, extstats_dim;
 -- start_ignore
 DROP SCHEMA orca CASCADE;
 NOTICE:  drop cascades to 190 other objects
