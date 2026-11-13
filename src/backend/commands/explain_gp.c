@@ -1116,23 +1116,23 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 		nodeAcc = &nloops;
 	if (nodeAcc)
 	{
-		instr->starttime = nodeAcc->nsimax->starttime;
-		instr->counter = nodeAcc->nsimax->counter;
-		instr->firsttuple = nodeAcc->nsimax->firsttuple;
-		instr->startup = nodeAcc->nsimax->startup;
-		instr->total = nodeAcc->nsimax->total;
-		instr->ntuples = nodeAcc->nsimax->ntuples;
-		instr->ntuples2 = nodeAcc->nsimax->ntuples2;
-		instr->nloops = nodeAcc->nsimax->nloops;
-		instr->nfiltered1 = nodeAcc->nsimax->nfiltered1;
-		instr->nfiltered2 = nodeAcc->nsimax->nfiltered2;
-		instr->prf_work     = nodeAcc->nsimax->prf_work;
-		instr->nfilteredPRF = nodeAcc->nsimax->nfilteredPRF;
-		instr->execmemused = nodeAcc->nsimax->execmemused;
-		instr->workmemused = nodeAcc->nsimax->workmemused;
-		instr->workmemwanted = nodeAcc->nsimax->workmemwanted;
-		instr->workfileCreated = nodeAcc->nsimax->workfileCreated;
-		instr->firststart = nodeAcc->nsimax->firststart;
+		instr->starttime = nodeAcc->rsimax->starttime;
+		instr->counter = nodeAcc->rsimax->counter;
+		instr->firsttuple = nodeAcc->rsimax->firsttuple;
+		instr->startup = nodeAcc->rsimax->startup;
+		instr->total = nodeAcc->rsimax->total;
+		instr->ntuples = nodeAcc->rsimax->ntuples;
+		instr->ntuples2 = nodeAcc->rsimax->ntuples2;
+		instr->nloops = nodeAcc->rsimax->nloops;
+		instr->nfiltered1 = nodeAcc->rsimax->nfiltered1;
+		instr->nfiltered2 = nodeAcc->rsimax->nfiltered2;
+		instr->prf_work = nodeAcc->rsimax->prf_work;
+		instr->nfilteredPRF = nodeAcc->rsimax->nfilteredPRF;
+		instr->execmemused = nodeAcc->rsimax->execmemused;
+		instr->workmemused = nodeAcc->rsimax->workmemused;
+		instr->workmemwanted = nodeAcc->rsimax->workmemwanted;
+		instr->workfileCreated = nodeAcc->rsimax->workfileCreated;
+		instr->firststart = nodeAcc->rsimax->firststart;
 	 }
 
 	/* Buffer usage is summed across all workers, not taken from the winner. */
