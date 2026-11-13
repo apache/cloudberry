@@ -36,9 +36,13 @@
 # Triggers:
 # - Weekly schedule, Saturday 02:00 UTC.
 # - Manual dispatch.
+# - Pull requests that change this file. This is a short run, five
+#   minutes for each oracle, to show that the workflow still works.
+#   Findings do not fail it: they are not caused by the pull request.
 #
 # Notes:
-# - Never runs on pushes or pull requests and is not a required check.
+# - Does not run on other pull requests or on pushes, and is not a
+#   required check.
 # - Runs only in the apache organization; forks are ignored.
 # - The job fails when SQLancer reports a potential bug or a server
 #   logs an assertion failure or a crash. These are raw fuzzer results:
@@ -51,6 +55,9 @@ on:
   # Saturday 02:00 UTC, 10:00 in UTC+8: the runners are idle and the
   # results are there on Monday morning.
   - cron: "0 2 * * 6"
+  pull_request:
+    paths:
+    - .github/workflows/sqlancer-cloudberry.yml
   workflow_dispatch:
     inputs:
       minutes_per_oracle:
@@ -71,6 +78,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # SQLancer has no releases. Move this pin forward on purpose, after
@@ -137,7 +148,12 @@ jobs:
         INPUT_SQLANCER_REF: ${{ inputs.sqlancer_ref }}
       run: |
         set -euo pipefail
-        minutes="${INPUT_MINUTES:-60}"
+        if [ "${GITHUB_EVENT_NAME}" = pull_request ]; then
+          # Only a check that the workflow works.
+          minutes=5
+        else
+          minutes="${INPUT_MINUTES:-60}"
+        fi
         oracles="${INPUT_ORACLES:-NOREC QUERY_PARTITIONING PQS DQP}"
         ref="${INPUT_SQLANCER_REF:-${SQLANCER_REF}}"
 
@@ -414,7 +430,7 @@ jobs:
         retention-days: 30
 
     - name: Fail on findings
-      if: ${{ steps.summary.outcome == 'success' && (steps.summary.outputs.findings != '0' || steps.summary.outputs.events != '0') }}
+      if: ${{ github.event_name != 'pull_request' && steps.summary.outcome == 'success' && (steps.summary.outputs.findings != '0' || steps.summary.outputs.events != '0') }}
       run: |
         echo "::error::SQLancer: ${{ steps.summary.outputs.findings }} finding(s), ${{ steps.summary.outputs.events }} server assertion failure(s) or crash(es). See the job summary."
         exit 1
