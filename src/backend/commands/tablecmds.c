@@ -16476,6 +16476,7 @@ ATPostAlterTypeCleanup(List **wqueue, AlteredTableInfo *tab, LOCKMODE lockmode,
 		Form_pg_constraint con;
 		Oid			relid;
 		Oid			confrelid;
+		char		contype;
 		bool		conislocal;
 
 		tup = SearchSysCache1(CONSTROID, ObjectIdGetDatum(oldId));
@@ -16492,6 +16493,7 @@ ATPostAlterTypeCleanup(List **wqueue, AlteredTableInfo *tab, LOCKMODE lockmode,
 				elog(ERROR, "could not identify relation associated with constraint %u", oldId);
 		}
 		confrelid = con->confrelid;
+		contype = con->contype;
 		conislocal = con->conislocal;
 		ReleaseSysCache(tup);
 
