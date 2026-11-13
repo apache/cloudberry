@@ -65,3 +65,18 @@ FROM (
 ) differences;
 RESET search_path;
 DROP SCHEMA mpp_attribute_version CASCADE;
+
+-- Cloudberry relation kinds and internal heaps do not map one-to-one to
+-- rowtypes. Directory tables have one, bitmap auxiliary heaps do not.
+CREATE DIRECTORY TABLE attver_directory;
+SELECT bool_and(attoptions IS NOT NULL) AS directory_versioned
+FROM pg_attribute
+WHERE attrelid = 'attver_directory'::regclass AND attnum > 0;
+CREATE TABLE attver_bitmap(a int) DISTRIBUTED BY (a);
+CREATE INDEX attver_bitmap_idx ON attver_bitmap USING bitmap(a);
+SELECT count(*) = 1 AND bool_and(reltype = 0) AS bitmap_aux_untyped
+FROM pg_class
+WHERE relnamespace = 'pg_bitmapindex'::regnamespace
+  AND relname = 'pg_bm_' || 'attver_bitmap_idx'::regclass::oid;
+DROP TABLE attver_bitmap;
+DROP DIRECTORY TABLE attver_directory;
