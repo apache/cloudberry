@@ -979,7 +979,10 @@ fsm_vacuum_page(Relation rel, FSMAddress addr,
 static bool
 fsm_does_block_exist(Relation rel, BlockNumber blknumber)
 {
-	SMgrRelation smgr = RelationGetSmgr(rel);
+	SMgrRelation smgr;
+
+	RelationOpenSmgr(rel);
+	smgr = rel->rd_smgr;
 
 	/*
 	 * If below the cached nblocks, the block surely exists.  Otherwise, we
