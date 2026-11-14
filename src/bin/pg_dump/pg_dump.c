@@ -6352,18 +6352,24 @@ getTypes(Archive *fout, int *numTypes)
 	 * cost of the subselect probe for all standard types.  This would have to
 	 * be revisited if the backend ever allows renaming of array types.
 	 */
-	appendPQExpBufferStr(query, "SELECT tableoid, oid, typname, "
-						 "typnamespace, typacl, "
-						 "acldefault('T', typowner) AS acldefault, "
-						 "typowner, "
-						 "typelem, typrelid, "
-						 "CASE WHEN typrelid = 0 THEN ' '::\"char\" "
-						 "ELSE (SELECT relkind FROM pg_class WHERE oid = typrelid) END AS typrelkind, "
-						 "typtype, typisdefined, "
-						 "typname[0] = '_' AND typelem != 0 AND "
-						 "(SELECT typarray FROM pg_type te WHERE oid = pg_type.typelem) = oid AS isarray, "
-						 "typstorage "
-						 "FROM pg_type");
+	/*
+	 * Cloudberry: typstorage here is not pg_type.typstorage but the type's
+	 * default column encoding from pg_type_encoding, which
+	 * dumpTypeStorageOptions emits as ALTER TYPE ... SET DEFAULT ENCODING.
+	 */
+	appendPQExpBufferStr(query, "SELECT t.tableoid, t.oid, t.typname, "
+						 "t.typnamespace, t.typacl, "
+						 "acldefault('T', t.typowner) AS acldefault, "
+						 "t.typowner, "
+						 "t.typelem, t.typrelid, "
+						 "CASE WHEN t.typrelid = 0 THEN ' '::\"char\" "
+						 "ELSE (SELECT relkind FROM pg_class WHERE oid = t.typrelid) END AS typrelkind, "
+						 "t.typtype, t.typisdefined, "
+						 "t.typname[0] = '_' AND t.typelem != 0 AND "
+						 "(SELECT typarray FROM pg_type te WHERE oid = t.typelem) = t.oid AS isarray, "
+						 "coalesce(array_to_string(e.typoptions, ', '), '') AS typstorage "
+						 "FROM pg_type t "
+						 "LEFT JOIN pg_type_encoding e ON t.oid = e.typid");
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
 
@@ -11422,8 +11428,6 @@ dumpNamespace(Archive *fout, const NamespaceInfo *nspinfo)
 	if (dopt->binary_upgrade)
 		binary_upgrade_set_namespace_oid(fout, q, nspinfo->dobj.catId.oid);
 
-	appendPQExpBuffer(q, "CREATE SCHEMA %s;\n", qnspname);
-
 	if (nspinfo->create)
 	{
 		appendPQExpBuffer(delq, "DROP SCHEMA %s;\n", qnspname);
@@ -15074,18 +15078,20 @@ dumpAgg(Archive *fout, const AggInfo *agginfo)
 		if (fout->remoteVersion >= 110000)
 			appendPQExpBufferStr(query,
 								 "aggfinalmodify,\n"
-								 "aggmfinalmodify\n");
+								 "aggmfinalmodify,\n");
 		else
 			appendPQExpBufferStr(query,
 								 "'0' AS aggfinalmodify,\n"
-								 "'0' AS aggmfinalmodify\n");
+								 "'0' AS aggmfinalmodify,\n");
 
-		if (fout->remoteVersion >= 140000)
+		/* Cloudberry: only Cloudberry 2 and later have aggrepsafeexec */
+		if (fout->remoteVersion >= 140000 &&
+			fout->version.type == Cloudberry && fout->version.version >= 2)
 			appendPQExpBufferStr(query,
-									"aggrepsafeexec,\n");
+								 "aggrepsafeexec\n");
 		else
 			appendPQExpBufferStr(query,
-									 "false AS aggrepsafeexec,\n");
+								 "false AS aggrepsafeexec\n");
 
 		appendPQExpBufferStr(query,
 							 "FROM pg_catalog.pg_aggregate a, pg_catalog.pg_proc p "
