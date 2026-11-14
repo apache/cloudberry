@@ -15,6 +15,7 @@
 /testtablespace_temp_tablespace/
 
 twophase_pqexecparams
+/jit_parallel_schedule
 
 data/part_ext.tbl
 data/wet_csv?.tbl

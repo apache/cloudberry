@@ -15,6 +15,9 @@ PG_CPPFLAGS += -I$(libpq_srcdir) -Isrc/protos -Isrc -Iinclude
 SHLIB_LINK += -lprotobuf -lstdc++
 EXTRA_CLEAN = src/protos
 
+# Avoid building LLVM Bitcode for gp_stats_collector module.
+with_llvm = no
+
 ifdef USE_PGXS
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)

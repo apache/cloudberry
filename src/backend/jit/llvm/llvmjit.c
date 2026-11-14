@@ -40,6 +40,7 @@
 #endif
 
 #include "jit/llvmjit.h"
+#include "jit/llvmjit_backport.h"
 #include "jit/llvmjit_emit.h"
 #include "miscadmin.h"
 #include "portability/instr_time.h"
@@ -565,8 +566,11 @@ llvm_copy_attributes(LLVMValueRef v_from, LLVMValueRef v_to)
 	/* copy function attributes */
 	llvm_copy_attributes_at_index(v_from, v_to, LLVMAttributeFunctionIndex);
 
-	/* and the return value attributes */
-	llvm_copy_attributes_at_index(v_from, v_to, LLVMAttributeReturnIndex);
+	if (LLVMGetTypeKind(LLVMGetFunctionReturnType(v_to)) != LLVMVoidTypeKind)
+	{
+		/* and the return value attributes */
+		llvm_copy_attributes_at_index(v_from, v_to, LLVMAttributeReturnIndex);
+	}
 
 	/* and each function parameter's attribute */
 	param_count = LLVMCountParams(v_from);
@@ -715,7 +719,11 @@ llvm_optimize_module(LLVMJitContext *context, LLVMModuleRef module)
 
 	if (context->base.flags & PGJIT_OPT3)
 		passes = "default<O3>";
+	else if (context->base.flags & PGJIT_INLINE)
+		/* if doing inlining, but no expensive optimization, add inline pass */
+		passes = "default<O0>,mem2reg,inline";
 	else
+		/* default<O0> includes always-inline pass */
 		passes = "default<O0>,mem2reg";
 
 	options = LLVMCreatePassBuilderOptions();
@@ -1183,9 +1191,6 @@ llvm_create_types(void)
 void
 llvm_split_symbol_name(const char *name, char **modname, char **funcname)
 {
-	*modname = NULL;
-	*funcname = NULL;
-
 	/*
 	 * Module function names are pgextern.$module.$funcname
 	 */
@@ -1195,14 +1200,21 @@ llvm_split_symbol_name(const char *name, char **modname, char **funcname)
 		 * Symbol names cannot contain a ., therefore we can split based on
 		 * first and last occurrence of one.
 		 */
-		*funcname = rindex(name, '.');
-		(*funcname)++;			/* jump over . */
+		const char *lastdot;
 
-		*modname = pnstrdup(name + strlen("pgextern."),
-							*funcname - name - strlen("pgextern.") - 1);
-		Assert(funcname);
-
-		*funcname = pstrdup(*funcname);
+		name += strlen("pgextern.");
+		lastdot = strrchr(name, '.');
+		if (lastdot)
+		{
+			*modname = pnstrdup(name, lastdot - name);
+			*funcname = pstrdup(lastdot + 1);
+		}
+		else
+		{
+			/* hmm, no second dot? */
+			*modname = NULL;
+			*funcname = pstrdup(name);
+		}
 	}
 	else
 	{
@@ -1313,8 +1325,16 @@ llvm_log_jit_error(void *ctx, LLVMErrorRef error)
 static LLVMOrcObjectLayerRef
 llvm_create_object_layer(void *Ctx, LLVMOrcExecutionSessionRef ES, const char *Triple)
 {
+#if LLVM_VERSION_MAJOR >= 22
 	LLVMOrcObjectLayerRef objlayer =
-	LLVMOrcCreateRTDyldObjectLinkingLayerWithSectionMemoryManager(ES);
+		LLVMOrcCreateRTDyldObjectLinkingLayerWithSectionMemoryManagerReserveAlloc(ES, true);
+#elif defined(USE_LLVM_BACKPORT_SECTION_MEMORY_MANAGER)
+	LLVMOrcObjectLayerRef objlayer =
+		LLVMOrcCreateRTDyldObjectLinkingLayerWithSafeSectionMemoryManager(ES);
+#else
+	LLVMOrcObjectLayerRef objlayer =
+		LLVMOrcCreateRTDyldObjectLinkingLayerWithSectionMemoryManager(ES);
+#endif
 
 #if defined(HAVE_DECL_LLVMCREATEGDBREGISTRATIONLISTENER) && HAVE_DECL_LLVMCREATEGDBREGISTRATIONLISTENER
 	if (jit_debugging_support)
@@ -1330,7 +1350,8 @@ llvm_create_object_layer(void *Ctx, LLVMOrcExecutionSessionRef ES, const char *T
 	{
 		LLVMJITEventListenerRef l = LLVMCreatePerfJITEventListener();
 
-		LLVMOrcRTDyldObjectLinkingLayerRegisterJITEventListener(objlayer, l);
+		if (l)
+			LLVMOrcRTDyldObjectLinkingLayerRegisterJITEventListener(objlayer, l);
 	}
 #endif
 

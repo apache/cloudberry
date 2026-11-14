@@ -33,6 +33,14 @@ extern "C"
 #endif
 
 #include "jit/llvmjit.h"
+#include "jit/llvmjit_backport.h"
+
+#ifdef USE_LLVM_BACKPORT_SECTION_MEMORY_MANAGER
+#include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
+#include <llvm/ExecutionEngine/SectionMemoryManager.h>
+#include "jit/SectionMemoryManager.h"
+#include <llvm/Support/CBindingWrapping.h>
+#endif
 
 
 /*
@@ -100,5 +108,24 @@ LLVMTypeRef
 LLVMGlobalGetValueType(LLVMValueRef g)
 {
 	return llvm::wrap(llvm::unwrap<llvm::GlobalValue>(g)->getValueType());
+}
+#endif
+
+#ifdef USE_LLVM_BACKPORT_SECTION_MEMORY_MANAGER
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(llvm::orc::ExecutionSession, LLVMOrcExecutionSessionRef)
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(llvm::orc::ObjectLayer, LLVMOrcObjectLayerRef);
+
+LLVMOrcObjectLayerRef
+LLVMOrcCreateRTDyldObjectLinkingLayerWithSafeSectionMemoryManager(LLVMOrcExecutionSessionRef ES)
+{
+#if LLVM_VERSION_MAJOR >= 21
+	return wrap(new llvm::orc::RTDyldObjectLinkingLayer(
+		*unwrap(ES), [](const llvm::MemoryBuffer&) {
+			return std::make_unique<llvm::backport::SectionMemoryManager>(nullptr, true);
+		}));
+#else
+	return wrap(new llvm::orc::RTDyldObjectLinkingLayer(
+		*unwrap(ES), [] { return std::make_unique<llvm::backport::SectionMemoryManager>(nullptr, true); }));
+#endif
 }
 #endif

@@ -4,6 +4,10 @@ set search_path = cte_prune;
 SET optimizer_trace_fallback = on;
 -- end_ignore
 
+-- Some plans below cost more than jit_above_cost, where a server built
+-- --with-llvm adds a JIT summary to EXPLAIN's output.
+set jit = off;
+
 create table t1(v1 int, v2 int, v3 int);
 insert into t1 values(generate_series(1, 10), generate_series(11, 20), generate_series(21, 30));
 analyze t1;

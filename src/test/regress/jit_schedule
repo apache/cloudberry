@@ -1,0 +1,27 @@
+# ----------
+# src/test/regress/jit_schedule
+#
+# installcheck-jit runs parallel_schedule and then this schedule, forcing JIT
+# compilation, inlining and optimization for every plan.
+# ----------
+
+# fails unless the JIT is there and forced; see the test
+test: gp_jit_available
+
+test: gp_aggregates gp_types gp_sort shared_scan
+test: leastsquares decode_expr bitmapscan case_gp limit_gp notin percentile join_gp union_gp window_views
+test: filter matrix sublink table_functions olap_setup complex
+test: indexjoin regex_gp gpparams with_clause transient_types gp_pullup_expr
+test: gpdiffcheck gp_hashagg agg_pushdown gp_array_agg
+test: rangefuncs_cdb gp_dqa subselect_gp subselect_gp2 olap_group olap_window_seq
+test: gp_distinct_plans
+test: portals_updatable gp_numeric_agg partition_pruning
+test: bfv_olap bfv_aggregate DML_over_joins nested_case_null sort aggregate_with_groupingsets gp_jit_cost
+test: rpt rpt_joins rpt_tpch
+test: bfv_joins bfv_planner
+test: tpcds_q04
+test: qp_olap_mdqa qp_select gp_tsrf qp_join_union_all qp_query_params qp_full_join
+test: qp_executor
+test: qp_correlated_query qp_query_execution correlated_subquery
+test: qp_dpe qp_subquery qp_left_anti_semi_join qp_union_intersect qp_functions qp_regexp
+test: qp_olap_group
