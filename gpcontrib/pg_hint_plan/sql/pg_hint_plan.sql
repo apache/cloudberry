@@ -13,8 +13,31 @@ SET client_min_messages TO log;
 EXPLAIN (COSTS false) SELECT * FROM t1, t2 WHERE t1.id = t2.id;
 EXPLAIN (COSTS false) SELECT * FROM t1, t2 WHERE t1.val = t2.val;
 
+
 LOAD 'pg_hint_plan';
 SET pg_hint_plan.debug_print TO on;
+SELECT setting <> 'off' FROM pg_settings WHERE name = 'compute_query_id';
+SHOW pg_hint_plan.enable_hint_table;
+
+/* query-id related test */
+SET compute_query_id to off;
+SET pg_hint_plan.enable_hint_table to on;	-- error
+SET compute_query_id to on;
+SET pg_hint_plan.enable_hint_table to on;
+SET compute_query_id to off;
+SELECT 1;									-- gets warining
+SELECT 1;									-- not
+SET compute_query_id to on;
+SELECT 1;									-- reactivated
+SET compute_query_id to off;
+SELECT 1;									-- gets warining
+SET pg_hint_plan.enable_hint_table to off;
+SET compute_query_id to on;
+SET pg_hint_plan.enable_hint_table to on;
+SELECT 1;									-- no warining
+
+RESET compute_query_id;
+RESET pg_hint_plan.enable_hint_table;
 
 EXPLAIN (COSTS false) SELECT * FROM t1, t2 WHERE t1.id = t2.id;
 EXPLAIN (COSTS false) SELECT * FROM t1, t2 WHERE t1.val = t2.val;
@@ -542,9 +565,9 @@ SELECT t1_3.id FROM t1 t1_3, t2 t2_3, t3 t3_3 WHERE t1_3.id = t2_3.id AND t2_3.i
 SELECT max(t1_4.id) FROM t1 t1_4, t2 t2_4, t3 t3_4 WHERE t1_4.id = t2_4.id AND t2_4.id = t3_4.id 
 );
 
--- ambigous error
+-- ambiguous error
 EXPLAIN (COSTS false) SELECT * FROM t1, s0.t1, t2 WHERE public.t1.id = s0.t1.id AND public.t1.id = t2.id;
-/*+NestLoop(t1 t2)*/
+/*+MergeJoin(t1 t2)*/
 EXPLAIN (COSTS false) SELECT * FROM t1, s0.t1, t2 WHERE public.t1.id = s0.t1.id AND public.t1.id = t2.id;
 /*+Leading(t1 t2 t1)*/
 EXPLAIN (COSTS false) SELECT * FROM t1, s0.t1, t2 WHERE public.t1.id = s0.t1.id AND public.t1.id = t2.id;
@@ -765,8 +788,34 @@ EXPLAIN (COSTS false) SELECT * FROM t1 JOIN parttbl ON (t1.id = parttbl.v1) JOIN
 /*+Leading(parttbl t1 t2)NestLoop(parttbl t1)IndexScan(parttbl_1_prt_p1 parttbl_1_prt_p1_idx_3)*/
 EXPLAIN (COSTS false) SELECT * FROM t1 JOIN parttbl ON (t1.id = parttbl.v1) JOIN t2 ON (t1.id = t2.id);
 
+-- Query with join RTE and outer-join relids
+/*+Leading(ft_1 ft_2 t1)*/
+SELECT relname, seq_scan > 0 AS seq_scan, idx_scan > 0 AS idx_scan
+  FROM pg_stat_user_tables WHERE schemaname = 'public' AND relname = 't1';
+
 -- all hint types together
 /*+ SeqScan(t1) MergeJoin(t1 t2) Leading(t1 t2) Set(random_page_cost 2.0)*/
 EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON (t1.id = t2.id) JOIN t3 ON (t3.id = t2.id);
+
+-- Check state of hint stack across with ERROR level due to debug_print.
+-- The first query generates an error while a hint is included.  The second
+-- query should work, with a clean hint on the stack.  The error is triggered
+-- due to a combination of debug_print and message_level making the debug_print
+-- fail.
+-- start_matchsubs
+-- m/\(pg_hint_plan\.c:\d+\)/
+-- s/\(pg_hint_plan\.c:\d+\)/(pg_hint_plan.c:XXX)/
+-- end_matchsubs
+-- CBDB: hide the LOG lines about the failed statement, their position
+-- relative to the ERROR varies
+SET client_min_messages TO error;
+SET pg_hint_plan.message_level TO error;
+SET pg_hint_plan.debug_print TO on;
+/*+ NoNestLoop(t1 t2) */
+EXPLAIN (COSTS OFF) SELECT count(*) FROM (SELECT count(*) FROM t1 GROUP BY id) AS q1;
+SELECT 1;
+RESET pg_hint_plan.message_level;
+RESET pg_hint_plan.debug_print;
+SET client_min_messages TO log;
 
 reset optimizer;

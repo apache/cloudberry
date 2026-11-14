@@ -516,16 +516,16 @@ EXPLAIN SELECT * FROM s1.p1 t1, s1.p1 t2 WHERE t1.c1 = t2.c1;
  Hash Join  (cost=xxx..xxx rows=301 width=xxx)
    Hash Cond: (t1.c1 = t2.c1)
    ->  Append  (cost=xxx..xxx rows=301 width=xxx)
-         ->  Seq Scan on p1 t1  (cost=xxx..xxx rows=1 width=xxx)
-         ->  Seq Scan on p1c1 t1_1  (cost=xxx..xxx rows=100 width=xxx)
-         ->  Seq Scan on p1c2 t1_2  (cost=xxx..xxx rows=100 width=xxx)
-         ->  Seq Scan on p1c3 t1_3  (cost=xxx..xxx rows=100 width=xxx)
+         ->  Seq Scan on p1 t1_1  (cost=xxx..xxx rows=1 width=xxx)
+         ->  Seq Scan on p1c1 t1_2  (cost=xxx..xxx rows=100 width=xxx)
+         ->  Seq Scan on p1c2 t1_3  (cost=xxx..xxx rows=100 width=xxx)
+         ->  Seq Scan on p1c3 t1_4  (cost=xxx..xxx rows=100 width=xxx)
    ->  Hash  (cost=xxx..xxx rows=301 width=xxx)
          ->  Append  (cost=xxx..xxx rows=301 width=xxx)
-               ->  Seq Scan on p1 t2  (cost=xxx..xxx rows=1 width=xxx)
-               ->  Seq Scan on p1c1 t2_1  (cost=xxx..xxx rows=100 width=xxx)
-               ->  Seq Scan on p1c2 t2_2  (cost=xxx..xxx rows=100 width=xxx)
-               ->  Seq Scan on p1c3 t2_3  (cost=xxx..xxx rows=100 width=xxx)
+               ->  Seq Scan on p1 t2_1  (cost=xxx..xxx rows=1 width=xxx)
+               ->  Seq Scan on p1c1 t2_2  (cost=xxx..xxx rows=100 width=xxx)
+               ->  Seq Scan on p1c2 t2_3  (cost=xxx..xxx rows=100 width=xxx)
+               ->  Seq Scan on p1c3 t2_4  (cost=xxx..xxx rows=100 width=xxx)
 
 \o results/ut-R.tmpout
 /*+Rows(t1 t2 #1)*/
@@ -544,16 +544,16 @@ error hint:
  Hash Join  (cost=xxx..xxx rows=1 width=xxx)
    Hash Cond: (t1.c1 = t2.c1)
    ->  Append  (cost=xxx..xxx rows=301 width=xxx)
-         ->  Seq Scan on p1 t1  (cost=xxx..xxx rows=1 width=xxx)
-         ->  Seq Scan on p1c1 t1_1  (cost=xxx..xxx rows=100 width=xxx)
-         ->  Seq Scan on p1c2 t1_2  (cost=xxx..xxx rows=100 width=xxx)
-         ->  Seq Scan on p1c3 t1_3  (cost=xxx..xxx rows=100 width=xxx)
+         ->  Seq Scan on p1 t1_1  (cost=xxx..xxx rows=1 width=xxx)
+         ->  Seq Scan on p1c1 t1_2  (cost=xxx..xxx rows=100 width=xxx)
+         ->  Seq Scan on p1c2 t1_3  (cost=xxx..xxx rows=100 width=xxx)
+         ->  Seq Scan on p1c3 t1_4  (cost=xxx..xxx rows=100 width=xxx)
    ->  Hash  (cost=xxx..xxx rows=301 width=xxx)
          ->  Append  (cost=xxx..xxx rows=301 width=xxx)
-               ->  Seq Scan on p1 t2  (cost=xxx..xxx rows=1 width=xxx)
-               ->  Seq Scan on p1c1 t2_1  (cost=xxx..xxx rows=100 width=xxx)
-               ->  Seq Scan on p1c2 t2_2  (cost=xxx..xxx rows=100 width=xxx)
-               ->  Seq Scan on p1c3 t2_3  (cost=xxx..xxx rows=100 width=xxx)
+               ->  Seq Scan on p1 t2_1  (cost=xxx..xxx rows=1 width=xxx)
+               ->  Seq Scan on p1c1 t2_2  (cost=xxx..xxx rows=100 width=xxx)
+               ->  Seq Scan on p1c2 t2_3  (cost=xxx..xxx rows=100 width=xxx)
+               ->  Seq Scan on p1c3 t2_4  (cost=xxx..xxx rows=100 width=xxx)
 
 -- No. R-1-6-3
 \o results/ut-R.tmpout
@@ -1070,7 +1070,7 @@ error hint:
    InitPlan 1 (returns $1)
      ->  Aggregate  (cost=xxx..xxx rows=1 width=xxx)
            ->  Nested Loop  (cost=xxx..xxx rows=100 width=xxx)
-                 Join Filter: (b1t2.c1 = b1t1.c1)
+                 Join Filter: (b1t1.c1 = b1t2.c1)
                  ->  Hash Join  (cost=xxx..xxx rows=100 width=xxx)
                        Hash Cond: (b1t4.c1 = b1t2.c1)
                        ->  Seq Scan on t4 b1t4  (cost=xxx..xxx rows=1130 width=xxx)
@@ -1164,7 +1164,7 @@ error hint:
    InitPlan 1 (returns $1)
      ->  Aggregate  (cost=xxx..xxx rows=1 width=xxx)
            ->  Nested Loop  (cost=xxx..xxx rows=1 width=xxx)
-                 Join Filter: (b1t2.c1 = b1t1.c1)
+                 Join Filter: (b1t1.c1 = b1t2.c1)
                  ->  Hash Join  (cost=xxx..xxx rows=1 width=xxx)
                        Hash Cond: (b1t4.c1 = b1t2.c1)
                        ->  Seq Scan on t4 b1t4  (cost=xxx..xxx rows=1130 width=xxx)
@@ -1256,7 +1256,7 @@ error hint:
    InitPlan 1 (returns $1)
      ->  Aggregate  (cost=xxx..xxx rows=1 width=xxx)
            ->  Nested Loop  (cost=xxx..xxx rows=100 width=xxx)
-                 Join Filter: (b1t2.c1 = b1t1.c1)
+                 Join Filter: (b1t1.c1 = b1t2.c1)
                  ->  Hash Join  (cost=xxx..xxx rows=100 width=xxx)
                        Hash Cond: (b1t4.c1 = b1t2.c1)
                        ->  Seq Scan on t4 b1t4  (cost=xxx..xxx rows=1130 width=xxx)
@@ -1376,7 +1376,7 @@ error hint:
    InitPlan 1 (returns $1)
      ->  Aggregate  (cost=xxx..xxx rows=1 width=xxx)
            ->  Nested Loop  (cost=xxx..xxx rows=1 width=xxx)
-                 Join Filter: (b1t2.c1 = b1t1.c1)
+                 Join Filter: (b1t1.c1 = b1t2.c1)
                  ->  Hash Join  (cost=xxx..xxx rows=1 width=xxx)
                        Hash Cond: (b1t4.c1 = b1t2.c1)
                        ->  Seq Scan on t4 b1t4  (cost=xxx..xxx rows=1130 width=xxx)
@@ -1484,7 +1484,7 @@ error hint:
 ----------------
  Aggregate  (cost=xxx..xxx rows=1 width=xxx)
    ->  Nested Loop  (cost=xxx..xxx rows=1 width=xxx)
-         Join Filter: (bmt2.c1 = bmt1.c1)
+         Join Filter: (bmt1.c1 = bmt2.c1)
          ->  Nested Loop  (cost=xxx..xxx rows=1 width=xxx)
                ->  Hash Join  (cost=xxx..xxx rows=1 width=xxx)
                      Hash Cond: (bmt3.c1 = bmt4.c1)
@@ -1551,7 +1551,7 @@ error hint:
 ----------------
  Aggregate  (cost=xxx..xxx rows=1 width=xxx)
    ->  Nested Loop  (cost=xxx..xxx rows=1 width=xxx)
-         Join Filter: (bmt2.c1 = bmt1.c1)
+         Join Filter: (bmt1.c1 = bmt2.c1)
          ->  Nested Loop  (cost=xxx..xxx rows=1 width=xxx)
                ->  Hash Join  (cost=xxx..xxx rows=1 width=xxx)
                      Hash Cond: (bmt3.c1 = bmt4.c1)
@@ -1606,7 +1606,7 @@ error hint:
    InitPlan 1 (returns $1)
      ->  Aggregate  (cost=xxx..xxx rows=1 width=xxx)
            ->  Nested Loop  (cost=xxx..xxx rows=100 width=xxx)
-                 Join Filter: (b1t2.c1 = b1t1.c1)
+                 Join Filter: (b1t1.c1 = b1t2.c1)
                  ->  Hash Join  (cost=xxx..xxx rows=100 width=xxx)
                        Hash Cond: (b1t4.c1 = b1t2.c1)
                        ->  Seq Scan on t4 b1t4  (cost=xxx..xxx rows=1130 width=xxx)
@@ -1702,7 +1702,7 @@ error hint:
    InitPlan 1 (returns $1)
      ->  Aggregate  (cost=xxx..xxx rows=1 width=xxx)
            ->  Nested Loop  (cost=xxx..xxx rows=1 width=xxx)
-                 Join Filter: (b1t2.c1 = b1t1.c1)
+                 Join Filter: (b1t1.c1 = b1t2.c1)
                  ->  Hash Join  (cost=xxx..xxx rows=1 width=xxx)
                        Hash Cond: (b1t4.c1 = b1t2.c1)
                        ->  Seq Scan on t4 b1t4  (cost=xxx..xxx rows=1130 width=xxx)
@@ -1795,7 +1795,7 @@ error hint:
    InitPlan 1 (returns $1)
      ->  Aggregate  (cost=xxx..xxx rows=1 width=xxx)
            ->  Nested Loop  (cost=xxx..xxx rows=100 width=xxx)
-                 Join Filter: (b1t2.c1 = b1t1.c1)
+                 Join Filter: (b1t1.c1 = b1t2.c1)
                  ->  Hash Join  (cost=xxx..xxx rows=100 width=xxx)
                        Hash Cond: (b1t4.c1 = b1t2.c1)
                        ->  Seq Scan on t4 b1t4  (cost=xxx..xxx rows=1130 width=xxx)
@@ -1916,7 +1916,7 @@ error hint:
    InitPlan 1 (returns $1)
      ->  Aggregate  (cost=xxx..xxx rows=1 width=xxx)
            ->  Nested Loop  (cost=xxx..xxx rows=1 width=xxx)
-                 Join Filter: (b1t2.c1 = b1t1.c1)
+                 Join Filter: (b1t1.c1 = b1t2.c1)
                  ->  Hash Join  (cost=xxx..xxx rows=1 width=xxx)
                        Hash Cond: (b1t4.c1 = b1t2.c1)
                        ->  Seq Scan on t4 b1t4  (cost=xxx..xxx rows=1130 width=xxx)
@@ -2038,7 +2038,7 @@ error hint:
                                                          Sort Key: (max(b1t1.c1))
                                                          ->  Aggregate  (cost=xxx..xxx rows=1 width=xxx)
                                                                ->  Nested Loop  (cost=xxx..xxx rows=100 width=xxx)
-                                                                     Join Filter: (b1t2.c1 = b1t1.c1)
+                                                                     Join Filter: (b1t1.c1 = b1t2.c1)
                                                                      ->  Hash Join  (cost=xxx..xxx rows=100 width=xxx)
                                                                            Hash Cond: (b1t4.c1 = b1t2.c1)
                                                                            ->  Seq Scan on t4 b1t4  (cost=xxx..xxx rows=1130 width=xxx)
@@ -2148,7 +2148,7 @@ error hint:
                                                          Sort Key: (max(b1t1.c1))
                                                          ->  Aggregate  (cost=xxx..xxx rows=1 width=xxx)
                                                                ->  Nested Loop  (cost=xxx..xxx rows=1 width=xxx)
-                                                                     Join Filter: (b1t2.c1 = b1t1.c1)
+                                                                     Join Filter: (b1t1.c1 = b1t2.c1)
                                                                      ->  Hash Join  (cost=xxx..xxx rows=1 width=xxx)
                                                                            Hash Cond: (b1t4.c1 = b1t2.c1)
                                                                            ->  Seq Scan on t4 b1t4  (cost=xxx..xxx rows=1130 width=xxx)
@@ -2246,7 +2246,7 @@ error hint:
                            ->  Sort  (cost=xxx..xxx rows=1 width=xxx)
                                  Sort Key: bmt1.c1
                                  ->  Nested Loop  (cost=xxx..xxx rows=1 width=xxx)
-                                       Join Filter: ((max(b1t1.c1)) = bmt1.c1)
+                                       Join Filter: (bmt1.c1 = (max(b1t1.c1)))
                                        ->  Hash Join  (cost=xxx..xxx rows=1 width=xxx)
                                              Hash Cond: ((max(b2t1.c1)) = (max(b1t1.c1)))
                                              ->  Merge Join  (cost=xxx..xxx rows=1 width=xxx)
@@ -2282,7 +2282,7 @@ error hint:
                                              ->  Hash  (cost=xxx..xxx rows=1 width=xxx)
                                                    ->  Aggregate  (cost=xxx..xxx rows=1 width=xxx)
                                                          ->  Nested Loop  (cost=xxx..xxx rows=100 width=xxx)
-                                                               Join Filter: (b1t2.c1 = b1t1.c1)
+                                                               Join Filter: (b1t1.c1 = b1t2.c1)
                                                                ->  Hash Join  (cost=xxx..xxx rows=100 width=xxx)
                                                                      Hash Cond: (b1t4.c1 = b1t2.c1)
                                                                      ->  Seq Scan on t4 b1t4  (cost=xxx..xxx rows=1130 width=xxx)
@@ -2389,7 +2389,7 @@ error hint:
                            ->  Sort  (cost=xxx..xxx rows=1 width=xxx)
                                  Sort Key: bmt1.c1
                                  ->  Nested Loop  (cost=xxx..xxx rows=1 width=xxx)
-                                       Join Filter: ((max(b1t1.c1)) = bmt1.c1)
+                                       Join Filter: (bmt1.c1 = (max(b1t1.c1)))
                                        ->  Hash Join  (cost=xxx..xxx rows=1 width=xxx)
                                              Hash Cond: ((max(b2t1.c1)) = (max(b1t1.c1)))
                                              ->  Merge Join  (cost=xxx..xxx rows=1 width=xxx)
@@ -2425,7 +2425,7 @@ error hint:
                                              ->  Hash  (cost=xxx..xxx rows=1 width=xxx)
                                                    ->  Aggregate  (cost=xxx..xxx rows=1 width=xxx)
                                                          ->  Nested Loop  (cost=xxx..xxx rows=1 width=xxx)
-                                                               Join Filter: (b1t2.c1 = b1t1.c1)
+                                                               Join Filter: (b1t1.c1 = b1t2.c1)
                                                                ->  Hash Join  (cost=xxx..xxx rows=1 width=xxx)
                                                                      Hash Cond: (b1t4.c1 = b1t2.c1)
                                                                      ->  Seq Scan on t4 b1t4  (cost=xxx..xxx rows=1130 width=xxx)
@@ -2788,7 +2788,7 @@ error hint:
          ->  Nested Loop  (cost=xxx..xxx rows=10 width=xxx)
                Join Filter: (bmt1.c1 = bmt2.c1)
                ->  Nested Loop  (cost={inf}..{inf} rows=100 width=xxx)
-                     Join Filter: (b1t1.c1 = bmt1.c1)
+                     Join Filter: (bmt1.c1 = b1t1.c1)
                      ->  Merge Join  (cost=xxx..xxx rows=100 width=xxx)
                            Merge Cond: (b1t1.c1 = b1t2.c1)
                            ->  Index Only Scan using t1_i1 on t1 b1t1  (cost=xxx..xxx rows=1000 width=xxx)
@@ -2931,7 +2931,7 @@ error hint:
          ->  Nested Loop  (cost=xxx..xxx rows=10 width=xxx)
                Join Filter: (bmt1.c1 = bmt2.c1)
                ->  Nested Loop  (cost={inf}..{inf} rows=100 width=xxx)
-                     Join Filter: (b1t1.c1 = bmt1.c1)
+                     Join Filter: (bmt1.c1 = b1t1.c1)
                      ->  Merge Join  (cost=xxx..xxx rows=1 width=xxx)
                            Merge Cond: (b1t1.c1 = b1t2.c1)
                            ->  Index Only Scan using t1_i1 on t1 b1t1  (cost=xxx..xxx rows=1000 width=xxx)
@@ -3008,13 +3008,13 @@ error hint:
    ->  Nested Loop  (cost=xxx..xxx rows=10 width=xxx)
          Join Filter: (bmt1.c1 = bmt3.c1)
          ->  Nested Loop  (cost=xxx..xxx rows=10 width=xxx)
-               Join Filter: (bmt2.c1 = bmt1.c1)
+               Join Filter: (bmt1.c1 = bmt2.c1)
                ->  Nested Loop  (cost={inf}..{inf} rows=100 width=xxx)
-                     Join Filter: (b1t1.c1 = bmt2.c1)
+                     Join Filter: (bmt2.c1 = b1t1.c1)
                      ->  Index Only Scan using t2_i1 on t2 bmt2  (cost=xxx..xxx rows=100 width=xxx)
                      ->  Materialize  (cost=xxx..xxx rows=100 width=xxx)
                            ->  Nested Loop  (cost=xxx..xxx rows=100 width=xxx)
-                                 Join Filter: (b1t2.c1 = b1t1.c1)
+                                 Join Filter: (b1t1.c1 = b1t2.c1)
                                  ->  Hash Join  (cost=xxx..xxx rows=100 width=xxx)
                                        Hash Cond: (b1t3.c1 = b1t2.c1)
                                        ->  Merge Join  (cost=xxx..xxx rows=1130 width=xxx)
@@ -3099,13 +3099,13 @@ error hint:
    ->  Nested Loop  (cost=xxx..xxx rows=10 width=xxx)
          Join Filter: (bmt1.c1 = bmt3.c1)
          ->  Nested Loop  (cost=xxx..xxx rows=10 width=xxx)
-               Join Filter: (bmt2.c1 = bmt1.c1)
+               Join Filter: (bmt1.c1 = bmt2.c1)
                ->  Nested Loop  (cost={inf}..{inf} rows=100 width=xxx)
-                     Join Filter: (b1t1.c1 = bmt2.c1)
+                     Join Filter: (bmt2.c1 = b1t1.c1)
                      ->  Index Only Scan using t2_i1 on t2 bmt2  (cost=xxx..xxx rows=100 width=xxx)
                      ->  Materialize  (cost=xxx..xxx rows=1 width=xxx)
                            ->  Nested Loop  (cost=xxx..xxx rows=1 width=xxx)
-                                 Join Filter: (b1t2.c1 = b1t1.c1)
+                                 Join Filter: (b1t1.c1 = b1t2.c1)
                                  ->  Hash Join  (cost=xxx..xxx rows=1 width=xxx)
                                        Hash Cond: (b1t3.c1 = b1t2.c1)
                                        ->  Merge Join  (cost=xxx..xxx rows=1 width=xxx)
@@ -4112,77 +4112,6 @@ error hint:
    ->  Index Scan using t1_i1 on t1 v1t1_  (cost=xxx..xxx rows=1 width=xxx)
          Index Cond: (c1 = v1t1.c1)
 
--- No. R-2-3-6
-\o results/ut-R.tmpout
-/*+RowsHashJoin(r4t1 r4t1)*/
-EXPLAIN SELECT * FROM s1.r4 t1, s1.r4 t2 WHERE t1.c1 = t2.c1;
-INFO:  pg_hint_plan: hint syntax error at or near "RowsHashJoin(r4t1 r4t1)"
-DETAIL:  Unrecognized hint keyword "RowsHashJoin".
-\o
-\! sql/maskout.sh results/ut-R.tmpout
-  QUERY PLAN
-----------------
- Hash Join  (cost=xxx..xxx rows=1000 width=xxx)
-   Hash Cond: (r4t1.c1 = r4t1_1.c1)
-   ->  Seq Scan on t1 r4t1  (cost=xxx..xxx rows=1000 width=xxx)
-   ->  Hash  (cost=xxx..xxx rows=1000 width=xxx)
-         ->  Seq Scan on t1 r4t1_1  (cost=xxx..xxx rows=1000 width=xxx)
-
-\o results/ut-R.tmpout
-/*+RowsHashJoin(r4t1 r4t1)Rows(r4t1 r4t1 #1)*/
-EXPLAIN SELECT * FROM s1.r4 t1, s1.r4 t2 WHERE t1.c1 = t2.c1;
-INFO:  pg_hint_plan: hint syntax error at or near "RowsHashJoin(r4t1 r4t1)Rows(r4t1 r4t1 #1)"
-DETAIL:  Unrecognized hint keyword "RowsHashJoin".
-\o
-\! sql/maskout.sh results/ut-R.tmpout
-  QUERY PLAN
-----------------
- Hash Join  (cost=xxx..xxx rows=1000 width=xxx)
-   Hash Cond: (r4t1.c1 = r4t1_1.c1)
-   ->  Seq Scan on t1 r4t1  (cost=xxx..xxx rows=1000 width=xxx)
-   ->  Hash  (cost=xxx..xxx rows=1000 width=xxx)
-         ->  Seq Scan on t1 r4t1_1  (cost=xxx..xxx rows=1000 width=xxx)
-
--- No. R-2-3-7
-\o results/ut-R.tmpout
-/*+NestLoop(r4t1 r5t1)*/
-EXPLAIN SELECT * FROM s1.r4 t1, s1.r5 t2 WHERE t1.c1 = t2.c1;
-LOG:  pg_hint_plan:
-used hint:
-NestLoop(r4t1 r5t1)
-not used hint:
-duplication hint:
-error hint:
-
-\o
-\! sql/maskout.sh results/ut-R.tmpout
-  QUERY PLAN
-----------------
- Nested Loop  (cost=xxx..xxx rows=1000 width=xxx)
-   ->  Seq Scan on t1 r4t1  (cost=xxx..xxx rows=1000 width=xxx)
-   ->  Index Scan using t1_i1 on t1 r5t1  (cost=xxx..xxx rows=1 width=xxx)
-         Index Cond: (c1 = r4t1.c1)
-
-\o results/ut-R.tmpout
-/*+NestLoop(r4t1 r5t1)Rows(r4t1 r5t1 #1)*/
-EXPLAIN SELECT * FROM s1.r4 t1, s1.r5 t2 WHERE t1.c1 = t2.c1;
-LOG:  pg_hint_plan:
-used hint:
-NestLoop(r4t1 r5t1)
-Rows(r4t1 r5t1 #1)
-not used hint:
-duplication hint:
-error hint:
-
-\o
-\! sql/maskout.sh results/ut-R.tmpout
-  QUERY PLAN
-----------------
- Nested Loop  (cost=xxx..xxx rows=1 width=xxx)
-   ->  Seq Scan on t1 r4t1  (cost=xxx..xxx rows=1000 width=xxx)
-   ->  Index Scan using t1_i1 on t1 r5t1  (cost=xxx..xxx rows=1 width=xxx)
-         Index Cond: (c1 = r4t1.c1)
-
 ----
 ---- No. R-2-4 VALUES clause
 ----
@@ -4701,22 +4630,22 @@ EXPLAIN SELECT * FROM s1.p1, s1.p2 WHERE p1.c1 = p2.c1;
  Hash Join  (cost=xxx..xxx rows=301 width=xxx)
    Hash Cond: (p2.c1 = p1.c1)
    ->  Append  (cost=xxx..xxx rows=304 width=xxx)
-         ->  Seq Scan on p2  (cost=xxx..xxx rows=1 width=xxx)
-         ->  Seq Scan on p2c1  (cost=xxx..xxx rows=1 width=xxx)
-         ->  Seq Scan on p2c2  (cost=xxx..xxx rows=1 width=xxx)
-         ->  Seq Scan on p2c3  (cost=xxx..xxx rows=1 width=xxx)
-         ->  Seq Scan on p2c1c1  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c1c2  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c2c1  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c2c2  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c3c1  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c3c2  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2 p2_1  (cost=xxx..xxx rows=1 width=xxx)
+         ->  Seq Scan on p2c1 p2_2  (cost=xxx..xxx rows=1 width=xxx)
+         ->  Seq Scan on p2c2 p2_3  (cost=xxx..xxx rows=1 width=xxx)
+         ->  Seq Scan on p2c3 p2_4  (cost=xxx..xxx rows=1 width=xxx)
+         ->  Seq Scan on p2c1c1 p2_5  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c1c2 p2_6  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c2c1 p2_7  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c2c2 p2_8  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c3c1 p2_9  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c3c2 p2_10  (cost=xxx..xxx rows=50 width=xxx)
    ->  Hash  (cost=xxx..xxx rows=301 width=xxx)
          ->  Append  (cost=xxx..xxx rows=301 width=xxx)
-               ->  Seq Scan on p1  (cost=xxx..xxx rows=1 width=xxx)
-               ->  Seq Scan on p1c1  (cost=xxx..xxx rows=100 width=xxx)
-               ->  Seq Scan on p1c2  (cost=xxx..xxx rows=100 width=xxx)
-               ->  Seq Scan on p1c3  (cost=xxx..xxx rows=100 width=xxx)
+               ->  Seq Scan on p1 p1_1  (cost=xxx..xxx rows=1 width=xxx)
+               ->  Seq Scan on p1c1 p1_2  (cost=xxx..xxx rows=100 width=xxx)
+               ->  Seq Scan on p1c2 p1_3  (cost=xxx..xxx rows=100 width=xxx)
+               ->  Seq Scan on p1c3 p1_4  (cost=xxx..xxx rows=100 width=xxx)
 
 \o results/ut-R.tmpout
 /*+Rows(p1 p2 #1)*/
@@ -4735,22 +4664,22 @@ error hint:
  Hash Join  (cost=xxx..xxx rows=1 width=xxx)
    Hash Cond: (p2.c1 = p1.c1)
    ->  Append  (cost=xxx..xxx rows=304 width=xxx)
-         ->  Seq Scan on p2  (cost=xxx..xxx rows=1 width=xxx)
-         ->  Seq Scan on p2c1  (cost=xxx..xxx rows=1 width=xxx)
-         ->  Seq Scan on p2c2  (cost=xxx..xxx rows=1 width=xxx)
-         ->  Seq Scan on p2c3  (cost=xxx..xxx rows=1 width=xxx)
-         ->  Seq Scan on p2c1c1  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c1c2  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c2c1  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c2c2  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c3c1  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c3c2  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2 p2_1  (cost=xxx..xxx rows=1 width=xxx)
+         ->  Seq Scan on p2c1 p2_2  (cost=xxx..xxx rows=1 width=xxx)
+         ->  Seq Scan on p2c2 p2_3  (cost=xxx..xxx rows=1 width=xxx)
+         ->  Seq Scan on p2c3 p2_4  (cost=xxx..xxx rows=1 width=xxx)
+         ->  Seq Scan on p2c1c1 p2_5  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c1c2 p2_6  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c2c1 p2_7  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c2c2 p2_8  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c3c1 p2_9  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c3c2 p2_10  (cost=xxx..xxx rows=50 width=xxx)
    ->  Hash  (cost=xxx..xxx rows=301 width=xxx)
          ->  Append  (cost=xxx..xxx rows=301 width=xxx)
-               ->  Seq Scan on p1  (cost=xxx..xxx rows=1 width=xxx)
-               ->  Seq Scan on p1c1  (cost=xxx..xxx rows=100 width=xxx)
-               ->  Seq Scan on p1c2  (cost=xxx..xxx rows=100 width=xxx)
-               ->  Seq Scan on p1c3  (cost=xxx..xxx rows=100 width=xxx)
+               ->  Seq Scan on p1 p1_1  (cost=xxx..xxx rows=1 width=xxx)
+               ->  Seq Scan on p1c1 p1_2  (cost=xxx..xxx rows=100 width=xxx)
+               ->  Seq Scan on p1c2 p1_3  (cost=xxx..xxx rows=100 width=xxx)
+               ->  Seq Scan on p1c3 p1_4  (cost=xxx..xxx rows=100 width=xxx)
 
 -- No. R-3-4-2
 \o results/ut-R.tmpout
@@ -4762,22 +4691,22 @@ EXPLAIN SELECT * FROM s1.p1, s1.p2 WHERE p1.c1 = p2.c1;
  Hash Join  (cost=xxx..xxx rows=301 width=xxx)
    Hash Cond: (p2.c1 = p1.c1)
    ->  Append  (cost=xxx..xxx rows=304 width=xxx)
-         ->  Seq Scan on p2  (cost=xxx..xxx rows=1 width=xxx)
-         ->  Seq Scan on p2c1  (cost=xxx..xxx rows=1 width=xxx)
-         ->  Seq Scan on p2c2  (cost=xxx..xxx rows=1 width=xxx)
-         ->  Seq Scan on p2c3  (cost=xxx..xxx rows=1 width=xxx)
-         ->  Seq Scan on p2c1c1  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c1c2  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c2c1  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c2c2  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c3c1  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c3c2  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2 p2_1  (cost=xxx..xxx rows=1 width=xxx)
+         ->  Seq Scan on p2c1 p2_2  (cost=xxx..xxx rows=1 width=xxx)
+         ->  Seq Scan on p2c2 p2_3  (cost=xxx..xxx rows=1 width=xxx)
+         ->  Seq Scan on p2c3 p2_4  (cost=xxx..xxx rows=1 width=xxx)
+         ->  Seq Scan on p2c1c1 p2_5  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c1c2 p2_6  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c2c1 p2_7  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c2c2 p2_8  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c3c1 p2_9  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c3c2 p2_10  (cost=xxx..xxx rows=50 width=xxx)
    ->  Hash  (cost=xxx..xxx rows=301 width=xxx)
          ->  Append  (cost=xxx..xxx rows=301 width=xxx)
-               ->  Seq Scan on p1  (cost=xxx..xxx rows=1 width=xxx)
-               ->  Seq Scan on p1c1  (cost=xxx..xxx rows=100 width=xxx)
-               ->  Seq Scan on p1c2  (cost=xxx..xxx rows=100 width=xxx)
-               ->  Seq Scan on p1c3  (cost=xxx..xxx rows=100 width=xxx)
+               ->  Seq Scan on p1 p1_1  (cost=xxx..xxx rows=1 width=xxx)
+               ->  Seq Scan on p1c1 p1_2  (cost=xxx..xxx rows=100 width=xxx)
+               ->  Seq Scan on p1c2 p1_3  (cost=xxx..xxx rows=100 width=xxx)
+               ->  Seq Scan on p1c3 p1_4  (cost=xxx..xxx rows=100 width=xxx)
 
 \o results/ut-R.tmpout
 /*+Rows(p1c1 p2c1 #1)*/
@@ -4796,22 +4725,22 @@ error hint:
  Hash Join  (cost=xxx..xxx rows=301 width=xxx)
    Hash Cond: (p2.c1 = p1.c1)
    ->  Append  (cost=xxx..xxx rows=304 width=xxx)
-         ->  Seq Scan on p2  (cost=xxx..xxx rows=1 width=xxx)
-         ->  Seq Scan on p2c1  (cost=xxx..xxx rows=1 width=xxx)
-         ->  Seq Scan on p2c2  (cost=xxx..xxx rows=1 width=xxx)
-         ->  Seq Scan on p2c3  (cost=xxx..xxx rows=1 width=xxx)
-         ->  Seq Scan on p2c1c1  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c1c2  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c2c1  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c2c2  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c3c1  (cost=xxx..xxx rows=50 width=xxx)
-         ->  Seq Scan on p2c3c2  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2 p2_1  (cost=xxx..xxx rows=1 width=xxx)
+         ->  Seq Scan on p2c1 p2_2  (cost=xxx..xxx rows=1 width=xxx)
+         ->  Seq Scan on p2c2 p2_3  (cost=xxx..xxx rows=1 width=xxx)
+         ->  Seq Scan on p2c3 p2_4  (cost=xxx..xxx rows=1 width=xxx)
+         ->  Seq Scan on p2c1c1 p2_5  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c1c2 p2_6  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c2c1 p2_7  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c2c2 p2_8  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c3c1 p2_9  (cost=xxx..xxx rows=50 width=xxx)
+         ->  Seq Scan on p2c3c2 p2_10  (cost=xxx..xxx rows=50 width=xxx)
    ->  Hash  (cost=xxx..xxx rows=301 width=xxx)
          ->  Append  (cost=xxx..xxx rows=301 width=xxx)
-               ->  Seq Scan on p1  (cost=xxx..xxx rows=1 width=xxx)
-               ->  Seq Scan on p1c1  (cost=xxx..xxx rows=100 width=xxx)
-               ->  Seq Scan on p1c2  (cost=xxx..xxx rows=100 width=xxx)
-               ->  Seq Scan on p1c3  (cost=xxx..xxx rows=100 width=xxx)
+               ->  Seq Scan on p1 p1_1  (cost=xxx..xxx rows=1 width=xxx)
+               ->  Seq Scan on p1c1 p1_2  (cost=xxx..xxx rows=100 width=xxx)
+               ->  Seq Scan on p1c2 p1_3  (cost=xxx..xxx rows=100 width=xxx)
+               ->  Seq Scan on p1c3 p1_4  (cost=xxx..xxx rows=100 width=xxx)
 
 ----
 ---- No. R-3-5 conflict join method hint
