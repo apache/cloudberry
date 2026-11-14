@@ -278,6 +278,45 @@ IsInplaceUpdateOid(Oid relid)
 }
 
 /*
+ * HasVersionedAttributes
+ *		Return whether the relation has versioned attributes.
+ */
+bool
+HasVersionedAttributes(Relation relation)
+{
+	Assert(RelationGetRelid(relation) != InvalidOid);
+
+	/*
+	 * If the relation does not have a rowtype, its attributes obviously are
+	 * not versioned, since attribute versioning exists to protect against
+	 * deforming composite datums incompatible with the current type
+	 * definition.
+	 */
+	/* Some Cloudberry auxiliary heaps have a table relkind but no rowtype. */
+	if (!OidIsValid(relation->rd_rel->reltype))
+		return false;
+
+	Assert(RELKIND_HAS_ROWTYPE(relation->rd_rel->relkind));
+
+	/*
+	 * Bootstrapped relations are not versioned, for two reasons:
+	 *
+	 * First, they can't ever change, i.e. we never need to detect mismatches.
+	 *
+	 * Second, to determine an attribute's version, we might need to do
+	 * syscache lookups, which could lead to recursion dangers (this is not
+	 * the case right now, but might again be at a later point). As there's no
+	 * reason to version, it's not worth analyzing further.
+	 */
+	if (RelationGetRelid(relation) < FirstUnpinnedObjectId)
+		return false;
+
+	Assert(!IsBootstrapProcessingMode());
+
+	return true;
+}
+
+/*
  * IsToastRelation
  *		True iff relation is a TOAST support relation (or index).
  *

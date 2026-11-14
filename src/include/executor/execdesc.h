@@ -294,6 +294,7 @@ typedef struct OidAssignment
 	Oid			keyOid4;		/* 4th generic OID field, meaning depends on object type */
 
 	Oid			oid;			/* OID to assign */
+	uint64		attributeVersion; /* payload for ATTRIBUTE_VERSION_ASSIGNMENT */
 
 } OidAssignment;
 
@@ -303,6 +304,9 @@ typedef struct OidAssignment
  * choice of an OID like normally.
  */
 #define INDEX_NAME_ASSIGNMENT		1
+
+/* A coordinator-generated attribute version, keyed by relation and attnum. */
+#define ATTRIBUTE_VERSION_ASSIGNMENT	2
 
 /* ----------------
  *		query descriptor:
