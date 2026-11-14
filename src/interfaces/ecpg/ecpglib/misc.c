@@ -454,17 +454,38 @@ ECPGis_noind_null(enum ECPGttype type, const void *ptr)
 #ifdef WIN32
 #ifdef ENABLE_THREAD_SAFETY
 
-void
-win32_pthread_mutex(volatile pthread_mutex_t *mutex)
+int
+pthread_mutex_init(pthread_mutex_t *mp, void *attr)
 {
-	if (mutex->handle == NULL)
+	mp->initstate = 0;
+	return 0;
+}
+
+int
+pthread_mutex_lock(pthread_mutex_t *mp)
+{
+	/* Initialize the csection if not already done */
+	if (mp->initstate != 1)
 	{
-		while (InterlockedExchange((LONG *) &mutex->initlock, 1) == 1)
-			Sleep(0);
-		if (mutex->handle == NULL)
-			mutex->handle = CreateMutex(NULL, FALSE, NULL);
-		InterlockedExchange((LONG *) &mutex->initlock, 0);
+		LONG		istate;
+
+		while ((istate = InterlockedExchange(&mp->initstate, 2)) == 2)
+			Sleep(0);			/* wait, another thread is doing this */
+		if (istate != 1)
+			InitializeCriticalSection(&mp->csection);
+		InterlockedExchange(&mp->initstate, 1);
 	}
+	EnterCriticalSection(&mp->csection);
+	return 0;
+}
+
+int
+pthread_mutex_unlock(pthread_mutex_t *mp)
+{
+	if (mp->initstate != 1)
+		return EINVAL;
+	LeaveCriticalSection(&mp->csection);
+	return 0;
 }
 
 static pthread_mutex_t win32_pthread_once_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -492,13 +513,14 @@ char *
 ecpg_gettext(const char *msgid)
 {
 	/*
-	 * If multiple threads come through here at about the same time, it's okay
-	 * for more than one of them to call bindtextdomain().  But it's not okay
-	 * for any of them to reach dgettext() before bindtextdomain() is
-	 * complete, so don't set the flag till that's done.  Use "volatile" just
-	 * to be sure the compiler doesn't try to get cute.
+	 * At least on Windows, there are gettext implementations that fail if
+	 * multiple threads call bindtextdomain() concurrently.  Use a mutex and
+	 * flag variable to ensure that we call it just once per process.  It is
+	 * not known that similar bugs exist on non-Windows platforms, but we
+	 * might as well do it the same way everywhere.
 	 */
 	static volatile bool already_bound = false;
+	static pthread_mutex_t binddomain_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 	if (!already_bound)
 	{
@@ -508,14 +530,26 @@ ecpg_gettext(const char *msgid)
 #else
 		int			save_errno = errno;
 #endif
-		const char *ldir;
 
-		/* No relocatable lookup here because the binary could be anywhere */
-		ldir = getenv("PGLOCALEDIR");
-		if (!ldir)
-			ldir = LOCALEDIR;
-		bindtextdomain(PG_TEXTDOMAIN("ecpglib"), ldir);
-		already_bound = true;
+		(void) pthread_mutex_lock(&binddomain_mutex);
+
+		if (!already_bound)
+		{
+			const char *ldir;
+
+			/*
+			 * No relocatable lookup here because the calling executable could
+			 * be anywhere
+			 */
+			ldir = getenv("PGLOCALEDIR");
+			if (!ldir)
+				ldir = LOCALEDIR;
+			bindtextdomain(PG_TEXTDOMAIN("ecpglib"), ldir);
+			already_bound = true;
+		}
+
+		(void) pthread_mutex_unlock(&binddomain_mutex);
+
 #ifdef WIN32
 		SetLastError(save_errno);
 #else
