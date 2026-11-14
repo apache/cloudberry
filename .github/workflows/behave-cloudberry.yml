@@ -22,7 +22,8 @@
 # --------------------------------------------------------------------
 # Description:
 #
-#   This workflow runs Apache Cloudberry gpMgmt Behave tests on Rocky Linux 9.
+#   This workflow runs Apache Cloudberry gpMgmt Behave tests on Rocky Linux
+#   8, 9 and 10.
 #   It is intentionally separated from the main build/installcheck workflow so
 #   that Behave-specific matrix expansion, environment setup, result parsing,
 #   and iterative test stabilization do not disturb the primary CI path.
@@ -30,14 +31,16 @@
 # Workflow Overview:
 # 1. **Prepare Behave Matrix**:
 #    - Expands the selected Behave command-level test matrix.
-#    - Supports manual filtering through `test_selection`.
+#    - Crosses it with the selected operating systems.
+#    - Supports manual filtering through `test_selection` and `os_selection`.
 #
-# 2. **Build Job**:
-#    - Builds Apache Cloudberry and creates source/RPM artifacts for reuse
-#      within this workflow.
+# 2. **Build Job (Matrix)**:
+#    - Builds Apache Cloudberry once per OS and creates source/RPM
+#      artifacts for reuse within this workflow.
 #
 # 3. **Behave Job (Matrix)**:
-#    - Creates a demo cluster for each Behave matrix entry.
+#    - Creates a demo cluster for each OS and Behave matrix entry, from
+#      that OS's RPM.
 #    - Runs the selected gpMgmt feature file(s) in isolation.
 #    - Parses Behave summaries and uploads logs/metadata artifacts.
 #
@@ -45,7 +48,7 @@
 #    - Aggregates build and Behave job status into a final workflow summary.
 #
 # Execution Environment:
-# - **Runs On**: ubuntu-22.04 with Rocky Linux 9 containers.
+# - **Runs On**: ubuntu-22.04 with Rocky Linux 8, 9 and 10 containers.
 # - **Primary Test Scope**: `gpMgmt/test/behave/mgmt_utils`
 #
 # Notes:
@@ -76,6 +79,11 @@ on:
     inputs:
       test_selection:
         description: 'Select Behave tests to run (comma-separated). Examples: ic-behave-gpconfig,ic-behave-gpstart'
+        required: false
+        default: 'all'
+        type: string
+      os_selection:
+        description: 'Select operating systems to run on (comma-separated). Examples: rocky9 or rocky8,rocky10'
         required: false
         default: 'all'
         type: string
@@ -132,18 +140,51 @@ jobs:
     if: needs.check-skip.outputs.should_skip != 'true'
     outputs:
       behave-matrix: ${{ steps.set-matrix.outputs.matrix }}
+      os-matrix: ${{ steps.set-matrix.outputs.os_matrix }}
     steps:
       - id: set-matrix
-        # TEST_SELECTION comes in through the environment rather than being
-        # interpolated into the script: a workflow_dispatch input is attacker
-        # controlled, and "${{ ... }}" is substituted before bash parses the
-        # line, so a value like $(...) would run as a command substitution.
+        # TEST_SELECTION and OS_SELECTION come in through the environment
+        # rather than being interpolated into the script: a workflow_dispatch
+        # input is attacker controlled, and "${{ ... }}" is substituted before
+        # bash parses the line, so a value like $(...) would run as a command
+        # substitution.
         env:
           TEST_SELECTION: ${{ github.event.inputs.test_selection || 'all' }}
+          OS_SELECTION: ${{ github.event.inputs.os_selection || 'all' }}
         run: |
           echo "=== Behave Matrix Preparation Diagnostics ==="
           echo "Event type: ${{ github.event_name }}"
           echo "Test selection input: '${TEST_SELECTION}'"
+          echo "OS selection input: '${OS_SELECTION}'"
+
+          # Each OS gets its own RPM build, and every selected suite runs on
+          # every selected OS. The names are the suffixes of the
+          # apache/incubator-cloudberry:cbdb-build-<os>-latest images.
+          ALL_OS='rocky8 rocky9 rocky10'
+
+          IFS=',' read -ra SELECTED_OS <<< "${OS_SELECTION}"
+          if [[ "${SELECTED_OS[*]}" == "all" || -z "${SELECTED_OS[*]}" ]]; then
+            read -ra SELECTED_OS <<< "$ALL_OS"
+          fi
+
+          INVALID_OS=()
+          FILTERED_OS=()
+          for OS in "${SELECTED_OS[@]}"; do
+            OS=$(echo "$OS" | tr -d '[:space:]')
+            if tr ' ' '\n' <<< "$ALL_OS" | grep -Fxq "$OS"; then
+              FILTERED_OS+=("$OS")
+            else
+              INVALID_OS+=("$OS")
+            fi
+          done
+
+          if [[ ${#INVALID_OS[@]} -gt 0 ]]; then
+            echo "::error::Invalid OS(es) selected: ${INVALID_OS[*]}"
+            echo "Valid OSes are: ${ALL_OS// /, }"
+            exit 1
+          fi
+
+          OS_JSON=$(printf '%s\n' "${FILTERED_OS[@]}" | awk '!seen[$0]++' | jq -R . | jq -cs .)
 
           # 17 of the 23 suites under test/behave/mgmt_utils run here. The
           # other six are left out on purpose:
@@ -244,40 +285,43 @@ jobs:
             exit 1
           fi
 
-          RESULT='{"include":['
-          FIRST=true
-          for TEST in "${FILTERED_TESTS[@]}"; do
-            CONFIG=$(jq -c --arg test "$TEST" '.include[] | select(.test == $test)' <<< "$ALL_BEHAVE_TESTS")
-            if [[ "$FIRST" == true ]]; then
-              FIRST=false
-            else
-              RESULT="${RESULT},"
-            fi
-            RESULT="${RESULT}${CONFIG}"
-          done
-          RESULT="${RESULT}]}"
+          TESTS_JSON=$(printf '%s\n' "${FILTERED_TESTS[@]}" | jq -R . | jq -cs .)
+          RESULT=$(jq -c --argjson tests "$TESTS_JSON" --argjson oses "$OS_JSON" '
+            {include: [$oses[] as $os
+                       | .include[] | select(.test as $t | $tests | index($t))
+                       | . + {os: $os}]}' <<< "$ALL_BEHAVE_TESTS")
 
+          echo "Final OS list: $OS_JSON"
           echo "Final behave matrix configuration:"
           echo "$RESULT" | jq .
 
           {
+            echo "os_matrix=$OS_JSON"
             echo "matrix<<EOF"
             echo "$RESULT"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build Apache Cloudberry RPM
-    needs: check-skip
+    # Not "Build Apache Cloudberry RPM": .asf.yaml requires a check by that
+    # name, and it belongs to build-cloudberry.yml.
+    name: Build Behave RPM (${{ matrix.os }})
+    needs: [check-skip, prepare-behave-matrix]
     if: needs.check-skip.outputs.should_skip != 'true'
     env:
       JOB_TYPE: build
     runs-on: ubuntu-22.04
     timeout-minutes: 120
+    strategy:
+      # One OS failing to build says nothing about the others; let them go
+      # on so their suites still run.
+      fail-fast: false
+      matrix:
+        os: ${{ fromJson(needs.prepare-behave-matrix.outputs.os-matrix) }}
     outputs:
       build_timestamp: ${{ steps.set_timestamp.outputs.timestamp }}
     container:
-      image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+      image: apache/incubator-cloudberry:cbdb-build-${{ matrix.os }}-latest
       options: >-
         --user root
         -h cdw
@@ -398,7 +442,8 @@ jobs:
 
           "${SRC_DIR}"/devops/build/packaging/rpm/build-rpm.sh --version "${CBDB_VERSION}" --release "${BUILD_NUMBER}" "${DEBUG_RPMBUILD_OPT}"
 
-          os_version=$(grep -oP '(?<=^VERSION_ID=")[0-9]' /etc/os-release)
+          # [0-9]+, not [0-9]: Rocky 10's VERSION_ID is "10.0".
+          os_version=$(grep -oP '(?<=^VERSION_ID=")[0-9]+' /etc/os-release)
           RPM_FILE="${HOME}"/rpmbuild/RPMS/x86_64/apache-cloudberry-db-incubating-"${CBDB_VERSION}"-"${BUILD_NUMBER}""${DEBUG_IDENTIFIER}".el"${os_version}".x86_64.rpm
           cp "${RPM_FILE}" "${SRC_DIR}"
           RPM_DEBUG="${HOME}"/rpmbuild/RPMS/x86_64/apache-cloudberry-db-incubating-debuginfo-"${CBDB_VERSION}"-"${BUILD_NUMBER}""${DEBUG_IDENTIFIER}".el"${os_version}".x86_64.rpm
@@ -407,7 +452,7 @@ jobs:
       - name: Upload build logs
         uses: actions/upload-artifact@v4
         with:
-          name: behave-build-logs-${{ env.BUILD_TIMESTAMP }}
+          name: behave-build-logs-${{ matrix.os }}-${{ env.BUILD_TIMESTAMP }}
           path: |
             build-logs/
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
@@ -415,36 +460,42 @@ jobs:
       - name: Upload Cloudberry RPM build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: apache-cloudberry-db-incubating-rpm-build-artifacts
+          name: apache-cloudberry-db-incubating-rpm-build-artifacts-${{ matrix.os }}
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
           if-no-files-found: error
           path: |
             *.rpm
 
+      # The tarball is taken after the build, so it carries this OS's
+      # objects; each OS's Behave jobs need their own.
       - name: Upload Cloudberry source build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: apache-cloudberry-db-incubating-source-build-artifacts
+          name: apache-cloudberry-db-incubating-source-build-artifacts-${{ matrix.os }}
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
           if-no-files-found: error
           path: |
             apache-cloudberry-incubating-src.tgz
 
   behave:
-    name: ${{ matrix.test }}
+    name: ${{ matrix.test }} (${{ matrix.os }})
     needs: [check-skip, build, prepare-behave-matrix]
+    # needs.build.result is "failure" as soon as one OS's build fails, so
+    # requiring "success" would skip every OS's suites. Run them whenever
+    # the build job ran at all; the suites of an OS whose build failed then
+    # fail at the artifact download, and the other OSes are unaffected.
     if: |
       !cancelled() &&
       needs.check-skip.outputs.should_skip != 'true' &&
       needs.prepare-behave-matrix.result == 'success' &&
-      needs.build.result == 'success'
+      needs.build.result != 'skipped'
     runs-on: ubuntu-22.04
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.prepare-behave-matrix.outputs.behave-matrix) }}
     container:
-      image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+      image: apache/incubator-cloudberry:cbdb-build-${{ matrix.os }}-latest
       options: >-
         --privileged
         --user root
@@ -526,7 +577,7 @@ jobs:
         if: always()
         run: |
           {
-            echo "# Behave Job Summary: ${{ matrix.test }}"
+            echo "# Behave Job Summary: ${{ matrix.test }} (${{ matrix.os }})"
             echo "## Environment"
             echo "- Start Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
             echo "- OS Version: $(cat /etc/redhat-release)"
@@ -535,7 +586,7 @@ jobs:
       - name: Download Cloudberry RPM build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: apache-cloudberry-db-incubating-rpm-build-artifacts
+          name: apache-cloudberry-db-incubating-rpm-build-artifacts-${{ matrix.os }}
           path: ${{ github.workspace }}/rpm_build_artifacts
           merge-multiple: false
           run-id: ${{ github.run_id }}
@@ -544,7 +595,7 @@ jobs:
       - name: Download Cloudberry Source build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: apache-cloudberry-db-incubating-source-build-artifacts
+          name: apache-cloudberry-db-incubating-source-build-artifacts-${{ matrix.os }}
           path: ${{ github.workspace }}/source_build_artifacts
           merge-multiple: false
           run-id: ${{ github.run_id }}
@@ -573,6 +624,7 @@ jobs:
         if: success()
         env:
           RPM_FILE: ${{ steps.verify-artifacts.outputs.rpm_file }}
+          TARGET_OS: ${{ matrix.os }}
         run: |
           set -eo pipefail
 
@@ -580,7 +632,8 @@ jobs:
           dnf makecache --refresh || dnf makecache
           rm -rf /usr/local/cloudberry-db
 
-          if ! time dnf install -y --setopt=retries=10 --releasever=9 "${RPM_FILE}"; then
+          releasever="${TARGET_OS#rocky}"
+          if ! time dnf install -y --setopt=retries=10 --releasever="${releasever}" "${RPM_FILE}"; then
             echo "::error::RPM installation failed"
             exit 1
           fi
@@ -888,7 +941,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: behave-logs-${{ matrix.test }}-${{ needs.build.outputs.build_timestamp || github.run_id }}
+          name: behave-logs-${{ matrix.os }}-${{ matrix.test }}-${{ needs.build.outputs.build_timestamp || github.run_id }}
           path: |
             build-logs/
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
@@ -897,7 +950,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: behave-metadata-${{ matrix.test }}
+          name: behave-metadata-${{ matrix.os }}-${{ matrix.test }}
           path: |
             test_results*.txt
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
@@ -913,6 +966,7 @@ jobs:
           {
             echo "# Apache Cloudberry Behave Report"
             echo "## Job Status"
+            echo "- Operating Systems: ${{ join(fromJson(needs.prepare-behave-matrix.outputs.os-matrix || '[]'), ', ') }}"
             echo "- Build Job: ${{ needs.build.result }}"
             echo "- Behave Job: ${{ needs.behave.result }}"
             echo "- Completion Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
