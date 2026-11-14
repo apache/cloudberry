@@ -377,6 +377,32 @@ jobs:
               },
               {"test":"ic-walrep",
                "make_configs":["src/test/walrep:installcheck"]
+              },
+              {"test":"ic-tap",
+               "make_configs":["src/bin/pg_archivecleanup:installcheck",
+                               "src/bin/pg_config:installcheck",
+                               "src/bin/pg_controldata:installcheck",
+                               "src/bin/pg_resetwal:installcheck",
+                               "src/bin/pg_waldump:installcheck",
+                               "src/interfaces/libpq:installcheck",
+                               "src/test/postmaster:installcheck",
+                               "src/test/modules/ssl_passphrase_callback:install installcheck",
+                               "src/test/modules/test_custom_rmgrs:install installcheck"]
+              },
+              {"test":"ic-pl-modules",
+               "make_configs":["src/pl/plperl:installcheck",
+                               "src/test/modules/dummy_index_am:install installcheck",
+                               "src/test/modules/dummy_seclabel:install installcheck",
+                               "src/test/modules/test_bloomfilter:install installcheck",
+                               "src/test/modules/test_ddl_deparse:install installcheck",
+                               "src/test/modules/test_ginpostinglist:install installcheck",
+                               "src/test/modules/test_integerset:install installcheck",
+                               "src/test/modules/test_lfind:install installcheck",
+                               "src/test/modules/test_parser:install installcheck",
+                               "src/test/modules/test_planner:install installcheck",
+                               "src/test/modules/test_rbtree:install installcheck",
+                               "src/test/modules/test_regex:install installcheck",
+                               "src/test/modules/test_shm_mq:install installcheck"]
               }
             ]
           }'
@@ -1777,7 +1803,7 @@ jobs:
           fi
 
           # Read configs into array
-          IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
+          mapfile -t configs <<< "${{ join(matrix.make_configs, fromJSON('"\n"')) }}"
 
           echo "=== Starting test execution for ${{ matrix.test }} ==="
           echo "Number of configurations to execute: ${#configs[@]}"
@@ -1958,7 +1984,7 @@ jobs:
           overall_status=0
 
           # Get configs array to create context for results
-          IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
+          mapfile -t configs <<< "${{ join(matrix.make_configs, fromJSON('"\n"')) }}"
 
           echo "=== Starting results parsing for ${{ matrix.test }} ==="
           echo "Number of configurations to parse: ${#configs[@]}"
@@ -2154,7 +2180,7 @@ jobs:
             fi
 
             # Process results for each configuration
-            IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
+            mapfile -t configs <<< "${{ join(matrix.make_configs, fromJSON('"\n"')) }}"
 
             for ((i=0; i<NUM_CONFIGS; i++)); do
               config="${configs[$i]}"
