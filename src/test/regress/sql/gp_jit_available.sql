@@ -1,0 +1,33 @@
+--
+-- installcheck-jit runs jit_schedule with JIT forced and compares the answers
+-- with the ordinary expected output.
+--
+select pg_jit_available();
+select gp_segment_id, pg_jit_available() from gp_dist_random('gp_id') order by 1;
+
+-- gp_jit_available_plan() runs a query under EXPLAIN ANALYZE and reports
+-- what the coordinator did with it.
+create table gp_jit_available (a int, b int) distributed by (a);
+insert into gp_jit_available select g, g % 7 from generate_series(1, 1000) g;
+analyze gp_jit_available;
+
+create function gp_jit_available_plan(q text, out jitted bool,
+                                      out inlined bool, out optimized bool)
+language plpgsql as $$
+declare
+  line text;
+begin
+  jitted := false; inlined := false; optimized := false;
+  for line in execute 'explain (analyze, timing off, summary off) ' || q loop
+    jitted := jitted or line ~ '^\s*Functions: [1-9]';
+    inlined := inlined or line ~ '^\s*Options: .*Inlining true';
+    optimized := optimized or line ~ '^\s*Options: .*Optimization true';
+  end loop;
+end $$;
+
+-- with installcheck-jit's settings, a plan is compiled, inlined and
+-- optimized whichever optimizer made it, however cheap it is
+select * from gp_jit_available_plan('select count(*), sum(b) from gp_jit_available');
+
+drop function gp_jit_available_plan(text);
+drop table gp_jit_available;
