@@ -3246,9 +3246,11 @@ sub wait_for_catchup
 	  . $self->name . "\n";
 	# Before release 12 walreceiver just set the application name to
 	# "walreceiver"
+	# Cloudberry: the recovery configuration that pg_basebackup -R and
+	# pg_rewind --write-recovery-conf write sets it to "gp_walreceiver".
 	my $query = qq[SELECT '$target_lsn' <= ${mode}_lsn AND state = 'streaming'
          FROM pg_catalog.pg_stat_replication
-         WHERE application_name IN ('$standby_name', 'walreceiver')];
+         WHERE application_name IN ('$standby_name', 'walreceiver', 'gp_walreceiver')];
 	if (!$self->poll_query_until('postgres', $query))
 	{
 		if (PostgreSQL::Test::Utils::has_wal_read_bug)
