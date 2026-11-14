@@ -65,7 +65,11 @@ WHERE t1.unique1 < 1000;
 SET enable_mergejoin TO off;
 
 -- Test for varlena datatype with expr evaluation
-CREATE TABLE expr_key (x numeric, t text);
+-- Keep both sides on one segment so that a parameterized Memoize path is
+-- available, including in the parallel regression configuration.
+SET enable_nestloop TO on;
+SET enable_parallel TO off;
+CREATE TABLE expr_key (x numeric, t text) DISTRIBUTED REPLICATED;
 INSERT INTO expr_key (x, t)
 SELECT d1::numeric, d1::text FROM (
     SELECT round((d / pi())::numeric, 7) AS d1 FROM generate_series(1, 20) AS d
@@ -77,12 +81,17 @@ INSERT INTO expr_key SELECT * FROM expr_key;
 CREATE INDEX expr_key_idx_x_t ON expr_key (x, t);
 VACUUM ANALYZE expr_key;
 
--- Ensure we get we get a cache miss and hit for each of the 20 distinct values
+-- Exercise repeated numeric and text expression keys.
 SELECT explain_memoize('
 SELECT * FROM expr_key t1 INNER JOIN expr_key t2
 ON t1.x = t2.t::numeric AND t1.t::numeric = t2.x;', false);
 
+SELECT count(*) FROM expr_key t1 INNER JOIN expr_key t2
+ON t1.x = t2.t::numeric AND t1.t::numeric = t2.x;
+
 DROP TABLE expr_key;
+RESET enable_parallel;
+RESET enable_nestloop;
 
 -- Reduce work_mem so that we see some cache evictions
 SET work_mem TO '64kB';
@@ -93,6 +102,9 @@ SELECT explain_memoize('
 SELECT COUNT(*),AVG(t1.unique1) FROM tenk1 t1
 INNER JOIN tenk1 t2 ON t1.unique1 = t2.thousand
 WHERE t2.unique1 < 1200;', true);
+
+-- Keep the plans returned by explain_memoize stable in parallel test runs.
+SET enable_parallel TO off;
 
 CREATE TABLE flt (f float);
 CREATE INDEX flt_f_idx ON flt (f);
@@ -130,6 +142,7 @@ SELECT explain_memoize('
 SELECT * FROM strtest s1 INNER JOIN strtest s2 ON s1.t >= s2.t;', false);
 
 DROP TABLE strtest;
+RESET enable_parallel;
 
 -- Ensure memoize works with partitionwise join
 SET enable_partitionwise_join TO on;
