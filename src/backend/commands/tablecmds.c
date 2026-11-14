@@ -71,6 +71,7 @@
 #include "cdb/cdbappendonlyxlog.h"
 #include "cdb/cdbaocsam.h"
 #include "cdb/cdbcat.h"
+#include "cdb/cdbhash.h"
 #include "cdb/memquota.h"
 #include "commands/cluster.h"
 #include "commands/copy.h"
@@ -394,6 +395,8 @@ static void ATTypedTableRecursion(List **wqueue, Relation rel, AlterTableCmd *cm
 								  AlterTableUtilityContext *context);
 static List *find_typed_table_dependencies(Oid typeOid, const char *typeName,
 										   DropBehavior behavior);
+static void check_rowtype_distribution_recurse(Oid typeOid, Relation origRelation,
+											  HTAB *visited);
 static void find_composite_type_dependencies_recurse(Oid typeOid, Relation origRelation,
 													 const char *origTypeName, HTAB *visited);
 static void check_composite_type_dependency(ObjectAddress *depobj, Oid typeOid,
@@ -8455,6 +8458,138 @@ ATTypedTableRecursion(List **wqueue, Relation rel, AlterTableCmd *cmd,
 
 
 /*
+ * check_rowtype_distribution
+ *
+ * Adding or dropping an attribute changes hash_record's result, even when
+ * the added attribute is NULL in every existing row.  It can also make the
+ * type unhashable.  Reject either operation if the row type is used, directly
+ * or through a container type, in a distribution key.  Such tables would need
+ * to be redistributed, which ALTER TYPE and ALTER TABLE do not arrange for.
+ *
+ * Unlike find_composite_type_dependencies(), this allows ordinary stored
+ * columns: adding and dropping attributes does not change the representation
+ * of the surviving fields.  Only the distribution policy needs protection.
+ */
+void
+check_rowtype_distribution(Relation rel)
+{
+	HASHCTL		hctl;
+	HTAB	   *visited;
+
+	if (!OidIsValid(rel->rd_rel->reltype))
+		return;
+
+	memset(&hctl, 0, sizeof(hctl));
+	hctl.keysize = sizeof(Oid);
+	hctl.entrysize = sizeof(Oid);
+	hctl.hcxt = CurrentMemoryContext;
+	visited = hash_create("distribution key types", 32, &hctl,
+						  HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
+
+	check_rowtype_distribution_recurse(rel->rd_rel->reltype, rel, visited);
+
+	hash_destroy(visited);
+}
+
+static void
+check_rowtype_distribution_recurse(Oid typeOid, Relation origRelation,
+								  HTAB *visited)
+{
+	Relation	depRel;
+	ScanKeyData key[2];
+	SysScanDesc depScan;
+	HeapTuple	depTup;
+	bool		visited_already;
+
+	check_stack_depth();
+	hash_search(visited, &typeOid, HASH_ENTER, &visited_already);
+	if (visited_already)
+		return;
+
+	/* Serialize with transactions adding dependencies on this type. */
+	LockDatabaseObject(TypeRelationId, typeOid, 0, AccessExclusiveLock);
+
+	depRel = table_open(DependRelationId, AccessShareLock);
+	ScanKeyInit(&key[0], Anum_pg_depend_refclassid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(TypeRelationId));
+	ScanKeyInit(&key[1], Anum_pg_depend_refobjid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(typeOid));
+	depScan = systable_beginscan(depRel, DependReferenceIndexId, true,
+								 NULL, 2, key);
+
+	while (HeapTupleIsValid(depTup = systable_getnext(depScan)))
+	{
+		Form_pg_depend dep = (Form_pg_depend) GETSTRUCT(depTup);
+
+		if (dep->classid == TypeRelationId)
+		{
+			HeapTuple	typeTup;
+			Form_pg_type typeForm;
+			bool		contains_type;
+
+			LockDatabaseObject(TypeRelationId, dep->objid, 0, AccessExclusiveLock);
+			typeTup = SearchSysCache1(TYPEOID, ObjectIdGetDatum(dep->objid));
+			if (!HeapTupleIsValid(typeTup))
+				elog(ERROR, "cache lookup failed for type %u", dep->objid);
+			typeForm = (Form_pg_type) GETSTRUCT(typeTup);
+			contains_type = typeForm->typelem == typeOid ||
+				typeForm->typbasetype == typeOid;
+			if (typeForm->typtype == TYPTYPE_RANGE)
+				contains_type = get_range_subtype(dep->objid) == typeOid;
+			else if (typeForm->typtype == TYPTYPE_MULTIRANGE)
+				contains_type = get_multirange_range(dep->objid) == typeOid;
+			ReleaseSysCache(typeTup);
+
+			/* Ignore expression-only dependencies, such as domain defaults. */
+			if (contains_type)
+				check_rowtype_distribution_recurse(dep->objid, origRelation, visited);
+		}
+		else if (dep->classid == RelationRelationId && dep->objsubid > 0)
+		{
+			Relation	rel = relation_open(dep->objid, AccessShareLock);
+			TupleDesc	desc = RelationGetDescr(rel);
+
+			if (dep->objsubid <= desc->natts)
+			{
+				Form_pg_attribute att = TupleDescAttr(desc, dep->objsubid - 1);
+
+				if (!att->attisdropped && att->atttypid == typeOid)
+				{
+					GpPolicy   *policy = rel->rd_cdbpolicy;
+
+					if (GpPolicyIsHashPartitioned(policy))
+					{
+						for (int i = 0; i < policy->nattrs; i++)
+						{
+							if (policy->attrs[i] == att->attnum)
+								ereport(ERROR,
+										(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+										 errmsg("cannot alter type \"%s\" because column \"%s\" of relation \"%s\" uses it in a distribution key",
+												RelationGetRelationName(origRelation),
+												NameStr(att->attname),
+												RelationGetRelationName(rel))));
+						}
+					}
+
+					/* A table or composite row type can itself be a key. */
+					if (OidIsValid(rel->rd_rel->reltype))
+						check_rowtype_distribution_recurse(rel->rd_rel->reltype,
+														  origRelation, visited);
+				}
+			}
+
+			/* Prevent a concurrent SET DISTRIBUTED BY until we commit. */
+			relation_close(rel, NoLock);
+		}
+	}
+
+	systable_endscan(depScan);
+	table_close(depRel, AccessShareLock);
+}
+
+/*
  * find_composite_type_dependencies
  *
  * Check to see if the type "typeOid" is being used in a way that prevents
@@ -9402,6 +9537,8 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		table_close(attrdesc, RowExclusiveLock);
 		return InvalidObjectAddress;
 	}
+
+	check_rowtype_distribution(rel);
 
 	/*
 	 * Okay, we need to add the column, so go ahead and do parse
@@ -15365,7 +15502,13 @@ ATPrepAlterColumnType(List **wqueue,
 		{
 			old_opfamily = get_opclass_family(old_opclass);
 
-			new_opclass = GetDefaultOpClass(targettype, HASH_AM_OID);
+			/*
+			 * A generic operator class, such as array_ops, is not enough:
+			 * its support functions must handle the actual element or field
+			 * types too.  Use the same check as when choosing distribution
+			 * keys for CREATE TABLE.
+			 */
+			new_opclass = cdb_default_distribution_opclass_for_type(targettype);
 			if (new_opclass)
 			{
 				new_opfamily = get_opclass_family(new_opclass);
@@ -15379,7 +15522,7 @@ ATPrepAlterColumnType(List **wqueue,
 			else
 			{
 				/*
-				 * The new datatype doesn't have a default operator class.
+				 * The new datatype doesn't have a usable default operator class.
 				 * We'll have to turn the table randomly distributed.
 				 */
 				new_opfamily = InvalidOid;

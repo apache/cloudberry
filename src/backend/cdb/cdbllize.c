@@ -266,7 +266,10 @@ get_partitioned_policy_from_path(PlannerInfo *root, Path *path)
 						 */
 						typeid = exprType((Node *) target->expr);
 
-						opclass = GetDefaultOpClass(typeid, HASH_AM_OID);
+						opclass = cdb_default_distribution_opclass_for_type(typeid);
+						if (!OidIsValid(opclass))
+							continue;
+
 						eqop = cdb_eqop_in_hash_opfamily(get_opclass_family(opclass), typeid);
 						foreach(opfam_cell, ec->ec_opfamilies)
 						{

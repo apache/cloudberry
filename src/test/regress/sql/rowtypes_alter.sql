@@ -1088,7 +1088,8 @@ DROP TYPE rta_type;
 -- Same in a set returning function, with the datum nested in a table's row
 -- type
 CREATE TYPE rta_type AS (a int);
-CREATE TABLE rta_tab (c rta_type);
+-- The row type is altered below; it must not be a distribution key.
+CREATE TABLE rta_tab (c rta_type) DISTRIBUTED RANDOMLY;
 CREATE FUNCTION rta_func() RETURNS TABLE (a int, c rta_tab)
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -1113,7 +1114,8 @@ DROP TYPE rta_type;
 -- Same in a function, with the datum nested in a variable of a table's row
 -- type
 CREATE TYPE rta_type AS (a int);
-CREATE TABLE rta_tab (c rta_type);
+-- The row type is altered below; it must not be a distribution key.
+CREATE TABLE rta_tab (c rta_type) DISTRIBUTED RANDOMLY;
 CREATE FUNCTION rta_func() RETURNS void LANGUAGE plpgsql AS $$
 DECLARE
   r rta_tab;
