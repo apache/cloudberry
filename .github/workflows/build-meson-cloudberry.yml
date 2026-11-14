@@ -1,0 +1,1240 @@
+# --------------------------------------------------------------------
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership.  The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License.  You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.  See the License for the specific language governing
+# permissions and limitations under the License.
+# --------------------------------------------------------------------
+#
+# Apache Cloudberry Meson Build
+#
+# PostgreSQL 16 introduced meson as a second build system alongside
+# autoconf/make. This workflow builds Cloudberry with meson, brings up a real
+# demo cluster on the result, and runs the regression suites against it -- the
+# same Makefile targets build-cloudberry.yml runs against the autoconf build.
+#
+# This does NOT replace the autoconf build. Until the two are proven
+# equivalent, build-cloudberry.yml remains the authoritative build; this
+# workflow exists to stop the meson files from rotting and to surface
+# divergence early.
+#
+# Shape, mirroring build-cloudberry.yml:
+#
+#   check-skip -> install-parity ------------------------------> report
+#              -> build (matrix) -> rpm-install-test ----------> report
+#                                -> test (one job per suite) --> report
+#
+# install-parity is static and finishes in seconds, so the most common porting
+# mistake -- a file added to a Makefile and not to the meson.build beside it --
+# is reported long before the build that would not have caught it anyway.
+#
+# The build matrix is two configurations, and they are opposites:
+#
+#   full      every component this branch supports, and the reference line in
+#             coverity.yml. It is what the test jobs run against.
+#   minimal   every optional component off, shared_postgres_backend included
+#
+# One build would only ever exercise the enabled side of each `if
+# get_option(...)` in the meson files, and the disabled side is where this
+# port's bugs were: C++ enabled only for ORCA, PAX requiring the shared
+# backend, extensions gated on flags nothing turned off. Between the two,
+# every option is compiled in both states.
+#
+# What that pair does not reach is a cross -- ORCA on with the shared backend
+# off, which is the one combination where C++ objects link into a static
+# postgres. Add a third configuration if that link ever needs guarding; until
+# then it is not worth a third full build of the tree.
+#
+# The regression suites stay make-driven: installcheck-good and the rest are
+# defined in Makefiles, and a second definition in meson would be a copy to
+# keep in step, whose passing proves nothing about the original. What the
+# Makefiles need is an in-tree configured build -- src/Makefile.global,
+# ./pg_regress, ./regress.so -- and every piece of that is a meson build
+# product. meson-test-harness.sh carries them from the build job into the test
+# job's checkout; see its header for the details. The suites are all of
+# build-cloudberry.yml's Rocky 9 entries, in its entry format.
+#
+# Option mapping, against the reference configure line in coverity.yml. The
+# full entry carries the left column as `configure`, and the build runs it and
+# compares the pg_config.h it writes with meson's -- so the table is checked,
+# not just documented:
+#
+#   --disable-external-fts      -> -Dexternal_fts=false
+#   --enable-orca               -> -Dorca=enabled
+#   --enable-orafce             -> -Dorafce=enabled
+#   --enable-ic-proxy           -> -Dic_proxy=enabled
+#   --enable-gpfdist            -> -Dgpfdist=enabled
+#   --enable-gpcloud            -> -Dgpcloud=enabled
+#   --enable-pax                -> -Dpax=enabled
+#   --with-diskquota            -> -Ddiskquota=enabled
+#   --with-gp-stats-collector   -> -Dgp_stats_collector=enabled
+#   --enable-tap-tests          -> -Dtap_tests=enabled
+#   --with-gssapi               -> -Dgssapi=enabled
+#   --with-ldap                 -> -Dldap=enabled
+#   --with-libxml               -> -Dlibxml=enabled
+#   --with-lz4                  -> -Dlz4=enabled
+#   --with-zstd                 -> -Dzstd=enabled
+#   --with-pam                  -> -Dpam=enabled
+#   --with-perl                 -> -Dplperl=enabled
+#   --with-python               -> -Dplpython=enabled
+#   --with-ssl=openssl          -> -Dssl=openssl
+#   --with-uuid=e2fs            -> -Duuid=e2fs
+#   --with-pgport=5432          -> -Dpgport=5432
+#   --with-pythonsrc-ext        -> -Dpythonsrc_ext=true
+#   --with-includes=...         -> -Dextra_include_dirs=...
+#   --with-libraries=...        -> -Dextra_lib_dirs=...
+#
+# --with-pythonsrc-ext and -Dpythonsrc_ext build psutil, PyGreSQL and PyYAML
+# during the install with gpMgmt/bin/Makefile's targets, which download any
+# source not already in gpMgmt/bin/pythonSrc/ext; see
+# gpMgmt/install_python_modules.py. The build job fetches the three tarballs
+# up front, alongside meson and ninja and before anything is configured, so
+# the install finds them there: nothing between meson setup and the end of the
+# job touches the network, and an unreachable PyPI fails the job in seconds.
+# --------------------------------------------------------------------
+name: Apache Cloudberry Meson Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  INSTALL_PREFIX: /usr/local/cloudberry-db
+  # meson.build's floor, so pip never installs a meson older than the project
+  # supports; it installs the newest one above it. The floor itself is held by
+  # meson, which warns about every feature newer than meson_version, and by
+  # "Fail on meson warnings" below, which makes those warnings errors.
+  MESON_VERSION: '>=0.54'
+
+jobs:
+  # ------------------------------------------------------------------
+  check-skip:
+    name: Check skip
+    runs-on: ubuntu-22.04
+    outputs:
+      should_skip: ${{ steps.skip-check.outputs.should_skip }}
+    steps:
+    - id: skip-check
+      shell: bash
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        PR_TITLE: ${{ github.event.pull_request.title || '' }}
+        PR_BODY: ${{ github.event.pull_request.body || '' }}
+      run: |
+        echo "should_skip=false" >> "$GITHUB_OUTPUT"
+        if [[ "$EVENT_NAME" == "pull_request" ]]; then
+          MESSAGE="${PR_TITLE} ${PR_BODY}"
+          if printf '%s' "$MESSAGE" | grep -qEi '\[skip[ -]ci\]|\[ci[ -]skip\]'; then
+            echo "Skip requested by PR title/body"
+            echo "should_skip=true" >> "$GITHUB_OUTPUT"
+          fi
+        fi
+
+  # ------------------------------------------------------------------
+  install-parity:
+    name: Install parity
+    runs-on: ubuntu-22.04
+    needs: [check-skip]
+    if: needs.check-skip.outputs.should_skip != 'true'
+    steps:
+    - name: Checkout Apache Cloudberry
+      uses: actions/checkout@v7
+      with:
+        # No submodules: this job reads Makefiles and meson.build files and
+        # compiles nothing. Cloning googletest and friends would cost more
+        # than the check itself, and the point of the job is fast feedback.
+        fetch-depth: 1
+        submodules: false
+
+    - name: Compare Makefile install lists against meson.build
+      run: |
+        set -euo pipefail
+        # Static, so it runs in seconds and reports before the build finishes.
+        # It catches the failure mode this port is most exposed to: a file
+        # added to a Makefile and not to the meson.build beside it, which no
+        # build failure reveals and only a running cluster notices.
+        python3 devops/build/automation/cloudberry/scripts/meson-install-parity.py
+
+  # ------------------------------------------------------------------
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ubuntu-22.04
+    needs: [check-skip]
+    if: needs.check-skip.outputs.should_skip != 'true'
+    # The full build takes about a quarter of this; without a limit a hung
+    # step holds the runner for GitHub's six-hour default.
+    timeout-minutes: 90
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - name: full
+          upload: true
+          options: >-
+            -Dexternal_fts=false
+            -Dorca=enabled
+            -Dorafce=enabled
+            -Dic_proxy=enabled
+            -Dgpfdist=enabled
+            -Dgpcloud=enabled
+            -Ddiskquota=enabled
+            -Dpax=enabled
+            -Dgp_stats_collector=enabled
+            -Dtap_tests=enabled
+            -Dgssapi=enabled
+            -Dldap=enabled
+            -Dlibxml=enabled
+            -Dlz4=enabled
+            -Dzstd=enabled
+            -Dpam=enabled
+            -Dplperl=enabled
+            -Dplpython=enabled
+            -Dssl=openssl
+            -Duuid=e2fs
+            -Dpgport=5432
+            -Dpythonsrc_ext=true
+          # The same configuration, spelled for configure. Only the full entry
+          # has one: minimal leaves the probed features to meson's `auto`,
+          # which enables whatever the image has, where configure's defaults
+          # are off -- a difference of defaults, not of the port.
+          configure: >-
+            --disable-external-fts
+            --enable-orca
+            --enable-orafce
+            --enable-ic-proxy
+            --enable-gpfdist
+            --enable-gpcloud
+            --with-diskquota
+            --enable-pax
+            --with-gp-stats-collector
+            --enable-tap-tests
+            --with-gssapi
+            --with-ldap
+            --with-libxml
+            --with-lz4
+            --with-zstd
+            --with-pam
+            --with-perl
+            --with-python
+            --with-ssl=openssl
+            --with-uuid=e2fs
+            --with-pgport=5432
+            --with-pythonsrc-ext
+        - name: minimal
+          upload: false
+          options: >-
+            -Dorca=disabled
+            -Dorafce=disabled
+            -Dic_proxy=disabled
+            -Dgpfdist=disabled
+            -Dgpcloud=disabled
+            -Ddiskquota=disabled
+            -Dpax=disabled
+            -Dshared_postgres_backend=false
+            -Ddebug_extensions=false
+            -Dtap_tests=disabled
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+      options: >-
+        --user root
+        -h cdw
+
+    steps:
+    - name: Checkout Apache Cloudberry
+      uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+        submodules: true
+
+    - name: Environment initialization
+      run: |
+        if ! su - gpadmin -c "/tmp/init_system.sh"; then
+          echo "::error::Container initialization failed"
+          exit 1
+        fi
+
+    - name: Install Python build tools
+      run: |
+        set -euox pipefail
+        # The build image ships autoconf/make but not meson.
+        python3 -m pip install --disable-pip-version-check "meson${MESON_VERSION}" ninja
+        meson --version
+        ninja --version
+        # What builds psutil, PyGreSQL and PyYAML later: they are setup.py
+        # distributions, and PyYAML cythonises its C extension. gpMgmt/bin's
+        # Makefile pip-installs wheel and Cython itself when they are absent,
+        # which on this image they are -- as gpadmin, mid-build, over the
+        # network. Installed here as root they are importable by gpadmin, so
+        # that check passes and the install stays offline. setuptools
+        # comes along because Python 3.12 dropped distutils and setup.py needs
+        # its shim; the rocky9 image already has it, images newer than it may
+        # not.
+        python3 -m pip install --disable-pip-version-check setuptools wheel "cython<3.0.0"
+
+    - name: Fetch gpMgmt Python sources
+      if: matrix.upload
+      run: |
+        set -euox pipefail
+        # psutil, PyGreSQL and PyYAML come from PyPI, and -Dpythonsrc_ext
+        # builds them during the install. Fetching them here, next to the
+        # other dependency installs and before anything is configured, keeps
+        # the build itself off the network and turns an unreachable PyPI into
+        # a failure in seconds rather than after a 40-minute build. They
+        # cannot be vendored in the repo -- downloading them is what replaced
+        # that, under the Apache release policy.
+        #
+        # This is the target the autoconf build uses, so the versions and URLs
+        # have one home. The three tarballs come to under a megabyte, and it
+        # skips any already there, which is what an offline build relies on.
+        # wheel and Cython, which it would otherwise pip-install here, are
+        # already in from the step above.
+        make -C gpMgmt/bin download-python-deps
+        for f in gpMgmt/bin/pythonSrc/ext/*.tar.gz; do gzip -t "${f}"; done
+        ls -la gpMgmt/bin/pythonSrc/ext/*.tar.gz
+
+    - name: Prepare install prefix
+      run: |
+        set -euox pipefail
+        # Mirrors build-cloudberry.yml: xerces is staged into the install
+        # prefix so the built binaries can find it at runtime.
+        mkdir -p "${INSTALL_PREFIX}/lib"
+        cp /usr/local/xerces-c/lib/libxerces-c.so \
+           /usr/local/xerces-c/lib/libxerces-c-3.3.so \
+           "${INSTALL_PREFIX}/lib"
+        chown -R gpadmin:gpadmin "${INSTALL_PREFIX}"
+        chown -R gpadmin:gpadmin "${GITHUB_WORKSPACE}"
+
+    - name: meson setup
+      run: |
+        set -euox pipefail
+        # Run the build as gpadmin, like the autoconf workflows do. No single
+        # quotes inside, so the whole command can be double quoted and the
+        # environment variables expand in this shell.
+        su gpadmin -c "cd ${GITHUB_WORKSPACE} && meson setup build-meson . \
+          --prefix=${INSTALL_PREFIX} \
+          --buildtype=release \
+          ${{ matrix.options }} \
+          -Dextra_include_dirs=/usr/local/xerces-c/include \
+          -Dextra_lib_dirs=${INSTALL_PREFIX}/lib"
+
+    - name: Fail on meson warnings
+      run: |
+        set -euo pipefail
+        LOG=build-meson/meson-logs/meson-log.txt
+        # Three kinds of warning are about the declared meson floor, and all
+        # three are actionable and platform-independent:
+        #
+        #   uses feature introduced in   the floor is too low for the code
+        #   uses feature deprecated      the floor is high enough that meson
+        #                                now objects to upstream's own APIs
+        #   always evaluates to true     the floor made an upstream version
+        #                                guard dead
+        #
+        # A configure that reports none of them is the evidence that the floor
+        # in meson.build is the right one, so treat any as a failure.
+        #
+        # So is a configure_file() variable meson does not set: it means a
+        # .in file configure renders -- Makefile.global.in, most likely --
+        # gained an @variable@ the meson build does not fill in. Other
+        # warnings can be environment-specific, so those are only reported.
+        FATAL="uses feature introduced in|uses feature deprecated|always evaluates to true|not present in the given configuration data"
+        if grep -qE "${FATAL}" "${LOG}"; then
+          echo "::error::meson reported version-floor or configure_file warnings"
+          grep -E "${FATAL}" "${LOG}"
+          exit 1
+        fi
+        echo "No meson version-floor or configure_file warnings"
+        OTHER=$(grep -c "WARNING" "${LOG}" || true)
+        echo "Other meson warnings: ${OTHER}"
+        if [ "${OTHER}" -gt 0 ]; then
+          grep "WARNING" "${LOG}" | head -20
+        fi
+
+    - name: Compare pg_config.h with configure's
+      if: matrix.configure
+      run: |
+        set -euo pipefail
+        # The same options should give the same pg_config.h; see
+        # meson-config-parity.py for why that is checked and what counts as a
+        # difference. This is where configure's copy comes from.
+        #
+        # configure runs in-tree, in a worktree of this commit, rather than in
+        # a VPATH directory: it runs ./getversion from the directory it is
+        # started in, so a VPATH configure writes an empty GP_VERSION. It
+        # stops at configure, which takes about a minute, and it runs before
+        # the compile: a build whose configuration differs from configure's
+        # is not the one worth spending the next 40 minutes on.
+        su gpadmin -c "git -C ${GITHUB_WORKSPACE} worktree add --detach /tmp/autoconf-src HEAD"
+        # LD_LIBRARY_PATH as configure-cloudberry.sh sets it: configure runs
+        # a test program against xerces in the install prefix.
+        if ! su gpadmin -c "cd /tmp/autoconf-src && \
+            LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib ./configure \
+              --prefix=${INSTALL_PREFIX} \
+              ${{ matrix.configure }} \
+              --with-includes=/usr/local/xerces-c/include \
+              --with-libraries=${INSTALL_PREFIX}/lib > configure.log 2>&1"; then
+          tail -50 /tmp/autoconf-src/configure.log
+          echo "::error::configure failed with the options the full build stands for"
+          exit 1
+        fi
+        python3 devops/build/automation/cloudberry/scripts/meson-config-parity.py \
+          /tmp/autoconf-src/src/include/pg_config.h \
+          build-meson/src/include/pg_config.h .
+
+    - name: Build the frontend common library first
+      run: |
+        set -euox pipefail
+        # src/common is compiled twice, once with -DFRONTEND. A backend header
+        # included there without an #ifndef FRONTEND guard drags in headers
+        # that only the backend build generates, and ninja is free to compile
+        # the frontend copy before anything has generated them -- so such a
+        # mistake fails the build or not depending on scheduling. It cost one
+        # red matrix entry and one green one on the same commit.
+        #
+        # Building this single target from cold, before the full build has
+        # produced anything, turns that coin flip into a deterministic check
+        # for the one directory that is compiled both ways.
+        su gpadmin -c "cd ${GITHUB_WORKSPACE} && ninja -C build-meson src/common/libpgcommon_shlib.a"
+
+    - name: ninja build
+      run: |
+        set -euox pipefail
+        su gpadmin -c "cd ${GITHUB_WORKSPACE} && ninja -C build-meson -j$(nproc)" \
+          2>&1 | tee build-meson-build.log
+
+    - name: Report compiler warnings
+      run: |
+        set -euo pipefail
+        # Not fatal, but surfaced: the autoconf build is warning-quiet for the
+        # flags Cloudberry selects, so a jump here usually means the meson
+        # flags have drifted from configure.ac.
+        COUNT=$(grep -c "warning:" build-meson-build.log || true)
+        echo "Compiler warnings: ${COUNT}"
+        if [ "${COUNT}" -gt 0 ]; then
+          grep -oE "\[-W[a-z0-9-]+\]" build-meson-build.log \
+            | sort | uniq -c | sort -rn | head -20
+        fi
+        {
+          echo "### Build \`${{ matrix.name }}\`"
+          echo
+          echo "Compiler warnings: **${COUNT}**"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: ninja install
+      run: |
+        set -euox pipefail
+        su gpadmin -c "cd ${GITHUB_WORKSPACE} && ninja -C build-meson install"
+
+    - name: Check gpMgmt Python modules
+      if: matrix.upload
+      run: |
+        set -euox pipefail
+        # The management utilities import these at runtime; -Dpythonsrc_ext
+        # built them during the install, from the sources fetched above.
+        test -d "${INSTALL_PREFIX}/lib/python/psutil"
+        test -f "${INSTALL_PREFIX}/lib/python/pg.py"
+        test -d "${INSTALL_PREFIX}/lib/python/yaml"
+
+    - name: Verify the install
+      run: |
+        set -euo pipefail
+        # As build-cloudberry.yml's "Verify build artifacts": the binaries are
+        # there and run, and initdb bootstraps every catalog, Cloudberry's
+        # included, and loads the SQL the build generated.
+        for b in postgres psql initdb pg_ctl pg_config; do
+          test -x "${INSTALL_PREFIX}/bin/${b}"
+        done
+        "${INSTALL_PREFIX}/bin/postgres" --version
+        "${INSTALL_PREFIX}/bin/psql" --version
+        # A script writes this at install time, so no static check can vouch
+        # for it.
+        test -f "${INSTALL_PREFIX}/share/greenplum/gucs_disallowed_in_file.txt"
+        if ! su gpadmin -c "${INSTALL_PREFIX}/bin/initdb -D /tmp/verify-initdb \
+            --no-locale --encoding=UTF8 > /tmp/verify-initdb.log 2>&1"; then
+          tail -30 /tmp/verify-initdb.log
+          exit 1
+        fi
+
+    - name: Create RPM and verify it
+      if: matrix.upload
+      env:
+        CBDB_VERSION: 99.0.0
+        BUILD_NUMBER: 1
+      run: |
+        set -eo pipefail
+        # build-cloudberry.yml's packaging, unchanged: the spec builds
+        # nothing, it packages the install prefix as it stands, so the same
+        # RPM comes out of a meson install as out of an autoconf one.
+        rpmdev-setuptree
+        ln -s "${GITHUB_WORKSPACE}"/devops/build/packaging/rpm/apache-cloudberry-db-incubating.spec \
+          "${HOME}"/rpmbuild/SPECS/apache-cloudberry-db-incubating.spec
+        "${GITHUB_WORKSPACE}"/devops/build/packaging/rpm/build-rpm.sh \
+          --version "${CBDB_VERSION}" --release "${BUILD_NUMBER}"
+        os_version=$(grep -oP '(?<=^VERSION_ID=")[0-9]+' /etc/os-release)
+        RPM_FILE="${HOME}"/rpmbuild/RPMS/x86_64/apache-cloudberry-db-incubating-"${CBDB_VERSION}"-"${BUILD_NUMBER}".el"${os_version}".x86_64.rpm
+        cp "${RPM_FILE}" "${GITHUB_WORKSPACE}"
+        rpm -qip "${RPM_FILE}"
+        for binary in bin/postgres bin/psql; do
+          if ! rpm -qlp "${RPM_FILE}" | grep -q "${binary}$"; then
+            echo "::error::Critical binary '${binary}' not found in RPM"
+            exit 1
+          fi
+        done
+        sha256sum "${RPM_FILE}"
+
+    - name: Upload RPM
+      if: matrix.upload
+      uses: actions/upload-artifact@v7
+      with:
+        name: meson-rpm
+        path: apache-cloudberry-db-incubating-*.rpm
+        retention-days: 3
+        if-no-files-found: error
+
+    - name: Package test harness
+      if: matrix.upload
+      run: |
+        set -euox pipefail
+        # pg_regress, regress.so, the libpq test clients and the rest of what
+        # the suites' Makefiles would otherwise compile, plus the rendered
+        # Makefile.global -- see meson-test-harness.sh for why.
+        su gpadmin -c "cd ${GITHUB_WORKSPACE} && \
+          devops/build/automation/cloudberry/scripts/meson-test-harness.sh \
+          pack build-meson cloudberry-meson-test-harness.tar.gz"
+
+    - name: Upload test harness
+      if: matrix.upload
+      uses: actions/upload-artifact@v7
+      with:
+        name: meson-test-harness
+        path: cloudberry-meson-test-harness.tar.gz
+        retention-days: 3
+        if-no-files-found: error
+
+    - name: Run unit tests
+      run: |
+        set -euo pipefail
+        # What build-cloudberry.yml runs after packaging: make unittest-check,
+        # the cmockery programs under src/*/test. src/test/unit/meson.build
+        # builds them from those Makefiles' own definitions, and meson test
+        # builds what it runs.
+        su gpadmin -c "cd ${GITHUB_WORKSPACE} && \
+          meson test -C build-meson --suite unittest --print-errorlogs"
+
+    - name: Upload meson logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: meson-logs-${{ matrix.name }}
+        path: |
+          build-meson/meson-logs/
+          build-meson-build.log
+        retention-days: 7
+        if-no-files-found: ignore
+
+  # ------------------------------------------------------------------
+  # build-cloudberry.yml's rpm-install-test: the RPM into the test image,
+  # which carries no build dependencies, so dnf has to find every library
+  # the meson build linked against from the package's own requirements.
+  rpm-install-test:
+    name: RPM install test
+    runs-on: ubuntu-22.04
+    needs: [check-skip, build]
+    if: needs.check-skip.outputs.should_skip != 'true'
+    timeout-minutes: 30
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-test-rocky9-latest
+      options: >-
+        --user root
+        -h cdw
+
+    steps:
+    - name: Download RPM
+      uses: actions/download-artifact@v8
+      with:
+        name: meson-rpm
+        path: ${{ github.workspace }}/rpm_build_artifacts
+
+    - name: Environment initialization
+      run: |
+        if ! su - gpadmin -c "/tmp/init_system.sh"; then
+          echo "::error::Container initialization failed"
+          exit 1
+        fi
+
+    - name: Install Cloudberry RPM
+      run: |
+        set -eo pipefail
+        RPM_FILE=$(ls "${GITHUB_WORKSPACE}"/rpm_build_artifacts/apache-cloudberry-db-incubating-[0-9]*.rpm)
+        rpm -qip "${RPM_FILE}"
+        dnf clean all
+        dnf makecache --refresh || dnf makecache
+        rm -rf /usr/local/cloudberry-db
+        if ! dnf install -y --setopt=retries=10 --releasever=9 "${RPM_FILE}"; then
+          echo "::error::RPM installation failed"
+          exit 1
+        fi
+        rpm -qa 'apache-cloudberry-db-incubating*' | xargs -r rpm -qi
+        su - gpadmin -c "source /usr/local/cloudberry-db/cloudberry-env.sh && \
+          postgres --version && psql --version && pg_config --version"
+
+  # ------------------------------------------------------------------
+  # The regression suites, run against the meson build the same way
+  # build-cloudberry.yml runs them against the autoconf one: every Rocky 9
+  # entry of that workflow, with the same Makefile targets, demo cluster
+  # script, test runner, result parser and core dump check, in a container
+  # with the same options. Entries use that workflow's shape, so a suite can
+  # be moved between the two by copying it.
+  #
+  # What differs is where the build products come from. The suites expect an
+  # in-tree configured build; meson-test-harness.sh lays the meson build's
+  # harness into this checkout to make one, and writes a make for the run
+  # that does not rebuild what meson already built.
+  test:
+    name: ${{ matrix.test }}
+    runs-on: ubuntu-22.04
+    needs: [check-skip, build]
+    if: needs.check-skip.outputs.should_skip != 'true'
+    timeout-minutes: 120
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - test: ic-good-opt-off
+          make_configs: [src/test/regress:installcheck-good]
+          pg_settings: {optimizer: 'off'}
+        - test: ic-good-opt-on
+          make_configs: [src/test/regress:installcheck-good]
+          pg_settings: {optimizer: 'on'}
+        - test: pax-ic-good-opt-off
+          make_configs:
+          - contrib/pax_storage/:pax-test
+          - contrib/pax_storage/:regress_test
+          pg_settings: {optimizer: 'off', default_table_access_method: pax}
+        - test: pax-ic-good-opt-on
+          make_configs:
+          - contrib/pax_storage/:pax-test
+          - contrib/pax_storage/:regress_test
+          pg_settings: {optimizer: 'on', default_table_access_method: pax}
+        - test: pax-ic-isolation2-opt-off
+          make_configs: [contrib/pax_storage/:isolation2_test]
+          pg_settings: {optimizer: 'off', default_table_access_method: pax}
+          enable_core_check: false
+        - test: pax-ic-isolation2-opt-on
+          make_configs: [contrib/pax_storage/:isolation2_test]
+          pg_settings: {optimizer: 'on', default_table_access_method: pax}
+          enable_core_check: false
+        - test: gpcontrib-gp-relaccess-stats
+          make_configs: [gpcontrib/gp_relaccess_stats:installcheck]
+          extension: gp_relaccess_stats
+          shared_preload_libraries: gp_relaccess_stats
+        - test: gpcontrib-gp-stats-collector
+          make_configs: [gpcontrib/gp_stats_collector:installcheck]
+          extension: gp_stats_collector
+        - test: gpcontrib-gp-relsizes-stats
+          make_configs: [gpcontrib/gp_relsizes_stats:installcheck]
+          extension: gp_relsizes_stats
+          shared_preload_libraries: gp_relsizes_stats
+        - test: ic-expandshrink
+          make_configs: [src/test/isolation2:installcheck-expandshrink]
+        - test: ic-singlenode
+          make_configs:
+          - src/test/isolation:installcheck-singlenode
+          - src/test/singlenode_regress:installcheck-singlenode
+          - src/test/singlenode_isolation2:installcheck-singlenode
+          num_primary_mirror_pairs: 0
+        - test: ic-resgroup-v2
+          make_configs: [src/test/isolation2:installcheck-resgroup-v2]
+          enable_cgroups: true
+        - test: ic-contrib
+          make_configs:
+          - contrib/auto_explain:installcheck
+          - contrib/amcheck:installcheck
+          - contrib/citext:installcheck
+          - contrib/btree_gin:installcheck
+          - contrib/btree_gist:installcheck
+          - contrib/dblink:installcheck
+          - contrib/dict_int:installcheck
+          - contrib/dict_xsyn:installcheck
+          - contrib/extprotocol:installcheck
+          - contrib/file_fdw:installcheck
+          - contrib/formatter_fixedwidth:installcheck
+          - contrib/hstore:installcheck
+          - contrib/indexscan:installcheck
+          - contrib/interconnect:installcheck
+          - contrib/pg_trgm:installcheck
+          - contrib/pgcrypto:installcheck
+          - contrib/pgstattuple:installcheck
+          - contrib/tablefunc:installcheck
+          - contrib/try_convert:installcheck
+          - contrib/passwordcheck:installcheck
+          - contrib/pg_buffercache:installcheck
+          - contrib/sslinfo:installcheck
+        - test: ic-datalake-fdw
+          make_configs: [contrib/datalake_fdw:installcheck]
+          pgxs_extension: contrib/datalake_fdw
+          shared_preload_libraries: datalake_fdw,datalake_fdw_dltest
+        - test: ic-gpcontrib
+          make_configs:
+          - gpcontrib/orafce:installcheck
+          - gpcontrib/zstd:installcheck
+          - gpcontrib/gp_sparse_vector:installcheck
+          - gpcontrib/gp_toolkit:installcheck
+          - gpcontrib/gp_exttable_fdw:installcheck
+          - gpcontrib/gp_internal_tools:installcheck
+        - test: ic-diskquota
+          make_configs: [gpcontrib/diskquota:installcheck]
+          shared_preload_libraries: diskquota-2.3
+        - test: ic-fixme
+          make_configs: [src/test/regress:installcheck-fixme]
+          enable_core_check: false
+        - test: ic-isolation2
+          make_configs: [src/test/isolation2:installcheck-isolation2]
+        - test: ic-isolation2-hot-standby
+          make_configs: [src/test/isolation2:installcheck-hot-standby]
+        - test: ic-isolation2-crash
+          make_configs: [src/test/isolation2:installcheck-isolation2-crash]
+          enable_core_check: false
+        - test: ic-parallel-retrieve-cursor
+          make_configs: [src/test/isolation2:installcheck-parallel-retrieve-cursor]
+        - test: ic-cbdb-parallel
+          make_configs: [src/test/regress:installcheck-cbdb-parallel]
+        - test: ic-orca-parallel
+          make_configs: [src/test/regress:installcheck-orca-parallel]
+        - test: ic-recovery
+          make_configs: [src/test/recovery:installcheck]
+          enable_core_check: false
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+      # build-cloudberry.yml's test container: privileged, with the host's
+      # cgroup tree for the resource group suite and the core pattern, and no
+      # limit on core files, so that a crash leaves one to find.
+      options: >-
+        --privileged
+        --user root
+        --hostname cdw
+        --shm-size=2gb
+        --ulimit core=-1
+        --cgroupns=host
+        -v /sys/fs/cgroup:/sys/fs/cgroup:rw
+
+    env:
+      SRC_DIR: ${{ github.workspace }}
+      BUILD_DESTINATION: /usr/local/cloudberry-db
+
+    steps:
+    - name: Checkout Apache Cloudberry
+      uses: actions/checkout@v7
+      with:
+        fetch-depth: 1
+        submodules: false
+
+    - name: Environment initialization
+      run: |
+        if ! su - gpadmin -c "/tmp/init_system.sh"; then
+          echo "::error::Container initialization failed"
+          exit 1
+        fi
+
+    - name: Set up cgroups
+      if: matrix.enable_cgroups
+      run: |
+        set -euxo pipefail
+        # build-cloudberry.yml's "Setup cgroups" without its diagnostics: a
+        # gpdb cgroup gpadmin owns, with the controllers resource groups use.
+        CG=/sys/fs/cgroup
+        chmod -R 777 ${CG}/
+        mkdir -p ${CG}/gpdb
+        echo '+cpu +cpuset +memory +io' > ${CG}/cgroup.subtree_control || true
+        echo '+cpu +cpuset +memory +io' > ${CG}/gpdb/cgroup.subtree_control || true
+        echo 'max 100000' > ${CG}/gpdb/cpu.max || true
+        echo '100' > ${CG}/gpdb/cpu.weight || true
+        echo '0' > ${CG}/gpdb/cpu.weight.nice || true
+        echo 0-$(( $(nproc) - 1 )) > ${CG}/gpdb/cpuset.cpus || true
+        echo '0' > ${CG}/gpdb/cpuset.mems || true
+        echo 'max' > ${CG}/gpdb/memory.max || true
+        echo '0' > ${CG}/gpdb/memory.min || true
+        echo 'max' > ${CG}/gpdb/memory.high || true
+        echo '' > ${CG}/gpdb/io.max || true
+        chmod -R 777 ${CG}/gpdb
+        chown -R gpadmin:gpadmin ${CG}/gpdb
+        grep -q cgroup2 /proc/self/mounts
+        su gpadmin -c "test -w ${CG}/gpdb"
+
+    - name: Download RPM
+      uses: actions/download-artifact@v8
+      with:
+        name: meson-rpm
+        path: ${{ github.workspace }}/rpm_build_artifacts
+
+    - name: Download test harness
+      uses: actions/download-artifact@v8
+      with:
+        name: meson-test-harness
+
+    - name: Install Cloudberry RPM
+      run: |
+        set -eo pipefail
+        # As build-cloudberry.yml's test job installs its RPM.
+        RPM_FILE=$(ls "${GITHUB_WORKSPACE}"/rpm_build_artifacts/apache-cloudberry-db-incubating-[0-9]*.rpm)
+        rpm -qip "${RPM_FILE}"
+        dnf clean all
+        dnf makecache --refresh || dnf makecache
+        rm -rf "${BUILD_DESTINATION}"
+        if ! dnf install -y --setopt=retries=10 --releasever=9 "${RPM_FILE}"; then
+          echo "::error::RPM installation failed"
+          exit 1
+        fi
+        rm -rf "${GITHUB_WORKSPACE}"/rpm_build_artifacts
+
+    - name: Lay out the test harness
+      run: |
+        set -euox pipefail
+        # The RPM installs as root, and the suites install test extensions
+        # as gpadmin. -H follows the command-line symlink the RPM makes.
+        chown -RH gpadmin:gpadmin "${BUILD_DESTINATION}/" "${SRC_DIR}"
+        su gpadmin -c "cd ${SRC_DIR} && \
+          devops/build/automation/cloudberry/scripts/meson-test-harness.sh \
+          unpack cloudberry-meson-test-harness.tar.gz ${SRC_DIR}"
+        mkdir -p build-logs/details
+        chown -R gpadmin:gpadmin build-logs
+
+    # contrib/datalake_fdw reads and writes s3 through the AWS SDK for C++,
+    # which no distribution packages, so it is built from source.  That costs
+    # a few minutes, and the result depends on nothing but the version, the
+    # distribution and the architecture -- so it is cached under exactly
+    # those three, and a hit restores it in seconds.
+    - name: Restore the AWS SDK for C++
+      id: aws-sdk-cache
+      if: matrix.pgxs_extension == 'contrib/datalake_fdw'
+      uses: actions/cache@v4
+      with:
+        path: /opt/datalake
+        key: aws-sdk-cpp-1.11.844-rocky9-${{ runner.arch }}
+
+    - name: Build the AWS SDK for C++
+      if: matrix.pgxs_extension == 'contrib/datalake_fdw' && steps.aws-sdk-cache.outputs.cache-hit != 'true'
+      run: |
+        set -eo pipefail
+
+        # Only s3 and the sts it needs to assume a role: the whole SDK is
+        # some three hundred clients and none of the rest is reachable from
+        # here.  Static and position-independent, because what consumes it is
+        # a shared library that promises to add no runtime dependency of its
+        # own beyond the system libraries the SDK itself needs.
+        . /etc/os-release
+        crb=crb
+        if [[ "${VERSION_ID%%.*}" == "8" ]]; then crb=powertools; fi
+
+        # Only what is missing, asked for by capability so a package the
+        # distribution renamed still counts as present -- Rocky 10 ships
+        # zlib-devel as zlib-ng-compat-devel.  Naming a package the image
+        # already has makes dnf try to upgrade it to the newest build in the
+        # repository, and that is how this step first failed: Rocky 10's
+        # newest libcurl-devel wants a libcurl no enabled repository
+        # carries.  The intent is to add build dependencies, never to move
+        # the image's own packages.
+        missing=""
+        for pkg in cmake git ninja-build libcurl-devel openssl-devel zlib-devel; do
+          rpm -q --whatprovides "${pkg}" > /dev/null 2>&1 || missing="${missing} ${pkg}"
+        done
+        if [[ -n "${missing}" ]]; then
+          dnf install -y --enablerepo=epel --enablerepo=${crb} ${missing}
+        fi
+
+        git clone --depth 1 --branch 1.11.844 \
+          --recurse-submodules --shallow-submodules \
+          https://github.com/aws/aws-sdk-cpp.git /tmp/aws-sdk-cpp
+        cmake -S /tmp/aws-sdk-cpp -B /tmp/aws-sdk-cpp/build -GNinja \
+          -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/datalake \
+          -DBUILD_ONLY="s3;sts" -DBUILD_SHARED_LIBS=OFF \
+          -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+          -DENABLE_TESTING=OFF -DUSE_OPENSSL=ON
+        ninja -C /tmp/aws-sdk-cpp/build install
+
+        # The cache stores what is under /opt/datalake; the tree it was built
+        # from is a gigabyte that nothing reads again.
+        rm -rf /tmp/aws-sdk-cpp
+
+    - name: Build extension against the installed server
+      if: matrix.pgxs_extension
+      run: |
+        set -eo pipefail
+        # As build-cloudberry.yml builds datalake_fdw, against the Arrow and
+        # Parquet the image carries: with PGXS, so here against the
+        # Makefile.global the meson install provides for extensions.
+        su - gpadmin -c "source ${BUILD_DESTINATION}/cloudberry-env.sh && \
+          cd ${SRC_DIR}/${{ matrix.pgxs_extension }} && \
+          make USE_PGXS=1 && make USE_PGXS=1 install" \
+          2>&1 | tee -a build-logs/details/build-pgxs-extension.log
+
+    - name: Create demo cluster
+      run: |
+        set -eo pipefail
+        EXTRA_CONF=""
+        if [[ -n "${{ matrix.shared_preload_libraries }}" ]]; then
+          EXTRA_CONF="shared_preload_libraries='${{ matrix.shared_preload_libraries }}'"
+        fi
+        # Three pairs unless the entry says otherwise; singlenode's is 0.
+        PAIRS="${{ matrix.num_primary_mirror_pairs }}"
+        su - gpadmin -c "cd ${SRC_DIR} && NUM_PRIMARY_MIRROR_PAIRS=${PAIRS:-3} \
+          BLDWRAP_POSTGRES_CONF_ADDONS=\"${EXTRA_CONF}\" \
+          SRC_DIR=${SRC_DIR} BUILD_DESTINATION=${BUILD_DESTINATION} \
+          ${SRC_DIR}/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh" \
+          2>&1 | tee -a build-logs/details/create-cloudberry-demo-cluster.log
+
+    - name: Create extension
+      if: matrix.extension
+      run: |
+        set -eo pipefail
+        su - gpadmin -c "source ${BUILD_DESTINATION}/cloudberry-env.sh && \
+          source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && \
+          gpconfig -c shared_preload_libraries -v '${{ matrix.extension }}' && \
+          gpstop -ra && \
+          echo 'CREATE EXTENSION IF NOT EXISTS ${{ matrix.extension }}; \
+                SHOW shared_preload_libraries; \
+                TABLE pg_extension;' | psql postgres"
+
+    # The s3 half of contrib/datalake_fdw's regression needs something that
+    # speaks S3.  SeaweedFS is one static binary, starts in a second, and
+    # answers the same requests as the object stores the maintainers test
+    # against by hand.  Its coordinates go into the job environment, which is
+    # what the test step reads to decide whether the s3 cases run at all --
+    # so every other test entry is unaffected, and a leg where this step did
+    # not run skips them rather than failing.
+    - name: Start an S3 service for datalake_fdw
+      if: matrix.test == 'ic-datalake-fdw'
+      run: |
+        set -eo pipefail
+
+        case "$(uname -m)" in
+          x86_64)  weed_arch=linux_amd64 ;;
+          aarch64) weed_arch=linux_arm64 ;;
+          *)       echo "::error::no SeaweedFS build for $(uname -m)"; exit 1 ;;
+        esac
+
+        # Pinned, and to the version the maintainers ran the same suite
+        # against by hand: a service the tests assert against must not change
+        # underneath them.
+        curl -fsSL -o /tmp/seaweedfs.tar.gz \
+          "https://github.com/seaweedfs/seaweedfs/releases/download/4.47/${weed_arch}.tar.gz"
+        tar -C /usr/local/bin -xzf /tmp/seaweedfs.tar.gz weed
+        rm -f /tmp/seaweedfs.tar.gz
+
+        # One identity with a key pair, because the suite asserts that a
+        # wrong secret is refused.  Started without this file SeaweedFS
+        # accepts anything, and that case would pass by not being tested.
+        mkdir -p /tmp/seaweedfs
+        printf '%s\n' '{"identities":[{"name":"datalake","credentials":[{"accessKey":"datalake","secretKey":"datalake-secret"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' \
+          > /tmp/seaweedfs/s3.json
+
+        nohup weed server -dir=/tmp/seaweedfs -ip=127.0.0.1 \
+          -master.port=9333 -volume.port=8080 -filer -filer.port=8888 \
+          -s3 -s3.port=8333 -s3.config=/tmp/seaweedfs/s3.json \
+          > /tmp/seaweedfs/weed.log 2>&1 &
+        disown
+
+        # Up to a minute, checking rather than sleeping, and checking the S3
+        # port itself: the master elects itself and the volume server
+        # registers seconds before the S3 gateway starts listening, so a
+        # master that answers is not yet a service the tests can use.  An
+        # unsigned request is refused with 403 once the identity file is in
+        # effect -- which is the state the wrong-secret case needs -- so any
+        # HTTP status means listening, and only "000" means nothing answered.
+        for _ in $(seq 60); do
+          s3_status=$(curl -sS -o /dev/null -w '%{http_code}' \
+            http://127.0.0.1:8333/ 2>/dev/null || true)
+          if [[ -n "${s3_status}" && "${s3_status}" != "000" ]]; then
+            break
+          fi
+          sleep 1
+        done
+        if [[ -z "${s3_status:-}" || "${s3_status}" == "000" ]]; then
+          echo "::error::the SeaweedFS S3 gateway never started listening"
+          tail -50 /tmp/seaweedfs/weed.log
+          exit 1
+        fi
+        echo "S3 gateway answers an unsigned GET with ${s3_status}"
+
+        # "weed shell" exits 0 whatever happened, so what is checked is the
+        # bucket being listed afterwards, not an exit code.
+        echo 's3.bucket.create -name datalake-test' |
+          weed shell -master=127.0.0.1:9333 > /tmp/seaweedfs/shell.log 2>&1
+        if ! echo 's3.bucket.list' |
+               weed shell -master=127.0.0.1:9333 2>/dev/null |
+               grep -q 'datalake-test'; then
+          echo "::error::SeaweedFS has no datalake-test bucket"
+          cat /tmp/seaweedfs/shell.log
+          tail -50 /tmp/seaweedfs/weed.log
+          exit 1
+        fi
+
+        {
+          echo "DATALAKE_TEST_S3_ENDPOINT=http://127.0.0.1:8333"
+          echo "DATALAKE_TEST_S3_BUCKET=datalake-test"
+          echo "DATALAKE_TEST_S3_ACCESS_KEY=datalake"
+          echo "DATALAKE_TEST_S3_SECRET_KEY=datalake-secret"
+          echo "DATALAKE_TEST_S3_REGION=us-east-1"
+          echo "DATALAKE_TEST_S3_PATH_STYLE=true"
+          # A value that is a secret only to this run: the suite asserts it
+          # never appears in an error message, and the logs are searched for
+          # it afterwards.
+          echo "DATALAKE_TEST_S3_BAD_SECRET=dl-canary-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          # Eleven hundred objects through a paginated listing: minutes, so
+          # it runs here rather than in every local build.
+          echo "DATALAKE_TEST_S3_PAGINATION=1"
+        } >> "${GITHUB_ENV}"
+
+    - name: "Run tests: ${{ matrix.test }}"
+      shell: bash {0}
+      run: |
+        set -o pipefail
+        # Where analyze_core_dumps.sh looks for core files.
+        mkdir -p /tmp/cloudberry-cores
+        chmod 1777 /tmp/cloudberry-cores
+        sysctl -w kernel.core_pattern="/tmp/cloudberry-cores/core-%e-%s-%u-%g-%p-%t"
+
+        PG_OPTS=""
+        if [[ -n "${{ matrix.pg_settings.optimizer }}" ]]; then
+          PG_OPTS="${PG_OPTS} -c optimizer=${{ matrix.pg_settings.optimizer }}"
+        fi
+        if [[ -n "${{ matrix.pg_settings.default_table_access_method }}" ]]; then
+          PG_OPTS="${PG_OPTS} -c default_table_access_method=${{ matrix.pg_settings.default_table_access_method }}"
+        fi
+
+        # As build-cloudberry.yml: a test that needs a service of its own
+        # carries its coordinates in the job environment, which "su -" drops,
+        # so they are named on the command line below.
+        EXTRA_TEST_ENV=""
+        if [[ -n "${DATALAKE_TEST_S3_ENDPOINT:-}" ]]; then
+          for v in DATALAKE_TEST_S3_ENDPOINT DATALAKE_TEST_S3_BUCKET \
+                   DATALAKE_TEST_S3_ACCESS_KEY DATALAKE_TEST_S3_SECRET_KEY \
+                   DATALAKE_TEST_S3_REGION DATALAKE_TEST_S3_PATH_STYLE \
+                   DATALAKE_TEST_S3_BAD_SECRET DATALAKE_TEST_S3_PAGINATION; do
+            EXTRA_TEST_ENV+="${v}='${!v}' "
+          done
+        fi
+
+        overall=0
+        i=0
+        {
+          echo "### ${{ matrix.test }}"
+          echo
+          echo "| Configuration | Result | Total | Failed | Ignored |"
+          echo "| --- | --- | --- | --- | --- |"
+        } >> "$GITHUB_STEP_SUMMARY"
+        for config in ${{ join(matrix.make_configs, ' ') }}; do
+          IFS=':' read -r dir target <<< "${config}"
+          log="build-logs/details/make-${{ matrix.test }}-config${i}.log"
+          echo "=== make -C ${dir} ${target}   (PGOPTIONS=${PG_OPTS}) ==="
+
+          # The harness's make leads PATH; see meson-test-harness.sh.
+          rm -f /tmp/cloudberry-cores/core-*
+          su - gpadmin -c "cd ${SRC_DIR} && \
+               ${EXTRA_TEST_ENV}\
+               PATH=${SRC_DIR}/.meson-harness:\$PATH \
+               MAKE_NAME='${{ matrix.test }}-config${i}' \
+               MAKE_TARGET='${target}' \
+               MAKE_DIRECTORY='-C ${dir}' \
+               PGOPTIONS='${PG_OPTS}' \
+               SRC_DIR='${SRC_DIR}' BUILD_DESTINATION='${BUILD_DESTINATION}' \
+               ${SRC_DIR}/devops/build/automation/cloudberry/scripts/test-cloudberry.sh" \
+               2>&1 | tee "${log}"
+          rc=${PIPESTATUS[0]}
+
+          MAKE_NAME="${{ matrix.test }}-config${i}" \
+            ${SRC_DIR}/devops/build/automation/cloudberry/scripts/parse-test-results.sh "${log}" >/dev/null
+          . ./test_results.txt 2>/dev/null || true
+          if [[ ${rc} -ne 0 ]]; then
+            overall=1
+            echo "::error::make -C ${dir} ${target} failed"
+            result="failed"
+          else
+            result="passed"
+          fi
+          echo "| \`${dir}:${target}\` | ${result} | ${TOTAL_TESTS:-?} | ${FAILED_TESTS:-?} | ${IGNORED_TESTS:-?} |" \
+            >> "$GITHUB_STEP_SUMMARY"
+          unset TOTAL_TESTS FAILED_TESTS IGNORED_TESTS
+
+          # Writes build-logs/core_analysis_*.log for each core it finds;
+          # "Check for core dumps" below decides what they mean.
+          ${SRC_DIR}/devops/build/automation/cloudberry/scripts/analyze_core_dumps.sh \
+            "${{ matrix.test }}-config${i}"
+          i=$((i + 1))
+        done
+        exit ${overall}
+
+    # A green job is only evidence if the cases it is green about ran.  The
+    # s3 half of this suite is reached through environment variables, and a
+    # variable that failed to arrive makes the Makefile skip those cases and
+    # report success -- which is exactly the shape of a regression nobody
+    # notices.  So the names are asserted afterwards, against the log the
+    # run actually wrote.
+    - name: Check the s3 cases ran, and left no secret behind
+      if: always() && matrix.test == 'ic-datalake-fdw'
+      env:
+        SRC_DIR: ${{ github.workspace }}
+      shell: bash
+      run: |
+        # "shell: bash" runs this with -e, and every check below expects a
+        # search to come back empty: a grep that finds nothing exits 1, and
+        # under -e that ends the step at the first clean result.  Each check
+        # records into status instead, and the step exits once at the end.
+        set +e -uo pipefail
+        status=0
+
+        # Named, not globbed: config0-results.log matches the same pattern,
+        # and which of the two sorts first depends on the locale.
+        log=build-logs/details/make-ic-datalake-fdw-config0.log
+        if [[ ! -f "${log}" ]]; then
+          echo "::error::no test log to check"
+          exit 1
+        fi
+
+        for case_name in storage_s3 storage_s3_pagination conformance_s3; do
+          if grep -Eq "^ok [0-9]+[[:space:]]+- ${case_name}[[:space:]]" "${log}"; then
+            echo "ran and passed: ${case_name}"
+          else
+            echo "::error::${case_name} did not run; the s3 half of this suite was skipped, not proven"
+            status=1
+          fi
+        done
+
+        # The suite asserts that a wrong secret does not come back in an
+        # error.  It cannot assert what went to a server-side log, and a
+        # credential that reaches one is a leak whether or not the client
+        # ever saw it.
+        canary="${DATALAKE_TEST_S3_BAD_SECRET:-}"
+        if [[ -z "${canary}" ]]; then
+          echo "::error::DATALAKE_TEST_S3_BAD_SECRET was never set, so no log was searched"
+          status=1
+        else
+          hits=$(grep -rl --binary-files=without-match -F "${canary}" \
+                   "${SRC_DIR}/gpAux/gpdemo/datadirs" 2>/dev/null; \
+                 grep -l --binary-files=without-match -F "${canary}" \
+                   /tmp/seaweedfs/weed.log 2>/dev/null)
+          if [[ -n "${hits}" ]]; then
+            echo "::error::the test credential reached a log:"
+            printf '%s\n' "${hits}"
+            status=1
+          else
+            echo "the test credential appears in no server or service log"
+          fi
+        fi
+
+        # An upload the writer gave up on has to be aborted, not abandoned:
+        # abandoned parts are billed for and no listing of objects shows
+        # them.  SeaweedFS keeps uploads in progress under the bucket's
+        # .uploads directory, and the suite leaves none behind.
+        uploads=$(echo 'fs.ls -l /buckets/datalake-test/.uploads' \
+                  | weed shell -master=127.0.0.1:9333 2>/dev/null \
+                  | grep -v '^total' | grep -v '^$')
+        if [[ -n "${uploads}" ]]; then
+          echo "::error::a multipart upload was left in progress:"
+          printf '%s\n' "${uploads}"
+          status=1
+        else
+          echo "no multipart upload was left in progress"
+        fi
+
+        exit ${status}
+
+    - name: Show regression diffs
+      if: failure()
+      run: |
+        for f in $(find ${SRC_DIR}/src/test ${SRC_DIR}/contrib ${SRC_DIR}/gpcontrib \
+                     -name regression.diffs 2>/dev/null); do
+          echo "::group::${f}"
+          head -500 "${f}"
+          echo "::endgroup::"
+        done
+
+    - name: Check for core dumps
+      if: always()
+      run: |
+        # As build-cloudberry.yml: a core file fails the job, unless the entry
+        # crashes the server on purpose and sets enable_core_check to false.
+        cores=$(find build-logs -name 'core_analysis_*.log' 2>/dev/null || true)
+        if [ -z "${cores}" ]; then
+          echo "No core dumps were found"
+          exit 0
+        fi
+        for f in ${cores}; do
+          echo "::group::${f}"
+          cat "${f}"
+          echo "::endgroup::"
+        done
+        if [ "${{ matrix.enable_core_check }}" = "false" ]; then
+          echo "::warning::Core dumps were found; this suite expects them"
+        else
+          echo "::error::Core dumps were found during the tests"
+          exit 1
+        fi
+
+    - name: Upload test logs
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: meson-test-logs-${{ matrix.test }}
+        path: |
+          build-logs/
+          **/regression.diffs
+          **/regression.out
+          gpAux/gpdemo/datadirs/*/*/log/
+        retention-days: 7
+        if-no-files-found: ignore
+
+  # ------------------------------------------------------------------
+  report:
+    name: Report
+    runs-on: ubuntu-22.04
+    needs: [check-skip, install-parity, build, rpm-install-test, test]
+    if: always() && needs.check-skip.outputs.should_skip != 'true'
+    steps:
+    - name: Summarise
+      run: |
+        PARITY="${{ needs.install-parity.result }}"
+        BUILD="${{ needs.build.result }}"
+        RPM="${{ needs.rpm-install-test.result }}"
+        TEST="${{ needs.test.result }}"
+        {
+          echo "## Meson build"
+          echo
+          echo "| Job | Result |"
+          echo "| --- | --- |"
+          echo "| install-parity | ${PARITY} |"
+          echo "| build (all configurations) | ${BUILD} |"
+          echo "| rpm-install-test | ${RPM} |"
+          echo "| test (all suites) | ${TEST} |"
+        } >> "$GITHUB_STEP_SUMMARY"
+        if [ "${PARITY}" != "success" ] || [ "${BUILD}" != "success" ] \
+           || [ "${RPM}" != "success" ] || [ "${TEST}" != "success" ]; then
+          echo "::error::meson workflow failed (install-parity=${PARITY} build=${BUILD} rpm-install-test=${RPM} test=${TEST})"
+          exit 1
+        fi
+        echo "All meson jobs passed"

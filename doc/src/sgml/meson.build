@@ -200,7 +200,10 @@ endif
 #
 # Man pages
 #
-if docs_dep.found()
+# Cloudberry does not ship stylesheet-man.xsl, so man pages cannot be built.
+# (doc/src/sgml/Makefile:85 still references it, so `make man` is equally
+# broken in the autoconf build -- guard here rather than silently failing.)
+if docs_dep.found() and fs.exists(meson.current_source_dir() / 'stylesheet-man.xsl')
   # FIXME: implement / consider sqlmansectnum logic
   man = custom_target('man',
     input: ['stylesheet-man.xsl', postgres_full_xml],
