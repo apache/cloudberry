@@ -290,7 +290,8 @@ class GpMirrorListToBuild:
         finally:
             # Re-enable Ctrl-C
             signal.signal(signal.SIGINT, old_handler)
-            return backout_map
+
+        return backout_map
 
     def _remove_progress_files(self, recovery_info_by_host, recovery_results):
         remove_progress_file_cmds = []
