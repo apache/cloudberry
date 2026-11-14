@@ -237,8 +237,12 @@ chmod_recursive("$pgdata", 0750, 0640);
 # Create a temporary directory in the system location.
 my $sys_tempdir = TestLib::tempdir_short;
 
-rename("$pgdata/pg_replslot", "$sys_tempdir/pg_replslot")
-  or BAIL_OUT "could not move $pgdata/pg_replslot";
+# pg_replslot should be empty. We remove it and recreate it in $sys_tempdir
+# before symlinking, in order to avoid possibly trying to move things across
+# drives.
+rmdir("$pgdata/pg_replslot")
+  or BAIL_OUT "could not remove $pgdata/pg_replslot";
+mkdir("$sys_tempdir/pg_replslot"); # if this fails the symlink will fail
 dir_symlink("$sys_tempdir/pg_replslot", "$pgdata/pg_replslot")
   or BAIL_OUT "could not symlink to $pgdata/pg_replslot";
 

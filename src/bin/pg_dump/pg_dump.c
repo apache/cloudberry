@@ -2177,7 +2177,7 @@ selectDumpableFunction(FuncInfo *finfo, Archive *fout)
 			simple_oid_list_member(&function_include_oids, finfo->dobj.catId.oid))
 		finfo->dobj.dump = DUMP_COMPONENT_ALL;
 	else if (finfo->dobj.namespace)
-		finfo->dobj.dump = finfo->dobj.namespace->dobj.dump;
+		finfo->dobj.dump = finfo->dobj.namespace->dobj.dump_contains;
 	else
 		finfo->dobj.dump = DUMP_COMPONENT_ALL;
 }
@@ -2202,7 +2202,7 @@ selectDumpableAggregate(AggInfo *agginfo, Archive *fout)
 			simple_oid_list_member(&function_include_oids, agginfo->aggfn.dobj.catId.oid))
 		agginfo->aggfn.dobj.dump = DUMP_COMPONENT_ALL;
 	else if (agginfo->aggfn.dobj.namespace)
-		agginfo->aggfn.dobj.dump = agginfo->aggfn.dobj.namespace->dobj.dump;
+		agginfo->aggfn.dobj.dump = agginfo->aggfn.dobj.namespace->dobj.dump_contains;
 	else
 		agginfo->aggfn.dobj.dump = DUMP_COMPONENT_ALL;
 }
@@ -8761,7 +8761,7 @@ getTriggers(Archive *fout, TableInfo tblinfo[], int numTables)
 						  "SELECT t.tgrelid, t.tgname, "
 						  "t.tgfoid::pg_catalog.regproc AS tgfname, "
 						  "pg_catalog.pg_get_triggerdef(t.oid, false) AS tgdef, "
-						  "t.tgenabled, t.tableoid, t.oid, t.tgisinternal as tgispartition\n"
+						  "t.tgenabled, t.tableoid, t.oid, t.tgisinternal\n"
 						  "FROM unnest('%s'::pg_catalog.oid[]) AS src(tbloid)\n"
 						  "JOIN pg_catalog.pg_trigger t ON (src.tbloid = t.tgrelid) "
 						  "LEFT JOIN pg_catalog.pg_trigger u ON (u.oid = t.tgparentid) "
@@ -8782,7 +8782,7 @@ getTriggers(Archive *fout, TableInfo tblinfo[], int numTables)
 						  "SELECT t.tgrelid, t.tgname, "
 						  "t.tgfoid::pg_catalog.regproc AS tgfname, "
 						  "pg_catalog.pg_get_triggerdef(t.oid, false) AS tgdef, "
-						  "t.tgenabled, t.tableoid, t.oid, t.tgisinternal as tgispartition "
+						  "t.tgenabled, t.tableoid, t.oid, t.tgisinternal "
 						  "FROM unnest('%s'::pg_catalog.oid[]) AS src(tbloid)\n"
 						  "JOIN pg_catalog.pg_trigger t ON (src.tbloid = t.tgrelid) "
 						  "LEFT JOIN pg_catalog.pg_depend AS d ON "
@@ -15410,11 +15410,11 @@ dumpAgg(Archive *fout, const AggInfo *agginfo)
 		if (fout->remoteVersion >= 110000)
 			appendPQExpBufferStr(query,
 								 "aggfinalmodify,\n"
-								 "aggmfinalmodify\n");
+								 "aggmfinalmodify,\n");
 		else
 			appendPQExpBufferStr(query,
 								 "'0' AS aggfinalmodify,\n"
-								 "'0' AS aggmfinalmodify\n");
+								 "'0' AS aggmfinalmodify,\n");
 		
 		if (fout->remoteVersion >= 140000 && fout->version.type == Cloudberry && fout->version.version >= 2)
 			appendPQExpBufferStr(query,
