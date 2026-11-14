@@ -38,9 +38,11 @@ OBJS = \
 	plpy_typeio.o \
 	plpy_util.o
 
+ifeq ($(disable_plpythonu_extension),no)
 DATA = $(NAME)u.control $(NAME)u--1.0.sql
 ifeq ($(python_majorversion),2)
 DATA += plpythonu.control plpythonu--1.0.sql
+endif
 endif
 
 # header files to install - it's not clear which of these might be needed
@@ -138,7 +140,9 @@ installdirs: installdirs-lib
 uninstall: uninstall-lib uninstall-data
 
 install-data: installdirs
+ifneq ($(strip $(DATA)),)
 	$(INSTALL_DATA) $(addprefix $(srcdir)/, $(DATA)) '$(DESTDIR)$(datadir)/extension/'
+endif
 	$(INSTALL_DATA) $(addprefix $(srcdir)/, $(INCS)) '$(DESTDIR)$(includedir_server)'
 	$(INSTALL_DATA) $(srcdir)/regress-python3-mangle.mk '$(DESTDIR)$(pgxsdir)/src/pl/plpython'
 

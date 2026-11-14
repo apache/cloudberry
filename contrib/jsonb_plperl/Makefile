@@ -8,8 +8,8 @@ PGFILEDESC = "jsonb_plperl - jsonb transform for plperl"
 
 PG_CPPFLAGS = -I$(top_srcdir)/src/pl/plperl
 
-EXTENSION = jsonb_plperlu jsonb_plperl
-DATA = jsonb_plperlu--1.0.sql jsonb_plperl--1.0.sql
+EXTENSION = jsonb_plperl
+DATA = jsonb_plperl--1.0.sql
 
 REGRESS = jsonb_plperl jsonb_plperlu
 
@@ -24,6 +24,11 @@ subdir = contrib/jsonb_plperl
 top_builddir = ../..
 include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
+endif
+
+ifeq ($(disable_plperlu_extension),no)
+EXTENSION += jsonb_plperlu
+DATA += jsonb_plperlu--1.0.sql
 endif
 
 # We must link libperl explicitly
