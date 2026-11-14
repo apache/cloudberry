@@ -158,6 +158,10 @@ jobs:
           #       not enabled yet; both have scenarios that are not
           #       @concourse_cluster and could be added once they have been
           #       run against a demo cluster.
+          #
+          # An entry with unittest_modules instead of behave_features runs
+          # those gpMgmt Python unit test modules.  They need the same Python
+          # packages as Behave, so they run here.
           ALL_BEHAVE_TESTS='{
             "include": [
               {"test":"ic-behave-analyzedb","behave_features":["test/behave/mgmt_utils/analyzedb.feature"]},
@@ -211,6 +215,9 @@ jobs:
               {"test":"ic-behave-replication-slots",
                "behave_features":["test/behave/mgmt_utils/replication_slots.feature"],
                "behave_args":"--tags ~@extended"
+              },
+              {"test":"ic-unit-segment-reconfigurer",
+               "unittest_modules":["gppylib.operations.test.unit.test_unit_segment_reconfigurer"]
               }
             ]
           }'
@@ -636,6 +643,10 @@ jobs:
           # review lands; each fix removes the tag from the scenarios it
           # makes pass.
           behave_args="--tags ~@needs_fix ${{ matrix.behave_args || '' }}"
+          # An entry with unittest_modules runs those gpMgmt Python unit test
+          # modules instead of Behave.  They need the same mock and Python
+          # setup, which no other workflow installs.
+          unittest_modules="${{ join(matrix.unittest_modules, ' ') }}"
 
           mkdir -p "/tmp/cloudberry-cores"
           chmod 1777 "/tmp/cloudberry-cores"
@@ -644,19 +655,35 @@ jobs:
           dnf install -y libffi-devel || echo "Warning: failed to install libffi-devel"
           su - gpadmin -c "pip3 install --user -r ${SRC_DIR}/gpMgmt/requirements-dev.txt || pip install --user -r ${SRC_DIR}/gpMgmt/requirements-dev.txt"
 
-          echo "Running features:"
-          for feature in $behave_targets; do
-            echo "- $feature"
-          done
-          if [[ -n "$behave_args" ]]; then
-            echo "Behave args: $behave_args"
-          fi
-
           behave_rc=0
-          if ! time su - gpadmin -c "cd ${SRC_DIR}/gpMgmt && source /usr/local/cloudberry-db/cloudberry-env.sh && source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && SRC_DIR=${SRC_DIR} PYTHONPATH=${SRC_DIR}/gpMgmt:\$PYTHONPATH behave $behave_args $behave_targets" \
-               2>&1 | tee -a "$config_log"; then
-            echo "::warning::Behave execution reported failures"
-            behave_rc=1
+          if [[ -n "$unittest_modules" ]]; then
+            echo "Running unit test modules:"
+            for module in $unittest_modules; do
+              echo "- $module"
+            done
+
+            # The same PYTHONPATH as "make -C gpMgmt/bin unitdevel", so the
+            # tests use the gppylib of the source tree.
+            bin_dir="${SRC_DIR}/gpMgmt/bin"
+            if ! time su - gpadmin -c "cd ${bin_dir} && source /usr/local/cloudberry-db/cloudberry-env.sh && PYTHONPATH=${bin_dir}:${bin_dir}/../sbin:\$PYTHONPATH:${bin_dir}/ext:${bin_dir}/lib python3 -m unittest -v $unittest_modules" \
+                 2>&1 | tee -a "$config_log"; then
+              echo "::warning::Unit test execution reported failures"
+              behave_rc=1
+            fi
+          else
+            echo "Running features:"
+            for feature in $behave_targets; do
+              echo "- $feature"
+            done
+            if [[ -n "$behave_args" ]]; then
+              echo "Behave args: $behave_args"
+            fi
+
+            if ! time su - gpadmin -c "cd ${SRC_DIR}/gpMgmt && source /usr/local/cloudberry-db/cloudberry-env.sh && source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && SRC_DIR=${SRC_DIR} PYTHONPATH=${SRC_DIR}/gpMgmt:\$PYTHONPATH behave $behave_args $behave_targets" \
+                 2>&1 | tee -a "$config_log"; then
+              echo "::warning::Behave execution reported failures"
+              behave_rc=1
+            fi
           fi
 
           # A Behave run can segfault a backend without failing a scenario, so
@@ -749,6 +776,10 @@ jobs:
 
           config_log="build-logs/details/make-${{ matrix.test }}-config0.log"
           behave_cmd="behave --tags ~@needs_fix ${{ matrix.behave_args || '' }} ${{ join(matrix.behave_features, ' ') }}"
+          unittest_modules="${{ join(matrix.unittest_modules, ' ') }}"
+          if [[ -n "$unittest_modules" ]]; then
+            behave_cmd="python3 -m unittest -v ${unittest_modules}"
+          fi
           if [ ! -f "$config_log" ]; then
             {
               echo "MAKE_COMMAND=\"${behave_cmd}\""
@@ -758,6 +789,47 @@ jobs:
               echo "PASSED_TESTS=0"
               echo "IGNORED_TESTS=0"
             } | tee "test_results.${{ matrix.test }}.0.txt"
+            exit 1
+          fi
+
+          if [[ -n "$unittest_modules" ]]; then
+            # unittest ends with "Ran N tests in Xs" and then "OK" or
+            # "FAILED (failures=F, errors=E, skipped=S)".
+            ran_line=$(grep -E '^Ran [0-9]+ tests? in ' "$config_log" | tail -n 1)
+            result_line=$(grep -E '^(OK|FAILED)( \(.*\))?$' "$config_log" | tail -n 1)
+            if [[ -z "$ran_line" || -z "$result_line" ]]; then
+              {
+                echo "MAKE_COMMAND=\"${behave_cmd}\""
+                echo "STATUS=parse_error"
+                echo "TOTAL_TESTS=0"
+                echo "FAILED_TESTS=0"
+                echo "PASSED_TESTS=0"
+                echo "IGNORED_TESTS=0"
+              } | tee "test_results.${{ matrix.test }}.0.txt"
+              exit 1
+            fi
+
+            total=$(echo "$ran_line" | sed -E 's/^Ran ([0-9]+) .*/\1/')
+            count() { echo "$result_line" | grep -oE "$1=[0-9]+" | cut -d= -f2 || true; }
+            failures=$(count failures); errors=$(count errors); skipped=$(count skipped)
+            failed=$(( ${failures:-0} + ${errors:-0} ))
+            skipped=${skipped:-0}
+            {
+              echo "MAKE_COMMAND=\"${behave_cmd}\""
+              if [[ "$result_line" == OK* ]]; then
+                echo "STATUS=passed"
+              else
+                echo "STATUS=failed"
+              fi
+              echo "TOTAL_TESTS=${total}"
+              echo "FAILED_TESTS=${failed}"
+              echo "PASSED_TESTS=$(( total - failed - skipped ))"
+              echo "IGNORED_TESTS=${skipped}"
+            } | tee "test_results.${{ matrix.test }}.0.txt"
+
+            if [[ "$result_line" == OK* ]]; then
+              exit 0
+            fi
             exit 1
           fi
 
