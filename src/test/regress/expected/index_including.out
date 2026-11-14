@@ -420,11 +420,13 @@ VACUUM nametbl;
 SET enable_seqscan = 0;
 -- Ensure we get an index only scan plan
 EXPLAIN (COSTS OFF) SELECT c2, c1, c3 FROM nametbl WHERE c2 = 'two' AND c1 = 1;
-                     QUERY PLAN                     
-----------------------------------------------------
- Index Only Scan using nametbl_c1_c2_idx on nametbl
-   Index Cond: ((c2 = 'two'::name) AND (c1 = 1))
-(2 rows)
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  Index Only Scan using nametbl_c1_c2_idx on nametbl
+         Index Cond: ((c2 = 'two'::name) AND (c1 = 1))
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 -- Validate the results look sane
 SELECT c2, c1, c3 FROM nametbl WHERE c2 = 'two' AND c1 = 1;
