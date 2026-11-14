@@ -103,7 +103,7 @@ def get_server_version(cursor):
     try:
         cursor.execute(query)
     except pgdb.DatabaseError as e:
-        sys.stderr.write('\nError while trying to find GPDB version.\n\n' + str(e) + '\n\n')
+        sys.stderr.write('\nError while trying to find Cloudberry version.\n\n' + str(e) + '\n\n')
         sys.exit(1)
     vals = cursor.fetchone()
     return vals[0]

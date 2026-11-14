@@ -27,9 +27,9 @@ fi
 declare -a GPPATH
 GPPATH=( $GPHOME $MPPHOME $BIZHOME )
 if [ ${#GPPATH[@]} -eq 0 ];then
-	echo "[FATAL]:-GPHOME environment variable is required to run GPDB but could not be found."
-	echo "Please set it by sourcing the cloudberry-env.sh in your GPDB installation directory."
-	echo "Example: ''. /usr/local/gpdb/cloudberry-env.sh''"
+	echo "[FATAL]:-GPHOME environment variable is required to run Cloudberry but could not be found."
+	echo "Please set it by sourcing the cloudberry-env.sh in your Cloudberry installation directory."
+	echo "Example: ''. /usr/local/cloudberry-db/cloudberry-env.sh''"
 	exit 1
 fi
 
@@ -1163,7 +1163,7 @@ CHK_GPDB_ID () {
 			fi
 			if [ x$GPDB_ID_CHK != x$USER_CHK ];then
 				LOG_MSG "[WARN]:-\$USER mismatch, id returns $GPDB_ID, \$USER returns $USER" 1
-				LOG_MSG "[WARN]:-The GPDB superuser account that owns the initdb binary should run these utilities" 1
+				LOG_MSG "[WARN]:-The Cloudberry superuser account that owns the initdb binary should run these utilities" 1
 				LOG_MSG "[WARN]:-This may cause problems when these utilities are run as $USER" 1
 			fi
 		else
@@ -1178,7 +1178,7 @@ CHK_GPDB_ID () {
 			fi
 			if [ x$GPDB_ID_CHK != x$LOGNAME_CHK ];then
 				LOG_MSG "[WARN]:-\$LOGNAME mismatch, id returns $GPDB_ID_CHK, \$LOGNAME returns $LOGNAME_CHK" 1
-				LOG_MSG "[WARN]:-The GPDB superuser account that owns the initdb binary should run these utilities" 1
+				LOG_MSG "[WARN]:-The Cloudberry superuser account that owns the initdb binary should run these utilities" 1
 				LOG_MSG "[WARN]:-This may cause problems when these utilities are run as $LOGNAME" 1
 			fi
 		else
