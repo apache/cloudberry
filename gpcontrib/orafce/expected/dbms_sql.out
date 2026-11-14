@@ -610,3 +610,245 @@ select * from tab1;
 
 drop procedure single_Row_insert;
 drop table tab1;
+create table test(id text);
+insert into test(id) values ('1'), (null);
+-- should not to crash
+do $$
+declare
+  cursor int;
+  id text;
+  row_counter int := 0;
+begin
+  cursor := dbms_sql.open_cursor();
+  call dbms_sql.parse(cursor, 'select id from test');
+  call dbms_sql.define_column(cursor, 1, 'id');
+  perform dbms_sql.execute(cursor);
+  while dbms_sql.fetch_rows(cursor) > 0 loop
+    row_counter = row_counter + 1;
+    raise notice 'process row #%', row_counter;
+    call dbms_sql.column_value(cursor, 1, id);
+    raise notice 'row id: `%`', id;
+  end loop;
+  call dbms_sql.close_cursor(cursor);
+end;
+$$;
+NOTICE:  process row #1
+NOTICE:  row id: `1`
+NOTICE:  process row #2
+NOTICE:  row id: `<NULL>`
+-- should not to crash
+do $$
+declare
+  c int;
+  n int;
+  d dbms_sql.desc_rec[];
+begin
+  c := dbms_sql.open_cursor();
+  call dbms_sql.parse(c, 'select * from test');
+  call dbms_sql.describe_columns(c, n, d);
+  raise notice '% %', n, d;
+  call dbms_sql.close_cursor(c);
+  -- should not crash
+  call dbms_sql.parse(c, 'create temp table t(a int)');
+  call dbms_sql.describe_columns(c, n, d);
+  call dbms_sql.close_cursor(c);
+end;
+$$;
+NOTICE:  1 {"(25,0,id,2,pg_catalog,10,0,0,0,0,t,text,4)"}
+ERROR:  cursor is not valid
+CONTEXT:  SQL statement "call dbms_sql.parse(c, 'create temp table t(a int)')"
+PL/pgSQL function inline_code_block line 13 at CALL
+drop table test;
+do $$
+declare
+  c int;
+  v text;
+begin
+  c := dbms_sql.open_cursor();
+  call dbms_sql.parse(c, 'select null::text');
+  call dbms_sql.define_column(c, 1, null::text);
+  perform dbms_sql.execute_and_fetch(c, false);
+
+  -- crashes here before the fix
+  v := dbms_sql.column_value_f(c, 1, null::text);
+
+  raise notice 'v is null = %', v is null;
+  call dbms_sql.close_cursor(c);
+end
+$$;
+NOTICE:  v is null = t
+-- the same defect is reachable through the procedure form of column_value().
+do $$
+declare
+  c int;
+  v text;
+begin
+  c := dbms_sql.open_cursor();
+  call dbms_sql.parse(c, 'select null::text');
+  call dbms_sql.define_column(c, 1, null::text);
+  perform dbms_sql.execute_and_fetch(c, false);
+
+  call dbms_sql.column_value(c, 1, v);
+
+  raise notice 'v is null = %', v is null;
+  call dbms_sql.close_cursor(c);
+end
+$$;
+NOTICE:  v is null = t
+-- a cursor has to be executable repeatedly.  the portal opened by the
+-- previous execution was never closed, so the second execution failed with
+-- 'cursor "__orafce_dbms_sql_cursor_0" already exists'.
+do $$
+declare c int; v int := 0;
+begin
+  c := dbms_sql.open_cursor();
+  call dbms_sql.parse(c, 'select 42');
+  call dbms_sql.define_column(c, 1, v);
+  perform dbms_sql.execute_and_fetch(c);
+  perform dbms_sql.execute_and_fetch(c);
+  call dbms_sql.column_value(c, 1, v);
+  call dbms_sql.close_cursor(c);
+  raise notice 'v = %', v; -- expected 42
+end
+$$;
+NOTICE:  v = 42
+-- the cast cache checked the requested array type only while the entry was
+-- built, so a second column_value() call for the same position handed back the
+-- value of the first type labelled with the second one.
+do $$
+declare c int; ia int[]; ta text[]; mismatch boolean := false;
+begin
+  c := dbms_sql.open_cursor();
+  call dbms_sql.parse(c, 'select i from generate_series(1,3) g(i)');
+  call dbms_sql.define_array(c, 1, ia, 3, 1);
+  perform dbms_sql.execute(c);
+  perform dbms_sql.fetch_rows(c);
+  call dbms_sql.column_value(c, 1, ia);
+  begin
+    call dbms_sql.column_value(c, 1, ta);
+  exception when datatype_mismatch then
+    mismatch := true;
+  end;
+  call dbms_sql.close_cursor(c);
+  raise notice 'ia = %', ia; -- expected [1,2,3]
+  raise notice 'mismatch = %', mismatch; -- expected true
+end
+$$;
+NOTICE:  ia = {1,2,3}
+NOTICE:  mismatch = t
+-- execute() registered the reset callback of the transaction memory
+-- context only when the context was created, but such callbacks fire at most
+-- once.  a cursor executed twice inside one transaction therefore kept a
+-- pointer to a context that the end of the transaction had already freed, and
+-- the next execution reset that freed memory.
+create temp table c31_rows(a int);
+do $$
+declare c int;
+begin
+  c := dbms_sql.open_cursor();
+  call dbms_sql.parse(c, 'insert into c31_rows values(10)');
+  raise notice '%', dbms_sql.execute(c);
+  raise notice '%', dbms_sql.execute(c);
+  raise notice '%', dbms_sql.execute(c);
+  commit;
+  raise notice '%', dbms_sql.execute(c);
+end;
+$$;
+NOTICE:  1
+NOTICE:  1
+NOTICE:  1
+NOTICE:  1
+select dbms_sql.open_cursor() as cur \gset c31_
+call dbms_sql.parse(:c31_cur, 'insert into c31_rows values(1)');
+begin;
+select dbms_sql.execute(:c31_cur) as r \gset c31_first_
+select dbms_sql.execute(:c31_cur) as r \gset c31_second_
+commit;
+select dbms_sql.execute(:c31_cur) as r \gset c31_third_
+call dbms_sql.close_cursor(:c31_cur);
+do $$
+begin
+  raise notice 'result = %', (select count(*) = 3 from c31_rows); -- true
+end
+$$;
+NOTICE:  result = f
+drop table c31_rows;
+create temp table test_cursor(a int);
+-- any cursor can be reused
+do $$
+declare c int;
+begin
+  c := dbms_sql.open_cursor();
+  call dbms_sql.parse(c, 'insert into test_cursor values(10)');
+  raise notice '%', dbms_sql.execute(c);
+  call dbms_sql.parse(c, 'update test_cursor set a = 30');
+  raise notice '%', dbms_sql.execute(c);
+  call dbms_sql.close_cursor(c);
+end;
+$$;
+NOTICE:  1
+NOTICE:  1
+select * from test_cursor;
+ a  
+----
+ 30
+(1 row)
+
+drop table test_cursor;
+create function public.close_during_convert()
+returns boolean
+language plpgsql
+as $$
+begin
+  if current_setting('audit.arm', true) = 'on' then
+    perform set_config('audit.arm', 'off', false);
+    call dbms_sql.close_cursor(current_setting('audit.cursor')::int);
+  end if;
+  return true;
+end $$;
+create domain public.d_big as text check (public.close_during_convert());
+do $$
+declare c integer; big public.d_big; result text;
+begin
+  c := dbms_sql.open_cursor();
+  call dbms_sql.parse(c, 'select repeat(''x'', 300000)::text');
+  call dbms_sql.define_column(c, 1, big);
+  perform dbms_sql.execute(c);
+  perform dbms_sql.fetch_rows(c);
+  perform set_config('audit.cursor', c::text, false);
+  perform set_config('audit.arm', 'on', false);
+  result := dbms_sql.column_value_f(c, 1, big); -- closes cursor mid-call, then faults
+end $$;
+ERROR:  cursor is in use and cannot be used recursively
+CONTEXT:  SQL statement "call dbms_sql.close_cursor(current_setting('audit.cursor')::int)"
+PL/pgSQL function close_during_convert() line 5 at CALL
+PL/pgSQL function inline_code_block line 11 at assignment
+drop function public.close_during_convert cascade;
+NOTICE:  drop cascades to constraint d_big_check
+create temp table t(v int);
+do $$
+declare c int;
+begin
+  c := dbms_sql.open_cursor();
+  call dbms_sql.parse(c, 'insert into t(v) values (:value)');
+  call dbms_sql.bind_array(c, 'value', array[1,2], 1, 2); -- is_array = true
+  perform dbms_sql.execute(c);
+  call dbms_sql.bind_variable(c, 'value', 42); -- scalar rebind; is_array stays true
+  perform dbms_sql.execute(c);-- datumgetarraytypep(42) -> deref
+end $$;
+drop table t;
+begin;
+create temp table audit_row(a integer, b text);
+do $$
+  declare c integer; a text; b text;
+begin
+  c := dbms_sql.open_cursor();
+  call dbms_sql.parse(c, 'select row(1, ''marker'')::pg_temp.audit_row');
+  call dbms_sql.define_column(c, 1, null::text);
+  perform dbms_sql.execute(c);
+  perform dbms_sql.fetch_rows(c);
+  a := dbms_sql.column_value_f(c, 1, null::text); -- builds the cast cache
+  b := dbms_sql.column_value_f(c, 1, null::text); -- reuses it after spi_finish freed fn_mcxt
+  call dbms_sql.close_cursor(c);
+end $$;
+rollback;
