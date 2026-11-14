@@ -438,7 +438,8 @@ execMotionSortedReceiver(MotionState *node)
 	Motion	   *motion = (Motion *) node->ps.plan;
 	EState	   *estate = node->ps.state;
 
-	AssertState(motion->motionType == MOTIONTYPE_GATHER &&
+	AssertState((motion->motionType == MOTIONTYPE_GATHER ||
+				motion->motionType == MOTIONTYPE_GATHER_SINGLE) &&
 				motion->sendSorted &&
 				hp != NULL);
 
