@@ -3645,6 +3645,40 @@ SELECT sum(a) INTO t_w_cte_relp_1 FROM ins;
 ERROR:  writable CTE queries cannot be used with writable queries
 DETAIL:  Apache Cloudberry currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
+-- A sorted GatherSingle can receive the result of a replicated DML CTE.
+SET optimizer = off;
+EXPLAIN (COSTS OFF)
+WITH ins AS (INSERT INTO t_w_cte_relp VALUES (1),(1) RETURNING a)
+SELECT a FROM ins ORDER BY a;
+                    QUERY PLAN                     
+---------------------------------------------------
+ Explicit Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: t_w_cte_relp.a
+   ->  Sort
+         Sort Key: t_w_cte_relp.a
+         ->  Insert on t_w_cte_relp
+               ->  Values Scan on "*VALUES*"
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+WITH ins AS (INSERT INTO t_w_cte_relp VALUES (1),(1) RETURNING a)
+SELECT a FROM ins ORDER BY a;
+ a 
+---
+ 1
+ 1
+(2 rows)
+
+-- An unsorted GatherSingle control.
+WITH ins AS (INSERT INTO t_w_cte_relp VALUES (2),(2) RETURNING a)
+SELECT a FROM ins;
+ a 
+---
+ 2
+ 2
+(2 rows)
+
+RESET optimizer;
 DROP TABLE t_w_cte_relp;
 --
 -- readable CTE with SELECT INTO clause.
