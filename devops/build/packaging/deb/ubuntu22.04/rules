@@ -29,12 +29,23 @@ gpinstall:
 	else \
 		echo "Build staging directory already populated, skipping copy."; \
 	fi
-	# Copy Apache compliance files into the build staging directory
-	cp -a LICENSE NOTICE DISCLAIMER ${DEBIAN_DESTINATION}/
-	cp -a licenses ${DEBIAN_DESTINATION}/
+	# Copy Apache compliance files into the build staging directory.
+	#
+	# The binary packages ship the -binary variants, which describe what is
+	# actually inside the package rather than what is in the source release:
+	# they cover the components downloaded and built during packaging
+	# (psutil, PyYAML, PyGreSQL) and omit components that only tests or
+	# other platforms use.  They are installed under their plain names so
+	# that the package contains a LICENSE, a NOTICE and a licenses/
+	# directory that describe the package itself.
+	cp -a LICENSE-binary ${DEBIAN_DESTINATION}/LICENSE
+	cp -a NOTICE-binary ${DEBIAN_DESTINATION}/NOTICE
+	cp -a DISCLAIMER ${DEBIAN_DESTINATION}/
+	rm -rf ${DEBIAN_DESTINATION}/licenses
+	cp -a licenses-binary ${DEBIAN_DESTINATION}/licenses
 	# Create debian/copyright for Debian policy compliance
 	mkdir -p $(shell pwd)/debian
-	cat LICENSE NOTICE > $(shell pwd)/debian/copyright
+	cat LICENSE-binary NOTICE-binary > $(shell pwd)/debian/copyright
 
 override_dh_auto_install: gpinstall
 	# the staging directory for creating a debian is NOT the right GPHOME.
