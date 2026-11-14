@@ -69,6 +69,7 @@ SET enable_mergejoin TO off;
 -- available, including in the parallel regression configuration.
 SET enable_nestloop TO on;
 SET enable_parallel TO off;
+SET optimizer_enable_indexonlyscan TO off;
 CREATE TABLE expr_key (x numeric, t text) DISTRIBUTED REPLICATED;
 INSERT INTO expr_key (x, t)
 SELECT d1::numeric, d1::text FROM (
@@ -90,6 +91,7 @@ SELECT count(*) FROM expr_key t1 INNER JOIN expr_key t2
 ON t1.x = t2.t::numeric AND t1.t::numeric = t2.x;
 
 DROP TABLE expr_key;
+RESET optimizer_enable_indexonlyscan;
 RESET enable_parallel;
 RESET enable_nestloop;
 

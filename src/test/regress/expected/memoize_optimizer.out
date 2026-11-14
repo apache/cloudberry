@@ -107,6 +107,7 @@ SET enable_mergejoin TO off;
 -- available, including in the parallel regression configuration.
 SET enable_nestloop TO on;
 SET enable_parallel TO off;
+SET optimizer_enable_indexonlyscan TO off;
 CREATE TABLE expr_key (x numeric, t text) DISTRIBUTED REPLICATED;
 INSERT INTO expr_key (x, t)
 SELECT d1::numeric, d1::text FROM (
@@ -120,18 +121,17 @@ VACUUM ANALYZE expr_key;
 SELECT explain_memoize('
 SELECT * FROM expr_key t1 INNER JOIN expr_key t2
 ON t1.x = t2.t::numeric AND t1.t::numeric = t2.x;', false);
-                                      explain_memoize                                      
--------------------------------------------------------------------------------------------
+                                   explain_memoize                                    
+--------------------------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1) (actual rows=80 loops=N)
    ->  Nested Loop (actual rows=80 loops=N)
          Join Filter: true
          ->  Seq Scan on expr_key t1 (actual rows=40 loops=N)
-         ->  Index Only Scan using expr_key_idx_x_t on expr_key t2 (actual rows=2 loops=N)
+         ->  Index Scan using expr_key_idx_x_t on expr_key t2 (actual rows=2 loops=N)
                Index Cond: (x = (t1.t)::numeric)
                Filter: (t1.x = (t)::numeric)
-               Heap Fetches: N
  Optimizer: GPORCA
-(9 rows)
+(8 rows)
 
 SELECT count(*) FROM expr_key t1 INNER JOIN expr_key t2
 ON t1.x = t2.t::numeric AND t1.t::numeric = t2.x;
@@ -141,6 +141,7 @@ ON t1.x = t2.t::numeric AND t1.t::numeric = t2.x;
 (1 row)
 
 DROP TABLE expr_key;
+RESET optimizer_enable_indexonlyscan;
 RESET enable_parallel;
 RESET enable_nestloop;
 -- Reduce work_mem so that we see some cache evictions
