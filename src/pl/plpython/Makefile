@@ -78,7 +78,7 @@ endif # win32
 
 SHLIB_LINK = $(python_libspec) $(python_additional_libs) $(filter -lintl,$(LIBS))
 
-REGRESS_OPTS = --dbname=$(PL_TESTDB)
+REGRESS_OPTS = --dbname=$(PL_TESTDB) --init-file=$(srcdir)/init_file
 
 # FIXME: enable plpython_returns test. exec() functionality changed
 # between Python2 and Python3. plpython_returns test uses it
