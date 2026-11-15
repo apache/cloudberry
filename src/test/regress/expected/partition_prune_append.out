@@ -23,6 +23,8 @@
 -- s/((0[1-9]|1[0-2])-(0[1-9]|1[0-9]|2[0-9])|(0[13-9]|1[0-2])-30|(0[13578]|1[02])-31)-(?!0000)[0-9]{4}/xx-xx-xxxx/
 -- m/((Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (0[1-9]|[12][0-9]|3[01]) ([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](.[0-9]+)? (?!0000)[0-9]{4}.*)+(['"])/
 -- s/((Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (0[1-9]|[12][0-9]|3[01]) ([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](.[0-9]+)? (?!0000)[0-9]{4}.*)+(['"])/xxx xx xx xx:xx:xx xxxx"/
+-- m/work_mem: \d+kB  Segments: \d+  Max: \d+kB \(segment \d+\).*/
+-- s/work_mem: \d+kB  Segments: \d+  Max: \d+kB \(segment \d+\).*/work_mem: ###/
 -- end_matchsubs
 -- Force generic plans to be used for all prepared statements in this file.
 \c partition_append
@@ -3377,6 +3379,7 @@ explain (analyze, verbose, costs off, summary off, timing off) execute mt_q2 (35
                      Sort Key: ma_test_p1.b
                      Sort Method:  quicksort  Memory: 75kB
    Max Memory: 25kB  Avg Memory: 25kB (3 segments)
+                     work_mem: 48kB  Segments: 3  Max: 16kB (segment 0)  Workfile: (0 spilling)
                      ->  Append (actual rows=0 loops=1)
                            ->  Seq Scan on public.ma_test_p1 (actual rows=0 loops=1)
                                  Output: ma_test_p1.a, ma_test_p1.b

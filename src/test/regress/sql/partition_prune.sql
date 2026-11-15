@@ -24,6 +24,8 @@
 -- s/((0[1-9]|1[0-2])-(0[1-9]|1[0-9]|2[0-9])|(0[13-9]|1[0-2])-30|(0[13578]|1[02])-31)-(?!0000)[0-9]{4}/xx-xx-xxxx/
 -- m/((Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (0[1-9]|[12][0-9]|3[01]) ([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](.[0-9]+)? (?!0000)[0-9]{4}.*)+(['"])/
 -- s/((Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (0[1-9]|[12][0-9]|3[01]) ([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](.[0-9]+)? (?!0000)[0-9]{4}.*)+(['"])/xxx xx xx xx:xx:xx xxxx"/
+-- m/work_mem: \d+kB  Segments: \d+  Max: \d+kB \(segment \d+\).*/
+-- s/work_mem: \d+kB  Segments: \d+  Max: \d+kB \(segment \d+\).*/work_mem: ###/
 -- end_matchsubs
 -- Force generic plans to be used for all prepared statements in this file.
 set plan_cache_mode = force_generic_plan;

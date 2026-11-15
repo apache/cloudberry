@@ -136,7 +136,7 @@ CreateExecutorState(void)
 	qcontext = AllocSetContextCreate(CurrentMemoryContext,
 									 "ExecutorState",
 									 ALLOCSET_DEFAULT_SIZES);
-	MemoryContextDeclareAccountingRoot(qcontext);
+	(void) MemoryContextStartPeakUsageTracking(qcontext);
 
 	/*
 	 * Make the EState node within the per-query context.  This way, we don't

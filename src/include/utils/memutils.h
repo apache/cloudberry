@@ -120,10 +120,11 @@ extern MemoryContext MemoryContextGetParent(MemoryContext context);
 extern bool MemoryContextIsEmpty(MemoryContext context);
 
 /* Statistics */
-extern void MemoryContextDeclareAccountingRoot(MemoryContext context);
-extern Size MemoryContextGetCurrentSpace(MemoryContext context);
-extern Size MemoryContextGetPeakSpace(MemoryContext context);
-extern Size MemoryContextSetPeakSpace(MemoryContext context, Size nbytes);
+extern Size MemoryContextGetCurrentUsage(MemoryContext context);
+extern Size MemoryContextGetPeakUsage(MemoryContext context);
+extern bool MemoryContextStartPeakUsageTracking(MemoryContext context);
+extern Size MemoryContextSetPeakUsage(MemoryContext context, Size nbytes);
+extern void MemoryContextReparentPeakUsage(MemoryContext cxt, MemoryContext new_parent);
 
 #define MemoryContextDelete(context)    (MemoryContextDeleteImpl(context, __FILE__, PG_FUNCNAME_MACRO, __LINE__))
 extern void MemoryContextDeleteImpl(MemoryContext context, const char* sfile, const char *func, int sline);
@@ -153,6 +154,27 @@ extern void MemoryContextError(int errorcode, MemoryContext context,
 
 extern void HandleLogMemoryContextInterrupt(void);
 extern void ProcessLogMemoryContextInterrupt(void);
+
+static inline void
+IncMcxtTrackerGroupCurrentUsage(MemoryContextPeakTrackerGroup g, Size mem_diff)
+{
+	while (g)
+	{
+		g->currentUsage += mem_diff;
+		g->peakUsage = Max(g->peakUsage, g->currentUsage);
+		g = g->parentGroup;
+	}
+}
+
+static inline void
+DecMcxtTrackerGroupCurrentUsage(MemoryContextPeakTrackerGroup g, Size mem_diff)
+{
+	while (g)
+	{
+		g->currentUsage -= mem_diff;
+		g = g->parentGroup;
+	}
+}
 
 /*
  * Memory-context-type-specific functions

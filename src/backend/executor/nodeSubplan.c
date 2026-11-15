@@ -1143,7 +1143,7 @@ ExecSetParamPlan(SubPlanState *node, ExprContext *econtext, QueryDesc *queryDesc
 	bool		found = false;
 	ListCell   *pvar;
 	ArrayBuildState *astate pg_attribute_unused() = NULL;
-	Size		savepeakspace = MemoryContextGetPeakSpace(planstate->state->es_query_cxt);
+	Size		savepeakspace = MemoryContextGetPeakUsage(planstate->state->es_query_cxt);
 
 	bool		needDtx;
 	bool		shouldDispatch = false;
@@ -1167,7 +1167,7 @@ ExecSetParamPlan(SubPlanState *node, ExprContext *econtext, QueryDesc *queryDesc
 	 * Reset memory high-water mark so EXPLAIN ANALYZE can report each
 	 * root slice's usage separately.
 	 */
-	MemoryContextSetPeakSpace(planstate->state->es_query_cxt, 0);
+	MemoryContextSetPeakUsage(planstate->state->es_query_cxt, 0);
 
 	/*
 	 * Need a try/catch block here so that if an ereport is called from
@@ -1457,7 +1457,7 @@ PG_TRY();
 PG_CATCH();
 {
 	/* Restore memory high-water mark for root slice of main query. */
-	MemoryContextSetPeakSpace(planstate->state->es_query_cxt, savepeakspace);
+	MemoryContextSetPeakUsage(planstate->state->es_query_cxt, savepeakspace);
 
 	if (oldcontext)
 		MemoryContextSwitchTo(oldcontext);
@@ -1499,7 +1499,7 @@ PG_END_TRY();
 		cdbexplain_localExecStats(planstate, econtext->ecxt_estate->showstatctx);
 
 	/* Restore memory high-water mark for root slice of main query. */
-	MemoryContextSetPeakSpace(planstate->state->es_query_cxt, savepeakspace);
+	MemoryContextSetPeakUsage(planstate->state->es_query_cxt, savepeakspace);
 
 	MemoryContextSwitchTo(oldcontext);
 

@@ -1,0 +1,4 @@
+comment = 'Test code for memory context peak usage'
+default_version = '1.0'
+module_pathname = '$libdir/test_mcxt_peak_tracker'
+relocatable = true

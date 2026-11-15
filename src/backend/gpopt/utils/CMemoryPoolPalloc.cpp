@@ -81,7 +81,7 @@ CMemoryPoolPalloc::TearDown()
 ULLONG
 CMemoryPoolPalloc::TotalAllocatedSize() const
 {
-	return MemoryContextGetCurrentSpace(m_cxt);
+	return MemoryContextGetCurrentUsage(m_cxt);
 }
 
 // get user requested size of array allocation. Note: this is ONLY called for arrays

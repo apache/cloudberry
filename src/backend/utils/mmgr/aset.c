@@ -175,72 +175,10 @@ typedef struct AllocSetContext
 	AllocBlock	keeper;			/* keep this block over resets */
 	/* freelist this context could be put in, or -1 if not a candidate: */
 	int			freeListIndex;	/* index in context_freelists[], or -1 */
-
-	/*
-	 * GPDB: Memory accounting fields
-	 *
-	 * accountingParent: Each MemoryContext has a designated MemoryContext
-	 * that will act as its account for tracking all memory allocations and
-	 * de-allocations performed within the MemoryContext, captured in
-	 * localAllocated, currentAllocated and peakAllocated. The account for
-	 * a MemoryContext must be the context itself, or one of its ancestors
-	 * in the MemoryContext tree. For MemoryContexts that are accounts, their
-	 * accountingParent field will point to itself.
-	 *
-	 * localAllocated: This is the memory allocated (in bytes) for this memory
-	 * context alone (i.e. it does not consider the memory allocated for any
-	 * members of the context's subtree).
-	 *
-	 * currentAllocated: This field is only applicable to a MemoryContext
-	 * designated as an account. It tracks the current bytes allocated in all
-	 * of the subtree MemoryContexts it is responsible for.
-	 *
-	 * peakAllocated: Maximum 'currentAllocated' value ever held in the
-	 * lifetime of this context.
-	 */
-	struct AllocSetContext *accountingParent;
-	Size		localAllocated;
-
-	Size		currentAllocated;
-	Size		peakAllocated;
 } AllocSetContext;
 
 typedef AllocSetContext *AllocSet;
 
-static inline bool
-IS_MEMORY_ACCOUNT(AllocSet set)
-{
-	return (set->accountingParent == set);
-}
-
-static inline void
-MEMORY_ACCOUNT_INC_ALLOCATED(AllocSet set, Size newbytes)
-{
-	AllocSet	parent = set->accountingParent;
-
-	set->localAllocated += newbytes;
-
-	parent->currentAllocated += newbytes;
-	parent->peakAllocated = Max(parent->peakAllocated,
-							  parent->currentAllocated);
-
-	/* Make sure these values are not overflow */
-	Assert(set->localAllocated >= newbytes);
-	Assert(parent->currentAllocated >= set->localAllocated);
-}
-
-static inline void
-MEMORY_ACCOUNT_DEC_ALLOCATED(AllocSet set, Size newbytes)
-{
-	AllocSet	parent = set->accountingParent;
-
-	Assert(set->localAllocated >= newbytes);
-	Assert(parent->currentAllocated >= set->localAllocated);
-
-	set->localAllocated -= newbytes;
-	parent->currentAllocated -= newbytes;
-
-}
 
 /*
  * AllocBlock
@@ -541,16 +479,10 @@ AllocSetContextCreateInternal(MemoryContext parent,
 								parent,
 								name);
 
-			if (parent)
-				set->accountingParent = ((AllocSet) parent)->accountingParent;
-			else
-				set->accountingParent = set;
-			set->localAllocated = 0;
-			set->currentAllocated = 0;
-			set->peakAllocated = 0;
-
 			((MemoryContext) set)->mem_allocated =
 				set->keeper->endptr - ((char *) set);
+
+			IncMcxtTrackerGroupCurrentUsage(((MemoryContext) set)->trackerGroup, set->header.mem_allocated);
 
 			return (MemoryContext) set;
 		}
@@ -649,15 +581,9 @@ AllocSetContextCreateInternal(MemoryContext parent,
 						parent,
 						name);
 
-	if (parent)
-		set->accountingParent = ((AllocSet) parent)->accountingParent;
-	else
-		set->accountingParent = set;
-	set->localAllocated = 0;
-	set->currentAllocated = 0;
-	set->peakAllocated = 0;
-
 	((MemoryContext) set)->mem_allocated = firstBlockSize;
+
+	IncMcxtTrackerGroupCurrentUsage(((MemoryContext) set)->trackerGroup, firstBlockSize);
 
 	return (MemoryContext) set;
 }
@@ -680,6 +606,7 @@ AllocSetReset(MemoryContext context)
 	AllocSet	set = (AllocSet) context;
 	AllocBlock	block;
 	Size		keepersize PG_USED_FOR_ASSERTS_ONLY;
+	Size        was_allocated = context->mem_allocated;
 
 	Assert(AllocSetIsValid(set));
 
@@ -693,7 +620,6 @@ AllocSetReset(MemoryContext context)
 	 * or the accounting data is incorrect.
 	 */
 	Assert(context->firstchild == NULL);
-	MEMORY_ACCOUNT_DEC_ALLOCATED(set, set->localAllocated);
 
 	/* Remember keeper block size for Assert below */
 	keepersize = set->keeper->endptr - ((char *) set);
@@ -738,6 +664,8 @@ AllocSetReset(MemoryContext context)
 		block = next;
 	}
 
+	DecMcxtTrackerGroupCurrentUsage(context->trackerGroup, was_allocated - context->mem_allocated);
+
 	Assert(context->mem_allocated == keepersize);
 
 	/* Reset block size allocation sequence, too */
@@ -752,11 +680,12 @@ AllocSetReset(MemoryContext context)
  * Unlike AllocSetReset, this *must* free all resources of the set.
  */
 void
-AllocSetDelete(MemoryContext context, MemoryContext parent)
+AllocSetDelete(MemoryContext context)
 {
 	AllocSet	set = (AllocSet) context;
 	AllocBlock	block = set->blocks;
 	Size		keepersize PG_USED_FOR_ASSERTS_ONLY;
+	Size        was_allocated = context->mem_allocated;
 
 	Assert(AllocSetIsValid(set));
 
@@ -764,19 +693,6 @@ AllocSetDelete(MemoryContext context, MemoryContext parent)
 	/* Check for corruption and leaks before freeing */
 	AllocSetCheck(context);
 #endif
-
-	/* Make sure all children have been deleted */
-	Assert(context->firstchild == NULL);
-	MEMORY_ACCOUNT_DEC_ALLOCATED(set, set->localAllocated);
-	if (IS_MEMORY_ACCOUNT(set))
-	{
-		/* Roll up our peak value to the parent, before this context goes away. */
-		AllocSet	parentset = (AllocSet) parent;
-
-		parentset->accountingParent->peakAllocated =
-			Max(set->peakAllocated,
-				parentset->accountingParent->peakAllocated);
-	}
 
 	/* Remember keeper block size for Assert below */
 	keepersize = set->keeper->endptr - ((char *) set);
@@ -795,6 +711,12 @@ AllocSetDelete(MemoryContext context, MemoryContext parent)
 		 */
 		if (!context->isReset)
 			MemoryContextResetOnly(context);
+
+		/*
+		 * MemoryContextResetOnly may decrement from trackerGroup, released
+		 * memory size, so use context mem_allocated
+		 */
+		DecMcxtTrackerGroupCurrentUsage(context->trackerGroup, context->mem_allocated);
 
 		/*
 		 * If the freelist is full, just discard what's already in it.  See
@@ -842,6 +764,12 @@ AllocSetDelete(MemoryContext context, MemoryContext parent)
 	}
 
 	Assert(context->mem_allocated == keepersize);
+
+	/*
+	 * MemoryContextResetOnly (ASetReset) wasn't called so we must decrement
+	 * from usageGrop all size of allocated memory.
+	 */
+	DecMcxtTrackerGroupCurrentUsage(context->trackerGroup, was_allocated);
 
 	/* Finally, free the context header, including the keeper block */
 	gp_free(set);
@@ -901,6 +829,7 @@ AllocSetAlloc(MemoryContext context, Size size)
 			return NULL;
 
 		context->mem_allocated += blksize;
+		IncMcxtTrackerGroupCurrentUsage(context->trackerGroup, blksize);
 
 		block->aset = set;
 		block->freeptr = block->endptr = ((char *) block) + blksize;
@@ -946,8 +875,6 @@ AllocSetAlloc(MemoryContext context, Size size)
 
 		/* Disallow access to the chunk header. */
 		VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
-
-		MEMORY_ACCOUNT_INC_ALLOCATED(set, chunk_size);
 
 		return MemoryChunkGetPointer(chunk);
 	}
@@ -997,8 +924,6 @@ AllocSetAlloc(MemoryContext context, Size size)
 
 		/* Disallow access to the chunk header. */
 		VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
-
-		MEMORY_ACCOUNT_INC_ALLOCATED(set, GetChunkSizeFromFreeListIdx(fidx));
 
 		return MemoryChunkGetPointer(chunk);
 	}
@@ -1118,6 +1043,7 @@ AllocSetAlloc(MemoryContext context, Size size)
 			return NULL;
 
 		context->mem_allocated += blksize;
+		IncMcxtTrackerGroupCurrentUsage(context->trackerGroup, blksize);
 
 		block->aset = set;
 		block->freeptr = ((char *) block) + ALLOC_BLOCKHDRSZ;
@@ -1166,8 +1092,6 @@ AllocSetAlloc(MemoryContext context, Size size)
 	/* Disallow access to the chunk header. */
 	VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
 
-	MEMORY_ACCOUNT_INC_ALLOCATED(set, chunk_size);
-
 	return MemoryChunkGetPointer(chunk);
 }
 
@@ -1197,8 +1121,6 @@ AllocSetFree(void *pointer)
 			elog(ERROR, "could not find block containing chunk %p", chunk);
 
 		set = block->aset;
-
-		MEMORY_ACCOUNT_DEC_ALLOCATED(set, block->endptr - (char *) chunk - ALLOC_CHUNKHDRSZ);
 
 #ifdef USE_ASSERT_CHECKING
 	/*
@@ -1232,6 +1154,7 @@ AllocSetFree(void *pointer)
 			block->next->prev = block->prev;
 
 		set->header.mem_allocated -= block->endptr - ((char *) block);
+		DecMcxtTrackerGroupCurrentUsage(set->header.trackerGroup, block->endptr - ((char *) block));
 
 #ifdef CLOBBER_FREED_MEMORY
 		wipe_mem(block, block->freeptr - ((char *) block));
@@ -1256,8 +1179,6 @@ AllocSetFree(void *pointer)
 		fidx = MemoryChunkGetValue(chunk);
 		Assert(FreeListIdxIsValid(fidx));
 		link = GetFreeListLink(chunk);
-
-		MEMORY_ACCOUNT_DEC_ALLOCATED(set, GetChunkSizeFromFreeListIdx(fidx));
 
 #ifdef MEMORY_CONTEXT_CHECKING
 		/* Test for someone scribbling on unused space in chunk */
@@ -1392,6 +1313,8 @@ AllocSetRealloc(void *pointer, Size size)
 		/* updated separately, not to underflow when (oldblksize > blksize) */
 		set->header.mem_allocated -= oldblksize;
 		set->header.mem_allocated += blksize;
+		DecMcxtTrackerGroupCurrentUsage(set->header.trackerGroup, oldblksize);
+		IncMcxtTrackerGroupCurrentUsage(set->header.trackerGroup, blksize);
 
 		block->freeptr = block->endptr = ((char *) block) + blksize;
 
@@ -1454,11 +1377,6 @@ AllocSetRealloc(void *pointer, Size size)
 
 		/* Disallow access to the chunk header . */
 		VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
-
-		if (chksize > oldchksize)
-			MEMORY_ACCOUNT_INC_ALLOCATED(set, chksize - oldchksize);
-		else
-			MEMORY_ACCOUNT_DEC_ALLOCATED(set, oldchksize - chksize);
 
 		return pointer;
 	}
@@ -1750,138 +1668,6 @@ AllocSetStats(MemoryContext context,
 		totals->totalspace += totalspace;
 		totals->freespace += freespace;
 	}
-}
-
-void
-AllocSetDeclareAccountingRoot(MemoryContext context)
-{
-	AllocSet	set = (AllocSet) context;
-
-	Assert(set->localAllocated == 0);
-
-	set->accountingParent = set;
-}
-
-Size
-AllocSetGetCurrentUsage(MemoryContext context)
-{
-	AllocSet	set = (AllocSet) context;
-
-	Assert(IS_MEMORY_ACCOUNT(set));
-
-	return set->currentAllocated;
-}
-
-static Size
- AllocSetGetPeakUsage_recurse(MemoryContext parent, MemoryContext context)
-{
-	MemoryContext child;
-	Size		total;
-
-	total = 0;
-	for (child = context->firstchild;
-		 child != NULL;
-		 child = child->nextchild)
-	{
-		AllocSet	childset = (AllocSet) child;
-
-		if (childset->accountingParent == (AllocSet) parent)
-			AllocSetGetPeakUsage_recurse(parent, child);
-		else
-		{
-			if (child->methods->get_peak_usage)
-				total += child->methods->get_peak_usage(child);
-		}
-	}
-
-	return total;
-}
-
-Size
-AllocSetGetPeakUsage(MemoryContext context)
-{
-	AllocSet	set = (AllocSet) context;
-	Size		total;
-
-	Assert(IS_MEMORY_ACCOUNT(set));
-
-	total = set->peakAllocated;
-
-	total += AllocSetGetPeakUsage_recurse(context, context);
-
-	return total;
-}
-
-Size
-AllocSetSetPeakUsage(MemoryContext context, Size nbytes)
-{
-	AllocSet	set = (AllocSet) context;
-	Size		oldpeak;
-
-	Assert(IS_MEMORY_ACCOUNT(set));
-
-	oldpeak = set->peakAllocated;
-
-	set->peakAllocated = Max(set->currentAllocated, nbytes);
-
-	return oldpeak;
-}
-
-void
-AllocSetTransferAccounting(MemoryContext context, MemoryContext new_parent)
-{
-	/*
-	 * Mixing AllocSetContexts and other contexts will lose the accounting info.
-	 */
-	if (!IsA(context, AllocSetContext) || (new_parent != NULL && !IsA(new_parent, AllocSetContext)))
-		return;
-
-	AllocSet set = (AllocSet)context;
-	AllocSet np = (AllocSet)new_parent;
-
-	if (set->accountingParent == set || set->accountingParent == np ||
-		(np && set->accountingParent == np->accountingParent))
-		return;
-
-	while (np && np->accountingParent != np && np != set->accountingParent)
-		np = (AllocSet)np->header.parent;
-
-	if (np)
-	{
-		if (np == set->accountingParent)
-		{
-			/*
-			* if set->accountingParent is the ancestor of the new parent,
-			* the accoutingParent doesn't need to change.
-			*/
-		}
-		else if (np == np->accountingParent)
-		{
-			set->accountingParent->currentAllocated -= set->localAllocated;
-			set->accountingParent = np->accountingParent;
-			np->currentAllocated += set->localAllocated;
-			np->peakAllocated = Max(np->currentAllocated, np->peakAllocated);
-
-			/* also need to update accounting info for descendants */
-			MemoryContext child;
-			for (child = context->firstchild; child != NULL; child = child->nextchild)
-				AllocSetTransferAccounting(child, (MemoryContext)np);
-		}
-	}
-	else
-	{
-		/* new_parent is NULL or new_parent is not the ancestor of context */
-		set->accountingParent->currentAllocated -= set->localAllocated;
-		set->accountingParent = set;
-		set->currentAllocated = set->localAllocated;
-		set->peakAllocated = set->localAllocated;
-
-		/* also need to update accounting info for descendants */
-		MemoryContext child;
-		for (child = context->firstchild; child != NULL; child = child->nextchild)
-			AllocSetTransferAccounting(child, (MemoryContext)set);
-	}
-
 }
 
 
