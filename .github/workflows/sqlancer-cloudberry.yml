@@ -21,7 +21,7 @@
 # --------------------------------------------------------------------
 # Description:
 #
-#   Fuzzes the main branch with SQLancer once a week. See
+#   Fuzzes Cloudberry with SQLancer. See
 #   https://github.com/apache/cloudberry/discussions/1952 for the
 #   background.
 #
@@ -34,30 +34,27 @@
 #    reproducers and the server logs as artifacts.
 #
 # Triggers:
-# - Weekly schedule, Saturday 02:00 UTC.
-# - Manual dispatch.
-# - Pull requests that change this file. This is a short run, five
-#   minutes for each oracle, to show that the workflow still works.
-#   Findings do not fail it: they are not caused by the pull request.
+# - Pushes to main and pull requests against main. These are short
+#   runs, five minutes for each oracle.
+# - Manual dispatch, by default 60 minutes for each oracle.
 #
 # Notes:
-# - Does not run on other pull requests or on pushes, and is not a
-#   required check.
 # - Runs only in the apache organization; forks are ignored.
 # - The job fails when SQLancer reports a potential bug or a server
 #   logs an assertion failure or a crash. These are raw fuzzer results:
-#   reproduce one before filing an issue for it.
+#   reproduce one before filing an issue for it. A pull request run
+#   does not fail on them, because the fuzzing is random and a finding
+#   is in most cases not caused by the pull request; look at the job
+#   summary instead.
 # --------------------------------------------------------------------
 name: Apache Cloudberry SQLancer Fuzzing
 
 on:
-  schedule:
-  # Saturday 02:00 UTC, 10:00 in UTC+8: the runners are idle and the
-  # results are there on Monday morning.
-  - cron: "0 2 * * 6"
+  push:
+    branches: [main]
   pull_request:
-    paths:
-    - .github/workflows/sqlancer-cloudberry.yml
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
     inputs:
       minutes_per_oracle:
@@ -148,11 +145,11 @@ jobs:
         INPUT_SQLANCER_REF: ${{ inputs.sqlancer_ref }}
       run: |
         set -euo pipefail
-        if [ "${GITHUB_EVENT_NAME}" = pull_request ]; then
-          # Only a check that the workflow works.
-          minutes=5
-        else
+        if [ "${GITHUB_EVENT_NAME}" = workflow_dispatch ]; then
           minutes="${INPUT_MINUTES:-60}"
+        else
+          # Pushes and pull requests get a short run.
+          minutes=5
         fi
         oracles="${INPUT_ORACLES:-NOREC QUERY_PARTITIONING PQS DQP}"
         ref="${INPUT_SQLANCER_REF:-${SQLANCER_REF}}"
