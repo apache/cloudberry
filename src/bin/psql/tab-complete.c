@@ -3874,8 +3874,11 @@ psql_completion(const char *text, int start, int end)
 	/* DROP STORAGE */
 	else if (Matches("DROP", "STORAGE"))
 		COMPLETE_WITH("SERVER", "USER MAPPING");
-	else if (Matches("DROP", "STORAGE", "SERVER") ||
-			 Matches("DROP", "STORAGE", "SERVER", "IF", "EXISTS"))
+	else if (Matches("DROP", "STORAGE", "SERVER"))
+		COMPLETE_WITH_QUERY_PLUS(Query_for_list_of_storage_servers, "IF EXISTS");
+	else if (Matches("DROP", "STORAGE", "SERVER", "IF"))
+		COMPLETE_WITH("EXISTS");
+	else if (Matches("DROP", "STORAGE", "SERVER", "IF", "EXISTS"))
 		COMPLETE_WITH_QUERY(Query_for_list_of_storage_servers);
 	/* DROP DIRECTORY TABLE */
 	else if (Matches("DROP", "DIRECTORY"))

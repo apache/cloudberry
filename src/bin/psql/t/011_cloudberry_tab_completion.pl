@@ -166,7 +166,7 @@ for my $command ('ALTER RESOURCE GROUP', 'DROP RESOURCE GROUP')
 	clear_query();
 }
 
-for my $command ('ALTER TAG', 'DROP TAG', 'DROP PROFILE')
+for my $command ('ALTER TAG', 'DROP TAG', 'DROP PROFILE', 'DROP STORAGE SERVER')
 {
 	check_completion("$command I\t", qr/IF EXISTS /,
 		"offer IF EXISTS after $command");
