@@ -1605,8 +1605,9 @@ select *, gp_segment_id from reorg_leaf_1_prt_p0;
 set optimizer = false;
 -- check the distribution difference between 't1' and 't2' after executing 'query_string'
 -- return true if data distribution changed, otherwise false.
--- Note: in extremely rare cases, even after 't2' being randomly-distributed from 't1', they could still have the 
--- exact same distribution. So let the tables have a reasonably large number of rows to reduce that possibility.
+-- Compare each row's segment, not just per-segment row counts, which can match
+-- even when many rows have moved. The unique b values identify the rows, and a
+-- large number of rows makes an entirely unchanged random placement negligible.
 CREATE OR REPLACE FUNCTION check_redistributed(query_string text, t1 text, t2 text) 
 RETURNS BOOLEAN AS 
 $$
@@ -1617,9 +1618,9 @@ DECLARE
     comparison_count INT;
 BEGIN
     -- Prepare the query strings
-    before_query := format('SELECT gp_segment_id as segid, count(*) AS tupcount FROM %I GROUP BY gp_segment_id', t1);
-    after_query := format('SELECT gp_segment_id as segid, count(*) AS tupcount FROM %I GROUP BY gp_segment_id', t2);
-    comparison_query := format('SELECT COUNT(*) FROM ((TABLE %I EXCEPT TABLE %I) UNION ALL (TABLE %I EXCEPT TABLE %I))q', 'distribution1', 'distribution2', 'distribution2', 'distribution1');
+    before_query := format('SELECT gp_segment_id AS segid, * FROM %I', t1);
+    after_query := format('SELECT gp_segment_id AS segid, * FROM %I', t2);
+    comparison_query := format('SELECT COUNT(*) FROM ((TABLE %I EXCEPT ALL TABLE %I) UNION ALL (TABLE %I EXCEPT ALL TABLE %I))q', 'distribution1', 'distribution2', 'distribution2', 'distribution1');
 
     -- Create temp tables to store the result
     EXECUTE format('CREATE TEMP TABLE distribution1 AS %s DISTRIBUTED REPLICATED', before_query);
@@ -1695,16 +1696,14 @@ select check_redistributed('alter table t_reorganize set with (reorganize=true) 
  t
 (1 row)
 
-create table t_random (like t_reorganize) distributed randomly;
-ERROR:  relation "t_random" already exists
+truncate t_random;
 select check_redistributed('insert into t_random select * from t_reorganize', 't_reorganize', 't_random');
  check_redistributed 
 ---------------------
  t
 (1 row)
 
-create table t_distbya (like t_reorganize) distributed by (a);
-ERROR:  relation "t_distbya" already exists
+truncate t_distbya;
 select check_redistributed('insert into t_distbya select * from t_reorganize', 't_reorganize', 't_distbya');
  check_redistributed 
 ---------------------
