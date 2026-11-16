@@ -99,6 +99,9 @@ public:
 	// column collation
 	IMDId *MdidCollation() const;
 
+	// set column collation, takes ownership of the given mdid
+	void SetMdidCollation(IMDId *mdid_collation);
+
 	void SerializeToDXL(CXMLSerializer *xml_serializer) const;
 };
 

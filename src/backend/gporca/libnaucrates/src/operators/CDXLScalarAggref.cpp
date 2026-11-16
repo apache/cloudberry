@@ -36,7 +36,8 @@ CDXLScalarAggref::CDXLScalarAggref(CMemoryPool *mp, IMDId *agg_func_mdid,
 								   BOOL is_distinct, EdxlAggrefStage agg_stage,
 								   EdxlAggrefKind aggkind,
 								   ULongPtrArray *argtypes,
-								   BOOL isAggStar)
+								   BOOL isAggStar,
+								   IMDId *mdid_input_collation)
 	: CDXLScalar(mp),
 	  m_agg_func_mdid(agg_func_mdid),
 	  m_resolved_rettype_mdid(resolved_rettype_mdid),
@@ -45,7 +46,8 @@ CDXLScalarAggref::CDXLScalarAggref(CMemoryPool *mp, IMDId *agg_func_mdid,
 	  m_aggkind(aggkind),
 	  m_argtypes(argtypes),
 	  m_is_aggstar(isAggStar),
-	  m_is_presorted(false)
+	  m_is_presorted(false),
+	  m_mdid_input_collation(mdid_input_collation)
 {
 	GPOS_ASSERT(nullptr != agg_func_mdid);
 	GPOS_ASSERT_IMP(nullptr != resolved_rettype_mdid,
@@ -66,6 +68,7 @@ CDXLScalarAggref::~CDXLScalarAggref()
 	m_agg_func_mdid->Release();
 	CRefCount::SafeRelease(m_resolved_rettype_mdid);
 	CRefCount::SafeRelease(m_argtypes);
+	CRefCount::SafeRelease(m_mdid_input_collation);
 }
 
 
@@ -246,6 +249,13 @@ CDXLScalarAggref::SerializeToDXL(CXMLSerializer *xml_serializer,
 	xml_serializer->AddAttribute(
 		CDXLTokens::GetDXLTokenStr(EdxltokenAggrefArgTypes), argtypes);
 	GPOS_DELETE(argtypes);
+
+	if (nullptr != m_mdid_input_collation && m_mdid_input_collation->IsValid())
+	{
+		m_mdid_input_collation->Serialize(
+			xml_serializer,
+			CDXLTokens::GetDXLTokenStr(EdxltokenAggrefInputCollation));
+	}
 
 	SerializeValuesListChildToDXL(xml_serializer, dxlnode, 0, "aggargs");
 	SerializeValuesListChildToDXL(xml_serializer, dxlnode, 1, "aggdirectargs");

@@ -158,6 +158,13 @@ CDXLColDescr::MdidCollation() const
 	return m_mdid_collation;
 }
 
+void
+CDXLColDescr::SetMdidCollation(IMDId *mdid_collation)
+{
+	CRefCount::SafeRelease(m_mdid_collation);
+	m_mdid_collation = mdid_collation;
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CDXLColDescr::SerializeToDXL

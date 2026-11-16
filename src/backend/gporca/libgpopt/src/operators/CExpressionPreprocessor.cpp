@@ -2044,6 +2044,76 @@ UpdateExprToConstantPredicateMapping(CMemoryPool *mp, CExpression *pexprFilter,
 	}
 }
 
+// A constant has the default collation of its type, so replacing an
+// expression with a constant may change the collation of the enclosing
+// expression. That is fine if the replaced expression has the default
+// collation too, or if another argument of the enclosing expression, which
+// is not replaced itself, is a column with the same collation: e.g. in
+// c2.name < c1.name with c1.name = 'abc', both of collation "C", the
+// comparison still uses "C" after c1.name has become 'abc'. Otherwise the
+// expression is kept.
+static BOOL
+FSubstitutionKeepsCollation(CExpression *pexprParent, ULONG child_index,
+							ExprToConstantMap *phmExprToConst)
+{
+	CExpression *pexpr = (*pexprParent)[child_index];
+	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
+	IMDId *mdid_type = CScalar::PopConvert(pexpr->Pop())->MdidType();
+	if (0 == md_accessor->RetrieveType(mdid_type)->TypeCollation())
+	{
+		// not a collatable type, or metadata without collation information
+		return true;
+	}
+
+	// the one other collation the replaced expression may have
+	OID collation = 0;
+	CColRefSetIter crsi(*pexpr->DeriveUsedColumns());
+	while (crsi.Advance())
+	{
+		CColRef *colref = crsi.Pcr();
+		if (CConstraintInterval::FCollationMatchesType(colref))
+		{
+			continue;
+		}
+		if (0 == colref->Collation() ||
+			(0 != collation && colref->Collation() != collation))
+		{
+			// unknown, or more than one
+			return false;
+		}
+		collation = colref->Collation();
+	}
+
+	if (0 == collation)
+	{
+		return true;
+	}
+
+	for (ULONG ul = 0; ul < pexprParent->Arity(); ul++)
+	{
+		CExpression *pexprSibling = (*pexprParent)[ul];
+		if (ul == child_index ||
+			nullptr != phmExprToConst->Find(pexprSibling))
+		{
+			continue;
+		}
+		if (CCastUtils::FBinaryCoercibleCastedScId(pexprSibling))
+		{
+			pexprSibling = (*pexprSibling)[0];
+		}
+		if (CUtils::FScalarIdent(pexprSibling) &&
+			nullptr == phmExprToConst->Find(pexprSibling) &&
+			collation == CScalarIdent::PopConvert(pexprSibling->Pop())
+							 ->Pcr()
+							 ->Collation())
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 // Create a new expression from an exression and map of ident to const
 static CExpression *
 SubstituteConstantIdentifier(CMemoryPool *mp, CExpression *pexpr,
@@ -2060,7 +2130,8 @@ SubstituteConstantIdentifier(CMemoryPool *mp, CExpression *pexpr,
 			// make sure the types match
 			CScalar::PopConvert(phmExprToConst->Find((*pexpr)[ul])->Pop())
 				->MdidType()
-				->Equals(CScalar::PopConvert((*pexpr)[ul]->Pop())->MdidType()))
+				->Equals(CScalar::PopConvert((*pexpr)[ul]->Pop())->MdidType()) &&
+			FSubstitutionKeepsCollation(pexpr, ul, phmExprToConst))
 		{
 			// substitute with constant
 			pexprChild = phmExprToConst->Find((*pexpr)[ul]);

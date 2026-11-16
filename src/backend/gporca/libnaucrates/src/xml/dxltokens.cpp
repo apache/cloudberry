@@ -373,6 +373,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenAggrefIsAggStar, GPOS_WSZ_LIT("AggStar")},
 		{EdxltokenAggrefIsPresorted, GPOS_WSZ_LIT("AggPresorted")},
 		{EdxltokenAggrefArgTypes, GPOS_WSZ_LIT("AggArgTypes")},
+		{EdxltokenAggrefInputCollation, GPOS_WSZ_LIT("InputCollation")},
 		{EdxltokenAggrefKind, GPOS_WSZ_LIT("AggKind")},
 		{EdxltokenAggrefStage, GPOS_WSZ_LIT("AggStage")},
 		{EdxltokenAggrefLookups, GPOS_WSZ_LIT("AggLookups")},

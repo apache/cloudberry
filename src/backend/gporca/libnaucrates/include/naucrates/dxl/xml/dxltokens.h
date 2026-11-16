@@ -325,6 +325,7 @@ enum Edxltoken
 	EdxltokenAggrefIsAggStar,
 	EdxltokenAggrefIsPresorted,
 	EdxltokenAggrefArgTypes,
+	EdxltokenAggrefInputCollation,
 	EdxltokenAggrefKind,
 	EdxltokenAggrefStage,
 	EdxltokenAggrefLookups,

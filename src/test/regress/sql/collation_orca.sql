@@ -612,6 +612,81 @@ DROP TABLE t_c_cols;
 DROP TABLE t_default_cols;
 
 -- ======================================================================
+-- Test: collations across constant substitution, subplans, aggregate
+-- stages, table functions and index lookups
+-- ======================================================================
+
+CREATE TABLE t_c_rows (id int, name text COLLATE "C") DISTRIBUTED BY (id);
+CREATE TABLE t_d_rows (id int, name text) DISTRIBUTED BY (id);
+INSERT INTO t_c_rows VALUES (1, 'abc'), (2, 'ABC'), (3, 'def'), (4, 'DEF');
+INSERT INTO t_d_rows SELECT * FROM t_c_rows;
+ANALYZE t_c_rows;
+ANALYZE t_d_rows;
+
+-- d.name < c.name compares in C, so c.name = 'abc' must not turn it into
+-- d.name < 'abc' in the default collation
+EXPLAIN (COSTS OFF)
+SELECT d.name FROM t_c_rows c JOIN t_d_rows d ON d.name < c.name
+WHERE c.name = 'abc';
+SELECT d.name FROM t_c_rows c JOIN t_d_rows d ON d.name < c.name
+WHERE c.name = 'abc' ORDER BY 1;
+SELECT d.name FROM t_c_rows c JOIN t_d_rows d ON d.name < lower(c.name)
+WHERE lower(c.name) = 'abc' ORDER BY 1;
+-- with a C column on the other side the comparison stays in C
+EXPLAIN (COSTS OFF)
+SELECT c2.name FROM t_c_rows c1 JOIN t_c_rows c2 ON c2.name < c1.name
+WHERE c1.name = 'abc';
+SELECT c2.name FROM t_c_rows c1 JOIN t_c_rows c2 ON c2.name < c1.name
+WHERE c1.name = 'abc' ORDER BY 1;
+
+-- the parameter for the output of a correlated subplan keeps its collation
+SELECT d.id, d.name < ANY (SELECT c.name FROM t_c_rows c
+                           WHERE c.id = d.id + 1 LIMIT 1) AS cmp
+FROM t_d_rows d ORDER BY d.id;
+
+-- the final stage of a split aggregate, which only gets the transition
+-- states, keeps the collation of the aggregated values
+SET optimizer_force_multistage_agg = on;
+EXPLAIN (COSTS OFF)
+SELECT name, string_agg(name, '') < 'a' FROM t_c_rows GROUP BY name;
+SELECT name, string_agg(name, '') < 'a' AS cmp FROM t_c_rows GROUP BY name
+ORDER BY name;
+SELECT string_agg(name, ',' ORDER BY name) < 'a' AS cmp FROM t_c_rows;
+SELECT max(name), min(name) FROM t_c_rows;
+RESET optimizer_force_multistage_agg;
+
+-- the output column of a table function has the collation of its argument
+SELECT x FROM unnest((SELECT array_agg(name) FROM t_c_rows)) AS x ORDER BY x;
+SELECT x FROM unnest(coalesce((SELECT array_agg(name) FROM t_c_rows),
+                              ARRAY[]::text[])) AS x ORDER BY x;
+SELECT x FROM unnest((SELECT array_agg(name) FROM t_c_rows) || ARRAY['zzz'])
+AS x ORDER BY x;
+SELECT (SELECT max(x) FROM unnest(array_agg(name)) AS x) FROM t_c_rows;
+
+-- an index serves only comparisons in its own collation
+CREATE TABLE t_d_idx (id int, name text) DISTRIBUTED BY (id);
+INSERT INTO t_d_idx
+SELECT i, (ARRAY['abc', 'ABC', 'def', 'DEF', 'b', 'B'])[1 + i % 6] || i
+FROM generate_series(1, 6000) i;
+CREATE INDEX t_d_idx_name ON t_d_idx (name);
+ANALYZE t_d_idx;
+SET optimizer_enable_hashjoin = off;
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM t_c_rows c JOIN t_d_idx d ON d.name < c.name;
+SELECT count(*) FROM t_c_rows c JOIN t_d_idx d ON d.name < c.name;
+SELECT count(*) FROM t_c_rows c JOIN t_d_idx d ON d.name = c.name || '6';
+SELECT count(*) FROM t_d_idx d WHERE d.name < (SELECT max(name) FROM t_c_rows);
+-- comparisons in the default collation still use it
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM t_d_rows c JOIN t_d_idx d ON d.name < c.name;
+SELECT count(*) FROM t_d_rows c JOIN t_d_idx d ON d.name < c.name;
+RESET optimizer_enable_hashjoin;
+
+DROP TABLE t_c_rows;
+DROP TABLE t_d_rows;
+DROP TABLE t_d_idx;
+
+-- ======================================================================
 -- Cleanup
 -- ======================================================================
 

@@ -246,6 +246,41 @@ CTranslatorUtils::HasSubquery(Node *node)
 
 //---------------------------------------------------------------------------
 //	@function:
+//		SetTVFColumnCollations
+//
+//	@doc:
+//		Give the output columns of a table-valued function the collations
+//		the parser assigned to them. For a polymorphic function such as
+//		unnest() the collation comes from the arguments, so it cannot be
+//		deduced from the column types alone.
+//
+//---------------------------------------------------------------------------
+static void
+SetTVFColumnCollations(CMemoryPool *mp, CDXLColDescrArray *column_descrs,
+					   const RangeTblEntry *rte)
+{
+	List *collations = gpdb::GetRTEColumnCollations((RangeTblEntry *) rte);
+
+	if (gpdb::ListLength(collations) == (INT) column_descrs->Size())
+	{
+		ULONG ul = 0;
+		ListCell *lc = nullptr;
+		ForEach(lc, collations)
+		{
+			OID collation = lfirst_oid(lc);
+			if (OidIsValid(collation))
+			{
+				(*column_descrs)[ul]->SetMdidCollation(
+					GPOS_NEW(mp) CMDIdGPDB(IMDId::EmdidGeneral, collation));
+			}
+			ul++;
+		}
+	}
+	gpdb::ListFree(collations);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CTranslatorUtils::ConvertToCDXLLogicalTVF
 //
 //	@doc:
@@ -286,6 +321,7 @@ CTranslatorUtils::ConvertToCDXLLogicalTVF(CMemoryPool *mp,
 		const IMDType *type = md_accessor->RetrieveType(mdid_return_type);
 		CDXLColDescrArray *column_descrs = GetColumnDescriptorsFromComposite(
 			mp, md_accessor, id_generator, type);
+		SetTVFColumnCollations(mp, column_descrs, rte);
 
 		CMDName *func_name =
 			CDXLUtils::CreateMDNameFromCharArray(mp, rte->eref->aliasname);
@@ -361,6 +397,8 @@ CTranslatorUtils::ConvertToCDXLLogicalTVF(CMemoryPool *mp,
 			GetColumnDescriptorsFromBase(mp, id_generator, mdid_return_type,
 										 default_type_modifier, &func_mdname);
 	}
+
+	SetTVFColumnCollations(mp, column_descrs, rte);
 
 	CMDName *pmdfuncname = GPOS_NEW(mp) CMDName(mp, func->Mdname().GetMDName());
 

@@ -1208,57 +1208,6 @@ check_collation_walker(Node *node, check_collation_context *context)
 		return true;
 	}
 
-	/*
-	 * ORCA cannot propagate collation through SubPlan boundaries
-	 * (CColRefComputed doesn't carry collation).  When a set-returning
-	 * function (e.g. unnest) takes a SubLink argument whose output has
-	 * non-default collation (including C), the expanded rows lose their
-	 * collation, causing wrong sort order in collation-sensitive operations.
-	 * Fall back in this case.
-	 *
-	 * The SubLink may be wrapped in coercion nodes (RelabelType,
-	 * ArrayCoerceExpr, CoerceViaIO, etc.) so we strip those to find it.
-	 */
-	if (IsA(node, FuncExpr))
-	{
-		FuncExpr *func = (FuncExpr *) node;
-		if (func->funcretset)
-		{
-			ListCell *lc;
-			foreach(lc, func->args)
-			{
-				Node *arg = lfirst(lc);
-				/* Strip coercion wrappers to find a buried SubLink */
-				for (;;)
-				{
-					if (arg == NULL)
-						break;
-					if (IsA(arg, SubLink))
-						break;
-					if (IsA(arg, RelabelType))
-						arg = (Node *) ((RelabelType *) arg)->arg;
-					else if (IsA(arg, ArrayCoerceExpr))
-						arg = (Node *) ((ArrayCoerceExpr *) arg)->arg;
-					else if (IsA(arg, CoerceViaIO))
-						arg = (Node *) ((CoerceViaIO *) arg)->arg;
-					else if (IsA(arg, ConvertRowtypeExpr))
-						arg = (Node *) ((ConvertRowtypeExpr *) arg)->arg;
-					else
-						break;
-				}
-				if (arg && IsA(arg, SubLink))
-				{
-					Oid coll = exprCollation(arg);
-					if (OidIsValid(coll) && coll != DEFAULT_COLLATION_OID)
-					{
-						context->foundNonDefaultCollation = 1;
-						break;
-					}
-				}
-			}
-		}
-	}
-
 	switch (nodeTag(node))
 	{
 		case T_Var:

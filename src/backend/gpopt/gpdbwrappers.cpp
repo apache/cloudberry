@@ -51,6 +51,7 @@ extern "C" {
 #include "optimizer/prep.h"
 #include "optimizer/subselect.h"
 #include "parser/parse_agg.h"
+#include "parser/parse_relation.h"
 #include "partitioning/partdesc.h"
 #include "storage/lmgr.h"
 #include "utils/fmgroids.h"
@@ -256,6 +257,28 @@ gpdb::GetAttCollation(Oid relid, AttrNumber attnum)
 	}
 	GP_WRAP_END;
 	return InvalidOid;
+}
+
+List *
+gpdb::GetRTEColumnCollations(RangeTblEntry *rte)
+{
+	GP_WRAP_START;
+	{
+		List *colvars = NIL;
+		List *collations = NIL;
+		ListCell *lc;
+
+		expandRTE(rte, 1 /* rtindex */, 0 /* sublevels_up */, -1 /* location */,
+				  true /* include_dropped */, nullptr /* colnames */, &colvars);
+		foreach (lc, colvars)
+		{
+			collations =
+				lappend_oid(collations, exprCollation((Node *) lfirst(lc)));
+		}
+		return collations;
+	}
+	GP_WRAP_END;
+	return NIL;
 }
 
 void

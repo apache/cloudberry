@@ -52,7 +52,7 @@ CScalarAggFunc::CScalarAggFunc(CMemoryPool *mp, IMDId *pmdidAggFunc,
 							   BOOL is_distinct, EAggfuncStage eaggfuncstage,
 							   BOOL fSplit, EAggfuncKind aggkind,
 							   ULongPtrArray *argtypes, BOOL fRepSafe,
-							   BOOL isAggStar)
+							   BOOL isAggStar, OID input_collation)
 	: CScalar(mp),
 	  m_pmdidAggFunc(pmdidAggFunc),
 	  m_pmdidResolvedRetType(resolved_rettype),
@@ -64,7 +64,8 @@ CScalarAggFunc::CScalarAggFunc(CMemoryPool *mp, IMDId *pmdidAggFunc,
 	  m_eaggfuncstage(eaggfuncstage),
 	  m_fSplit(fSplit),
 	  m_fRepSafe(fRepSafe),
-	  m_is_agg_star(isAggStar)
+	  m_is_agg_star(isAggStar),
+	  m_input_collation(input_collation)
 {
 	GPOS_ASSERT(nullptr != pmdidAggFunc);
 	GPOS_ASSERT(nullptr != pstrAggFunc);
@@ -191,6 +192,7 @@ CScalarAggFunc::Matches(COperator *pop) const
 				(popScAggFunc->Eaggfuncstage() == Eaggfuncstage()) &&
 				(popScAggFunc->IsAggStar() == IsAggStar()) &&
 				(popScAggFunc->FSplit() == m_fSplit) &&
+				(popScAggFunc->InputCollation() == m_input_collation) &&
 				m_pmdidAggFunc->Equals(popScAggFunc->MDId()));
 	}
 

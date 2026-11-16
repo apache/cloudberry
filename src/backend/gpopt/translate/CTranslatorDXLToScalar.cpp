@@ -794,7 +794,15 @@ CTranslatorDXLToScalar::TranslateDXLScalarAggrefToScalar(
 	// so that min/max etc. use the correct column-level collation. Like
 	// the parser, only consider the aggregated arguments, which come first
 	// (one per entry of aggargtypes), and not the ORDER BY-only expressions
-	// appended after them.
+	// appended after them. A later stage of a split aggregate only gets the
+	// transition states, so it relies on the collation carried in the DXL.
+	if (nullptr != dxlop->MdidInputCollation() &&
+		dxlop->MdidInputCollation()->IsValid())
+	{
+		aggref->inputcollid =
+			CMDIdGPDB::CastMdid(dxlop->MdidInputCollation())->Oid();
+	}
+	else
 	{
 		List *agg_args = NIL;
 		const int num_agg_args = gpdb::ListLength(aggref->aggargtypes);
@@ -1029,42 +1037,58 @@ void
 CTranslatorDXLToScalar::TranslateDXLTestExprScalarIdentToExpr(
 	CDXLNode *child_node, Param *param, CDXLScalarIdent **ident, Expr **expr)
 {
-	if (EdxlopScalarIdent == child_node->GetOperator()->GetDXLOperator())
+	Edxlopid op_id = child_node->GetOperator()->GetDXLOperator();
+	if (EdxlopScalarIdent == op_id)
 	{
 		// Ident
 		*ident = CDXLScalarIdent::Cast(child_node->GetOperator());
-		*expr = (Expr *) param;
 	}
-	else if (EdxlopScalarCast == child_node->GetOperator()->GetDXLOperator() &&
+	else if ((EdxlopScalarCast == op_id ||
+			  EdxlopScalarCoerceViaIO == op_id) &&
 			 child_node->Arity() > 0 &&
 			 EdxlopScalarIdent ==
 				 (*child_node)[0]->GetOperator()->GetDXLOperator())
 	{
 		// Casted Ident
 		*ident = CDXLScalarIdent::Cast((*child_node)[0]->GetOperator());
-		CDXLScalarCast *scalar_cast =
-			CDXLScalarCast::Cast(child_node->GetOperator());
-		*expr =
-			TranslateDXLScalarCastWithChildExpr(scalar_cast, (Expr *) param);
-	}
-	else if (EdxlopScalarCoerceViaIO ==
-				 child_node->GetOperator()->GetDXLOperator() &&
-			 child_node->Arity() > 0 &&
-			 EdxlopScalarIdent ==
-				 (*child_node)[0]->GetOperator()->GetDXLOperator())
-	{
-		// CoerceViaIO over Ident
-		*ident = CDXLScalarIdent::Cast((*child_node)[0]->GetOperator());
-		CDXLScalarCoerceViaIO *coerce =
-			CDXLScalarCoerceViaIO::Cast(child_node->GetOperator());
-		*expr =
-			TranslateDXLScalarCoerceViaIOWithChildExpr(coerce, (Expr *) param);
 	}
 	else
 	{
 		// ORCA currently only supports PARAMs of the form id or cast(id)
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
 				   GPOS_WSZ_LIT("Unsupported subplan test expression"));
+	}
+
+	// The param stands for the subplan output column, so it takes over the
+	// column's type and collation. Set them before building a cast on top of
+	// the param, which derives its own collation from the param.
+	param->paramtype = CMDIdGPDB::CastMdid((*ident)->MdidType())->Oid();
+	param->paramtypmod = (*ident)->TypeModifier();
+	if (nullptr != (*ident)->MdidCollation() &&
+		(*ident)->MdidCollation()->IsValid())
+	{
+		param->paramcollid =
+			CMDIdGPDB::CastMdid((*ident)->MdidCollation())->Oid();
+	}
+	else
+	{
+		param->paramcollid = gpdb::TypeCollation(param->paramtype);
+	}
+
+	if (EdxlopScalarIdent == op_id)
+	{
+		*expr = (Expr *) param;
+	}
+	else if (EdxlopScalarCast == op_id)
+	{
+		*expr = TranslateDXLScalarCastWithChildExpr(
+			CDXLScalarCast::Cast(child_node->GetOperator()), (Expr *) param);
+	}
+	else
+	{
+		*expr = TranslateDXLScalarCoerceViaIOWithChildExpr(
+			CDXLScalarCoerceViaIO::Cast(child_node->GetOperator()),
+			(Expr *) param);
 	}
 }
 
@@ -1133,8 +1157,6 @@ CTranslatorDXLToScalar::TranslateDXLSubplanTestExprToScalar(
 		GPOS_ASSERT(nullptr != outer_expr);
 
 		// finalize outer expression
-		param1->paramtype = CMDIdGPDB::CastMdid(outer_ident->MdidType())->Oid();
-		param1->paramtypmod = outer_ident->TypeModifier();
 		param1->paramid = dxl_to_plstmt_ctxt->GetNextParamId(param1->paramtype);
 
 		// test expression is used for non-scalar subplan,
@@ -1165,8 +1187,6 @@ CTranslatorDXLToScalar::TranslateDXLSubplanTestExprToScalar(
 	GPOS_ASSERT(nullptr != inner_expr);
 
 	// finalize inner expression
-	param->paramtype = CMDIdGPDB::CastMdid(inner_ident->MdidType())->Oid();
-	param->paramtypmod = inner_ident->TypeModifier();
 	param->paramid = dxl_to_plstmt_ctxt->GetNextParamId(param->paramtype);
 
 	// test expression is used for non-scalar subplan,

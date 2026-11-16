@@ -1489,9 +1489,17 @@ CTranslatorScalarToDXL::TranslateAggrefToDXL(
 		aggargtypes_values->Append(poid);
 	}
 
+	IMDId *mdid_input_collation = nullptr;
+	if (OidIsValid(aggref->inputcollid))
+	{
+		mdid_input_collation =
+			GPOS_NEW(m_mp) CMDIdGPDB(IMDId::EmdidGeneral, aggref->inputcollid);
+	}
+
 	CDXLScalarAggref *aggref_scalar = GPOS_NEW(m_mp) CDXLScalarAggref(
 		m_mp, agg_mdid, resolved_ret_type, is_distinct, agg_stage,
-		CTranslatorUtils::GetAggKind(aggref->aggkind), aggargtypes_values, is_agg_star);
+		CTranslatorUtils::GetAggKind(aggref->aggkind), aggargtypes_values,
+		is_agg_star, mdid_input_collation);
 
 	// create the DXL node holding the scalar aggref
 	CDXLNode *dxlnode = GPOS_NEW(m_mp) CDXLNode(m_mp, aggref_scalar);

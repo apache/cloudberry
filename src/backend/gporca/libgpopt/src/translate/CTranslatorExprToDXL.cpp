@@ -6766,9 +6766,17 @@ CTranslatorExprToDXL::PdxlnScAggref(CExpression *pexprAggFunc)
 	ULongPtrArray *argtypes = popScAggFunc->GetArgTypes();
 	argtypes->AddRef();
 
+	IMDId *mdid_input_collation = nullptr;
+	if (0 != popScAggFunc->InputCollation())
+	{
+		mdid_input_collation = GPOS_NEW(m_mp)
+			CMDIdGPDB(IMDId::EmdidGeneral, popScAggFunc->InputCollation());
+	}
+
 	CDXLScalarAggref *pdxlopAggRef = GPOS_NEW(m_mp) CDXLScalarAggref(
 		m_mp, pmdidAggFunc, resolved_rettype, popScAggFunc->IsDistinct(),
-		edxlaggrefstage, edxlaggrefkind, argtypes, popScAggFunc->IsAggStar());
+		edxlaggrefstage, edxlaggrefkind, argtypes, popScAggFunc->IsAggStar(),
+		mdid_input_collation);
 
 	CDXLNode *pdxlnAggref = GPOS_NEW(m_mp) CDXLNode(m_mp, pdxlopAggRef);
 

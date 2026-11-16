@@ -1242,9 +1242,18 @@ CDXLOperatorFactory::MakeDXLAggFunc(CDXLMemoryManager *dxl_memory_manager,
 			dxl_memory_manager, attrs, EdxltokenTypeId, EdxltokenScalarAggref);
 	}
 
-	CDXLScalarAggref *dxl_op =
-		GPOS_NEW(mp) CDXLScalarAggref(mp, agg_mdid, resolved_rettype, is_distinct,
-									  agg_stage, agg_kind, argtypelist, is_agg_star);
+	IMDId *mdid_input_collation = nullptr;
+	if (nullptr != attrs.getValue(CDXLTokens::XmlstrToken(
+					   EdxltokenAggrefInputCollation)))
+	{
+		mdid_input_collation = ExtractConvertAttrValueToMdId(
+			dxl_memory_manager, attrs, EdxltokenAggrefInputCollation,
+			EdxltokenScalarAggref);
+	}
+
+	CDXLScalarAggref *dxl_op = GPOS_NEW(mp) CDXLScalarAggref(
+		mp, agg_mdid, resolved_rettype, is_distinct, agg_stage, agg_kind,
+		argtypelist, is_agg_star, mdid_input_collation);
 	dxl_op->SetPresorted(is_presorted);
 
 	return dxl_op;

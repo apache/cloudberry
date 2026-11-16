@@ -92,6 +92,9 @@ private:
 	// is agg(*)
 	BOOL m_is_agg_star;
 
+	// collation of the aggregated arguments, 0 if unknown
+	OID m_input_collation;
+
 public:
 	CScalarAggFunc(const CScalarAggFunc &) = delete;
 
@@ -100,7 +103,7 @@ public:
 				   IMDId *resolved_rettype, const CWStringConst *pstrAggFunc,
 				   BOOL is_distinct, EAggfuncStage eaggfuncstage, BOOL fSplit,
 				   EAggfuncKind aggkind, ULongPtrArray *argtypes,
-				   BOOL fRepSafe, BOOL m_is_agg_star);
+				   BOOL fRepSafe, BOOL m_is_agg_star, OID input_collation = 0);
 
 	// dtor
 	~CScalarAggFunc() override
@@ -200,6 +203,15 @@ public:
 	GetArgTypes() const
 	{
 		return m_argtypes;
+	}
+
+	// collation of the aggregated arguments, 0 if unknown; carried over to
+	// the stages of a split aggregate, which do not see the original
+	// arguments
+	OID
+	InputCollation() const
+	{
+		return m_input_collation;
 	}
 
 	// stage of the aggregate function

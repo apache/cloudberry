@@ -252,6 +252,10 @@ Oid TypeCollation(Oid type);
 // collation of a relation's attribute
 Oid GetAttCollation(Oid relid, AttrNumber attnum);
 
+// collations of the columns of a range table entry, as the parser assigns
+// them to the Vars that reference it (dropped columns included)
+List *GetRTEColumnCollations(RangeTblEntry *rte);
+
 // Byval type get len
 void TypLenByVal(Oid typid, int16 *typlen, bool *typbyval);
 

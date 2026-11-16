@@ -3458,13 +3458,22 @@ CTranslatorDXLToExpr::PexprAggFunc(const CDXLNode *pdxlnAggref)
 		resolved_return_type_mdid->AddRef();
 	}
 
+	OID input_collation = 0;
+	if (nullptr != dxl_op->MdidInputCollation() &&
+		dxl_op->MdidInputCollation()->IsValid())
+	{
+		input_collation =
+			CMDIdGPDB::CastMdid(dxl_op->MdidInputCollation())->Oid();
+	}
+
 	dxl_op->GetArgTypes()->AddRef();
 	CScalarAggFunc *popScAggFunc = CUtils::PopAggFunc(
 		m_mp, agg_func_mdid,
 		GPOS_NEW(m_mp)
 			CWStringConst(m_mp, (pmdagg->Mdname().GetMDName())->GetBuffer()),
 		dxl_op->IsDistinct(), agg_func_stage, fSplit, resolved_return_type_mdid,
-		agg_func_kind, dxl_op->GetArgTypes(), pmdagg->IsAggRepSafe(), dxl_op->IsAggStar());
+		agg_func_kind, dxl_op->GetArgTypes(), pmdagg->IsAggRepSafe(),
+		dxl_op->IsAggStar(), input_collation);
 
 	CExpression *pexprAggFunc = nullptr;
 

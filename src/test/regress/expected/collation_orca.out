@@ -1371,6 +1371,239 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 DROP TABLE t_c_cols;
 DROP TABLE t_default_cols;
 -- ======================================================================
+-- Test: collations across constant substitution, subplans, aggregate
+-- stages, table functions and index lookups
+-- ======================================================================
+CREATE TABLE t_c_rows (id int, name text COLLATE "C") DISTRIBUTED BY (id);
+CREATE TABLE t_d_rows (id int, name text) DISTRIBUTED BY (id);
+INSERT INTO t_c_rows VALUES (1, 'abc'), (2, 'ABC'), (3, 'def'), (4, 'DEF');
+INSERT INTO t_d_rows SELECT * FROM t_c_rows;
+ANALYZE t_c_rows;
+ANALYZE t_d_rows;
+-- d.name < c.name compares in C, so c.name = 'abc' must not turn it into
+-- d.name < 'abc' in the default collation
+EXPLAIN (COSTS OFF)
+SELECT d.name FROM t_c_rows c JOIN t_d_rows d ON d.name < c.name
+WHERE c.name = 'abc';
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Join Filter: (d.name < c.name)
+         ->  Broadcast Motion 3:3  (slice2; segments: 3)
+               ->  Seq Scan on t_c_rows c
+                     Filter: (name = 'abc'::text)
+         ->  Seq Scan on t_d_rows d
+ Optimizer: GPORCA
+(8 rows)
+
+SELECT d.name FROM t_c_rows c JOIN t_d_rows d ON d.name < c.name
+WHERE c.name = 'abc' ORDER BY 1;
+ name 
+------
+ ABC
+ DEF
+(2 rows)
+
+SELECT d.name FROM t_c_rows c JOIN t_d_rows d ON d.name < lower(c.name)
+WHERE lower(c.name) = 'abc' ORDER BY 1;
+ name 
+------
+ ABC
+ ABC
+ DEF
+ DEF
+(4 rows)
+
+-- with a C column on the other side the comparison stays in C
+EXPLAIN (COSTS OFF)
+SELECT c2.name FROM t_c_rows c1 JOIN t_c_rows c2 ON c2.name < c1.name
+WHERE c1.name = 'abc';
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Join Filter: (c2.name < c1.name)
+         ->  Seq Scan on t_c_rows c2
+               Filter: (name < 'abc'::text)
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on t_c_rows c1
+                           Filter: (name = 'abc'::text)
+ Optimizer: GPORCA
+(10 rows)
+
+SELECT c2.name FROM t_c_rows c1 JOIN t_c_rows c2 ON c2.name < c1.name
+WHERE c1.name = 'abc' ORDER BY 1;
+ name 
+------
+ ABC
+ DEF
+(2 rows)
+
+-- the parameter for the output of a correlated subplan keeps its collation
+SELECT d.id, d.name < ANY (SELECT c.name FROM t_c_rows c
+                           WHERE c.id = d.id + 1 LIMIT 1) AS cmp
+FROM t_d_rows d ORDER BY d.id;
+ id | cmp 
+----+-----
+  1 | f
+  2 | t
+  3 | f
+  4 | f
+(4 rows)
+
+-- the final stage of a split aggregate, which only gets the transition
+-- states, keeps the collation of the aggregated values
+SET optimizer_force_multistage_agg = on;
+EXPLAIN (COSTS OFF)
+SELECT name, string_agg(name, '') < 'a' FROM t_c_rows GROUP BY name;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Finalize GroupAggregate
+         Group Key: name
+         ->  Sort
+               Sort Key: name COLLATE "C"
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: name
+                     ->  Partial GroupAggregate
+                           Group Key: name
+                           ->  Sort
+                                 Sort Key: name COLLATE "C"
+                                 ->  Seq Scan on t_c_rows
+ Optimizer: GPORCA
+(13 rows)
+
+SELECT name, string_agg(name, '') < 'a' AS cmp FROM t_c_rows GROUP BY name
+ORDER BY name;
+ name | cmp 
+------+-----
+ ABC  | t
+ DEF  | t
+ abc  | f
+ def  | f
+(4 rows)
+
+SELECT string_agg(name, ',' ORDER BY name) < 'a' AS cmp FROM t_c_rows;
+ cmp 
+-----
+ t
+(1 row)
+
+SELECT max(name), min(name) FROM t_c_rows;
+ max | min 
+-----+-----
+ def | ABC
+(1 row)
+
+RESET optimizer_force_multistage_agg;
+-- the output column of a table function has the collation of its argument
+SELECT x FROM unnest((SELECT array_agg(name) FROM t_c_rows)) AS x ORDER BY x;
+  x  
+-----
+ ABC
+ DEF
+ abc
+ def
+(4 rows)
+
+SELECT x FROM unnest(coalesce((SELECT array_agg(name) FROM t_c_rows),
+                              ARRAY[]::text[])) AS x ORDER BY x;
+  x  
+-----
+ ABC
+ DEF
+ abc
+ def
+(4 rows)
+
+SELECT x FROM unnest((SELECT array_agg(name) FROM t_c_rows) || ARRAY['zzz'])
+AS x ORDER BY x;
+  x  
+-----
+ ABC
+ DEF
+ abc
+ def
+ zzz
+(5 rows)
+
+SELECT (SELECT max(x) FROM unnest(array_agg(name)) AS x) FROM t_c_rows;
+ max 
+-----
+ def
+(1 row)
+
+-- an index serves only comparisons in its own collation
+CREATE TABLE t_d_idx (id int, name text) DISTRIBUTED BY (id);
+INSERT INTO t_d_idx
+SELECT i, (ARRAY['abc', 'ABC', 'def', 'DEF', 'b', 'B'])[1 + i % 6] || i
+FROM generate_series(1, 6000) i;
+CREATE INDEX t_d_idx_name ON t_d_idx (name);
+ANALYZE t_d_idx;
+SET optimizer_enable_hashjoin = off;
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM t_c_rows c JOIN t_d_idx d ON d.name < c.name;
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Nested Loop
+                     Join Filter: (d.name < c.name)
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on t_c_rows c
+                     ->  Seq Scan on t_d_idx d
+ Optimizer: GPORCA
+(9 rows)
+
+SELECT count(*) FROM t_c_rows c JOIN t_d_idx d ON d.name < c.name;
+ count 
+-------
+ 10000
+(1 row)
+
+SELECT count(*) FROM t_c_rows c JOIN t_d_idx d ON d.name = c.name || '6';
+ count 
+-------
+     1
+(1 row)
+
+SELECT count(*) FROM t_d_idx d WHERE d.name < (SELECT max(name) FROM t_c_rows);
+ count 
+-------
+  5000
+(1 row)
+
+-- comparisons in the default collation still use it
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM t_d_rows c JOIN t_d_idx d ON d.name < c.name;
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Nested Loop
+                     Join Filter: true
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on t_d_rows c
+                     ->  Index Scan using t_d_idx_name on t_d_idx d
+                           Index Cond: (name < c.name)
+ Optimizer: GPORCA
+(10 rows)
+
+SELECT count(*) FROM t_d_rows c JOIN t_d_idx d ON d.name < c.name;
+ count 
+-------
+  8000
+(1 row)
+
+RESET optimizer_enable_hashjoin;
+DROP TABLE t_c_rows;
+DROP TABLE t_d_rows;
+DROP TABLE t_d_idx;
+-- ======================================================================
 -- Cleanup
 -- ======================================================================
 RESET optimizer_trace_fallback;
