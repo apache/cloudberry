@@ -1,7 +1,7 @@
 -- Test tied Perl values via handmade classes, so as not to require
 -- Tie::Hash and Tie::Array; some popular platforms don't have those
 -- in their base Perl installations.
-DO $$
+CREATE OR REPLACE FUNCTION init_tied_classes() RETURNS void AS $$
 {
 	package PLPerlTiedHash;
 	sub TIEHASH  { bless {}, $_[0] }
@@ -27,6 +27,12 @@ DO $$
 	                  unless ${$_[0]}++; 'outer' }
 }
 $$ LANGUAGE plperl;
+SELECT init_tied_classes();
+ init_tied_classes 
+-------------------
+ 
+(1 row)
+
 CREATE FUNCTION tied_setof() RETURNS SETOF text AS $$
 	my @a;
 	tie @a, 'PLPerlTiedArray';
@@ -129,6 +135,8 @@ SELECT * FROM tied_reentrant_setof();
 -- Artificial: $_TD->{new} and the trigger return value are tied scalars.
 CREATE TABLE tied_trigger_test (i int, v text);
 CREATE FUNCTION tied_modify() RETURNS trigger AS $$
+	# Triggers run on QEs, whose Perl interpreters have not run the QD setup.
+	spi_exec_query('SELECT init_tied_classes()');
 	my %h;
 	tie %h, 'PLPerlTiedHash';
 	$h{i} = $_TD->{new}{i};
@@ -152,7 +160,7 @@ SELECT i, v FROM tied_trigger_test;
 (1 row)
 
 -- Verify that we can cope with errors thrown within get magic.
-DO $$
+CREATE OR REPLACE FUNCTION init_tied_classes() RETURNS void AS $$
 {
 	package PLPerlTiedHash;
 	sub TIEHASH  { bless {}, $_[0] }
@@ -173,6 +181,12 @@ DO $$
 	sub FETCH     { die("tied scalar fetch failure"); ${$_[0]} }
 }
 $$ LANGUAGE plperl;
+SELECT init_tied_classes();
+ init_tied_classes 
+-------------------
+ 
+(1 row)
+
 SELECT * FROM tied_setof();
 ERROR:  tied array fetch failure at line 13.
 CONTEXT:  PL/Perl function "tied_setof"
