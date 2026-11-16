@@ -401,6 +401,7 @@ jobs:
                                "src/bin/pg_resetwal:installcheck",
                                "src/bin/pg_waldump:installcheck",
                                "src/bin/pgbench:installcheck",
+                               "src/bin/scripts:installcheck",
                                "src/interfaces/libpq:installcheck",
                                "src/test/postmaster:installcheck",
                                "src/test/modules/ssl_passphrase_callback:install installcheck",
