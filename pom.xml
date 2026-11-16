@@ -436,6 +436,7 @@ code or new licensing patterns.
             <exclude>contrib/ltree/ltree_io.c</exclude>
             <exclude>contrib/ltree/lquery_op.c</exclude>
             <exclude>contrib/ltree/crc32.h</exclude>
+            <exclude>contrib/ltree/specs/schema-rename-attack.spec</exclude>
 
             <exclude>contrib/pg_stat_statements/pg_stat_statements.conf</exclude>
 

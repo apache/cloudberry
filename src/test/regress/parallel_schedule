@@ -149,7 +149,7 @@ test: publication subscription
 # ----------
 # Another group of parallel tests
 # ----------
-test: select_views portals_p2 cluster dependency guc bitmapops combocid tsearch tsdicts foreign_data window xmlmap functional_deps advisory_lock indirect_toast equivclass
+test: select_views portals_p2 cluster dependency guc bitmapops combocid tsearch tsdicts foreign_data window xmlmap functional_deps advisory_lock indirect_toast equivclass alter_column_type
 
 # 'foreign_key' test is disabled, because it contains several tables with
 # multiple UNIQUE constraints, which is not supported in GPDB.
@@ -172,10 +172,15 @@ test: plancache limit plpgsql copy2 temp domain rangefuncs prepare conversion tr
 
 test: gp_foreign_data
 
+# rowtypes_alter relies on cached plans surviving across statements, which
+# concurrent DDL can prevent, and on parallel workers being available, so run
+# it by itself
+test: rowtypes_alter
+
 # ----------
 # Another group of parallel tests
 # ----------
-test: partition_join partition_prune reloptions hash_part indexing partition_aggregate partition_info tuplesort explain compression memoize
+test: partition_join partition_prune reloptions hash_part indexing partition_aggregate partition_info tuplesort explain compression memoize attribute_version
 
 # tese the partition table with append
 test: partition_append_setup

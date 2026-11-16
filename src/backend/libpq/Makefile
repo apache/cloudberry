@@ -18,6 +18,7 @@ override CPPFLAGS += -I$(libpq_srcdir) -I$(top_builddir)/src/port
 OBJS = \
 	auth-scram.o \
 	auth.o \
+	be-fe-helpers.o \
 	be-fsstubs.o \
 	be-secure-common.o \
 	be-secure.o \

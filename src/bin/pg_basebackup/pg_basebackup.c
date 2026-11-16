@@ -1985,7 +1985,7 @@ ReceiveBackupManifestInMemoryChunk(size_t r, char *copybuf,
 {
 	PQExpBuffer buf = callback_data;
 
-	appendPQExpBuffer(buf, copybuf, r);
+	appendBinaryPQExpBuffer(buf, copybuf, r);
 }
 
 static void

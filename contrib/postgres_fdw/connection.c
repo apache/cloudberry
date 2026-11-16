@@ -21,6 +21,7 @@
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "postgres_fdw.h"
+#include "libpq/libpq-be-fe-helpers.h"
 #include "storage/fd.h"
 #include "storage/latch.h"
 #include "utils/builtins.h"
@@ -378,6 +379,22 @@ connect_pg_server(ForeignServer *server, UserMapping *user)
 
 		/* verify the set of connection parameters */
 		check_conn_params(keywords, values, user);
+
+		/*
+		 * Final security check on proxied keywords. Note that expand_dbname
+		 * is false below; we don't need to worry about parsing dbname itself.
+		 *
+		 * This must be done prior to the AcquireExternalFD() call, so we
+		 * don't leak the reservation on ERROR.
+		 */
+		for (int i = 0; keywords[i]; i++)
+		{
+			if (!libpqsrv_is_valid_proxy_option(keywords[i]))
+				ereport(ERROR,
+						errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+						errmsg("permission denied to set connection option \"%s\"",
+							   keywords[i]));
+		}
 
 		/*
 		 * We must obey fd.c's limit on non-virtual file descriptors.  Assume
