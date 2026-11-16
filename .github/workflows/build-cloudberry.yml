@@ -342,6 +342,7 @@ jobs:
                                "src/bin/pg_controldata:installcheck",
                                "src/bin/pg_dump:installcheck",
                                "src/bin/pg_resetwal:installcheck",
+                               "src/bin/pg_rewind:installcheck",
                                "src/bin/pg_waldump:installcheck",
                                "src/bin/pgbench:installcheck",
                                "src/bin/scripts:installcheck",
