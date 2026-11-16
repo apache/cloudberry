@@ -359,6 +359,7 @@ jobs:
                                "src/pl/plpython:installcheck",
                                "src/test/modules/dummy_index_am:install installcheck",
                                "src/test/modules/dummy_seclabel:install installcheck",
+                               "src/test/modules/parallel_customscan:install installcheck",
                                "src/test/modules/test_bloomfilter:install installcheck",
                                "src/test/modules/test_ddl_deparse:install installcheck",
                                "src/test/modules/test_ginpostinglist:install installcheck",
