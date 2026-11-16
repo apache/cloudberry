@@ -387,7 +387,8 @@ jobs:
                                "src/interfaces/libpq:installcheck",
                                "src/test/postmaster:installcheck",
                                "src/test/modules/ssl_passphrase_callback:install installcheck",
-                               "src/test/modules/test_custom_rmgrs:install installcheck"]
+                               "src/test/modules/test_custom_rmgrs:install installcheck",
+                               "src/test/modules/test_escape:all installcheck"]
               },
               {"test":"ic-pl-modules",
                "make_configs":["src/pl/plperl:installcheck",
