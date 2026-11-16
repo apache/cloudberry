@@ -107,7 +107,23 @@ SELECT * FROM tied_reentrant_setof();
 -- Artificial: $_TD->{new} and the trigger return value are tied scalars.
 CREATE TABLE tied_trigger_test (i int, v text);
 
+-- Cloudberry: the trigger runs on the segments, but the DO blocks run on the
+-- coordinator, so the segments do not have the tied classes.  Define the
+-- classes that the trigger uses in the function itself.
 CREATE FUNCTION tied_modify() RETURNS trigger AS $$
+	{
+		package PLPerlTiedHash;
+		sub TIEHASH  { bless {}, $_[0] }
+		sub STORE    { $_[0]{$_[1]} = $_[2] }
+		sub FETCH    { $_[0]{$_[1]} }
+		sub FIRSTKEY { my $a = keys %{$_[0]}; each %{$_[0]} }
+		sub NEXTKEY  { each %{$_[0]} }
+
+		package PLPerlTiedScalar;
+		sub TIESCALAR { my $s; bless \$s, $_[0] }
+		sub STORE     { ${$_[0]} = $_[1] }
+		sub FETCH     { ${$_[0]} }
+	}
 	my %h;
 	tie %h, 'PLPerlTiedHash';
 	$h{i} = $_TD->{new}{i};
@@ -158,4 +174,34 @@ SELECT tied_composite();
 SELECT tied_int_array();
 SELECT * FROM tied_scalar_setof();
 SELECT tied_scalar_int_array();
+
+-- Cloudberry: also define the failing classes on the segments.
+CREATE OR REPLACE FUNCTION tied_modify() RETURNS trigger AS $$
+	{
+		package PLPerlTiedHash;
+		sub TIEHASH  { bless {}, $_[0] }
+		sub STORE    { $_[0]{$_[1]} = $_[2] }
+		sub FETCH    { die("tied hash fetch failure"); $_[0]{$_[1]} }
+		sub FIRSTKEY { my $a = keys %{$_[0]}; each %{$_[0]} }
+		sub NEXTKEY  { each %{$_[0]} }
+
+		package PLPerlTiedScalar;
+		sub TIESCALAR { my $s; bless \$s, $_[0] }
+		sub STORE     { ${$_[0]} = $_[1] }
+		sub FETCH     { die("tied scalar fetch failure"); ${$_[0]} }
+	}
+	my %h;
+	tie %h, 'PLPerlTiedHash';
+	$h{i} = $_TD->{new}{i};
+	$h{v} = 'from_tie';
+	my $new;
+	tie $new, 'PLPerlTiedScalar';
+	$new = \%h;
+	$_TD->{new} = $new;
+	my $ret;
+	tie $ret, 'PLPerlTiedScalar';
+	$ret = 'MODIFY';
+	return $ret;
+$$ LANGUAGE plperl;
+
 INSERT INTO tied_trigger_test (i, v) VALUES (2, 'orig');
