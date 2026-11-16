@@ -1533,7 +1533,7 @@ pgstat_assert_is_up(void)
 
 /* helpers for pgstat_write_statsfile() */
 static void
-write_chunk(FILE *fpout, void *ptr, size_t len)
+write_chunk(FILE *fpout, const void *ptr, size_t len)
 {
 	int			rc;
 
