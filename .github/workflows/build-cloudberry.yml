@@ -386,6 +386,7 @@ jobs:
                                "src/bin/pg_waldump:installcheck",
                                "src/interfaces/libpq:installcheck",
                                "src/test/postmaster:installcheck",
+                               "src/test/modules/libpq_pipeline:all installcheck",
                                "src/test/modules/ssl_passphrase_callback:install installcheck",
                                "src/test/modules/test_custom_rmgrs:install installcheck"]
               },
