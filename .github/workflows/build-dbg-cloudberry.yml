@@ -183,9 +183,16 @@ jobs:
               {"test":"ic-cbdb-parallel",
                "make_configs":["src/test/regress:installcheck-cbdb-parallel"]
               },
+              {"test":"ic-good-opt-off",
+               "make_configs":["src/test/regress:installcheck-good"],
+               "pg_settings":{"optimizer":"off"}
+              },
               {"test":"ic-good-opt-on",
                "make_configs":["src/test/regress:installcheck-good"],
                "pg_settings":{"optimizer":"on"}
+              },
+              {"test":"pax-unit-test",
+               "make_configs":["contrib/pax_storage/:pax-unit-test"]
               },
               {"test":"pax-ic-good-opt-off",
                "make_configs":[
@@ -196,6 +203,9 @@ jobs:
                  "optimizer":"off",
                  "default_table_access_method":"pax"
                 }
+              },
+              {"test":"ic-orca-parallel",
+               "make_configs":["src/test/regress:installcheck-orca-parallel"]
               },
               {"test":"ic-isolation2",
                "make_configs":["src/test/isolation2:installcheck-isolation2"]
