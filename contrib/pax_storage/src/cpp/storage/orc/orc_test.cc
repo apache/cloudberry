@@ -377,6 +377,23 @@ TEST_F(OrcTest, WriteReadEmptyOrc) {
   delete reader;
 }
 
+TEST_F(OrcTest, ReadZeroLengthFile) {
+  auto local_fs = Singleton<LocalFileSystem>::GetInstance();
+  ASSERT_NE(nullptr, local_fs);
+
+  auto file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  ASSERT_NE(nullptr, file_ptr.get());
+  file_ptr->Close();
+
+  file_ptr = local_fs->Open(file_name_, fs::kReadMode);
+  MicroPartitionReader::ReaderOptions reader_options;
+  auto reader = new OrcReader(std::move(file_ptr));
+  reader->Open(reader_options);
+  EXPECT_EQ(0UL, reader->GetGroupNums());
+  reader->Close();
+  delete reader;
+}
+
 TEST_F(OrcTest, ReadTuple) {
   TupleTableSlot *tuple_slot = CreateTestTupleTableSlot();
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();

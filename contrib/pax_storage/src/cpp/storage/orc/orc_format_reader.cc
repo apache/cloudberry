@@ -55,6 +55,18 @@ void OrcFormatReader::Open() {
   uint64 post_script_len = 0;
 
   Assert(file_);
+
+  // A newly created PAX segment may be empty and therefore have no ORC tail.
+  // Reset the reader state and treat it as having no stripes instead of
+  // reading the postscript length at file_length - PORC_POST_SCRIPT_SIZE.
+  post_script_.Clear();
+  file_footer_.Clear();
+  column_types_.clear();
+  column_attrs_.clear();
+  stripe_row_offsets_.clear();
+  num_of_stripes_ = 0;
+  is_vec_ = false;
+
   auto read_in_disk = [this](size_t file_size, size_t ps_len,
                              bool skip_read_post_script) {
     // read post script
@@ -100,6 +112,14 @@ void OrcFormatReader::Open() {
   };
 
   file_length = file_->FileLength();
+  if (file_length == 0)
+    return;
+
+  CBDB_CHECK(file_length >= PORC_POST_SCRIPT_SIZE,
+             cbdb::CException::ExType::kExTypeInvalidPORCFormat,
+             fmt("Invalid PORC file, too small to contain a postscript. %s",
+                 file_->DebugString().c_str()));
+
   if (file_length > PORC_TAIL_SIZE) {
     size_t footer_len;
     size_t tail_len;
