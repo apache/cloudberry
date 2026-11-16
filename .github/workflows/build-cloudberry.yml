@@ -383,6 +383,7 @@ jobs:
                                "src/bin/pg_config:installcheck",
                                "src/bin/pg_controldata:installcheck",
                                "src/bin/pg_resetwal:installcheck",
+                               "src/bin/pg_rewind:installcheck",
                                "src/bin/pg_waldump:installcheck",
                                "src/interfaces/libpq:installcheck",
                                "src/test/postmaster:installcheck",
