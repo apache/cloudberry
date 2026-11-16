@@ -447,13 +447,15 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 	/*
 	 * The phases of one vacuum share these stats and free them at the end of
 	 * the last phase, so a vacuum that failed in between leaves them behind.
-	 * Drop such leftovers: otherwise the counters of the failed vacuum are
-	 * taken for the next one, whose progress is never reported because the
-	 * progress command is only
-	 * started along with the stats.
+	 * Drop such leftovers at either entry point: the coordinator and utility
+	 * mode start at phase 0, while segments start at pre-cleanup.  Otherwise a
+	 * retry on the same relation can reuse stale counters, or lack extstats
+	 * when a non-VERBOSE vacuum is followed by a VERBOSE one.  Progress also
+	 * needs to be restarted along with the stats.
 	 */
 	if (vacrelstats != NULL &&
-		(ao_vacuum_phase == VACOPT_AO_PRE_CLEANUP_PHASE ||
+		(ao_vacuum_phase == 0 ||
+		 ao_vacuum_phase == VACOPT_AO_PRE_CLEANUP_PHASE ||
 		 vacrelstats->relid != RelationGetRelid(rel)))
 		cleanup_vacrelstats(&vacrelstats);
 

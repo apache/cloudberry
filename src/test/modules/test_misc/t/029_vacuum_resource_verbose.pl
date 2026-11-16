@@ -7,6 +7,30 @@ use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 use Test::More;
 
+# psql -f - prefixes diagnostics with psql:<stdin>:<line>:.  A phase
+# must not borrow counters from the next diagnostic or resource report.
+sub resource_report
+{
+    my ($stderr, $table, $phase) = @_;
+    my ($report) = $stderr =~
+      /vacuum resource usage for "public\.\Q$table\E" \(\Q$phase\E\):\n(.*?)(?=\n(?:psql:[^\n]*?:\s*)?(?:INFO|CONTEXT|WARNING|ERROR):|\n[^\n]*vacuum resource usage for|\z)/s;
+    return $report;
+}
+
+my $diagnostics = <<'REPORTS';
+psql:<stdin>:1: INFO:  vacuum resource usage for "public.first" (phase):
+buffer usage: -1 hits, 0 misses, 0 dirtied, 0 written
+psql:<stdin>:2: INFO:  vacuum resource usage for "public.second" (phase):
+buffer usage: 1 hits, 0 misses, 0 dirtied, 0 written
+WAL usage: 1 records, 0 full page images, 10 bytes
+I/O timings: read: 0.000 ms, write: 0.000 ms
+REPORTS
+my $first_report = resource_report($diagnostics, 'first', 'phase');
+like($first_report, qr/buffer usage: -1 hits/,
+     'phase capture retains its own invalid counters');
+unlike($first_report, qr/WAL usage:|I\/O timings:|buffer usage: 1 hits/,
+       'phase capture cannot borrow valid counters from the next report');
+
 my $node = PostgreSQL::Test::Cluster->new('vacuum_resource_verbose');
 $node->init;
 $node->append_conf('postgresql.conf', q{
@@ -45,8 +69,7 @@ DELETE FROM $table WHERE id <= 1000;
        'AO post-cleanup (excluding indexes)');
     for my $phase (@phases)
     {
-        my ($report) = $stderr =~
-          /vacuum resource usage for "public\.\Q$table\E" \(\Q$phase\E\):\n(.*?)(?=\n(?:INFO|CONTEXT|WARNING):|\z)/s;
+        my $report = resource_report($stderr, $table, $phase);
         ok(defined $report, "$storage reports $phase without an extension");
         $report //= '';
         like($report, qr/buffer usage: \d+ hits, \d+ misses, \d+ dirtied, \d+ written/,
@@ -60,8 +83,8 @@ DELETE FROM $table WHERE id <= 1000;
     }
     if ($storage ne 'heap')
     {
-        my ($inserts) = $stderr =~
-          /vacuum resource usage for "public\.\Q$table\E" \(AO compaction index inserts \(all indexes\)\):\n(.*?)(?=vacuum resource usage for|\z)/s;
+        my $inserts = resource_report($stderr, $table,
+          'AO compaction index inserts (all indexes)');
         ok(defined $inserts, "$storage reports compaction index insertions separately");
         $inserts //= '';
         like($inserts, qr/buffer usage: [1-9]\d* hits,/,
@@ -75,6 +98,57 @@ DELETE FROM $table WHERE id <= 1000;
          "$storage reports index resources separately");
 }
 
+# Parallel-safe btrees/GIN and leader-only BRIN bulk deletion must be excluded
+# from the heap report after worker usage has been merged into the leader.
+$node->safe_psql('postgres', q{
+CREATE TABLE verbose_parallel (id int, a int[]) WITH (autovacuum_enabled = off);
+INSERT INTO verbose_parallel SELECT g, ARRAY[g % 100] FROM generate_series(1, 20000) g;
+CREATE INDEX verbose_parallel_btree ON verbose_parallel (id);
+CREATE INDEX verbose_parallel_expr ON verbose_parallel ((id + 1));
+CREATE INDEX verbose_parallel_gin ON verbose_parallel USING gin (a);
+CREATE INDEX verbose_parallel_brin ON verbose_parallel USING brin (id);
+DELETE FROM verbose_parallel WHERE id % 2 = 0;
+});
+SKIP:
+{
+    my ($stdout, $stderr);
+    is($node->psql('postgres', q{
+SET min_parallel_index_scan_size = 0;
+SET max_parallel_maintenance_workers = 2;
+VACUUM (VERBOSE, PARALLEL 2, INDEX_CLEANUP ON) verbose_parallel;
+}, stdout => \$stdout, stderr => \$stderr), 0,
+       'parallel verbose vacuum succeeds');
+    skip 'Parallel VACUUM is disabled in this build', 21
+      if $stderr =~ /disabling parallel option of vacuum.*cannot vacuum tables in parallel/;
+    like($stderr, qr/launched [1-9]\d* parallel vacuum worker/,
+         'parallel accounting test actually launches workers');
+
+    my $reported_wal = 0;
+    my $index_wal = 0;
+    for my $index ('verbose_parallel_btree', 'verbose_parallel_expr',
+                   'verbose_parallel_gin', 'verbose_parallel_brin')
+    {
+        for my $phase ('index bulk delete', 'index cleanup')
+        {
+            my $report = resource_report($stderr, $index, $phase);
+            ok(defined $report, "$index reports $phase");
+            my ($wal) = ($report // '') =~ /^WAL usage: (\d+) records,/m;
+            ok(defined $wal, "$index $phase has its own WAL counter");
+            $index_wal += $wal // 0;
+        }
+    }
+    cmp_ok($index_wal, '>', 0, 'index passes generate WAL');
+    my $heap = resource_report($stderr, 'verbose_parallel', 'heap (excluding indexes)');
+    my ($heap_wal) = ($heap // '') =~ /^WAL usage: (\d+) records,/m;
+    ok(defined $heap_wal, 'parallel heap report has a nonnegative WAL counter');
+    $reported_wal = $index_wal + ($heap_wal // 0);
+    my ($summary) = $stderr =~ /finished vacuuming "postgres\.public\.verbose_parallel":(.*?)(?=\n(?:psql:[^\n]*?:\s*)?INFO:|\z)/s;
+    my ($total_wal) = ($summary // '') =~ /^WAL usage: (\d+) records,/m;
+    ok(defined $total_wal, 'overall VACUUM WAL counter is available');
+    cmp_ok($reported_wal, '<=', $total_wal // 0,
+           'heap and index reports do not count parallel index WAL twice');
+}
+
 # Timing output is conditional, while collection of buffer/WAL counters is not.
 my ($stdout, $stderr);
 is($node->psql('postgres',
@@ -83,6 +157,59 @@ is($node->psql('postgres',
 like($stderr, qr/vacuum resource usage for "public\.verbose_heap"/,
      'resource report remains available without I/O timing');
 unlike($stderr, qr/I\/O timings:/, 'disabled I/O timing is not printed');
+
+# An error during compaction leaves the per-relation AO statistics behind.
+# Retry in the same backend and on the same relation, with VERBOSE newly
+# enabled: phase 0 must discard the old, uninstrumented statistics before
+# accessing extstats.  An expression index gives a deterministic error without
+# requiring the fault injector or depending on statement_timeout timing.
+$node->safe_psql('postgres', q{
+CREATE FUNCTION vacuum_resource_error(i int) RETURNS int
+LANGUAGE plpgsql IMMUTABLE AS $$
+BEGIN
+    IF current_setting('vacuum_resource.fail', true) = 'on' THEN
+        RAISE EXCEPTION 'aborting AO compaction for test';
+    END IF;
+    RETURN i;
+END
+$$;
+});
+for my $storage ('row', 'column')
+{
+    my $table = "retry_$storage";
+    $node->safe_psql('postgres', qq{
+CREATE TABLE $table (id int, padding text)
+  WITH (appendonly = true, orientation = $storage);
+CREATE INDEX ${table}_idx ON $table (vacuum_resource_error(id));
+INSERT INTO $table SELECT g, repeat('x', 100) FROM generate_series(1, 4000) g;
+DELETE FROM $table WHERE id <= 1000;
+});
+    is($node->psql('postgres', qq{
+SELECT pg_backend_pid() AS vacuum_pid \\gset
+SET vacuum_resource.fail = on;
+\\set ON_ERROR_STOP off
+VACUUM $table;
+\\set ON_ERROR_STOP on
+SET vacuum_resource.fail = off;
+VACUUM (VERBOSE, INDEX_CLEANUP ON) $table;
+SELECT pg_backend_pid() = :vacuum_pid AND
+       (SELECT count(*) FROM $table) = 3000;
+}, stdout => \$stdout, stderr => \$stderr), 0,
+       "$storage verbose vacuum succeeds after an aborted plain vacuum");
+    like($stderr, qr/ERROR:  aborting AO compaction for test/,
+         "$storage plain vacuum fails during compaction");
+    is($stdout, 't', "$storage retry preserves the backend and surviving rows");
+    for my $phase ('AO pre-cleanup (excluding indexes)',
+                   'AO compaction (excluding indexes)',
+                   'AO post-cleanup (excluding indexes)')
+    {
+        my $report = resource_report($stderr, $table, $phase);
+        ok(defined $report, "$storage retry reports $phase");
+        like($report // '',
+             qr/buffer usage: \d+ hits, \d+ misses, \d+ dirtied, \d+ written/,
+             "$storage retry has nonnegative $phase buffer counters");
+    }
+}
 
 $node->stop;
 done_testing();
