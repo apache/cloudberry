@@ -1468,15 +1468,6 @@ ProcessUtilitySlow(ParseState *pstate,
 													queryString);
 
 					/*
-					* GPDB_14_MERGE_FIXME
-					* GPDB will expand stmts list when there is part-partition definition and once used
-					* a label to iterate.
-					* Upstream expands stmts list too if there is 'LIKE' stmt.
-					* We follow the upstream method, the main difference is expanded partition list was appended
-					* to the end of stmt list after a range, but expanded runtime now.Need to check.
-					*/
-
-					/*
 					 * ... and do it.  We can't use foreach() because we may
 					 * modify the list midway through, so pick off the
 					 * elements one at a time, the hard way.
@@ -1867,7 +1858,8 @@ ProcessUtilitySlow(ParseState *pstate,
 							address =
 								AlterDomainAddConstraint(stmt->typeName,
 														 stmt->def,
-														 &secondaryObject);
+														 &secondaryObject,
+														 false);
 							break;
 						case 'X':	/* DROP CONSTRAINT */
 							address =

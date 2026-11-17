@@ -70,3 +70,44 @@ from the array - we can't just cast the next "B" bytes into the appropriate
 sized type and dereference it.  This would cause an unaligned access error,
 which will result in an abort on some architectures and poor performance on
 others.
+
+Version 1.0.2
+=============
+
+Upgrade with ALTER EXTENSION gp_sparse_vector UPDATE TO '1.0.2'. New
+installations use 1.0.2 by default. The published 1.0.1 installation script
+is unchanged; create new extensions using the default version.
+
+Version 1.0.2 corrects the commutator and negator links of the L2 comparison
+operators. In particular, <> now computes L2 inequality using svec_l2_ne;
+previously its implementation mistakenly computed L2 equality. Structural
+equality (=) and L2 equality (==) retain their implementation functions.
+
+The upgrade preserves operator OIDs, data, and the svec_l2_ops operator class.
+An ordinary index using that operator class does not need rebuilding.
+Prepared statements are invalidated by the operator catalog changes.
+
+Existing stored expressions that reference <> retain a cached implementation
+function OID. Therefore the upgrade refuses to proceed if pg_depend lists
+any persistent dependent object, including a view, expression/partial index,
+constraint, default, generated expression, or parsed SQL function body.
+The error identifies the dependent objects. It rolls back the entire upgrade;
+it does not drop dependent objects or change user data.
+
+Before upgrading, save their definitions and assess the corrected inequality
+semantics in a maintenance window. Remove those dependencies explicitly and
+retry the upgrade, then recreate the intended objects. Rebuild affected
+indexes and recompute or validate stored/generated/materialized results and
+constraints as appropriate for the application. Do not assume that existing
+values computed with the old <> implementation remain valid. SQL function
+bodies stored as text and dynamic SQL have no catalog dependency to inspect;
+audit application code that uses this operator too.
+
+Perform this upgrade without concurrent schema DDL, including commands that
+were already parsed before the upgrade began. The catalog lock does not
+replace this maintenance-window requirement.
+
+The upgrade temporarily locks pg_depend against concurrent dependency
+creation and updates local catalogs on the coordinator and every primary
+segment. Its catalog-update GUC settings are local to the temporary helper
+function. The helper is removed before the upgrade transaction commits.

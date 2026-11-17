@@ -876,10 +876,26 @@ LockErrorCleanup(void)
 		return;
 	}
 
-	/* Don't try to cancel resource locks.*/
+	/*
+	 * Resource queue locks are not handled by the regular lock wait cleanup
+	 * below.  Cancel the wait with ResLockWaitCancel() instead, before abort
+	 * processing gets a chance to release any portal of this backend.
+	 *
+	 * This matters when we are terminated while waiting inside a
+	 * subtransaction: CleanupSubTransaction() drops the waiting portal, and
+	 * since the portal already has an increment, PortalDrop() releases its
+	 * resource queue lock.  That frees the LOCALLOCK and PROCLOCK while
+	 * lockAwaited and MyProc->waitProcLock still point to them, and the
+	 * top-level ResLockWaitCancel() would later operate on a freed (and
+	 * possibly reused) PROCLOCK.
+	 *
+	 * If the lock was granted just before we got here, ResLockWaitCancel()
+	 * leaves the grant alone, and it is released through the portal.
+	 */
 	if ((Gp_role == GP_ROLE_DISPATCH || IS_SINGLENODE()) && IsResQueueEnabled() &&
 		LOCALLOCK_LOCKMETHOD(*lockAwaited) == RESOURCE_LOCKMETHOD)
 	{
+		ResLockWaitCancel();
 		RESUME_INTERRUPTS();
 		return;
 	}

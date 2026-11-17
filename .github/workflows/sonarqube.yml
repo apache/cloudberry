@@ -102,7 +102,6 @@ jobs:
             --enable-orafce \
             --enable-orca \
             --enable-pax \
-            --enable-pxf \
             --enable-tap-tests \
             --with-gssapi \
             --with-ldap \

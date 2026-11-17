@@ -15,8 +15,8 @@
 #define ANALYZE_H
 
 #include "nodes/params.h"
+#include "nodes/queryjumble.h"
 #include "parser/parse_node.h"
-#include "utils/queryjumble.h"
 
 /* GUC parameter */
 extern PGDLLIMPORT bool enableLockOptimization;

@@ -22,7 +22,7 @@
 #include "cdb/cdbconn.h"		/* SegmentDatabaseDescriptor */
 #include "cdb/cdbdisp.h"                /* CheckDispatchResult() */
 #include "cdb/cdbdispatchresult.h"	/* CdbDispatchResults */
-#include "cdb/cdbexplain.h"		/* me */
+#include "cdb/cdbexplain.h"
 #include "cdb/cdbpathlocus.h"
 #include "cdb/cdbutil.h"
 #include "cdb/cdbvars.h"		/* GpIdentity.segindex */
@@ -35,8 +35,6 @@
 #include "utils/tuplesort.h"
 #include "utils/memutils.h"		/* MemoryContextGetPeakSpace() */
 #include "utils/vmem_tracker.h"
-
-#include "cdb/cdbexplain.h"             /* cdbexplain_recvExecStats */
 
 /* Convert bytes into kilobytes */
 #define kb(x) (floor((x + 1023.0) / 1024.0))
@@ -818,6 +816,7 @@ cdbexplain_collectStatsFromNode(PlanState *planstate, CdbExplain_SendStatCtx *ct
 	si->ntuples = instr->ntuples;
 	si->ntuples2 = instr->ntuples2;
 	si->nloops = instr->nloops;
+	si->bufusage = instr->bufusage;
 	si->nfiltered1 = instr->nfiltered1;
 	si->nfiltered2 = instr->nfiltered2;
 	si->prf_work     = instr->prf_work;
@@ -953,7 +952,6 @@ cdbexplain_depStatAcc_saveText(CdbExplain_DepStatAcc *acc,
 	}
 }								/* cdbexplain_depStatAcc_saveText */
 
-
 /*
  * cdbexplain_depositStatsToNode
  *
@@ -994,6 +992,7 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 	CdbExplain_DepStatAcc vmem_reserved;
 	CdbExplain_DepStatAcc totalPartTableScanned;
 	CdbExplain_DepStatAcc sortSpaceUsed[NUM_SORT_SPACE_TYPE][NUM_SORT_METHOD];
+	BufferUsage bufusage;
 	int			imsgptr;
 	int			nInst;
 
@@ -1018,6 +1017,7 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 	cdbexplain_depStatAcc_init0(&workmemwanted);
 	cdbexplain_depStatAcc_init0(&totalWorkfileCreated);
 	cdbexplain_depStatAcc_init0(&totalPartTableScanned);
+	memset(&bufusage, 0, sizeof(bufusage));
 	for (int i = 0; i < NUM_SORT_METHOD; i++)
 	{
 		for (int j = 0; j < NUM_SORT_SPACE_TYPE; j++)
@@ -1063,6 +1063,7 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 		cdbexplain_depStatAcc_upd(&workmemwanted, rsi->workmemwanted, rsh, rsi, nsi);
 		cdbexplain_depStatAcc_upd(&totalWorkfileCreated, (rsi->workfileCreated ? 1 : 0), rsh, rsi, nsi);
 		cdbexplain_depStatAcc_upd(&totalPartTableScanned, rsi->numPartScanned, rsh, rsi, nsi);
+		BufferUsageAdd(&bufusage, &rsi->bufusage);
 		Assert(rsi->sortstats.sortMethod < NUM_SORT_METHOD);
 		Assert(rsi->sortstats.spaceType < NUM_SORT_SPACE_TYPE);
 		if (rsi->sortstats.sortMethod != SORT_TYPE_STILL_IN_PROGRESS)
@@ -1115,24 +1116,27 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 		nodeAcc = &nloops;
 	if (nodeAcc)
 	{
-		instr->starttime = nodeAcc->nsimax->starttime;
-		instr->counter = nodeAcc->nsimax->counter;
-		instr->firsttuple = nodeAcc->nsimax->firsttuple;
-		instr->startup = nodeAcc->nsimax->startup;
-		instr->total = nodeAcc->nsimax->total;
-		instr->ntuples = nodeAcc->nsimax->ntuples;
-		instr->ntuples2 = nodeAcc->nsimax->ntuples2;
-		instr->nloops = nodeAcc->nsimax->nloops;
-		instr->nfiltered1 = nodeAcc->nsimax->nfiltered1;
-		instr->nfiltered2 = nodeAcc->nsimax->nfiltered2;
-		instr->prf_work     = nodeAcc->nsimax->prf_work;
-		instr->nfilteredPRF = nodeAcc->nsimax->nfilteredPRF;
-		instr->execmemused = nodeAcc->nsimax->execmemused;
-		instr->workmemused = nodeAcc->nsimax->workmemused;
-		instr->workmemwanted = nodeAcc->nsimax->workmemwanted;
-		instr->workfileCreated = nodeAcc->nsimax->workfileCreated;
-		instr->firststart = nodeAcc->nsimax->firststart;
+		instr->starttime = nodeAcc->rsimax->starttime;
+		instr->counter = nodeAcc->rsimax->counter;
+		instr->firsttuple = nodeAcc->rsimax->firsttuple;
+		instr->startup = nodeAcc->rsimax->startup;
+		instr->total = nodeAcc->rsimax->total;
+		instr->ntuples = nodeAcc->rsimax->ntuples;
+		instr->ntuples2 = nodeAcc->rsimax->ntuples2;
+		instr->nloops = nodeAcc->rsimax->nloops;
+		instr->nfiltered1 = nodeAcc->rsimax->nfiltered1;
+		instr->nfiltered2 = nodeAcc->rsimax->nfiltered2;
+		instr->prf_work = nodeAcc->rsimax->prf_work;
+		instr->nfilteredPRF = nodeAcc->rsimax->nfilteredPRF;
+		instr->execmemused = nodeAcc->rsimax->execmemused;
+		instr->workmemused = nodeAcc->rsimax->workmemused;
+		instr->workmemwanted = nodeAcc->rsimax->workmemwanted;
+		instr->workfileCreated = nodeAcc->rsimax->workfileCreated;
+		instr->firststart = nodeAcc->rsimax->firststart;
 	 }
+
+	/* Buffer usage is summed across all workers, not taken from the winner. */
+	instr->bufusage = bufusage;
 
 	/* Save extra message text for the most interesting winning qExecs. */
 	if (ctx->extratextbuf)

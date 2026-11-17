@@ -37,10 +37,10 @@
 #include "lib/stringinfo.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
+#include "nodes/queryjumble.h"
 #include "parser/scanner.h"
 #include "utils/builtins.h"
 #include "utils/memutils.h"
-#include "utils/queryjumble.h"
 
 #include "pg_stat_statements_parser.h"
 
@@ -357,6 +357,8 @@ generate_normalized_query(JumbleState *jstate, const char *query,
 	*query_len_p = n_quer_loc;
 	return norm_query;
 }
+
+#define JUMBLE_SIZE				1024	/* query serialization buffer size */
 
 char *
 gen_normquery(const char *query)

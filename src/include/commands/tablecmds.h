@@ -135,6 +135,7 @@ extern void GpRenameChildPartitions(Relation targetrelation,
 									const char *oldparentrelname,
 									const char *newparentrelname);
 extern void set_random_distribution_if_drop_distkey(Relation rel, AttrNumber attnum);
+extern void check_rowtype_distribution(Relation rel);
 
 extern Datum get_rel_opts(Relation rel);
 #endif							/* TABLECMDS_H */

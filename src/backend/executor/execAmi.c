@@ -686,7 +686,7 @@ ExecSupportsBackwardScan(Plan *node)
 
 		case T_SeqScan:
 		case T_TidScan:
-		case T_TidRangeScan: /* GPDB_14_MERGE_FIXME: Does TidRangeScan support backward scan or call TargetListSupportsBackwardScan? */
+		case T_TidRangeScan:
 		case T_FunctionScan:
 		case T_ValuesScan:
 		case T_CteScan:

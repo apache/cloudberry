@@ -3672,3 +3672,133 @@ select * from generate_series(1,2) t1, lateral (select t3.i from lat_oq_t2 t2 jo
 
 drop table lat_oq_t2;
 drop table lat_oq_t3;
+--
+-- Test that ORCA can plan a USING join whose merged column is the left input
+-- coerced with a binary-compatible cast (RelabelType), e.g. varchar vs text or
+-- int vs oid. The query-to-DXL translator used to assert on such join alias
+-- vars and fall back to the Postgres planner.
+--
+create table using_coerce_t1(k varchar(10), f2 int) distributed by (f2);
+create table using_coerce_t2(k text, f2 oid) distributed by (f2);
+insert into using_coerce_t1 values ('a', 1), ('b', 2);
+insert into using_coerce_t2 values ('a', 1), ('c', 3);
+explain (costs off) select k from using_coerce_t1 left join using_coerce_t2 using(k) order by 1;
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: ((using_coerce_t1.k)::character varying)
+   ->  Sort
+         Sort Key: ((using_coerce_t1.k)::character varying)
+         ->  Hash Right Join
+               Hash Cond: (using_coerce_t2.k = (using_coerce_t1.k)::text)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: using_coerce_t2.k
+                     ->  Seq Scan on using_coerce_t2
+               ->  Hash
+                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                           Hash Key: using_coerce_t1.k
+                           ->  Seq Scan on using_coerce_t1
+ Optimizer: Postgres query optimizer
+(14 rows)
+
+select k from using_coerce_t1 left join using_coerce_t2 using(k) order by 1;
+ k 
+---
+ a
+ b
+(2 rows)
+
+select f2, count(*) from using_coerce_t1 left join using_coerce_t2 using(f2) group by f2 order by 1;
+ f2 | count 
+----+-------
+  1 |     1
+  2 |     1
+(2 rows)
+
+select f2, count(*) from using_coerce_t1 x(x0,x1) left join (using_coerce_t1 left join using_coerce_t2 using(f2)) on (x0 = 'a') group by f2 order by 1;
+ f2 | count 
+----+-------
+  1 |     1
+  2 |     1
+    |     1
+(3 rows)
+
+-- Quals are deliberately not flattened by flatten_join_alias_var_optimizer, so
+-- a predicate on the merged column references the computed join output column
+-- directly. Without a projection producing it ORCA fell back with
+-- "Attribute number N not found in project list".
+explain (costs off) select k from using_coerce_t1 left join using_coerce_t2 using(k) where k = 'a';
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         ->  Seq Scan on using_coerce_t1
+               Filter: ((k)::text = 'a'::text)
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on using_coerce_t2
+                           Filter: (k = 'a'::text)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+select k from using_coerce_t1 left join using_coerce_t2 using(k) where k = 'a';
+ k 
+---
+ a
+(1 row)
+
+select f2 from using_coerce_t1 join using_coerce_t2 using(f2) where f2 = 1;
+ f2 
+----
+  1
+(1 row)
+
+select k from using_coerce_t1 full join using_coerce_t2 using(k) where k = 'c';
+ k 
+---
+ c
+(1 row)
+
+drop table using_coerce_t1;
+drop table using_coerce_t2;
+--
+-- Same, for a merged column that needs a real cast function (FuncExpr) rather
+-- than a binary-compatible relabel.
+--
+create table using_coerce_t3(k int, v int) distributed by (v);
+create table using_coerce_t4(k bigint, v int) distributed by (v);
+insert into using_coerce_t3 values (1, 1), (2, 2);
+insert into using_coerce_t4 values (1, 1), (3, 3);
+explain (costs off) select k from using_coerce_t3 left join using_coerce_t4 using(k) where k = 1;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Right Join
+         Hash Cond: (using_coerce_t4.k = using_coerce_t3.k)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: using_coerce_t4.k
+               ->  Seq Scan on using_coerce_t4
+         ->  Hash
+               ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                     Hash Key: using_coerce_t3.k
+                     ->  Seq Scan on using_coerce_t3
+                           Filter: ((k)::bigint = 1)
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+select k from using_coerce_t3 left join using_coerce_t4 using(k) where k = 1;
+ k 
+---
+ 1
+(1 row)
+
+select k from using_coerce_t3 full join using_coerce_t4 using(k) order by 1;
+ k 
+---
+ 1
+ 2
+ 3
+(3 rows)
+
+drop table using_coerce_t3;
+drop table using_coerce_t4;

@@ -2022,39 +2022,6 @@ vac_update_relstats(Relation relation,
 								 RelationGetRelationName(relation))));
 }
 
-/* GPDB_14_MERGE_FIXME: see comments in vac_update_datfrozenxid */
-#if 0
-/*
- * fetch_database_tuple - Fetch a copy of database tuple from pg_database.
- *
- * This using disk heap table instead of system cache.
- * relation: opened pg_database relation in vac_update_datfrozenxid().
- */
-static HeapTuple
-fetch_database_tuple(Relation relation, Oid dbOid)
-{
-	ScanKeyData skey[1];
-	SysScanDesc sscan;
-	HeapTuple	tuple = NULL;
-
-	ScanKeyInit(&skey[0],
-				Anum_pg_database_oid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(dbOid));
-
-	sscan = systable_beginscan(relation, DatabaseOidIndexId, true,
-							   NULL, 1, skey);
-
-	tuple = systable_getnext(sscan);
-	if (HeapTupleIsValid(tuple))
-		tuple = heap_copytuple(tuple);
-
-	systable_endscan(sscan);
-
-	return tuple;
-}
-#endif
-
 /*
  *	vac_update_datfrozenxid() -- update pg_database.datfrozenxid for our DB
  *
@@ -3421,12 +3388,10 @@ vacuum_params_to_options_list(VacuumParams *params)
 	else
 		optmask &= ~VACOPT_PROCESS_MAIN;
 	
-	if (optmask & VACOPT_PROCESS_TOAST)
-	{
-		/* GPDB_14_MERGE_FIXME: skip_toast is replaced by process_toast, need to check */
-		options = lappend(options, makeDefElem("process_toast", (Node *) makeInteger(1), -1));
+	if (!(optmask & VACOPT_PROCESS_TOAST))
+		options = lappend(options, makeDefElem("process_toast", (Node *) makeInteger(0), -1));
+	else
 		optmask &= ~VACOPT_PROCESS_TOAST;
-	}
 	if (optmask & VACOPT_DISABLE_PAGE_SKIPPING)
 	{
 		options = lappend(options, makeDefElem("disable_page_skipping", (Node *) makeInteger(1), -1));

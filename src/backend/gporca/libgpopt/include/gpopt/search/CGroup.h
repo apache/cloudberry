@@ -542,6 +542,10 @@ public:
 	// insert given context into contexts hash table
 	COptimizationContext *PocInsert(COptimizationContext *poc);
 
+	// check if looking up the requirements of a context of this group finds
+	// that context, and not another context with equal requirements
+	BOOL FLookupFinds(COptimizationContext *poc);
+
 	// update the best group cost under the given optimization context
 	void UpdateBestCost(COptimizationContext *poc, CCostContext *pcc);
 

@@ -72,6 +72,7 @@
 #include "naucrates/base/IDatumOid.h"
 #include "naucrates/exception.h"
 #include "naucrates/md/CMDArrayCoerceCastGPDB.h"
+#include "naucrates/dxl/gpdb_types.h"
 #include "naucrates/md/CMDIdGPDB.h"
 #include "naucrates/md/CMDIdScCmp.h"
 #include "naucrates/md/IMDAggregate.h"
@@ -2159,6 +2160,30 @@ CUtils::FHasCountAgg(CExpression *pexpr,
 	}
 
 	return fHasCountAgg;
+}
+
+
+BOOL
+CUtils::FHasScalarAgg(CExpression *pexpr)
+{
+	GPOS_CHECK_STACK_SIZE;
+	GPOS_ASSERT(pexpr->Pop()->FLogical());
+
+	if (COperator::EopLogicalGbAgg == pexpr->Pop()->Eopid() &&
+		0 == CLogicalGbAgg::PopConvert(pexpr->Pop())->Pdrgpcr()->Size())
+	{
+		return true;
+	}
+
+	for (ULONG ul = 0; ul < pexpr->Arity(); ul++)
+	{
+		CExpression *pexprChild = (*pexpr)[ul];
+		if (pexprChild->Pop()->FLogical() && FHasScalarAgg(pexprChild))
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 
@@ -4831,6 +4856,29 @@ CUtils::FHasAggWindowFunc(CExpression *pexpr)
 	}
 
 	return fHasAggWindowFunc;
+}
+
+// returns true if the given aggregate function has an ORDER BY clause
+BOOL
+CUtils::FAggHasOrderBy(CExpression *pexprAggFunc)
+{
+	GPOS_ASSERT(nullptr != pexprAggFunc);
+	GPOS_ASSERT(COperator::EopScalarAggFunc == pexprAggFunc->Pop()->Eopid());
+
+	return pexprAggFunc->Arity() > EaggfuncIndexOrder &&
+		   (*pexprAggFunc)[EaggfuncIndexOrder]->Arity() > 0;
+}
+
+// returns true if the result of the aggregate function may depend on the
+// order of its input.  That is assumed for every aggregate that is not known
+// to be order insensitive, including all user-defined ones that are not
+// MIN/MAX-like, see is_agg_order_insensitive().
+BOOL
+CUtils::FOrderSensitiveAgg(IMDId *agg_mdid)
+{
+	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
+
+	return !md_accessor->RetrieveAgg(agg_mdid)->IsOrderInsensitive();
 }
 
 

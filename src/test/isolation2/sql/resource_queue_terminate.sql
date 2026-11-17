@@ -139,6 +139,46 @@
 -- Sanity check: Ensure that the resource queue is now empty.
 0:SELECT rsqcountlimit, rsqcountvalue FROM pg_resqueue_status WHERE rsqname = 'rq_terminate';
 
+--
+-- Scenario 7: Terminate a backend that is waiting inside a subtransaction.
+--
+-- The wait has to be cancelled before abort processing releases any portal of
+-- this backend. Otherwise subtransaction cleanup drops the waiting portal,
+-- which releases the LOCALLOCK and PROCLOCK that the wait still points to, and
+-- the top-level cleanup then works on freed lock table entries.
+--
+11:SET ROLE role_terminate;
+11:BEGIN;
+11:DECLARE cs9 CURSOR FOR SELECT 0;
+12:SET ROLE role_terminate;
+12:BEGIN;
+12:SAVEPOINT sp;
+12&:SELECT 331767;
+
+-- Suspend the terminated backend at the start of the top-level abort, which is
+-- reached after the subtransaction has been cleaned up.
+0:SELECT gp_inject_fault('transaction_abort_failure', 'suspend', '', '', '', 1, 1, 0,
+    c.dbid, a.sess_id) FROM gp_segment_configuration c, pg_stat_activity a
+    WHERE c.content = -1 AND c.role = 'p' AND a.query = 'SELECT 331767;';
+
+0:SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+  WHERE query='SELECT 331767;';
+0:SELECT gp_wait_until_triggered_fault('transaction_abort_failure', 1, dbid) FROM
+    gp_segment_configuration WHERE content = -1 AND role = 'p';
+
+-- Sanity check: Ensure that the wait has already been cancelled, so that no
+-- stale wait refers to the lock entries released by subtransaction cleanup.
+0:SELECT rsqcountlimit, rsqcountvalue, rsqwaiters FROM pg_resqueue_status WHERE rsqname = 'rq_terminate';
+
+0:SELECT gp_inject_fault('transaction_abort_failure', 'reset', dbid) FROM
+    gp_segment_configuration WHERE content = -1 AND role = 'p';
+
+12<:
+11:END;
+
+-- Sanity check: Ensure that the resource queue is now empty.
+0:SELECT rsqcountlimit, rsqcountvalue, rsqwaiters FROM pg_resqueue_status WHERE rsqname = 'rq_terminate';
+
 -- Cleanup
 0:DROP ROLE role_terminate;
 0:DROP RESOURCE QUEUE rq_terminate;

@@ -3184,6 +3184,7 @@ _equalRangeTblEntry(const RangeTblEntry *a, const RangeTblEntry *b)
 	COMPARE_SCALAR_FIELD(inh);
 	COMPARE_SCALAR_FIELD(inFromCl);
 	COMPARE_NODE_FIELD(securityQuals);
+	COMPARE_SCALAR_FIELD(forceDistRandom);
 
 	return true;
 }

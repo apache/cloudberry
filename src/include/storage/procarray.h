@@ -114,6 +114,7 @@ extern void GetSlotTableDebugInfo(void **snapshotArray, int *maxSlots);
 extern void getDtxCheckPointInfo(char **result, int *result_size);
 
 extern List *ListAllGxid(void);
+extern List *ListSuboverflowedPids(void);
 extern int GetPidByGxid(DistributedTransactionId gxid);
 extern bool IsDtxInProgress(DistributedTransactionId gxid);
 

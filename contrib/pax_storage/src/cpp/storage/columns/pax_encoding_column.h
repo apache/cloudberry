@@ -46,6 +46,8 @@ class PaxEncodingColumn : public PaxCommColumn<T> {
 
   void Set(std::unique_ptr<DataBuffer<T>> data) override;
 
+  // Do not hide the base class GetBuffer(size_t position) overload.
+  using PaxCommColumn<T>::GetBuffer;
   std::pair<char *, size_t> GetBuffer() override;
 
   int64 GetOriginLength() const override;

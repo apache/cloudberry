@@ -190,9 +190,6 @@ public:
 	static JoinType GetGPDBJoinTypeFromDXLJoinType(EdxlJoinType join_type);
 
 private:
-	// Set the bitmapset of a plan to the list of param_ids defined by the plan
-	static void SetParamIds(Plan *);
-
 	static List *TranslatePartOids(IMdIdArray *parts, INT lockmode);
 
 	static List *TranslateJoinPruneParamids(
@@ -359,6 +356,12 @@ private:
 		const CDXLNode *append_dxlnode, CDXLTranslateContext *output_context,
 		CDXLTranslationContextArray *
 			ctxt_translation_prev_siblings	// translation contexts of previous siblings
+	);
+
+	Plan *TranslateDXLParallelAppend(
+		const CDXLNode *append_dxlnode, CDXLTranslateContext *output_context,
+		CDXLTranslationContextArray *
+		ctxt_translation_prev_siblings  // translation contexts of previous siblings
 	);
 
 	Plan *TranslateDXLMaterialize(

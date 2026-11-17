@@ -72,6 +72,19 @@ class GpExpand(GpTestCase):
         sys.argv = self.old_sys_argv
         super(GpExpand, self).tearDown()
 
+    def test_stop_new_primary_segments_uses_configured_shutdown_mode(self):
+        segment_template = self.subject.SegmentTemplate.__new__(self.subject.SegmentTemplate)
+        segment_template.gparray = Mock()
+        segment_template.gparray.getExpansionSegDbList.return_value = [self.primary0]
+        segment_template.pool = Mock()
+        segment_template.shutdown_mode = 'fast'
+
+        with patch('gpexpand.SegmentStop') as segment_stop:
+            segment_template._stop_new_primary_segments()
+
+        segment_stop.assert_called_once()
+        self.assertEqual('fast', segment_stop.call_args[1]['mode'])
+
     @patch('gpexpand.is_cluster_up_and_balanced', return_value=True)
     def test_validate_heap_checksums_aborts_when_cluster_inconsistent(self, mock1):
         self.options.filename = '/tmp/doesnotexist' # Replacement of the sys.argv

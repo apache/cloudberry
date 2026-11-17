@@ -228,13 +228,6 @@ PGAC_ARG_BOOL(enable, gpfdist, yes,
 AC_SUBST(enable_gpfdist)
 
 #
-# pxf
-#
-PGAC_ARG_BOOL(enable, pxf, yes,
-             [do not build pxf])
-AC_SUBST(enable_pxf)
-
-#
 # include debug extensions in gpcontrib
 #
 PGAC_ARG_BOOL(enable, debug-extensions, yes,
@@ -467,6 +460,16 @@ dnl must use AS_IF here, else AC_REQUIRES inside PGAC_LLVM_SUPPORT malfunctions
 AS_IF([test "$with_llvm" = yes], [
   PGAC_LLVM_SUPPORT()
 ]) # fi
+
+#
+# --without-copy-program disables COPY TO/FROM PROGRAM
+#
+PGAC_ARG_BOOL(with, copy-program, yes,
+              [build without COPY TO/FROM PROGRAM support],
+              [AC_DEFINE([USE_COPY_PROGRAM], 1,
+                         [Define to 1 to build with COPY TO/FROM PROGRAM support. (--with-copy-program)])])
+AC_MSG_RESULT([checking whether to build with COPY PROGRAM... $with_copy_program])
+AC_SUBST(with_copy_program)
 
 
 unset CFLAGS
@@ -919,15 +922,6 @@ PGAC_ARG_BOOL(enable, serverless, no, [use serverless mode of Cloudberry],
                                     [Define to 1 to use serverless mode of Cloudberry. (--enable-serverless)])])
 AC_MSG_RESULT([checking whether to use serverless mode of Cloudberry... $enable_serverless])
 AC_SUBST(enable_serverless)
-
-#
-# --enable-mapreduce enables GPMapreduce support
-#
-PGAC_ARG_BOOL(enable, mapreduce, no, [enable Cloudberry Mapreduce support],
-              [AC_DEFINE([USE_MAPREDUCE], 1,
-			             [Define to 1 to build with Mapreduce capabilities (--enable-mapreduce)])])
-AC_MSG_RESULT([checking whether to build with Cloudberry Mapreduce... $enable_mapreduce])
-AC_SUBST(enable_mapreduce)
 
 #
 # --enable-shared-postgres-backend enables shared postgres backend support
@@ -1505,15 +1499,11 @@ PGAC_ARG_BOOL(with, rt, yes,
 AC_SUBST(with_rt)
 
 #
-# libcurl. Used for external table support and the PXF extension
+# libcurl. Used for external table support and gpcloud
 #
 PGAC_ARG_BOOL(with, libcurl, yes,
               [do not use libcurl])
 AC_SUBST(with_libcurl)
-
-if test "$with_libcurl" = "no" && test "$enable_pxf" = "yes"; then
-  AC_MSG_ERROR([libcurl is required by PXF])
-fi
 
 if test "$with_libcurl" = "no" && test "$enable_gpcloud" = "yes"; then
   AC_MSG_ERROR([libcurl is required by gpcloud])
@@ -1782,14 +1772,6 @@ if test "$enable_gpfdist" = yes ; then
   AC_SUBST(EVENT_LIBS)
 
   AC_SEARCH_LIBS(yaml_parser_initialize, [yaml], [have_yaml=yes; YAML_LIBS=" -lyaml"], [AC_MSG_WARN([libyaml is not found. disabling transformations for gpfdist.])])
-  AC_SUBST(YAML_LIBS)
-  AC_SUBST(have_yaml)
-  LIBS="$_LIBS"
-fi
-
-if test "$enable_mapreduce" = yes ; then
-  _LIBS="$LIBS"
-  AC_SEARCH_LIBS(yaml_parser_initialize, [yaml], [have_yaml=yes; YAML_LIBS=" -lyaml"], [AC_MSG_ERROR([libyaml is required for Cloudberry Mapreduce])])
   AC_SUBST(YAML_LIBS)
   AC_SUBST(have_yaml)
   LIBS="$_LIBS"
@@ -2219,13 +2201,6 @@ esac
 if test "$with_rt" = yes; then
 	AC_CHECK_HEADERS([time.h], [],
 			 [AC_MSG_ERROR([header file <time.h> is required for realtime library support])])
-fi
-
-if test "$enable_mapreduce" = yes; then
-  if test "$with_perl" = no; then
-    AC_MSG_ERROR([Cloudberry Mapreduce requires Perl, reconfigure with --with-perl])
-  fi
-  AC_CHECK_HEADERS(yaml.h, [], [AC_MSG_ERROR([header file <yaml.h> is required for Cloudberry Mapreduce])])
 fi
 
 if test "$PORTNAME" = "win32" ; then

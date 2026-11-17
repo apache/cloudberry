@@ -22,6 +22,8 @@ HEADERS = ltree.h
 REGRESS = ltree
 REGRESS_OPTS += --init-file=$(top_srcdir)/src/test/regress/init_file
 
+ISOLATION = schema-rename-attack
+
 ifdef USE_PGXS
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)

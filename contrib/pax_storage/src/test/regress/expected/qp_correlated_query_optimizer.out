@@ -1607,8 +1607,6 @@ select * from qp_csq_t4 order by a;
 (4 rows)
 
 update qp_csq_t4 set a = (select y from qp_csq_t2 where x=a) where b < 8;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 21 not found in project list
 select * from qp_csq_t4 order by a;
  a  | b 
 ----+---
@@ -1619,8 +1617,6 @@ select * from qp_csq_t4 order by a;
 (4 rows)
 
 update qp_csq_t4 set a = 9999 where qp_csq_t4.a = (select max(x) from qp_csq_t2);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 23 not found in project list
 select * from qp_csq_t4 order by a;
   a   | b 
 ------+---
@@ -1631,8 +1627,6 @@ select * from qp_csq_t4 order by a;
 (4 rows)
 
 update qp_csq_t4 set a = (select max(y) from qp_csq_t2 where x=a) where qp_csq_t4.a = (select min(x) from qp_csq_t2);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 35 not found in project list
 select * from qp_csq_t4 order by a;
   a   | b 
 ------+---
@@ -1643,8 +1637,6 @@ select * from qp_csq_t4 order by a;
 (4 rows)
 
 update qp_csq_t4 set a = 8888 where (select (y*2)>b from qp_csq_t2 where a=x);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 22 not found in project list
 select * from qp_csq_t4 order by a;
   a   | b 
 ------+---
@@ -1655,8 +1647,6 @@ select * from qp_csq_t4 order by a;
 (4 rows)
 
 update qp_csq_t4 set a = 3333 where qp_csq_t4.a in (select x from qp_csq_t2);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 25 not found in project list
 select * from qp_csq_t4 order by a;
   a   | b 
 ------+---
@@ -1667,8 +1657,6 @@ select * from qp_csq_t4 order by a;
 (4 rows)
 
 update D set i = 11111 from C where C.i = D.i and exists (select C.j from C,B where C.j = B.j and D.j < 10);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 45 not found in project list
 select * from D;
    i   | j  
 -------+----
@@ -1680,8 +1668,6 @@ select * from D;
 (5 rows)
 
 update D set i = 22222 from C where C.i = D.i and not exists (select C.j from C,B where C.j = B.j and D.j < 10);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 45 not found in project list
 select * from D;
    i   | j  
 -------+----
@@ -2405,8 +2391,6 @@ analyze product;
 commit;
 UPDATE product SET product_price = product_price * .9 
     where product_name NOT IN (SELECT DISTINCT product_name FROM product_order);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 35 not found in project list
 SELECT * FROM  product order by product_name;
  product_name | product_price | quantity_on_hand | last_stock_date 
 --------------+---------------+------------------+-----------------

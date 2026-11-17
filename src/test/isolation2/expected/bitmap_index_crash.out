@@ -79,6 +79,14 @@ ALTER
 --------
  OK     
 (1 row)
+-- pg_ctl -w returns once crash recovery has started, not when seg1 accepts
+-- connections again. Gang creation retries while the segment is in recovery,
+-- so dispatch to it from a new session before connecting directly below.
+3:SELECT count(*) FROM bm;
+ count 
+-------
+ 5000  
+(1 row)
 3:SELECT gp_inject_fault_infinite('checkpoint', 'reset', dbid) FROM gp_segment_configuration WHERE role='p';
  gp_inject_fault_infinite 
 --------------------------

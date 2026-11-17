@@ -188,6 +188,9 @@ enum EOptTraceFlag
 	// Eager Agg
 	EopttraceEnableEagerAgg = 103030,
 
+	// Enable parallel append scan
+	EopttraceEnableParallelAppendScan = 103031,
+
 	// ExpandFullJoin
 	EopttraceExpandFullJoin = 103032,
 
@@ -252,6 +255,19 @@ enum EOptTraceFlag
 
 	// Disable streaming hash agg in ORCA-generated local partial aggregations
 	EopttraceDisableStreamingHashAgg = 103054,
+
+	// Disable sorting the input of order sensitive aggregates with ORDER BY,
+	// e.g. string_agg(), on the segments for aggregates without GROUP BY,
+	// so that they don't need to sort it themselves on the coordinator
+	EopttraceDisablePresortedAgg = 103055,
+
+	// reuse the child contexts that the same request of a group expression
+	// reached under another context, instead of optimizing the children again
+	EopttraceChildOptMemo = 103070,
+
+	// optimize the children of requests that could reuse child contexts, and
+	// report when the child contexts differ from the reused ones
+	EopttraceVerifyChildOptMemo = 103071,
 
 	///////////////////////////////////////////////////////
 	///////////////////// statistics flags ////////////////

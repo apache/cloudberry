@@ -2166,11 +2166,6 @@ static int
 hash_choose_num_partitions(AggState *aggstate, double input_groups, double hashentrysize,
 						   int used_bits, int *log2_npartitions)
 {
-	/* GPDB_14_MERGE_FIXME: no use in GPDB, work_mem instead */
-#if 0
-	Size		hash_mem_limit = get_hash_memory_limit();
-#endif
-
 	double		partition_limit;
 	double		mem_wanted;
 	double		dpartitions;
@@ -2178,9 +2173,6 @@ hash_choose_num_partitions(AggState *aggstate, double input_groups, double hashe
 	int			partition_bits;
 	uint64		strict_memlimit = work_mem;
 
-	// GPDB_14_MERGE_FIXME: PG14 applies `hash_mem_multiplier` to increase the memory
-	// limit used by hash table. The memory limit is calculated in get_hash_memory_limit().
-	// We should also apply the GUC `hash_mem_multiplier` for hash table.
 	if (aggstate)
 	{
 		uint64 operator_mem = PlanStateOperatorMemKB((PlanState *) aggstate);

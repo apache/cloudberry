@@ -29,10 +29,6 @@ OBJS = \
 
 OBJS += gp_replication.o
 
-# In PostgreSQL, libpqwalreceiver is linked into a separate shared library.
-# In GPDB, it's linked as a normal object.
-OBJS += libpqwalreceiver/libpqwalreceiver.o
-
 SUBDIRS = logical
 
 include $(top_srcdir)/src/backend/common.mk

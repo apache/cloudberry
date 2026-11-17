@@ -236,7 +236,7 @@ class TestCloudberryMCPClient:
     async def test_get_table_bloat_info(self, client):
         """Test getting table bloat information"""
         try:
-            result = await client.call_tool("get_table_bloat_info", {"schema": "public", "limit": 5})
+            result = await client.call_tool("get_table_bloat_info", {})
             assert result is not None
             assert hasattr(result, 'structured_content')
         except Exception as e:

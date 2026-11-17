@@ -144,6 +144,13 @@ extern Oid pg_iceberg_am_oid(void);
 extern MetaKv *pg_iceberg_resolve_credentials(Oid serverid, Oid auth_userid,
 											  int *n_props);
 extern void pg_iceberg_check_server_usage(Oid serverid);
+/*
+ * A form of a location URI that is safe to quote back in an error message:
+ * the parts that carry secrets -- userinfo, a query string -- are reported as
+ * present rather than reproduced.  Anything that echoes a base_path a user
+ * typed has to go through this, message and detail alike.
+ */
+extern char *pg_iceberg_redacted_location_uri(const char *uri);
 extern DlErrCode pg_iceberg_parse_location(const char *uri,
 										   const char *endpoint,
 										   const char *region,

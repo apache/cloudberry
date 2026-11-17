@@ -30,6 +30,7 @@ pg_finfo_iceberg_catalog_fdw_validator
 iceberg_catalog_fdw_validator
 pg_finfo_iceberg_volume_fdw_validator
 iceberg_volume_fdw_validator
+datalake_register_storage_backend
 
 # datalake_fdw_test: not part of what this module offers, but a SQL-callable
 # function has to be found by name in the library like any other.
@@ -37,3 +38,15 @@ pg_finfo_datalake_parquet_write
 datalake_parquet_write
 pg_finfo_datalake_parquet_read
 datalake_parquet_read
+pg_finfo_datalake_storage_write_text
+datalake_storage_write_text
+pg_finfo_datalake_storage_read_text
+datalake_storage_read_text
+pg_finfo_datalake_storage_list
+datalake_storage_list
+pg_finfo_datalake_storage_delete
+datalake_storage_delete
+pg_finfo_datalake_storage_probe
+datalake_storage_probe
+pg_finfo_datalake_storage_register_bad
+datalake_storage_register_bad

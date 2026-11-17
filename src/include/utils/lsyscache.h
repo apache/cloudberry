@@ -105,6 +105,8 @@ extern Oid get_compatible_hash_opfamily(Oid opno);
 extern Oid get_compatible_legacy_hash_opfamily(Oid opno);
 extern bool get_op_hash_functions(Oid opno,
 								  RegProcedure *lhs_procno, RegProcedure *rhs_procno);
+extern bool get_op_hash_functions_ext(Oid opno, Oid inputtype,
+									  RegProcedure *lhs_procno, RegProcedure *rhs_procno);
 extern List *get_op_btree_interpretation(Oid opno);
 extern bool equality_ops_are_compatible(Oid opno1, Oid opno2);
 extern bool comparison_ops_are_compatible(Oid opno1, Oid opno2);
@@ -164,6 +166,7 @@ extern Oid get_agg_transtype(Oid aggid);
 extern bool is_agg_ordered(Oid aggid);
 extern bool is_agg_repsafe(Oid aggid);
 extern bool is_agg_partial_capable(Oid aggid);
+extern bool is_agg_order_insensitive(Oid aggid);
 extern RegProcedure get_func_support(Oid funcid);
 extern Oid	get_relname_relid(const char *relname, Oid relnamespace);
 extern char *get_rel_name(Oid relid);

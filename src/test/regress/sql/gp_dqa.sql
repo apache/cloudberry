@@ -644,3 +644,43 @@ from mdqa_part where b between 0 and 2 group by a;
 
 reset optimizer_enable_multiple_distinct_aggs;
 drop table mdqa_part;
+
+-- A non-hashable DISTINCT argument must invalidate the entire MPP DQA plan,
+-- even after a hashable argument has already been classified.
+BEGIN;
+SET LOCAL optimizer = off;
+SET LOCAL gp_enable_multiphase_agg = on;
+SET LOCAL enable_groupagg = on;
+
+-- money has no default hash support; its containers cannot be hashed either.
+CREATE TYPE dqa_cash_range AS RANGE (subtype = money);
+CREATE TABLE dqa_hashability (a int, b int, c dqa_cash_range, arr money[])
+  DISTRIBUTED BY (a);
+INSERT INTO dqa_hashability
+SELECT i % 7, i % 11,
+       dqa_cash_range((i % 3)::money, (i % 3 + 1)::money),
+       ARRAY[(i % 5)::money]
+FROM generate_series(1, 100) i;
+ANALYZE dqa_hashability;
+
+-- c and arr are not collocated, even though a is the distribution key.
+SELECT count(DISTINCT a), count(DISTINCT c) FROM dqa_hashability;
+SELECT count(DISTINCT c), count(DISTINCT a) FROM dqa_hashability;
+SELECT count(DISTINCT a), count(DISTINCT arr) FROM dqa_hashability;
+SELECT count(DISTINCT arr), count(DISTINCT a) FROM dqa_hashability;
+SELECT count(DISTINCT a), count(DISTINCT c), count(*) FROM dqa_hashability;
+
+-- Keep validating after two different hashable DISTINCT arguments.
+SELECT count(DISTINCT a), count(DISTINCT b), count(DISTINCT c)
+FROM dqa_hashability;
+SELECT count(DISTINCT a), count(DISTINCT b), count(DISTINCT arr)
+FROM dqa_hashability;
+
+-- Hashable DISTINCT arguments and ordered aggregates still work.
+SELECT count(DISTINCT a), count(DISTINCT b) FROM dqa_hashability;
+SELECT count(DISTINCT a), sum(DISTINCT a) FROM dqa_hashability;
+SELECT count(DISTINCT a), count(DISTINCT b ORDER BY b) FROM dqa_hashability;
+
+DROP TABLE dqa_hashability;
+DROP TYPE dqa_cash_range;
+COMMIT;

@@ -121,6 +121,7 @@
 #include "utils/timestamp.h"
 
 #include "access/appendonlywriter.h"
+#include "catalog/gp_distribution_policy.h"
 #include "catalog/heap.h"
 #include "catalog/pg_am.h"
 #include "cdb/cdbappendonlyam.h"
@@ -1774,7 +1775,7 @@ acquire_sample_rows(Relation onerel, int elevel,
 
 #ifdef USE_PREFETCH
 	/*
-	 * GPDB_14_MERGE_FIXME: pre-fetching is introduced in PG14.
+	 * GPDB: pre-fetching is introduced in PG14.
 	 * It's not suitable for AO tables, will get error when PrefetchBuffer
 	 * because Blocks is not same as Heap tables.
 	 * Set prefetch_maximum to zero seems the easiest way to bypass.
@@ -2661,9 +2662,10 @@ parse_record_to_string(char *string, TupleDesc tupdesc, char** values, bool *nul
 }
 
 /*
- * Build a querydesc for a sql, set "dest" to portal->holdStore
+ * Build a querydesc for a sql, sending results to the sample tuplestore.
  */
-static QueryDesc *build_querydesc(Portal portal, char *sql)
+static QueryDesc *build_querydesc(Tuplestorestate *sampleStore,
+								MemoryContext sampleContext, char *sql)
 {
 	List	   *raw_parsetree_list;
 	RawStmt	   *parsetree;
@@ -2674,8 +2676,8 @@ static QueryDesc *build_querydesc(Portal portal, char *sql)
 	QueryDesc  *queryDesc = NULL;
 	destReceiver = CreateDestReceiver(DestTuplestore);
 	SetTuplestoreDestReceiverParams(destReceiver,
-									portal->holdStore,
-									portal->holdContext,
+									sampleStore,
+									sampleContext,
 									false, NULL, NULL);
 
 	/*
@@ -2721,7 +2723,7 @@ static QueryDesc *build_querydesc(Portal portal, char *sql)
 }
 
 static int
-process_sample_rows(Portal portal,
+process_sample_rows(Tuplestorestate *sampleStore,
 					QueryDesc  *queryDesc,
 					Relation onerel,
 					HeapTuple *rows,
@@ -2832,7 +2834,7 @@ process_sample_rows(Portal portal,
 
 		CHECK_FOR_INTERRUPTS();
 
-		ok = tuplestore_gettupleslot(portal->holdStore, true, false, slot);
+		ok = tuplestore_gettupleslot(sampleStore, true, false, slot);
 
 		if (!ok)
 			break;
@@ -3012,7 +3014,9 @@ acquire_sample_rows_dispatcher(Relation onerel, bool inh, int elevel,
 	int			perseg_targrows;
 	int			sampleTuples;	/* 32 bit - assume that number of tuples will not > 2B */
 	char	   *sql;
-	Portal		portal;
+	MemoryContext sampleContext;
+	MemoryContext oldContext;
+	Tuplestorestate *sampleStore;
 	QueryDesc  *queryDesc = NULL;
 
 	Assert(targrows > 0.0);
@@ -3063,18 +3067,24 @@ acquire_sample_rows_dispatcher(Relation onerel, bool inh, int elevel,
 	 * Use ExecutorStart|ExecutorRun|ExecutorEnd to execute a plan and store results
 	 * into tuplestore could handle this situation well.
 	 *
-	 * Execute the given query and store the results into portal->holdStore to
+	 * Execute the given query and store the results in a tuplestore to
 	 * avoid memory error.
 	 */
 	elog(elevel, "Executing SQL: %s", str.data);
 	sql = str.data;
-	/* Create a new portal to run the query in */
-	portal = CreateNewPortal();
-	/* Don't display the portal in pg_cursors, it is for internal use only */
-	portal->visible = false;
-	/* use a tuplestore to store received tuples to avoid out of memory error */
-	PortalCreateHoldStore(portal);
-	queryDesc = build_querydesc(portal, sql);
+	/*
+	 * This query runs directly through the executor, not PortalStart/PortalRun.
+	 * A portal used only as a tuplestore owner would remain PORTAL_NEW, which
+	 * correctly cannot be dropped while setup is in progress. Keep sampling
+	 * storage in its own transaction-lifetime context instead.
+	 */
+	sampleContext = AllocSetContextCreate(CurrentMemoryContext,
+										  "Analyze sample store",
+										  ALLOCSET_DEFAULT_SIZES);
+	oldContext = MemoryContextSwitchTo(sampleContext);
+	sampleStore = tuplestore_begin_heap(false, false, work_mem);
+	MemoryContextSwitchTo(oldContext);
+	queryDesc = build_querydesc(sampleStore, sampleContext, sql);
 
 	/* Call ExecutorStart to prepare the plan for execution */
 	ExecutorStart(queryDesc, 0);
@@ -3093,12 +3103,13 @@ acquire_sample_rows_dispatcher(Relation onerel, bool inh, int elevel,
 	/*
 	 * Step3: process results.
 	 */
-	sampleTuples = process_sample_rows(portal, queryDesc, onerel, rows,
+	sampleTuples = process_sample_rows(sampleStore, queryDesc, onerel, rows,
 									targrows, totalrows, totaldeadrows);
 
 	ExecutorEnd(queryDesc);
 	FreeQueryDesc(queryDesc);
-	PortalDrop(portal, false);
+	tuplestore_end(sampleStore);
+	MemoryContextDelete(sampleContext);
 
 	return sampleTuples;
 }
@@ -5007,13 +5018,54 @@ merge_leaf_stats(VacAttrStatsP stats,
 		old_context = MemoryContextSwitchTo(stats->anl_context);
 		bool valid;
 		double ndinstinct_by_segs = 0;
+		double leaf_ndistinct_sum = 0;
 		Datum *ndvbs;
 
 		valid = aggregate_leaf_partition_ndvbs(
-			numPartitions, heaptupleStats, relTuples, &ndinstinct_by_segs);
+			numPartitions, heaptupleStats, relTuples, &ndinstinct_by_segs,
+			&leaf_ndistinct_sum);
 
 		if (valid)
 		{
+			/*
+			 * The leaves' values are summed, which is only right when leaves hold
+			 * disjoint values, e.g. for the partitioning key.  A value repeated in
+			 * every partition is counted once per partition, so the sum grows
+			 * with the number of partitions and ORCA overestimates the output of
+			 * a local aggregate.
+			 *
+			 * This statistic counts a distinct value once per segment holding
+			 * it, so it is the column's ndistinct times the average number of
+			 * segments a value sits on.  That average does not depend on the
+			 * partitioning, so take it from the leaves, where the sums are free
+			 * of the double counting, and apply it to the root's ndistinct.
+			 * For a partitioning key, whose values belong to one leaf each, the
+			 * result is the plain sum as before.
+			 *
+			 * The average is between one and the number of segments.  Keeping
+			 * the sum as an upper bound guards against the root's ndistinct and
+			 * the leaves' one disagreeing, as they are estimated separately.
+			 */
+			double		root_ndistinct = stats->stadistinct < 0 ?
+				-stats->stadistinct * totalTuples : stats->stadistinct;
+
+			if (root_ndistinct > 0)
+			{
+				GpPolicy   *policy = GpPolicyFetch(stats->attr->attrelid);
+				int			numsegments = policy->numsegments > 0 ?
+					policy->numsegments : getgpsegmentCount();
+				double		segs_per_value;
+
+				pfree(policy);
+
+				segs_per_value = leaf_ndistinct_sum > 0 ?
+					ndinstinct_by_segs / leaf_ndistinct_sum : numsegments;
+				segs_per_value = Min(Max(segs_per_value, 1.0), numsegments);
+
+				ndinstinct_by_segs = Min(ndinstinct_by_segs,
+										 root_ndistinct * segs_per_value);
+			}
+
 			ndvbs = (Datum *) palloc(sizeof(Datum));
 			ndvbs[0] = Float8GetDatum(ndinstinct_by_segs);
 

@@ -1458,10 +1458,10 @@ create table at_tab1 (a int, b text);
 create table at_tab2 (x int, y at_tab1);
 alter table at_tab1 alter column b type varchar; -- fails
 drop table at_tab2;
--- Use of row type in an expression is defended differently
+-- A row type used in an expression stored in a constraint cannot be altered
 create table at_tab2 (x int, y text, check((x,y)::at_tab1 = (1,'42')::at_tab1));
-alter table at_tab1 alter column b type varchar; -- allowed, but ...
-insert into at_tab2 values(1,'42'); -- ... this will fail
+alter table at_tab1 alter column b type varchar; -- fails
+insert into at_tab2 values(1,'42'); -- succeeds after the rejected ALTER
 drop table at_tab1, at_tab2;
 -- Check it for a partitioned table, too
 create table at_tab1 (a int, b text) partition by list(a);
@@ -2053,7 +2053,7 @@ DROP TYPE test_typex;
 -- behind a table to test pg_upgrade with. The table has a composite type
 -- column in it, and the composite type has a dropped attribute.
 CREATE TYPE test_type3 AS (a int);
-CREATE TABLE test_tbl3 (c) AS SELECT '(1)'::test_type3;
+CREATE TABLE test_tbl3 (c) AS SELECT '(1)'::test_type3 DISTRIBUTED RANDOMLY;
 ALTER TYPE test_type3 DROP ATTRIBUTE a, ADD ATTRIBUTE b int;
 
 CREATE TYPE test_type_empty AS ();

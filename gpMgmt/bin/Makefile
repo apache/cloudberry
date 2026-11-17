@@ -133,6 +133,7 @@ pygresql: download-python-deps
 	@echo "--- PyGreSQL"
 	cd $(PYLIB_SRC_EXT)/ && $(TAR) xzf $(PYGRESQL_DIR).tar.gz
 	cd $(PYLIB_SRC_EXT)/$(PYGRESQL_DIR)/ && PATH=$(DESTDIR)$(bindir):$$PATH LDFLAGS='$(LDFLAGS) $(PYGRESQL_LDFLAGS)' python3 setup.py build
+	rm -f $(PYLIB_DIR)/_pg*.so
 	cp -r $(PYLIB_SRC_EXT)/$(PYGRESQL_DIR)/build/lib*-3*/* $(PYLIB_DIR)/
 
 #
@@ -144,6 +145,7 @@ psutil: download-python-deps
 ifeq "$(findstring $(BLD_ARCH),aix7_ppc_64 )" ""
 	cd $(PYLIB_SRC_EXT)/ && $(TAR) xzf $(PSUTIL_DIR).tar.gz
 	cd $(PYLIB_SRC_EXT)/$(PSUTIL_DIR)/ && env -u CC python3 setup.py build
+	rm -rf $(PYLIB_DIR)/psutil
 	cp -r $(PYLIB_SRC_EXT)/$(PSUTIL_DIR)/build/lib.*/psutil $(PYLIB_DIR)
 endif
 
@@ -156,6 +158,8 @@ pyyaml: download-python-deps
 	@echo "--- pyyaml"
 	cd $(PYLIB_SRC_EXT)/ && $(TAR) xzf $(PYYAML_DIR).tar.gz
 	cd $(PYLIB_SRC_EXT)/$(PYYAML_DIR)/ && env -u CC CFLAGS="-w" python3 setup.py build
+	rm -rf $(PYLIB_DIR)/yaml
+	rm -f $(PYLIB_DIR)/_yaml*.so
 	cp -r $(PYLIB_SRC_EXT)/$(PYYAML_DIR)/build/lib*-3*/* $(PYLIB_DIR)/
 
 #

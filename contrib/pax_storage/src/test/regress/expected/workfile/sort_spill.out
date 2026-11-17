@@ -37,7 +37,8 @@ analyze testsort;
 select * from sort_spill.is_workfile_created('explain (analyze, verbose) select i1,i2 from testsort order by i2;');
  is_workfile_created 
 ---------------------
-(0 rows)
+                   1
+(1 row)
 
 select * from sort_spill.is_workfile_created('explain (analyze, verbose) select i1,i2 from testsort order by i2 limit 50000;');
  is_workfile_created 

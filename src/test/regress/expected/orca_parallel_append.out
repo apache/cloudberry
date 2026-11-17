@@ -1,0 +1,354 @@
+--
+-- ORCA Parallel Append
+--
+-- ORCA can implement a scan of a partitioned table as a parallel-aware
+-- Append over parallel scans of the selected partitions, instead of a
+-- serial Dynamic Seq Scan. The alternative is gated by
+-- optimizer_enable_parallel_append and competes with the dynamic scan
+-- on cost.
+--
+-- All GUCs are set locally in this file; the plans must stay stable with
+-- 3 segments and max_parallel_workers_per_gather = 2.
+--
+create schema orca_parallel_append;
+set search_path = orca_parallel_append, public;
+set optimizer = on;
+set optimizer_trace_fallback = on;
+create table pa_ao (id int, d int, pad text)
+with (appendonly = true)
+distributed by (id)
+partition by range (d) (start (1) end (6) every (1));
+insert into pa_ao
+select g, 1 + (g % 5), repeat('x', 20) from generate_series(1, 5000) g;
+analyze pa_ao;
+-- plain heap table, single level partitioning
+create table pa_heap (id int, d int)
+distributed by (id)
+partition by list (d) (partition p1 values (1), partition p2 values (2), partition p3 values (3));
+insert into pa_heap select g, 1 + (g % 3) from generate_series(1, 300) g;
+analyze pa_heap;
+-- empty partitioned table
+create table pa_empty (id int, d int)
+distributed by (id)
+partition by range (d) (start (1) end (4) every (1));
+analyze pa_empty;
+-- non-partitioned side for joins and set operations
+create table pa_dim (d int, name text) distributed by (d);
+insert into pa_dim values (1, 'one'), (2, 'two'), (3, 'three');
+analyze pa_dim;
+set enable_parallel = on;
+set max_parallel_workers_per_gather = 2;
+set parallel_setup_cost = 0;
+set min_parallel_table_scan_size = 0;
+set min_parallel_index_scan_size = 0;
+--
+-- GUC off: serial dynamic scan
+--
+set optimizer_enable_parallel_append = off;
+explain (costs off) select count(*) from pa_ao;
+                           QUERY PLAN                           
+----------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Dynamic Seq Scan on pa_ao
+                     Number of partitions to scan: 5 (out of 5)
+ Optimizer: GPORCA
+(6 rows)
+
+select count(*) from pa_ao;
+ count 
+-------
+  5000
+(1 row)
+
+--
+-- GUC on: parallel append over parallel seq scans
+--
+set optimizer_enable_parallel_append = on;
+explain (costs off) select count(*) from pa_ao;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         ->  Partial Aggregate
+               ->  Parallel Append
+                     ->  Parallel Seq Scan on pa_ao_1_prt_1
+                     ->  Parallel Seq Scan on pa_ao_1_prt_2
+                     ->  Parallel Seq Scan on pa_ao_1_prt_3
+                     ->  Parallel Seq Scan on pa_ao_1_prt_4
+                     ->  Parallel Seq Scan on pa_ao_1_prt_5
+ Optimizer: GPORCA
+(10 rows)
+
+select count(*) from pa_ao;
+ count 
+-------
+  5000
+(1 row)
+
+select d, count(*) from pa_ao group by d order by d;
+ d | count 
+---+-------
+ 1 |  1000
+ 2 |  1000
+ 3 |  1000
+ 4 |  1000
+ 5 |  1000
+(5 rows)
+
+-- heap partitions
+explain (costs off) select count(*) from pa_heap;
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         ->  Partial Aggregate
+               ->  Parallel Append
+                     ->  Parallel Seq Scan on pa_heap_1_prt_p1
+                     ->  Parallel Seq Scan on pa_heap_1_prt_p2
+                     ->  Parallel Seq Scan on pa_heap_1_prt_p3
+ Optimizer: GPORCA
+(8 rows)
+
+select count(*) from pa_heap;
+ count 
+-------
+   300
+(1 row)
+
+-- static partition pruning: multiple, one and zero partitions survive
+explain (costs off) select count(*) from pa_ao where d >= 4;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         ->  Partial Aggregate
+               ->  Parallel Append
+                     ->  Parallel Seq Scan on pa_ao_1_prt_4
+                           Filter: (d >= 4)
+                     ->  Parallel Seq Scan on pa_ao_1_prt_5
+                           Filter: (d >= 4)
+ Optimizer: GPORCA
+(9 rows)
+
+select count(*) from pa_ao where d >= 4;
+ count 
+-------
+  2000
+(1 row)
+
+explain (costs off) select count(*) from pa_ao where d = 2;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         ->  Partial Aggregate
+               ->  Parallel Append
+                     ->  Parallel Seq Scan on pa_ao_1_prt_2
+                           Filter: (d = 2)
+ Optimizer: GPORCA
+(7 rows)
+
+select count(*) from pa_ao where d = 2;
+ count 
+-------
+  1000
+(1 row)
+
+explain (costs off) select count(*) from pa_ao where d = 42;
+           QUERY PLAN           
+--------------------------------
+ Aggregate
+   ->  Result
+         One-Time Filter: false
+ Optimizer: GPORCA
+(4 rows)
+
+select count(*) from pa_ao where d = 42;
+ count 
+-------
+     0
+(1 row)
+
+-- empty partitioned table
+explain (costs off) select count(*) from pa_empty;
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Aggregate
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         ->  Parallel Append
+               ->  Parallel Seq Scan on pa_empty_1_prt_1
+               ->  Parallel Seq Scan on pa_empty_1_prt_2
+               ->  Parallel Seq Scan on pa_empty_1_prt_3
+ Optimizer: GPORCA
+(7 rows)
+
+select count(*) from pa_empty;
+ count 
+-------
+     0
+(1 row)
+
+-- dynamic partition elimination: the partition selector stays on the
+-- hash side, the parallel append consumes its selector id
+explain (costs off)
+select count(*) from pa_ao join pa_dim using (d) where pa_dim.name = 'two';
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         ->  Partial Aggregate
+               ->  Hash Join
+                     Hash Cond: (pa_ao_1_prt_1.d = pa_dim.d)
+                     ->  Parallel Append
+                           Partition Selectors: $0
+                           ->  Parallel Seq Scan on pa_ao_1_prt_1
+                           ->  Parallel Seq Scan on pa_ao_1_prt_2
+                           ->  Parallel Seq Scan on pa_ao_1_prt_3
+                           ->  Parallel Seq Scan on pa_ao_1_prt_4
+                           ->  Parallel Seq Scan on pa_ao_1_prt_5
+                     ->  Hash
+                           ->  Partition Selector (selector id: $0)
+                                 ->  Broadcast Motion 6:6  (slice2; segments: 6)
+                                       ->  Parallel Seq Scan on pa_dim
+                                             Filter: (name = 'two'::text)
+ Optimizer: GPORCA
+(18 rows)
+
+select count(*) from pa_ao join pa_dim using (d) where pa_dim.name = 'two';
+ count 
+-------
+  1000
+(1 row)
+
+-- predicate and projection pushed into the per-partition scans
+explain (costs off) select id, d from pa_ao where id < 10 order by id;
+                      QUERY PLAN                      
+------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Merge Key: pa_ao_1_prt_1.id
+   ->  Sort
+         Sort Key: pa_ao_1_prt_1.id
+         ->  Parallel Append
+               ->  Parallel Seq Scan on pa_ao_1_prt_1
+                     Filter: (id < 10)
+               ->  Parallel Seq Scan on pa_ao_1_prt_2
+                     Filter: (id < 10)
+               ->  Parallel Seq Scan on pa_ao_1_prt_3
+                     Filter: (id < 10)
+               ->  Parallel Seq Scan on pa_ao_1_prt_4
+                     Filter: (id < 10)
+               ->  Parallel Seq Scan on pa_ao_1_prt_5
+                     Filter: (id < 10)
+ Optimizer: GPORCA
+(16 rows)
+
+select id, d from pa_ao where id < 10 order by id;
+ id | d 
+----+---
+  1 | 2
+  2 | 3
+  3 | 4
+  4 | 5
+  5 | 1
+  6 | 2
+  7 | 3
+  8 | 4
+  9 | 5
+(9 rows)
+
+-- set operations with a partitioned child are not parallelized: a serial
+-- sibling under the same Append would be executed by every worker and
+-- its rows duplicated
+explain (costs off) select d from pa_dim union all select d from pa_heap;
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Append
+         ->  Seq Scan on pa_dim
+         ->  Dynamic Seq Scan on pa_heap
+               Number of partitions to scan: 3 (out of 3)
+ Optimizer: GPORCA
+(6 rows)
+
+select d, count(*) from (select d from pa_dim union all select d from pa_heap) s group by d order by d;
+ d | count 
+---+-------
+ 1 |   101
+ 2 |   101
+ 3 |   101
+(3 rows)
+
+select count(*) from (select d from pa_dim union select d from pa_heap) s;
+ count 
+-------
+     3
+(1 row)
+
+-- nested loop inner side requires rewindability, which the parallel append
+-- cannot provide; the plan must still be correct
+set optimizer_enable_hashjoin = off;
+explain (costs off)
+select count(*) from pa_dim join pa_heap on pa_dim.d = pa_heap.d;
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         ->  Partial Aggregate
+               ->  Nested Loop
+                     Join Filter: (pa_dim.d = pa_heap_1_prt_p1.d)
+                     ->  Broadcast Motion 6:6  (slice2; segments: 6)
+                           ->  Parallel Seq Scan on pa_dim
+                     ->  Materialize
+                           ->  Parallel Append
+                                 ->  Parallel Seq Scan on pa_heap_1_prt_p1
+                                 ->  Parallel Seq Scan on pa_heap_1_prt_p2
+                                 ->  Parallel Seq Scan on pa_heap_1_prt_p3
+ Optimizer: GPORCA
+(13 rows)
+
+select count(*) from pa_dim join pa_heap on pa_dim.d = pa_heap.d;
+ count 
+-------
+   300
+(1 row)
+
+reset optimizer_enable_hashjoin;
+-- results match the serial plan and the Postgres planner
+set optimizer_enable_parallel_append = off;
+select count(*) from pa_ao join pa_dim using (d) where pa_dim.name = 'two';
+ count 
+-------
+  1000
+(1 row)
+
+set optimizer = off;
+select count(*) from pa_ao join pa_dim using (d) where pa_dim.name = 'two';
+ count 
+-------
+  1000
+(1 row)
+
+select count(*) from pa_ao;
+ count 
+-------
+  5000
+(1 row)
+
+reset optimizer;
+reset optimizer_enable_parallel_append;
+reset enable_parallel;
+reset max_parallel_workers_per_gather;
+reset parallel_setup_cost;
+reset min_parallel_table_scan_size;
+reset min_parallel_index_scan_size;
+reset optimizer_trace_fallback;
+-- start_ignore
+drop schema orca_parallel_append cascade;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to table pa_ao
+drop cascades to table pa_heap
+drop cascades to table pa_empty
+drop cascades to table pa_dim
+-- end_ignore

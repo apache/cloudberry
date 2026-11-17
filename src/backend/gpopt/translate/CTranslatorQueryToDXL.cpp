@@ -4142,9 +4142,12 @@ CTranslatorQueryToDXL::TranslateJoinExprInFromToDXL(JoinExpr *join_expr)
 		{
 			continue;
 		}
-		GPOS_ASSERT(IsA(join_alias_node, Var) ||
-					IsA(join_alias_node, FuncExpr) ||
-					IsA(join_alias_node, CoalesceExpr));
+		// A merged USING column is a plain Var when both inputs have the same
+		// type, a CoalesceExpr for a FULL JOIN, and the outer input coerced to
+		// the common type otherwise (FuncExpr, RelabelType, ...). Any
+		// expression the scalar translator understands is acceptable here;
+		// unsupported nodes still raise the regular "unsupported feature"
+		// exception from TranslateExprToDXL.
 		CHAR *col_name_char_array = strVal(lfirst(lc_col_name));
 
 		// create the DXL node holding the target list entry and add it to proj list
@@ -4152,9 +4155,14 @@ CTranslatorQueryToDXL::TranslateJoinExprInFromToDXL(JoinExpr *join_expr)
 			(Expr *) join_alias_node, col_name_char_array);
 		project_list_dxlnode->AddChild(project_elem_dxlnode);
 
-		if (IsA(join_alias_node, CoalesceExpr))
+		if (!IsA(join_alias_node, Var))
 		{
-			// add coalesce expression to the computed columns
+			// TranslateExprToDXLProject reuses the input colid for a plain
+			// Var but allocates a new one for any other expression, so the
+			// column only exists if the join computes it. Quals are left
+			// alone by flatten_join_alias_var_optimizer and still reference
+			// the merged column through the mapping loaded below, hence the
+			// projection is required and not merely an optimization.
 			project_elem_dxlnode->AddRef();
 			project_list_computed_cols_dxlnode->AddChild(project_elem_dxlnode);
 		}

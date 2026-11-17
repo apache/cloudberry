@@ -30,11 +30,9 @@
 # Configuration Features:
 #   - Cloud Storage Integration (gpcloud)
 #   - IC Proxy Support
-#   - MapReduce Processing
 #   - Oracle Compatibility (orafce)
 #   - ORCA Query Optimizer
 #   - PAX Access Method
-#   - PXF External Table Access
 #   - Test Automation Support (tap-tests)
 #
 # System Integration:
@@ -58,7 +56,6 @@
 #
 #                 When true, enables:
 #                   --enable-debug
-#                   --enable-profiling
 #                   --enable-cassert
 #                   --enable-debug-extensions
 #
@@ -139,7 +136,6 @@ CONFIGURE_DEBUG_OPTS=""
 
 if [ "${ENABLE_DEBUG:-false}" = "true" ]; then
     CONFIGURE_DEBUG_OPTS="--enable-debug \
-                          --enable-profiling \
                           --enable-cassert \
                           --enable-debug-extensions"
 fi
@@ -155,11 +151,9 @@ execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
             --disable-external-fts \
             --enable-gpcloud \
             --enable-ic-proxy \
-            --enable-mapreduce \
             --enable-orafce \
             --enable-orca \
             --enable-pax \
-            --disable-pxf \
             --enable-tap-tests \
             ${CONFIGURE_DEBUG_OPTS} \
             --with-diskquota \

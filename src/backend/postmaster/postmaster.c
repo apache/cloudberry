@@ -112,6 +112,7 @@
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
 #include "libpq/pqsignal.h"
+#include "nodes/queryjumble.h"
 #include "pg_getopt.h"
 #include "pgstat.h"
 #include "port/pg_bswap.h"
@@ -145,7 +146,6 @@
 #include "utils/memutils.h"
 #include "utils/pidfile.h"
 #include "utils/ps_status.h"
-#include "utils/queryjumble.h"
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
 #include "utils/varlena.h"
@@ -1148,7 +1148,7 @@ PostmasterMain(int argc, char *argv[])
 	 * max_connections. Hence, in gpdb below check is modified from upstream to
 	 * allow equal setting.
 	 */
-	if (SuperuserReservedConnections + ReservedConnections >= MaxConnections)
+	if (SuperuserReservedConnections + ReservedConnections > MaxConnections)
 	{
 		write_stderr("%s: superuser_reserved_connections (%d) plus reserved_connections (%d) must be less than max_connections (%d)\n",
 					 progname,

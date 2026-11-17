@@ -74,7 +74,7 @@ static WalReceiverConn *test_connection = NULL;
 void
 _PG_init(void)
 {
-	libpqwalreceiver_PG_init();
+	load_file("libpqwalreceiver", false);
 }
 
 Datum
@@ -85,7 +85,7 @@ test_connect(PG_FUNCTION_ARGS)
 	MemoryContext oldcxt;
 
 	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
-	test_connection = walrcv_connect(conninfo, false, "walrcv_test", &err);
+	test_connection = walrcv_connect(conninfo, false, false, "walrcv_test", &err);
 	if (!test_connection)
 		ereport(ERROR,
 				(errmsg("could not connect to the primary server: %s", err)));
@@ -361,7 +361,7 @@ test_xlog_ao(PG_FUNCTION_ARGS)
 
 		xrecoff = (uint32)startpoint;
 
-		conn = walrcv_connect(conninfo, false, "walrcv_test_ao_xlog", &err);
+		conn = walrcv_connect(conninfo, false, false, "walrcv_test_ao_xlog", &err);
 		if (!conn)
 			ereport(ERROR,
 					(errmsg("could not connect to the primary server: %s", err)));
@@ -411,9 +411,9 @@ test_xlog_ao(PG_FUNCTION_ARGS)
 			values[1] = CStringGetTextDatum("XLOG_APPENDONLY_TRUNCATE");
 
 		values[2] = Int32GetDatum(result->len);
-		values[3] = ObjectIdGetDatum(result->target.node.spcNode);
-		values[4] = ObjectIdGetDatum(result->target.node.dbNode);
-		values[5] = ObjectIdGetDatum(result->target.node.relNode);
+		values[3] = ObjectIdGetDatum(result->target.node.spcOid);
+		values[4] = ObjectIdGetDatum(result->target.node.dbOid);
+		values[5] = ObjectIdGetDatum(result->target.node.relNumber);
 		values[6] = Int32GetDatum(result->target.segment_filenum);
 		values[7] = Int64GetDatum(result->target.offset);
 
@@ -496,9 +496,9 @@ check_ao_record_present(unsigned char type, char *buf, Size len,
 				xl_ao_target *xlaorecord = (xl_ao_target*) XLogRecGetData(xlogreader);
 
 				aorecordresult->xrecoff = xlogreader->ReadRecPtr;
-				aorecordresult->target.node.spcNode = xlaorecord->node.spcNode;
-				aorecordresult->target.node.dbNode = xlaorecord->node.dbNode;
-				aorecordresult->target.node.relNode = xlaorecord->node.relNode;
+				aorecordresult->target.node.spcOid = xlaorecord->node.spcOid;
+				aorecordresult->target.node.dbOid = xlaorecord->node.dbOid;
+				aorecordresult->target.node.relNumber = xlaorecord->node.relNumber;
 				aorecordresult->target.segment_filenum = xlaorecord->segment_filenum;
 				aorecordresult->target.offset = xlaorecord->offset;
 				aorecordresult->len = XLogRecGetDataLen(xlogreader);

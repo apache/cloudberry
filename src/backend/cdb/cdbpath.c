@@ -2853,9 +2853,12 @@ create_motion_path_for_merge(PlannerInfo *root, List *resultRelations, GpPolicy 
 		/*
 		 * The statement that insert/update/delete on replicated table has to
 		 * be dispatched to each segment and executed on each segment. Thus
-		 * the targetlist cannot contain volatile functions.
+		 * the targetlist cannot contain volatile functions. MERGE action
+		 * expressions (WHEN conditions, SET and VALUES) are kept in
+		 * mergeActionLists, not in the subpath targetlist, so check them too.
 		 */
-		if (contain_volatile_functions((Node *) (subpath->pathtarget->exprs)))
+		if (contain_volatile_functions((Node *) (subpath->pathtarget->exprs)) ||
+			contain_volatile_functions((Node *) mergeActionLists))
 			elog(ERROR, "could not devise a plan.");
 	}
 	else

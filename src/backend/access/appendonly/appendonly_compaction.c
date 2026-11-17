@@ -32,6 +32,7 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/toast_internals.h"
+#include "access/tableam.h"
 #include "access/transam.h"
 #include "access/heaptoast.h"
 #include "access/xact.h"
@@ -443,7 +444,8 @@ AppendOnlySegmentFileFullCompaction(Relation aorel,
 										 &compact_segno, 1, 0, NULL);
 
 	tupDesc = RelationGetDescr(aorel);
-	slot = MakeSingleTupleTableSlot(tupDesc, &TTSOpsVirtual);
+	/* Use the slot type the table's access method hands out, not a fixed one. */
+	slot = table_slot_create(aorel, NULL);
 	slot->tts_tableOid = RelationGetRelid(aorel);
 	mt_bind = create_memtuple_binding(tupDesc);
 

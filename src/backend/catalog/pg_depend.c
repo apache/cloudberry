@@ -26,13 +26,17 @@
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
 #include "miscadmin.h"
+#include "storage/lmgr.h"
+#include "storage/lock.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
+#include "utils/snapmgr.h"
 #include "utils/syscache.h"
 
 
 static bool isObjectPinned(const ObjectAddress *object);
+static void dependencyLockAndCheckType(Oid typeOid);
 
 
 /*
@@ -107,6 +111,13 @@ recordMultipleDependencies(const ObjectAddress *depender,
 		 */
 		if (isObjectPinned(referenced))
 			continue;
+
+		/*
+		 * Keep referenced types stable until this dependency is committed.
+		 * DROP and ALTER TYPE take an exclusive lock on the same object.
+		 */
+		if (referenced->classId == TypeRelationId)
+			dependencyLockAndCheckType(referenced->objectId);
 
 		if (slot_init_count < max_slots)
 		{
@@ -506,6 +517,9 @@ changeDependencyFor(Oid classId, Oid objectId,
 		return 1;
 	}
 
+	if (!newIsPinned && refClassId == TypeRelationId)
+		dependencyLockAndCheckType(newRefObjectId);
+
 	depRel = table_open(DependRelationId, RowExclusiveLock);
 
 	/* There should be existing dependency record(s), so search. */
@@ -710,6 +724,57 @@ static bool
 isObjectPinned(const ObjectAddress *object)
 {
 	return IsPinnedObject(object->classId, object->objectId);
+}
+
+
+/*
+ * Lock a referenced type while adding or changing a dependency on it.
+ *
+ * This is the type-specific part of PostgreSQL's dependencyLockAndCheckObject.
+ * The rowtype ALTER checks rely on the referencing transaction holding this
+ * lock, including when the type occurs only inside a stored expression.
+ */
+static void
+dependencyLockAndCheckType(Oid typeOid)
+{
+	LOCKTAG		tag;
+	Relation	rel;
+	SysScanDesc scan;
+	ScanKeyData skey;
+	HeapTuple	tuple;
+
+	/* Pinned types cannot be dropped; callers have already skipped them. */
+	Assert(!IsPinnedObject(TypeRelationId, typeOid));
+
+	SET_LOCKTAG_OBJECT(tag, MyDatabaseId, TypeRelationId, typeOid, 0);
+	if (LockOrStrongerHeldByMe(&tag, AccessShareLock))
+		return;
+
+	LockDatabaseObject(TypeRelationId, typeOid, 0, AccessShareLock);
+
+	/* LockDatabaseObject processes invalidations after any wait. */
+	if (SearchSysCacheExists1(TYPEOID, ObjectIdGetDatum(typeOid)))
+		return;
+
+	/*
+	 * A type created by the current command might not be visible in the
+	 * syscache yet.  SnapshotSelf also sees those pg_type tuples.
+	 */
+	rel = table_open(TypeRelationId, AccessShareLock);
+	ScanKeyInit(&skey,
+				Anum_pg_type_oid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(typeOid));
+	scan = systable_beginscan(rel, TypeOidIndexId, true,
+							  SnapshotSelf, 1, &skey);
+	tuple = systable_getnext(scan);
+	if (!HeapTupleIsValid(tuple))
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("referenced type was concurrently dropped")));
+
+	systable_endscan(scan);
+	table_close(rel, AccessShareLock);
 }
 
 

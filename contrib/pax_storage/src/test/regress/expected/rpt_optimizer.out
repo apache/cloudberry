@@ -784,18 +784,15 @@ explain (costs off) select * from t_hashdist where a > All (select random() from
 (9 rows)
 
 explain (costs off) select * from t_hashdist where a in (select random()::int from t_replicate_volatile);
-                            QUERY PLAN                            
-------------------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Semi Join
-         Hash Cond: (t_hashdist.a = ((random())::integer))
-         ->  Seq Scan on t_hashdist
-         ->  Hash
-               ->  Redistribute Motion 1:3  (slice2; segments: 1)
-                     Hash Key: ((random())::integer)
-                     ->  Seq Scan on t_replicate_volatile
- Optimizer: Pivotal Optimizer (GPORCA)
-(9 rows)
+   ->  Seq Scan on t_hashdist
+         Filter: (hashed SubPlan 1)
+         SubPlan 1
+           ->  Seq Scan on t_replicate_volatile
+ Optimizer: GPORCA
+(6 rows)
 
 -- subplan
 explain (costs off, verbose) select * from t_hashdist left join t_replicate_volatile on t_hashdist.a > any (select random() from t_replicate_volatile);

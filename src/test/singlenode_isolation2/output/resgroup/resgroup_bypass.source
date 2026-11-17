@@ -74,6 +74,17 @@ SET
 ----------------
  on             
 (1 row)
+-- Roll back a GUC change in one query message; restoration must not wait
+-- for a resource-group slot (concurrency is still zero).
+61: SET DateStyle = 'ISO, MDY';
+SET
+61: SET DateStyle = 'SQL, DMY'; SET work_mem = 'invalid';
+ERROR:  invalid value for parameter "work_mem": "invalid"
+61: SHOW DateStyle;
+ DateStyle 
+-----------
+ ISO, MDY  
+(1 row)
 61: invalid_syntax;
 ERROR:  syntax error at or near "invalid_syntax"
 LINE 1: invalid_syntax;

@@ -180,7 +180,9 @@ CREATE FUNCTION recreate_two_level_table() RETURNS VOID
 $fn$;
 
 -- validate that there are no constraints when we start
-SELECT * FROM partition_tables_show_all('r');
+-- call partition_tables() directly: inside partition_tables_show_all() the
+-- error depends on the join order picked by the planner
+SELECT * FROM partition_tables('r');
 
 -- UNIQUE constraint: validate we correctly add it and can only drop from root
 SELECT recreate_two_level_table();
@@ -331,7 +333,9 @@ CREATE FUNCTION recreate_three_level_table() RETURNS VOID
 $fn$;
 
 -- validate that there are no constraints when we start
-SELECT * FROM partition_tables_show_all('r');
+-- call partition_tables() directly: inside partition_tables_show_all() the
+-- error depends on the join order picked by the planner
+SELECT * FROM partition_tables('r');
 
 -- UNIQUE constraint: validate we correctly add it and can only drop from root
 SELECT recreate_three_level_table();

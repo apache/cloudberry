@@ -189,20 +189,26 @@ t1.a=bar_rls.p and bar_rls.q is null and leak_data(c);
 
 -- The RTE of the relation containing security quals is present inside a
 -- SUBLINK node
+-- leak_data() is VOLATILE by default and emits NOTICEs, so ORCA keeps a
+-- SubPlan instead of pulling up the subquery into a semi join: decorrelation
+-- could change the number of calls. This tests RLS quals inside a subquery,
+-- not whether the subquery can be pulled up.
 explain (costs off ) select * from bar_rls where bar_rls.p in (select a
 from foo_rls where abs(a) >= 10 and leak_data(c)) and bar_rls.q is not null;
-                                                  QUERY PLAN                                                   
----------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Semi Join
-         Hash Cond: (bar_rls.p = foo_rls.a)
+                                                     QUERY PLAN                                                    
+-------------------------------------------------------------------------------------------------------------------
+ Result
+   Filter: (hashed SubPlan 1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Seq Scan on bar_rls
                Filter: (NOT (q IS NULL))
-         ->  Hash
-               ->  Seq Scan on foo_rls
-                     Filter: ((("" IS DISTINCT FROM c) OR (("" + 1) = 4)) AND ((abs(a) >= 10) AND leak_data(c)))
+   SubPlan 1
+     ->  Materialize
+           ->  Gather Motion 3:1  (slice2; segments: 3)
+                 ->  Seq Scan on foo_rls
+                       Filter: ((("" IS DISTINCT FROM c) OR (("" + 1) = 4)) AND ((abs(a) >= 10) AND leak_data(c)))
  Optimizer: GPORCA
-(9 rows)
+(11 rows)
 
 -- The RTE of the relation containing security quals is present inside a CTE
 explain (costs off ) with cte as (select * from foo_rls where
@@ -453,23 +459,29 @@ where t1.a=bar_part_rls.p and bar_part_rls.q is not null and leak_data(c);
 
 -- The RTE of the relation containing security quals is present inside a
 -- SUBLINK node
+-- leak_data() is VOLATILE by default and emits NOTICEs, so ORCA keeps a
+-- SubPlan instead of pulling up the subquery into a semi join: decorrelation
+-- could change the number of calls. This tests RLS quals inside a subquery,
+-- not whether the subquery can be pulled up.
 explain (costs off ) select * from bar_part_rls where bar_part_rls.p in
 (select a from foo_part_rls where abs(a) >= 10 and leak_data(c)) and
 bar_part_rls.q is not null;
-                                                  QUERY PLAN                                                   
----------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Semi Join
-         Hash Cond: (bar_part_rls.p = foo_part_rls.a)
+                                                    QUERY PLAN                                                   
+-----------------------------------------------------------------------------------------------------------------
+ Result
+   Filter: (hashed SubPlan 1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Dynamic Seq Scan on bar_part_rls
                Number of partitions to scan: 5 (out of 5)
                Filter: (NOT (q IS NULL))
-         ->  Hash
-               ->  Dynamic Seq Scan on foo_part_rls
-                     Number of partitions to scan: 6 (out of 6)
-                     Filter: (((b IS DISTINCT FROM c) OR ((b + 1) = 4)) AND ((abs(a) >= 10) AND leak_data(c)))
+   SubPlan 1
+     ->  Materialize
+           ->  Gather Motion 3:1  (slice2; segments: 3)
+                 ->  Dynamic Seq Scan on foo_part_rls
+                       Number of partitions to scan: 6 (out of 6)
+                       Filter: (((b IS DISTINCT FROM c) OR ((b + 1) = 4)) AND ((abs(a) >= 10) AND leak_data(c)))
  Optimizer: GPORCA
-(11 rows)
+(13 rows)
 
 -- The RTE of the relation containing security quals is present inside a CTE
 explain (costs off ) with cte as (select * from foo_part_rls where

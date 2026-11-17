@@ -81,8 +81,11 @@ CLogicalLeftOuterCorrelatedApply::CLogicalLeftOuterCorrelatedApply(
 	  // discard the tuple 2 output from generate_series. Instead we want to
 	  // preserve it for a NULL match in the LOJ so that we correctly evaulate
 	  // subplan ALL_SUBLINK.
-	  m_allow_predicate_pushdown(COperator::EopScalarSubqueryAll !=
-								 eopidOriginSubq)
+	  // ANY must also keep NULL comparison results. Moving its test into a
+	  // filter would turn ANY over a NULL row into ANY over no rows (false).
+	  m_allow_predicate_pushdown(
+		  COperator::EopScalarSubqueryAll != eopidOriginSubq &&
+		  COperator::EopScalarSubqueryAny != eopidOriginSubq)
 {
 }
 

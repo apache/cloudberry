@@ -413,10 +413,18 @@ fileGetOptions(Oid foreigntableid,
 		}
 		else if (strcmp(def->defname, "program") == 0)
 		{
+#ifndef USE_COPY_PROGRAM
+			ereport(ERROR,
+					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+					 errmsg("permission denied to use program option in file_fdw"),
+					 errhint("Anyone can COPY to stdout or from stdin. "
+							 "psql's \\copy command also works for anyone.")));
+#else
 			*filename = defGetString(def);
 			*is_program = true;
 			options = foreach_delete_current(options, lc);
 			break;
+#endif
 		}
 	}
 

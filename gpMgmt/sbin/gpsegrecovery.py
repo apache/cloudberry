@@ -7,7 +7,7 @@ from gppylib.recoveryinfo import RecoveryErrorType
 from gppylib.commands.pg import PgBaseBackup, PgRewind
 from recovery_base import RecoveryBase, set_recovery_cmd_results
 from gppylib.commands.base import Command
-from gppylib.commands.gp import SegmentStart
+from gppylib.commands.gp import SegmentStart, ModifyConfSetting
 from gppylib.gparray import Segment
 from gppylib.commands.unix import terminate_proc_tree
 
@@ -63,6 +63,10 @@ class FullRecovery(Command):
         self.error_type = RecoveryErrorType.DEFAULT_ERROR
         self.logger.info("Successfully ran pg_basebackup for dbid: {}".format(
             self.recovery_info.target_segment_dbid))
+
+        # Updating port number on conf after recovery
+        update_port_in_conf(self.recovery_info, self.logger)
+
         self.error_type = RecoveryErrorType.START_ERROR
         start_segment(self.recovery_info, self.logger, self.era)
 
@@ -87,8 +91,25 @@ class IncrementalRecovery(Command):
         cmd.run(validateAfter=True)
         self.logger.info("Successfully ran pg_rewind for dbid: {}".format(self.recovery_info.target_segment_dbid))
 
+        # Updating port number on conf after recovery
+        update_port_in_conf(self.recovery_info, self.logger)
+
         self.error_type = RecoveryErrorType.START_ERROR
         start_segment(self.recovery_info, self.logger, self.era)
+
+
+def update_port_in_conf(recovery_info, logger):
+    """
+    pg_basebackup and pg_rewind both copy the source segment's
+    postgresql.conf, which carries the *source* port. Point it back at this
+    segment before it is started, or the mirror comes up on its primary's
+    port.
+    """
+    logger.info("Updating %s/postgresql.conf" % recovery_info.target_datadir)
+    modifyConfCmd = ModifyConfSetting('Updating %s/postgresql.conf' % recovery_info.target_datadir,
+                                      "{}/{}".format(recovery_info.target_datadir, 'postgresql.conf'),
+                                      'port', recovery_info.target_port, optType='number')
+    modifyConfCmd.run(validateAfter=True)
 
 
 def start_segment(recovery_info, logger, era):

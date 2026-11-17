@@ -505,7 +505,7 @@ get_or_create_unique_check_desc(Relation relation, Snapshot snapshot)
 static const TupleTableSlotOps *
 appendonly_slot_callbacks(Relation relation)
 {
-	return &TTSOpsVirtual;
+	return &TTSOpsMemTuple;
 }
 
 MemTuple
@@ -1376,14 +1376,6 @@ appendonly_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 
 	/* use_wal off requires smgr_targblock be initially invalid */
 	Assert(RelationGetTargetBlock(NewHeap) == InvalidBlockNumber);
-
-	/*
-	 * AO/AOCO tables have no per-tuple xmin/xmax, so freeze limits don't
-	 * apply. Return Invalid values so that relfrozenxid and relminmxid
-	 * remain unchanged after CLUSTER.
-	 */
-	*xid_cutoff = InvalidTransactionId;
-	*multi_cutoff = InvalidMultiXactId;
 
 	tuplesort = tuplesort_begin_cluster(oldTupDesc, OldIndex,
 											maintenance_work_mem, NULL, false);

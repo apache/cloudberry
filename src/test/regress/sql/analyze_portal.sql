@@ -1,0 +1,26 @@
+-- Distributed sampling uses the executor directly, without a query portal.
+-- A small work_mem also exercises the sampling tuplestore's spill path.
+SET gp_autostats_mode = none;
+SET work_mem = '64kB';
+CREATE TABLE analyze_portal(a integer, b text) DISTRIBUTED BY(a);
+INSERT INTO analyze_portal
+SELECT i, repeat(md5(i::text), 16) FROM generate_series(1, 5000) i;
+ANALYZE analyze_portal;
+SELECT reltuples = 5000 AS all_rows_sampled
+FROM pg_class WHERE oid = 'analyze_portal'::regclass;
+SELECT count(*) = 2 AND bool_and(stawidth > 0) AS stats_present
+FROM pg_statistic WHERE starelid = 'analyze_portal'::regclass;
+
+-- Successful sampling can be discarded at a savepoint and run again.
+BEGIN;
+SAVEPOINT before_analyze;
+UPDATE analyze_portal SET b = b || 'x' WHERE a = 1;
+ANALYZE analyze_portal;
+ROLLBACK TO SAVEPOINT before_analyze;
+ANALYZE analyze_portal;
+COMMIT;
+SELECT count(*) = 2 AND bool_and(stawidth > 0) AS stats_present
+FROM pg_statistic WHERE starelid = 'analyze_portal'::regclass;
+DROP TABLE analyze_portal;
+RESET work_mem;
+RESET gp_autostats_mode;

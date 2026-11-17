@@ -663,6 +663,10 @@ SELECT sum(reads) AS io_sum_shared_after_reads
   FROM gp_stat_io_summary WHERE context = 'normal' AND object = 'relation'  \gset
 SELECT :io_sum_shared_after_reads > :io_sum_shared_before_reads;
 
+-- Analyze explicitly so the plan below does not depend on whether
+-- autovacuum has auto-analyzed the table yet: ORCA picks a one-stage
+-- aggregate without stats and a two-stage aggregate with them.
+ANALYZE test_io_shared;
 SELECT sum(hits) AS io_sum_shared_before_hits
   FROM gp_stat_io_summary WHERE context = 'normal' AND object = 'relation' \gset
 -- Select from the table again to count hits.

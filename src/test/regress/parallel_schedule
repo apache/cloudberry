@@ -107,7 +107,7 @@ test: task
 # psql depends on create_am
 # amutils depends on geometry, create_index_spgist, hash_index, brin
 # ----------
-test: create_table_like alter_generic alter_operator misc async dbsize misc_functions sysviews tsrf tid tidscan tidrangescan collate.icu.utf8 incremental_sort
+test: create_table_like alter_generic alter_operator misc async dbsize merge misc_functions sysviews tsrf tid tidscan tidrangescan collate.icu.utf8 incremental_sort
 # test: incremental_matview
 
 # ----------
@@ -148,7 +148,7 @@ test: publication subscription
 # Another group of parallel tests
 # select_views depends on create_view
 # ----------
-test: select_views portals_p2 cluster dependency guc bitmapops combocid tsearch tsdicts foreign_data xmlmap functional_deps advisory_lock indirect_toast equivclass
+test: select_views portals_p2 portals_inflight cluster dependency guc bitmapops combocid tsearch tsdicts foreign_data xmlmap functional_deps advisory_lock indirect_toast equivclass alter_column_type
 ignore: window
 # 'foreign_key' test is disabled, because it contains several tables with
 # multiple UNIQUE constraints, which is not supported in GPDB.
@@ -173,6 +173,11 @@ test: plancache limit plpgsql copy2 temp domain rangefuncs prepare conversion tr
 # test: largeobject
 
 test: gp_foreign_data
+
+# rowtypes_alter relies on cached plans surviving across statements, which
+# concurrent DDL can prevent, and on parallel workers being available, so run
+# it by itself
+test: rowtypes_alter
 
 # ----------
 # Another group of parallel tests
@@ -202,6 +207,7 @@ test: constraints_check
 
 # test of tag
 # test: tag
+test: orca_agg_order_by
 
 # run tablespace test at the end because it drops the tablespace created during
 # setup that other tests may use.

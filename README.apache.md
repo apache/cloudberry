@@ -27,17 +27,18 @@ This file documents licensing clarifications and exceptions as part of ASF relea
 
 This file is licensed under the GPL (Category X) and has been removed from the source tree to comply with ASF release policy.
 
-## Historical Attribution Under Apache License 2.0
+## Historical Copyright Notices in Greenplum-based Code
 
-The following entities have contributed to the Greenplum-based source code under the Apache License 2.0:
+Files that came from Greenplum Database carry the copyright notices of the companies that owned the code when it was written:
 
+- Metapa (one of the two companies that merged to form Greenplum)
 - Greenplum, Inc.
 - EMC Corporation
-- VMware, Inc.
 - Pivotal Software
+- VMware, Inc.
 - Broadcom Inc.
 
-RAT matchers are used to classify their license headers accordingly.
+Greenplum Database was released under the Apache License 2.0 in 2015, and these files are distributed under that license. RAT matchers are used to classify their license headers accordingly.
 
 ## Compressed Files in Source
 
@@ -50,6 +51,7 @@ The following compressed files are included in the source tree. These files are 
 - src/bin/gpfdist/regress/data/gpfdist2/gz_multi_chunk_2.tbl.gz
 - src/bin/gpfdist/regress/data/gpfdist2/lineitem.tbl.bz2
 - src/bin/gpfdist/regress/data/gpfdist2/lineitem.tbl.gz
+- src/bin/gpfdist/regress/data/gpfdist2/lineitem.tbl.zst
 
 ## Binary Files in Source
 

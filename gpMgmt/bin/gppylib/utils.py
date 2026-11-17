@@ -505,7 +505,12 @@ def escapeDoubleQuoteInSQLString(string, forceDoubleQuote=True):
 
 
 def Escape(query_str):
-    return pgdb.escape_string(query_str)
+    # pgdb.escape_string() is a thin wrapper around libpq's PQescapeString,
+    # and the str overload encodes with the ASCII codec, so any non-ASCII
+    # identifier or value raises UnicodeEncodeError.  Hand it UTF-8 bytes
+    # instead: libpq escapes those byte-for-byte and the result decodes back
+    # to the original text.
+    return pgdb.escape_string(query_str.encode('utf-8')).decode('utf-8')
 
 
 def escapeArrayElement(query_str):
@@ -607,3 +612,45 @@ def formatInsertValuesList(row, starelid, inclHLL):
         rowVals.append('\t{0}::{1}'.format(val, typ))
 
     return rowVals
+
+
+def _resolve_all_addresses(name):
+    """
+    Every address a name resolves to, across address families.
+
+    Not gethostbyaddr(): it answers for one family only, so on a dual-stack
+    host "localhost" can come back as ::1 while an address that names the same
+    machine comes back as 127.0.0.1. Comparing those two lists says the names
+    are different hosts when they are not.
+    """
+    return {info[4][0] for info in socket.getaddrinfo(name, None)}
+
+
+# cherry-pick from Greenplum Database
+# greenplum-db/gpdb-archive @ 482967c1b4, gpMgmt/bin/gppylib/utils.py
+def validateHostnameAddress(hostname, address):
+    """
+    validateHostnameAddress : validates that given hostname and address are for the same host
+    Address can be hostname/alias also. Resolves hostname and address both to get the associated addresses.
+
+    @param hostname Name of the host to be validated
+    @param address Address of the host to be validated. Can be hostname/alias also
+    @return if the address and hostname are of the same host
+    """
+    try:
+        resolved_address_list = _resolve_all_addresses(hostname)
+        resolved_address_list_2 = _resolve_all_addresses(address)
+    except Exception as e:
+        # This means given hostname or address is not reachable
+        logger.warning(
+            "Could not resolve hostname:{0}."
+                .format(hostname))
+        return False
+
+    # Resolved address and hostname should have at least one IP address common if they are of same host
+    if not bool(resolved_address_list.intersection(resolved_address_list_2)):
+        logger.warning(
+            "Given address:{0} not present in resolved hostname:{1} address list we got:{2}".format(
+                address, hostname, sorted(resolved_address_list)))
+        return False
+    return True

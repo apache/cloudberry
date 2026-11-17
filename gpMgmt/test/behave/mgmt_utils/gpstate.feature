@@ -160,7 +160,8 @@ Feature: gpstate tests
         Given a standard local demo cluster is running
         Given all files in gpAdminLogs directory are deleted
         And a sample recovery_progress.file is created with ongoing recoveries in gpAdminLogs
-        And a sample gprecoverseg.lock directory is created in coordinator_data_directory
+        And we run a sample background script to generate a pid on "coordinator" segment
+        And a sample gprecoverseg.lock directory is created using the background pid in coordinator_data_directory
         When the user runs "gpstate -e"
         Then gpstate should print "Segments in recovery" to stdout
         And gpstate output contains "full,incremental" entries for mirrors of content 0,1
@@ -169,13 +170,15 @@ Feature: gpstate tests
             | \S+     | [0-9]+ | full           | 1164848                | 1371715            | 84%                  |
             | \S+     | [0-9]+ | incremental    | 1                      | 1371875            | 1%                   |
         And all files in gpAdminLogs directory are deleted
+        And the background pid is killed on "coordinator" segment
         And the gprecoverseg lock directory is removed
 
     Scenario: gpstate -e does not show information about segments with completed recovery
         Given a standard local demo cluster is running
         Given all files in gpAdminLogs directory are deleted
         And a sample recovery_progress.file is created with completed recoveries in gpAdminLogs
-        And a sample gprecoverseg.lock directory is created in coordinator_data_directory
+        And we run a sample background script to generate a pid on "coordinator" segment
+        And a sample gprecoverseg.lock directory is created using the background pid in coordinator_data_directory
         When the user runs "gpstate -e"
         Then gpstate should print "Segments in recovery" to stdout
         And gpstate output contains "full" entries for mirrors of content 1
@@ -185,6 +188,7 @@ Feature: gpstate tests
         And gpstate should not print "incremental" to stdout
         And gpstate should not print "All segments are running normally" to stdout
         And all files in gpAdminLogs directory are deleted
+        And the background pid is killed on "coordinator" segment
         Then the gprecoverseg lock directory is removed
 
     Scenario: gpstate -c logs cluster info for a mirrored cluster
@@ -251,7 +255,7 @@ Feature: gpstate tests
     Scenario: gpstate -m logs mirror details
         Given a standard local demo cluster is running
         When the user runs "gpstate -m"
-        Then gpstate should print "Current GPDB mirror list and status" to stdout
+        Then gpstate should print "Current CBDB mirror list and status" to stdout
         And gpstate output looks like
             | Mirror | Datadir                        | Port   | Status  | Data Status  |
             | \S+    | .*/dbfast_mirror1/demoDataDir0 | [0-9]+ | Passive | Synchronized |
@@ -263,7 +267,7 @@ Feature: gpstate tests
           And user stops all primary processes
           And user can start transactions
         When the user runs "gpstate -m"
-        Then gpstate should print "Current GPDB mirror list and status" to stdout
+        Then gpstate should print "Current CBDB mirror list and status" to stdout
         And gpstate output looks like
             | Mirror | Datadir                        | Port   | Status            | Data Status |
             | \S+    | .*/dbfast_mirror1/demoDataDir0 | [0-9]+ | Acting as Primary | Not In Sync |

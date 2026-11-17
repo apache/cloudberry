@@ -143,6 +143,35 @@ CGroupExpression::CleanupContexts()
 			}
 		}
 	}
+
+	CRefCount::SafeRelease(m_pdrgpcome);
+	m_pdrgpcome = nullptr;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CGroupExpression::AddChildOptMemo
+//
+//	@doc:
+//		Store the child contexts reached by a request, together with the
+//		required plan properties of the context the request was made under
+//
+//---------------------------------------------------------------------------
+void
+CGroupExpression::AddChildOptMemo(CMemoryPool *mp, ULONG ulOptReq,
+								  ULONG ulSearchStage, CReqdPropPlan *prpp,
+								  COptimizationContextArray *pdrgpoc)
+{
+	if (nullptr == m_pdrgpcome)
+	{
+		m_pdrgpcome = GPOS_NEW(mp) ChildOptMemoArray(mp);
+	}
+
+	prpp->AddRef();
+	pdrgpoc->AddRef();
+	m_pdrgpcome->Append(GPOS_NEW(mp) CChildOptMemoEntry(
+		ulOptReq, ulSearchStage, prpp, pdrgpoc));
 }
 
 

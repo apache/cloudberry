@@ -36,6 +36,29 @@ SELECT gp_inject_fault('vacuum_update_dat_frozen_xid', 'skip', '', 'regression',
  Success:
 (1 row)
 
+-- A worker launched before the suspend fault was injected has already passed
+-- it, and could freeze pg_class while we consume xids below. Wait for such
+-- workers to finish; workers held by the fault have not reported any activity.
+-- This runs on seg0, so the check sees seg0's autovacuum workers.
+create or replace function wait_for_running_autovacuum() returns void as $$
+BEGIN
+     FOR i in 1..1500 loop
+	      IF NOT EXISTS (SELECT 1 FROM pg_stat_activity
+	                     WHERE backend_type = 'autovacuum worker'
+	                       AND datname = 'regression' AND query <> '') THEN
+	         RETURN;
+	      END IF;
+	      PERFORM pg_sleep(0.2);
+	      PERFORM pg_stat_clear_snapshot();
+     END LOOP;
+     raise notice 'autovacuum worker is still running';
+END$$ language plpgsql;
+select wait_for_running_autovacuum() from gp_dist_random('gp_id') where gp_segment_id = 0;
+ wait_for_running_autovacuum 
+-----------------------------
+ 
+(1 row)
+
 select test_consume_xids(100 * 1000000) from gp_dist_random('gp_id') where gp_segment_id = 0;
  test_consume_xids 
 -------------------

@@ -43,6 +43,8 @@
 #ifndef DL_ERR_H
 #define DL_ERR_H
 
+#include <stddef.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -97,6 +99,14 @@ extern void dl_error_set(DlErrCode code, const char *operation,
 /* Record the implementation's own numeric code, when it reports one. */
 extern void dl_error_set_remote_code(int remote_code);
 
+/*
+ * Remember a value that must never be shown.  Every error recorded afterwards
+ * has it replaced with "***", whichever layer produced the text -- a backend,
+ * an SDK, or an exception nobody expected.  NULL and empty values are ignored;
+ * there is no minimum length.
+ */
+extern void dl_error_add_secret(const char *value);
+
 /* Record a stack from the failing implementation. */
 extern void dl_error_set_stack(const char *stack);
 
@@ -118,6 +128,15 @@ extern const char *dl_err_message(DlErrCode code);
  * record is not left behind for the next one to inherit.
  */
 extern void dl_error_report(int elevel, DlErrCode code, const char *prefix);
+
+/*
+ * Take the PostgreSQL error that DL_WRAP_END caught off PostgreSQL's error
+ * stack, copying its message into `message` for the C++ exception that carries
+ * it on.  `context` is the memory context the wrapped code ran in, and is
+ * current again afterwards.  Never raises.
+ */
+extern void dl_error_take_pg_error(void *context, char *message,
+								   size_t message_size);
 
 /*
  * An argument that was not what it had to be.  A caller reporting the code
