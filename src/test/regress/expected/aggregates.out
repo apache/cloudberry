@@ -1280,18 +1280,18 @@ set local enable_sort = off;
 explain (costs off)
   select f1, (select distinct min(t1.f1) from int4_tbl t1 where t1.f1 = t0.f1)
   from int4_tbl t0;
-                             QUERY PLAN                              
----------------------------------------------------------------------
- Seq Scan on int4_tbl t0
-   SubPlan 2
-     ->  HashAggregate
-           Group Key: $1
-           InitPlan 1 (returns $1)
-             ->  Limit
-                   ->  Seq Scan on int4_tbl t1
-                         Filter: ((f1 IS NOT NULL) AND (f1 = t0.f1))
-           ->  Result
-(9 rows)
+                                 QUERY PLAN                                  
+-----------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on int4_tbl t0
+         SubPlan 1
+           ->  Aggregate
+                 ->  Result
+                       Filter: (t1.f1 = t0.f1)
+                       ->  Materialize
+                             ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                   ->  Seq Scan on int4_tbl t1
+(10 rows)
 
 select f1, (select distinct min(t1.f1) from int4_tbl t1 where t1.f1 = t0.f1)
 from int4_tbl t0;
