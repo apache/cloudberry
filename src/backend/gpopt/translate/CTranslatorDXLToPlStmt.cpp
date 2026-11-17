@@ -6434,8 +6434,34 @@ CTranslatorDXLToPlStmt::AddSecurityQuals(OID relId, List **qual, Index *index)
 	// Find the RTE in the parse tree based on the relId and add the security
 	// quals of that RTE to the m_security_quals list present in
 	// ctxt_security_quals struct.
-	FetchSecurityQuals(m_dxl_to_plstmt_context->m_orig_query,
-					   &ctxt_security_quals);
+	BOOL found = FetchSecurityQuals(m_dxl_to_plstmt_context->m_orig_query,
+									&ctxt_security_quals);
+
+	// The partitions of a partitioned table that are scanned one by one, by
+	// an Append of (Parallel) Seq Scans, have no RTE in the parse tree: they
+	// are scanned on behalf of the RTE of the partitioned table, which
+	// carries the security quals. Walk up the partition ancestors until we
+	// find the one with an RTE.
+	OID quals_relid = relId;
+	while (!found && gpdb::HasSuperclass(quals_relid))
+	{
+		quals_relid = gpdb::GetPartitionParent(quals_relid);
+		SContextSecurityQuals anc_ctxt(quals_relid);
+		found =
+			FetchSecurityQuals(m_dxl_to_plstmt_context->m_orig_query, &anc_ctxt);
+		ctxt_security_quals.m_security_quals = anc_ctxt.m_security_quals;
+	}
+
+	if (NIL == ctxt_security_quals.m_security_quals)
+	{
+		return;
+	}
+
+	// Copy the security quals before changing their Vars in place: they
+	// belong to the parse tree, and the scans of all the partitions of a
+	// partitioned table share them.
+	List *quals_copy =
+		(List *) gpdb::CopyObject(ctxt_security_quals.m_security_quals);
 
 	// The varno of the columns related to a particular table is different in
 	// the rewritten parse tree and the planned statement tree. In planned
@@ -6444,11 +6470,20 @@ CTranslatorDXLToPlStmt::AddSecurityQuals(OID relId, List **qual, Index *index)
 	// the security quals from the rewritten parse tree to planned statement
 	// tree we need to modify the varno of all the VAR nodes present in the
 	// security quals and assign it equal to index of the RTE in the rte_list.
-	SetSecurityQualsVarnoWalker((Node *) ctxt_security_quals.m_security_quals,
-								index);
+	SetSecurityQualsVarnoWalker((Node *) quals_copy, index);
 
-	// Adding the security quals from m_security_quals list to the qual list
-	*qual = gpdb::ListConcat(*qual, ctxt_security_quals.m_security_quals);
+	// The security quals of a partition ancestor refer to the attribute
+	// numbers of the ancestor. A partition can have its columns at other
+	// attribute numbers, e.g. one that was attached, or whose parent had a
+	// column dropped before the partition was created.
+	if (quals_relid != relId)
+	{
+		quals_copy =
+			gpdb::MapPartitionVarattnos(quals_copy, *index, relId, quals_relid);
+	}
+
+	// Adding the security quals to the qual list
+	*qual = gpdb::ListConcat(*qual, quals_copy);
 }
 
 //---------------------------------------------------------------------------
