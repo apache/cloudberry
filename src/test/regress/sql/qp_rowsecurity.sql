@@ -373,6 +373,51 @@ reset session authorization;
 drop policy p1 on parent;
 drop table parent cascade;
 
+--------------------------------------------------------------------------------
+------------ Partitions scanned one by one with RLS enabled --------------------
+--------------------------------------------------------------------------------
+-- The scans of the partitions under an Append get the policies of the
+-- partitioned table. The second partition has the columns at other
+-- attribute numbers, with a column of another type at the attribute number
+-- of the column in the policy.
+create table part_attno_rls (a int, b int, c text) distributed by (a)
+partition by range(a);
+create table part_attno_rls_1 partition of part_attno_rls
+for values from (0) to (100);
+create table part_attno_rls_2 (a int, c text, b int) distributed by (a);
+alter table part_attno_rls attach partition part_attno_rls_2
+for values from (100) to (200);
+insert into part_attno_rls values (1, 1, 'visible'), (2, 5, 'hidden'),
+(101, 1, 'visible'), (102, 5, 'hidden');
+analyze part_attno_rls;
+grant select on part_attno_rls to new_user;
+alter table part_attno_rls enable row level security;
+create policy p1 on part_attno_rls using (b < 3);
+set session authorization new_user;
+explain (costs off) select * from part_attno_rls;
+select * from part_attno_rls order by a;
+-- Append of Seq Scans
+set optimizer_enable_dynamictablescan to off;
+set optimizer_enable_parallel_append to on;
+explain (costs off) select * from part_attno_rls;
+select * from part_attno_rls order by a;
+-- Parallel Append of Parallel Seq Scans
+set enable_parallel to on;
+set max_parallel_workers_per_gather to 2;
+set parallel_setup_cost to 0;
+set min_parallel_table_scan_size to 0;
+explain (costs off) select * from part_attno_rls;
+select * from part_attno_rls order by a;
+reset min_parallel_table_scan_size;
+reset parallel_setup_cost;
+reset max_parallel_workers_per_gather;
+reset enable_parallel;
+reset optimizer_enable_parallel_append;
+reset optimizer_enable_dynamictablescan;
+reset session authorization;
+drop policy p1 on part_attno_rls;
+drop table part_attno_rls;
+
 
 --------------------------------------------------------------------------------
 ----- INSERT queries on relation having row level security enabled -------------
