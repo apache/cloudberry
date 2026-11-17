@@ -162,7 +162,9 @@ gp_exttable_permission_check(PG_FUNCTION_ARGS)
 		        (errcode(ERRCODE_SYNTAX_ERROR),
 		         errmsg("must specify one of location_uris and command option")));
 
-	if(!is_superuser && Gp_role == GP_ROLE_DISPATCH)
+	/* The coordinator and utility sessions must both check permissions. */
+	if (!is_superuser &&
+		(Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_UTILITY))
 	{
 		/*----------
 		 * check permissions to create this external table.
