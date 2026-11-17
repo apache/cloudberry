@@ -149,7 +149,9 @@ CLogicalDynamicGet::Matches(COperator *pop) const
 	CLogicalDynamicGet *popGet = CLogicalDynamicGet::PopConvert(pop);
 
 	return CUtils::FMatchDynamicScan(this, pop) &&
-		   this->HasSecurityQuals() == popGet->HasSecurityQuals();
+		   this->HasSecurityQuals() == popGet->HasSecurityQuals() &&
+		   this->Ptabdesc()->GetSecurityQualsId() ==
+			   popGet->Ptabdesc()->GetSecurityQualsId();
 }
 
 //---------------------------------------------------------------------------

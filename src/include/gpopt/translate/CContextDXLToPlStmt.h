@@ -107,6 +107,11 @@ private:
 	// list of all RTEPermissionInfo entries
 	List *m_perminfo_list;
 
+	// security quals of the range table entries of the query, and the oids
+	// of their relations, see CContextQueryToDXL::m_security_quals
+	List *m_security_quals;
+	List *m_security_quals_relids;
+
 	// list of all subplan entries
 	List *m_subplan_entries_list;
 	List *m_subplan_sliceids_list;
@@ -249,6 +254,13 @@ public:
 
 	// add a permission info entry
 	void AddPermInfo(RTEPermissionInfo *pi);
+
+	// set the security quals of the range table entries of the query
+	void SetSecurityQuals(List *security_quals, List *security_quals_relids);
+
+	// get the security quals with the given id, and the oid of the relation
+	// of their range table entry; NIL if the id is NO_SECURITY_QUALS_ID
+	List *GetSecurityQuals(ULONG security_quals_id, OID *relid) const;
 
 	// get perm info from m_perminfo_list by given index
 	RTEPermissionInfo *GetPermInfoByIndex(Index index);

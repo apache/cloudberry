@@ -813,13 +813,6 @@ bool TestexprIsHashable(Node *testexpr, List *param_ids);
 RTEPermissionInfo *
 GetRTEPermissionInfo(List *rteperminfos, const RangeTblEntry *rte);
 
-// returns true if relid has any parent in pg_inherits (i.e. is a partition)
-bool HasSuperclass(Oid relid);
-
-// returns the OID of relid's immediate partition parent
-// (caller must ensure HasSuperclass(relid) is true)
-Oid GetPartitionParent(Oid relid);
-
 // rewrite the attribute numbers of the Vars with the given varno in expr,
 // which are those of from_relid, into those of its partition to_relid
 List *MapPartitionVarattnos(List *expr, int varno, Oid to_relid,

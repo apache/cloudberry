@@ -448,6 +448,21 @@ public:
 		return m_context->m_distribution_hashops;
 	}
 
+	// security quals of the range table entries, indexed by the security
+	// quals ids of the table descriptors (minus 1)
+	List *
+	GetSecurityQuals() const
+	{
+		return m_context->m_security_quals;
+	}
+
+	// oids of the relations of those range table entries
+	List *
+	GetSecurityQualsRelids() const
+	{
+		return m_context->m_security_quals_relids;
+	}
+
 	// main translation routine for Query -> DXL tree
 	CDXLNode *TranslateSelectQueryToDXL();
 

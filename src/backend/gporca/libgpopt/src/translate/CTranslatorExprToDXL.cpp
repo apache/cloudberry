@@ -1368,7 +1368,10 @@ CTranslatorExprToDXL::MakeTableDescForPart(const IMDRelation *part,
 		part->RetrieveRelStorageType(),
 		root_table_desc->GetExecuteAsUserId(), root_table_desc->LockMode(),
 		root_table_desc->GetAclMode(),
-		root_table_desc->GetAssignedQueryIdForTargetRel());
+		root_table_desc->GetAssignedQueryIdForTargetRel(),
+		// the partition is scanned on behalf of the root's range table
+		// entry, so it gets the root's security quals
+		root_table_desc->GetSecurityQualsId());
 
 	for (ULONG ul = 0; ul < part->ColumnCount(); ++ul)
 	{
@@ -7761,7 +7764,8 @@ CTranslatorExprToDXL::MakeDXLTableDescr(
 	CDXLTableDescr *table_descr = GPOS_NEW(m_mp)
 		CDXLTableDescr(m_mp, mdid, pmdnameTbl, ptabdesc->GetExecuteAsUserId(),
 					   ptabdesc->LockMode(), ptabdesc->GetAclMode(),
-					   ptabdesc->GetAssignedQueryIdForTargetRel());
+					   ptabdesc->GetAssignedQueryIdForTargetRel(),
+					   ptabdesc->GetSecurityQualsId());
 
 	const ULONG ulColumns = ptabdesc->ColumnCount();
 	// translate col descriptors
