@@ -882,10 +882,39 @@ build-postgresql:
       </varlistentry>
 
       <varlistentry>
+       <term><option>--disable-plperlu-extension</option></term>
+       <listitem>
+        <para>
+         Do not install the <literal>plperlu</literal> extension files or
+         its transform extension files.  By default, these files are installed
+         when <option>--with-perl</option> is specified.  This option does not
+         disable building the <application>PL/Perl</application> language
+         module.  Some tests require these extensions and must be run with
+         the default setting.
+        </para>
+       </listitem>
+      </varlistentry>
+
+      <varlistentry>
        <term><option>--with-python</option></term>
        <listitem>
         <para>
          Build the <application>PL/Python</application> server-side language.
+        </para>
+       </listitem>
+      </varlistentry>
+
+      <varlistentry>
+       <term><option>--disable-plpythonu-extension</option></term>
+       <listitem>
+        <para>
+         Do not install the untrusted <application>PL/Python</application>
+         extension files.  This applies to <literal>plpython2u</literal> or
+         <literal>plpython3u</literal> for the selected Python version and,
+         with Python 2, <literal>plpythonu</literal>.  By default, these files
+         are installed when <option>--with-python</option> is specified.  This
+         option does not disable building the language module.  Some tests
+         require these extensions and must be run with the default setting.
         </para>
        </listitem>
       </varlistentry>
