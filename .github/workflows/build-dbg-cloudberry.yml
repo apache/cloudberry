@@ -1230,9 +1230,14 @@ jobs:
         if: success() && needs.check-skip.outputs.should_skip != 'true'
         env:
           SRC_DIR: ${{ github.workspace }}
+          BUILD_DESTINATION: /usr/local/cloudberry-db
         shell: bash {0}
         run: |
           set -o pipefail
+
+          # Grant gpadmin write access to the install directory
+          # -H follows the command-line symlink to the real directory.
+          chown -RH gpadmin:gpadmin "${BUILD_DESTINATION}/"
 
           # Initialize test status
           overall_status=0
