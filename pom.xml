@@ -119,7 +119,7 @@ code or new licensing patterns.
 
             <exclude>gpcontrib/gp_replica_check/**</exclude>
 
-            <exlucde>gpcontrib/gp_distribution_policy/**/*.source</exlucde>
+            <exclude>gpcontrib/gp_distribution_policy/**/*.source</exclude>
             <exclude>gpcontrib/gp_distribution_policy/Makefile</exclude>
             <exclude>gpcontrib/gp_distribution_policy/gp_distribution_policy.control</exclude>
 
