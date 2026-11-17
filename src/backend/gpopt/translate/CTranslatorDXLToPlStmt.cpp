@@ -651,7 +651,10 @@ CTranslatorDXLToPlStmt::TranslateDXLTblScan(
 
 		// The postgres_fdw wrapper does not support row level security. So
 		// passing only the query_quals while creating the foreign scan node.
-		//
+		// A foreign partition of a partitioned table with row level security
+		// would lose the policies: fall back.
+		CheckNoSecurityQuals(dxl_table_descr);
+
 		// BuildForeignScan internally calls build_simple_rel which looks up
 		// RTEPermissionInfo via root->parse->rteperminfos.  The RTE here was
 		// newly created by ORCA with its own perminfoindex numbering, which
@@ -686,10 +689,10 @@ CTranslatorDXLToPlStmt::TranslateDXLTblScan(
 		// quals.
 		List *security_query_quals = NIL;
 
-		// Fetching the RTE of the relation from the rewritten parse tree
-		// based on the oidRel and adding the security quals of the RTE in
+		// Adding the security quals of the RTE the scan was created for in
 		// the security_query_quals list.
-		AddSecurityQuals(oidRel, &security_query_quals, &index);
+		AddSecurityQuals(dxl_table_descr, oidRel, &security_query_quals,
+						 &index);
 
 		// The security quals should always be executed first when
 		// compared to other quals. So appending query quals to the
@@ -784,10 +787,9 @@ CTranslatorDXLToPlStmt::TranslateDXLParallelTblScan(
 	// quals.
 	List *security_query_quals = NIL;
 
-	// Fetching the RTE of the relation from the rewritten parse tree
-	// based on the oidRel and adding the security quals of the RTE in
+	// Adding the security quals of the RTE the scan was created for in
 	// the security_query_quals list.
-	AddSecurityQuals(oidRel, &security_query_quals, &index);
+	AddSecurityQuals(dxl_table_descr, oidRel, &security_query_quals, &index);
 
 	// The security quals should always be executed first when
 	// compared to other quals. So appending query quals to the
@@ -948,6 +950,7 @@ CTranslatorDXLToPlStmt::TranslateDXLIndexScan(
 	GPOS_ASSERT(dxl_table_descr->LockMode() != -1);
 	gpdb::GPDBLockRelationOid(mdid->Oid(), dxl_table_descr->LockMode());
 
+	CheckNoSecurityQuals(dxl_table_descr);
 	Index index = ProcessDXLTblDescr(dxl_table_descr, &base_table_context);
 
 	IndexScan *index_scan = nullptr;
@@ -1101,6 +1104,7 @@ CTranslatorDXLToPlStmt::TranslateDXLIndexOnlyScan(
 	const IMDRelation *md_rel = m_md_accessor->RetrieveRel(
 		physical_idx_scan_dxlop->GetDXLTableDescr()->MDId());
 
+	CheckNoSecurityQuals(table_desc);
 	Index index = ProcessDXLTblDescr(table_desc, &base_table_context);
 
 	IndexOnlyScan *index_scan = MakeNode(IndexOnlyScan);
@@ -4993,10 +4997,9 @@ CTranslatorDXLToPlStmt::TranslateDXLDynTblScan(
 	// List to hold the quals after translating filter_dxlnode node.
 	List *query_quals = NIL;
 
-	// Fetching the RTE of the relation from the rewritten parse tree
-	// based on the oidRel and adding the security quals of the RTE in
+	// Adding the security quals of the RTE the scan was created for in
 	// the security_query_quals list.
-	AddSecurityQuals(oidRel, &security_query_quals, &index);
+	AddSecurityQuals(dxl_table_descr, oidRel, &security_query_quals, &index);
 
 	TranslateProjListAndFilter(
 		project_list_dxlnode, filter_dxlnode,
@@ -5039,6 +5042,7 @@ CTranslatorDXLToPlStmt::TranslateDXLDynIdxOnlyScan(
 		dyn_index_only_scan_dxlop->GetDXLTableDescr();
 	const IMDRelation *md_rel = m_md_accessor->RetrieveRel(table_desc->MDId());
 
+	CheckNoSecurityQuals(table_desc);
 	Index index = ProcessDXLTblDescr(table_desc, &base_table_context);
 
 	DynamicIndexOnlyScan *dyn_idx_only_scan = MakeNode(DynamicIndexOnlyScan);
@@ -5121,6 +5125,7 @@ CTranslatorDXLToPlStmt::TranslateDXLDynIdxScan(
 	const CDXLTableDescr *table_desc = dyn_index_scan_dxlop->GetDXLTableDescr();
 	const IMDRelation *md_rel = m_md_accessor->RetrieveRel(table_desc->MDId());
 
+	CheckNoSecurityQuals(table_desc);
 	Index index = ProcessDXLTblDescr(table_desc, &base_table_context);
 
 	DynamicIndexScan *dyn_idx_only_scan = MakeNode(DynamicIndexScan);
@@ -5224,6 +5229,7 @@ CTranslatorDXLToPlStmt::TranslateDXLDynForeignScan(
 	// translation context for column mappings in the base relation
 	CDXLTranslateContextBaseTable base_table_context(m_mp);
 
+	CheckNoSecurityQuals(dyn_foreign_scan_dxlop->GetDXLTableDescr());
 	Index index = ProcessDXLTblDescr(dyn_foreign_scan_dxlop->GetDXLTableDescr(),
 									 &base_table_context);
 	// rte of root dynamic scan
@@ -6418,181 +6424,69 @@ CTranslatorDXLToPlStmt::TranslateProjListAndFilter(
 //		CTranslatorDXLToPlStmt::AddSecurityQuals
 //
 //	@doc:
-//		This method is used to fetch the range table entry from the rewritten
-//		parse tree based on the relId and add it's security quals in the quals
-//		list. It also modifies the varno of the VAR node present in the
-//		security quals and assigns it the value of the index i.e. the
-//		position of this rte at m_dxl_to_plstmt_context->m_rtable_entries_list
-//		(shortened as "rte_list")
+//		Add the security quals of the range table entry the scan of relId
+//		was created for to the quals list. The translator from the query
+//		registered them under the security quals id of the table descriptor;
+//		the relation's oid can't be used to find them, since the query can
+//		refer to it more than once with different security quals.
+//
+//		The varno of the Vars in the quals is set to index, the position of
+//		the scan's RTE in m_dxl_to_plstmt_context->m_rtable_entries_list.
 //
 //---------------------------------------------------------------------------
 void
-CTranslatorDXLToPlStmt::AddSecurityQuals(OID relId, List **qual, Index *index)
+CTranslatorDXLToPlStmt::AddSecurityQuals(const CDXLTableDescr *table_descr,
+										 OID relId, List **qual, Index *index)
 {
-	SContextSecurityQuals ctxt_security_quals(relId);
+	OID quals_relid = InvalidOid;
+	List *security_quals = m_dxl_to_plstmt_context->GetSecurityQuals(
+		table_descr->GetSecurityQualsId(), &quals_relid);
 
-	// Find the RTE in the parse tree based on the relId and add the security
-	// quals of that RTE to the m_security_quals list present in
-	// ctxt_security_quals struct.
-	BOOL found = FetchSecurityQuals(m_dxl_to_plstmt_context->m_orig_query,
-									&ctxt_security_quals);
-
-	// The partitions of a partitioned table that are scanned one by one, by
-	// an Append of (Parallel) Seq Scans, have no RTE in the parse tree: they
-	// are scanned on behalf of the RTE of the partitioned table, which
-	// carries the security quals. Walk up the partition ancestors until we
-	// find the one with an RTE.
-	OID quals_relid = relId;
-	while (!found && gpdb::HasSuperclass(quals_relid))
-	{
-		quals_relid = gpdb::GetPartitionParent(quals_relid);
-		SContextSecurityQuals anc_ctxt(quals_relid);
-		found =
-			FetchSecurityQuals(m_dxl_to_plstmt_context->m_orig_query, &anc_ctxt);
-		ctxt_security_quals.m_security_quals = anc_ctxt.m_security_quals;
-	}
-
-	if (NIL == ctxt_security_quals.m_security_quals)
+	if (NIL == security_quals)
 	{
 		return;
 	}
 
-	// Copy the security quals before changing their Vars in place: they
-	// belong to the parse tree, and the scans of all the partitions of a
-	// partitioned table share them.
-	List *quals_copy =
-		(List *) gpdb::CopyObject(ctxt_security_quals.m_security_quals);
+	// Copy the quals before changing their Vars in place: every scan made
+	// for the same range table entry shares them, e.g. the scans of the
+	// partitions of a partitioned table.
+	List *quals_copy = (List *) gpdb::CopyObject(security_quals);
 
-	// The varno of the columns related to a particular table is different in
-	// the rewritten parse tree and the planned statement tree. In planned
-	// statement the varno of the columns is based on the index of the RTE
-	// at m_dxl_to_plstmt_context->m_rtable_entries_list. Since we are adding
-	// the security quals from the rewritten parse tree to planned statement
-	// tree we need to modify the varno of all the VAR nodes present in the
-	// security quals and assign it equal to index of the RTE in the rte_list.
 	SetSecurityQualsVarnoWalker((Node *) quals_copy, index);
 
-	// The security quals of a partition ancestor refer to the attribute
-	// numbers of the ancestor. A partition can have its columns at other
-	// attribute numbers, e.g. one that was attached, or whose parent had a
-	// column dropped before the partition was created.
+	// A partition scanned on behalf of the range table entry of a
+	// partitioned table gets its security quals. They refer to the
+	// attribute numbers of the partitioned table; a partition can have its
+	// columns at other attribute numbers, e.g. one that was attached.
 	if (quals_relid != relId)
 	{
 		quals_copy =
 			gpdb::MapPartitionVarattnos(quals_copy, *index, relId, quals_relid);
 	}
 
-	// Adding the security quals to the qual list
 	*qual = gpdb::ListConcat(*qual, quals_copy);
 }
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CTranslatorDXLToPlStmt::FetchSecurityQuals
+//		CTranslatorDXLToPlStmt::CheckNoSecurityQuals
 //
 //	@doc:
-//		This method is used to walk the entire rewritten parse tree and
-//		search for a range table entry whose relid is equal to the m_relId
-//		field of ctxt_security_quals struct. On finding the RTE this method
-//		will also add the security quals present in it to the
-//		m_security_quals list of ctxt_security_quals struct.
+//		ORCA doesn't consider index paths for relations with security quals,
+//		and only table scans add them; foreign scans pass only the query's
+//		quals to the FDW. Raise an exception, so that we fall back to
+//		planner, rather than scan such a relation without its policies.
 //
 //---------------------------------------------------------------------------
-BOOL
-CTranslatorDXLToPlStmt::FetchSecurityQuals(
-	Query *parsetree, SContextSecurityQuals *ctxt_security_quals)
+void
+CTranslatorDXLToPlStmt::CheckNoSecurityQuals(const CDXLTableDescr *table_descr)
 {
-	ListCell *lc;
-
-	// Iterate through all the range table entries present in the the rtable
-	// of the parsetree and search for a range table entry whose relid is
-	// equal to ctxt_security_quals->m_relId. If found then add the security
-	// quals of that RTE in the ctxt_security_quals->m_security_quals list.
-	// If the range table entry contains a subquery then recurse through that
-	// subquery and continue the search.
-	foreach (lc, parsetree->rtable)
+	if (NO_SECURITY_QUALS_ID != table_descr->GetSecurityQualsId())
 	{
-		RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
-		if (RTE_RELATION == rte->rtekind &&
-			rte->relid == ctxt_security_quals->m_relId)
-		{
-			ctxt_security_quals->m_security_quals = gpdb::ListConcat(
-				ctxt_security_quals->m_security_quals, rte->securityQuals);
-			return true;
-		}
-
-		if ((RTE_SUBQUERY == rte->rtekind ||
-			 RTE_TABLEFUNCTION == rte->rtekind) &&
-			FetchSecurityQuals(rte->subquery, ctxt_security_quals))
-		{
-			return true;
-		}
+		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+				   GPOS_WSZ_LIT("Scan of a relation with security quals "
+								"that can't apply them"));
 	}
-
-	// Recurse into ctelist
-	foreach (lc, parsetree->cteList)
-	{
-		CommonTableExpr *cte = lfirst_node(CommonTableExpr, lc);
-
-		if (FetchSecurityQuals(castNode(Query, cte->ctequery),
-							   ctxt_security_quals))
-		{
-			return true;
-		}
-	}
-
-	// Recurse into sublink subqueries. We have already recursed the sublink
-	// subqueries present in the rtable and ctelist. QTW_IGNORE_RC_SUBQUERIES
-	// flag indicates to avoid recursing subqueries present in rtable and
-	// ctelist
-	if (parsetree->hasSubLinks)
-	{
-		return gpdb::WalkQueryTree(
-			parsetree,
-			(bool (*)(Node *, void *)) CTranslatorDXLToPlStmt::FetchSecurityQualsWalker,
-			ctxt_security_quals, QTW_IGNORE_RC_SUBQUERIES);
-	}
-
-	return false;
-}
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CTranslatorDXLToPlStmt::FetchSecurityQualsWalker
-//
-//	@doc:
-//		This method is a walker to recurse into SUBLINK nodes and search for
-//		an RTE having relid equal to m_relId field of ctxt_security_quals struct
-//
-//---------------------------------------------------------------------------
-BOOL
-CTranslatorDXLToPlStmt::FetchSecurityQualsWalker(
-	Node *node, SContextSecurityQuals *ctxt_security_quals)
-{
-	if (nullptr == node)
-	{
-		return false;
-	}
-
-	// If the node is a SUBLINK, fetch its subselect node and start the
-	// search again for the RTE based on the m_relId field of
-	// ctxt_security_quals struct. If we found the RTE then the flag
-	// m_found_rte would have been set to true. In that case returning true
-	// which indicates to abort the walk immediately.
-	if (IsA(node, SubLink))
-	{
-		SubLink *sub = (SubLink *) node;
-
-		if (FetchSecurityQuals(castNode(Query, sub->subselect),
-							   ctxt_security_quals))
-		{
-			return true;
-		}
-	}
-
-	return gpdb::WalkExpressionTree(
-		node, (bool (*)(Node *, void *)) CTranslatorDXLToPlStmt::FetchSecurityQualsWalker,
-		ctxt_security_quals);
 }
 
 //-----------------------------------------------------------------------------
@@ -7117,6 +7011,7 @@ CTranslatorDXLToPlStmt::TranslateDXLBitmapTblScan(
 	GPOS_ASSERT(table_descr->LockMode() != -1);
 	gpdb::GPDBLockRelationOid(mdid->Oid(), table_descr->LockMode());
 
+	CheckNoSecurityQuals(table_descr);
 	Index index = ProcessDXLTblDescr(table_descr, &base_table_context);
 
 	DynamicBitmapHeapScan *dscan;

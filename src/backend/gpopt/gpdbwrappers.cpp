@@ -2803,28 +2803,6 @@ gpdb::GetRTEPermissionInfo(List *rteperminfos, const RangeTblEntry *rte)
 	GP_WRAP_END;
 }
 
-bool
-gpdb::HasSuperclass(Oid relid)
-{
-	GP_WRAP_START;
-	{
-		return has_superclass(relid);
-	}
-	GP_WRAP_END;
-	return false;
-}
-
-Oid
-gpdb::GetPartitionParent(Oid relid)
-{
-	GP_WRAP_START;
-	{
-		return get_partition_parent(relid, false);
-	}
-	GP_WRAP_END;
-	return InvalidOid;
-}
-
 List *
 gpdb::MapPartitionVarattnos(List *expr, int varno, Oid to_relid,
 							Oid from_relid)

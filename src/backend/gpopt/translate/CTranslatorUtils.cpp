@@ -116,8 +116,8 @@ CTranslatorUtils::GetTableDescr(CMemoryPool *mp, CMDAccessor *md_accessor,
 								const RangeTblEntry *rte,
 								const RTEPermissionInfo *perminfo,
 								ULONG assigned_query_id_for_target_rel,
-								BOOL *is_distributed_table	// output
-)
+								BOOL *is_distributed_table,	 // output
+								ULONG security_quals_id)
 {
 	// generate an MDId for the table desc.
 	OID rel_oid = rte->relid;
@@ -135,7 +135,7 @@ CTranslatorUtils::GetTableDescr(CMemoryPool *mp, CMDAccessor *md_accessor,
 	ULONG required_perms = static_cast<ULONG>(perminfo->requiredPerms);
 	CDXLTableDescr *table_descr = GPOS_NEW(mp) CDXLTableDescr(
 		mp, mdid, table_mdname, perminfo->checkAsUser, rte->rellockmode,
-		required_perms, assigned_query_id_for_target_rel);
+		required_perms, assigned_query_id_for_target_rel, security_quals_id);
 
 	const ULONG len = rel->ColumnCount();
 

@@ -63,6 +63,13 @@ private:
 	// What operator classes are used in the distribution keys?
 	DistributionHashOpsKind m_distribution_hashops;
 
+	// security quals of the range table entries that have some, and the
+	// oids of their relations, in the order the entries were translated.
+	// The position in these lists, starting at 1, is the security quals id
+	// of the table descriptors created for the entries.
+	List *m_security_quals;
+	List *m_security_quals_relids;
+
 public:
 	// ctor
 	CContextQueryToDXL(CMemoryPool *mp);
@@ -71,6 +78,10 @@ public:
 	~CContextQueryToDXL();
 
 	ULONG GetNextQueryId();
+
+	// register the security quals of a range table entry of relid, and
+	// return their id
+	ULONG AddSecurityQuals(OID relid, List *security_quals);
 };
 }  // namespace gpdxl
 #endif	// GPDXL_CContextQueryToDXL_H

@@ -17,6 +17,8 @@ extern "C" {
 }
 
 #include "gpopt/translate/CContextQueryToDXL.h"
+
+#include "gpopt/gpdbwrappers.h"
 #include "gpopt/translate/CTranslatorUtils.h"
 #include "naucrates/dxl/CIdGenerator.h"
 
@@ -25,7 +27,9 @@ using namespace gpdxl;
 CContextQueryToDXL::CContextQueryToDXL(CMemoryPool *mp)
 	: m_mp(mp),
 	  m_has_distributed_tables(false),
-	  m_distribution_hashops(DistrHashOpsNotDeterminedYet)
+	  m_distribution_hashops(DistrHashOpsNotDeterminedYet),
+	  m_security_quals(NIL),
+	  m_security_quals_relids(NIL)
 {
 	// map that stores gpdb att to optimizer col mapping
 	m_colid_counter = GPOS_NEW(mp) CIdGenerator(GPDXL_COL_ID_START);
@@ -44,4 +48,18 @@ ULONG
 CContextQueryToDXL::GetNextQueryId()
 {
 	return m_queryid_counter->next_id();
+}
+
+ULONG
+CContextQueryToDXL::AddSecurityQuals(OID relid, List *security_quals)
+{
+	GPOS_ASSERT(NIL != security_quals);
+
+	// The translation may work on a mutated copy of the query. Copy the
+	// quals, so that they outlive it until the plan is translated.
+	m_security_quals = gpdb::LAppend(
+		m_security_quals, gpdb::CopyObject(security_quals));
+	m_security_quals_relids = gpdb::LAppendOid(m_security_quals_relids, relid);
+
+	return gpdb::ListLength(m_security_quals);
 }

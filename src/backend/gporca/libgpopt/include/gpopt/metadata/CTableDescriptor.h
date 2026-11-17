@@ -97,6 +97,10 @@ private:
 	// to the target (result) relation it has value UNASSIGNED_QUERYID
 	ULONG m_assigned_query_id_for_target_rel;
 
+	// identifier of the security quals of the range table entry the
+	// descriptor was created for, see CDXLTableDescr::m_security_quals_id
+	ULONG m_security_quals_id;
+
 public:
 	CTableDescriptor(const CTableDescriptor &) = delete;
 
@@ -106,7 +110,8 @@ public:
 					 IMDRelation::Ereldistrpolicy rel_distr_policy,
 					 IMDRelation::Erelstoragetype erelstoragetype,
 					 ULONG ulExecuteAsUser, INT lockmode, ULONG acl_mode,
-					 ULONG assigned_query_id_for_target_rel);
+					 ULONG assigned_query_id_for_target_rel,
+					 ULONG security_quals_id = 0);
 
 	// dtor
 	~CTableDescriptor() override;
@@ -250,6 +255,12 @@ public:
 	GetAssignedQueryIdForTargetRel() const
 	{
 		return m_assigned_query_id_for_target_rel;
+	}
+
+	ULONG
+	GetSecurityQualsId() const
+	{
+		return m_security_quals_id;
 	}
 
 	static ULONG HashValue(const CTableDescriptor *ptabdesc);

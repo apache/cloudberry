@@ -39,7 +39,8 @@ CTableDescriptor::CTableDescriptor(
 	BOOL convert_hash_to_random, IMDRelation::Ereldistrpolicy rel_distr_policy,
 	IMDRelation::Erelstoragetype erelstoragetype,
 	ULONG ulExecuteAsUser,
-	INT lockmode, ULONG acl_mode, ULONG assigned_query_id_for_target_rel)
+	INT lockmode, ULONG acl_mode, ULONG assigned_query_id_for_target_rel,
+	ULONG security_quals_id)
 	: m_mp(mp),
 	  m_mdid(mdid),
 	  m_name(mp, name),
@@ -54,7 +55,8 @@ CTableDescriptor::CTableDescriptor(
 	  m_execute_as_user_id(ulExecuteAsUser),
 	  m_lockmode(lockmode),
 	  m_acl_mode(acl_mode),
-	  m_assigned_query_id_for_target_rel(assigned_query_id_for_target_rel)
+	  m_assigned_query_id_for_target_rel(assigned_query_id_for_target_rel),
+	  m_security_quals_id(security_quals_id)
 {
 	GPOS_ASSERT(nullptr != mp);
 	GPOS_ASSERT(mdid->IsValid());
@@ -333,8 +335,12 @@ BOOL
 CTableDescriptor::Equals(const CTableDescriptor *ptabdescLeft,
 						 const CTableDescriptor *ptabdescRight)
 {
+	// two references to a relation with different security quals don't
+	// produce the same rows
 	return ptabdescLeft->MDId()->Equals(ptabdescRight->MDId()) &&
-		   ptabdescLeft->Name().Equals(ptabdescRight->Name());
+		   ptabdescLeft->Name().Equals(ptabdescRight->Name()) &&
+		   ptabdescLeft->GetSecurityQualsId() ==
+			   ptabdescRight->GetSecurityQualsId();
 }
 
 
