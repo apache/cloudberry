@@ -142,7 +142,8 @@ private:
 	static PlannedStmt *ConvertToPlanStmtFromDXL(
 		CMemoryPool *mp, CMDAccessor *md_accessor, const Query *orig_query,
 		const CDXLNode *dxlnode, bool can_set_tag,
-		DistributionHashOpsKind distribution_hashops);
+		DistributionHashOpsKind distribution_hashops, List *security_quals,
+		List *security_quals_relids);
 
 	// load search strategy from given path
 	static CSearchStageArray *LoadSearchStrategy(CMemoryPool *mp, char *path);

@@ -3409,10 +3409,23 @@ CTranslatorQueryToDXL::TranslateRTEToDXLLogicalGet(const RangeTblEntry *rte,
 		query_id_for_target_rel = m_query_id;
 	}
 
+	// The security quals are not translated. The translator to the plan adds
+	// them to the scans of the relation, and finds them with the id in the
+	// table descriptor: the query can refer to the relation more than once,
+	// with different security quals, e.g. once through a view whose owner
+	// bypasses row level security.
+	ULONG security_quals_id = NO_SECURITY_QUALS_ID;
+	if (rteHasSecurityQuals)
+	{
+		security_quals_id =
+			m_context->AddSecurityQuals(rte->relid, rte->securityQuals);
+	}
+
 	// construct table descriptor for the scan node from the range table entry
 	CDXLTableDescr *dxl_table_descr = CTranslatorUtils::GetTableDescr(
 		m_mp, m_md_accessor, m_context->m_colid_counter, rte, perminfo,
-		query_id_for_target_rel, &m_context->m_has_distributed_tables);
+		query_id_for_target_rel, &m_context->m_has_distributed_tables,
+		security_quals_id);
 
 	CDXLLogicalGet *dxl_op = nullptr;
 	const IMDRelation *md_rel =

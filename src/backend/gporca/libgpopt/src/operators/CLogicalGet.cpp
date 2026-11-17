@@ -160,7 +160,9 @@ CLogicalGet::Matches(COperator *pop) const
 
 	return Ptabdesc()->MDId()->Equals(popGet->Ptabdesc()->MDId()) &&
 		   m_pdrgpcrOutput->Equals(popGet->PdrgpcrOutput()) &&
-		   m_has_security_quals == popGet->HasSecurityQuals();
+		   m_has_security_quals == popGet->HasSecurityQuals() &&
+		   Ptabdesc()->GetSecurityQualsId() ==
+			   popGet->Ptabdesc()->GetSecurityQualsId();
 }
 
 //---------------------------------------------------------------------------

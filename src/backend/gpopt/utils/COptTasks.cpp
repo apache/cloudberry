@@ -305,7 +305,8 @@ PlannedStmt *
 COptTasks::ConvertToPlanStmtFromDXL(
 	CMemoryPool *mp, CMDAccessor *md_accessor, const Query *orig_query,
 	const CDXLNode *dxlnode, bool can_set_tag,
-	DistributionHashOpsKind distribution_hashops)
+	DistributionHashOpsKind distribution_hashops, List *security_quals,
+	List *security_quals_relids)
 {
 	GPOS_ASSERT(nullptr != md_accessor);
 	GPOS_ASSERT(nullptr != dxlnode);
@@ -321,6 +322,8 @@ COptTasks::ConvertToPlanStmtFromDXL(
 	CContextDXLToPlStmt dxl_to_plan_stmt_ctxt(
 		mp, &plan_id_generator, &motion_id_generator, &param_id_generator,
 		distribution_hashops);
+	dxl_to_plan_stmt_ctxt.SetSecurityQuals(security_quals,
+										   security_quals_relids);
 
 	// translate DXL -> PlannedStmt
 	CTranslatorDXLToPlStmt dxl_to_plan_stmt_translator(
@@ -1015,7 +1018,9 @@ COptTasks::OptimizeTask(void *ptr)
 					(PlannedStmt *) gpdb::CopyObject(ConvertToPlanStmtFromDXL(
 						mp, &mda, opt_ctxt->m_query, plan_dxl,
 						opt_ctxt->m_query->canSetTag,
-						query_to_dxl_translator->GetDistributionHashOpsKind()));
+						query_to_dxl_translator->GetDistributionHashOpsKind(),
+						query_to_dxl_translator->GetSecurityQuals(),
+						query_to_dxl_translator->GetSecurityQualsRelids()));
 			}
 
 			CStatisticsConfig *stats_conf = optimizer_config->GetStatsConf();
