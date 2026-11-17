@@ -2606,6 +2606,10 @@ WalSndLoop(WalSndSendDataCallback send_data)
 						(errmsg_internal("\"%s\" has now caught up with upstream server",
 										 application_name)));
 				WalSndSetState(WALSNDSTATE_STREAMING);
+#ifdef FAULT_INJECTOR
+				if (MyWalSnd->is_for_gp_walreceiver)
+					SIMPLE_FAULT_INJECTOR("wal_sender_after_streaming");
+#endif
 			}
 
 			/*
