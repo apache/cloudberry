@@ -1427,7 +1427,7 @@ external_getdata_callback(void *outbuf, int minread, int maxread, void *extra)
 {
 	FileScanDesc scan = (FileScanDesc) extra;
 	MemoryContext oldcontext;
-	int			bytesread;
+	int			bytesread = 0;
 
 	oldcontext = MemoryContextSwitchTo(scan->fs_pstate->copycontext);
 	PG_TRY();
