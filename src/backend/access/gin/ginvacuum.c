@@ -692,6 +692,7 @@ ginvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 	BlockNumber npages,
 				blkno;
 	BlockNumber totFreePages;
+	BlockNumber totDeletedPages;
 	GinState	ginstate;
 	GinStatsData idxStat;
 
@@ -743,6 +744,7 @@ ginvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 		UnlockRelationForExtension(index, ExclusiveLock);
 
 	totFreePages = 0;
+	totDeletedPages = 0;
 
 	for (blkno = GIN_ROOT_BLKNO; blkno < npages; blkno++)
 	{
@@ -761,6 +763,12 @@ ginvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 			Assert(blkno != GIN_ROOT_BLKNO);
 			RecordFreeIndexPage(index, blkno);
 			totFreePages++;
+			totDeletedPages++;
+		}
+		else if (GinPageIsDeleted(page))
+		{
+			/* Include pages still retained by an older snapshot. */
+			totDeletedPages++;
 		}
 		else if (GinPageIsData(page))
 		{
@@ -784,6 +792,8 @@ ginvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 	/* Finally, vacuum the FSM */
 	IndexFreeSpaceMapVacuum(info->index);
 
+	/* Both are whole-index populations; newly deleted work stays cumulative. */
+	stats->pages_deleted = totDeletedPages;
 	stats->pages_free = totFreePages;
 
 	if (needLock)
