@@ -481,7 +481,7 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 
 	/* Sample the resource usage of the phase for the extended statistics */
 	extcounters = extvac_stats_start(rel, verbose);
-	if (verbose)
+	if (vacrelstats->extstats != NULL)
 		index_start = vacrelstats->extstats->indexes;
 
 	/*
@@ -497,7 +497,8 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 		/* Do nothing here, we will launch the stages later */
 		Assert(ao_vacuum_phase == 0);
 
-	if (verbose && ao_vacuum_phase != 0)
+	if (vacrelstats->extstats != NULL && extcounters != NULL &&
+		ao_vacuum_phase != 0)
 	{
 		extvac_stats_end(rel, extcounters, &extcounters->report.common);
 		if (Gp_role != GP_ROLE_DISPATCH)
@@ -635,7 +636,6 @@ ao_measure_index_resources(Relation indrel, LVExtStatCounters *counters,
 	extvac_stats_end(indrel, counters, &report->common);
 	if (verbose)
 		extvac_stats_log(indrel, _("AO index vacuum"), &report->common);
-	report->type = PGSTAT_EXTVAC_INDEX;
 
 	ao_accum_resources(&vacrelstats->extstats->indexes, &report->common, false);
 	pfree(counters);
