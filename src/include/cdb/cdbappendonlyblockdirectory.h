@@ -109,7 +109,6 @@ typedef struct AppendOnlyBlockDirectory
 	CatalogIndexState indinfo;
 	int numColumnGroups;
 	bool isAOCol;
-	bool *proj; /* projected columns, used only if isAOCol = TRUE */
 
 	MemoryContext memoryContext;
 	
@@ -144,6 +143,9 @@ typedef struct AppendOnlyBlockDirectory
 	 * may need to consider using this cache.
 	 */
 	int cached_mpentry_num;
+	/* Column numbers (zero based) of columns we need to fetch */
+	AttrNumber		   *proj_atts;
+	AttrNumber			num_proj_atts;
 
 }	AppendOnlyBlockDirectory;
 
@@ -205,7 +207,14 @@ extern bool AppendOnlyBlockDirectory_GetEntry(
 	AppendOnlyBlockDirectory		*blockDirectory,
 	AOTupleId 						*aoTupleId,
 	int                             columnGroupNo,
-	AppendOnlyBlockDirectoryEntry	*directoryEntry);
+	AppendOnlyBlockDirectoryEntry	*directoryEntry,
+	int64 				*attnum_to_rownum);
+extern bool AppendOnlyBlockDirectory_GetEntryForPartialScan(
+	AppendOnlyBlockDirectory		*blockDirectory,
+	BlockNumber 					blkno,
+	int                             columnGroupNo,
+	AppendOnlyBlockDirectoryEntry	*dirEntry,
+	int 							*fsInfoIdx);
 extern int64 AOBlkDirScan_GetRowNum(
 	AOBlkDirScan					blkdirscan,
 	int								targsegno,
@@ -215,6 +224,9 @@ extern int64 AOBlkDirScan_GetRowNum(
 extern bool AppendOnlyBlockDirectory_CoversTuple(
 	AppendOnlyBlockDirectory		*blockDirectory,
 	AOTupleId 						*aoTupleId);
+extern bool blkdir_entry_exists(AppendOnlyBlockDirectory *blockDirectory,
+	AOTupleId 				*aoTupleId,
+	int 					columnGroupNo);
 extern void AppendOnlyBlockDirectory_Init_forInsert(
 	AppendOnlyBlockDirectory *blockDirectory,
 	Snapshot appendOnlyMetaDataSnapshot,
@@ -237,7 +249,13 @@ extern void AppendOnlyBlockDirectory_Init_forUniqueChecks(AppendOnlyBlockDirecto
 														  Relation aoRel,
 														  int numColumnGroups,
 														  Snapshot snapshot);
-extern void AppendOnlyBlockDirectory_Init_addCol(
+/*
+ * GPDB_PORT: upstream af8b70021b also adds
+ * AppendOnlyBlockDirectory_Init_forIndexOnlyScan() here.  cbdb has its own AO
+ * index-only-scan implementation, so only the addCol -> writeCols rename is
+ * taken.
+ */
+extern void AppendOnlyBlockDirectory_Init_writeCols(
 	AppendOnlyBlockDirectory *blockDirectory,
 	Snapshot appendOnlyMetaDataSnapshot,
 	FileSegInfo *segmentFileInfo,
@@ -245,24 +263,27 @@ extern void AppendOnlyBlockDirectory_Init_addCol(
 	int segno,
 	int numColumnGroups,
 	bool isAOCol);
-extern bool AppendOnlyBlockDirectory_InsertEntry(
-	AppendOnlyBlockDirectory *blockDirectory,
-	int columnGroupNo,
-	int64 firstRowNum,
-	int64 fileOffset,
-	int64 rowCount,
-	bool addColAction);
+extern bool
+AppendOnlyBlockDirectory_InsertEntry(AppendOnlyBlockDirectory *blockDirectory,
+									 int columnGroupNo,
+									 int64 firstRowNum,
+									 int64 fileOffset,
+									 int64 rowCount);
+extern void
+AppendOnlyBlockDirectory_DeleteSegmentFile(AppendOnlyBlockDirectory *blockDirectory,
+										   int columnGroupNo,
+										   int segno,
+										   Snapshot snapshot);
 extern void AppendOnlyBlockDirectory_End_forInsert(
 	AppendOnlyBlockDirectory *blockDirectory);
 extern void AppendOnlyBlockDirectory_End_forSearch(
 	AppendOnlyBlockDirectory *blockDirectory);
-extern void AppendOnlyBlockDirectory_End_addCol(
-	AppendOnlyBlockDirectory *blockDirectory);
-extern void AppendOnlyBlockDirectory_DeleteSegmentFile(
-	Relation aoRel,
-		Snapshot snapshot,
-		int segno,
-		int columnGroupNo);
+extern void AppendOnlyBlockDirectory_End_writeCols(
+	AppendOnlyBlockDirectory *blockDirectory, List *newvals);
+extern void
+AppendOnlyBlockDirectory_DeleteSegmentFiles(Oid blkdirrelid,
+											Snapshot snapshot,
+											int segno);
 extern void AppendOnlyBlockDirectory_End_forUniqueChecks(
 	AppendOnlyBlockDirectory *blockDirectory);
 extern void AppendOnlyBlockDirectory_End_forSearch_InSequence(
@@ -272,7 +293,6 @@ extern void AppendOnlyBlockDirectory_InsertPlaceholder(AppendOnlyBlockDirectory 
 												  int64 firstRowNum,
 												  int64 fileOffset,
 												  int columnGroupNo);
-
 /*
  * AppendOnlyBlockDirectory_UniqueCheck
  *

@@ -602,14 +602,15 @@ static bool
 check_splitupdate(List *tlist, Index result_relation, Relation rel)
 {
 	ListCell   *lc;
-	int			attrno;
 	Bitmapset  *changed_cols = NULL;
+	GpPolicy   *targetPolicy = rel->rd_cdbpolicy;
+
+	if (targetPolicy == NULL || targetPolicy->ptype != POLICYTYPE_PARTITIONED)
+		return false;
 
 	foreach(lc, tlist)
 	{
 		TargetEntry *tle = (TargetEntry *) lfirst(lc);
-		attrno = tle->resno;
-
 		if (tle->resjunk)
 			continue;
 
@@ -622,6 +623,7 @@ check_splitupdate(List *tlist, Index result_relation, Relation rel)
 
 		{
 			bool		col_changed = true;
+			int			attrno = tle->resno;
 
 			/*
 			 * The column is unchanged, if the new value is a Var that refers
@@ -645,29 +647,20 @@ check_splitupdate(List *tlist, Index result_relation, Relation rel)
 	 * If an UPDATE can move the tuples from one segment to another, we will
 	 * need to create a Split Update node for it. The node is created later
 	 * in the planning.
+	 * Was any distribution key column among the changed columns?
 	 */
+	for (int i = 0; i < targetPolicy->nattrs; i++)
 	{
-		GpPolicy   *targetPolicy;
-		bool		key_col_updated = false;
-
-		/* Was any distribution key column among the changed columns? */
-		targetPolicy = GpPolicyFetch(RelationGetRelid(rel));
-		if (targetPolicy->ptype == POLICYTYPE_PARTITIONED)
+		if (bms_is_member(targetPolicy->attrs[i], changed_cols))
 		{
-			int			i;
-
-			for (i = 0; i < targetPolicy->nattrs; i++)
-			{
-				if (bms_is_member(targetPolicy->attrs[i], changed_cols))
-				{
-					key_col_updated = true;
-					break;
-				}
-			}
+			bms_free(changed_cols);
+			return true;
 		}
-		bms_free(changed_cols);
-		return key_col_updated;
 	}
+
+	bms_free(changed_cols);
+
+	return false;
 }
 
 /*
