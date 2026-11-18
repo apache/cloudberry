@@ -88,21 +88,7 @@ typedef struct PgStat_FunctionCounts
 	instr_time	self_time;
 } PgStat_FunctionCounts;
 
-/*
- * Working state needed to accumulate per-function-call timing statistics.
- */
-/*
- * Resource measurements collected during VACUUM.
- * Type of entry: table (heap), index, or database aggregate.
- */
-typedef enum ExtVacReportType
-{
-	PGSTAT_EXTVAC_INVALID = 0,
-	PGSTAT_EXTVAC_TABLE = 1,
-	PGSTAT_EXTVAC_INDEX = 2,
-	PGSTAT_EXTVAC_DB = 3,
-}			ExtVacReportType;
-
+/* Resource measurements collected during VACUUM. */
 typedef struct PgStat_CommonCounts
 {
 	int64		total_blks_read;
@@ -121,9 +107,11 @@ typedef struct PgStat_CommonCounts
 typedef struct PgStat_VacuumRelationCounts
 {
 	PgStat_CommonCounts common;
-	ExtVacReportType type;
 }			PgStat_VacuumRelationCounts;
 
+/*
+ * Working state needed to accumulate per-function-call timing statistics.
+ */
 typedef struct PgStat_FunctionCallUsage
 {
 	/* Link to function's hashtable entry (must still be there at exit!) */

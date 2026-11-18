@@ -883,7 +883,6 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 							  indstats->status == PARALLEL_INDVAC_STATUS_NEED_CLEANUP ?
 							  _("index cleanup") : _("index bulk delete"),
 							  &extVacReport->common);
-		extVacReport->type = PGSTAT_EXTVAC_INDEX;
 		pfree(extVacCounters);
 	}
 
