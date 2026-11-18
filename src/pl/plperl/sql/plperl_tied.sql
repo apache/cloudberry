@@ -2,7 +2,9 @@
 -- Tie::Hash and Tie::Array; some popular platforms don't have those
 -- in their base Perl installations.
 
-DO $$
+-- GPDB: triggers run on the segments, which have their own Perl interpreters,
+-- so the classes must be defined there too, not only on the coordinator.
+CREATE FUNCTION tied_define_classes() RETURNS void AS $$
 {
 	package PLPerlTiedHash;
 	sub TIEHASH  { bless {}, $_[0] }
@@ -28,6 +30,8 @@ DO $$
 	                  unless ${$_[0]}++; 'outer' }
 }
 $$ LANGUAGE plperl;
+SELECT tied_define_classes();
+SELECT count(*) > 0 FROM (SELECT tied_define_classes() FROM gp_dist_random('gp_id')) s;
 
 CREATE FUNCTION tied_setof() RETURNS SETOF text AS $$
 	my @a;
@@ -130,7 +134,7 @@ INSERT INTO tied_trigger_test (i, v) VALUES (1, 'orig');
 SELECT i, v FROM tied_trigger_test;
 
 -- Verify that we can cope with errors thrown within get magic.
-DO $$
+CREATE OR REPLACE FUNCTION tied_define_classes() RETURNS void AS $$
 {
 	package PLPerlTiedHash;
 	sub TIEHASH  { bless {}, $_[0] }
@@ -151,6 +155,8 @@ DO $$
 	sub FETCH     { die("tied scalar fetch failure"); ${$_[0]} }
 }
 $$ LANGUAGE plperl;
+SELECT tied_define_classes();
+SELECT count(*) > 0 FROM (SELECT tied_define_classes() FROM gp_dist_random('gp_id')) s;
 
 SELECT * FROM tied_setof();
 SELECT tied_scalar();

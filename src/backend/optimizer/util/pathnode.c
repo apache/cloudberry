@@ -2097,13 +2097,17 @@ set_append_path_locus(PlannerInfo *root, Path *pathnode, RelOptInfo *rel,
 												  NULL,		/* outer_relids */
 												  NULL);	/* nullable_relids */
 
+				/*
+				 * The filter Result must retain outer rels required by its
+				 * subpath.
+				 */
 				subpath = (Path *) create_projection_path_with_quals(
 					root,
 					subpath->parent,
 					subpath,
 					subpath->pathtarget,
 					list_make1(restrict_info),
-					false);
+					true);
 
 				/*
 				 * We use the skill of Result plannode with one time filter

@@ -118,10 +118,22 @@
 2: abort;
 2: checkpoint;
 
+-- The old sender can still report streaming after the standby restarts.
+-- This fault is reached only when the new sender leaves catchup.
+2: select gp_inject_fault('wal_sender_after_streaming', 'skip', dbid) from gp_segment_configuration where content=-1 and role='p';
+
 -- now make the standby QD resets itself
 -1S: select gp_inject_fault('exec_simple_query_start', 'panic', dbid) from gp_segment_configuration where content=-1 and role='m';
 -1S: select 1;
 -1Sq:
+
+2: select gp_wait_until_triggered_fault('wal_sender_after_streaming', 1, dbid) from gp_segment_configuration where content=-1 and role='p';
+2: select gp_inject_fault('wal_sender_after_streaming', 'reset', dbid) from gp_segment_configuration where content=-1 and role='p';
+
+-- With the new sender streaming, remote_apply waits for this distributed
+-- commit to be replayed, including all WAL from before the restart.
+2: create temp table hs_replay_barrier(a int) distributed by (a);
+2: drop table hs_replay_barrier;
 
 -- standby should still not see rows in the in-progress DTX, but should see the completed ones
 -1S: select * from hs_t5;

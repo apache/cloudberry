@@ -2022,39 +2022,6 @@ vac_update_relstats(Relation relation,
 								 RelationGetRelationName(relation))));
 }
 
-/* GPDB_14_MERGE_FIXME: see comments in vac_update_datfrozenxid */
-#if 0
-/*
- * fetch_database_tuple - Fetch a copy of database tuple from pg_database.
- *
- * This using disk heap table instead of system cache.
- * relation: opened pg_database relation in vac_update_datfrozenxid().
- */
-static HeapTuple
-fetch_database_tuple(Relation relation, Oid dbOid)
-{
-	ScanKeyData skey[1];
-	SysScanDesc sscan;
-	HeapTuple	tuple = NULL;
-
-	ScanKeyInit(&skey[0],
-				Anum_pg_database_oid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(dbOid));
-
-	sscan = systable_beginscan(relation, DatabaseOidIndexId, true,
-							   NULL, 1, skey);
-
-	tuple = systable_getnext(sscan);
-	if (HeapTupleIsValid(tuple))
-		tuple = heap_copytuple(tuple);
-
-	systable_endscan(sscan);
-
-	return tuple;
-}
-#endif
-
 /*
  *	vac_update_datfrozenxid() -- update pg_database.datfrozenxid for our DB
  *

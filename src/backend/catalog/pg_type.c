@@ -47,12 +47,6 @@
 #include "catalog/pg_type_encoding.h"
 #include "cdb/cdbvars.h"
 
-/* GPDB_14_MERGE_FIXME: Do we need to keep binary_upgrade_next_pg_type_oid
- * for binary upgrade?
- */
-/* Potentially set by pg_upgrade_support functions */
-Oid			binary_upgrade_next_pg_type_oid = InvalidOid;
-
 /*
  * Record a type's default encoding clause in the catalog.
  */

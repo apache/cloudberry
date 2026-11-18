@@ -1833,7 +1833,7 @@ TransactionIdIsActive(TransactionId xid)
  * than later when deciding which tuples can be removed - which the code
  * doesn't expect (breaking HOT).
  *
- * GPDB_14_MERGE_FIXME:
+ * GPDB:
  * Add a param updateGlobalVis which takes globalxmin of distributed transactions
  * into account and updates GlobalVis* if true.
  * We can't wrap a local function as in PG13 because ComputeXidHorizons is used
@@ -1924,7 +1924,7 @@ ComputeXidHorizons(ComputeXidHorizonsResult *h, bool updateGlobalVis)
 			continue;
 
 		/*
-		 * GPDB_14_MERGE_FIXME:
+		 * GPDB:
 		 * In computing Globals, also takes distributed snapshots into
 		 * account.
 		 * We don't try to advance oldestxmin across DtxSnapshots, it
@@ -2248,7 +2248,7 @@ GetReplicationHorizons(TransactionId *xmin, TransactionId *catalog_xmin)
 		!IsBinaryUpgrade && !gp_maintenance_mode)
 		*xmin = DistributedLog_GetOldestXmin(*xmin);
 
-	/* GPDB_14_MERGE_FIXME: don't change catalog_xmin*/
+	/* GPDB: don't change catalog_xmin*/
 	*catalog_xmin = horizons.slot_catalog_xmin;
 }
 
@@ -2914,7 +2914,7 @@ GetSnapshotDataReuse(Snapshot snapshot)
  * Note: this function should probably not be called with an argument that's
  * not statically allocated (see xip allocation below).
  *
- * GPDB_14_MERGE_FIXME:
+ * GPDB:
  * We can't benefit from skipping range proc->xmin or reuse snapshot in GPDB:
  * 		GlobalVis depends on a globalxmin of all distributed sanpshots. We have to
  * 		check proc->xmin which is omitted by upstream.
@@ -3141,7 +3141,7 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 				continue;
 
 			/*
-			 * GPDB_14_MERGE_FIXME: we re-rank the check order:
+			 * GPDB: we re-rank the check order:
 			 * GPDB needs to get the global xmin across cluster but
 			 * skip over backends doing logical decoding which manages xmin separately.
 			 * Even a proc->xid >= xmax, its xmin should be recored.
@@ -3338,8 +3338,10 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 
 
 	/*
-	* GPDB_14_MERGE_FIXME: use globalxmin to compute Globals.
-	*/
+	 * GPDB: the upper bounds below don't take distributed snapshots into
+	 * account.  That is safe: an xid between the two bounds makes GlobalVis
+	 * recompute them with ComputeXidHorizons(), which does.
+	 */
 	/* maintain state for GlobalVis* */
 	{
 		TransactionId def_vis_xid;
@@ -3504,7 +3506,7 @@ ProcArrayInstallImportedXmin(TransactionId xmin,
 		int			pgprocno = arrayP->pgprocnos[index];
 		PGPROC	   *proc = &allProcs[pgprocno];
 	/*
-	* GPDB_14_MERGE_FIXME: don't ignore LAZY VACUUM
+	* GPDB: don't ignore LAZY VACUUM
 	* The statusFlags is useless, annotate here for less warnings.
 	*/
 #if 0

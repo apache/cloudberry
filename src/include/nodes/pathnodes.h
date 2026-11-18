@@ -83,9 +83,8 @@ typedef struct AggClauseCosts
  * GPDB_15_MERGE_FIXME: upstream has a type UPPERREL_PARTIAL_DISTINCT,
  * which looks the same meaning of UPPERREL_CDB_FIRST_STAGE_DISTINCT.
  * Can we replace UPPERREL_CDB_FIRST_STAGE_DISTINCT by UPPERREL_PARTIAL_DISTINCT?
- * GPDB_14_MERGE_FIXME: upstream has a type UPPERREL_PARTIAL_GROUP_AGG,
- * Can we replace UPPERREL_CDB_FIRST_STAGE_GROUP_AGG by
- * UPPERREL_PARTIAL_GROUP_AGG?
+ * GPDB: UPPERREL_CDB_FIRST_STAGE_GROUP_AGG is used by two-stage MPP aggregation
+ * plans (cdbgroupingpaths.c), separately from UPPERREL_PARTIAL_GROUP_AGG.
  */
 typedef enum UpperRelationKind
 {

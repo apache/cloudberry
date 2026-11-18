@@ -95,7 +95,7 @@ SecLabelSupportsObjectType(ObjectType objtype)
 		case OBJECT_TSPARSER:
 		case OBJECT_TSTEMPLATE:
 		case OBJECT_USER_MAPPING:
-		/* GPDB_14_MERGE_FIXME: Don't support following type now */
+		/* GPDB-specific object types, not supported */
 		case OBJECT_EXTPROTOCOL:
 		case OBJECT_RESQUEUE:
 		case OBJECT_RESGROUP:
