@@ -538,6 +538,44 @@ FROM t_out;
 RESET optimizer_trace_fallback;
 
 
+--Split Update should be used when partition key is updated and expand is in progress
+--start_ignore
+create extension if not exists gp_debug_numsegments;
+drop table if exists t_part, t;
+--end_ignore
+select gp_debug_set_create_table_default_numsegments(2);
+
+create table t_part (a int, b int, c int, d int)
+distributed by (a)
+partition by range (b)
+subpartition by list (c)
+subpartition template (
+    subpartition sp1 values (1),
+    subpartition sp2 values (2)
+)
+(start (0) end (20) every (10));
+
+insert into t_part select i, 5, 1, 1 from generate_series(1, 20) i;
+alter table t_part expand partition prepare;
+
+alter table t_part_1_prt_2_2_prt_sp2 set with (REORGANIZE = TRUE) distributed by (a);
+
+explain (costs off) update t_part set b = 15, c = 2;
+explain (costs off) update t_part set b = 15;
+explain (costs off) update t_part set c = 2;
+explain (costs off) update t_part set d = 2;
+update t_part set b = 15, c = 2;
+
+select gp_debug_set_create_table_default_numsegments(3);
+
+create table t as select generate_series(1, 20) a distributed by (a);
+select count(*) from t_part_1_prt_2_2_prt_sp2 join t_part using (a);
+
+--cleanup
+select gp_debug_reset_create_table_default_numsegments();
+drop extension gp_debug_numsegments;
+
+
 -- start_ignore
 drop table if exists bfv_planner_x;
 drop table if exists testbadsql;

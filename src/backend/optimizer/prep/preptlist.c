@@ -47,6 +47,7 @@
 #include "parser/parse_coerce.h"
 #include "parser/parsetree.h"
 #include "utils/lsyscache.h"
+#include "utils/partcache.h"
 #include "utils/rel.h"
 
 #include "catalog/gp_distribution_policy.h"     /* CDB: POLICYTYPE_PARTITIONED */
@@ -54,6 +55,7 @@
 #include "optimizer/plancat.h"
 #include "parser/parse_relation.h"
 #include "utils/lsyscache.h"
+#include "utils/syscache.h"
 
 static bool check_splitupdate(List *tlist, Index result_relation, Relation rel);
 static List *supplement_simply_updatable_targetlist(PlannerInfo *root,
@@ -598,14 +600,81 @@ expand_insert_targetlist(PlannerInfo *root, List *tlist, Relation rel, Index spl
 	return new_tlist;
 }
 
+/*
+ * Sub-partitions may have a different physical column layout than the
+ * root (dropped columns, ATTACH PARTITION), so attributes are mapped to
+ * the root by name.
+ */
+static bool
+is_partkey_updated(Oid rootoid, List *inheritors, Bitmapset *changed_cols)
+{
+	ListCell   *lc;
+
+	foreach(lc, inheritors)
+	{
+		Relation	r;
+		PartitionKey key;
+		Oid			relid = lfirst_oid(lc);
+		Bitmapset  *attnos = NULL;
+
+		if (get_rel_relkind(relid) != RELKIND_PARTITIONED_TABLE)
+			continue;
+
+		/* already locked by find_all_inheritors() */
+		r = table_open(relid, NoLock);
+		key = RelationGetPartitionKey(r);
+
+		for (int i = 0; i < key->partnatts; i++)
+		{
+			if (key->partattrs[i] != 0)
+				attnos = bms_add_member(attnos,
+										key->partattrs[i] - FirstLowInvalidHeapAttributeNumber);
+		}
+		/* partition expressions always use varno 1 */
+		pull_varattnos((Node *) key->partexprs, 1, &attnos);
+
+		table_close(r, NoLock);
+
+		for (int x = -1; (x = bms_next_member(attnos, x)) >= 0; )
+		{
+			AttrNumber	attno = x + FirstLowInvalidHeapAttributeNumber;
+			AttrNumber	rootattno;
+
+			/* attno is not InvalidAttrNumber and not a system column */
+			Assert (attno > 0);
+
+			if (relid == rootoid)
+				rootattno = attno;
+			else
+				rootattno = get_attnum(rootoid,
+									   get_attname(relid, attno, false));
+
+			Assert (rootattno > 0);
+
+			if (bms_is_member(rootattno, changed_cols))
+			{
+				bms_free(attnos);
+				return true;
+			}
+		}
+
+		bms_free(attnos);
+	}
+
+	return false;
+}
+
 static bool
 check_splitupdate(List *tlist, Index result_relation, Relation rel)
 {
 	ListCell   *lc;
 	Bitmapset  *changed_cols = NULL;
 	GpPolicy   *targetPolicy = rel->rd_cdbpolicy;
+	List	   *inheritors;
 
-	if (targetPolicy == NULL || targetPolicy->ptype != POLICYTYPE_PARTITIONED)
+	if (targetPolicy == NULL ||
+		targetPolicy->ptype != POLICYTYPE_PARTITIONED ||
+		targetPolicy->nattrs == 0)
 		return false;
 
 	foreach(lc, tlist)
@@ -658,8 +727,59 @@ check_splitupdate(List *tlist, Index result_relation, Relation rel)
 		}
 	}
 
+
+	if (rel->rd_rel->relkind != RELKIND_PARTITIONED_TABLE)
+	{
+		bms_free(changed_cols);
+		return false;
+	}
+
+	inheritors = find_all_inheritors(RelationGetRelid(rel), AccessShareLock, NULL);
+
+	/* Check if partition key is updated */
+	if (!is_partkey_updated(RelationGetRelid(rel), inheritors, changed_cols))
+	{
+		list_free(inheritors);
+		bms_free(changed_cols);
+		return false;
+	}
+
 	bms_free(changed_cols);
 
+	/*
+	 * Check if there are partitions which are distributed randomly. These
+	 * partitions appear as a result of ALTER TABLE ... EXPAND PARTITION PREPARE
+	 */
+	foreach(lc, inheritors)
+	{
+		HeapTuple	tuple;
+		int2vector *distkey;
+		bool		isNull;
+		int			nattrs;
+		Oid			relid = lfirst_oid(lc);
+
+		tuple = SearchSysCache1(GPPOLICYID, ObjectIdGetDatum(relid));
+		if (!HeapTupleIsValid(tuple))
+		{
+			list_free(inheritors);
+			return true;
+		}
+
+		distkey = (int2vector *) DatumGetPointer(
+			SysCacheGetAttr(GPPOLICYID, tuple,
+							Anum_gp_distribution_policy_distkey,
+							&isNull));
+
+		nattrs = distkey->dim1;
+		ReleaseSysCache(tuple);
+		if (isNull || nattrs == 0)
+		{
+			list_free(inheritors);
+			return true;
+		}
+	}
+
+	list_free(inheritors);
 	return false;
 }
 
