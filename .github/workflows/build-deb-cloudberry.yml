@@ -83,7 +83,7 @@ on:
     branches: [REL_2_STABLE]
   pull_request:
     branches: [main, REL_2_STABLE]
-    types: [opened, synchronize, reopened, edited]
+    types: [opened, synchronize, reopened]
   workflow_dispatch:  # Manual trigger
     inputs:
       ubuntu_version:
@@ -101,6 +101,10 @@ on:
         required: false
         default: ''
         type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Note: Step details, logs, and artifacts require users to be logged into GitHub
 # even for public repositories. This is a GitHub security feature and cannot

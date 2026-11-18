@@ -111,7 +111,7 @@ on:
     branches: [REL_2_STABLE]
   pull_request:
     branches: [main, REL_2_STABLE]
-    types: [opened, synchronize, reopened, edited]
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
     inputs:
       test_selection:
@@ -122,7 +122,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Note: Step details, logs, and artifacts require users to be logged into GitHub
 # even for public repositories. This is a GitHub security feature and cannot
