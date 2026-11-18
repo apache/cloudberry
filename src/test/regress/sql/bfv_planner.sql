@@ -487,7 +487,7 @@ drop table t2_issue_1950;
 
 -- Result of query with subquery which contains window function must be correct
 -- start_ignore
-DROP TABLE IF EXISTS t1_issue_2047, t2_issue_2047;
+DROP TABLE IF EXISTS t1_issue_2047, t2_issue_2047, t_out, t_in;
 -- end_ignore
 CREATE TEMP TABLE t1_issue_2047 AS SELECT 4 a, 1 b DISTRIBUTED BY (a);
 CREATE TEMP TABLE t2_issue_2047 AS SELECT v.a FROM (VALUES (1), (1), (2)) AS v(a) DISTRIBUTED BY (a);
@@ -498,6 +498,45 @@ WHERE t1_issue_2047.a > (
    SELECT SUM(t2_issue_2047.a) + COUNT(*) OVER ()
    FROM t2_issue_2047
    WHERE t2_issue_2047.a = t1_issue_2047.b);
+
+
+CREATE TEMP TABLE t_out AS SELECT 1 a, 2 b DISTRIBUTED BY (b);
+CREATE TEMP TABLE t_in AS SELECT v.a FROM (VALUES (1),(1),(2)) v(a) DISTRIBUTED BY (a);
+ANALYZE t_out, t_in;
+
+-- Orca should be able to plan the following queries
+SET optimizer_trace_fallback = on;
+
+SELECT * FROM t_out
+WHERE t_out.b IN (SELECT count(*) OVER () FROM t_in WHERE t_in.a = t_out.a);
+
+SELECT * FROM t_out
+WHERE t_out.b IN (SELECT count(*) OVER () FROM t_in WHERE t_in.a = t_out.a)
+   OR t_out.a = 5;
+
+SELECT t_out.b IN (SELECT count(*) OVER () FROM t_in WHERE t_in.a = t_out.a)
+FROM t_out;
+
+SELECT * FROM t_out
+WHERE EXISTS (SELECT 1 FROM (SELECT count(*) OVER () c FROM t_in
+                             WHERE t_in.a = t_out.a) s
+              WHERE s.c = t_out.b);
+
+SELECT * FROM t_out
+WHERE NOT EXISTS (SELECT 1 FROM (SELECT count(*) OVER () c FROM t_in
+                                 WHERE t_in.a = t_out.a) s
+                  WHERE s.c = t_out.b);
+
+SELECT * FROM t_out
+WHERE t_out.b = (SELECT max(c) FROM (SELECT count(*) OVER () c FROM t_in
+                                     WHERE t_in.a = t_out.a) s);
+
+SELECT (SELECT max(c) FROM (SELECT count(*) OVER () c FROM t_in
+                            WHERE t_in.a = t_out.a) s)
+FROM t_out;
+
+RESET optimizer_trace_fallback;
+
 
 -- start_ignore
 drop table if exists bfv_planner_x;
