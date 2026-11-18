@@ -187,8 +187,6 @@ typedef struct LVRelState
 	/* Error reporting state */
 	char	   *dbname;
 	char	   *relnamespace;
-	Oid			reloid;
-	Oid			indoid;
 	char	   *relname;
 	char	   *indname;		/* Current index name */
 	BlockNumber blkno;			/* used only for heap operations */
@@ -229,16 +227,11 @@ typedef struct LVRelState
 	int64		missed_dead_tuples; /* # removable, but not removed */
 
 	/*
-	 * Resource usage of the index passes this process ran, subtracted from
-	 * the heap report to avoid double-counting (see
+	 * Total index resource usage, including parallel-worker usage merged into
+	 * the leader, subtracted from the heap report to avoid double-counting (see
 	 * accumulate_heap_vacuum_statistics).
 	 */
 	PgStat_CommonCounts *extVacReportIdx;
-
-	/*
-	 * We need to accumulate index statistics for later subtraction from heap
-	 * stats.
-	 */
 } LVRelState;
 
 /*
@@ -430,8 +423,6 @@ extvac_stats_log(Relation rel, const char *phase, const PgStat_CommonCounts *rep
 static void
 accumulate_heap_vacuum_statistics(LVRelState *vacrel, PgStat_VacuumRelationCounts * extVacStats)
 {
-	extVacStats->type = PGSTAT_EXTVAC_TABLE;
-
 	/*
 	 * Subtract index work, including worker usage merged into the leader by
 	 * InstrAccumParallelQuery().  Serial passes contribute individually;
@@ -538,7 +529,6 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 	vacrel->dbname = get_database_name(MyDatabaseId);
 	vacrel->relnamespace = get_namespace_name(RelationGetNamespace(rel));
 	vacrel->relname = pstrdup(RelationGetRelationName(rel));
-	vacrel->reloid = RelationGetRelid(rel);
 	vacrel->indname = NULL;
 	vacrel->phase = VACUUM_ERRCB_PHASE_UNKNOWN;
 	vacrel->verbose = verbose;
@@ -2962,7 +2952,6 @@ lazy_vacuum_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 	 */
 	Assert(vacrel->indname == NULL);
 	vacrel->indname = pstrdup(RelationGetRelationName(indrel));
-	vacrel->indoid = RelationGetRelid(indrel);
 	update_vacuum_error_info(vacrel, &saved_err_info,
 							 VACUUM_ERRCB_PHASE_VACUUM_INDEX,
 							 InvalidBlockNumber, InvalidOffsetNumber);
@@ -2977,7 +2966,6 @@ lazy_vacuum_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 		extvac_stats_end(indrel, extVacCounters, &extVacReport->common);
 		if (vacrel->verbose)
 			extvac_stats_log(indrel, _("index bulk delete"), &extVacReport->common);
-		extVacReport->type = PGSTAT_EXTVAC_INDEX;
 		accumulate_idxs_vacuum_statistics(vacrel, extVacReport);
 		pfree(extVacCounters);
 	}
@@ -3027,7 +3015,6 @@ lazy_cleanup_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 	 */
 	Assert(vacrel->indname == NULL);
 	vacrel->indname = pstrdup(RelationGetRelationName(indrel));
-	vacrel->indoid = RelationGetRelid(indrel);
 	update_vacuum_error_info(vacrel, &saved_err_info,
 							 VACUUM_ERRCB_PHASE_INDEX_CLEANUP,
 							 InvalidBlockNumber, InvalidOffsetNumber);
@@ -3041,7 +3028,6 @@ lazy_cleanup_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 		extvac_stats_end(indrel, extVacCounters, &extVacReport->common);
 		if (vacrel->verbose)
 			extvac_stats_log(indrel, _("index cleanup"), &extVacReport->common);
-		extVacReport->type = PGSTAT_EXTVAC_INDEX;
 		accumulate_idxs_vacuum_statistics(vacrel, extVacReport);
 		pfree(extVacCounters);
 	}
