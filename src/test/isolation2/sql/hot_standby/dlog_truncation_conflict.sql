@@ -60,6 +60,11 @@
 !\retcode sh -ec 'export PGDATABASE=postgres; for d in $(psql -Atqc "select datadir from gp_segment_configuration where role = chr(109) and content >= 0 order by content"); do pg_ctl -D "$d" restart -m fast -w -l "$d/dlog_restart.log" > /dev/null; done';
 1: insert into hs_dlog_sync select generate_series(1, 10);
 
+-- A fresh standby snapshot must not be canceled just because this paused
+-- query has an older snapshot.  Its own xmin is newer than the truncation
+-- bound, even though xminAllDistributedSnapshots still includes the old one.
+!\retcode sh -ec 'export PGDATABASE=isolation2-hot-standby; port=$(psql -XAtqc "select port from gp_segment_configuration where content = -1 and role = chr(109)"); n=$(psql -XAtq -p "$port" -c "select count(*) from hs_dlog_conf"); echo "new standby query: $n"; test "$n" = 10';
+
 -- Resume the old standby distributed snapshot: the mirror must cancel the
 -- statement with a recovery conflict instead of returning rows committed
 -- after the snapshot.

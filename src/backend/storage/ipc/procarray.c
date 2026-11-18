@@ -3307,7 +3307,8 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 	{
 		if (snapshot->haveDistribSnapshot)
 			globalxmin = DistributedLog_AdvanceOldestXmin(globalxmin,
-														  ds->xminAllDistributedSnapshots);
+														  ds->xminAllDistributedSnapshots,
+														  ds->xmin);
 		else if (!gp_maintenance_mode)
 			globalxmin = DistributedLog_GetOldestXmin(globalxmin);
 	}

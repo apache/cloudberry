@@ -95,7 +95,7 @@ DistributedSnapshotWithLocalMapping_CommittedTest(
 		 * Ok, now we must consult the distributed log.
 		 */
 		if (DistributedLog_CommittedCheck(localXid, &distribXid,
-										  ds->xminAllDistributedSnapshots))
+										  ds->xmin))
 		{
 			/*
 			 * We found it in the distributed log.

@@ -29,6 +29,7 @@
 #include "postgres.h"
 
 #include <fcntl.h>
+#include <unistd.h>
 
 #include "access/distributedlog.h"
 #include "access/slru.h"
@@ -101,10 +102,11 @@ typedef struct DistributedLogShmem
 	 * distribXid < truncGXidBound.  Maintained as a monotonic max of the
 	 * xminAllDistributedSnapshots values that backed each oldestXmin
 	 * advance (or, in recovery, the bound carried by a TRUNCATE WAL
-	 * record).  A distributed snapshot with
-	 * xminAllDistributedSnapshots < truncGXidBound may need entries that
-	 * the primary already trimmed, which readers cannot resolve
-	 * correctly: see DistributedLog_AdvanceOldestXmin().
+	 * record). A snapshot whose own xmin < truncGXidBound may need entries
+	 * that the primary already trimmed, which readers cannot resolve
+	 * correctly. Do not use xminAllDistributedSnapshots for this per-reader
+	 * check: another older snapshot can hold it back even when this reader
+	 * is safe.
 	 */
 	pg_atomic_uint64 truncGXidBound;
 
@@ -118,7 +120,7 @@ static void DistributedLog_WriteZeroPageXlogRec(int page);
 static void DistributedLog_WriteTruncateXlogRec(int page);
 static void DistributedLog_Truncate(TransactionId oldestXmin);
 static void DistributedLog_RaiseTruncGXidBound(DistributedTransactionId gbound);
-static void DistributedLog_CheckSnapshot(DistributedTransactionId xminAllDistributedSnapshots);
+static void DistributedLog_CheckSnapshot(DistributedTransactionId snapshotXmin);
 static void DistributedLog_SaveHorizon(void);
 static void DistributedLog_RestoreHorizon(void);
 
@@ -217,8 +219,8 @@ DistributedLog_InitOldestXmin(void)
  * transaction running in this segment at the moment.
  *
  * Call this function in the QE, whenever a new distributed snapshot is
- * received from the QD. Pass the 'distribTransactionTimeStamp' and
- * 'xminAllDistributedSnapshots' values from the DistributedSnapshot.
+ * received from the QD. Pass 'xminAllDistributedSnapshots' for advancing the
+ * shared horizon and the snapshot's own 'xmin' for recovery conflict checks.
  * 'oldestLocalXmin' is the oldest xmin that is still visible according
  * to local snapshots. (That is the upper bound of how far we can advance
  * the oldest xmin)
@@ -230,7 +232,8 @@ DistributedLog_InitOldestXmin(void)
  */
 TransactionId
 DistributedLog_AdvanceOldestXmin(TransactionId oldestLocalXmin,
-								 DistributedTransactionId xminAllDistributedSnapshots)
+								 DistributedTransactionId xminAllDistributedSnapshots,
+								 DistributedTransactionId snapshotXmin)
 {
 	TransactionId oldestXmin;
 	TransactionId oldOldestXmin;
@@ -264,7 +267,7 @@ DistributedLog_AdvanceOldestXmin(TransactionId oldestLocalXmin,
 	 */
 	if (RecoveryInProgress())
 	{
-		DistributedLog_CheckSnapshot(xminAllDistributedSnapshots);
+		DistributedLog_CheckSnapshot(snapshotXmin);
 		LWLockRelease(DistributedLogTruncateLock);
 		return oldestXmin;
 	}
@@ -569,7 +572,7 @@ bool
 DistributedLog_CommittedCheck(
 	TransactionId 						localXid,
 	DistributedTransactionId 			*distribXid,
-	DistributedTransactionId xminAllDistributedSnapshots)
+	DistributedTransactionId snapshotXmin)
 {
 	int			page = TransactionIdToPage(localXid);
 	int			entryno = TransactionIdToEntry(localXid);
@@ -583,7 +586,7 @@ DistributedLog_CommittedCheck(
 
 	/* Revalidate the snapshot and read the mapping in one lock interval. */
 	LWLockAcquire(DistributedLogTruncateLock, LW_SHARED);
-	DistributedLog_CheckSnapshot(xminAllDistributedSnapshots);
+	DistributedLog_CheckSnapshot(snapshotXmin);
 	oldestXmin = (TransactionId)pg_atomic_read_u32((pg_atomic_uint32 *)&DistributedLogShared->oldestXmin);
 	if (oldestXmin == InvalidTransactionId)
 		elog(PANIC, "DistributedLog's OldestXmin not initialized yet");
@@ -805,12 +808,12 @@ DistributedLog_RaiseTruncGXidBound(DistributedTransactionId gbound)
 
 /* Caller holds DistributedLogTruncateLock, also taken exclusively by redo. */
 static void
-DistributedLog_CheckSnapshot(DistributedTransactionId xminAllDistributedSnapshots)
+DistributedLog_CheckSnapshot(DistributedTransactionId snapshotXmin)
 {
 	Assert(LWLockHeldByMe(DistributedLogTruncateLock));
 
 	if (RecoveryInProgress() &&
-		xminAllDistributedSnapshots <
+		snapshotXmin <
 		pg_atomic_read_u64(&DistributedLogShared->truncGXidBound))
 		ereport(ERROR,
 				(errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),

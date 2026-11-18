@@ -51,12 +51,13 @@ extern void DistributedLog_SetCommittedTree(TransactionId xid, int nxids, Transa
 extern bool DistributedLog_CommittedCheck(
 							  TransactionId localXid,
 							  DistributedTransactionId *distribXid,
-							  DistributedTransactionId xminAllDistributedSnapshots);
+							  DistributedTransactionId snapshotXmin);
 extern bool DistributedLog_ScanForPrevCommitted(
 									TransactionId *indexXid,
 									DistributedTransactionId *distribXid);
 extern TransactionId DistributedLog_AdvanceOldestXmin(TransactionId oldestInProgressLocalXid,
-								 DistributedTransactionId oldestDistribXid);
+								 DistributedTransactionId oldestDistribXid,
+								 DistributedTransactionId snapshotXmin);
 extern TransactionId DistributedLog_GetOldestXmin(TransactionId oldestLocalXmin);
 
 extern Size DistributedLog_ShmemBuffers(void);
