@@ -23,6 +23,7 @@
 #include "catalog/catalog.h"
 #include "common/pg_lzcompress.h"
 #include "miscadmin.h"
+#include "utils/faultinjector.h"
 #include "utils/fmgroids.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
@@ -139,6 +140,7 @@ toast_save_datum(Relation rel, Datum value,
 		int32		align_it;
 	}			chunk_data;
 	int32		chunk_size;
+	int32		max_chunk_size = TOAST_MAX_CHUNK_SIZE;
 	int32		chunk_seq = 0;
 	char	   *data_p;
 	int32		data_todo;
@@ -300,6 +302,12 @@ toast_save_datum(Relation rel, Datum value,
 	t_isnull[1] = false;
 	t_isnull[2] = false;
 
+#ifdef FAULT_INJECTOR
+	/* Exercise reading values written with a different chunk size before upgrade. */
+	if (SIMPLE_FAULT_INJECTOR("decrease_toast_max_chunk_size") == FaultInjectorTypeSkip)
+		max_chunk_size--;
+#endif
+
 	/*
 	 * Split up the item into chunks
 	 */
@@ -312,7 +320,7 @@ toast_save_datum(Relation rel, Datum value,
 		/*
 		 * Calculate the size of this chunk
 		 */
-		chunk_size = Min(TOAST_MAX_CHUNK_SIZE, data_todo);
+		chunk_size = Min(max_chunk_size, data_todo);
 
 		/*
 		 * Build a tuple and store it

@@ -38,6 +38,7 @@ endif
 	$(top_builddir)/src/test/regress/pg_regress --dbname=gpfdist_regression $(REGRESS) $(REGRESS_OPTS)
 
 watchdog:
+	python3 test_watchdog_options.py
 	sh test_watchdog.sh
 
 ipv4v6_ports:
