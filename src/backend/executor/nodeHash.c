@@ -35,6 +35,7 @@
 #include "commands/tablespace.h"
 #include "executor/execdebug.h"
 #include "executor/hashjoin.h"
+#include "executor/nodeDynamicSeqscan.h"
 #include "executor/nodeHash.h"
 #include "executor/nodeHashjoin.h"
 #include "executor/nodeRuntimeFilter.h"
@@ -4382,7 +4383,7 @@ PushdownRuntimeFilter(HashState *node)
 		else if (IsA(attr_filter->target, DynamicSeqScanState))
 		{
 			DynamicSeqScanState *dsss = castNode(DynamicSeqScanState, attr_filter->target);
-			dsss->filters = list_concat(dsss->filters, scankeys);
+			ExecDynamicSeqScanAddRuntimeFilters(dsss, scankeys);
 		}
 		else
 		{

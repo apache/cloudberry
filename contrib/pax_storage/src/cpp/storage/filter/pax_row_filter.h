@@ -66,6 +66,38 @@ struct ExecutionFilterContext {
   bool sampling = true;
   uint64 sample_target = 65536;  // number of rows for sampling phase
   uint64 sample_rows = 0;        // rows seen in sampling
+
+  enum class FilterResult { kPass, kBloomRejected, kExprRejected };
+
+  template <typename Evaluate>
+  FilterResult ApplyFilters(Evaluate evaluate) {
+	auto result = FilterResult::kPass;
+	for (auto &node : filter_nodes) {
+	  // A rejected row may still feed the sampling of later Bloom probes,
+	  // which only hash the key, but no SQL condition may see it: it could
+	  // raise an error (b <> 0 AND a / b > 1) or leak the row's values to a
+	  // function that the earlier condition was meant to guard.
+	  if (result != FilterResult::kPass && node.kind == FilterKind::kExpr)
+		break;
+
+	  bool pass = evaluate(node);
+	  if (sampling) {
+		++node.tested;
+		node.passed += pass;
+	  }
+	  if (!pass) {
+		result = node.kind == FilterKind::kBloom
+					 ? FilterResult::kBloomRejected
+					 : FilterResult::kExprRejected;
+		if (!sampling) break;
+	  }
+	}
+
+	if (sampling && ++sample_rows >= sample_target) FinishSampling();
+	return result;
+  }
+
+  void FinishSampling();
 };
 
 class PaxRowFilter final {

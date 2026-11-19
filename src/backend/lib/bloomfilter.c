@@ -40,6 +40,7 @@
 #include "port/pg_bitutils.h"
 
 #define MAX_HASH_FUNCS		10
+#define BLOOM_PROBE_MIN_REJECT_PCT 5
 
 struct bloom_filter
 {
@@ -48,6 +49,9 @@ struct bloom_filter
 	uint64		seed;
 	/* m is bitset size, in bits.  Must be a power of two <= 2^32.  */
 	uint64		m;
+	int			probe_sample_count;
+	int			probe_sample_rejected;
+	bool		probe_disabled;
 	unsigned char bitset[FLEXIBLE_ARRAY_MEMBER];
 };
 
@@ -169,6 +173,49 @@ bloom_lacks_element(bloom_filter *filter, unsigned char *elem, size_t len)
 	}
 
 	return false;
+}
+
+bool
+bloom_runtime_probe_disabled(const bloom_filter *filter)
+{
+	return filter->probe_disabled;
+}
+
+/* Rank by rejection rate, including partial samples. */
+int
+bloom_runtime_probe_rank(const bloom_filter *filter)
+{
+	if (filter->probe_disabled)
+		return -1;
+	if (filter->probe_sample_count == 0)
+		return 0;
+	return filter->probe_sample_rejected * BLOOM_PROBE_SAMPLE_SIZE /
+		filter->probe_sample_count;
+}
+
+/*
+ * Return true for a definite miss. Once a sample rejects fewer than 5% of
+ * its non-null keys, subsequent calls pass rows through. The last sampled
+ * probe still returns its actual result. The sample belongs to this filter and
+ * lasts across partitions and rescans that reuse it.
+ */
+bool
+bloom_runtime_probe(bloom_filter *filter, unsigned char *elem, size_t len)
+{
+	bool lacks;
+
+	if (filter->probe_disabled)
+		return false;
+
+	lacks = bloom_lacks_element(filter, elem, len);
+	if (filter->probe_sample_count < BLOOM_PROBE_SAMPLE_SIZE)
+	{
+		filter->probe_sample_rejected += lacks;
+		if (++filter->probe_sample_count == BLOOM_PROBE_SAMPLE_SIZE)
+			filter->probe_disabled = filter->probe_sample_rejected * 100 <
+				BLOOM_PROBE_SAMPLE_SIZE * BLOOM_PROBE_MIN_REJECT_PCT;
+	}
+	return lacks;
 }
 
 /*

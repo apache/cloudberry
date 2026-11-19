@@ -12,12 +12,151 @@
  */
 #include "postgres.h"
 
+#include "access/skey.h"
+#include "catalog/pg_type.h"
+#include "executor/nodeDynamicSeqscan.h"
 #include "common/pg_prng.h"
+#include "executor/nodeSeqscan.h"
 #include "fmgr.h"
 #include "lib/bloomfilter.h"
 #include "miscadmin.h"
+#include "utils/memutils.h"
+#include "utils/rel.h"
 
 PG_MODULE_MAGIC;
+
+static void
+check_runtime_probing(void)
+{
+	bloom_filter *weak = bloom_create(32, 8, 123);
+	bloom_filter *strong = bloom_create(32, 8, 123);
+	Datum		present = Int64GetDatum(1);
+	Datum		absent = Int64GetDatum(2);
+	int			i;
+	ScanKeyData weak_key = {0};
+	ScanKeyData strong_key = {0};
+	SeqScanState scan = {0};
+	TupleTableSlot slot = {0};
+	Datum		values[2] = {present, absent};
+	bool		nulls[2] = {false, false};
+	List	   *keys;
+	TupleDesc	desc = CreateTemplateTupleDesc(2);
+
+	bloom_add_element(weak, (unsigned char *) &present, sizeof(Datum));
+	for (i = 0; i < BLOOM_PROBE_SAMPLE_SIZE; i++)
+		bloom_runtime_probe(weak, (unsigned char *) &present, sizeof(Datum));
+	if (!bloom_runtime_probe_disabled(weak) ||
+		bloom_runtime_probe(weak, (unsigned char *) &absent, sizeof(Datum)) ||
+		!bloom_lacks_element(weak, (unsigned char *) &absent, sizeof(Datum)))
+		elog(ERROR, "ineffective runtime filter did not stop probing");
+
+	bloom_free(weak);
+	weak = bloom_create(32, 8, 123);
+	bloom_add_element(weak, (unsigned char *) &present, sizeof(Datum));
+	bloom_add_element(strong, (unsigned char *) &present, sizeof(Datum));
+	for (i = 0; i < BLOOM_PROBE_SAMPLE_SIZE; i++)
+	{
+		Datum key = i < 128 ? absent : present;
+
+		bloom_runtime_probe(weak, (unsigned char *) &key, sizeof(Datum));
+	}
+	for (i = 0; i < BLOOM_PROBE_SAMPLE_SIZE - 1; i++)
+	{
+		Datum key = i < 768 ? absent : present;
+
+		bloom_runtime_probe(strong, (unsigned char *) &key, sizeof(Datum));
+	}
+
+	weak_key.sk_flags = strong_key.sk_flags = SK_BLOOM_FILTER;
+	weak_key.sk_attno = 1;
+	strong_key.sk_attno = 2;
+	weak_key.sk_argument = PointerGetDatum(weak);
+	strong_key.sk_argument = PointerGetDatum(strong);
+	scan.filters = keys = list_make2(&weak_key, &strong_key);
+	TupleDescInitBuiltinEntry(desc, 1, "weak", INT8OID, -1, 0);
+	TupleDescInitBuiltinEntry(desc, 2, "strong", INT8OID, -1, 0);
+	slot.tts_tupleDescriptor = desc;
+	slot.tts_values = values;
+	slot.tts_isnull = nulls;
+	slot.tts_nvalid = 2;
+
+	for (i = 0; i < BLOOM_PROBE_SAMPLE_SIZE - 1; i++)
+	{
+		if (PassByBloomFilter(&scan, &slot) || linitial(keys) != &weak_key)
+			elog(ERROR, "runtime filters reordered during sampling");
+	}
+	if (PassByBloomFilter(&scan, &slot) ||
+		linitial(keys) != &strong_key || lsecond(keys) != &weak_key)
+		elog(ERROR, "runtime filters did not move the more selective probe first");
+	values[1] = present;
+	if (!PassByBloomFilter(&scan, &slot) ||
+		scan.bloom_sample_rows != BLOOM_PROBE_SAMPLE_SIZE)
+		elog(ERROR, "reordered runtime filters rejected a matching tuple");
+
+	list_free(keys);
+	bloom_free(strong);
+	bloom_free(weak);
+	FreeTupleDesc(desc);
+}
+
+static void
+check_partition_runtime_keys(void)
+{
+	DynamicSeqScanState parent = {0};
+	SeqScanState child = {0};
+	TupleTableSlot parent_slot = {0};
+	RelationData partition = {0};
+	EState		estate = {0};
+	ScanKeyData bloom_key = {0};
+	ScanKeyData range_key = {0};
+	TupleDesc	parent_desc = CreateTemplateTupleDesc(2);
+	TupleDesc	child_desc = CreateTemplateTupleDesc(2);
+	ScanKey		first;
+	ScanKey		second;
+
+	TupleDescInitEntry(parent_desc, 1, "a", INT8OID, -1, 0);
+	TupleDescInitEntry(parent_desc, 2, "b", INT8OID, -1, 0);
+	TupleDescInitEntry(child_desc, 1, "b", INT8OID, -1, 0);
+	TupleDescInitEntry(child_desc, 2, "a", INT8OID, -1, 0);
+	parent_slot.tts_tupleDescriptor = parent_desc;
+	partition.rd_att = child_desc;
+	parent.ss.ss_ScanTupleSlot = &parent_slot;
+	parent.ss.ps.state = &estate;
+	parent.partitionMemoryContext = AllocSetContextCreate(CurrentMemoryContext,
+														   "runtime key test",
+														   ALLOCSET_DEFAULT_SIZES);
+	parent.seqScanState = &child;
+	child.ss.ss_currentRelation = &partition;
+	/* An already-open partition whose AM took ownership of the old keys. */
+	child.filters = list_make1(&bloom_key);
+	bloom_key.sk_flags = SK_BLOOM_FILTER;
+	bloom_key.sk_attno = 1;
+	range_key.sk_attno = 2;
+
+	ExecDynamicSeqScanAddRuntimeFilters(&parent, list_make2(&bloom_key, &range_key));
+	first = linitial(child.filters);
+	second = lsecond(child.filters);
+	if (!child.filter_in_seqscan || list_length(child.filters) != 2 ||
+		first == &bloom_key || first->sk_attno != 2 ||
+		second == &range_key || second->sk_attno != 1 ||
+		list_length(parent.filters) != 2 ||
+		bloom_key.sk_attno != 1 || range_key.sk_attno != 2)
+		elog(ERROR, "late runtime keys were not copied to the partition layout");
+
+	list_free(parent.filters);
+	MemoryContextDelete(parent.partitionMemoryContext);
+	FreeTupleDesc(child_desc);
+	FreeTupleDesc(parent_desc);
+}
+
+PG_FUNCTION_INFO_V1(test_bloomfilter_runtime_probe);
+Datum
+test_bloomfilter_runtime_probe(PG_FUNCTION_ARGS)
+{
+	check_runtime_probing();
+	check_partition_runtime_keys();
+	PG_RETURN_VOID();
+}
 
 /* Fits decimal representation of PG_INT64_MIN + 2 bytes: */
 #define MAX_ELEMENT_BYTES		21

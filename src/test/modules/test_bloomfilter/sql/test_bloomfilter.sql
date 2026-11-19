@@ -1,5 +1,10 @@
 CREATE EXTENSION test_bloomfilter;
 
+CREATE FUNCTION test_bloomfilter_runtime_probe()
+RETURNS void AS '$libdir/test_bloomfilter' LANGUAGE C;
+DO $$ BEGIN PERFORM test_bloomfilter_runtime_probe(); END $$;
+DROP FUNCTION test_bloomfilter_runtime_probe();
+
 -- See README for explanation of arguments:
 SELECT test_bloomfilter(power => 23,
     nelements => 838861,
