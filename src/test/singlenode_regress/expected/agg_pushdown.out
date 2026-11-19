@@ -284,20 +284,20 @@ c2.parent = p.i WHERE c1.j = c2.k GROUP BY p.i;
          Output: p.i, c1.v, c2.v
          Inner Unique: true
          ->  Nested Loop
-               Output: c1.v, c1.parent, c2.v, c2.parent
+               Output: p.i, c1.v, c1.parent, c1.j
                Inner Unique: true
                ->  Seq Scan on public.agg_pushdown_child1 c1
                      Output: c1.j, c1.parent, c1.v
-               ->  Index Scan using agg_pushdown_child2_pkey on public.agg_pushdown_child2 c2
-                     Output: c2.k, c2.parent, c2.v
-                     Index Cond: ((c2.k = c1.j) AND (c2.parent = c1.parent))
-         ->  Memoize
-               Output: p.i
-               Cache Key: c1.parent
-               Cache Mode: logical
-               ->  Index Only Scan using agg_pushdown_parent_pkey on public.agg_pushdown_parent p
+               ->  Memoize
                      Output: p.i
-                     Index Cond: (p.i = c1.parent)
+                     Cache Key: c1.parent
+                     Cache Mode: logical
+                     ->  Index Only Scan using agg_pushdown_parent_pkey on public.agg_pushdown_parent p
+                           Output: p.i
+                           Index Cond: (p.i = c1.parent)
+         ->  Index Scan using agg_pushdown_child2_pkey on public.agg_pushdown_child2 c2
+               Output: c2.k, c2.parent, c2.v
+               Index Cond: ((c2.k = c1.j) AND (c2.parent = c1.parent))
  Settings: enable_hashjoin = 'off', enable_mergejoin = 'off', enable_nestloop = 'on', enable_seqscan = 'on', gp_enable_agg_pushdown = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
 (23 rows)

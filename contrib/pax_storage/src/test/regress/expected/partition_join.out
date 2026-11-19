@@ -1768,52 +1768,62 @@ ANALYZE plt1_e;
 -- test partition matching with N-way join
 EXPLAIN (COSTS OFF)
 SELECT avg(t1.a), avg(t2.b), avg(t3.a + t3.b), t1.c, t2.c, t3.c FROM plt1 t1, plt2 t2, plt1_e t3 WHERE t1.b = t2.b AND t1.c = t2.c AND ltrim(t3.c, 'A') = t1.c GROUP BY t1.c, t2.c, t3.c ORDER BY t1.c, t2.c, t3.c;
-                                               QUERY PLAN                                               
---------------------------------------------------------------------------------------------------------
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: t1.c, t3.c
-   ->  GroupAggregate
-         Group Key: t1.c, t3.c
-         ->  Sort
-               Sort Key: t1.c, t3.c
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: t1.c, t3.c
-                     ->  Append
+   ->  Sort
+         Sort Key: t1.c, t3.c
+         ->  HashAggregate
+               Group Key: t1.c, t3.c
+               ->  Append
+                     ->  Hash Join
+                           Hash Cond: ((t1_1.b = t2_1.b) AND (t1_1.c = t2_1.c))
                            ->  Hash Join
                                  Hash Cond: (ltrim(t3_1.c, 'A'::text) = t1_1.c)
-                                 ->  Seq Scan on plt1_e_p1 t3_1
+                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                       Hash Key: ltrim(t3_1.c, 'A'::text)
+                                       ->  Seq Scan on plt1_e_p1 t3_1
                                  ->  Hash
-                                       ->  Broadcast Motion 3:3  (slice3; segments: 3)
-                                             ->  Hash Join
-                                                   Hash Cond: ((t2_1.b = t1_1.b) AND (t2_1.c = t1_1.c))
-                                                   ->  Broadcast Motion 3:3  (slice4; segments: 3)
-                                                         ->  Seq Scan on plt2_p1 t2_1
-                                                   ->  Hash
-                                                         ->  Seq Scan on plt1_p1 t1_1
+                                       ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                             Hash Key: t1_1.c
+                                             ->  Seq Scan on plt1_p1 t1_1
+                           ->  Hash
+                                 ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                       Hash Key: t2_1.c
+                                       ->  Seq Scan on plt2_p1 t2_1
+                     ->  Hash Join
+                           Hash Cond: ((t1_2.b = t2_2.b) AND (t1_2.c = t2_2.c))
                            ->  Hash Join
                                  Hash Cond: (ltrim(t3_2.c, 'A'::text) = t1_2.c)
-                                 ->  Seq Scan on plt1_e_p2 t3_2
+                                 ->  Redistribute Motion 3:3  (slice5; segments: 3)
+                                       Hash Key: ltrim(t3_2.c, 'A'::text)
+                                       ->  Seq Scan on plt1_e_p2 t3_2
                                  ->  Hash
-                                       ->  Broadcast Motion 3:3  (slice5; segments: 3)
-                                             ->  Hash Join
-                                                   Hash Cond: ((t2_2.b = t1_2.b) AND (t2_2.c = t1_2.c))
-                                                   ->  Broadcast Motion 3:3  (slice6; segments: 3)
-                                                         ->  Seq Scan on plt2_p2 t2_2
-                                                   ->  Hash
-                                                         ->  Seq Scan on plt1_p2 t1_2
+                                       ->  Redistribute Motion 3:3  (slice6; segments: 3)
+                                             Hash Key: t1_2.c
+                                             ->  Seq Scan on plt1_p2 t1_2
+                           ->  Hash
+                                 ->  Redistribute Motion 3:3  (slice7; segments: 3)
+                                       Hash Key: t2_2.c
+                                       ->  Seq Scan on plt2_p2 t2_2
+                     ->  Hash Join
+                           Hash Cond: ((t1_3.b = t2_3.b) AND (t1_3.c = t2_3.c))
                            ->  Hash Join
                                  Hash Cond: (ltrim(t3_3.c, 'A'::text) = t1_3.c)
-                                 ->  Seq Scan on plt1_e_p3 t3_3
+                                 ->  Redistribute Motion 3:3  (slice8; segments: 3)
+                                       Hash Key: ltrim(t3_3.c, 'A'::text)
+                                       ->  Seq Scan on plt1_e_p3 t3_3
                                  ->  Hash
-                                       ->  Broadcast Motion 3:3  (slice7; segments: 3)
-                                             ->  Hash Join
-                                                   Hash Cond: ((t2_3.b = t1_3.b) AND (t2_3.c = t1_3.c))
-                                                   ->  Broadcast Motion 3:3  (slice8; segments: 3)
-                                                         ->  Seq Scan on plt2_p3 t2_3
-                                                   ->  Hash
-                                                         ->  Seq Scan on plt1_p3 t1_3
+                                       ->  Redistribute Motion 3:3  (slice9; segments: 3)
+                                             Hash Key: t1_3.c
+                                             ->  Seq Scan on plt1_p3 t1_3
+                           ->  Hash
+                                 ->  Redistribute Motion 3:3  (slice10; segments: 3)
+                                       Hash Key: t2_3.c
+                                       ->  Seq Scan on plt2_p3 t2_3
  Optimizer: Postgres query optimizer
-(43 rows)
+(53 rows)
 
 SELECT avg(t1.a), avg(t2.b), avg(t3.a + t3.b), t1.c, t2.c, t3.c FROM plt1 t1, plt2 t2, plt1_e t3 WHERE t1.b = t2.b AND t1.c = t2.c AND ltrim(t3.c, 'A') = t1.c GROUP BY t1.c, t2.c, t3.c ORDER BY t1.c, t2.c, t3.c;
          avg          |         avg          |          avg          |  c   |  c   |   c   
@@ -1951,56 +1961,62 @@ ANALYZE pht1_e;
 -- test partition matching with N-way join
 EXPLAIN (COSTS OFF)
 SELECT avg(t1.a), avg(t2.b), avg(t3.a + t3.b), t1.c, t2.c, t3.c FROM pht1 t1, pht2 t2, pht1_e t3 WHERE t1.b = t2.b AND t1.c = t2.c AND ltrim(t3.c, 'A') = t1.c GROUP BY t1.c, t2.c, t3.c ORDER BY t1.c, t2.c, t3.c;
-                                               QUERY PLAN                                               
---------------------------------------------------------------------------------------------------------
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: t1.c, t3.c
-   ->  GroupAggregate
-         Group Key: t1.c, t3.c
-         ->  Sort
-               Sort Key: t1.c, t3.c
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: t1.c, t3.c
-                     ->  Append
-                           ->  Hash Join
-                                 Hash Cond: ((t1_1.b = t2_1.b) AND (t1_1.c = t2_1.c))
-                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                       Hash Key: t1_1.c
-                                       ->  Seq Scan on pht1_p1 t1_1
-                                 ->  Hash
-                                       ->  Hash Join
-                                             Hash Cond: (t2_1.c = ltrim(t3_1.c, 'A'::text))
+   ->  Sort
+         Sort Key: t1.c, t3.c
+         ->  HashAggregate
+               Group Key: t1.c, t3.c
+               ->  Append
+                     ->  Hash Join
+                           Hash Cond: ((t1_1.b = t2_1.b) AND (t1_1.c = t2_1.c))
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                 Hash Key: t1_1.c
+                                 ->  Seq Scan on pht1_p1 t1_1
+                           ->  Hash
+                                 ->  Hash Join
+                                       Hash Cond: (t2_1.c = ltrim(t3_1.c, 'A'::text))
+                                       ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                             Hash Key: t2_1.c
+                                             ->  Seq Scan on pht2_p1 t2_1
+                                       ->  Hash
                                              ->  Redistribute Motion 3:3  (slice4; segments: 3)
-                                                   Hash Key: t2_1.c
-                                                   ->  Seq Scan on pht2_p1 t2_1
-                                             ->  Hash
-                                                   ->  Redistribute Motion 3:3  (slice5; segments: 3)
-                                                         Hash Key: ltrim(t3_1.c, 'A'::text)
-                                                         ->  Seq Scan on pht1_e_p1 t3_1
-                           ->  Hash Join
-                                 Hash Cond: (t1_2.c = ltrim(t3_2.c, 'A'::text))
-                                 ->  Broadcast Motion 3:3  (slice6; segments: 3)
-                                       ->  Hash Join
-                                             Hash Cond: ((t2_2.b = t1_2.b) AND (t2_2.c = t1_2.c))
-                                             ->  Broadcast Motion 3:3  (slice7; segments: 3)
-                                                   ->  Seq Scan on pht2_p2 t2_2
-                                             ->  Hash
-                                                   ->  Seq Scan on pht1_p2 t1_2
-                                 ->  Hash
-                                       ->  Seq Scan on pht1_e_p2 t3_2
-                           ->  Hash Join
-                                 Hash Cond: (ltrim(t3_3.c, 'A'::text) = t1_3.c)
-                                 ->  Seq Scan on pht1_e_p3 t3_3
-                                 ->  Hash
-                                       ->  Broadcast Motion 3:3  (slice8; segments: 3)
-                                             ->  Hash Join
-                                                   Hash Cond: ((t2_3.b = t1_3.b) AND (t2_3.c = t1_3.c))
-                                                   ->  Broadcast Motion 3:3  (slice9; segments: 3)
-                                                         ->  Seq Scan on pht2_p3 t2_3
-                                                   ->  Hash
-                                                         ->  Seq Scan on pht1_p3 t1_3
+                                                   Hash Key: ltrim(t3_1.c, 'A'::text)
+                                                   ->  Seq Scan on pht1_e_p1 t3_1
+                     ->  Hash Join
+                           Hash Cond: ((t1_2.b = t2_2.b) AND (t1_2.c = t2_2.c))
+                           ->  Redistribute Motion 3:3  (slice5; segments: 3)
+                                 Hash Key: t1_2.c
+                                 ->  Seq Scan on pht1_p2 t1_2
+                           ->  Hash
+                                 ->  Hash Join
+                                       Hash Cond: (t2_2.c = ltrim(t3_2.c, 'A'::text))
+                                       ->  Redistribute Motion 3:3  (slice6; segments: 3)
+                                             Hash Key: t2_2.c
+                                             ->  Seq Scan on pht2_p2 t2_2
+                                       ->  Hash
+                                             ->  Redistribute Motion 3:3  (slice7; segments: 3)
+                                                   Hash Key: ltrim(t3_2.c, 'A'::text)
+                                                   ->  Seq Scan on pht1_e_p2 t3_2
+                     ->  Hash Join
+                           Hash Cond: ((t1_3.b = t2_3.b) AND (t1_3.c = t2_3.c))
+                           ->  Redistribute Motion 3:3  (slice8; segments: 3)
+                                 Hash Key: t1_3.c
+                                 ->  Seq Scan on pht1_p3 t1_3
+                           ->  Hash
+                                 ->  Hash Join
+                                       Hash Cond: (t2_3.c = ltrim(t3_3.c, 'A'::text))
+                                       ->  Redistribute Motion 3:3  (slice9; segments: 3)
+                                             Hash Key: t2_3.c
+                                             ->  Seq Scan on pht2_p3 t2_3
+                                       ->  Hash
+                                             ->  Redistribute Motion 3:3  (slice10; segments: 3)
+                                                   Hash Key: ltrim(t3_3.c, 'A'::text)
+                                                   ->  Seq Scan on pht1_e_p3 t3_3
  Optimizer: Postgres query optimizer
-(47 rows)
+(53 rows)
 
 SELECT avg(t1.a), avg(t2.b), avg(t3.a + t3.b), t1.c, t2.c, t3.c FROM pht1 t1, pht2 t2, pht1_e t3 WHERE t1.b = t2.b AND t1.c = t2.c AND ltrim(t3.c, 'A') = t1.c GROUP BY t1.c, t2.c, t3.c ORDER BY t1.c, t2.c, t3.c;
          avg          |         avg          |         avg          |  c   |  c   |   c   
@@ -6004,16 +6020,19 @@ SELECT t1.*, t2.* FROM alpha t1 INNER JOIN beta t2 ON (t1.a = t2.a AND t1.c = t2
    ->  Sort
          Sort Key: t1.a, t1.b, t2.b
          ->  Append
-               ->  Hash Join
-                     Hash Cond: ((t1_2.a = t2_2.a) AND (t1_2.c = t2_2.c))
-                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                           Hash Key: t1_2.a, t1_2.c
-                           ->  Append
-                                 ->  Seq Scan on alpha_neg_p1 t1_2
-                                       Filter: ((c = ANY ('{0004,0009}'::text[])) AND (((b >= 100) AND (b < 110)) OR ((b >= 200) AND (b < 210))))
-                                 ->  Seq Scan on alpha_neg_p2 t1_3
-                                       Filter: ((c = ANY ('{0004,0009}'::text[])) AND (((b >= 100) AND (b < 110)) OR ((b >= 200) AND (b < 210))))
-                     ->  Hash
+               ->  Merge Join
+                     Merge Cond: ((t1_2.a = t2_2.a) AND (t1_2.c = t2_2.c))
+                     ->  Sort
+                           Sort Key: t1_2.a, t1_2.c
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                 Hash Key: t1_2.a, t1_2.c
+                                 ->  Append
+                                       ->  Seq Scan on alpha_neg_p1 t1_2
+                                             Filter: ((c = ANY ('{0004,0009}'::text[])) AND (((b >= 100) AND (b < 110)) OR ((b >= 200) AND (b < 210))))
+                                       ->  Seq Scan on alpha_neg_p2 t1_3
+                                             Filter: ((c = ANY ('{0004,0009}'::text[])) AND (((b >= 100) AND (b < 110)) OR ((b >= 200) AND (b < 210))))
+                     ->  Sort
+                           Sort Key: t2_2.a, t2_2.c
                            ->  Redistribute Motion 3:3  (slice3; segments: 3)
                                  Hash Key: t2_2.a, t2_2.c
                                  ->  Append
@@ -6036,7 +6055,7 @@ SELECT t1.*, t2.* FROM alpha t1 INNER JOIN beta t2 ON (t1.a = t2.a AND t1.c = t2
                            ->  Seq Scan on beta_pos_p3 t2_5
                                  Filter: ((c = ANY ('{0004,0009}'::text[])) AND (((b >= 100) AND (b < 110)) OR ((b >= 200) AND (b < 210))))
  Optimizer: Postgres query optimizer
-(37 rows)
+(40 rows)
 
 SELECT t1.*, t2.* FROM alpha t1 INNER JOIN beta t2 ON (t1.a = t2.a AND t1.c = t2.c) WHERE ((t1.b >= 100 AND t1.b < 110) OR (t1.b >= 200 AND t1.b < 210)) AND ((t2.b >= 100 AND t2.b < 110) OR (t2.b >= 200 AND t2.b < 210)) AND t1.c IN ('0004', '0009') ORDER BY t1.a, t1.b, t2.b;
  a  |  b  |  c   | a  |  b  |  c   

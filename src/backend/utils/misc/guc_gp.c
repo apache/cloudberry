@@ -1809,7 +1809,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_NOT_IN_SAMPLE | GUC_EXPLAIN
 		},
 		&gp_composite_key_join_selectivity,
-		false,
+		true,
 		NULL, NULL, NULL
 	},
 

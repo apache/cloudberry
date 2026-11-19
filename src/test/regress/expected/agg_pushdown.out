@@ -283,23 +283,23 @@ c2.parent = p.i WHERE c1.j = c2.k GROUP BY p.i;
                      Sort Key: p.i
                      ->  Nested Loop
                            Output: p.i, c1.v, c2.v
-                           Join Filter: (p.i = c1.parent)
-                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                                 Output: p.i
-                                 ->  Seq Scan on public.agg_pushdown_parent p
+                           Join Filter: ((c1.parent = c2.parent) AND (c1.j = c2.k))
+                           ->  Nested Loop
+                                 Output: p.i, c1.v, c1.parent, c1.j
+                                 Join Filter: (p.i = c1.parent)
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)
                                        Output: p.i
-                           ->  Materialize
-                                 Output: c1.v, c1.parent, c2.v, c2.parent
-                                 ->  Nested Loop
-                                       Output: c1.v, c1.parent, c2.v, c2.parent
-                                       Join Filter: ((c1.parent = c2.parent) AND (c1.j = c2.k))
+                                       ->  Seq Scan on public.agg_pushdown_parent p
+                                             Output: p.i
+                                 ->  Materialize
+                                       Output: c1.v, c1.parent, c1.j
                                        ->  Seq Scan on public.agg_pushdown_child1 c1
-                                             Output: c1.j, c1.parent, c1.v
-                                       ->  Materialize
-                                             Output: c2.v, c2.parent, c2.k
-                                             ->  Seq Scan on public.agg_pushdown_child2 c2
-                                                   Output: c2.v, c2.parent, c2.k
- Settings: enable_hashjoin = 'off', enable_mergejoin = 'off', enable_nestloop = 'on', enable_parallel = 'off', enable_seqscan = 'on', gp_enable_agg_pushdown = 'off', optimizer = 'off'
+                                             Output: c1.v, c1.parent, c1.j
+                           ->  Materialize
+                                 Output: c2.v, c2.parent, c2.k
+                                 ->  Seq Scan on public.agg_pushdown_child2 c2
+                                       Output: c2.v, c2.parent, c2.k
+ Settings: optimizer = 'off', enable_mergejoin = 'off', enable_nestloop = 'on', enable_hashjoin = 'off', gp_enable_agg_pushdown = 'off', enable_seqscan = 'on'
  Optimizer: Postgres query optimizer
 (32 rows)
 
@@ -399,32 +399,35 @@ EXPLAIN (VERBOSE on, COSTS off)
 SELECT p.i, avg(c1.v + c2.v) FROM agg_pushdown_parent AS p JOIN
 agg_pushdown_child1 AS c1 ON c1.parent = p.i JOIN agg_pushdown_child2 AS c2 ON
 c2.parent = p.i WHERE c1.j = c2.k GROUP BY p.i;
-                                                                                       QUERY PLAN                                                                                       
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                           
+---------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: p.i, (avg((c1.v + c2.v)))
-   ->  HashAggregate
+   ->  Finalize HashAggregate
          Output: p.i, avg((c1.v + c2.v))
          Group Key: p.i
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Output: p.i, c1.v, c2.v
+               Output: p.i, (PARTIAL avg((c1.v + c2.v)))
                Hash Key: p.i
                ->  Merge Join
-                     Output: p.i, c1.v, c2.v
+                     Output: p.i, (PARTIAL avg((c1.v + c2.v)))
                      Merge Cond: (c1.parent = p.i)
-                     ->  Merge Join
-                           Output: c1.v, c1.parent, c2.v, c2.parent
-                           Merge Cond: ((c1.parent = c2.parent) AND (c1.j = c2.k))
-                           ->  Sort
-                                 Output: c1.v, c1.parent, c1.j
-                                 Sort Key: c1.parent, c1.j
-                                 ->  Seq Scan on public.agg_pushdown_child1 c1
+                     ->  Partial GroupAggregate
+                           Output: c1.parent, c2.parent, PARTIAL avg((c1.v + c2.v))
+                           Group Key: c1.parent
+                           ->  Merge Join
+                                 Output: c1.v, c1.parent, c2.v, c2.parent
+                                 Merge Cond: ((c1.parent = c2.parent) AND (c1.j = c2.k))
+                                 ->  Sort
                                        Output: c1.v, c1.parent, c1.j
-                           ->  Sort
-                                 Output: c2.v, c2.parent, c2.k
-                                 Sort Key: c2.parent, c2.k
-                                 ->  Seq Scan on public.agg_pushdown_child2 c2
+                                       Sort Key: c1.parent, c1.j
+                                       ->  Seq Scan on public.agg_pushdown_child1 c1
+                                             Output: c1.v, c1.parent, c1.j
+                                 ->  Sort
                                        Output: c2.v, c2.parent, c2.k
+                                       Sort Key: c2.parent, c2.k
+                                       ->  Seq Scan on public.agg_pushdown_child2 c2
+                                             Output: c2.v, c2.parent, c2.k
                      ->  Sort
                            Output: p.i
                            Sort Key: p.i
@@ -434,7 +437,7 @@ c2.parent = p.i WHERE c1.j = c2.k GROUP BY p.i;
                                        Output: p.i
  Settings: enable_hashjoin = 'off', enable_mergejoin = 'on', enable_nestloop = 'off', enable_parallel = 'off', enable_seqscan = 'off', gp_enable_agg_pushdown = 'on', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(33 rows)
+(36 rows)
 
 SET enable_seqscan TO on;
 -- Clear tables
