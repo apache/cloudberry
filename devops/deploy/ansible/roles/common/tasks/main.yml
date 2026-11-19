@@ -1,0 +1,369 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+---
+# --- SELinux ---
+# On RHEL/Rocky Linux, SELinux must be disabled.
+# On Ubuntu, SELinux is not installed by default and this task is skipped.
+# If SELinux is installed on Ubuntu, it will also be disabled.
+- name: Disable SELinux (RHEL/Rocky Linux)
+  selinux:
+    state: disabled
+  when: ansible_os_family == "RedHat"
+
+- name: Disable SELinux if installed (Ubuntu)
+  shell: |
+    if dpkg -l selinux-basics &>/dev/null 2>&1; then
+      setenforce 0 2>/dev/null || true
+      sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config 2>/dev/null || true
+      echo "SELinux disabled"
+    else
+      echo "SELinux not installed, skipping"
+    fi
+  args:
+    executable: /bin/bash
+  when: ansible_os_family == "Debian"
+  register: selinux_ubuntu_result
+  changed_when: "'SELinux disabled' in selinux_ubuntu_result.stdout"
+
+# --- Firewall ---
+# RHEL/Rocky Linux: stop and disable firewalld
+# Ubuntu: ufw is disabled by default; disable it if active
+- name: Stop and disable firewalld (RHEL/Rocky Linux)
+  systemd:
+    name: firewalld
+    state: stopped
+    enabled: no
+  when: ansible_os_family == "RedHat"
+  ignore_errors: yes
+
+- name: Disable ufw if active (Ubuntu)
+  shell: |
+    if ufw status | grep -q "Status: active"; then
+      ufw disable
+      echo "ufw disabled"
+    else
+      echo "ufw already inactive, skipping"
+    fi
+  args:
+    executable: /bin/bash
+  when: ansible_os_family == "Debian"
+  register: ufw_result
+  changed_when: "'ufw disabled' in ufw_result.stdout"
+
+# --- Hosts file ---
+- name: Set hostname
+  hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Add cluster hosts to /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ hostvars[item].ansible_host }}  {{ item }}"
+    state: present
+  loop: "{{ groups['cloudberry'] }}"
+
+# --- Kernel parameters ---
+# Dynamically calculate memory-dependent sysctl values based on each host's
+# actual physical memory and swap, following the official documentation formulas:
+#   kernel.shmall = _PHYS_PAGES / 2
+#   kernel.shmmax = (_PHYS_PAGES / 2) * PAGE_SIZE
+#   vm.overcommit_ratio = (RAM - 0.026 * gp_vmem) / RAM * 100
+#   vm.dirty_* uses bytes mode for >64GB RAM, ratio mode for <=64GB RAM
+#   vm.min_free_kbytes = MemTotal * 3%
+
+- name: Get system PAGE_SIZE
+  command: getconf PAGE_SIZE
+  register: _page_size_result
+  changed_when: false
+
+- name: Calculate dynamic sysctl values
+  set_fact:
+    _ram_mb: "{{ ansible_memtotal_mb }}"
+    _swap_mb: "{{ ansible_swaptotal_mb }}"
+    _page_size: "{{ _page_size_result.stdout | int }}"
+
+- name: Calculate kernel.shmall and kernel.shmmax
+  set_fact:
+    _shmall: "{{ ((_ram_mb | int * 1024 / (_page_size | int)) / 2) | int }}"
+    _shmmax: "{{ ((_ram_mb | int * 1024 / (_page_size | int)) / 2 * (_page_size | int)) | int }}"
+
+- name: Calculate vm.overcommit_ratio
+  set_fact:
+    _ram_gb: "{{ (_ram_mb | int / 1024) | float }}"
+    _swap_gb: "{{ (_swap_mb | int / 1024) | float }}"
+
+- name: Calculate gp_vmem and overcommit_ratio
+  set_fact:
+    _gp_vmem: >-
+      {{ ((_swap_gb | float + _ram_gb | float) - (7.5 + 0.05 * (_ram_gb | float)))
+         / ((_ram_gb | float >= 256) | ternary(1.17, 1.7)) }}
+
+- name: Calculate final overcommit_ratio
+  set_fact:
+    _overcommit_ratio: "{{ ((_ram_gb | float - 0.026 * (_gp_vmem | float)) / (_ram_gb | float) * 100) | int }}"
+
+- name: Calculate vm.min_free_kbytes (3% of MemTotal in kB)
+  set_fact:
+    _min_free_kbytes: "{{ (_ram_mb | int * 1024 * 0.03) | round | int }}"
+
+- name: Set sysctl parameters (fixed values)
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_set: yes
+    reload: yes
+  loop: "{{ sysctl_fixed | dict2items }}"
+  vars:
+    sysctl_fixed:
+      kernel.shmmni: "4096"
+      vm.overcommit_memory: "2"
+      net.ipv4.ip_local_port_range: "10000 65535"
+      kernel.sem: "250 2048000 200 8192"
+      kernel.sysrq: "1"
+      kernel.core_uses_pid: "1"
+      kernel.msgmnb: "65536"
+      kernel.msgmax: "65536"
+      kernel.msgmni: "2048"
+      net.ipv4.tcp_syncookies: "1"
+      net.ipv4.conf.default.accept_source_route: "0"
+      net.ipv4.tcp_max_syn_backlog: "4096"
+      net.ipv4.conf.all.arp_filter: "1"
+      net.ipv4.ipfrag_high_thresh: "41943040"
+      net.ipv4.ipfrag_low_thresh: "31457280"
+      net.ipv4.ipfrag_time: "60"
+      net.core.netdev_max_backlog: "10000"
+      net.core.rmem_max: "2097152"
+      net.core.wmem_max: "2097152"
+      vm.swappiness: "10"
+      vm.zone_reclaim_mode: "0"
+      vm.dirty_expire_centisecs: "500"
+      vm.dirty_writeback_centisecs: "100"
+      kernel.core_pattern: "/var/core/core.%h.%t"
+
+- name: Set sysctl parameters (memory-dependent)
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_set: yes
+    reload: yes
+  loop:
+    - { key: "kernel.shmall", value: "{{ _shmall }}" }
+    - { key: "kernel.shmmax", value: "{{ _shmmax }}" }
+    - { key: "vm.overcommit_ratio", value: "{{ _overcommit_ratio }}" }
+    - { key: "vm.min_free_kbytes", value: "{{ _min_free_kbytes }}" }
+
+- name: Set sysctl dirty parameters for hosts with more than 64GB RAM (bytes mode)
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_set: yes
+    reload: yes
+  loop:
+    - { key: "vm.dirty_background_ratio", value: "0" }
+    - { key: "vm.dirty_ratio", value: "0" }
+    - { key: "vm.dirty_background_bytes", value: "1610612736" }
+    - { key: "vm.dirty_bytes", value: "4294967296" }
+  when: _ram_mb | int > 65536
+
+- name: Set sysctl dirty parameters for hosts with 64GB RAM or less (ratio mode)
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_set: yes
+    reload: yes
+  loop:
+    - { key: "vm.dirty_background_ratio", value: "3" }
+    - { key: "vm.dirty_ratio", value: "10" }
+  when: _ram_mb | int <= 65536
+  # Per official docs: for systems with 64GB RAM or less, only set the ratio
+  # parameters. vm.dirty_background_bytes and vm.dirty_bytes should be omitted
+  # entirely, not set to 0.
+
+- name: Create core dump directory
+  file:
+    path: /var/core
+    state: directory
+    mode: "1777"
+
+# --- Resource limits ---
+- name: Set PAM limits
+  pam_limits:
+    domain: "*"
+    limit_type: "{{ item.type }}"
+    limit_item: "{{ item.item }}"
+    value: "{{ item.value }}"
+  loop:
+    - { type: soft, item: nofile, value: "524288" }
+    - { type: hard, item: nofile, value: "524288" }
+    - { type: soft, item: nproc, value: "131072" }
+    - { type: hard, item: nproc, value: "131072" }
+    - { type: soft, item: core, value: unlimited }
+
+# --- XFS mount ---
+- name: Create XFS filesystem on data disk
+  filesystem:
+    fstype: xfs
+    dev: "{{ data_disk }}"
+    force: no
+  ignore_errors: yes
+
+- name: Mount data disk
+  mount:
+    path: "{{ data_mount }}"
+    src: "{{ data_disk }}"
+    fstype: xfs
+    opts: rw,nodev,noatime,inode64
+    state: mounted
+
+# --- Disk I/O ---
+- name: Set blockdev read-ahead
+  command: "/sbin/blockdev --setra 16384 {{ data_disk }}"
+  changed_when: false
+
+- name: Set I/O scheduler via grubby (RHEL/Rocky Linux)
+  command: grubby --update-kernel=ALL --args="elevator=mq-deadline"
+  ignore_errors: yes
+  changed_when: false
+  when: ansible_os_family == "RedHat"
+
+- name: Set I/O scheduler via grub (Ubuntu)
+  shell: |
+    if grep -q "elevator=mq-deadline" /etc/default/grub; then
+      echo "elevator already set, skipping"
+    else
+      sed -i 's/GRUB_CMDLINE_LINUX="\(.*\)"/GRUB_CMDLINE_LINUX="\1 elevator=mq-deadline"/' /etc/default/grub
+      update-grub
+      echo "elevator set"
+    fi
+  args:
+    executable: /bin/bash
+  when: ansible_os_family == "Debian"
+  register: grub_elevator_result
+  changed_when: "'elevator set' in grub_elevator_result.stdout"
+
+# --- THP ---
+- name: Disable Transparent Huge Pages via grubby (RHEL/Rocky Linux)
+  command: grubby --update-kernel=ALL --args="transparent_hugepage=never"
+  ignore_errors: yes
+  changed_when: false
+  when: ansible_os_family == "RedHat"
+
+- name: Disable Transparent Huge Pages via grub (Ubuntu)
+  shell: |
+    if grep -q "transparent_hugepage=never" /etc/default/grub; then
+      echo "THP already disabled, skipping"
+    else
+      sed -i 's/GRUB_CMDLINE_LINUX="\(.*\)"/GRUB_CMDLINE_LINUX="\1 transparent_hugepage=never"/' /etc/default/grub
+      update-grub
+      echo "THP disabled"
+    fi
+  args:
+    executable: /bin/bash
+  when: ansible_os_family == "Debian"
+  register: grub_thp_result
+  changed_when: "'THP disabled' in grub_thp_result.stdout"
+
+# --- IPC ---
+- name: Disable IPC object removal
+  lineinfile:
+    path: /etc/systemd/logind.conf
+    regexp: "^#?RemoveIPC="
+    line: "RemoveIPC=no"
+  notify: restart systemd-logind
+
+# --- SSH threshold ---
+- name: Set SSH MaxStartups
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?MaxStartups"
+    line: "MaxStartups 10:30:200"
+  notify: restart sshd
+
+- name: Set SSH MaxSessions
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?MaxSessions"
+    line: "MaxSessions 200"
+  notify: restart sshd
+
+# --- Clock sync ---
+# RHEL/Rocky Linux uses chronyd; Ubuntu uses chrony (package name differs)
+- name: Enable and start chronyd (RHEL/Rocky Linux)
+  systemd:
+    name: chronyd
+    state: started
+    enabled: yes
+  when: ansible_os_family == "RedHat"
+
+- name: Enable and start chrony (Ubuntu)
+  systemd:
+    name: chrony
+    state: started
+    enabled: yes
+  when: ansible_os_family == "Debian"
+
+# --- gpadmin user ---
+- name: Create gpadmin group
+  group:
+    name: "{{ cloudberry_admin_user }}"
+    state: present
+
+- name: Create gpadmin user
+  user:
+    name: "{{ cloudberry_admin_user }}"
+    group: "{{ cloudberry_admin_user }}"
+    system: yes
+    create_home: yes
+    password: "{{ cloudberry_admin_password | password_hash('sha512') }}"
+
+- name: Add gpadmin to wheel group and enable NOPASSWD sudo (RHEL/Rocky Linux)
+  user:
+    name: "{{ cloudberry_admin_user }}"
+    groups: wheel
+    append: yes
+  when: ansible_os_family == "RedHat"
+
+- name: Ensure wheel group has NOPASSWD sudo (RHEL/Rocky Linux)
+  lineinfile:
+    path: /etc/sudoers
+    regexp: "^%wheel"
+    line: "%wheel ALL=(ALL) NOPASSWD: ALL"
+    validate: "visudo -cf %s"
+  when: ansible_os_family == "RedHat"
+
+- name: Add gpadmin to sudo group (Ubuntu)
+  user:
+    name: "{{ cloudberry_admin_user }}"
+    groups: sudo
+    append: yes
+  when: ansible_os_family == "Debian"
+
+- name: Create sudoers drop-in file for gpadmin (Ubuntu)
+  copy:
+    content: "gpadmin ALL=(ALL) NOPASSWD: ALL\n"
+    dest: /etc/sudoers.d/gpadmin
+    mode: "0440"
+    validate: "visudo -cf %s"
+  when: ansible_os_family == "Debian"
+
+- name: Set data directory ownership
+  file:
+    path: "{{ data_mount }}"
+    owner: "{{ cloudberry_admin_user }}"
+    group: "{{ cloudberry_admin_user }}"
+    recurse: yes

@@ -1,0 +1,337 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+# Usage:
+#   Download and verify the source tarball from https://cloudberry.apache.org/releases
+#   before running this playbook, then pass the local path via:
+#     -e source_path=/path/to/apache-cloudberry-2.1.0-incubating-src.tar.gz
+
+---
+# --- Install build dependencies ---
+
+- name: Install EPEL repository (RHEL/Rocky Linux 8)
+  dnf:
+    name: epel-release
+    state: present
+  when:
+    - ansible_os_family == "RedHat"
+    - ansible_distribution_major_version == "8"
+
+- name: Install build dependencies (RHEL/Rocky Linux 8)
+  dnf:
+    name:
+      - apr-devel
+      - bison
+      - bzip2-devel
+      - cmake3
+      - curl
+      - diffutils
+      - flex
+      - gcc
+      - gcc-c++
+      - glibc-langpack-en
+      - glibc-locale-source
+      - iproute
+      - krb5-devel
+      - libcurl-devel
+      - libevent-devel
+      - libxml2-devel
+      - libuuid-devel
+      - libzstd-devel
+      - lz4-devel
+      - net-tools
+      - openldap-devel
+      - openssl-devel
+      - openssh-server
+      - pam-devel
+      - perl
+      - perl-ExtUtils-Embed
+      - perl-Test-Simple
+      - perl-Env
+      - python3-devel
+      - python3-pip
+      - readline-devel
+      - rsync
+      - the_silver_searcher
+      - wget
+      - which
+      - zlib-devel
+    state: present
+  when:
+    - ansible_os_family == "RedHat"
+    - ansible_distribution_major_version == "8"
+
+- name: Install extra build dependencies from devel repo (Rocky Linux 8)
+  dnf:
+    name:
+      - liburing-devel
+      - libuv-devel
+      - libyaml-devel
+      - perl-IPC-Run
+      - protobuf-devel
+    state: present
+    enablerepo: devel
+  when:
+    - ansible_os_family == "RedHat"
+    - ansible_distribution_major_version == "8"
+
+- name: Install EPEL repository (RHEL/Rocky Linux 9+)
+  dnf:
+    name: epel-release
+    state: present
+  when:
+    - ansible_os_family == "RedHat"
+    - ansible_distribution_major_version | int >= 9
+
+- name: Install build dependencies (RHEL/Rocky Linux 9+)
+  dnf:
+    name:
+      - apr-devel
+      - bison
+      - bzip2-devel
+      - cmake3
+      - curl
+      - diffutils
+      - flex
+      - gcc
+      - gcc-c++
+      - glibc-langpack-en
+      - glibc-locale-source
+      - iproute
+      - krb5-devel
+      - libcurl-devel
+      - libevent-devel
+      - libxml2-devel
+      - libuuid-devel
+      - libzstd-devel
+      - lz4-devel
+      - net-tools
+      - openldap-devel
+      - openssl-devel
+      - openssh-server
+      - pam-devel
+      - perl
+      - perl-ExtUtils-Embed
+      - perl-Test-Simple
+      - perl-Env
+      - python3-devel
+      - python3-pip
+      - readline-devel
+      - rsync
+      - the_silver_searcher
+      - wget
+      - which
+      - zlib-devel
+    state: present
+  when:
+    - ansible_os_family == "RedHat"
+    - ansible_distribution_major_version | int >= 9
+
+- name: Install extra build dependencies from crb repo (Rocky Linux 9+)
+  dnf:
+    name:
+      - liburing-devel
+      - libuv-devel
+      - libyaml-devel
+      - perl-IPC-Run
+      - protobuf-devel
+    state: present
+    enablerepo: crb
+  when:
+    - ansible_os_family == "RedHat"
+    - ansible_distribution_major_version | int >= 9
+
+- name: Install build dependencies (Ubuntu 22.04)
+  apt:
+    name:
+      - bison
+      - bzip2
+      - cmake
+      - curl
+      - flex
+      - gcc
+      - g++
+      - iproute2
+      - iputils-ping
+      - language-pack-en
+      - locales
+      - libapr1-dev
+      - libbz2-dev
+      - libcurl4-gnutls-dev
+      - libevent-dev
+      - libkrb5-dev
+      - libipc-run-perl
+      - libldap2-dev
+      - libpam0g-dev
+      - libprotobuf-dev
+      - libreadline-dev
+      - libssl-dev
+      - liburing-dev
+      - libuv1-dev
+      - liblz4-dev
+      - libxerces-c-dev
+      - libxml2-dev
+      - libyaml-dev
+      - libzstd-dev
+      - libperl-dev
+      - make
+      - pkg-config
+      - protobuf-compiler
+      - python3-dev
+      - python3-pip
+      - python3-setuptools
+      - rsync
+      - wget
+    state: present
+    update_cache: yes
+  when: ansible_os_family == "Debian"
+
+# --- Install Apache Xerces-C (RHEL/Rocky Linux only) ---
+# Ubuntu uses the system libxerces-c-dev package installed above.
+# Download the Xerces-C source tarball from https://xerces.apache.org/xerces-c/download.cgi
+# and pass the local path via: -e xerces_path=/path/to/xerces-c-3.3.0.tar.gz
+
+- name: Check if Xerces-C is already installed (RHEL/Rocky Linux)
+  stat:
+    path: "/usr/local/xerces-c/lib/libxerces-c.so"
+  register: xerces_installed
+  when: ansible_os_family == "RedHat"
+
+- name: Copy Xerces-C source tarball to host (RHEL/Rocky Linux)
+  copy:
+    src: "{{ xerces_path }}"
+    dest: "/tmp/{{ xerces_path | basename }}"
+    mode: "0644"
+  when:
+    - ansible_os_family == "RedHat"
+    - not xerces_installed.stat.exists
+
+- name: Build and install Xerces-C (RHEL/Rocky Linux)
+  shell: |
+    cd /tmp
+    tar xf {{ xerces_path | basename }}
+    extracted=$(tar -tzf {{ xerces_path | basename }} | head -1 | cut -d/ -f1)
+    cd ${extracted}
+    ./configure --prefix=/usr/local/xerces-c-{{ xerces_version }}
+    make -j$(nproc)
+    sudo make install
+    sudo ln -sf /usr/local/xerces-c-{{ xerces_version }} /usr/local/xerces-c
+    cd /tmp && rm -rf ${extracted} {{ xerces_path | basename }}
+  args:
+    executable: /bin/bash
+  when:
+    - ansible_os_family == "RedHat"
+    - not xerces_installed.stat.exists
+
+# --- Copy and extract source tarball ---
+
+- name: Copy source tarball to host
+  copy:
+    src: "{{ source_path }}"
+    dest: "/tmp/{{ source_path | basename }}"
+    owner: "{{ cloudberry_admin_user }}"
+    group: "{{ cloudberry_admin_user }}"
+    mode: "0644"
+
+- name: Check if source directory already exists
+  stat:
+    path: "/home/{{ cloudberry_admin_user }}/cloudberry"
+  register: src_dir
+
+- name: Extract source tarball
+  unarchive:
+    src: "/tmp/{{ source_path | basename }}"
+    dest: "/home/{{ cloudberry_admin_user }}"
+    remote_src: yes
+    owner: "{{ cloudberry_admin_user }}"
+    group: "{{ cloudberry_admin_user }}"
+  when: not src_dir.stat.exists
+
+- name: Rename extracted directory to cloudberry
+  shell: |
+    extracted=$(tar -tzf /tmp/{{ source_path | basename }} | head -1 | cut -d/ -f1)
+    mv /home/{{ cloudberry_admin_user }}/${extracted} \
+       /home/{{ cloudberry_admin_user }}/cloudberry
+  args:
+    executable: /bin/bash
+  when: not src_dir.stat.exists
+
+- name: Cleanup source tarball from /tmp
+  file:
+    path: "/tmp/{{ source_path | basename }}"
+    state: absent
+
+# --- Build and install ---
+
+- name: Create build-logs directory
+  file:
+    path: "/home/{{ cloudberry_admin_user }}/cloudberry/build-logs"
+    state: directory
+    owner: "{{ cloudberry_admin_user }}"
+    group: "{{ cloudberry_admin_user }}"
+
+- name: Configure Cloudberry
+  shell: |
+    export SRC_DIR=/home/{{ cloudberry_admin_user }}/cloudberry
+    export BUILD_DESTINATION=/usr/local/cloudberry-db
+    cd ${SRC_DIR}
+    ./devops/build/automation/cloudberry/scripts/configure-cloudberry.sh
+  args:
+    executable: /bin/bash
+  become_user: "{{ cloudberry_admin_user }}"
+
+- name: Build Cloudberry main
+  shell: make -j$(nproc) --directory ${SRC_DIR}
+  args:
+    executable: /bin/bash
+  become_user: "{{ cloudberry_admin_user }}"
+  environment:
+    SRC_DIR: "/home/{{ cloudberry_admin_user }}/cloudberry"
+    BUILD_DESTINATION: "/usr/local/cloudberry-db"
+    LD_LIBRARY_PATH: "/usr/local/cloudberry-db/lib"
+
+- name: Build Cloudberry contrib
+  shell: make -j$(nproc) --directory ${SRC_DIR}/contrib
+  args:
+    executable: /bin/bash
+  become_user: "{{ cloudberry_admin_user }}"
+  environment:
+    SRC_DIR: "/home/{{ cloudberry_admin_user }}/cloudberry"
+    BUILD_DESTINATION: "/usr/local/cloudberry-db"
+    LD_LIBRARY_PATH: "/usr/local/cloudberry-db/lib"
+
+- name: Install Cloudberry main
+  shell: make install --directory ${SRC_DIR}
+  args:
+    executable: /bin/bash
+  become_user: "{{ cloudberry_admin_user }}"
+  environment:
+    SRC_DIR: "/home/{{ cloudberry_admin_user }}/cloudberry"
+    BUILD_DESTINATION: "/usr/local/cloudberry-db"
+
+- name: Install Cloudberry contrib
+  shell: make install --directory ${SRC_DIR}/contrib
+  args:
+    executable: /bin/bash
+  become_user: "{{ cloudberry_admin_user }}"
+  environment:
+    SRC_DIR: "/home/{{ cloudberry_admin_user }}/cloudberry"
+    BUILD_DESTINATION: "/usr/local/cloudberry-db"
+
+- name: Set installation directory ownership
+  shell: chown -R {{ cloudberry_admin_user }}:{{ cloudberry_admin_user }} /usr/local/cloudberry*
+  changed_when: false
