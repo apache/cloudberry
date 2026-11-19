@@ -524,8 +524,7 @@ SharedSnapshotLookup(int32 slotId)
 
 
 /*
- * Used by the "writer" qExec to "release" the slot it had been using.
- *
+ * Release the shared snapshot slot owned by the coordinator or writer QE.
  */
 void
 SharedSnapshotRemove(volatile SharedSnapshotSlot *slot, char *creatorDescription)
@@ -537,8 +536,9 @@ SharedSnapshotRemove(volatile SharedSnapshotSlot *slot, char *creatorDescription
 	if (slot->snapshot_handle != DSM_HANDLE_INVALID)
 		dsm_unpin_segment(slot->snapshot_handle);
 
-	/* determine if we need to modify the next available slot to use.  we
-	 * only do this is our slotindex is lower then the existing one.
+	/*
+	 * Make this slot the next available one if no free slot was recorded
+	 * or this slot has a lower index.
 	 */
 	if (sharedSnapshotArray->nextSlot == -1 || slot->slotindex < sharedSnapshotArray->nextSlot)
 	{
@@ -566,6 +566,9 @@ SharedSnapshotRemove(volatile SharedSnapshotSlot *slot, char *creatorDescription
 
 	elog((Debug_print_full_dtm ? LOG : DEBUG5),"SharedSnapshotRemove removed slot for slotId = %d, creator = %s (address %p)",
 		 slotId, creatorDescription, SharedLocalSnapshotSlot);
+
+	/* Lets a test wait until an exiting backend has released its slot. */
+	SIMPLE_FAULT_INJECTOR("shared_snapshot_remove_done");
 }
 
 void
