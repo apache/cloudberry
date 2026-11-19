@@ -711,3 +711,50 @@ SELECT * FROM cursor_initplan ORDER BY a;
 (10 rows)
 
 DROP TABLE cursor_initplan;
+-- Reuse cursor dump DSMs across multiple turns of the 32-entry ring.
+CREATE TABLE sharedsnapshot_dsm_test (id int, value int) DISTRIBUTED BY (id);
+INSERT INTO sharedsnapshot_dsm_test VALUES (1, 10), (2, 20), (3, 30);
+BEGIN;
+DECLARE saved_cursor CURSOR FOR
+    SELECT * FROM sharedsnapshot_dsm_test ORDER BY id;
+FETCH 1 FROM saved_cursor;
+ id | value 
+----+-------
+  1 |    10
+(1 row)
+
+UPDATE sharedsnapshot_dsm_test SET value = value + 100;
+-- Separate client commands produce distinct dump versions. Suppress the
+-- repetitive results while retaining errors in the regression output.
+\o /dev/null
+\set ECHO none
+\o
+-- The saved cursor still returns its original rows after the ring wraps.
+FETCH ALL FROM saved_cursor;
+ id | value 
+----+-------
+  2 |    20
+  3 |    30
+(2 rows)
+
+CLOSE saved_cursor;
+COMMIT;
+-- Exercise transaction-end cleanup through rollback as well.
+BEGIN;
+\o /dev/null
+\set ECHO none
+\o
+ROLLBACK;
+-- A new cursor returns the expected result after commit and rollback.
+BEGIN;
+DECLARE fresh_cursor CURSOR FOR
+    SELECT sum(value) AS total FROM sharedsnapshot_dsm_test;
+FETCH ALL FROM fresh_cursor;
+ total 
+-------
+   360
+(1 row)
+
+CLOSE fresh_cursor;
+COMMIT;
+DROP TABLE sharedsnapshot_dsm_test;
