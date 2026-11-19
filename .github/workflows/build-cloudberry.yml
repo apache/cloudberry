@@ -391,7 +391,8 @@ jobs:
                                "src/interfaces/libpq:installcheck",
                                "src/test/postmaster:installcheck",
                                "src/test/modules/ssl_passphrase_callback:install installcheck",
-                               "src/test/modules/test_custom_rmgrs:install installcheck"]
+                               "src/test/modules/test_custom_rmgrs:install installcheck",
+                               "src/test/modules/test_misc:installcheck PROVE_TESTS=t/029_vacuum_resource_verbose.pl"]
               },
               {"test":"ic-pl-modules",
                "make_configs":["src/pl/plperl:installcheck",
@@ -1537,9 +1538,8 @@ jobs:
       # shared_preload_libraries has to exist for the cluster to start.
       #
       # The regression below still runs through the ordinary make_configs
-      # entry.  Note that those entries cannot carry make variables: the runner
-      # joins the list and re-splits it on spaces, so "dir:target VAR=1" would
-      # be read as two configurations and the second one would fail.
+      # entry. Entries are separated by newlines, so a target may include
+      # make variable assignments, such as "dir:installcheck PROVE_TESTS=t/test.pl".
       - name: Build extension against the installed server
         if: success() && needs.check-skip.outputs.should_skip != 'true'
         env:
