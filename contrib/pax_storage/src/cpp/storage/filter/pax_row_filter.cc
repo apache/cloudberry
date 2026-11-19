@@ -27,6 +27,8 @@
 
 #include "storage/filter/pax_row_filter.h"
 
+#include <algorithm>
+
 #include "comm/cbdb_wrappers.h"
 
 namespace paxc {
@@ -169,6 +171,20 @@ static bool BuildExecutionFilterForColumns(Relation rel, PlanState *ps,
 
 namespace pax {
 
+void ExecutionFilterContext::FinishSampling() {
+  for (auto &node : filter_nodes) {
+    node.score =
+        node.tested == 0 ? 1.0 : (double)node.passed / (double)node.tested;
+  }
+  std::stable_sort(filter_nodes.begin(), filter_nodes.end(),
+                   [](const auto &a, const auto &b) {
+                     if (a.kind != b.kind)
+                       return a.kind == FilterKind::kBloom;
+                     return a.score < b.score;
+                   });
+  sampling = false;
+}
+
 PaxRowFilter::PaxRowFilter() {}
 
 bool PaxRowFilter::Initialize(Relation rel, PlanState *ps,
@@ -181,6 +197,8 @@ bool PaxRowFilter::Initialize(Relation rel, PlanState *ps,
   CBDB_WRAP_END;
 
   if (ok) {
+    if (efctx_.size == 0 && !efctx_.runtime_bloom_keys.empty())
+      efctx_.sample_target = BLOOM_PROBE_SAMPLE_SIZE;
     FillRemainingColumns(rel, projection);
   }
 

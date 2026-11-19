@@ -51,26 +51,15 @@ class MicroPartitionRowFilterReader : public MicroPartitionReaderProxy {
   bool TestRowScanInternal(TupleTableSlot *slot, ExprState *estate,
                            AttrNumber attno);
 
-  // Ensure all columns needed by expr filters are loaded into the slot
-  inline void LoadExprFilterColumns(MicroPartitionReader::Group *group, TupleDesc desc,
-                                    const ExecutionFilterContext *ctx,
-                                    size_t row_index, TupleTableSlot *slot);
-
   // Evaluate a single bloom filter node
   inline bool EvalBloomNode(const ExecutionFilterContext *ctx,
                             MicroPartitionReader::Group *group, TupleDesc desc,
                             size_t row_index, int bloom_index);
 
   // Evaluate a single expr filter node
-  inline bool EvalExprNode(const ExecutionFilterContext *ctx, TupleTableSlot *slot,
-                           int expr_index);
-
-  // Evaluate a unified filter node and optionally update sampling stats
-  inline bool EvalFilterNode(ExecutionFilterContext *ctx,
-                             MicroPartitionReader::Group *group, TupleDesc desc,
-                             size_t row_index, TupleTableSlot *slot,
-                             ExecutionFilterContext::FilterNode &node,
-                             bool update_stats);
+  inline bool EvalExprNode(
+	  const ExecutionFilterContext *ctx, MicroPartitionReader::Group *group,
+	  TupleDesc desc, size_t row_index, TupleTableSlot *slot, int expr_index);
 
   // Apply all filters with sampling and dynamic ordering
   bool ApplyFiltersWithSampling(ExecutionFilterContext *ctx,

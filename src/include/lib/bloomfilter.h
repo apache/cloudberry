@@ -22,6 +22,12 @@ extern void bloom_add_element(bloom_filter *filter, unsigned char *elem,
 							  size_t len);
 extern bool bloom_lacks_element(bloom_filter *filter, unsigned char *elem,
 								size_t len);
+/* Optional runtime probes may stop rejecting rows after sampling. */
+#define BLOOM_PROBE_SAMPLE_SIZE 1024
+extern bool bloom_runtime_probe_disabled(const bloom_filter *filter);
+extern bool bloom_runtime_probe(bloom_filter *filter, unsigned char *elem,
+								size_t len);
+extern int bloom_runtime_probe_rank(const bloom_filter *filter);
 extern double bloom_prop_bits_set(bloom_filter *filter);
 extern double bloom_false_positive_rate(bloom_filter *filter);
 extern uint64 bloom_total_bits(bloom_filter *filter);

@@ -34,6 +34,7 @@
 #include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "access/skey.h"
 #include "access/table.h"
 #include "access/tableam.h"
 
@@ -101,6 +102,69 @@ ExecInitDynamicSeqScan(DynamicSeqScan *node, EState *estate, int eflags)
 									 ALLOCSET_DEFAULT_INITSIZE,
 									 ALLOCSET_DEFAULT_MAXSIZE);
 	return state;
+}
+
+/* Copy parent-layout keys for the active partition. */
+static void
+install_partition_runtime_filters(DynamicSeqScanState *node, List *filters)
+{
+	SeqScanState *child = node->seqScanState;
+	TupleDesc	parent_desc = node->ss.ss_ScanTupleSlot->tts_tupleDescriptor;
+	TupleDesc	part_desc = RelationGetDescr(child->ss.ss_currentRelation);
+	MemoryContext oldcontext;
+	AttrMap    *map;
+	ListCell   *lc;
+
+	if (filters == NIL)
+		return;
+
+	oldcontext = MemoryContextSwitchTo(node->partitionMemoryContext);
+	map = build_attrmap_by_name_if_req(part_desc, parent_desc, false);
+
+	/*
+	 * If the table AM took over the initial keys, leave those keys with it.
+	 * An already-open scan can apply late Bloom keys at the executor.
+	 */
+	if (!child->filter_in_seqscan)
+	{
+		list_free(child->filters);
+		child->filters = NIL;
+		child->filter_in_seqscan = true;
+	}
+
+	foreach(lc, filters)
+	{
+		ScanKey		parent_key = lfirst(lc);
+		AttrNumber	attno = parent_key->sk_attno;
+		ScanKey		key;
+
+		if (attno <= 0 || attno > parent_desc->natts)
+			continue;
+		if (map != NULL)
+			attno = map->attnums[attno - 1];
+		if (attno <= 0 || attno > part_desc->natts ||
+			TupleDescAttr(part_desc, attno - 1)->attisdropped)
+			continue;
+
+		key = palloc(sizeof(ScanKeyData));
+		*key = *parent_key;
+		key->sk_attno = attno;
+		child->filters = lappend(child->filters, key);
+	}
+
+	if (map != NULL)
+		free_attrmap(map);
+	MemoryContextSwitchTo(oldcontext);
+}
+
+void
+ExecDynamicSeqScanAddRuntimeFilters(DynamicSeqScanState *node, List *filters)
+{
+	if (node->seqScanState != NULL &&
+		!node->ss.ps.state->useMppParallelMode)
+		install_partition_runtime_filters(node, filters);
+
+	node->filters = list_concat(node->filters, filters);
 }
 
 /*
@@ -180,8 +244,7 @@ initNextTableToScan(DynamicSeqScanState *node)
 	if (gp_enable_runtime_filter_pushdown && !estate->useMppParallelMode)
 	{
 		node->seqScanState->filter_in_seqscan = true;
-		// copy filters to seqscan state
-		node->seqScanState->filters = list_concat(node->seqScanState->filters, node->filters);
+		install_partition_runtime_filters(node, node->filters);
 	}
 	else
 	{
@@ -262,7 +325,8 @@ CleanupOnePartition(DynamicSeqScanState *scanState)
 	if (scanState->seqScanState)
 	{
 		// if runtime filter really work in subpartition, accumulate the statistics
-		if(scanState->seqScanState->ss.ps.instrument && scanState->seqScanState->ss.ps.instrument->prf_work)
+		if (scanState->ss.ps.instrument && scanState->seqScanState->ss.ps.instrument &&
+			scanState->seqScanState->ss.ps.instrument->prf_work)
 		{	
 			scanState->ss.ps.instrument->prf_work = true;
 			scanState->ss.ps.instrument->nfilteredPRF += scanState->seqScanState->ss.ps.instrument->nfilteredPRF;
@@ -270,6 +334,7 @@ CleanupOnePartition(DynamicSeqScanState *scanState)
 
 		ExecEndSeqScan(scanState->seqScanState);
 		scanState->seqScanState = NULL;
+		MemoryContextReset(scanState->partitionMemoryContext);
 		Assert(scanState->ss.ss_currentRelation != NULL);
 		table_close(scanState->ss.ss_currentRelation, NoLock);
 		scanState->ss.ss_currentRelation = NULL;

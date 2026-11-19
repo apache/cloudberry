@@ -66,6 +66,35 @@ struct ExecutionFilterContext {
   bool sampling = true;
   uint64 sample_target = 65536;  // number of rows for sampling phase
   uint64 sample_rows = 0;        // rows seen in sampling
+
+  enum class FilterResult { kPass, kBloomRejected, kExprRejected };
+
+  template <typename Evaluate>
+  FilterResult ApplyFilters(Evaluate evaluate) {
+	auto result = FilterResult::kPass;
+	for (auto &node : filter_nodes) {
+	  if (result == FilterResult::kBloomRejected &&
+		  node.kind == FilterKind::kExpr)
+		break;
+
+	  bool pass = evaluate(node);
+	  if (sampling) {
+		++node.tested;
+		node.passed += pass;
+	  }
+	  if (!pass) {
+		result = node.kind == FilterKind::kBloom
+					 ? FilterResult::kBloomRejected
+					 : FilterResult::kExprRejected;
+		if (!sampling) break;
+	  }
+	}
+
+	if (sampling && ++sample_rows >= sample_target) FinishSampling();
+	return result;
+  }
+
+  void FinishSampling();
 };
 
 class PaxRowFilter final {
