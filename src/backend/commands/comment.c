@@ -121,10 +121,10 @@ CommentObject(CommentStmt *stmt)
 	}
 
 	/*
-	 * Databases, tablespaces, roles, resource queues/groups are cluster-wide
-	 * objects, so any comments on those objects are recorded in the shared
-	 * pg_shdescription catalog.  Comments on all other objects are recorded in
-	 * pg_description.
+	 * Databases, tablespaces, roles, storage servers, resource queues/groups are
+	 * cluster-wide objects, so any comments on those objects are recorded in
+	 * the shared pg_shdescription catalog.  Comments on all other objects are
+	 * recorded in pg_description.
 	 */
 	switch (stmt->objtype)
 	{
@@ -134,6 +134,7 @@ CommentObject(CommentStmt *stmt)
 		case OBJECT_RESQUEUE:
 		case OBJECT_RESGROUP:
 		case OBJECT_PROFILE:
+		case OBJECT_STORAGE_SERVER:
 		case OBJECT_TAG:
 			CreateSharedComments(address.objectId, address.classId, stmt->comment);
 			break;

@@ -14,6 +14,7 @@
 
 #include "access/transam.h"
 #include "access/xact.h"
+#include "cdb/cdbvars.h"
 #include "pgstat.h"
 #include "utils/memutils.h"
 #include "utils/pgstat_internal.h"
@@ -369,7 +370,13 @@ pgstat_create_transactional(PgStat_Kind kind, Oid dboid, Oid objoid)
 {
 	if (pgstat_get_entry_ref(kind, dboid, objoid, false, NULL))
 	{
-		ereport(WARNING,
+		/*
+		 * Distributed CREATE can reuse the same OID on every segment.
+		 * Keep segment diagnostics in the server log instead of forwarding
+		 * a warning from each QE to the client. Direct utility connections
+		 * and the coordinator retain the warning.
+		 */
+		ereport(Gp_role == GP_ROLE_EXECUTE ? LOG_SERVER_ONLY : WARNING,
 				errmsg("resetting existing statistics for kind %s, db=%u, oid=%u",
 					   (pgstat_get_kind_info(kind))->name, dboid, objoid));
 

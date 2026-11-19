@@ -326,6 +326,32 @@ SetNextFileSegForRead(AppendOnlyScanDesc scan)
 }
 
 /*
+ * Similar to SetNextFileSegForRead(), except that we explicitly specify the
+ * seg to be read (via 'fsInfoIdx', an index into the scan's segfile array).
+ *
+ * We return true if we are successfully able to open the target segment.
+ *
+ * Since SetNextFileSegForRead() opens the next segment starting from
+ * aoscan->aos_segfiles_processed, skipping empty/awaiting-drop segs, we also
+ * check if the seg opened isn't the one we targeted. If it isn't, then the
+ * target seg was empty/awaiting-drop, and we return false.
+ */
+static bool
+SetSegFileForRead(AppendOnlyScanDesc aoscan, int fsInfoIdx)
+{
+	Assert(fsInfoIdx >= 0 && fsInfoIdx < aoscan->aos_total_segfiles);
+
+	/*
+	 * Advance aos_segfiles_processed pointer to target segment, so that it
+	 * is considered as the "next" segment.
+	 */
+	aoscan->aos_segfiles_processed = fsInfoIdx;
+
+	return SetNextFileSegForRead(aoscan) &&
+		(aoscan->aos_segfiles_processed - fsInfoIdx == 1);
+}
+
+/*
  * errcontext_appendonly_insert_block_user_limit
  *
  * Add an errcontext() line showing the table name but little else because this is a user
@@ -704,6 +730,16 @@ AppendOnlyExecutorReadBlock_GetBlockInfo(AppendOnlyStorageRead *storageRead,
 	executorReadBlock->headerOffsetInFile =
 		AppendOnlyStorageRead_CurrentHeaderOffsetInFile(storageRead);
 
+	/* Start curLargestAttnum from 1, this will be updated in AppendOnlyExecutorReadBlock_BindingInit() */
+	executorReadBlock->curLargestAttnum = 1;
+
+	/* mt_bind should be recreated for the new block */
+	if (executorReadBlock->mt_bind)
+	{
+		destroy_memtuple_binding(executorReadBlock->mt_bind);
+		executorReadBlock->mt_bind = NULL;
+	}
+
 	/* UNDONE: Check blockFirstRowNum */
 
 	return true;
@@ -749,6 +785,11 @@ AppendOnlyExecutorReadBlock_Init(AppendOnlyExecutorReadBlock *executorReadBlock,
 	executorReadBlock->storageRead = storageRead;
 	executorReadBlock->memoryContext = memoryContext;
 
+	Assert(relation); /* should have a valid relation */
+	/* NULL: ao_row checks this once per block in BindingInit(), not per row */
+	executorReadBlock->attnum_to_rownum = GetAttnumToLastrownumMapping(RelationGetRelid(relation),
+												RelationGetNumberOfAttributes(relation), NULL);
+
 	MemoryContextSwitchTo(oldcontext);
 }
 
@@ -775,6 +816,12 @@ AppendOnlyExecutorReadBlock_Finish(AppendOnlyExecutorReadBlock *executorReadBloc
 		pfree(executorReadBlock->mt_bind);
 		executorReadBlock->mt_bind = NULL;
 	}
+
+	if (executorReadBlock->attnum_to_rownum)
+	{
+		pfree(executorReadBlock->attnum_to_rownum);
+		executorReadBlock->attnum_to_rownum = NULL;
+	}
 }
 
 static void
@@ -783,22 +830,79 @@ AppendOnlyExecutorReadBlock_ResetCounts(AppendOnlyExecutorReadBlock *executorRea
 	executorReadBlock->totalRowsScanned = 0;
 }
 
+/*
+ * Initialize the memtuple attribute bindings.
+ *
+ * Here, we figure out how many attributes are physically stored in the
+ * memtuple based on the row number. Any row with a row number larger than
+ * the pg_attribute_encoding.lastrownums number associated with the attribute
+ * and current segno should have the attribute physically stored in memtuple.
+ * For example, imagine we have this attnum-to-rownum mapping for segno=1:
+ * 	(attnum=1, lastrownums=100)
+ * 	(attnum=2, lastrownums=200)
+ * 	(attnum=3, lastrownums=1000)
+ * 	(attnum=4, lastrownums=2000)
+ * And assume we are reading a memtuple with row number = 1500, we will know that
+ * the first three attribute should be physically stored in the memtuple, but the
+ * fourth attribute and onwards are not.
+ *
+ * So if lastrownum=0 for an attribute and segment pair, it effectively indicates
+ * that all rows in the segment carry that attribute in the on-disk memtuple.
+ *
+ * Note that, the attnum_to_row array is first divided based on attribute numbers,
+ * so the above mapping will be represented in attnum_to_row as (assume there's no
+ * other segno being used):
+ *     [
+ *       0, 100, 0, ...(125 zeroes)...,       <-- for attnum=1
+ *       0, 200, 0, ...(125 zeroes)...,       <-- for attnum=2
+ *       0, 1000, 0, ...(125 zeroes)...,      <-- for attnum=3
+ *       0, 2000, 0, ...(125 zeroes)...,      <-- for attnum=4
+ *       0, ...(all zeroes)...
+ *     ]
+ */
 static void
-AOExecutorReadBlockBindingInit(AppendOnlyExecutorReadBlock *executorReadBlock,
-									   TupleTableSlot *slot)
+AppendOnlyExecutorReadBlock_BindingInit(AppendOnlyExecutorReadBlock *executorReadBlock,
+									   TupleTableSlot *slot,
+									   int64 rowNum)
 {
+	int segno = executorReadBlock->segmentFileNum;
+	int largestAttnum = executorReadBlock->curLargestAttnum;
 	MemoryContext oldContext;
+
+	Assert(executorReadBlock->attnum_to_rownum != NULL);
+
+	if (slot->tts_tupleDescriptor->natts == 0)
+		return;
+
+	/* Find the number of attributes that are not missing in the row. */
+	while (largestAttnum < slot->tts_tupleDescriptor->natts &&
+			!AO_ATTR_VAL_IS_MISSING(rowNum, largestAttnum, segno, executorReadBlock->attnum_to_rownum))
+		largestAttnum++;
+
+	/*
+	 * If we already created the bindings and also the largest attnum have not changed, 
+	 * we do not need to recreate the bindings again.
+	 */
+	if (executorReadBlock->mt_bind && largestAttnum == executorReadBlock->curLargestAttnum)
+		return;
+
+	/* Otherwise, we have to create/recreate bindings */
+	oldContext = MemoryContextSwitchTo(executorReadBlock->memoryContext);
+
+	/* destroy the previous bindings */
+	if (executorReadBlock->mt_bind)
+		destroy_memtuple_binding(executorReadBlock->mt_bind);
+
 	/*
 	 * MemTupleBinding should be created from the slot's tuple descriptor
-	 * and not from the tuple descriptor in the relation.  These could be
-	 * different.  One example is alter table rewrite.
+	 * (plus the expected largest attnum that we calculated above). We should
+	 * not using the tuple descriptor in the relation which could be different
+	 * in case like alter table rewrite.
 	 */
-	if (!executorReadBlock->mt_bind)
-	{
-		oldContext = MemoryContextSwitchTo(executorReadBlock->memoryContext);
-		executorReadBlock->mt_bind = create_memtuple_binding(slot->tts_tupleDescriptor);
-		MemoryContextSwitchTo(oldContext);
-	}
+	executorReadBlock->mt_bind = create_memtuple_binding(slot->tts_tupleDescriptor, largestAttnum);
+	MemoryContextSwitchTo(oldContext);
+
+	executorReadBlock->curLargestAttnum = largestAttnum;
 }
 
 
@@ -822,17 +926,17 @@ AppendOnlyExecutorReadBlock_ProcessTuple(AppendOnlyExecutorReadBlock *executorRe
 
 	AOTupleIdInit(aoTupleId, executorReadBlock->segmentFileNum, rowNum);
 
-	if (slot)
-		AOExecutorReadBlockBindingInit(executorReadBlock, slot);
-
 	/*
 	 * Is it legal to call this function with NULL slot?  The
 	 * HeapKeyTestUsingSlot call below assumes that the slot is not NULL.
 	 */
 	Assert (slot);
-	{
-		Assert(executorReadBlock->mt_bind);
 
+	AppendOnlyExecutorReadBlock_BindingInit(executorReadBlock, slot, rowNum);
+	
+	ExecClearTuple(slot);
+
+	{
 		/*
 		 * Hand the tuple to the slot as it is.  Attributes are fetched from
 		 * it only as the executor asks for them, so a query over a wide table
@@ -840,8 +944,12 @@ AppendOnlyExecutorReadBlock_ProcessTuple(AppendOnlyExecutorReadBlock *executorRe
 		 *
 		 * The tuple points into the read buffer and stays valid until the
 		 * next block is read, which is why the slot does not own it.
+		 *
+		 * GPDB_PORT: upstream asserts mt_bind here.  A relation whose columns
+		 * have all been dropped has no memtuple binding and nothing to
+		 * deform, so take the expand-up-front path, which handles that.
 		 */
-		if (TTS_IS_MEMTUPLE(slot))
+		if (TTS_IS_MEMTUPLE(slot) && executorReadBlock->mt_bind)
 		{
 			ExecStoreMemTuple(tuple, executorReadBlock->mt_bind, slot, false);
 			slot->tts_tid = fake_ctid;
@@ -853,8 +961,9 @@ AppendOnlyExecutorReadBlock_ProcessTuple(AppendOnlyExecutorReadBlock *executorRe
 			 * up front, which is all a virtual slot can represent.
 			 */
 			ExecClearTuple(slot);
-			memtuple_deform(tuple, executorReadBlock->mt_bind,
-							slot->tts_values, slot->tts_isnull);
+			if (executorReadBlock->mt_bind)
+				memtuple_deform(tuple, executorReadBlock->mt_bind,
+								slot->tts_values, slot->tts_isnull);
 			slot->tts_tid = fake_ctid;
 			ExecStoreVirtualTuple(slot);
 		}
@@ -1107,11 +1216,10 @@ getNextBlock(AppendOnlyScanDesc scan)
 	if (scan->blockDirectory)
 	{
 		AppendOnlyBlockDirectory_InsertEntry(
-											 scan->blockDirectory, 0,
-											 scan->executorReadBlock.blockFirstRowNum,
-											 scan->executorReadBlock.headerOffsetInFile,
-											 scan->executorReadBlock.rowCount,
-											 false);
+			scan->blockDirectory, 0,
+			scan->executorReadBlock.blockFirstRowNum,
+			scan->executorReadBlock.headerOffsetInFile,
+			scan->executorReadBlock.rowCount);
 	}
 
 	AppendOnlyExecutorReadBlock_GetContents(
@@ -1605,12 +1713,11 @@ finishWriteBlock(AppendOnlyInsertDesc aoInsertDesc)
 
 	/* Insert an entry to the block directory */
 	AppendOnlyBlockDirectory_InsertEntry(
-										 &aoInsertDesc->blockDirectory,
-										 0,
-										 aoInsertDesc->blockFirstRowNum,
-										 AppendOnlyStorageWrite_LogicalBlockStartOffset(&aoInsertDesc->storageWrite),
-										 itemCount,
-										 false);
+		&aoInsertDesc->blockDirectory,
+		0,
+		aoInsertDesc->blockFirstRowNum,
+		AppendOnlyStorageWrite_LogicalBlockStartOffset(&aoInsertDesc->storageWrite),
+		itemCount);
 
 	Assert(aoInsertDesc->nonCompressedData == NULL);
 	Assert(!AppendOnlyStorageWrite_IsBufferAllocated(&aoInsertDesc->storageWrite));
@@ -1925,6 +2032,41 @@ appendonly_rescan(TableScanDesc scan, ScanKey key,
 	 * reinitialize scan descriptor
 	 */
 	initscan(aoscan, key);
+}
+
+/*
+ * Position an AO scan to start from a segno specified by the 'fsInfoIdx' in
+ * the scan's segfile array, and offset specified by blkdir entry 'dirEntry'.
+ *
+ * If we are unable to position the scan, we return false.
+ */
+bool
+appendonly_positionscan(AppendOnlyScanDesc aoscan,
+						AppendOnlyBlockDirectoryEntry *dirEntry,
+						int fsInfoIdx)
+{
+	int64 	beginFileOffset = dirEntry->range.fileOffset;
+	int64 	afterFileOffset = dirEntry->range.afterFileOffset;
+
+	Assert(dirEntry);
+
+	if (!SetSegFileForRead(aoscan, fsInfoIdx))
+	{
+		/* target segment is empty/awaiting-drop */
+		return false;
+	}
+
+	if (beginFileOffset > aoscan->storageRead.logicalEof)
+	{
+		/* position maps to a hole at the end of the segfile */
+		return false;
+	}
+
+	AppendOnlyStorageRead_SetTemporaryStart(&aoscan->storageRead,
+											beginFileOffset,
+											afterFileOffset);
+
+	return true;
 }
 
 /* ----------------
@@ -2692,7 +2834,8 @@ appendonly_fetch(AppendOnlyFetchDesc aoFetchDesc,
 										   &aoFetchDesc->blockDirectory,
 										   aoTupleId,
 										   0,
-										   &aoFetchDesc->currentBlock.blockDirectoryEntry))
+										   &aoFetchDesc->currentBlock.blockDirectoryEntry,
+										   NULL))
 	{
 		if (slot != NULL)
 		{
@@ -2887,7 +3030,7 @@ appendonly_insert_init(Relation rel, int segno)
 	 */
 	aoInsertDesc->appendOnlyMetaDataSnapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
 
-	aoInsertDesc->mt_bind = create_memtuple_binding(RelationGetDescr(rel));
+	aoInsertDesc->mt_bind = create_memtuple_binding(RelationGetDescr(rel), RelationGetNumberOfAttributes(rel));
 
 	aoInsertDesc->appendFile = -1;
 	aoInsertDesc->appendFilePathNameMaxLen = AOSegmentFilePathNameLen(rel) + 1;

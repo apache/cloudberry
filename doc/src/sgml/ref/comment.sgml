@@ -56,6 +56,7 @@ COMMENT ON
   SEQUENCE <replaceable class="parameter">object_name</replaceable> |
   SERVER <replaceable class="parameter">object_name</replaceable> |
   STATISTICS <replaceable class="parameter">object_name</replaceable> |
+  STORAGE SERVER <replaceable class="parameter">object_name</replaceable> |
   SUBSCRIPTION <replaceable class="parameter">object_name</replaceable> |
   TABLE <replaceable class="parameter">object_name</replaceable> |
   TABLESPACE <replaceable class="parameter">object_name</replaceable> |

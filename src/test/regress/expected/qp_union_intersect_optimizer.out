@@ -2161,3 +2161,56 @@ SELECT * FROM tcte WHERE c3 = 1;
 ----+----+----
 (0 rows)
 
+-- A replicated parent and distributed child form a mixed-locus Append.
+-- Preserve the parameterization when set_append_path_locus adds its filter.
+-- Keep statistics across the truncate so the planner builds that path.
+SET optimizer = off;
+SET client_min_messages = error;
+CREATE TABLE qparam_hash (c0 boolean PRIMARY KEY UNIQUE, CHECK (c0));
+CREATE TABLE qparam_rep (LIKE qparam_hash);
+CREATE TABLE qparam_child (c0 boolean PRIMARY KEY, CHECK (c0))
+  INHERITS (qparam_hash, qparam_rep);
+ALTER TABLE qparam_hash SET DISTRIBUTED BY (c0);
+ALTER TABLE qparam_rep SET DISTRIBUTED REPLICATED;
+ALTER TABLE qparam_child SET DISTRIBUTED BY (c0);
+INSERT INTO qparam_hash VALUES (TRUE);
+INSERT INTO qparam_rep VALUES (TRUE);
+INSERT INTO qparam_child VALUES (TRUE);
+ANALYZE qparam_hash;
+ANALYZE qparam_rep;
+ANALYZE qparam_child;
+CREATE UNIQUE INDEX qparam_child_idx ON ONLY qparam_child (c0, c0);
+ALTER TABLE ONLY qparam_rep ALTER c0 RESET (n_distinct_inherited, n_distinct);
+SET min_parallel_index_scan_size = 514217221;
+TRUNCATE TABLE qparam_hash, qparam_rep, qparam_child RESTART IDENTITY;
+INSERT INTO qparam_hash VALUES (TRUE);
+INSERT INTO qparam_rep VALUES (TRUE);
+INSERT INTO qparam_child VALUES (TRUE);
+SELECT COALESCE(CAST(a0 AS TEXT), 'NULL')
+FROM (
+  SELECT DISTINCT * FROM (
+    SELECT DISTINCT t1.c0
+    FROM qparam_rep* t1 INNER JOIN qparam_child* t2 ON t2.c0
+    WHERE (NOT (t2.c0)) BETWEEN SYMMETRIC
+          ((t2.c0)::VARCHAR(65) ~ lower('W4')) AND (t1.c0)
+    UNION ALL
+    SELECT DISTINCT t1.c0
+    FROM qparam_rep t1 INNER JOIN qparam_child* t2 ON t2.c0
+    WHERE NOT ((NOT (t2.c0)) BETWEEN SYMMETRIC
+               ((t2.c0)::VARCHAR(65) ~ lower('W4')) AND (t1.c0))
+    UNION ALL
+    SELECT DISTINCT t1.c0
+    FROM qparam_rep t1 INNER JOIN qparam_child t2 ON t2.c0
+    WHERE ((NOT (t2.c0)) BETWEEN SYMMETRIC
+           ((t2.c0)::VARCHAR(65) ~ lower('W4')) AND (t1.c0)) ISNULL
+  ) AS u
+) AS r(a0);
+ coalesce 
+----------
+ true
+(1 row)
+
+DROP TABLE qparam_hash, qparam_rep, qparam_child;
+RESET min_parallel_index_scan_size;
+RESET client_min_messages;
+RESET optimizer;
