@@ -469,7 +469,7 @@ class BuildMirrorsTestCase(GpTestCase):
         build_mirrors_obj._clean_up_failed_segments()
 
         self.mock_get_segments_by_hostname.assert_called_once_with([failed1, failed3])
-        self.mock_logger.info.called_once_with('"Cleaning files from 2 segment(s)')
+        self.mock_logger.info.assert_any_call('Cleaning files from 2 segment(s)')
 
     def test_clean_up_failed_segments_no_segs_to_cleanup(self):
         failed2 = self._create_primary(dbid='3', status='d')

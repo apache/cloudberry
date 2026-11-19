@@ -225,7 +225,7 @@ class FullRecoveryTestCase(GpTestCase):
         self.assertEqual([expected_init_args1, expected_init_args2], self.mock_pgbasebackup_init.call_args_list)
         self.assertEqual(2, self.mock_pgbasebackup_run.call_count)
         self.assertEqual([call(validateAfter=True),call(validateAfter=True)], self.mock_pgbasebackup_run.call_args_list)
-        self.mock_logger.info.any_call('Running pg_basebackup failed: backup failed once')
+        self.mock_logger.info.assert_any_call('Running pg_basebackup failed: backup failed once')
         self.mock_logger.info.assert_called_with("Re-running pg_basebackup, creating the slot this time")
         self.assertEqual(0, gpsegrecovery.start_segment.call_count)
         self._assert_cmd_failed('{"error_type": "full", "error_msg": "backup failed twice", "dbid": 2, ' \
