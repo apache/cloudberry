@@ -857,6 +857,8 @@ _outNewColumnValue(StringInfo str, const NewColumnValue *node)
 	WRITE_NODE_FIELD(expr);
 	/* can't serialize exprstate */
 	WRITE_BOOL_FIELD(is_generated);
+	WRITE_NODE_FIELD(new_encoding);
+	WRITE_ENUM_FIELD(op, AOCSWriteColumnOperation);
 }
 
 static void

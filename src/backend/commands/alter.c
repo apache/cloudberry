@@ -19,6 +19,7 @@
 #include "access/sysattr.h"
 #include "access/table.h"
 #include "catalog/dependency.h"
+#include "catalog/gp_storage_server.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "catalog/objectaccess.h"
@@ -1002,6 +1003,7 @@ ExecAlterOwnerStmt_internal(AlterOwnerStmt *stmt)
 		case OBJECT_ROUTINE:
 		case OBJECT_STATISTIC_EXT:
 		case OBJECT_TABLESPACE:
+		case OBJECT_STORAGE_SERVER:
 		case OBJECT_TAG:
 		case OBJECT_TSDICTIONARY:
 		case OBJECT_TSCONFIGURATION:
@@ -1141,6 +1143,14 @@ AlterObjectOwner_internal(Relation rel, Oid objectId, Oid new_ownerId)
 			}
 
 			check_mdb_admin_is_member_of_role(GetUserId(), new_ownerId);
+
+			/*
+			 * Like foreign servers, storage servers require SET ROLE access
+			 * to the new owner.  Preserve the mdb_admin ownership exception.
+			 */
+			if (classId == StorageServerRelationId &&
+				!mdb_admin_allow_bypass_owner_checks(GetUserId(), new_ownerId))
+				check_can_set_role(GetUserId(), new_ownerId);
 
 			/* New owner must have CREATE privilege on namespace */
 			if (OidIsValid(namespaceId))

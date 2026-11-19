@@ -217,6 +217,9 @@ get_altertable_subcmdinfo(PG_FUNCTION_ARGS)
 			case AT_SetTableSpace:
 				strtype = "SET TABLESPACE";
 				break;
+			case AT_SetColumnEncoding:
+				strtype = "ALTER COLUMN SET ENCODING";
+				break;
 			case AT_SetRelOptions:
 				strtype = "SET RELOPTIONS";
 				break;
