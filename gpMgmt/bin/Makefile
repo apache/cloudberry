@@ -142,12 +142,10 @@ pygresql: download-python-deps
 PSUTIL_DIR=psutil-$(PSUTIL_VERSION)
 psutil: download-python-deps
 	@echo "--- psutil"
-ifeq "$(findstring $(BLD_ARCH),aix7_ppc_64 )" ""
 	cd $(PYLIB_SRC_EXT)/ && $(TAR) xzf $(PSUTIL_DIR).tar.gz
 	cd $(PYLIB_SRC_EXT)/$(PSUTIL_DIR)/ && env -u CC python3 setup.py build
 	rm -rf $(PYLIB_DIR)/psutil
 	cp -r $(PYLIB_SRC_EXT)/$(PSUTIL_DIR)/build/lib.*/psutil $(PYLIB_DIR)
-endif
 
 #
 # PYYAML
