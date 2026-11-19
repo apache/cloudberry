@@ -599,3 +599,16 @@ enable_parallel_retrieve_cursor_check_timeout(void)
 							 GP_PARALLEL_RETRIEVE_CURSOR_CHECK_PERIOD_MS);
 	}
 }
+
+/*
+ * Disable the timeout of parallel retrieve cursor check.
+ *
+ * Safe to call unconditionally; disable_timeout() is a no-op when the
+ * timeout is not active.
+ */
+void
+disable_parallel_retrieve_cursor_check_timeout(void)
+{
+	if (Gp_role == GP_ROLE_DISPATCH)
+		disable_timeout(GP_PARALLEL_RETRIEVE_CURSOR_CHECK_TIMEOUT, false);
+}
