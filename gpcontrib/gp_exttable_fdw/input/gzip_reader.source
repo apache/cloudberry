@@ -1,0 +1,59 @@
+-- Licensed to the Apache Software Foundation (ASF) under one or more
+-- contributor license agreements.  See the NOTICE file distributed with
+-- this work for additional information regarding copyright ownership.
+-- The ASF licenses this file to you under the Apache License, Version 2.0
+-- (the "License"); you may not use this file except in compliance with
+-- the License.  You may obtain a copy of the License at
+--
+-- http://www.apache.org/licenses/LICENSE-2.0
+--
+-- Unless required by applicable law or agreed to in writing, software
+-- distributed under the License is distributed on an "AS IS" BASIS,
+-- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-- See the License for the specific language governing permissions and
+-- limitations under the License.
+-- Exercise decoder lifetime across row resets and file boundaries.
+SET client_min_messages = warning;
+CREATE EXTENSION IF NOT EXISTS gp_exttable_fdw;
+RESET client_min_messages;
+
+-- Remove objects left by an interrupted run.
+SET client_min_messages = warning;
+DROP EXTERNAL TABLE IF EXISTS gzip_plain;
+DROP EXTERNAL TABLE IF EXISTS gzip_single;
+DROP EXTERNAL TABLE IF EXISTS gzip_multiple;
+RESET client_min_messages;
+
+-- Generate enough records to refill the COPY and decompression buffers.
+COPY (SELECT repeat('x', 127) FROM generate_series(1, 8192))
+TO '@abs_builddir@/results/gzip_reader.csv' CSV;
+\! gzip -n -c @abs_builddir@/results/gzip_reader.csv > @abs_builddir@/results/gzip_reader.1.csv.gz
+\! cp @abs_builddir@/results/gzip_reader.1.csv.gz @abs_builddir@/results/gzip_reader.2.csv.gz
+
+-- Read the same CSV without compression as a control.
+CREATE READABLE EXTERNAL TABLE gzip_plain (message text)
+LOCATION ('file://@hostname@@abs_builddir@/results/gzip_reader.csv')
+ON COORDINATOR FORMAT 'CSV' ENCODING 'UTF8';
+SELECT count(*) FROM gzip_plain;
+
+-- Reading a single stream must preserve the count and decoded contents.
+CREATE READABLE EXTERNAL TABLE gzip_single (message text)
+LOCATION ('file://@hostname@@abs_builddir@/results/gzip_reader.1.csv.gz')
+ON COORDINATOR FORMAT 'CSV' ENCODING 'UTF8';
+SELECT count(*) FROM gzip_single;
+SELECT count(*), sum(length(message)), bool_and(message = repeat('x', 127))
+FROM gzip_single;
+
+-- Opening the next gzip stream during a scan must not allocate decoder
+-- state in the per-row context, which is reset before subsequent rows.
+CREATE READABLE EXTERNAL TABLE gzip_multiple (message text)
+LOCATION ('file://@hostname@@abs_builddir@/results/gzip_reader.*.csv.gz')
+ON COORDINATOR FORMAT 'CSV' ENCODING 'UTF8';
+SELECT count(*) FROM gzip_multiple;
+SELECT count(*), sum(length(message)), bool_and(message = repeat('x', 127))
+FROM gzip_multiple;
+
+DROP EXTERNAL TABLE gzip_plain;
+DROP EXTERNAL TABLE gzip_single;
+DROP EXTERNAL TABLE gzip_multiple;
+\! rm @abs_builddir@/results/gzip_reader.csv @abs_builddir@/results/gzip_reader.1.csv.gz @abs_builddir@/results/gzip_reader.2.csv.gz
