@@ -826,10 +826,13 @@ CXformSplitDQA::ExtractDistinctCols(
 		CScalarAggFunc *popScAggFunc =
 			CScalarAggFunc::PopConvert(pexprAggFunc->Pop());
 		hasNonSplittableAgg =
-			!md_accessor->RetrieveAgg(popScAggFunc->MDId())->IsSplittable();
+			!md_accessor->RetrieveAgg(popScAggFunc->MDId())->IsSplittable() ||
+			(CUtils::FAggHasOrderBy(pexprAggFunc) &&
+			 CUtils::FOrderSensitiveAgg(popScAggFunc->MDId()));
 
-		// if an agg fucntion is missing a combine function, then such an agg is
-		// called non splittable. Non splittable aggs cannot participate in multi-phase DQAs
+		// if an agg fucntion is missing a combine function, or is order
+		// sensitive and has an ORDER BY that partial aggregation would not
+		// preserve, then such an agg is called non splittable. Non splittable aggs cannot participate in multi-phase DQAs
 		// We do not track missing combine functions per DQA so we cannot have some
 		// as single phase and some as multiple phases.
 		if (hasNonSplittableAgg)

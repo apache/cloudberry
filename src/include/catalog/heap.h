@@ -137,6 +137,8 @@ extern List *AddRelationConstraints(Relation rel,
 						  List *constraints);
 
 extern void RelationClearMissing(Relation rel);
+extern void RelationClearMissingByAttname(Relation rel, char *attname);
+extern void SetAttrMissing(Oid relid, char *attname, char *value);
 
 extern void StoreAttrMissingVal(Relation rel, AttrNumber attnum,
 								Datum missingval);

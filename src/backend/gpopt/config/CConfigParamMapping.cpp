@@ -292,6 +292,11 @@ CConfigParamMapping::SConfigMappingElem CConfigParamMapping::m_elements[] = {
 	 true,	// m_negate_param
 	 GPOS_WSZ_LIT("Disable ordered aggregate plans.")},
 
+	{EopttraceDisablePresortedAgg, &optimizer_enable_presorted_agg,
+	 true,	// m_negate_param
+	 GPOS_WSZ_LIT("Disable sorting the input of order sensitive aggregates with "
+				  "ORDER BY on the segments, for aggregates without GROUP BY.")},
+
 	{EopttraceExpandFullJoin, &optimizer_expand_fulljoin,
 	 false,	 // m_negate_param
 	 GPOS_WSZ_LIT(
@@ -340,6 +345,16 @@ CConfigParamMapping::SConfigMappingElem CConfigParamMapping::m_elements[] = {
 	 true,	// m_negate_param
 	 GPOS_WSZ_LIT(
 		 "Disable streaming hash agg in ORCA-generated local partial aggregations.")},
+
+	{EopttraceChildOptMemo, &optimizer_enable_child_opt_memo,
+	 false,	 // m_negate_param
+	 GPOS_WSZ_LIT(
+		 "Reuse the child contexts that the same request of a group expression reached under another context.")},
+
+	{EopttraceVerifyChildOptMemo, &optimizer_verify_child_opt_memo,
+	 false,	 // m_negate_param
+	 GPOS_WSZ_LIT(
+		 "Optimize the children of requests that could reuse child contexts and report differences.")},
 
 };
 

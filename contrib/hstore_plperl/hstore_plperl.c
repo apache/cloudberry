@@ -2,6 +2,7 @@
 
 #include "fmgr.h"
 #include "hstore/hstore.h"
+#include "miscadmin.h"
 #include "plperl.h"
 
 PG_MODULE_MAGIC;
@@ -106,15 +107,30 @@ plperl_to_hstore(PG_FUNCTION_ARGS)
 	Pairs	   *pairs;
 
 	/* Dereference references recursively. */
-	while (SvROK(in))
+	plperl_materialize_sv(in);
+	while (in && SvROK(in))
+	{
+		/*
+		 * It's possible for circular references to make this an infinite
+		 * loop.  Checking for such a situation seems like much more trouble
+		 * than it's worth, but let's provide a way to break out of the loop.
+		 */
+		CHECK_FOR_INTERRUPTS();
 		in = SvRV(in);
+		plperl_materialize_sv(in);
+	}
 
 	/* Now we must have a hash. */
-	if (SvTYPE(in) != SVt_PVHV)
+	if (!in || SvTYPE(in) != SVt_PVHV)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("cannot transform non-hash Perl value to hstore")));
 	hv = (HV *) in;
+
+	/* Hold a reference on the hash while we scan it */
+	ENTER;
+	SAVETMPS;
+	sv_2mortal(newRV((SV *) hv));
 
 	(void) hv_iterinit(hv);
 
@@ -125,7 +141,9 @@ plperl_to_hstore(PG_FUNCTION_ARGS)
 	while ((he = hv_iternext(hv)))
 	{
 		char	   *key = sv2cstr(HeSVKEY_force(he));
-		SV		   *value = HeVAL(he);
+		SV		   *value = hv_iterval(hv, he);
+
+		plperl_materialize_sv(value);
 
 		if (i >= pcount)
 		{
@@ -137,7 +155,7 @@ plperl_to_hstore(PG_FUNCTION_ARGS)
 		pairs[i].keylen = hstoreCheckKeyLen(strlen(pairs[i].key));
 		pairs[i].needfree = true;
 
-		if (!SvOK(value))
+		if (!value || !SvOK(value))
 		{
 			pairs[i].val = NULL;
 			pairs[i].vallen = 0;
@@ -152,6 +170,10 @@ plperl_to_hstore(PG_FUNCTION_ARGS)
 
 		i++;
 	}
+
+	/* release our reference on the hash */
+	FREETMPS;
+	LEAVE;
 
 	pcount = hstoreUniquePairs(pairs, i, &buflen);
 	out = hstorePairs(pairs, pcount, buflen);

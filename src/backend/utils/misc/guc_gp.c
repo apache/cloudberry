@@ -153,6 +153,8 @@ bool		enable_parallel_semi_join = true;
 bool		enable_parallel_dedup_semi_join = true;
 bool		enable_parallel_dedup_semi_reverse_join = true;
 bool		parallel_query_use_streaming_hashagg = false;
+bool		optimizer_enable_child_opt_memo = true;
+bool		optimizer_verify_child_opt_memo = false;
 bool		gp_use_streaming_hashagg = true;
 bool		optimizer_use_streaming_hashagg = true;
 int			gp_appendonly_insert_files = 0;
@@ -429,6 +431,7 @@ bool		optimizer_enable_range_predicate_dpe;
 bool		optimizer_enable_use_distribution_in_dqa;
 bool		optimizer_enable_push_join_below_union_all;
 bool		optimizer_enable_orderedagg;
+bool		optimizer_enable_presorted_agg;
 bool		optimizer_disable_dynamic_table_scan;
 
 /* Analyze related GUCs for Optimizer */
@@ -3072,6 +3075,18 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"optimizer_enable_presorted_agg", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enable sorting the input of order sensitive aggregates "
+						 "with ORDER BY, e.g. string_agg(), on the segments, for "
+						 "aggregates without GROUP BY."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_presorted_agg,
+		true,
+		NULL, NULL, NULL
+	},
+	{
 		{"optimizer_enable_eageragg", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Enable Eager Agg transform for pushing aggregate below an innerjoin."),
 			NULL,
@@ -3247,6 +3262,26 @@ struct config_bool ConfigureNamesBool_gp[] =
 		true,
 		NULL, NULL, NULL
 	},
+	{
+		{"optimizer_enable_child_opt_memo", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Reuse the child contexts that the same request of a group expression reached under another context."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_child_opt_memo,
+		true, NULL, NULL
+	},
+
+	{
+		{"optimizer_verify_child_opt_memo", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Optimize the children of requests that could reuse child contexts and report differences."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_verify_child_opt_memo,
+		false, NULL, NULL
+	},
+
 	{
 		{"parallel_query_use_streaming_hashagg", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("allow to use of streaming hashagg in parallel query for DISTINCT."),

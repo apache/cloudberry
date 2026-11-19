@@ -16,7 +16,13 @@
 #include "gpopt/base/CDistributionSpecHashed.h"
 #include "gpopt/base/CDistributionSpecSingleton.h"
 #include "gpopt/base/COptCtxt.h"
+#include "gpopt/base/CUtils.h"
 #include "gpopt/operators/CExpressionHandle.h"
+#include "gpopt/operators/CScalarAggFunc.h"
+#include "gpopt/operators/CScalarIdent.h"
+#include "gpopt/operators/CScalarSortGroupClause.h"
+#include "naucrates/md/CMDIdGPDB.h"
+#include "naucrates/traceflags/traceflags.h"
 
 using namespace gpopt;
 
@@ -56,6 +62,144 @@ CPhysicalScalarAgg::~CPhysicalScalarAgg() = default;
 
 //---------------------------------------------------------------------------
 //	@function:
+//		PosFromAggOrder
+//
+//	@doc:
+//		Return the order spec of the ORDER BY of an aggregate function, or
+//		null if it orders by something other than plain columns produced by
+//		the child of the aggregate, e.g. an outer reference
+//
+//---------------------------------------------------------------------------
+static COrderSpec *
+PosFromAggOrder(CMemoryPool *mp, CExpression *pexprAggFunc,
+				CColRefSet *pcrsChildOutput)
+{
+	CExpression *pexprArgs = (*pexprAggFunc)[EaggfuncIndexArgs];
+	CExpression *pexprOrder = (*pexprAggFunc)[EaggfuncIndexOrder];
+
+	COrderSpec *pos = GPOS_NEW(mp) COrderSpec(mp);
+	for (ULONG ul = 0; ul < pexprOrder->Arity(); ul++)
+	{
+		CScalarSortGroupClause *popSortGroupClause =
+			CScalarSortGroupClause::PopConvert((*pexprOrder)[ul]->Pop());
+		INT index = popSortGroupClause->Index();
+		if (0 > index || pexprArgs->Arity() <= (ULONG) index ||
+			!CUtils::FScalarIdent((*pexprArgs)[index]))
+		{
+			pos->Release();
+			return nullptr;
+		}
+
+		const CColRef *colref =
+			CScalarIdent::PopConvert((*pexprArgs)[index]->Pop())->Pcr();
+		if (!pcrsChildOutput->FMember(colref))
+		{
+			pos->Release();
+			return nullptr;
+		}
+		COrderSpec::ENullTreatment ent = popSortGroupClause->NullsFirst()
+											 ? COrderSpec::EntFirst
+											 : COrderSpec::EntLast;
+		pos->Append(GPOS_NEW(mp) CMDIdGPDB(IMDId::EmdidGeneral,
+										   popSortGroupClause->SortOp()),
+					colref, ent);
+	}
+
+	return pos;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CPhysicalScalarAgg::PosPresorted
+//
+//	@doc:
+//		Return the order of the input that lets the aggregates with ORDER BY
+//		in the project list skip their own sort, or an empty order spec.
+//
+//		An aggregate with ORDER BY sorts its input itself, on the
+//		coordinator for a scalar aggregate that is not split. When the input
+//		of an order sensitive aggregate such as string_agg() is sorted below
+//		the aggregate instead, the segments sort their own rows in parallel,
+//		and a merging Gather Motion produces the ordered input.
+//
+//		This is only done when all the aggregates with ORDER BY order by the
+//		same plain columns of the input, at least one of them is order
+//		sensitive, and none of the aggregates has DISTINCT.
+//
+//---------------------------------------------------------------------------
+COrderSpec *
+CPhysicalScalarAgg::PosPresorted(CMemoryPool *mp, CExpression *pexprPrL,
+								 CColRefSet *pcrsChildOutput) const
+{
+	if (GPOS_FTRACE(EopttraceDisablePresortedAgg) ||
+		COperator::EgbaggtypeGlobal != Egbaggtype() || nullptr == pexprPrL)
+	{
+		return GPOS_NEW(mp) COrderSpec(mp);
+	}
+
+	COrderSpec *pos = nullptr;
+	BOOL has_order_sensitive_agg = false;
+	for (ULONG ul = 0; ul < pexprPrL->Arity(); ul++)
+	{
+		CExpression *pexprAggFunc = (*(*pexprPrL)[ul])[0];
+		if (COperator::EopScalarAggFunc != pexprAggFunc->Pop()->Eopid())
+		{
+			continue;
+		}
+
+		CScalarAggFunc *popAggFunc =
+			CScalarAggFunc::PopConvert(pexprAggFunc->Pop());
+		if (popAggFunc->IsDistinct())
+		{
+			CRefCount::SafeRelease(pos);
+			return GPOS_NEW(mp) COrderSpec(mp);
+		}
+
+		if (!CUtils::FAggHasOrderBy(pexprAggFunc))
+		{
+			continue;
+		}
+
+		COrderSpec *pos_agg = nullptr;
+		if (EaggfunckindNormal == popAggFunc->AggKind())
+		{
+			pos_agg = PosFromAggOrder(mp, pexprAggFunc, pcrsChildOutput);
+		}
+
+		if (nullptr == pos_agg ||
+			(nullptr != pos && !pos->Matches(pos_agg)))
+		{
+			CRefCount::SafeRelease(pos_agg);
+			CRefCount::SafeRelease(pos);
+			return GPOS_NEW(mp) COrderSpec(mp);
+		}
+
+		if (nullptr == pos)
+		{
+			pos = pos_agg;
+		}
+		else
+		{
+			pos_agg->Release();
+		}
+
+		has_order_sensitive_agg = has_order_sensitive_agg ||
+								  CUtils::FOrderSensitiveAgg(popAggFunc->MDId());
+	}
+
+	if (nullptr == pos || !has_order_sensitive_agg)
+	{
+		CRefCount::SafeRelease(pos);
+		return GPOS_NEW(mp) COrderSpec(mp);
+	}
+
+	return pos;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CPhysicalScalarAgg::PosRequired
 //
 //	@doc:
@@ -63,9 +207,8 @@ CPhysicalScalarAgg::~CPhysicalScalarAgg() = default;
 //
 //---------------------------------------------------------------------------
 COrderSpec *
-CPhysicalScalarAgg::PosRequired(CMemoryPool *mp,
-								CExpressionHandle &,  // exprhdl
-								COrderSpec *,		  // posRequired
+CPhysicalScalarAgg::PosRequired(CMemoryPool *mp, CExpressionHandle &exprhdl,
+								COrderSpec *,  // posRequired
 								ULONG
 #ifdef GPOS_DEBUG
 									child_index
@@ -77,8 +220,9 @@ CPhysicalScalarAgg::PosRequired(CMemoryPool *mp,
 {
 	GPOS_ASSERT(0 == child_index);
 
-	// return empty sort order
-	return GPOS_NEW(mp) COrderSpec(mp);
+	// require the order of the aggregates with ORDER BY, if they can use it
+	return PosPresorted(mp, exprhdl.PexprScalarRepChild(1),
+						exprhdl.DeriveOutputColumns(0 /*child_index*/));
 }
 
 

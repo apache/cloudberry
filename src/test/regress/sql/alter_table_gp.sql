@@ -331,3 +331,30 @@ SELECT * FROM issue_14279_taptest_table_p3000000000;
 SELECT * FROM issue_14279_taptest_table_p3000000100;
 DROP TABLE issue_14279_taptest_table;
 DROP TABLE issue_14279_fk_reference;
+
+-- ADD COLUMN with a stable default such as now() stores the default in
+-- attmissingval.  The QD must evaluate it once and dispatch the value, so
+-- that the coordinator and every segment store the same value.
+CREATE TABLE add_col_missingval_heap (a int) DISTRIBUTED BY (a);
+INSERT INTO add_col_missingval_heap SELECT generate_series(1, 30);
+ALTER TABLE add_col_missingval_heap ADD COLUMN c text DEFAULT 'v_' || now();
+ALTER TABLE add_col_missingval_heap ADD COLUMN d timestamptz DEFAULT now();
+CREATE TABLE add_col_missingval_part (a int, b int) DISTRIBUTED BY (a)
+  PARTITION BY RANGE (b) (START (0) END (30) EVERY (10));
+INSERT INTO add_col_missingval_part SELECT i, i FROM generate_series(0, 29) i;
+ALTER TABLE add_col_missingval_part ADD COLUMN c timestamptz DEFAULT now();
+SELECT c.relname, a.attname, count(*) AS n_nodes,
+       count(DISTINCT a.attmissingval::text) AS n_missingval
+FROM (SELECT attrelid, attname, attmissingval FROM pg_attribute
+      UNION ALL
+      SELECT attrelid, attname, attmissingval
+      FROM gp_dist_random('pg_attribute')) a
+JOIN pg_class c ON c.oid = a.attrelid
+WHERE c.relname LIKE 'add_col_missingval%' AND a.attname IN ('c', 'd')
+  AND a.attmissingval IS NOT NULL
+GROUP BY 1, 2 ORDER BY 1, 2;
+-- Existing rows read the same value on every segment.
+SELECT count(DISTINCT c) AS n_c, count(DISTINCT d) AS n_d
+FROM add_col_missingval_heap;
+SELECT count(DISTINCT c) AS n_c FROM add_col_missingval_part;
+DROP TABLE add_col_missingval_heap, add_col_missingval_part;

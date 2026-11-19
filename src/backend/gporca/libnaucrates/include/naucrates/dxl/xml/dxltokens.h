@@ -322,6 +322,7 @@ enum Edxltoken
 	EdxltokenAggrefOid,
 	EdxltokenAggrefDistinct,
 	EdxltokenAggrefIsAggStar,
+	EdxltokenAggrefIsPresorted,
 	EdxltokenAggrefArgTypes,
 	EdxltokenAggrefKind,
 	EdxltokenAggrefStage,
@@ -669,6 +670,7 @@ enum Edxltoken
 	EdxltokenGPDBAggSplittable,
 	EdxltokenGPDBAggHashAggCapable,
 	EdxltokenGPDBAggFinalFuncVolatile,
+	EdxltokenGPDBAggOrderInsensitive,
 
 	EdxltokenEntireRow,
 

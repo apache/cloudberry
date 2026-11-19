@@ -47,12 +47,6 @@
 #include "catalog/pg_type_encoding.h"
 #include "cdb/cdbvars.h"
 
-/* GPDB_14_MERGE_FIXME: Do we need to keep binary_upgrade_next_pg_type_oid
- * for binary upgrade?
- */
-/* Potentially set by pg_upgrade_support functions */
-Oid			binary_upgrade_next_pg_type_oid = InvalidOid;
-
 /*
  * Record a type's default encoding clause in the catalog.
  */
@@ -348,6 +342,9 @@ TypeShellMake(const char *typeName, Oid typeNamespace, Oid ownerId)
  *		Returns the ObjectAddress assigned to the new type.
  *		If newTypeOid is zero (the normal case), a new OID is created;
  *		otherwise we use exactly that OID.
+ *
+ *		NB: Caller is responsible for ensuring the user has USAGE
+ *		on all types defaultTypeBin depends on.
  * ----------------------------------------------------------------
  */
 ObjectAddress
@@ -699,6 +696,9 @@ TypeCreate(Oid newTypeOid,
  * type already belongs to the current extension.  That's the behavior we
  * want when replacing a shell type, which is the only case where both flags
  * are true.
+ *
+ * NB: Caller is responsible for ensuring the user has USAGE on all types
+ * defaultExpr depends on.
  */
 void
 GenerateTypeDependencies(HeapTuple typeTuple,

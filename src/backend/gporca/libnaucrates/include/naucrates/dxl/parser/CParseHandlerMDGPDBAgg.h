@@ -62,6 +62,9 @@ private:
 
 	BOOL m_is_final_func_volatile;
 
+	// is the result independent of the order of the input
+	BOOL m_is_order_insensitive;
+
 	// process the start of an element
 	void StartElement(
 		const XMLCh *const element_uri,			// URI of element's namespace

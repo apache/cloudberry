@@ -1635,20 +1635,20 @@ select
   sum(unique1 order by two, four)
 from tenk1
 group by ten;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Hash aggregation with ORDER BY
-                            QUERY PLAN
-------------------------------------------------------------------
+                         QUERY PLAN                         
+------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  GroupAggregate
+   ->  Finalize HashAggregate
          Group Key: ten
-         ->  Sort
-               Sort Key: ten, two, four
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: ten
-                     ->  Seq Scan on tenk1
- Optimizer: Postgres query optimizer
-(9 rows)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: ten
+               ->  Partial GroupAggregate
+                     Group Key: ten
+                     ->  Sort
+                           Sort Key: ten
+                           ->  Seq Scan on tenk1
+ Optimizer: GPORCA
+(11 rows)
 
 -- Ensure that we never choose to provide presorted input to an Aggref with
 -- a volatile function in the ORDER BY / DISTINCT clause.  We want to ensure
@@ -1660,20 +1660,20 @@ select
   sum(unique1 order by two, random(), random() + 1)
 from tenk1
 group by ten;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Hash aggregation with ORDER BY
-                            QUERY PLAN                            
-------------------------------------------------------------------
+                         QUERY PLAN                         
+------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  GroupAggregate
+   ->  Finalize HashAggregate
          Group Key: ten
-         ->  Sort
-               Sort Key: ten, four, two
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: ten
-                     ->  Seq Scan on tenk1
- Optimizer: Postgres query optimizer
-(9 rows)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: ten
+               ->  Partial GroupAggregate
+                     Group Key: ten
+                     ->  Sort
+                           Sort Key: ten
+                           ->  Seq Scan on tenk1
+ Optimizer: GPORCA
+(11 rows)
 
 -- Ensure consecutive NULLs are properly treated as distinct from each other
 select array_agg(distinct val)

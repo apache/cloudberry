@@ -90,7 +90,7 @@ begin
   RAISE NOTICE 'Updated % rows', num_rows;
 end;
 $$;
-ERROR:  not supported on pax relations: IndexDeleteTuples
+NOTICE:  Updated 12884901855 rows
 SELECT gp_inject_fault('executor_run_high_processed', 'reset', dbid)
   FROM pg_catalog.gp_segment_configuration
  WHERE role = 'p';

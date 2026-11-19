@@ -631,24 +631,27 @@ DROP OWNED BY regress_user_mvtest CASCADE;
 DROP ROLE regress_user_mvtest;
 -- Concurrent refresh requires a unique index on the materialized
 -- view. Test what happens if it's dropped during the refresh.
+-- start_matchsubs
+-- m/^ERROR:  could not find suitable unique index on materialized view/
+-- s/ \(matview\.c:[0-9]+\)//
+-- end_matchsubs
+SET client_min_messages = warning;
 CREATE OR REPLACE FUNCTION mvtest_drop_the_index()
-  RETURNS bool AS $$
+  RETURNS SETOF bool AS $$
 BEGIN
   EXECUTE 'DROP INDEX IF EXISTS mvtest_drop_idx';
-  RETURN true;
+  RETURN NEXT true;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql EXECUTE ON INITPLAN;
 CREATE MATERIALIZED VIEW drop_idx_matview AS
-  SELECT 1 as i WHERE mvtest_drop_the_index();
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement
-CONTEXT:  SQL statement "DROP INDEX IF EXISTS mvtest_drop_idx"
-PL/pgSQL function mvtest_drop_the_index() line 3 at EXECUTE
+  SELECT 1 as i FROM mvtest_drop_the_index() AS f(keep) WHERE keep
+  DISTRIBUTED BY (i);
 CREATE UNIQUE INDEX mvtest_drop_idx ON drop_idx_matview (i);
-ERROR:  relation "drop_idx_matview" does not exist
 REFRESH MATERIALIZED VIEW CONCURRENTLY drop_idx_matview;
-ERROR:  relation "drop_idx_matview" does not exist
+ERROR:  could not find suitable unique index on materialized view
 DROP MATERIALIZED VIEW drop_idx_matview; -- clean up
-ERROR:  materialized view "drop_idx_matview" does not exist
+DROP FUNCTION mvtest_drop_the_index();
+RESET client_min_messages;
 -- make sure that create WITH NO DATA works via SPI
 BEGIN;
 CREATE FUNCTION mvtest_func()

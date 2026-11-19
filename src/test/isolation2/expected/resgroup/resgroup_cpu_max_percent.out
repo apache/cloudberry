@@ -34,8 +34,8 @@ CREATE
 -- the table cpu_usage_sample. And compare the average value to the expected value.
 -- return true if the practical value is close to the expected value.
 CREATE OR REPLACE FUNCTION verify_cpu_usage(groupname TEXT, expect_cpu_usage INT, err_rate INT) RETURNS BOOL AS $$ import json 
-all_info = plpy.execute(''' SELECT sample::json->'{name}' AS cpu FROM cpu_usage_samples '''.format(name=groupname)) usage = sum(float(row['cpu']) for row in all_info) / len(all_info) 
-return abs(usage - expect_cpu_usage) <= err_rate $$ LANGUAGE plpython3u;
+all_info = plpy.execute(''' SELECT sample::json->'{name}' AS cpu FROM cpu_usage_samples '''.format(name=groupname)) samples = [float(row['cpu']) for row in all_info] usage = sum(samples) / len(samples) 
+ok = abs(usage - expect_cpu_usage) <= err_rate if not ok: # only printed on failure, so the expected output is unchanged plpy.warning('{}: average cpu usage {:.2f}, expected {} +/- {}, samples {}'.format( groupname, usage, expect_cpu_usage, err_rate, samples)) return ok $$ LANGUAGE plpython3u;
 CREATE
 
 CREATE OR REPLACE FUNCTION busy() RETURNS void AS $$ import os import signal 

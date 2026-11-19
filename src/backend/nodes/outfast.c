@@ -833,6 +833,7 @@ static void
 _outExtensibleNode(StringInfo str, const ExtensibleNode *node)
 {
 	const ExtensibleNodeMethods *methods;
+	StringInfoData buf;
 
 	methods = GetExtensibleNodeMethods(node->extnodename, false);
 
@@ -840,8 +841,16 @@ _outExtensibleNode(StringInfo str, const ExtensibleNode *node)
 
 	WRITE_STRING_FIELD(extnodename);
 
-	/* serialize the private fields */
-	methods->nodeOut(str, node);
+	/*
+	 * Serialize the private fields.  nodeOut() emits the text format, so
+	 * collect it in a separate buffer and write it as a length-prefixed
+	 * string: _readExtensibleNode() reads it back with READ_STRING_VAR()
+	 * and hands it to nodeRead() through pg_strtok().
+	 */
+	initStringInfo(&buf);
+	methods->nodeOut(&buf, node);
+	WRITE_STRING_VAR(buf.data);
+	pfree(buf.data);
 }
 
 static void

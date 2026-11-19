@@ -243,6 +243,9 @@ jobs:
                "make_configs":["src/test/regress:installcheck-good"],
                "pg_settings":{"optimizer":"on"}
               },
+              {"test":"ic-anser",
+               "make_configs":["gpcontrib/anser:installcheck-with-install"]
+              },
               {"test":"pax-ic-good-opt-off",
                "make_configs":[
                 "contrib/pax_storage/:pax-test",
@@ -317,16 +320,20 @@ jobs:
                                "contrib/dict_xsyn:installcheck",
                                "contrib/extprotocol:installcheck",
                                "contrib/file_fdw:installcheck",
+                               "contrib/fuzzystrmatch:installcheck",
                                "contrib/formatter_fixedwidth:installcheck",
                                "contrib/hstore:installcheck",
                                "contrib/indexscan:installcheck",
+                               "contrib/intarray:installcheck",
                                "contrib/interconnect:installcheck",
+                               "contrib/isn:installcheck",
                                "contrib/pg_trgm:installcheck",
                                "contrib/indexscan:installcheck",
                                "contrib/pgcrypto:installcheck",
                                "contrib/pgstattuple:installcheck",
                                "contrib/tablefunc:installcheck",
                                "contrib/try_convert:installcheck",
+                               "contrib/unaccent:installcheck",
                                "contrib/passwordcheck:installcheck",
                                "contrib/pg_buffercache:installcheck",
                                "contrib/sslinfo:installcheck"]
@@ -377,6 +384,33 @@ jobs:
               },
               {"test":"ic-walrep",
                "make_configs":["src/test/walrep:installcheck"]
+              },
+              {"test":"ic-tap",
+               "make_configs":["src/bin/pg_archivecleanup:installcheck",
+                               "src/bin/pg_config:installcheck",
+                               "src/bin/pg_controldata:installcheck",
+                               "src/bin/pg_resetwal:installcheck",
+                               "src/bin/pg_waldump:installcheck",
+                               "src/bin/pgbench:installcheck",
+                               "src/interfaces/libpq:installcheck",
+                               "src/test/postmaster:installcheck",
+                               "src/test/modules/ssl_passphrase_callback:install installcheck",
+                               "src/test/modules/test_custom_rmgrs:install installcheck"]
+              },
+              {"test":"ic-pl-modules",
+               "make_configs":["src/pl/plperl:installcheck",
+                               "src/test/modules/dummy_index_am:install installcheck",
+                               "src/test/modules/dummy_seclabel:install installcheck",
+                               "src/test/modules/test_bloomfilter:install installcheck",
+                               "src/test/modules/test_ddl_deparse:install installcheck",
+                               "src/test/modules/test_ginpostinglist:install installcheck",
+                               "src/test/modules/test_integerset:install installcheck",
+                               "src/test/modules/test_lfind:install installcheck",
+                               "src/test/modules/test_parser:install installcheck",
+                               "src/test/modules/test_planner:install installcheck",
+                               "src/test/modules/test_rbtree:install installcheck",
+                               "src/test/modules/test_regex:install installcheck",
+                               "src/test/modules/test_shm_mq:install installcheck"]
               }
             ]
           }'
@@ -1777,7 +1811,7 @@ jobs:
           fi
 
           # Read configs into array
-          IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
+          mapfile -t configs <<< "${{ join(matrix.make_configs, fromJSON('"\n"')) }}"
 
           echo "=== Starting test execution for ${{ matrix.test }} ==="
           echo "Number of configurations to execute: ${#configs[@]}"
@@ -1958,7 +1992,7 @@ jobs:
           overall_status=0
 
           # Get configs array to create context for results
-          IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
+          mapfile -t configs <<< "${{ join(matrix.make_configs, fromJSON('"\n"')) }}"
 
           echo "=== Starting results parsing for ${{ matrix.test }} ==="
           echo "Number of configurations to parse: ${#configs[@]}"
@@ -1984,7 +2018,7 @@ jobs:
                 echo "FAILED_TESTS=0"
                 echo "PASSED_TESTS=0"
                 echo "IGNORED_TESTS=0"
-              } > "test_results.$i.txt"
+              } > "test_results.${{ matrix.test }}.$i.txt"
               overall_status=1
               continue
             fi
@@ -2044,7 +2078,7 @@ jobs:
                   ;;
             esac
 
-            echo "Results stored in test_results.$i.txt"
+            echo "Results stored in test_results.${{ matrix.test }}.$i.txt"
             echo "=== End parsing for configuration $((i+1)) ==="
             echo ""
           done
@@ -2154,7 +2188,7 @@ jobs:
             fi
 
             # Process results for each configuration
-            IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
+            mapfile -t configs <<< "${{ join(matrix.make_configs, fromJSON('"\n"')) }}"
 
             for ((i=0; i<NUM_CONFIGS; i++)); do
               config="${configs[$i]}"
@@ -2167,9 +2201,16 @@ jobs:
                 continue
               fi
 
-              # Source configuration results
-              # shellcheck source=/dev/null
-              . "test_results.${{ matrix.test }}.$i.txt"
+              # Read result fields as data, not shell commands. Reset optional
+              # fields on each iteration so they cannot leak from a prior suite.
+              STATUS= TOTAL_TESTS= PASSED_TESTS= FAILED_TESTS= IGNORED_TESTS=
+              FAILED_TEST_NAMES= IGNORED_TEST_NAMES=
+              while IFS='=' read -r key value; do
+                case "$key" in
+                  STATUS|TOTAL_TESTS|PASSED_TESTS|FAILED_TESTS|IGNORED_TESTS|FAILED_TEST_NAMES|IGNORED_TEST_NAMES)
+                    printf -v "$key" '%s' "$value" ;;
+                esac
+              done < "test_results.${{ matrix.test }}.$i.txt"
 
               # Rest of the code remains the same...
               # Display status with emoji

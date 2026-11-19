@@ -211,6 +211,10 @@ CJobGroupExpressionOptimization::Init(CGroupExpression *pgexpr,
 	m_pdrgpdp = nullptr;
 	m_pexprhdlPlan = nullptr;
 	m_pexprhdlRel = nullptr;
+	m_fChildOptMemoHit = false;
+	m_pdrgpocMemo = nullptr;
+	m_fMemoPredictsPrune = false;
+	m_fPrunedAfterChild = false;
 	m_eceo = CPhysical::PopConvert(pgexpr->Pop())->Eceo();
 	m_ulArity = pgexpr->Arity();
 	m_ulChildIndex = gpos::ulong_max;
@@ -246,6 +250,8 @@ CJobGroupExpressionOptimization::Cleanup()
 	CRefCount::SafeRelease(m_pdrgpstatCurrentCtxt);
 	CRefCount::SafeRelease(m_pdrgpdp);
 	CRefCount::SafeRelease(m_prppCTEProducer);
+	CRefCount::SafeRelease(m_pdrgpocMemo);
+	m_pdrgpocMemo = nullptr;
 	GPOS_DELETE(m_pexprhdlPlan);
 	GPOS_DELETE(m_pexprhdlRel);
 }
@@ -337,6 +343,48 @@ CJobGroupExpressionOptimization::EevtInitialize(CSchedulerContext *psc,
 		return eevFinalized;
 	}
 
+	// reuse the child contexts that the same request reached under another
+	// context, if the request would reach them under this context as well
+	CEngine *peng = psc->Peng();
+	if (peng->FChildOptMemoApplicable(pjgeo->m_pgexpr,
+									  pjgeo->m_fOptimizeCTESequence))
+	{
+		COptimizationContextArray *pdrgpoc = peng->PdrgpocChildOptMemo(
+			psc->GetGlobalMemoryPool(), pjgeo->m_pgexpr, pjgeo->m_poc,
+			pjgeo->m_ulOptReq);
+		if (nullptr != pdrgpoc)
+		{
+			CCost costLowerBoundMemo(GPOPT_INVALID_COST);
+			BOOL fPruned = peng->FSafeToPruneWithChildOptMemo(
+				pjgeo->m_pgexpr, pjgeo->m_poc, pdrgpoc, &costLowerBoundMemo);
+			peng->CountChildOptMemoEvent(fPruned ? CEngine::EcomePrunedHit
+												 : CEngine::EcomeHit);
+			if (GPOS_FTRACE(EopttraceVerifyChildOptMemo))
+			{
+				// optimize the children anyway, and compare the contexts
+				// they reach with the reused ones
+				pjgeo->m_pdrgpocMemo = pdrgpoc;
+				pjgeo->m_fMemoPredictsPrune = fPruned;
+			}
+			else if (fPruned)
+			{
+				(void) pjgeo->m_pgexpr->PccComputeCost(
+					psc->GetGlobalMemoryPool(), pjgeo->m_poc,
+					pjgeo->m_ulOptReq, nullptr /*pdrgpoc*/, true /*fPruned*/,
+					costLowerBoundMemo);
+				pdrgpoc->Release();
+				return eevFinalized;
+			}
+			else
+			{
+				pjgeo->m_pdrgpoc = pdrgpoc;
+				pjgeo->m_fChildOptMemoHit = true;
+				pjgeo->SetChildrenScheduled();
+				return eevOptimizingChildren;
+			}
+		}
+	}
+
 	pjgeo->InitChildGroupsOptimization(psc);
 
 	return eevOptimizingChildren;
@@ -389,6 +437,7 @@ CJobGroupExpressionOptimization::DerivePrevChildProps(CSchedulerContext *psc)
 										m_ulOptReq, nullptr /*pdrgpoc*/,
 										true /*fPruned*/, costLowerBound);
 		m_fChildOptimizationFailed = true;
+		m_fPrunedAfterChild = true;
 		return;
 	}
 
@@ -544,6 +593,24 @@ CJobGroupExpressionOptimization::EevtOptimizeChildren(CSchedulerContext *psc,
 		pjgeo->ScheduleChildGroupsJobs(psc);
 		if (pjgeo->m_fChildOptimizationFailed)
 		{
+			if (nullptr != pjgeo->m_pdrgpocMemo)
+			{
+				// verify mode: the reused child contexts would have let the
+				// request continue, or be pruned at another point
+				if (!pjgeo->m_fPrunedAfterChild)
+				{
+					psc->Peng()->ReportChildOptMemoDifference(
+						CEngine::EcomeVerifyIncomplete, pjgeo->m_pgexpr,
+						pjgeo->m_poc, pjgeo->m_ulOptReq);
+				}
+				else if (!pjgeo->m_fMemoPredictsPrune)
+				{
+					psc->Peng()->ReportChildOptMemoDifference(
+						CEngine::EcomeVerifyPruneDiff, pjgeo->m_pgexpr,
+						pjgeo->m_poc, pjgeo->m_ulOptReq);
+				}
+			}
+
 			// failed to optimize child, terminate job
 			pjgeo->Cleanup();
 			return eevFinalized;
@@ -571,10 +638,29 @@ CJobGroupExpressionOptimization::EevtAddEnforcers(CSchedulerContext *psc,
 	// get a job pointer
 	CJobGroupExpressionOptimization *pjgeo = PjConvert(pjOwner);
 
-	// build child contexts array
-	GPOS_ASSERT(nullptr == pjgeo->m_pdrgpoc);
-	pjgeo->m_pdrgpoc = psc->Peng()->PdrgpocChildren(psc->GetGlobalMemoryPool(),
-													*pjgeo->m_pexprhdlPlan);
+	// build child contexts array, unless reused from the child
+	// optimization memo
+	if (!pjgeo->m_fChildOptMemoHit)
+	{
+		GPOS_ASSERT(nullptr == pjgeo->m_pdrgpoc);
+		CEngine *peng = psc->Peng();
+		pjgeo->m_pdrgpoc = peng->PdrgpocChildren(psc->GetGlobalMemoryPool(),
+												 *pjgeo->m_pexprhdlPlan);
+		if (nullptr != pjgeo->m_pdrgpocMemo)
+		{
+			peng->VerifyChildOptMemo(pjgeo->m_pgexpr, pjgeo->m_poc,
+									 pjgeo->m_ulOptReq, pjgeo->m_pdrgpocMemo,
+									 pjgeo->m_pdrgpoc,
+									 pjgeo->m_fMemoPredictsPrune);
+		}
+		if (peng->FChildOptMemoApplicable(pjgeo->m_pgexpr,
+										  pjgeo->m_fOptimizeCTESequence))
+		{
+			peng->AddChildOptMemo(psc->GetGlobalMemoryPool(), pjgeo->m_pgexpr,
+								  pjgeo->m_poc, pjgeo->m_ulOptReq,
+								  pjgeo->m_pdrgpoc);
+		}
+	}
 
 	// enforce physical properties
 	BOOL fCheckEnfdProps = psc->Peng()->FCheckEnfdProps(

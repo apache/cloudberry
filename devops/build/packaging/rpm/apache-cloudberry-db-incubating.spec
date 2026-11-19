@@ -222,7 +222,10 @@ elif [ -L "${LINK_PATH}" ]; then
     case "${EXISTING_NAME}" in
         %{cloudberry_name}-*)
             EXISTING_VERSION=${EXISTING_NAME#%{cloudberry_name}-}
-            EXISTING_MAJOR=${EXISTING_VERSION%%.*}
+            # RPM turns each %% into a single % when it expands the
+            # scriptlet, so write %%%% to get the shell's %% operator
+            # (remove the longest ".*" suffix, which leaves the major).
+            EXISTING_MAJOR=${EXISTING_VERSION%%%%.*}
             if [ "${EXISTING_MAJOR}" = "%{cloudberry_major_version}" ]; then
                 # Same major version: move the generic symlink to this build.
                 ln -sfnT "${LINK_TARGET_REL}" "${LINK_PATH}" || :

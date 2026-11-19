@@ -44,7 +44,8 @@ CDXLScalarAggref::CDXLScalarAggref(CMemoryPool *mp, IMDId *agg_func_mdid,
 	  m_agg_stage(agg_stage),
 	  m_aggkind(aggkind),
 	  m_argtypes(argtypes),
-	  m_is_aggstar(isAggStar)
+	  m_is_aggstar(isAggStar),
+	  m_is_presorted(false)
 {
 	GPOS_ASSERT(nullptr != agg_func_mdid);
 	GPOS_ASSERT_IMP(nullptr != resolved_rettype_mdid,
@@ -224,6 +225,12 @@ CDXLScalarAggref::SerializeToDXL(CXMLSerializer *xml_serializer,
 		CDXLTokens::GetDXLTokenStr(EdxltokenAggrefDistinct), m_is_distinct);
 	xml_serializer->AddAttribute(
 		CDXLTokens::GetDXLTokenStr(EdxltokenAggrefIsAggStar), m_is_aggstar);
+	if (m_is_presorted)
+	{
+		xml_serializer->AddAttribute(
+			CDXLTokens::GetDXLTokenStr(EdxltokenAggrefIsPresorted),
+			m_is_presorted);
+	}
 	
 	xml_serializer->AddAttribute(
 		CDXLTokens::GetDXLTokenStr(EdxltokenAggrefStage), GetDXLStrAggStage());

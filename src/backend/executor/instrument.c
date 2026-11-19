@@ -32,7 +32,6 @@ static BufferUsage save_pgBufferUsage;
 WalUsage	pgWalUsage;
 static WalUsage save_pgWalUsage;
 
-static void BufferUsageAdd(BufferUsage *dst, const BufferUsage *add);
 static void WalUsageAdd(WalUsage *dst, WalUsage *add);
 
 /* GPDB specific */
@@ -87,6 +86,7 @@ InstrInit(Instrumentation *instr, int instrument_options)
 	instr->need_bufusage = (instrument_options & INSTRUMENT_BUFFERS) != 0;
 	instr->need_walusage = (instrument_options & INSTRUMENT_WAL) != 0;
 	instr->need_timer = (instrument_options & INSTRUMENT_TIMER) != 0;
+	instr->need_cdb = (instrument_options & INSTRUMENT_CDB) != 0;
 }
 
 /* Entry to a plan node */
@@ -271,7 +271,7 @@ InstrAccumParallelQuery(BufferUsage *bufusage, WalUsage *walusage)
 }
 
 /* dst += add */
-static void
+void
 BufferUsageAdd(BufferUsage *dst, const BufferUsage *add)
 {
 	dst->shared_blks_hit += add->shared_blks_hit;
@@ -506,8 +506,9 @@ pickInstrFromShmem(const Plan *plan, int instrument_options)
 		MemoryContextSwitchTo(contextSave);
 	}
 
-	if (NULL != instr && instrument_options & (INSTRUMENT_TIMER | INSTRUMENT_CDB))
+	if (instr != NULL)
 	{
+		instr->need_bufusage = (instrument_options & INSTRUMENT_BUFFERS) != 0;
 		instr->need_timer = (instrument_options & INSTRUMENT_TIMER) != 0;
 		instr->need_cdb = (instrument_options & INSTRUMENT_CDB) != 0;
 	}

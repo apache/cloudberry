@@ -220,7 +220,7 @@ CREATE TABLE more__int AS SELECT
      (select array_agg(u) || array_agg(u + 1000) || array_agg(u + 2000)
       from unnest(a) u where u < 2000000000)
    END AS a, a as b
-   FROM test__int;
+   FROM test__int DISTRIBUTED BY (b);
 CREATE INDEX ON more__int using gist (a gist__int_ops(numranges = 252));
 
 SELECT count(*) from more__int WHERE a && '{23,50}';

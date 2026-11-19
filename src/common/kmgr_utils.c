@@ -34,8 +34,6 @@
 #include "crypto/kmgr.h"
 #include "lib/stringinfo.h"
 #include "storage/fd.h"
-#include "postgres.h"
-#include "utils/builtins.h"
 
 #ifndef FRONTEND
 #include "pgstat.h"

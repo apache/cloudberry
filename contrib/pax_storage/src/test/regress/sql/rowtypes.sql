@@ -59,7 +59,8 @@ select f1, q.c1 from quadtable;		-- fails, q is a table reference
 
 select f1, (q).c1, (qq.q).c1.i from quadtable qq;
 
-create temp table people (fn fullname, bd date);
+-- fullname changes below, so it cannot be the distribution key.
+create temp table people (fn fullname, bd date) distributed by (bd);
 
 insert into people values ('(Joe,Blow)', '1984-01-10');
 

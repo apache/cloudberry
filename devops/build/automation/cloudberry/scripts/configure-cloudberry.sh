@@ -32,6 +32,7 @@
 #   - IC Proxy Support
 #   - Oracle Compatibility (orafce)
 #   - ORCA Query Optimizer
+#   - Anser Runtime Filters (opt-in, ENABLE_ANSER=true)
 #   - PAX Access Method
 #   - Test Automation Support (tap-tests)
 #
@@ -56,7 +57,6 @@
 #
 #                 When true, enables:
 #                   --enable-debug
-#                   --enable-profiling
 #                   --enable-cassert
 #                   --enable-debug-extensions
 #
@@ -137,7 +137,6 @@ CONFIGURE_DEBUG_OPTS=""
 
 if [ "${ENABLE_DEBUG:-false}" = "true" ]; then
     CONFIGURE_DEBUG_OPTS="--enable-debug \
-                          --enable-profiling \
                           --enable-cassert \
                           --enable-debug-extensions"
 fi
@@ -145,6 +144,16 @@ fi
 CONFIGURE_MDBLOCALES_OPTS="--without-mdblocales"
 if [ "${ENABLE_MDBLOCALES:-false}" = "true" ]; then
     CONFIGURE_MDBLOCALES_OPTS="--with-mdblocales"
+fi
+
+# Anser is opt-in at configure time, and stays opt-in here: passing
+# --with-anser unconditionally would put it into every release artifact, which
+# is the opposite of what the configure default says.  The ic-anser CI job does
+# not need it -- gpcontrib/anser's installcheck-with-install builds, installs
+# and preloads the extension itself.
+CONFIGURE_ANSER_OPTS=""
+if [ "${ENABLE_ANSER:-false}" = "true" ]; then
+    CONFIGURE_ANSER_OPTS="--with-anser"
 fi
 
 # Configure build
@@ -158,6 +167,7 @@ execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
             --enable-pax \
             --enable-tap-tests \
             ${CONFIGURE_DEBUG_OPTS} \
+            ${CONFIGURE_ANSER_OPTS} \
             --with-diskquota \
             --with-gp-stats-collector \
             --with-gssapi \

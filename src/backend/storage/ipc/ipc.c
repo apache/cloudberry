@@ -467,22 +467,3 @@ check_on_shmem_exit_lists_are_empty(void)
 		elog(FATAL, "on_shmem_exit has been called prematurely");
 	/* Checking DSM detach state seems unnecessary given the above */
 }
-
-/*
- * GPDB_14_MERGE_FIXME:
- * Helper function to peak and test the top of before_shmem_exit_list.
- * GPDB will call cancel_before_shmem_exit multiple times(reset Gang)
- * even there are no pg_on_exit_callback(s) registered.
- * cancel_before_shmem_exit reports error if the function not from PG14.
- * Wrap with this function to bypass the restriction.
- * This is ugly to keep cancel_before_shmem_exit same with upstream.
- */
-void
-cancel_before_shmem_exit_if_matched(pg_on_exit_callback function, Datum arg)
-{
-	if (before_shmem_exit_index > 0 &&
-		before_shmem_exit_list[before_shmem_exit_index - 1].function
-		== function &&
-		before_shmem_exit_list[before_shmem_exit_index - 1].arg == arg)
-		cancel_before_shmem_exit(function, arg);
-}

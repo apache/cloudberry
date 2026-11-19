@@ -586,6 +586,7 @@ CTranslatorDXLToScalar::TranslateDXLScalarAggrefToScalar(
 	aggref->aggno = -1;
 	aggref->aggtransno = -1;
 	aggref->aggstar = dxlop->IsAggStar();
+	aggref->aggpresorted = dxlop->IsPresorted();
 
 	CMDIdGPDB *agg_mdid =
 		GPOS_NEW(m_mp) CMDIdGPDB(IMDId::EmdidGeneral, aggref->aggfnoid);

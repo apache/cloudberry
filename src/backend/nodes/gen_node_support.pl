@@ -1032,10 +1032,6 @@ _read${n}(void)
 ";
 		
 		# for read fast
-		my $macro =
-			(@{ $node_type_info{$n}->{fields} } > 0)
-				? 'READ_LOCALS'
-				: 'READ_LOCALS_NO_FIELDS';
 		print $rfaf "
 static $n *
 _read${n}(void)
@@ -1433,11 +1429,11 @@ _read${n}(void)
 	}
 ! unless $no_read;
 
-			# for out and read fast
+			# for out and read fast: the binary format has no field labels,
+			# and the reader below expects a length-prefixed string.
 			print $ofaf q{
 	/* CustomName is a key to lookup CustomScanMethods */
-	appendStringInfoString(str, " :methods ");
-	outToken(str, node->methods->CustomName);
+	WRITE_STRING_VAR(node->methods->CustomName);
 };
 			print $rfaf q!
 	{

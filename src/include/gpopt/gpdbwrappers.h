@@ -303,6 +303,9 @@ bool IsRepSafeAgg(Oid aggid);
 // does aggregate have a combine function (and serial/deserial functions, if needed)
 bool IsAggPartialCapable(Oid aggid);
 
+// is the result of the aggregate independent of the order of its input
+bool IsAggOrderInsensitive(Oid aggid);
+
 // intermediate result type of given aggregate
 Oid GetAggregate(const char *agg, Oid type_oid);
 
@@ -798,6 +801,8 @@ Var *MakeVarFromTargetEntry(Index varno, TargetEntry *tle);
 TargetEntry *FlatCopyTargetEntry(TargetEntry *src_tle);
 
 bool IsTypeRange(Oid typid);
+
+bool IsTypeMultirange(Oid typid);
 
 char *GetRelAmName(Oid reloid);
 

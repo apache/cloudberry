@@ -23,6 +23,7 @@
 #include "access/appendonlytid.h"
 #include "access/appendonly_visimap.h"
 #include "executor/tuptable.h"
+#include "nodes/altertablenodes.h"
 #include "nodes/execnodes.h"
 #include "nodes/primnodes.h"
 #include "storage/block.h"
@@ -82,6 +83,15 @@ typedef struct AOCSInsertDescData
 typedef AOCSInsertDescData *AOCSInsertDesc;
 
 /*
+ * Anchor column is a complete column (i.e. no missing values) that we will use
+ * to scan/fetch before we scan/fetch other columns that might has missing values.
+ *
+ * This macro indicates the position in the projection column array where the
+ * anchor column is in (always the first one).
+ */
+#define ANCHOR_COL_IN_PROJ 0
+
+/*
  * Scan descriptors
  */
 
@@ -104,6 +114,22 @@ enum AOCSScanDescIdentifier
 	AOCSSCANDESCDATA,		/* public */
 	AOCSBITMAPSCANDATA		/* am private */
 };
+
+/*
+ * The type of AOCS column projection in scan/fetch.
+ *
+ * GPDB_PORT: upstream writes "typedef enum AOCSProjectionKind { ... };" with no
+ * name after the closing brace, so the typedef declares nothing; it is used as a
+ * type name below, which only compiles because the tag happens to share the
+ * name.  cbdb builds with -Werror and rejects it as "useless storage class
+ * specifier in empty declaration".  Name the typedef properly.
+ */
+typedef enum AOCSProjectionKind
+{
+	AOCS_PROJ_ANY, 		/* any one column can be used, we'll pick the smallest complete one */
+	AOCS_PROJ_SOME, 		/* some of the columns, could be all as well */
+	AOCS_PROJ_ALL 		/* all of the columns */
+} AOCSProjectionKind;
 
 /*
  * Used for fetch individual tuples from specified by TID of append only relations
@@ -152,6 +178,9 @@ typedef struct AOCSFetchDescData
 	AppendOnlyVisimap visibilityMap;
 
 	Oid segrelid;
+
+	/* attnum to rownum mapping, used in reading missing column value */
+	int64 		*attnum_to_rownum;
 } AOCSFetchDescData;
 
 typedef AOCSFetchDescData *AOCSFetchDesc;
@@ -245,6 +274,20 @@ typedef struct AOCSScanDescData
 		AttrNumber		   *proj_atts;
 		AttrNumber			num_proj_atts;
 
+		/* Indicate if we proj some/all of the columns */
+		AOCSProjectionKind 		projKind;
+
+		/* attnum to rownum mapping, used in reading missing column value */
+		int64 			   *attnum_to_rownum;
+
+		/*
+		 * Does any column of this relation have a missing region at all?  If
+		 * not -- which is the usual case -- the per-row missing-value check
+		 * can be skipped outright instead of probing attnum_to_rownum once
+		 * per row per column.
+		 */
+		bool 				has_missing_cols;
+
 		struct DatumStreamRead **ds;
 	} columnScanInfo;
 
@@ -281,6 +324,12 @@ typedef struct AOCSScanDescData
 	 * across all columns projected, so far. It is used for scan progress reporting.
 	 */
 	int64		totalBytesRead;
+
+	/*
+	 * Is this for partial scan? Partial scans involve scanning a subset of the
+	 * CO table, starting at a certain logical heap block and ending in another.
+	 */
+	bool		partialScan;
 } AOCSScanDescData;
 
 typedef AOCSScanDescData *AOCSScanDesc;
@@ -345,7 +394,8 @@ typedef struct AOCSHeaderScanDescData
 
 typedef AOCSHeaderScanDescData *AOCSHeaderScanDesc;
 
-typedef struct AOCSAddColumnDescData
+
+typedef struct AOCSWriteColumnDescData
 {
 	Relation rel;
 
@@ -354,12 +404,23 @@ typedef struct AOCSAddColumnDescData
 	DatumStreamWrite **dsw;
 	/* array of datum stream write objects, one per new column */
 
-	int num_newcols;
+	int num_cols_to_write;
 
 	int32 cur_segno;
 
-} AOCSAddColumnDescData;
-typedef AOCSAddColumnDescData *AOCSAddColumnDesc;
+	List *newcolvals;
+
+	AOCSWriteColumnOperation op;
+} AOCSWriteColumnDescData;
+typedef AOCSWriteColumnDescData *AOCSWriteColumnDesc;
+
+/* function to help find the anchor column to scan */
+extern int
+get_anchor_col(AOCSFileSegInfo **segInfos, int nseg, int natts, Relation aocsrel, AttrNumber *proj_atts, AttrNumber num_proj_atts);
+
+/* function to find the column consulted by unique constraint checks */
+extern int
+aocs_unique_check_col(Relation aocsrel);
 
 /* ----------------
  *		function prototypes for appendoptimized columnar access method
@@ -367,10 +428,14 @@ typedef AOCSAddColumnDescData *AOCSAddColumnDesc;
  */
 
 extern AOCSScanDesc aocs_beginscan(Relation relation, Snapshot snapshot, ParallelTableScanDesc parallel_scan,
-								   bool *proj, uint32 flags);
-extern AOCSScanDesc aocs_beginrangescan(Relation relation, Snapshot snapshot,
-										Snapshot appendOnlyMetaDataSnapshot,
-										int *segfile_no_arr, int segfile_count);
+								   bool *proj, AOCSProjectionKind projKind, uint32 flags);
+extern AOCSScanDesc
+aocs_beginrangescan(Relation relation,
+					Snapshot snapshot,
+					Snapshot appendOnlyMetaDataSnapshot,
+					int *segfile_no_arr,
+					int segfile_count,
+					bool *proj);
 
 extern void aocs_rescan(AOCSScanDesc scan);
 extern void aocs_endscan(AOCSScanDesc scan);
@@ -399,25 +464,10 @@ extern void aocs_delete_finish(AOCSDeleteDesc desc);
 
 extern AOCSHeaderScanDesc aocs_begin_headerscan(
 		Relation rel, int colno);
-extern void aocs_headerscan_opensegfile(
-		AOCSHeaderScanDesc hdesc, AOCSFileSegInfo *seginfo, char *basepath);
-extern bool aocs_get_nextheader(AOCSHeaderScanDesc hdesc);
-extern void aocs_end_headerscan(AOCSHeaderScanDesc hdesc);
-extern AOCSAddColumnDesc aocs_addcol_init(
-		Relation rel, int num_newcols);
-extern void aocs_addcol_newsegfile(
-		AOCSAddColumnDesc desc, AOCSFileSegInfo *seginfo, char *basepath,
-		RelFileLocatorBackend relfilenode);
-extern void aocs_addcol_closefiles(AOCSAddColumnDesc desc);
-extern void aocs_addcol_endblock(AOCSAddColumnDesc desc, int64 firstRowNum);
-extern void aocs_addcol_insert_datum(AOCSAddColumnDesc desc,
-									   Datum *d, bool *isnull);
-extern void aocs_addcol_finish(AOCSAddColumnDesc desc);
-extern void aocs_addcol_emptyvpe(
-		Relation rel, AOCSFileSegInfo **segInfos,
-		int32 nseg, int num_newcols);
-extern void aocs_addcol_setfirstrownum(AOCSAddColumnDesc desc,
-		int64 firstRowNum);
+extern AOCSWriteColumnDesc aocs_writecol_init(Relation rel, List *newvals, AOCSWriteColumnOperation op);
+extern void aocs_writecol_add(Oid relid, List *newvals, TupleDesc oldDesc);
+extern void aocs_writecol_rewrite(Oid relid, List *newvals, List *constraints,
+								  TupleDesc oldDesc);
 
 extern bool aocs_get_target_tuple(AOCSScanDesc aoscan, int64 targrow, TupleTableSlot *slot);
 
@@ -427,6 +477,13 @@ extern ExprState * aocs_predicate_pushdown_prepare(AOCSScanDesc scan,
 								ExprState *state,
 								ExprContext *ecxt,
 								PlanState *ps);
+extern bool aocs_positionscan(AOCSScanDesc aoscan,
+							  AppendOnlyBlockDirectoryEntry *dirEntry,
+							  int colIdx,
+							  int fsInfoIdx);
+extern int aoco_proj_move_anchor_first(AttrNumber *proj_atts, int num_proj_atts, int anchor_colno);
+extern void initscan_with_colinfo(AOCSScanDesc scan);
+
 /*
  * Update total bytes read for the entire scan. If the block was compressed,
  * update it with the compressed length. If the block was not compressed, update

@@ -1539,25 +1539,19 @@ ExecInitExprRec(Expr *node, ExprState *state,
 			{
 				FieldStore *fstore = (FieldStore *) node;
 				TupleDesc	tupDesc;
-				ExprEvalRowtypeCache *rowcachep;
 				Datum	   *values;
 				bool	   *nulls;
 				int			ncolumns;
 				ListCell   *l1,
 						   *l2;
 
-				/* find out the number of columns in the composite type */
-				tupDesc = lookup_rowtype_tupdesc(fstore->resulttype, -1);
+				/* Copy the tupdesc to describe result tuples */
+				tupDesc = lookup_rowtype_tupdesc_copy(fstore->resulttype, -1);
 				ncolumns = tupDesc->natts;
-				ReleaseTupleDesc(tupDesc);
 
 				/* create workspace for column values */
 				values = (Datum *) palloc(sizeof(Datum) * ncolumns);
 				nulls = (bool *) palloc(sizeof(bool) * ncolumns);
-
-				/* create shared composite-type-lookup cache struct */
-				rowcachep = palloc(sizeof(ExprEvalRowtypeCache));
-				rowcachep->cacheptr = NULL;
 
 				/* emit code to evaluate the composite input value */
 				ExecInitExprRec(fstore->arg, state, resv, resnull);
@@ -1565,23 +1559,37 @@ ExecInitExprRec(Expr *node, ExprState *state,
 				/* next, deform the input tuple into our workspace */
 				scratch.opcode = EEOP_FIELDSTORE_DEFORM;
 				scratch.d.fieldstore.fstore = fstore;
-				scratch.d.fieldstore.rowcache = rowcachep;
+				scratch.d.fieldstore.tupdesc = tupDesc;
 				scratch.d.fieldstore.values = values;
 				scratch.d.fieldstore.nulls = nulls;
-				scratch.d.fieldstore.ncolumns = ncolumns;
 				ExprEvalPushStep(state, &scratch);
 
 				/* evaluate new field values, store in workspace columns */
 				forboth(l1, fstore->newvals, l2, fstore->fieldnums)
 				{
 					Expr	   *e = (Expr *) lfirst(l1);
+					Oid			etype = exprType((Node *) e);
 					AttrNumber	fieldnum = lfirst_int(l2);
+					Oid			atttype = TupleDescAttr(tupDesc, fieldnum - 1)->atttypid;
 					Datum	   *save_innermost_caseval;
 					bool	   *save_innermost_casenull;
 
 					if (fieldnum <= 0 || fieldnum > ncolumns)
 						elog(ERROR, "field number %d is out of range in FieldStore",
 							 fieldnum);
+
+					/*
+					 * Be paranoid about the plan and the current type
+					 * definition having gotten out of sync.
+					 */
+					if (etype != atttype)
+						ereport(ERROR,
+								(errcode(ERRCODE_DATATYPE_MISMATCH),
+								 errmsg("attribute %d of type %s has wrong type",
+										fieldnum, format_type_be(fstore->resulttype)),
+								 errdetail("Attribute has type %s, but query expects %s.",
+										   format_type_be(atttype),
+										   format_type_be(etype))));
 
 					/*
 					 * Use the CaseTestExpr mechanism to pass down the old
@@ -1603,7 +1611,7 @@ ExecInitExprRec(Expr *node, ExprState *state,
 					 * first, and (2) any such CaseTestExpr is directly the
 					 * arg or refexpr input.  So any read of the caseval will
 					 * occur before there's a chance to overwrite it.  Also,
-					 * if multiple entries in the newvals/fieldnums lists
+					 * if multiple entries in the newcolvals/fieldnums lists
 					 * target the same field, they'll effectively be applied
 					 * left-to-right which is what we want.
 					 */
@@ -1623,10 +1631,9 @@ ExecInitExprRec(Expr *node, ExprState *state,
 				/* finally, form result tuple */
 				scratch.opcode = EEOP_FIELDSTORE_FORM;
 				scratch.d.fieldstore.fstore = fstore;
-				scratch.d.fieldstore.rowcache = rowcachep;
+				scratch.d.fieldstore.tupdesc = tupDesc;
 				scratch.d.fieldstore.values = values;
 				scratch.d.fieldstore.nulls = nulls;
-				scratch.d.fieldstore.ncolumns = ncolumns;
 				ExprEvalPushStep(state, &scratch);
 				break;
 			}
@@ -3325,7 +3332,7 @@ ExecInitSubscriptingRef(ExprEvalStep *scratch, SubscriptingRef *sbsref,
  * not; the CaseTestExpr, if any, will be directly the arg or refexpr of the
  * top-level node.  Nested-assignment situations give rise to expression
  * trees in which each level of assignment has its own CaseTestExpr, and the
- * recursive structure appears within the newvals or refassgnexpr field.
+ * recursive structure appears within the newcolvals or refassgnexpr field.
  * There is an exception, though: if the array is an array-of-domain, we will
  * have a CoerceToDomain or RelabelType as the refassgnexpr, and we need to
  * be able to look through that.

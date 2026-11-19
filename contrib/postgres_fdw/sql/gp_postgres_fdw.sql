@@ -383,6 +383,60 @@ DROP TABLE sub_part;
 DROP TABLE sub_part_1_prt_1_2_prt_one_foreign;
 DROP TABLE sub_part_1_prt_1_2_prt_two_foreign;
 
+-- ===================================================================
+-- Foreign writes on segments, in a distributed transaction that also
+-- writes local data on more than one segment.  The segments commit it
+-- with two-phase commit, and the remote transactions must be committed
+-- at PREPARE, or the foreign writes are lost.
+-- ===================================================================
+CREATE TABLE fdw_2pc_remote (a int, b int) DISTRIBUTED BY (b);
+CREATE TABLE fdw_2pc_part (a int, b int) PARTITION BY LIST (a) DISTRIBUTED BY (b);
+CREATE TABLE fdw_2pc_part_local PARTITION OF fdw_2pc_part FOR VALUES IN (1);
+CREATE FOREIGN TABLE fdw_2pc_part_foreign PARTITION OF fdw_2pc_part FOR VALUES IN (2)
+	SERVER loopback OPTIONS (schema_name 'postgres_fdw_gp', table_name 'fdw_2pc_remote');
+
+-- Cross-partition UPDATE: deletes from the local partition and inserts
+-- into the foreign one on every segment.
+INSERT INTO fdw_2pc_part SELECT 1, i FROM generate_series(1, 25) i;
+UPDATE fdw_2pc_part SET a = 2 WHERE a = 1;
+SELECT count(*) FROM fdw_2pc_part_local;
+SELECT count(*) FROM fdw_2pc_remote;
+
+-- Same, with batch insert into the foreign partition.
+DELETE FROM fdw_2pc_remote;
+ALTER FOREIGN TABLE fdw_2pc_part_foreign OPTIONS (ADD batch_size '10');
+INSERT INTO fdw_2pc_part SELECT 1, i FROM generate_series(1, 25) i;
+UPDATE fdw_2pc_part SET a = 2 WHERE a = 1;
+SELECT count(*) FROM fdw_2pc_part_local;
+SELECT count(*) FROM fdw_2pc_remote;
+
+-- A foreign table written on all segments, in a transaction that also
+-- writes a local table.
+DELETE FROM fdw_2pc_remote;
+CREATE TABLE fdw_2pc_local (a int, b int) DISTRIBUTED BY (b);
+CREATE FOREIGN TABLE fdw_2pc_ft (a int, b int)
+	SERVER loopback OPTIONS (schema_name 'postgres_fdw_gp', table_name 'fdw_2pc_remote',
+							 mpp_execute 'all segments');
+BEGIN;
+INSERT INTO fdw_2pc_local SELECT 3, i FROM generate_series(1, 25) i;
+INSERT INTO fdw_2pc_ft SELECT * FROM fdw_2pc_local;
+COMMIT;
+SELECT count(*) FROM fdw_2pc_local;
+SELECT count(*) FROM fdw_2pc_remote;
+
+-- When the transaction is rolled back, so are the foreign writes.
+BEGIN;
+INSERT INTO fdw_2pc_local SELECT 4, i FROM generate_series(1, 25) i;
+INSERT INTO fdw_2pc_ft SELECT * FROM fdw_2pc_local WHERE a = 4;
+ROLLBACK;
+SELECT count(*) FROM fdw_2pc_local;
+SELECT count(*) FROM fdw_2pc_remote;
+
+DROP FOREIGN TABLE fdw_2pc_ft;
+DROP TABLE fdw_2pc_local;
+DROP TABLE fdw_2pc_part;
+DROP TABLE fdw_2pc_remote;
+
 -- GPDB #16219: validate scram-sha-256 in postgres_fdw
 alter system set password_encryption = 'scram-sha-256';
 -- add created user to pg_hba.conf

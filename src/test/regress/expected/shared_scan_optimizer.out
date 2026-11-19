@@ -270,3 +270,69 @@ WITH
 
 RESET statement_timeout;
 DROP TABLE ss_t1, ss_t2;
+-- A Shared Scan below a Partition Selector must be processed like any other
+-- Shared Scan. PartitionSelector used to be missed by is_plan_node(), so the
+-- shared input walker didn't descend into its subtree, and executing the
+-- query failed with "cannot execute alien Share Input Scan".
+CREATE TABLE ss_pt (a int, b int) DISTRIBUTED BY (a)
+  PARTITION BY RANGE (b) (START (0) END (10) EVERY (1));
+CREATE TABLE ss_t (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO ss_pt SELECT i, i % 10 FROM generate_series(1, 1000) i;
+INSERT INTO ss_t SELECT i, i % 3 FROM generate_series(1, 30) i;
+ANALYZE ss_pt;
+ANALYZE ss_t;
+SET optimizer = off;
+SET gp_cte_sharing = on;
+EXPLAIN (COSTS OFF)
+WITH c AS (SELECT a, b FROM ss_t WHERE a < 20)
+SELECT count(*) FROM ss_pt JOIN c ON ss_pt.b = c.b
+UNION ALL
+SELECT count(*) FROM c;
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Append
+   ->  Finalize Aggregate
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               ->  Partial Aggregate
+                     ->  Hash Join
+                           Hash Cond: (ss_pt.b = c.b)
+                           ->  Append
+                                 Partition Selectors: $0
+                                 ->  Seq Scan on ss_pt_1_prt_1 ss_pt_1
+                                 ->  Seq Scan on ss_pt_1_prt_2 ss_pt_2
+                                 ->  Seq Scan on ss_pt_1_prt_3 ss_pt_3
+                                 ->  Seq Scan on ss_pt_1_prt_4 ss_pt_4
+                                 ->  Seq Scan on ss_pt_1_prt_5 ss_pt_5
+                                 ->  Seq Scan on ss_pt_1_prt_6 ss_pt_6
+                                 ->  Seq Scan on ss_pt_1_prt_7 ss_pt_7
+                                 ->  Seq Scan on ss_pt_1_prt_8 ss_pt_8
+                                 ->  Seq Scan on ss_pt_1_prt_9 ss_pt_9
+                                 ->  Seq Scan on ss_pt_1_prt_10 ss_pt_10
+                           ->  Hash
+                                 ->  Partition Selector (selector id: $0)
+                                       ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                             ->  Subquery Scan on c
+                                                   ->  Shared Scan (share slice:id 2:0)
+                                                         ->  Seq Scan on ss_t
+                                                               Filter: (a < 20)
+   ->  Finalize Aggregate
+         ->  Gather Motion 3:1  (slice3; segments: 3)
+               ->  Partial Aggregate
+                     ->  Shared Scan (share slice:id 3:0)
+ Optimizer: Postgres query optimizer
+(30 rows)
+
+WITH c AS (SELECT a, b FROM ss_t WHERE a < 20)
+SELECT count(*) FROM ss_pt JOIN c ON ss_pt.b = c.b
+UNION ALL
+SELECT count(*) FROM c
+ORDER BY 1;
+ count 
+-------
+    19
+  1900
+(2 rows)
+
+RESET gp_cte_sharing;
+RESET optimizer;
+DROP TABLE ss_pt, ss_t;

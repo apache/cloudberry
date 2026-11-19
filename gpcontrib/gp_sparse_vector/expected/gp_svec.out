@@ -1,5 +1,42 @@
 CREATE EXTENSION gp_sparse_vector;
 SET search_path TO sparse_vector;
+-- Structural equality and L2 equality have distinct operator links.
+SELECT o.oprname, c.oprname AS commutator, n.oprname AS negator
+FROM pg_operator o
+JOIN pg_operator c ON c.oid = o.oprcom
+LEFT JOIN pg_operator n ON n.oid = o.oprnegate
+WHERE o.oprnamespace = 'sparse_vector'::regnamespace
+  AND o.oprleft = 'svec'::regtype AND o.oprright = 'svec'::regtype
+  AND o.oprname IN ('=', '==', '<>')
+ORDER BY o.oprname;
+ oprname | commutator | negator 
+---------+------------+---------
+ <>      | <>         | ==
+ =       | =          | 
+ ==      | ==         | <>
+(3 rows)
+
+-- Equal norms need not imply equal contents; <> negates L2 equality.
+SELECT a = b AS same_contents, a == b AS same_norm, a <> b AS different_norm,
+       NOT (a == b) AS not_same_norm
+FROM (VALUES (1, '{1,1}:{3,4}'::svec, '{1,1}:{3,4}'::svec),
+             (2, '{1,1}:{3,4}'::svec, '{1,1}:{0,5}'::svec),
+             (3, '{1,1}:{3,4}'::svec, '{1,1}:{0,6}'::svec)) v(n,a,b)
+ORDER BY n;
+ same_contents | same_norm | different_norm | not_same_norm 
+---------------+-----------+----------------+---------------
+ t             | t         | f              | f
+ f             | t         | f              | f
+ f             | f         | t              | t
+(3 rows)
+
+SELECT NULL::svec == '{1,1}:{3,4}'::svec AS null_same_norm,
+       NULL::svec <> '{1,1}:{3,4}'::svec AS null_different_norm;
+ null_same_norm | null_different_norm 
+----------------+---------------------
+                | 
+(1 row)
+
 DROP TABLE if exists test;
 NOTICE:  table "test" does not exist, skipping
 CREATE TABLE test (a int, b svec) DISTRIBUTED BY (a);

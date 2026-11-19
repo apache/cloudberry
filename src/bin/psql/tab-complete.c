@@ -2283,7 +2283,7 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH("VERSION", "OPTIONS", "OWNER TO", "RENAME TO");
 	/* ALTER STORAGE SERVER <name> */
 	else if (Matches("ALTER", "STORAGE", "SERVER", MatchAny))
-		COMPLETE_WITH("OPTIONS", "RENAME TO");
+		COMPLETE_WITH("OPTIONS", "OWNER TO", "RENAME TO");
 	/* ALTER SERVER <name> VERSION <version> */
 	else if (Matches("ALTER", "SERVER", MatchAny, "VERSION", MatchAny))
 		COMPLETE_WITH("OPTIONS");

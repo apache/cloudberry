@@ -7594,10 +7594,15 @@ xact_redo_abort(xl_xact_parsed_abort *parsed, TransactionId xid,
 	}
 
 	/*
-	 * GPDB_14_MERGE_FIXME: Do we need to call XLogFlush before dropping database
-	 * and tablespace
+	 * Removing a database directory cannot be undone, so update the minimum
+	 * recovery point first, like xact_redo_commit() does.
 	 */
-	DropDatabaseDirectories(parsed->deldbs, parsed->ndeldbs, true);
+	if (parsed->ndeldbs > 0)
+	{
+		XLogFlush(lsn);
+		DropDatabaseDirectories(parsed->deldbs, parsed->ndeldbs, true);
+	}
+
 	DoTablespaceDeletionForRedoXlog(parsed->tablespace_oid_to_delete_on_abort);
 
 	if (parsed->nstats > 0)

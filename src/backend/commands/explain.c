@@ -738,7 +738,10 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 	else
 		dest = None_Receiver;
 
-	// GPDB_14_MERGE_FIXME: fix intoClause in optimizer
+	/*
+	 * GPDB: the executor reads intoClause from the plan.  CREATE TABLE AS
+	 * EXECUTE gets here without ExplainOneQuery() having set it.
+	 */
 	plannedstmt->intoClause = copyObject(into);
 	/* Create a QueryDesc for the query */
 	queryDesc = CreateQueryDesc(plannedstmt, queryString,
@@ -2540,7 +2543,11 @@ ExplainNode(PlanState *planstate, List *ancestors,
 			/* fall through to print additional fields the same as SeqScan */
 			/* FALLTHROUGH */
 		case T_SeqScan:
-			if (gp_enable_runtime_filter_pushdown && IsA(planstate, SeqScanState))
+			/*
+			 * Not gated on gp_enable_runtime_filter_pushdown: an extension can
+			 * install a pushdown filter without it.  prf_work tells.
+			 */
+			if (IsA(planstate, SeqScanState))
 				show_pushdown_runtime_filter_info(planstate, es);
 			/* FALLTHROUGH */
 		case T_DynamicSeqScan:
@@ -4467,8 +4474,7 @@ show_instrumentation_count(const char *qlabel, int which,
 static void
 show_pushdown_runtime_filter_info(PlanState *planstate, ExplainState *es)
 {
-	Assert(gp_enable_runtime_filter_pushdown && 
-		   (IsA(planstate, SeqScanState) || IsA(planstate, DynamicSeqScanState)));
+	Assert(IsA(planstate, SeqScanState) || IsA(planstate, DynamicSeqScanState));
 
 	if (!es->analyze || !planstate->instrument)
 		return;

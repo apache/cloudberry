@@ -541,6 +541,49 @@ select * from foo;
 ---+---
 (0 rows)
 
+-- MERGE into a replicated table must broadcast the source to every segment,
+-- like UPDATE/DELETE, otherwise each replica only sees the source rows stored
+-- on its own segment and the replicas diverge.
+create table rpt_merge_tgt(k int, v int) distributed replicated;
+create table rpt_merge_src(k int, v int) distributed by (k);
+insert into rpt_merge_tgt select g, 0 from generate_series(1, 10) g;
+insert into rpt_merge_src select g, 1 from generate_series(6, 15) g;
+explain (costs off)
+merge into rpt_merge_tgt t using rpt_merge_src s on t.k = s.k
+  when matched then update set v = s.v
+  when not matched then insert values (s.k, s.v);
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Merge on rpt_merge_tgt t
+   ->  Hash Left Join
+         Hash Cond: (s.k = t.k)
+         ->  Broadcast Motion 3:3  (slice1; segments: 3)
+               ->  Seq Scan on rpt_merge_src s
+         ->  Hash
+               ->  Seq Scan on rpt_merge_tgt t
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+merge into rpt_merge_tgt t using rpt_merge_src s on t.k = s.k
+  when matched then update set v = s.v
+  when not matched then insert values (s.k, s.v);
+select count(*), count(*) filter (where v = 1) as v_is_1 from rpt_merge_tgt;
+ count | v_is_1 
+-------+--------
+    15 |     10
+(1 row)
+
+-- every replica must hold the same 15 rows
+select gp_execution_segment() as seg, count(*), count(*) filter (where v = 1) as v_is_1
+from gp_dist_random('rpt_merge_tgt') group by 1 order by 1;
+ seg | count | v_is_1 
+-----+-------+--------
+   0 |    15 |     10
+   1 |    15 |     10
+   2 |    15 |     10
+(3 rows)
+
+drop table rpt_merge_tgt, rpt_merge_src;
 -- Test replicate table within init plan
 insert into foo values (1, 1), (2, 1);
 select * from bar where exists (select * from foo);
@@ -965,6 +1008,14 @@ explain (costs off) delete from t_replicate_volatile using t_replicate_volatile 
 ERROR:  could not devise a plan (cdbpath.c:2578)
 explain (costs off) update t_replicate_volatile set a = random();
 ERROR:  could not devise a plan. (cdbpath.c:2441)
+-- merge: volatile functions in MERGE actions are evaluated by ModifyTable,
+-- not in the subplan targetlist, but must be rejected all the same
+explain (costs off) merge into t_replicate_volatile using t_hashdist x on x.a = t_replicate_volatile.a when matched then update set b = random();
+ERROR:  could not devise a plan. (cdbpath.c:2862)
+explain (costs off) merge into t_replicate_volatile using t_hashdist x on x.a = t_replicate_volatile.a when not matched then insert values (x.a, random());
+ERROR:  could not devise a plan. (cdbpath.c:2862)
+explain (costs off) merge into t_replicate_volatile using t_hashdist x on x.a = t_replicate_volatile.a when matched and random() < 0.5 then delete;
+ERROR:  could not devise a plan. (cdbpath.c:2862)
 -- limit
 explain (costs off) insert into t_replicate_volatile select * from t_replicate_volatile limit random();
                                    QUERY PLAN                                    

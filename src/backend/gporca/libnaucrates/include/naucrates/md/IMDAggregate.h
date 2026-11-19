@@ -64,6 +64,10 @@ public:
 
 	// A volatile final function must not be shared between outer rows.
 	virtual BOOL IsFinalFuncVolatile() const = 0;
+
+	// is the result independent of the order of the input, even with an
+	// ORDER BY clause in the aggregate call
+	virtual BOOL IsOrderInsensitive() const = 0;
 };
 }  // namespace gpmd
 

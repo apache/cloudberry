@@ -15,9 +15,11 @@
 ALTER SYSTEM SET wait_for_replication_threshold = 1;
 SELECT pg_reload_conf();
 
-CREATE TABLE select_no_throttle(a int) DISTRIBUTED BY (a);
+-- Keep autovacuum/auto-analyze away from the tables: if it reads them first,
+-- it sets the hint bits and the SELECTs below have no WAL to be throttled on.
+CREATE TABLE select_no_throttle(a int) WITH (autovacuum_enabled = false) DISTRIBUTED BY (a);
 INSERT INTO select_no_throttle SELECT generate_series (1, 10);
-CREATE TABLE select_throttle(a int) DISTRIBUTED BY (a);
+CREATE TABLE select_throttle(a int) WITH (autovacuum_enabled = false) DISTRIBUTED BY (a);
 INSERT INTO select_throttle SELECT generate_series (1, 900000);
 
 -- Enable tuple hints so that buffer will be marked dirty upon a hint bit change
@@ -43,6 +45,9 @@ SELECT gp_inject_fault_infinite('wal_sender_loop', 'suspend', dbid) FROM gp_segm
 -- This query should not wait
 1U: SELECT count(*) FROM select_no_throttle;
 checkpoint;
+-- The suspend only takes effect the next time the walsender goes round its
+-- loop. Make sure it is really parked before generating the WAL to throttle.
+SELECT gp_wait_until_triggered_fault('wal_sender_loop', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
 -- This query should wait for Syncrep since its WAL size for hint bits is greater than wait_for_replication_threshold
 1U&: SELECT count(*) FROM select_throttle;
 
@@ -85,6 +90,9 @@ checkpoint;
 SELECT gp_inject_fault_infinite('wal_sender_loop', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
 
 checkpoint;
+-- The suspend only takes effect the next time the walsender goes round its
+-- loop. Make sure it is really parked before generating the WAL to throttle.
+SELECT gp_wait_until_triggered_fault('wal_sender_loop', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
 -- SELECT will set the hint bit on (the buffer will be marked dirty)
 -- This query should wait for Syncrep since its WAL size for hint bits is greater than wait_for_replication_threshold
 1U&: SELECT count(*) FROM select_throttle;
@@ -122,3 +130,22 @@ SELECT pg_reload_conf();
 
 !\retcode gprecoverseg -av;
 SELECT wait_until_all_segments_synchronized();
+
+-- Test 3: Full Page Images compressed with wal_compression must be
+-- replayable on the mirrors.  RestoreBlockImage() used to run the zstd
+-- decompressor on every compressed image, so pglz images stopped mirror
+-- replay.
+!\retcode gpconfig -c wal_compression -v pglz --skipvalidation;
+!\retcode gpstop -u;
+CREATE TABLE wal_compression_fpi(a int, b text) DISTRIBUTED BY (a);
+INSERT INTO wal_compression_fpi SELECT i, repeat('x', 100) FROM generate_series(1, 1000) i;
+-- the first change to each page after a checkpoint writes an FPI
+CHECKPOINT;
+UPDATE wal_compression_fpi SET b = repeat('y', 100);
+SELECT content, wait_for_replication_replay(content, 600) FROM gp_segment_configuration
+  WHERE role = 'p' AND content >= 0 ORDER BY content;
+SELECT count(*) FROM gp_segment_configuration WHERE status = 'd';
+
+!\retcode gpconfig -r wal_compression --skipvalidation;
+!\retcode gpstop -u;
+DROP TABLE wal_compression_fpi;

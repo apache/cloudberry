@@ -623,6 +623,10 @@ CheckAttributeNamesTypes(TupleDesc tupdesc, char relkind,
  * flags can also control the phrasing of the error messages.  If
  * CHKATYPE_IS_PARTKEY is specified, "attname" should be a partition key
  * column number as text, not a real column name.
+ *
+ * attname can be NULL when checking an expression that has no column name,
+ * such as an extended statistics expression. This can't be combined with
+ * CHKATYPE_IS_PARTKEY.
  * --------------------------------
  */
 void
@@ -642,6 +646,8 @@ CheckAttributeType(const char *attname,
 		 */
 		return;
 	}
+
+	Assert(attname != NULL || (flags & CHKATYPE_IS_PARTKEY) == 0);
 
 	/* since this function recurses, it could be driven to stack overflow */
 	check_stack_depth();
@@ -668,11 +674,16 @@ CheckAttributeType(const char *attname,
 				/* translator: first %s is an integer not a name */
 						 errmsg("partition key column %s has pseudo-type %s",
 								attname, format_type_be(atttypid))));
-			else
+			else if (attname)
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 						 errmsg("column \"%s\" has pseudo-type %s",
 								attname, format_type_be(atttypid))));
+			else
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+						 errmsg("expression has pseudo-type %s",
+								format_type_be(atttypid))));
 		}
 	}
 	else if (att_typtype == TYPTYPE_DOMAIN)
@@ -707,6 +718,11 @@ CheckAttributeType(const char *attname,
 
 		containing_rowtypes = lappend_oid(containing_rowtypes, atttypid);
 
+		/*
+		 * Lock the composite type relation to prevent its attributes from
+		 * being modified in an incompatible way until we record the
+		 * dependency to it and commit.
+		 */
 		relation = relation_open(get_typ_typrelid(atttypid), AccessShareLock);
 
 		tupdesc = RelationGetDescr(relation);
@@ -723,7 +739,7 @@ CheckAttributeType(const char *attname,
 							   flags & ~CHKATYPE_IS_PARTKEY);
 		}
 
-		relation_close(relation, AccessShareLock);
+		relation_close(relation, NoLock);
 
 		containing_rowtypes = list_delete_last(containing_rowtypes);
 	}
@@ -760,11 +776,17 @@ CheckAttributeType(const char *attname,
 					 errmsg("no collation was derived for partition key column %s with collatable type %s",
 							attname, format_type_be(atttypid)),
 					 errhint("Use the COLLATE clause to set the collation explicitly.")));
-		else
+		else if (attname)
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 					 errmsg("no collation was derived for column \"%s\" with collatable type %s",
 							attname, format_type_be(atttypid)),
+					 errhint("Use the COLLATE clause to set the collation explicitly.")));
+		else
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+					 errmsg("no collation was derived for expression with collatable type %s",
+							format_type_be(atttypid)),
 					 errhint("Use the COLLATE clause to set the collation explicitly.")));
 	}
 }
@@ -2117,6 +2139,9 @@ RemoveAttributeById(Oid relid, AttrNumber attnum)
 	 */
 	rel = relation_open(relid, AccessExclusiveLock);
 
+	if (attnum > 0)
+		check_rowtype_distribution(rel);
+
 	set_random_distribution_if_drop_distkey(rel, attnum);
 
 	attr_rel = table_open(AttributeRelationId, RowExclusiveLock);
@@ -2392,7 +2417,21 @@ heap_drop_with_catalog(Oid relid)
 		rel->rd_rel->relkind == RELKIND_MATVIEW ||
 		rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 	{
-		RemoveAttributeEncodingsByRelid(relid);
+		/*
+		 * Skip the command counter increment for a directory table: its
+		 * caller is not finished reading the catalog yet.  performDeletion()
+		 * runs DirectoryTableDropStorage() right after this returns, and that
+		 * still has to find the pg_directory_table row this very command just
+		 * deleted above -- a counter increment here would make the deletion
+		 * visible and turn that into "cache lookup failed for directory
+		 * table".  Nothing in the directory table path needs the increment:
+		 * it is there for relations whose pg_attribute_encoding rows get
+		 * touched again later in the same command.
+		 */
+		if (rel->rd_rel->relkind == RELKIND_DIRECTORY_TABLE)
+			RemoveAttributeEncodingsByRelidNoCCI(relid);
+		else
+			RemoveAttributeEncodingsByRelid(relid);
 	}
 
 	/*
@@ -2547,6 +2586,66 @@ RelationClearMissing(Relation rel)
 	table_close(attr_rel, RowExclusiveLock);
 }
 
+/* 
+ * GPDB: similar to RelationClearMissing, but only clearing for one column.
+ * Currently used only for CO tables when we are rewriting a specific column.
+ */
+void
+RelationClearMissingByAttname(Relation rel, char *attname)
+{
+	Relation	attr_rel;
+	Oid			relid = RelationGetRelid(rel);
+	Datum		repl_val[Natts_pg_attribute];
+	bool		repl_null[Natts_pg_attribute];
+	bool		repl_repl[Natts_pg_attribute];
+	Form_pg_attribute attrtuple;
+	HeapTuple	tuple,
+				newtuple;
+
+	Assert(attname);
+
+	/* Get a lock on pg_attribute */
+	attr_rel = table_open(AttributeRelationId, RowExclusiveLock);
+
+	tuple = SearchSysCache2(ATTNAME,
+							ObjectIdGetDatum(relid),
+							CStringGetDatum(attname));
+	if (!HeapTupleIsValid(tuple))	/* shouldn't happen */
+		elog(ERROR, "cache lookup failed for attribute %s of relation %u",
+			 attname, relid);
+
+	attrtuple = (Form_pg_attribute) GETSTRUCT(tuple);
+
+	/* ignore if the attribute is not missing */
+	if (attrtuple->atthasmissing)
+	{
+		memset(repl_val, 0, sizeof(repl_val));
+		memset(repl_null, false, sizeof(repl_null));
+		memset(repl_repl, false, sizeof(repl_repl));
+
+		repl_val[Anum_pg_attribute_atthasmissing - 1] = BoolGetDatum(false);
+		repl_null[Anum_pg_attribute_attmissingval - 1] = true;
+
+		repl_repl[Anum_pg_attribute_atthasmissing - 1] = true;
+		repl_repl[Anum_pg_attribute_attmissingval - 1] = true;
+
+		newtuple = heap_modify_tuple(tuple, RelationGetDescr(attr_rel),
+									 repl_val, repl_null, repl_repl);
+
+		CatalogTupleUpdate(attr_rel, &newtuple->t_self, newtuple);
+
+		heap_freetuple(newtuple);
+	}
+
+	ReleaseSysCache(tuple);
+
+	/*
+	 * Our update of the pg_attribute row will force a relcache rebuild, so
+	 * there's nothing else to do here.
+	 */
+	table_close(attr_rel, RowExclusiveLock);
+}
+
 /*
  * StoreAttrMissingVal
  *
@@ -2668,6 +2767,9 @@ SetAttrMissing(Oid relid, char *attname, char *value)
  * in the pg_class entry for the relation.
  *
  * The OID of the new constraint is returned.
+ *
+ * NB: Caller is responsible for ensuring the user has USAGE on all types expr
+ * depends on.
  */
 static Oid
 StoreRelCheck(Relation rel, const char *ccname, Node *expr,
@@ -2929,6 +3031,10 @@ AddRelationNewConstraints(Relation rel,
 			 castNode(Const, expr)->constisnull))
 			continue;
 
+		/* Check the types before storing the default and its dependencies. */
+		if (!is_internal)
+			CheckUsageOnTypesInSingleRelExpr(expr, RelationGetRelid(rel), GetUserId());
+
 		/* If the DEFAULT is volatile we cannot use a missing value */
 		if (colDef->missingMode && contain_volatile_functions((Node *) expr))
 			colDef->missingMode = false;
@@ -2977,6 +3083,14 @@ AddRelationNewConstraints(Relation rel,
 			 */
 			expr = cookConstraint(pstate, cdef->raw_expr,
 								  RelationGetRelationName(rel));
+
+			/*
+			 * The below call to StoreRelCheck() calls CreateConstraintEntry(),
+			 * which adds the dependencies on types.  We are responsible for
+			 * checking USAGE.
+			 */
+			if (!is_internal)
+				CheckUsageOnTypesInSingleRelExpr(expr, RelationGetRelid(rel), GetUserId());
 		}
 		else
 		{
@@ -4045,12 +4159,16 @@ StorePartitionKey(Relation rel,
 	 * columns, i.e. they become internally dependent on the whole table.
 	 */
 	if (partexprs)
+	{
+		CheckUsageOnTypesInSingleRelExpr((Node *) partexprs, RelationGetRelid(rel),
+										 GetUserId());
 		recordDependencyOnSingleRelExpr(&myself,
 										(Node *) partexprs,
 										RelationGetRelid(rel),
 										DEPENDENCY_NORMAL,
 										DEPENDENCY_INTERNAL,
 										true /* reverse the self-deps */ );
+	}
 
 	/*
 	 * We must invalidate the relcache so that the next

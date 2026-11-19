@@ -370,6 +370,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenAggrefOid, GPOS_WSZ_LIT("AggMdid")},
 		{EdxltokenAggrefDistinct, GPOS_WSZ_LIT("AggDistinct")},
 		{EdxltokenAggrefIsAggStar, GPOS_WSZ_LIT("AggStar")},
+		{EdxltokenAggrefIsPresorted, GPOS_WSZ_LIT("AggPresorted")},
 		{EdxltokenAggrefArgTypes, GPOS_WSZ_LIT("AggArgTypes")},
 		{EdxltokenAggrefKind, GPOS_WSZ_LIT("AggKind")},
 		{EdxltokenAggrefStage, GPOS_WSZ_LIT("AggStage")},
@@ -715,6 +716,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenGPDBAggSplittable, GPOS_WSZ_LIT("IsSplittable")},
 		{EdxltokenGPDBAggHashAggCapable, GPOS_WSZ_LIT("HashAggCapable")},
 		{EdxltokenGPDBAggFinalFuncVolatile, GPOS_WSZ_LIT("FinalFuncVolatile")},
+		{EdxltokenGPDBAggOrderInsensitive, GPOS_WSZ_LIT("OrderInsensitive")},
 
 		{EdxltokenGPDBCast, GPOS_WSZ_LIT("MDCast")},
 		{EdxltokenGPDBCastBinaryCoercible, GPOS_WSZ_LIT("BinaryCoercible")},

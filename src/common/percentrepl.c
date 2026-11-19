@@ -15,16 +15,16 @@
 
 #ifndef FRONTEND
 #include "postgres.h"
+#include "cdb/cdbvars.h"
+#include "postmaster/postmaster.h"
+#include "utils/builtins.h"
 #else
 #include "postgres_fe.h"
 #include "common/logging.h"
 #endif
 
-#include "cdb/cdbvars.h"
 #include "common/percentrepl.h"
 #include "lib/stringinfo.h"
-#include "postmaster/postmaster.h"
-#include "utils/builtins.h"
 
 /*
  * replace_percent_placeholders

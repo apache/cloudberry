@@ -16,6 +16,7 @@
  */
 #include "postgres.h"
 
+#include "access/appendonlywriter.h"
 #include "access/attmap.h"
 #include "access/genam.h"
 #include "access/heapam.h"
@@ -31,6 +32,7 @@
 #include "access/xlog.h"
 #include "access/xloginsert.h"
 #include "catalog/catalog.h"
+#include "catalog/dependency.h"
 #include "catalog/heap.h"
 #include "catalog/index.h"
 #include "catalog/namespace.h"
@@ -40,6 +42,7 @@
 #include "catalog/pg_attribute_encoding.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_attrdef.h"
+#include "catalog/pg_cast.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_compression.h"
 #include "catalog/pg_constraint.h"
@@ -50,6 +53,12 @@
 #include "catalog/pg_largeobject.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_opclass.h"
+#include "catalog/pg_operator.h"
+#include "catalog/pg_partitioned_table.h"
+#include "catalog/pg_policy.h"
+#include "catalog/pg_proc.h"
+#include "catalog/pg_publication_rel.h"
+#include "catalog/pg_rewrite.h"
 #include "catalog/pg_statistic_ext.h"
 #include "catalog/pg_tablespace.h"
 #include "catalog/pg_trigger.h"
@@ -63,6 +72,7 @@
 #include "cdb/cdbappendonlyxlog.h"
 #include "cdb/cdbaocsam.h"
 #include "cdb/cdbcat.h"
+#include "cdb/cdbhash.h"
 #include "cdb/memquota.h"
 #include "commands/cluster.h"
 #include "commands/copy.h"
@@ -357,6 +367,9 @@ static void ATController(AlterTableStmt *parsetree,
 static void ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 					  bool recurse, bool recursing, LOCKMODE lockmode,
 					  AlterTableUtilityContext *context);
+static void setupColumnOnlyRewrite(List **wqueue,
+					 const AlteredTableInfo *tab,
+					 AlterTableType ATtype);
 static void ATRewriteCatalogs(List **wqueue, LOCKMODE lockmode,
 							  AlterTableUtilityContext *context);
 static void ATExecCmd(List **wqueue, AlteredTableInfo *tab,
@@ -371,10 +384,6 @@ static void ATRewriteTables(AlterTableStmt *parsetree,
 							List **wqueue, LOCKMODE lockmode,
 							AlterTableUtilityContext *context);
 static void ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode);
-static void ATAocsWriteSegFileNewColumns(
-		AOCSAddColumnDesc idesc, AOCSHeaderScanDesc sdesc,
-		AlteredTableInfo *tab, ExprContext *econtext, TupleTableSlot *slot, const char *relname);
-static void ATAocsWriteNewColumns(AlteredTableInfo *tab);
 static AlteredTableInfo *ATGetQueueEntry(List **wqueue, Relation rel);
 static void ATSimplePermissions(AlterTableType cmdtype, Relation rel, int allowed_targets);
 static void ATSimpleRecursion(List **wqueue, Relation rel,
@@ -386,6 +395,19 @@ static void ATTypedTableRecursion(List **wqueue, Relation rel, AlterTableCmd *cm
 								  AlterTableUtilityContext *context);
 static List *find_typed_table_dependencies(Oid typeOid, const char *typeName,
 										   DropBehavior behavior);
+static void check_rowtype_distribution_recurse(Oid typeOid, Relation origRelation,
+											  HTAB *visited);
+static void find_composite_type_dependencies_recurse(Oid typeOid, Relation origRelation,
+													 const char *origTypeName, HTAB *visited);
+static void check_composite_type_dependency(ObjectAddress *depobj, Oid typeOid,
+											Relation origRelation, const char *origTypeName,
+											HTAB *visited);
+static void report_type_used_in_column(const char *relname, const char *attname,
+									   Relation origRelation, const char *origTypeName);
+static void report_type_used_in_expr(const ObjectAddress *obj, Relation origRelation,
+									 const char *origTypeName);
+static Node *get_node_tree_attr(enum SysCacheIdentifier cacheId, HeapTuple tup, AttrNumber attnum);
+static void find_missing_composite_type_dependencies(HTAB *types, Relation origRelation, const char *origTypeName);
 static void ATPrepAddColumn(List **wqueue, Relation rel, bool recurse, bool recursing,
 							bool is_view, AlterTableCmd *cmd, LOCKMODE lockmode,
 							AlterTableUtilityContext *context);
@@ -394,6 +416,8 @@ static ObjectAddress ATExecAddColumn(List **wqueue, AlteredTableInfo *tab,
 									 bool recurse, bool recursing,
 									 LOCKMODE lockmode, int cur_pass,
 									 AlterTableUtilityContext *context);
+static void ATExecSetColumnEncoding(List **wqueue, AlteredTableInfo *tab, Relation rel,
+									AlterTableCmd *cmd);
 static bool check_for_column_name_collision(Relation rel, const char *colname,
 											bool if_not_exists);
 static void add_column_datatype_dependency(Oid relid, int32 attnum, Oid typid);
@@ -523,8 +547,12 @@ static void ATPrepAlterColumnType(List **wqueue,
 								  AlterTableCmd *cmd, LOCKMODE lockmode,
 								  AlterTableUtilityContext *context);
 static bool ATColumnChangeRequiresRewrite(Node *expr, AttrNumber varattno);
-static ObjectAddress ATExecAlterColumnType(AlteredTableInfo *tab, Relation rel,
-										   AlterTableCmd *cmd, LOCKMODE lockmode);
+static ObjectAddress
+ATExecAlterColumnType(List **wqueue,
+					  AlteredTableInfo *tab,
+					  Relation rel,
+					  AlterTableCmd *cmd,
+					  LOCKMODE lockmode);
 static void RememberConstraintForRebuilding(Oid conoid, AlteredTableInfo *tab);
 static void RememberIndexForRebuilding(Oid indoid, AlteredTableInfo *tab);
 static void RememberStatisticsForRebuilding(Oid stxoid, AlteredTableInfo *tab);
@@ -556,6 +584,7 @@ static void ATExecSetTableSpaceNoStorage(Relation rel, Oid newTableSpace);
 static void ATExecSetRelOptions(Relation rel, List *defList,
 								AlterTableType operation,
 								bool *aoopt_changed,
+								Datum *newOptions_out,
 								Oid newAccessMethod,
 								LOCKMODE lockmode);
 static void ATExecEnableDisableTrigger(Relation rel, const char *trigname,
@@ -632,7 +661,6 @@ static bool prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *
 static void checkATSetDistributedByStandalone(AlteredTableInfo *tab, Relation rel);
 static void populate_rel_col_encodings(Relation rel, List *stenc, List *withOptions, Oid newAm);
 static void clear_rel_opts(Relation rel);
-
 
 /* ----------------------------------------------------------------
  *		DefineRelation
@@ -1170,7 +1198,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	 * Analyze AOCS attribute encoding clauses.
 	 *
 	 * Ideally this could have happened even later confined in
-	 * AddRelationAttributeEncodings(). However, since this function can
+	 * AddCOAttributeEncodings(). However, since this function can
 	 * legitimately error out, it is prefered to call it before updating the
 	 * catalog in heap_create_with_catalog().
 	 *
@@ -1396,10 +1424,10 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 									&& !stmt->partbound && !stmt->partspec
 									/* errorOnEncodingClause */, true);
 
-		AddRelationAttributeEncodings(rel, part_attr_encodings);
+		AddCOAttributeEncodings(relationId, part_attr_encodings);
 	}
 	else if (stmt->attr_encodings && (relkind != RELKIND_PARTITIONED_TABLE))
-		AddRelationAttributeEncodings(rel, stmt->attr_encodings);
+		AddCOAttributeEncodings(relationId, stmt->attr_encodings);
 
 	/*
 	 * Make column generation expressions visible for use by partitioning.
@@ -2099,7 +2127,7 @@ ao_aux_tables_safe_truncate(Relation rel)
 	 * This mimics the state of the gp_fastsequence row when an empty AO/AOCS
 	 * table is created.
 	 */
-	RemoveFastSequenceEntry(aoseg_relid);
+	RemoveFastSequenceEntry(RelationGetRelid(rel), aoseg_relid);
 	InsertInitialFastSequenceEntries(aoseg_relid);
 
 	/* GPDB truncate should also update pg_appendonly.segfilecount */
@@ -2863,8 +2891,6 @@ truncate_check_rel(Oid relid, Form_pg_class reltuple)
 	 * latter are only being included here for the following checks; no
 	 * physical truncation will occur in their case.).
 	 */
-
-	/* GPDB_14_MERGE_FIXME: follow upstream logic, check foreign table first */
 
 	if (reltuple->relkind == RELKIND_FOREIGN_TABLE)
 	{
@@ -5045,14 +5071,27 @@ static void populate_rel_col_encodings(Relation rel, List *stenc, List *withOpti
 {
 	int 		attno;
 	List 		*colDefs = NIL;
+
 	const TableAmRoutine *tam;
 	TupleDesc 	tupdesc = RelationGetDescr(rel);
+	List 		*current_encodings = NIL;
 
+	current_encodings = rel_get_column_encodings(rel);
 	/* Figure out the column definition list. */
 	for (attno = 0; attno < tupdesc->natts; attno++)
 	{
 		Form_pg_attribute 	att = TupleDescAttr(tupdesc, attno);
-		ColumnDef 		*cd = makeColumnDef(NameStr(att->attname),
+		ColumnDef 		*cd;
+
+		/* 
+		 * Skip if it's already in pg_attribute_encoding. 
+		 * This is possible when we do ALTER COLUMN SET ENCODING and 
+		 * SET ACCESS METHOD together and the former takes place first.
+		 */
+		if (find_crsd(NameStr(att->attname), current_encodings))
+			continue;
+
+		cd = makeColumnDef(NameStr(att->attname),
 								att->atttypid, 
 								att->atttypmod,
 								0);
@@ -5077,8 +5116,13 @@ static void populate_rel_col_encodings(Relation rel, List *stenc, List *withOpti
 							false,
 							newAccessMethod == AO_COLUMN_TABLE_AM_OID, RelationIsAppendOptimized(rel));
 
-
-	AddRelationAttributeEncodings(rel, attr_encodings);
+	/*
+	 * Update in place rather than insert: an ao_row table already has an entry
+	 * per column added by fast ADD COLUMN, and its lastrownums must survive
+	 * into phase 3, which still reads the old ao_row data.
+	 * swap_relation_files() clears them once the rewrite is done.
+	 */
+	AddOrUpdateCOAttributeEncodings(RelationGetRelid(rel), attr_encodings);
 }
 
 /*
@@ -5160,6 +5204,7 @@ AlterTableGetLockLevel(List *cmds)
 				/*
 				 * These subcommands rewrite the heap, so require full locks.
 				 */
+			case AT_SetColumnEncoding: /* must rewrite heap */
 			case AT_AddColumn:	/* may rewrite heap, in some cases and visible
 								 * to SELECT */
 			case AT_SetAccessMethod:	/* must rewrite heap */
@@ -5608,6 +5653,11 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 							lockmode, context);
 			/* Recursion occurs during execution phase */
 			pass = AT_PASS_ADD_COL;
+			break;
+		case AT_SetColumnEncoding: /* ALTER COLUMN SET ENCODING */
+			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE);
+			ATSimpleRecursion(wqueue, rel, cmd, recurse, lockmode, context);
+			pass = AT_PASS_SET_ENCODING;
 			break;
 		case AT_ColumnDefault:	/* ALTER COLUMN DEFAULT */
 
@@ -6253,6 +6303,9 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 									  cmd->recurse, false,
 									  lockmode, cur_pass, context);
 			break;
+		case AT_SetColumnEncoding:
+			ATExecSetColumnEncoding(wqueue, tab, rel, cmd);
+			break;
 		case AT_ColumnDefault:	/* ALTER COLUMN DEFAULT */
 			address = ATExecColumnDefault(rel, cmd->name, cmd->def, lockmode);
 			break;
@@ -6343,7 +6396,7 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 			address =
 				AlterDomainAddConstraint(((AlterDomainStmt *) cmd->def)->typeName,
 										 ((AlterDomainStmt *) cmd->def)->def,
-										 NULL);
+										 NULL, true);
 			break;
 		case AT_ReAddComment:	/* Re-add existing comment */
 			address = CommentObject((CommentStmt *) cmd->def);
@@ -6366,7 +6419,7 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 			break;
 		case AT_AlterColumnType:	/* ALTER COLUMN TYPE */
 			/* parse transformation was done earlier */
-			address = ATExecAlterColumnType(tab, rel, cmd, lockmode);
+			address = ATExecAlterColumnType(wqueue, tab, rel, cmd, lockmode);
 			break;
 		case AT_AlterColumnGenericOptions:	/* ALTER COLUMN OPTIONS */
 			address =
@@ -6395,7 +6448,7 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 			{
 				bool aoopt_changed = false;
 
-				ATExecSetRelOptions(rel, (List *) cmd->def, cmd->subtype, &aoopt_changed, tab->newAccessMethod, lockmode);
+				ATExecSetRelOptions(rel, (List *) cmd->def, cmd->subtype, &aoopt_changed, NULL, tab->newAccessMethod, lockmode);
 
 				/* 
 				 * When user sets the same access method as the existing one, the
@@ -6427,12 +6480,50 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 		case AT_ReplaceRelOptions:	/* replace entire option list */
 			{
 				bool 		aoopt_changed = false;
+				Datum		newOptions = (Datum) 0;
 
-				ATExecSetRelOptions(rel, (List *) cmd->def, cmd->subtype, &aoopt_changed, InvalidOid, lockmode);
+				ATExecSetRelOptions(rel, (List *) cmd->def, cmd->subtype,
+									&aoopt_changed, &newOptions, InvalidOid, lockmode);
 
 				/* Will rewrite table if there's a change to the AO reloptions. */
 				if (aoopt_changed)
 					tab->rewrite |= AT_REWRITE_ALTER_RELOPTS;
+
+				/*
+				 * A column with no ENCODING of its own only ever gets a codec
+				 * from the table-level default, so the rewrite the options
+				 * change triggers has to re-encode it with the new default
+				 * rather than just relabel pg_class.reloptions.  Columns
+				 * carrying an explicit override keep it, including one given
+				 * by an ALTER COLUMN ... SET ENCODING earlier in this same
+				 * command -- get_cols_for_new_reloption_defaults() sorts that
+				 * out by inspecting tab->new_crsds.
+				 *
+				 * GPDB_PORT: upstream reads the proposed options from
+				 * tab->newOptions, which cbdb's AlteredTableInfo does not
+				 * have -- ATExecSetRelOptions() writes pg_class itself -- so
+				 * they come from the out parameter added to it instead.
+				 * Upstream also handles a partitioned root here; cbdb cannot
+				 * reach that case, because partitioned_table_reloptions()
+				 * rejects AO storage options outright ("unrecognized
+				 * parameter \"compresstype\""), so that branch is left out.
+				 */
+				if (RelationIsAoCols(rel))
+				{
+					List	   *default_updates =
+						get_cols_for_new_reloption_defaults(rel, newOptions, tab->new_crsds);
+					ListCell   *lc2;
+
+					foreach(lc2, default_updates)
+					{
+						ColumnReferenceStorageDirective *c = lfirst(lc2);
+						bool		is_updated;
+
+						if (!tab->new_crsds)
+							tab->new_crsds = rel_get_column_encodings(rel);
+						tab->new_crsds = updateEncodingList(tab->new_crsds, c, &is_updated);
+					}
+				}
 			}
 			break;
 		case AT_EnableTrig:		/* ENABLE TRIGGER name */
@@ -6829,7 +6920,9 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 		 * constraints, so it's not necessary/appropriate to enforce them just
 		 * during ALTER.)
 		 */
-		if (tab->newvals != NIL || tab->rewrite > 0)
+		if (tab->newvals != NIL ||
+			((tab->rewrite & (AT_REWRITE_DEFAULT_VAL | AT_REWRITE_COLUMN_REWRITE)) != 0 &&
+			 tab->relkind != RELKIND_SEQUENCE))
 		{
 			Relation	rel;
 
@@ -6894,67 +6987,73 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				errmsg("cannot rewrite temporary tables of other sessions")));
 		}
-		heap_close(OldHeap, NoLock);
 
 		/*
-		 * GPDB_12_MERGE_FIXME: This is a AM specific optimization, currently
-		 * exposted out of the AM handler.  The add-column optimization should
-		 * ideally be implemented within the table AM.
+		 * If the operation can be optimized to not rewrite the AOCO table
+		 * but instead just write new columns/ rewrite existing columns with new type
+		 * Call the corresponding optimization and continue
 		 *
-		 * A counterargument can be made that this optimization is very
-		 * specific to column-oriented table AM.  Should the table AM API be
-		 * generalised to fit it?
-		 *
-		 * If table AM API needs to be changed, we can imagine a few options
-		 * to implement the add-column optimization.
-		 *
-		 * (1) definfe a new interface on the lines of
-		 * table_relation_copy_for_cluster.  It would require traslating the
-		 * state currently maintained in AlteredTableInfo for per-row
-		 * expression and constraint evaluation and passed as arguments to the
-		 * new interface.
-		 *
-		 * (2) Define a new interface to scan the underlying table one block
-		 * at a time, where block is a append-optimized varblock.  And another
-		 * interface to scan tuples within the block.  After evaluating the
-		 * expressions and constraints on this tuple, new slot is constructed,
-		 * as is currently done.  A new interface is needed to insert this
-		 * slot into specific block and finish the block being inserted into,
-		 * when there are no more tuples in the scanned block.  Let's
-		 * illustrate this with pseudocode:
-		 *
-		 * TableScanDesc sdesc = table_begin_block_scan();
-		 * Block block;
-		 * 
-		 * // table AM API doesn't provide an insert descriptor
-		 * TableInsertDesc idesc = table_begin_block_insert();
-		 *
-		 * while (block = table_getnext_block(sdesc))
-		 * {
-		 *     table_insert_begin_block(idesc, block);
-		 *     while (slot = table_getnextslot_in_block(block))
-		 *     {
-		 *         // evaluate expressions and constraints for tab->newvals
-		 *         newslot = ExecEvalExpr();
-		 *         tuple_insert_in_block(idesc, block, newslot);
-		 *     }
-		 *     table_insert_end_block(idesc);
-		 * }
-		 *
-		 * table_end_block_insert(idesc);
-		 *
-		 * table_end_blcok_scan(sdesc);
-		 *
-		 *
-		 * Ideally, ALTER TABLE ADD COLUMN should not be exposed to any code
-		 * specific to table AM.  Descide the best option to achieve this
-		 * goal.
+		 * We call CommandCounterIncrement after ATAocsWriteNewColumns since
+		 * we might edit the catalog again in ATAocsRewriteColumns if the AT
+		 * cmd has both subcmds
 		 */
-		if (tab->rewrite & AT_REWRITE_NEW_COLUMNS_ONLY_AOCS)
+		if (tab->rewrite & AT_REWRITE_NEW_COLUMNS_ONLY || tab->rewrite & AT_REWRITE_REWRITE_COLUMNS_ONLY)
 		{
-			ATAocsWriteNewColumns(tab);
+			/*
+			 * Both flags are only ever set under RelationIsAoCols(); no other
+			 * access method implements the two callbacks below.  table_relation_
+			 * add_columns() rejects the rest at runtime, this just pins the
+			 * assumption down in assert-enabled builds.
+			 */
+			Assert(RelationIsAoCols(OldHeap));
+
+			if (tab->rewrite & AT_REWRITE_NEW_COLUMNS_ONLY)
+			{
+				table_relation_add_columns(OldHeap, tab->newvals, tab->oldDesc);
+				CommandCounterIncrement();
+			}
+			if (tab->rewrite & AT_REWRITE_REWRITE_COLUMNS_ONLY)
+			{
+				/*
+				 * The rewrite checks the constraints itself, one tuple at a
+				 * time, which costs nothing extra because it is reading every
+				 * column anyway.  It can only do so when this is the whole
+				 * command, though.  Alongside ADD COLUMN its tuples are not
+				 * complete: it builds them from tab->oldDesc, the descriptor
+				 * from before the command, so the columns ADD COLUMN has just
+				 * appended are left at the zero the slot was allocated with --
+				 * and marked not-null, so a CHECK over one of them reads a
+				 * datum of 0.  For "ADD COLUMN b text ... CHECK (length(b) >
+				 * 0)" that is a NULL pointer handed to the detoaster.  Leave
+				 * the checking to the pass below, which reads whole tuples
+				 * back off disk.
+				 */
+				table_relation_rewrite_columns(OldHeap, tab->newvals,
+											   (tab->rewrite & AT_REWRITE_NEW_COLUMNS_ONLY) ?
+											   NIL : tab->constraints,
+											   tab->oldDesc);
+			}
+			heap_close(OldHeap, NoLock);
+
+			/*
+			 * ADD COLUMN only writes the new columns; it never reads the
+			 * existing ones, so the access method cannot evaluate a CHECK that
+			 * references them.  Run the same validate-only scan the ordinary
+			 * no-rewrite path below performs, which reads the tuples as they
+			 * now stand on disk.  Passing InvalidOid is what makes it a
+			 * verification pass rather than a rebuild.
+			 *
+			 * This covers a combined ADD COLUMN + ALTER COLUMN TYPE as well,
+			 * the rewrite half having deferred its constraints to here.
+			 */
+			if (tab->rewrite & AT_REWRITE_NEW_COLUMNS_ONLY &&
+				(tab->constraints != NIL || tab->verify_new_notnull ||
+				 tab->partition_constraint != NULL))
+				ATRewriteTable(tab, InvalidOid, lockmode);
 			continue;
 		}
+		heap_close(OldHeap, NoLock);
+
 		/*
 		 * We only need to rewrite the table if at least one column needs to
 		 * be recomputed, or we are
@@ -7074,7 +7173,8 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 			 * unlogged anyway.
 			 */
 			OIDNewHeap = make_new_heap(tab->relid, NewTableSpace, NewAccessMethod,
-									   persistence, lockmode, hasIndexes, false);
+									   tab->new_crsds, persistence, lockmode,
+									   hasIndexes, false);
 
 			/*
 			 * Copy the heap data into the new table with the desired
@@ -7241,336 +7341,6 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 }
 
 /*
- * A helper for ATAocsWriteNewColumns(). It scans an existing column for
- * varblock headers. Write one new segfile each for new columns.
- */
-static void
-ATAocsWriteSegFileNewColumns(
-		AOCSAddColumnDesc idesc, AOCSHeaderScanDesc sdesc,
-		AlteredTableInfo *tab, ExprContext *econtext, TupleTableSlot *slot, const char *relname)
-{
-	NewColumnValue *newval;
-	TupleDesc tupdesc = RelationGetDescr(idesc->rel);
-	Form_pg_attribute attr;
-	Datum *values = slot->tts_values;
-	bool *isnull = slot->tts_isnull;
-	int64 expectedFRN = -1; /* expected firstRowNum of the next varblock */
-	ListCell *l;
-	int i;
-
-	/* Start index in values and isnull array for newly added columns. */
-	AttrNumber newcol = tupdesc->natts - idesc->num_newcols;
-
-	/* Loop over each varblock in an appendonly segno. */
-	while (aocs_get_nextheader(sdesc))
-	{
-		if (sdesc->ao_read.current.hasFirstRowNum)
-		{
-			if (expectedFRN == -1)
-			{
-				/*
-				 * Initialize expected firstRowNum for each appendonly
-				 * segment.  Initializing it to 1 may not always be
-				 * good.  E.g. if the first insert into an appendonly
-				 * segment is aborted.  A subsequent successful insert
-				 * creates the first varblock having firstRowNum
-				 * greater than 1.
-				 */
-				expectedFRN = sdesc->ao_read.current.firstRowNum;
-				aocs_addcol_setfirstrownum(idesc, expectedFRN);
-			}
-			else
-			{
-				Assert(expectedFRN <= sdesc->ao_read.current.firstRowNum);
-				if (expectedFRN < sdesc->ao_read.current.firstRowNum)
-				{
-					elogif(Debug_appendonly_print_storage_headers, LOG,
-						   "hole in %s: exp FRN: " INT64_FORMAT ", actual FRN: "
-						   INT64_FORMAT, sdesc->ao_read.segmentFileName,
-						   expectedFRN, sdesc->ao_read.current.firstRowNum);
-					/*
-					 * We encountered a break in sequence of row
-					 * numbers (hole), replicate it in the new
-					 * segfiles.
-					 */
-					aocs_addcol_endblock(
-							idesc, sdesc->ao_read.current.firstRowNum);
-				}
-			}
-			for (i = 0; i < sdesc->ao_read.current.rowCount; ++i)
-			{
-				foreach (l, tab->newvals)
-				{
-					newval = lfirst(l);
-					values[newval->attnum-1] =
-							ExecEvalExprSwitchContext(newval->exprstate,
-													  econtext,
-													  &isnull[newval->attnum-1]);
-					/*
-					 * Ensure that NOT NULL constraint for the newly
-					 * added columns is not being violated.  This
-					 * covers the case when explicit "CHECK()"
-					 * constraint is not specified but only "NOT NULL"
-					 * is specified in the new column's definition.
-					 */
-					attr = TupleDescAttr(tupdesc, newval->attnum - 1);
-					if (attr->attnotnull &&	isnull[newval->attnum-1])
-					{
-						ereport(ERROR,
-								(errcode(ERRCODE_NOT_NULL_VIOLATION),
-								 errmsg("column \"%s\" of relation \"%s\" contains null values",
-										NameStr(attr->attname),
-										relname)));
-					}
-				}
-				foreach (l, tab->constraints)
-				{
-					NewConstraint *con = lfirst(l);
-					switch(con->contype)
-					{
-						case CONSTR_CHECK:
-							if(!ExecCheck(con->qualstate, econtext))
-								ereport(ERROR,
-										(errcode(ERRCODE_CHECK_VIOLATION),
-										 errmsg("check constraint \"%s\" is violated by some row",
-											con->name)));
-							break;
-						case CONSTR_FOREIGN:
-							/* Nothing to do */
-							break;
-						default:
-							elog(ERROR, "Unrecognized constraint type: %d",
-								 (int) con->contype);
-					}
-				}
-				aocs_addcol_insert_datum(idesc, values+newcol, isnull+newcol);
-				ResetExprContext(econtext);
-				CHECK_FOR_INTERRUPTS();
-			}
-			expectedFRN = sdesc->ao_read.current.firstRowNum +
-					sdesc->ao_read.current.rowCount;
-		}
-	}
-}
-
-/*
- * Choose the column that has the smallest segfile size so as to
- * minimize disk I/O in subsequent varblock header scan. The natts arg
- * includes only existing columns and not the ones being added. Once
- * we find a segfile with nonzero tuplecount and find the column with
- * the smallest eof to return, we continue the loop but skip over all
- * segfiles except for those in AOSEG_STATE_AWAITING_DROP state which
- * we need to append to our drop list.
- */
-static int
-column_to_scan(AOCSFileSegInfo **segInfos, int nseg, int natts, Relation aocsrel)
-{
-	int scancol = -1;
-	int segi;
-	int i;
-	AOCSVPInfoEntry *vpe;
-	int64 min_eof = 0;
-
-	for (segi = 0; segi < nseg; ++segi)
-	{
-		/*
-		 * Don't use a AOSEG_STATE_AWAITING_DROP segfile. That seems
-		 * like a bad idea in general, but there's one particular problem:
-		 * the 'vpinfo' of a dropped segfile might be missing information
-		 * for columns that were added later.
-		 */
-		if (segInfos[segi]->state == AOSEG_STATE_AWAITING_DROP)
-			continue;
-
-		/*
-		 * Skip over appendonly segments with no tuples (caused by VACUUM)
-		 */
-		if (segInfos[segi]->total_tupcount > 0 && scancol == -1)
-		{
-			for (i = 0; i < natts; ++i)
-			{
-				vpe = getAOCSVPEntry(segInfos[segi], i);
-				if (vpe->eof > 0 && (!min_eof || vpe->eof < min_eof))
-				{
-					min_eof = vpe->eof;
-					scancol = i;
-				}
-			}
-		}
-	}
-
-	return scancol;
-}
-
-static void
-ATAocsWriteNewColumns(AlteredTableInfo *tab)
-{
-	AOCSFileSegInfo **segInfos;
-	AOCSHeaderScanDesc sdesc;
-	AOCSAddColumnDesc idesc;
-	NewColumnValue *newval;
-	NewConstraint *con;
-	TupleTableSlot *slot;
-	EState *estate;
-	ExprContext *econtext;
-	Relation rel; /* Relation being altered */
-	int32 nseg;
-	int32 segi;
-	char *basepath;
-	int32 scancol; /* chosen column number to scan from */
-	ListCell *l;
-	Snapshot snapshot;
-	int addcols;
-
-	snapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
-
-	estate = CreateExecutorState();
-	foreach(l, tab->constraints)
-	{
-		con = lfirst(l);
-		switch (con->contype)
-		{
-			case CONSTR_CHECK:
-				con->qualstate = ExecPrepareExpr((Expr *) con->qual, estate);
-				break;
-			case CONSTR_FOREIGN:
-				/* Nothing to do here */
-				break;
-			default:
-				elog(ERROR, "unrecognized constraint type: %d",
-					 (int) con->contype);
-		}
-	}
-	Assert(tab->newvals);
-	foreach(l, tab->newvals)
-	{
-		newval = lfirst(l);
-		newval->exprstate = ExecPrepareExpr((Expr *) newval->expr, estate);
-	}
-
-	rel = heap_open(tab->relid, NoLock);
-	Assert(RelationIsAoCols(rel));
-
-	/*
-     * There might be AWAITING_DROP segments occupying spaces for failing
-     * to drop at VACUUM in the case of cleaning up happened concurrently
-     * with earlier readers which was accessing the dead segment files.
-     *
-     * We used to call AppendOptimizedRecycleDeadSegments() (current name is
-     * ao_vacuum_rel_recycle_dead_segments) to recycle those segfiles to save
-     * spaces in this scenario. But it didn't do corresponding index tuples
-     * cleanup for unknown reason.
-     *
-     * After optimizing VACUUM AO strategy, we did refactor for
-     * AppendOptimizedRecycleDeadSegments() a little bit and combine
-     * dead segfiles cleanup with corresponding indexes cleanup together.
-     * While it seems to be impossible to pass index vacuuming parameter in
-     * this scenario, so we removed AppendOptimizedRecycleDeadSegments() out
-     * of this function and dedicated it to be called only in VACUUM scenario.
-     *
-     * We are supposed to be fine without recycling spaces here, or find
-     * another way to fix it if that does become a real problem.
-     */
-
-	segInfos = GetAllAOCSFileSegInfo(rel, snapshot, &nseg, NULL);
-	basepath = relpathbackend(rel->rd_locator, rel->rd_backend, MAIN_FORKNUM);
-	if (nseg > 0)
-	{
-		aocs_addcol_emptyvpe(rel, segInfos, nseg,
-							 list_length(tab->newvals));
-	}
-
-	scancol = column_to_scan(segInfos, nseg, tab->oldDesc->natts, rel);
-	elogif(Debug_appendonly_print_storage_headers, LOG,
-		   "using column %d of relation %s for alter table scan",
-		   scancol, RelationGetRelationName(rel));
-
-	/*
-	 * Continue only if a non-empty existing segfile was found above.
-	 */
-	if (Gp_role != GP_ROLE_DISPATCH && scancol != -1)
-	{
-		slot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtual);
-
-		/*
-		 * Initialize expression context for evaluating values and
-		 * constraints of the newly added columns.
-		 */
-		econtext = GetPerTupleExprContext(estate);
-		/*
-		 * The slot's data will be populated for each newly added
-		 * column by ExecEvalExpr().
-		 */
-		econtext->ecxt_scantuple = slot;
-
-		/*
-		 * Mark all attributes including newly added columns as valid.
-		 * Used for per tuple constraint evaluation.
-		 */
-		ExecStoreAllNullTuple(slot);
-
-		sdesc = aocs_begin_headerscan(rel, scancol);
-		addcols = RelationGetDescr(rel)->natts - tab->oldDesc->natts;
-		/*
-		 * Protect against potential negative number here.
-		 * Note that natts is not decremented to reflect dropped columns,
-		 * so this should be safe
-		 */
-		Assert(addcols > 0);
-		idesc = aocs_addcol_init(rel, addcols);
-
-		/* Loop over all appendonly segments */
-		for (segi = 0; segi < nseg; ++segi)
-		{
-			if (segInfos[segi]->total_tupcount <= 0 ||
-				segInfos[segi]->state == AOSEG_STATE_AWAITING_DROP)
-			{
-				/*
-				 * VACUUM may cause appendonly segments with eof=0.
-				 * We only need to add new rows in pg_aocsseg_* in
-				 * this case for each newly added column.  This is
-				 * accomplished by aocs_addcol_emptyvpe() above.
-				 *
-				 * Compaction leaves redundant segments in
-				 * AOSEG_STATE_AWAITING_DROP.  We skip over them too.
-				 */
-				elogif(Debug_appendonly_print_storage_headers, LOG,
-					   "Skipping over empty segno %d relation %s",
-					   segInfos[segi]->segno, RelationGetRelationName(rel));
-				continue;
-			}
-			/*
-			 * Open aocs segfile for chosen column for current
-			 * appendonly segment.
-			 */
-			aocs_headerscan_opensegfile(sdesc, segInfos[segi], basepath);
-
-			/*
-			 * Create new segfiles for new columns for current
-			 * appendonly segment.
-			 */
-			RelFileLocatorBackend rnode;
-
-			rnode.locator = rel->rd_locator;
-			rnode.backend = rel->rd_backend;
-
-			aocs_addcol_newsegfile(idesc, segInfos[segi],
-								   basepath, rnode);
-
-			ATAocsWriteSegFileNewColumns(idesc, sdesc, tab, econtext, slot, RelationGetRelationName(rel));
-		}
-		aocs_end_headerscan(sdesc);
-		aocs_addcol_finish(idesc);
-		ExecDropSingleTupleTableSlot(slot);
-	}
-
-
-	FreeExecutorState(estate);
-	heap_close(rel, NoLock);
-	UnregisterSnapshot(snapshot);
-}
-
-/*
  * ATRewriteTable: scan or rewrite one table
  *
  * OIDNewHeap is InvalidOid if we don't need to rewrite
@@ -7725,10 +7495,18 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode)
 		 * can't be evaluated.  Note that even when the tuple layout is the
 		 * same and no rewrite is required, the tupDescs might not be
 		 * (consider ADD COLUMN without a default).
+		 *
+		 * This tested tab->rewrite, under an Assert() that newrel was
+		 * non-NULL.  "OIDNewHeap is InvalidOid if we don't need to rewrite" is
+		 * this function's contract, so newrel is what says whether a rewrite is
+		 * happening; tab->rewrite only agreed with it because every rewrite
+		 * reason came with a new heap.  The AOCO column-only paths break that:
+		 * they ask for a verification pass over a table they have already
+		 * updated in place, and so arrive with a rewrite reason set and no new
+		 * heap.
 		 */
-		if (tab->rewrite)
+		if (newrel)
 		{
-			Assert(newrel != NULL);
 			oldslot = MakeSingleTupleTableSlot(oldTupDesc,
 											   table_slot_callbacks(oldrel));
 			newslot = MakeSingleTupleTableSlot(newTupDesc,
@@ -7782,7 +7560,8 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode)
 		{
 			TupleTableSlot *insertslot;
 
-			if (tab->rewrite > 0)
+			/* See the newrel comment above */
+			if (newrel)
 			{
 				/* Extract data from old tuple */
 				slot_getallattrs(oldslot);
@@ -7980,6 +7759,7 @@ ATGetQueueEntry(List **wqueue, Relation rel)
 	tab->relkind = rel->rd_rel->relkind;
 	tab->oldDesc = CreateTupleDescCopyConstr(RelationGetDescr(rel));
 	tab->newAccessMethod = InvalidOid;
+	tab->new_crsds = NIL;
 	tab->newTableSpace = InvalidOid;
 	tab->newrelpersistence = RELPERSISTENCE_PERMANENT;
 	tab->chgPersistence = false;
@@ -8053,6 +7833,8 @@ alter_table_type_to_string(AlterTableType cmdtype)
 			return "SET WITHOUT CLUSTER";
 		case AT_SetAccessMethod:
 			return "SET ACCESS METHOD";
+		case AT_SetColumnEncoding:
+			return "ALTER COLUMN ... SET ENCODING";
 		case AT_SetLogged:
 			return "SET LOGGED";
 		case AT_SetUnLogged:
@@ -8434,35 +8216,214 @@ ATTypedTableRecursion(List **wqueue, Relation rel, AlterTableCmd *cmd,
 
 
 /*
- * find_composite_type_dependencies
+ * check_rowtype_distribution
  *
- * Check to see if the type "typeOid" is being used as a column in some table
- * (possibly nested several levels deep in composite types, arrays, etc!).
- * Eventually, we'd like to propagate the check or rewrite operation
- * into such tables, but for now, just error out if we find any.
+ * Adding or dropping an attribute changes hash_record's result, even when
+ * the added attribute is NULL in every existing row.  It can also make the
+ * type unhashable.  Reject either operation if the row type is used, directly
+ * or through a container type, in a distribution key.  Such tables would need
+ * to be redistributed, which ALTER TYPE and ALTER TABLE do not arrange for.
  *
- * Caller should provide either the associated relation of a rowtype,
- * or a type name (not both) for use in the error message, if any.
- *
- * Note that "typeOid" is not necessarily a composite type; it could also be
- * another container type such as an array or range, or a domain over one of
- * these things.  The name of this function is therefore somewhat historical,
- * but it's not worth changing.
- *
- * We assume that functions and views depending on the type are not reasons
- * to reject the ALTER.  (How safe is this really?)
+ * Unlike find_composite_type_dependencies(), this allows ordinary stored
+ * columns: adding and dropping attributes does not change the representation
+ * of the surviving fields.  Only the distribution policy needs protection.
  */
 void
-find_composite_type_dependencies(Oid typeOid, Relation origRelation,
-								 const char *origTypeName)
+check_rowtype_distribution(Relation rel)
+{
+	HASHCTL		hctl;
+	HTAB	   *visited;
+
+	if (!OidIsValid(rel->rd_rel->reltype))
+		return;
+
+	memset(&hctl, 0, sizeof(hctl));
+	hctl.keysize = sizeof(Oid);
+	hctl.entrysize = sizeof(Oid);
+	hctl.hcxt = CurrentMemoryContext;
+	visited = hash_create("distribution key types", 32, &hctl,
+						  HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
+
+	check_rowtype_distribution_recurse(rel->rd_rel->reltype, rel, visited);
+
+	hash_destroy(visited);
+}
+
+static void
+check_rowtype_distribution_recurse(Oid typeOid, Relation origRelation,
+								  HTAB *visited)
 {
 	Relation	depRel;
 	ScanKeyData key[2];
 	SysScanDesc depScan;
 	HeapTuple	depTup;
+	bool		visited_already;
+
+	check_stack_depth();
+	hash_search(visited, &typeOid, HASH_ENTER, &visited_already);
+	if (visited_already)
+		return;
+
+	/* Serialize with transactions adding dependencies on this type. */
+	LockDatabaseObject(TypeRelationId, typeOid, 0, AccessExclusiveLock);
+
+	depRel = table_open(DependRelationId, AccessShareLock);
+	ScanKeyInit(&key[0], Anum_pg_depend_refclassid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(TypeRelationId));
+	ScanKeyInit(&key[1], Anum_pg_depend_refobjid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(typeOid));
+	depScan = systable_beginscan(depRel, DependReferenceIndexId, true,
+								 NULL, 2, key);
+
+	while (HeapTupleIsValid(depTup = systable_getnext(depScan)))
+	{
+		Form_pg_depend dep = (Form_pg_depend) GETSTRUCT(depTup);
+
+		if (dep->classid == TypeRelationId)
+		{
+			HeapTuple	typeTup;
+			Form_pg_type typeForm;
+			bool		contains_type;
+
+			LockDatabaseObject(TypeRelationId, dep->objid, 0, AccessExclusiveLock);
+			typeTup = SearchSysCache1(TYPEOID, ObjectIdGetDatum(dep->objid));
+			if (!HeapTupleIsValid(typeTup))
+				elog(ERROR, "cache lookup failed for type %u", dep->objid);
+			typeForm = (Form_pg_type) GETSTRUCT(typeTup);
+			contains_type = typeForm->typelem == typeOid ||
+				typeForm->typbasetype == typeOid;
+			if (typeForm->typtype == TYPTYPE_RANGE)
+				contains_type = get_range_subtype(dep->objid) == typeOid;
+			else if (typeForm->typtype == TYPTYPE_MULTIRANGE)
+				contains_type = get_multirange_range(dep->objid) == typeOid;
+			ReleaseSysCache(typeTup);
+
+			/* Ignore expression-only dependencies, such as domain defaults. */
+			if (contains_type)
+				check_rowtype_distribution_recurse(dep->objid, origRelation, visited);
+		}
+		else if (dep->classid == RelationRelationId && dep->objsubid > 0)
+		{
+			Relation	rel = relation_open(dep->objid, AccessShareLock);
+			TupleDesc	desc = RelationGetDescr(rel);
+
+			if (dep->objsubid <= desc->natts)
+			{
+				Form_pg_attribute att = TupleDescAttr(desc, dep->objsubid - 1);
+
+				if (!att->attisdropped && att->atttypid == typeOid)
+				{
+					GpPolicy   *policy = rel->rd_cdbpolicy;
+
+					if (GpPolicyIsHashPartitioned(policy))
+					{
+						for (int i = 0; i < policy->nattrs; i++)
+						{
+							if (policy->attrs[i] == att->attnum)
+								ereport(ERROR,
+										(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+										 errmsg("cannot alter type \"%s\" because column \"%s\" of relation \"%s\" uses it in a distribution key",
+												RelationGetRelationName(origRelation),
+												NameStr(att->attname),
+												RelationGetRelationName(rel))));
+						}
+					}
+
+					/* A table or composite row type can itself be a key. */
+					if (OidIsValid(rel->rd_rel->reltype))
+						check_rowtype_distribution_recurse(rel->rd_rel->reltype,
+														  origRelation, visited);
+				}
+			}
+
+			/* Prevent a concurrent SET DISTRIBUTED BY until we commit. */
+			relation_close(rel, NoLock);
+		}
+	}
+
+	systable_endscan(depScan);
+	table_close(depRel, AccessShareLock);
+}
+
+/*
+ * find_composite_type_dependencies
+ *
+ * Check to see if the type "typeOid" is being used in a way that prevents
+ * ALTER COLUMN / ALTER ATTRIBUTE on it.  For example, if it's used as a
+ * column in some table (possibly nested several levels deep in composite
+ * types, arrays, etc!), we must not allow it.  Eventually, we'd like to
+ * propagate the check or rewrite operation into such tables, but for now,
+ * just error out if we find any.
+ *
+ * Caller should provide either the associated relation of a rowtype, or a
+ * type name (not both) for use in the error message, if any.
+ *
+ * Note that "typeOid" is not necessarily a composite type; it could also be
+ * another container type such as an array or range, or a domain over one of
+ * these things.  The name of this function is therefore somewhat historical,
+ * but it's not worth changing.
+ */
+void
+find_composite_type_dependencies(Oid typeOid, Relation origRelation,
+								 const char *origTypeName)
+{
+	HASHCTL		hctl;
+	HTAB	   *visited;
+
+	memset(&hctl, 0, sizeof(HASHCTL));
+	hctl.keysize = sizeof(Oid);
+	hctl.entrysize = sizeof(Oid);
+	hctl.hcxt = CurrentMemoryContext;
+
+	visited = hash_create("visited types",
+						  32,	/* start small and extend */
+						  &hctl,
+						  HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
+
+	find_composite_type_dependencies_recurse(typeOid, origRelation, origTypeName,
+											 visited);
+
+	/*
+	 * We used to not record pg_depend entries in some cases where we really
+	 * should have.  Scan the catalog tables for those, too.
+	 */
+	find_missing_composite_type_dependencies(visited, origRelation, origTypeName);
+
+	hash_destroy(visited);
+}
+
+/*
+ * Recursive part of find_composite_type_dependencies.  'visited' keeps track
+ * of types that have already been visited, to avoid duplicating work.
+ */
+static void
+find_composite_type_dependencies_recurse(Oid typeOid, Relation origRelation,
+										 const char *origTypeName, HTAB *visited)
+{
+	Relation	depRel;
+	ScanKeyData key[2];
+	SysScanDesc depScan;
+	HeapTuple	depTup;
+	bool		visited_already;
 
 	/* since this function recurses, it could be driven to stack overflow */
 	check_stack_depth();
+
+	/* skip if we visited this type already */
+	hash_search(visited, &typeOid, HASH_ENTER, &visited_already);
+	if (visited_already)
+		return;
+
+	/*
+	 * We already hold a lock on the relation being ALTERed, but also lock its
+	 * rowtype (on first call), and its array type, domains, composite types
+	 * etc. that depend on the ALTERed type (as we recurse).  This ensures
+	 * that if a concurrent command is adding a new dependency to any of those
+	 * types, we will see it.
+	 */
+	LockDatabaseObject(TypeRelationId, typeOid, 0, AccessExclusiveLock);
 
 	/*
 	 * We scan pg_depend to find those things that depend on the given type.
@@ -8485,116 +8446,13 @@ find_composite_type_dependencies(Oid typeOid, Relation origRelation,
 	while (HeapTupleIsValid(depTup = systable_getnext(depScan)))
 	{
 		Form_pg_depend pg_depend = (Form_pg_depend) GETSTRUCT(depTup);
-		Relation	rel;
-		TupleDesc	tupleDesc;
-		Form_pg_attribute att;
+		ObjectAddress depobj;
 
-		/* Check for directly dependent types */
-		if (pg_depend->classid == TypeRelationId)
-		{
-			/*
-			 * This must be an array, domain, or range containing the given
-			 * type, so recursively check for uses of this type.  Note that
-			 * any error message will mention the original type not the
-			 * container; this is intentional.
-			 */
-			find_composite_type_dependencies(pg_depend->objid,
-											 origRelation, origTypeName);
-			continue;
-		}
+		ObjectAddressSubSet(depobj, pg_depend->classid, pg_depend->objid,
+							pg_depend->objsubid);
 
-		/* Else, ignore dependees that aren't relations */
-		if (pg_depend->classid != RelationRelationId)
-			continue;
-
-		rel = relation_open(pg_depend->objid, AccessShareLock);
-		tupleDesc = RelationGetDescr(rel);
-
-		/*
-		 * If objsubid identifies a specific column, refer to that in error
-		 * messages.  Otherwise, search to see if there's a user column of the
-		 * type.  (We assume system columns are never of interesting types.)
-		 * The search is needed because an index containing an expression
-		 * column of the target type will just be recorded as a whole-relation
-		 * dependency.  If we do not find a column of the type, the dependency
-		 * must indicate that the type is transiently referenced in an index
-		 * expression but not stored on disk, which we assume is OK, just as
-		 * we do for references in views.  (It could also be that the target
-		 * type is embedded in some container type that is stored in an index
-		 * column, but the previous recursion should catch such cases.)
-		 */
-		if (pg_depend->objsubid > 0 && pg_depend->objsubid <= tupleDesc->natts)
-			att = TupleDescAttr(tupleDesc, pg_depend->objsubid - 1);
-		else
-		{
-			att = NULL;
-			for (int attno = 1; attno <= tupleDesc->natts; attno++)
-			{
-				att = TupleDescAttr(tupleDesc, attno - 1);
-				if (att->atttypid == typeOid && !att->attisdropped)
-					break;
-				att = NULL;
-			}
-			if (att == NULL)
-			{
-				/* No such column, so assume OK */
-				relation_close(rel, AccessShareLock);
-				continue;
-			}
-		}
-
-		/*
-		 * We definitely should reject if the relation has storage.  If it's
-		 * partitioned, then perhaps we don't have to reject: if there are
-		 * partitions then we'll fail when we find one, else there is no
-		 * stored data to worry about.  However, it's possible that the type
-		 * change would affect conclusions about whether the type is sortable
-		 * or hashable and thus (if it's a partitioning column) break the
-		 * partitioning rule.  For now, reject for partitioned rels too.
-		 */
-		if (RELKIND_HAS_STORAGE(rel->rd_rel->relkind) ||
-			RELKIND_HAS_PARTITIONS(rel->rd_rel->relkind))
-		{
-			if (origTypeName)
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("cannot alter type \"%s\" because column \"%s.%s\" uses it",
-								origTypeName,
-								RelationGetRelationName(rel),
-								NameStr(att->attname))));
-			else if (origRelation->rd_rel->relkind == RELKIND_COMPOSITE_TYPE)
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("cannot alter type \"%s\" because column \"%s.%s\" uses it",
-								RelationGetRelationName(origRelation),
-								RelationGetRelationName(rel),
-								NameStr(att->attname))));
-			else if (origRelation->rd_rel->relkind == RELKIND_FOREIGN_TABLE)
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("cannot alter foreign table \"%s\" because column \"%s.%s\" uses its row type",
-								RelationGetRelationName(origRelation),
-								RelationGetRelationName(rel),
-								NameStr(att->attname))));
-			else
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("cannot alter table \"%s\" because column \"%s.%s\" uses its row type",
-								RelationGetRelationName(origRelation),
-								RelationGetRelationName(rel),
-								NameStr(att->attname))));
-		}
-		else if (OidIsValid(rel->rd_rel->reltype))
-		{
-			/*
-			 * A view or composite type itself isn't a problem, but we must
-			 * recursively check for indirect dependencies via its rowtype.
-			 */
-			find_composite_type_dependencies(rel->rd_rel->reltype,
-											 origRelation, origTypeName);
-		}
-
-		relation_close(rel, AccessShareLock);
+		check_composite_type_dependency(&depobj, typeOid, origRelation, origTypeName,
+										visited);
 	}
 
 	systable_endscan(depScan);
@@ -8602,6 +8460,606 @@ find_composite_type_dependencies(Oid typeOid, Relation origRelation,
 	relation_close(depRel, AccessShareLock);
 }
 
+/*
+ * check_composite_type_dependency
+ *
+ * Subroutine of find_composite_type_dependencies, to check whether a
+ * dependency from "depobj" makes it unsafe to alter a column of "typeOid".
+ * Some dependencies that would prevent dropping a composite type entirely
+ * don't prevent ALTERing it.  This function is called after we have
+ * established that there is a dependency, to look closer at whether the
+ * dependency prevents ALTER or not.
+ *
+ * Caller should provide either the associated relation of a rowtype, or a
+ * type name (not both) for use in the error message, if any.
+ *
+ * Note that "typeOid" is not necessarily a composite type; it could also be
+ * another container type such as an array or range, or a domain over one of
+ * these things.
+ */
+static void
+check_composite_type_dependency(ObjectAddress *depobj, Oid typeOid,
+								Relation origRelation, const char *origTypeName,
+								HTAB *visited)
+{
+	Oid			classid = depobj->classId;
+	Oid			objid = depobj->objectId;
+	int32		objsubid = depobj->objectSubId;
+	HeapTuple	catalog_tup;
+	Node	   *expr;
+	Relation	rel;
+	TupleDesc	tupleDesc;
+	Form_pg_attribute att;
+	Form_pg_constraint cform;
+
+	/*
+	 * By default, a dependency on a type prevents ALTERing it.  But we make
+	 * many exceptions for cases that are safe:
+	 */
+	switch (classid)
+	{
+		case OperatorRelationId:
+
+			/*
+			 * Operators are OK.  The function implementing the operator will
+			 * have a dependency of its own and will be checked separately.
+			 */
+			break;
+
+		case CastRelationId:
+
+			/*
+			 * Casts are also OK.  If the cast uses a function, the function
+			 * will have a dependency of its own.
+			 */
+			break;
+
+		case ProcedureRelationId:
+
+			/*
+			 * A function that uses the composite type as its return or
+			 * argument type doesn't prevent ALTERing it.  But if the type is
+			 * used in the DEFAULT expressions or in a new-style SQL
+			 * function's body, we need to reject, because the expression
+			 * might contain Consts or other things that would become invalid.
+			 *
+			 * Fetch the procedure definition to see which parts are using the
+			 * type.  Lock it to make sure that a DEFAULT expression is not
+			 * added to it concurrently with CREATE OR REPLACE FUNCTION.
+			 */
+			LockDatabaseObject(ProcedureRelationId, objid, 0, AccessShareLock);
+			catalog_tup = SearchSysCache1(PROCOID, ObjectIdGetDatum(objid));
+			if (!HeapTupleIsValid(catalog_tup))
+				elog(ERROR, "cache lookup failed for function %u", objid);
+
+			/* Is it used in the argument DEFAULTs? */
+			expr = get_node_tree_attr(PROCOID, catalog_tup, Anum_pg_proc_proargdefaults);
+			if (expr && CheckTypeDependencyInExpr(expr, NIL, typeOid))
+				report_type_used_in_expr(depobj, origRelation, origTypeName);
+
+			/* Is it used in the SQL body? */
+			expr = get_node_tree_attr(PROCOID, catalog_tup, Anum_pg_proc_prosqlbody);
+			if (expr && CheckTypeDependencyInExpr(expr, NIL, typeOid))
+				report_type_used_in_expr(depobj, origRelation, origTypeName);
+
+			/*
+			 * Otherwise, it must be used as a return or parameter type, which
+			 * is OK.
+			 */
+			ReleaseSysCache(catalog_tup);
+			break;
+
+		case ConstraintRelationId:
+
+			/*
+			 * Constraints referencing the type usually forbid ALTERing it,
+			 * but there's one exception: a CHECK constraint on a domain
+			 * referencing the type itself is ignored, if the expression
+			 * doesn't refer to the type.  In other words, if the dependency
+			 * exists just because it's a CHECK constraint on the domain, that
+			 * doesn't prevent altering the underlying type.  (We assume that
+			 * the constraint cannot be reassigned to a different type, so no
+			 * need to hold the lock just to check 'contypid'.)
+			 */
+			catalog_tup = SearchSysCache1(CONSTROID, ObjectIdGetDatum(objid));
+			if (!HeapTupleIsValid(catalog_tup))
+				elog(ERROR, "cache lookup failed for constraint %u", objid);
+			cform = (Form_pg_constraint) GETSTRUCT(catalog_tup);
+			if (cform->contypid == typeOid)
+			{
+				/*
+				 * This is a CHECK constraint on the domain.  Look closer if
+				 * the expression actually refers to the target type.
+				 */
+				LockDatabaseObject(ConstraintRelationId, objid, 0, AccessShareLock);
+				expr = get_node_tree_attr(CONSTROID, catalog_tup,
+										  Anum_pg_constraint_conbin);
+				if (expr && CheckTypeDependencyInExpr(expr, NIL, typeOid))
+					report_type_used_in_expr(depobj, origRelation, origTypeName);
+			}
+			else
+			{
+				/* This is some other constraint using the type */
+				report_type_used_in_expr(depobj, origRelation, origTypeName);
+			}
+			ReleaseSysCache(catalog_tup);
+			break;
+
+		case TypeRelationId:
+
+			/*
+			 * An array, domain, or range containing the given type doesn't
+			 * prevent altering it.  But recursively check for uses of this
+			 * type.  Note that any error message will mention the original
+			 * type not the container; this is intentional.
+			 */
+			find_composite_type_dependencies_recurse(objid,
+													 origRelation, origTypeName,
+													 visited);
+
+			/*
+			 * A domain's default expression can embed a Const of the altered
+			 * type, however.  We must reject that.
+			 *
+			 * find_composite_type_dependencies_recurse() acquired a lock on
+			 * the type, so we don't need to acquire it here again to inspect
+			 * the default.
+			 */
+			catalog_tup = SearchSysCache1(TYPEOID, ObjectIdGetDatum(objid));
+			if (!HeapTupleIsValid(catalog_tup))
+				elog(ERROR, "cache lookup failed for type %u", objid);
+
+			expr = get_node_tree_attr(TYPEOID, catalog_tup, Anum_pg_type_typdefaultbin);
+			if (expr && CheckTypeDependencyInExpr(expr, NIL, typeOid))
+				report_type_used_in_expr(depobj, origRelation, origTypeName);
+
+			ReleaseSysCache(catalog_tup);
+			break;
+
+		case RelationRelationId:
+			rel = relation_open(objid, AccessShareLock);
+			tupleDesc = RelationGetDescr(rel);
+
+			/*
+			 * First check for a dependency from a specific column.  (We
+			 * assume system columns are never of interesting types.)
+			 */
+			if (objsubid > 0 && objsubid <= tupleDesc->natts)
+				att = TupleDescAttr(tupleDesc, objsubid - 1);
+			else
+			{
+				/*
+				 * We treat a whole-row dependency the same as a dependency
+				 * from a specific column, if the relation also has a column
+				 * of the given type.  This is because we used to have a gap
+				 * in dependency tracking: expression indexes didn't store a
+				 * dependency on the indexed type returned by the expression.
+				 * That was a bug, but in many typical cases, the expression
+				 * still had a dependency on the row type, so we can often
+				 * still catch it here.  Treat it as if the dependency was on
+				 * the column.  (It could also be that the target type is
+				 * embedded in some container type that is stored in an index
+				 * column, but the previous recursion should catch such
+				 * cases.)
+				 *
+				 * Any cases of missing dependencies not caught here are
+				 * handled by find_missing_composite_type_dependencies().
+				 */
+				att = NULL;
+				for (int attno = 1; attno <= tupleDesc->natts; attno++)
+				{
+					att = TupleDescAttr(tupleDesc, attno - 1);
+					if (att->atttypid == typeOid && !att->attisdropped)
+						break;
+					att = NULL;
+				}
+			}
+			if (att)
+			{
+				/*
+				 * A column uses the datatype.
+				 *
+				 * We definitely should reject if the relation has storage.
+				 *
+				 * If it's partitioned, then perhaps we wouldn't have to
+				 * reject: if there are partitions then we'll fail when we
+				 * find one, else there is no stored data to worry about.
+				 * However, it's possible that the type change would affect
+				 * conclusions about whether the type is sortable or hashable
+				 * and thus (if it's a partitioning column) break the
+				 * partitioning rule.  For now, reject for partitioned rels
+				 * too.
+				 *
+				 * Foreign tables don't have storage as such, but they can
+				 * have statistics stored in the pg_statistic table.  (It
+				 * might be better to remove the statistics than fail the
+				 * operation, but with the current code structure, it'd be
+				 * inconvenient to memorize the need for removing the
+				 * statistics.  Note that if we allowed partitioned tables
+				 * here, they could also have statistics.)
+				 */
+				if (RELKIND_HAS_STORAGE(rel->rd_rel->relkind) ||
+					RELKIND_HAS_PARTITIONS(rel->rd_rel->relkind) ||
+					rel->rd_rel->relkind == RELKIND_FOREIGN_TABLE)
+				{
+					report_type_used_in_column(RelationGetRelationName(rel),
+											   NameStr(att->attname),
+											   origRelation, origTypeName);
+				}
+
+				if (OidIsValid(rel->rd_rel->reltype) && rel->rd_rel->reltype != typeOid)
+				{
+					/*
+					 * A view or composite type itself isn't a problem, but we
+					 * must recursively check for indirect dependencies via
+					 * its rowtype.
+					 */
+					find_composite_type_dependencies_recurse(rel->rd_rel->reltype,
+															 origRelation, origTypeName,
+															 visited);
+				}
+			}
+
+			/*
+			 * If it's a dependency on the type as whole, look closer what
+			 * exactly in the relation uses it.  Some uses don't prevent
+			 * ALTERing the rowtype, but others do.
+			 *
+			 * NOTE: We must not use the expressions cached in the relcache,
+			 * because they go through eval_const_expressions(), which could
+			 * fold away the thing that caused the dependency.
+			 */
+			if (objsubid == 0)
+			{
+				/*
+				 * If the type is used in a PARTITION BY expression, must be
+				 * rejected.
+				 */
+				if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+				{
+					List	   *partexprs;
+					ListCell   *lc;
+
+					catalog_tup = SearchSysCache1(PARTRELID,
+												  ObjectIdGetDatum(RelationGetRelid(rel)));
+					if (!HeapTupleIsValid(catalog_tup))
+						elog(ERROR, "cache lookup failed for partition key of relation %u",
+							 RelationGetRelid(rel));
+					partexprs = (List *)
+						get_node_tree_attr(PARTRELID, catalog_tup,
+										   Anum_pg_partitioned_table_partexprs);
+					foreach(lc, partexprs)
+					{
+						Node	   *partexpr = lfirst(lc);
+
+						/*
+						 * Check if it's the PARTITION BY's return type.
+						 *
+						 * (This could be allowed as long as the table has no
+						 * partitions.  The problem really only arises from
+						 * the partition bounds stored in the 'relpartbound'
+						 * of the partitions.  But it's not worth
+						 * distinguishing that case.)
+						 *
+						 * We had a gap in our dependency tracking in the
+						 * past, and didn't record a pg_depend entry for
+						 * these.  Any missing dependencies not caught here
+						 * are handled by
+						 * find_missing_composite_type_dependencies().
+						 */
+						if (exprType(partexpr) == typeOid)
+							report_type_used_in_expr(depobj, origRelation, origTypeName);
+
+						/*
+						 * Check if the expression uses the rowtype.  We must
+						 * reject that case because otherwise we'd need to
+						 * rewrite the expression stored in the catalog, as
+						 * well as the partition bounds of all the partitions,
+						 * and also because the data might no longer be in the
+						 * correct partitions according to the new datatype's
+						 * sort order.
+						 */
+						if (CheckTypeDependencyInSingleRelExpr(partexpr, RelationGetRelid(rel), typeOid))
+							report_type_used_in_expr(depobj, origRelation, origTypeName);
+					}
+					ReleaseSysCache(catalog_tup);
+				}
+
+				/*
+				 * If it's an expression or partial index, must reject if the
+				 * expressions use the rowtype (it might include Consts).
+				 *
+				 * If an index uses the target type as a column, we will
+				 * rebuild it, but RememberAllDependentForRebuilding() doesn't
+				 * handle whole-row dependencies.
+				 */
+				if (rel->rd_indextuple)
+				{
+					expr = get_node_tree_attr(INDEXRELID, rel->rd_indextuple,
+											  Anum_pg_index_indexprs);
+					if (expr)
+					{
+						if (CheckTypeDependencyInSingleRelExpr(expr, RelationGetRelid(rel), typeOid))
+							report_type_used_in_expr(depobj, origRelation, origTypeName);
+
+						/*
+						 * If it's the *return type* of an index expression,
+						 * it becomes a column type and we checked that above
+						 * already.
+						 */
+					}
+					expr = get_node_tree_attr(INDEXRELID, rel->rd_indextuple,
+											  Anum_pg_index_indpred);
+					if (expr)
+					{
+						if (CheckTypeDependencyInSingleRelExpr(expr, RelationGetRelid(rel), typeOid))
+							report_type_used_in_expr(depobj, origRelation, origTypeName);
+					}
+				}
+
+				/*
+				 * We have now checked for all the known reasons that a
+				 * relation might depend on a type that prevents ALTERing it.
+				 * There are two reasons left that don't prevent ALTER: the
+				 * type is the table's reltype, or its TYPE OF type.  (The
+				 * TYPE OF case might still prevent the operation, but that's
+				 * handled separately by find_typed_table_dependencies())
+				 */
+				if (rel->rd_rel->reltype == typeOid || rel->rd_rel->reloftype == typeOid)
+				{
+					/* ok */
+				}
+				else
+				{
+					/*
+					 * We've covered all reasons for this dependency to exist,
+					 * so why are we here?  Better play safe and reject it.
+					 */
+					Assert(false);
+					report_type_used_in_expr(depobj, origRelation, origTypeName);
+				}
+			}
+
+			relation_close(rel, AccessShareLock);
+			break;
+
+		case PublicationRelRelationId:
+
+			/*
+			 * pg_publication_rel.prqual contains an expression.  It should
+			 * not contain user-defined types, but CREATE PUBLICATION's
+			 * definition of a user-defined type is different from a pinned
+			 * object, so we might see these.
+			 */
+			report_type_used_in_expr(depobj, origRelation, origTypeName);
+			break;
+
+		case RewriteRelationId:
+		case AttrDefaultRelationId:
+		case TriggerRelationId:
+		case PolicyRelationId:
+		case StatisticExtRelationId:
+		default:
+			/* Forbid anything else */
+			report_type_used_in_expr(depobj, origRelation, origTypeName);
+			break;
+	}
+}
+
+/*
+ * report_type_used_in_column
+ *
+ * Complain that the ALTER can't proceed because a column uses the type being
+ * altered.
+ */
+static void
+report_type_used_in_column(const char *relname, const char *attname,
+						   Relation origRelation, const char *origTypeName)
+{
+	if (origTypeName)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot alter type \"%s\" because column \"%s.%s\" uses it",
+						origTypeName,
+						relname, attname)));
+	else if (origRelation->rd_rel->relkind == RELKIND_COMPOSITE_TYPE)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot alter type \"%s\" because column \"%s.%s\" uses it",
+						RelationGetRelationName(origRelation),
+						relname, attname)));
+	else if (origRelation->rd_rel->relkind == RELKIND_FOREIGN_TABLE)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot alter foreign table \"%s\" because column \"%s.%s\" uses its row type",
+						RelationGetRelationName(origRelation),
+						relname, attname)));
+	else
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot alter table \"%s\" because column \"%s.%s\" uses its row type",
+						RelationGetRelationName(origRelation),
+						relname, attname)));
+}
+
+/*
+ * report_type_used_in_expr
+ *
+ * Complain that the ALTER can't proceed because a stored expression holds a
+ * value of the type being altered.
+ */
+static void
+report_type_used_in_expr(const ObjectAddress *obj, Relation origRelation,
+						 const char *origTypeName)
+{
+	char	   *objdesc = getObjectDescription(obj, false);
+
+	if (origTypeName)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot alter type \"%s\" because %s uses it",
+						origTypeName, objdesc)));
+
+	if (origRelation->rd_rel->relkind == RELKIND_COMPOSITE_TYPE)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot alter type \"%s\" because %s uses it",
+						RelationGetRelationName(origRelation), objdesc)));
+
+	if (origRelation->rd_rel->relkind == RELKIND_FOREIGN_TABLE)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot alter foreign table \"%s\" because %s uses its row type",
+						RelationGetRelationName(origRelation), objdesc)));
+
+	ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 errmsg("cannot alter table \"%s\" because %s uses its row type",
+					RelationGetRelationName(origRelation), objdesc)));
+}
+
+/* Read a pg_node_tree column's value as a Node */
+static Node *
+get_node_tree_attr(enum SysCacheIdentifier cacheId, HeapTuple tup, AttrNumber attnum)
+{
+	Datum		val;
+	bool		isnull;
+
+	val = SysCacheGetAttr(cacheId, tup, attnum, &isnull);
+	if (isnull)
+		return NULL;
+
+	return stringToNode(TextDatumGetCString(val));
+}
+
+/*
+ * find_missing_composite_type_dependencies
+ *
+ * In the past, we failed to record pg_depend entries for a few cases that
+ * clearly form a dependency and should prevent you from ALTERing a rowtype.
+ * This function scans the catalogs for the missing dependencies.
+ * Unfortunately, these need to resort to sequential scans, which is slow.
+ */
+static void
+find_missing_composite_type_dependencies(HTAB *types, Relation origRelation,
+										 const char *origTypeName)
+{
+	Relation	catalog_rel;
+	SysScanDesc scan;
+	HeapTuple	tup;
+
+	/*
+	 * A partition bound is stored as a Const of the PARTITION BY expression's
+	 * result type.  However, we used to not record a pg_depend entry for
+	 * that.  Often an expression depends on its result type for other
+	 * reasons, for example a Const does record a dependency on its type, but
+	 * as a counter-example, a function call records a dependency only on the
+	 * function, not on its return type.
+	 *
+	 * To find such missing dependencies, scan pg_partitioned_table directly
+	 * for a key expression that produces typeOid.
+	 *
+	 * The expression might return the target type directly, or wrapped in a
+	 * container such as an array or a range.  We only check for the direct
+	 * case here, containers are handled by the recursion from
+	 * find_composite_type_dependencies()
+	 */
+	catalog_rel = table_open(PartitionedRelationId, AccessShareLock);
+	scan = systable_beginscan(catalog_rel, InvalidOid, false, NULL, 0, NULL);
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		List	   *exprs;
+		ListCell   *lc;
+
+		/* Is the *result* of the PARTITION BY expression a problem? */
+		exprs = (List *) get_node_tree_attr(PARTRELID, tup,
+											Anum_pg_partitioned_table_partexprs);
+		foreach(lc, exprs)
+		{
+			Node	   *expr = (Node *) lfirst(lc);
+			Oid			resultType = exprType(expr);
+
+			if (hash_search(types, &resultType, HASH_FIND, NULL))
+			{
+				Form_pg_partitioned_table form =
+					(Form_pg_partitioned_table) GETSTRUCT(tup);
+				ObjectAddress obj;
+
+				ObjectAddressSet(obj, RelationRelationId, form->partrelid);
+				report_type_used_in_expr(&obj, origRelation, origTypeName);
+			}
+		}
+	}
+	systable_endscan(scan);
+	table_close(catalog_rel, AccessShareLock);
+
+	/*
+	 * Similarly, an expression index whose expression returns the target type
+	 * stores datums of that type in the index, but we used to not record a
+	 * pg_depend entry for that.  Scan pg_index for those.
+	 *
+	 * The predicate of a partial index always returns a boolean, so we don't
+	 * need to worry about that here.
+	 */
+	catalog_rel = table_open(IndexRelationId, AccessShareLock);
+	scan = systable_beginscan(catalog_rel, InvalidOid, false, NULL, 0, NULL);
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		List	   *exprs;
+		ListCell   *lc;
+
+		exprs = (List *) get_node_tree_attr(INDEXRELID, tup, Anum_pg_index_indexprs);
+		foreach(lc, exprs)
+		{
+			Node	   *expr = (Node *) lfirst(lc);
+			Oid			resultType = exprType(expr);
+
+			if (hash_search(types, &resultType, HASH_FIND, NULL))
+			{
+				Form_pg_index index = (Form_pg_index) GETSTRUCT(tup);
+				ObjectAddress obj;
+
+				ObjectAddressSet(obj, RelationRelationId, index->indexrelid);
+				report_type_used_in_expr(&obj, origRelation, origTypeName);
+			}
+		}
+	}
+	systable_endscan(scan);
+	table_close(catalog_rel, AccessShareLock);
+
+	/*
+	 * Similarly, extended statistics on an expression that returns the target
+	 * type stores a datum of the type into pg_statistic_ext_data at ANALYZE
+	 * time, and we used to not record a pg_depend entry for that either. Scan
+	 * pg_statistic_ext for those.
+	 */
+	catalog_rel = table_open(StatisticExtRelationId, AccessShareLock);
+	scan = systable_beginscan(catalog_rel, InvalidOid, false, NULL, 0, NULL);
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		List	   *exprs;
+		ListCell   *lc;
+
+		exprs = (List *) get_node_tree_attr(STATEXTOID, tup,
+											Anum_pg_statistic_ext_stxexprs);
+		foreach(lc, exprs)
+		{
+			Node	   *expr = (Node *) lfirst(lc);
+			Oid			resultType = exprType(expr);
+
+			if (hash_search(types, &resultType, HASH_FIND, NULL))
+			{
+				Form_pg_statistic_ext form = (Form_pg_statistic_ext) GETSTRUCT(tup);
+				ObjectAddress obj;
+
+				ObjectAddressSet(obj, StatisticExtRelationId, form->oid);
+				report_type_used_in_expr(&obj, origRelation, origTypeName);
+			}
+		}
+	}
+	systable_endscan(scan);
+	table_close(catalog_rel, AccessShareLock);
+}
 
 /*
  * find_typed_table_dependencies
@@ -8720,6 +9178,151 @@ ATPrepAddColumn(List **wqueue, Relation rel, bool recurse, bool recursing,
 }
 
 /*
+ * Checks if we can avoid a full-table rewrite in phase 3,
+ * by only manipulating the columns involved in the ALTER operation.
+ * For instance, for an ADD COLUMN operation,
+ * we can simply add a new column file for CO tables.
+ * Also, for CO tables, we can rewrite an existing column solely, if we ALTER it's type or encoding.
+ * If we can optimize, then we set AlteredTableInfo->rewrite with the appropriate flag.
+ */
+static void
+setupColumnOnlyRewrite(List **wqueue,
+					 const AlteredTableInfo *tab,
+					 AlterTableType ATtype)
+{
+	bool columnar_rewrite = true;
+
+	/*
+	* ADD COLUMN, ALTER COLUMN TYPE, ALTER COLUMN SET ENCODING or ADD constraint commands for 
+	* CO can be optimize only if there's no other subcommand (except DROP COLUMN) being performed.
+	*
+	* GPDB_PORT: upstream has a single AT_PASS_ADD_CONSTR, described as "ADD
+	* constraints, defaults".  PG13 split the defaults out of it into
+	* AT_PASS_ADD_OTHERCONSTR, so allowing only AT_PASS_ADD_CONSTR here would
+	* leave ALTER COLUMN ... SET DEFAULT blocking the optimization, which is
+	* one of the cases this commit is about.  Both passes are allowed.
+	*/
+
+	/* we should be here for these commands only */
+	Assert(ATtype == AT_AddColumn ||
+				ATtype == AT_AlterColumnType ||
+				ATtype == AT_SetColumnEncoding);
+
+	for (int i = 0; i < AT_NUM_PASSES; ++i)
+	{
+		/*
+		 * AT_PASS_OLD_INDEX and AT_PASS_OLD_CONSTR hold the indexes and
+		 * constraints ATPostAlterTypeCleanup() re-adds after ALTER COLUMN TYPE
+		 * drops them.  They are allowed here because the column-only rewrite
+		 * already handles them: it rebuilds the indexes that depend on a
+		 * rewritten column and checks the re-added constraints row by row.
+		 * Also because this function is called at different points for the
+		 * subcommands it serves -- from ATExecAlterColumnType() during
+		 * AT_PASS_ALTER_TYPE, before those passes are filled in, and from
+		 * ATExecAddColumn() during AT_PASS_ADD_COL, after.  Rejecting them
+		 * here therefore never affected ALTER COLUMN TYPE, only an ADD COLUMN
+		 * in the same command, which then went without
+		 * AT_REWRITE_NEW_COLUMNS_ONLY while AT_REWRITE_REWRITE_COLUMNS_ONLY
+		 * stayed set.  ATRewriteTables() took the column-only branch on the
+		 * latter, never wrote the new column, and skipped the full rewrite
+		 * that AT_REWRITE_COLUMN_REWRITE asked for: the table came out
+		 * unreadable, missing the new column's segment files.
+		 */
+		if (i != AT_PASS_SET_ENCODING &&
+					i != AT_PASS_ADD_COL &&
+					i != AT_PASS_ALTER_TYPE &&
+					i != AT_PASS_OLD_INDEX &&
+					i != AT_PASS_OLD_CONSTR &&
+					i != AT_PASS_DROP &&
+					i != AT_PASS_ADD_CONSTR &&
+					i != AT_PASS_ADD_OTHERCONSTR &&
+					tab->subcmds[i])
+		{
+			columnar_rewrite = false;
+			break;
+		}
+	}
+
+	if (columnar_rewrite)
+	{
+		/*
+		 * We have acquired lockmode on the root and first-level partitions
+		 * already. This leaves the deeper subpartitions unlocked, but no
+		 * operations can drop (or alter) those relations without locking
+		 * through the root. But we still lock them to meet the upstream
+		 * expecation in relation_open that all callers should have acquired
+		 * a lock on the table except in bootstrap mode.
+
+		 * Note that find_all_inheritors() also includes the root partition
+		 * in the returned list.
+		 */
+		List *all_inheritors = find_all_inheritors(tab->relid, AccessShareLock, NULL);
+		ListCell *lc;
+		foreach (lc, all_inheritors)
+		{
+			Oid r = lfirst_oid(lc);
+			Relation rel = heap_open(r, NoLock);
+			AlteredTableInfo *childtab;
+			childtab = ATGetQueueEntry(wqueue, rel);
+
+			if (RelationIsAoCols(rel))
+			{
+				bool add_generated_column = false;
+				ListCell *l;
+
+				/*
+				 * Check if it is adding generated column by existing column value.
+				 *
+				 * We place this check here instead of under AT_AddColumn is
+				 * because add-column could be a subcommand of ALTER TABLE
+				 * which may contain other subcommand like alter-column-type.
+				 * We need to pre-detect the case and mark/unmark `rewrite` flag
+				 * accordingly to determine whether needs to do AOCO optimization
+				 * or not.
+				 */
+				foreach(l, childtab->newvals)
+				{
+					NewColumnValue *nv = lfirst(l);
+					if (nv->is_generated && contain_var_clause((Node *)nv->expr))
+					{
+						/* 
+						 * For a generated column, if the expression contains Var,
+						 * it indicates the new column value needs to be calculated
+						 * based on existing column, in this case we need to fallback
+						 * to ATRewriteTable() to do table scan instead of scanning
+						 * varblock header only.
+						 * 
+						 * TODO: currently we scan all columns in ATRewriteTable(),
+						 * it is optimizable to only scan the required columns.
+						 * 
+						 * Note, for partitioned table, we clear the flag for parent
+						 * only as newvals is null for children, we clear it in
+						 * recursive ATExecAddColumn(recursing=true) for children.
+						 */
+						add_generated_column = true;
+						break;
+					}
+				}
+
+				if (ATtype == AT_AddColumn)
+					childtab->rewrite |= AT_REWRITE_NEW_COLUMNS_ONLY;
+				else if (ATtype == AT_AlterColumnType || ATtype == AT_SetColumnEncoding)
+					childtab->rewrite |= AT_REWRITE_REWRITE_COLUMNS_ONLY;
+				else
+					Assert(false); /* shouldn't reach here */
+				
+				/* unmark flags to fallback to ATRewriteTable() for generated column */
+				if (add_generated_column)
+				{
+					childtab->rewrite &= ~AT_REWRITE_NEW_COLUMNS_ONLY;
+					childtab->rewrite &= ~AT_REWRITE_REWRITE_COLUMNS_ONLY;
+				}
+			}
+			heap_close(rel, NoLock);
+		}
+	}
+}
+/*
  * Add a column to a table.  The return value is the address of the
  * new column in the parent relation.
  *
@@ -8758,6 +9361,7 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 
 	/* since this function recurses, it could be driven to stack overflow */
 	check_stack_depth();
+	bool		missingmode = true;
 
 	/* At top level, permission check was done in ATPrepCmd, else do it */
 	if (recursing)
@@ -8837,6 +9441,8 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		table_close(attrdesc, RowExclusiveLock);
 		return InvalidObjectAddress;
 	}
+
+	check_rowtype_distribution(rel);
 
 	/*
 	 * Okay, we need to add the column, so go ahead and do parse
@@ -8967,20 +9573,8 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		rawEnt = (RawColumnDefault *) palloc(sizeof(RawColumnDefault));
 		rawEnt->attnum = attribute.attnum;
 		rawEnt->raw_default = copyObject(colDef->raw_default);
-
-		rawEnt->hasCookedMissingVal = colDef->hasCookedMissingVal;
-		rawEnt->missingVal = colDef->missingVal;
-		rawEnt->missingIsNull = colDef->missingIsNull;
-
-		/*
-		 * Attempt to skip a complete table rewrite by storing the specified
-		 * DEFAULT value outside of the heap.  This may be disabled inside
-		 * AddRelationNewConstraints if the optimization cannot be applied.
-		 *
-		 * In GPDB, AddRelationNewConstraints will also set rawEnt->missingVal/IsNull
-		 */
-		rawEnt->missingMode = (!colDef->generated);
-
+		rawEnt->missingMode = false;	/* XXX vestigial */
+		rawEnt->hasCookedMissingVal = false;
 		rawEnt->generated = colDef->generated;
 
 		/*
@@ -8990,38 +9584,8 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		AddRelationNewConstraints(rel, list_make1(rawEnt), NIL,
 								  false, true, false, NULL);
 
-		/* copy back the cooked attmissingval for dispatch */
-		colDef->hasCookedMissingVal = rawEnt->hasCookedMissingVal;
-		colDef->missingVal = rawEnt->missingVal;
-		colDef->missingIsNull = rawEnt->missingIsNull;
-
 		/* Make the additional catalog changes visible */
 		CommandCounterIncrement();
-
-		/*
-		 * Did the request for a missing value work? If not we'll have to do a
-		 * rewrite
-		 */
-		/*
-		 * GPDB_12_MERGE_FIXME: This optimization to avoid rewriting a table
-		 * is based on the assumption that at the time of reading tuples from
-		 * this table, it is possible to determine if the tuple does not
-		 * contain the value for the new column being added.  In that case,
-		 * the missing value would be replaced with the default value from
-		 * pg_attrdef catalog table.
-		 *
-		 * The optimization cannot be applied to appendoptimized row-oriented
-		 * tables because the number of attributes is not recorded on disk.
-		 * MemTuples only record the tuple length followed by the tuple data.
-		 * This information is not sufficient to determine if the tuple
-		 * contains a missing column.
-		 *
-		 * A possible solution involves recoding the number of attributes for
-		 * each tuple or for each varblock, so that this optimization can be
-		 * applied on similar lines as heap_getattr.
-		 */
-		if (!rawEnt->missingMode || RelationIsAoRows(rel))
-			tab->rewrite |= AT_REWRITE_DEFAULT_VAL;
 	}
 
 	/*
@@ -9103,45 +9667,39 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		}
 
 		/*
-		 * Handling of default NULL for AO/CO tables.
-		 *
-		 * Currently memtuples cannot deal with the scenario where the number of
-		 * attributes in the tuple data don't match the attnum. We will generate an
-		 * explicit NULL default value and force a rewrite of the table below.
-		 *
-		 * At one point there were plans to restructure memtuples so that this
-		 * rewrite did not have to occur. An optimization was added to
-		 * column-oriented tables to avoid the rewrite, but it does not apply to
-		 * row-oriented tables. Eventually it would be nice to remove this
-		 * workaround; see GitHub issue
-		 *     https://github.com/greenplum-db/gpdb/issues/3756
-		 *
-		 * GPDB_12_MERGE_FIXME: we used to do this only if no default was given,
-		 * but starting with PostgreSQL v11, a table doesn't need to be rewritten
-		 * even if a non-NULL default is used. That caused an assertion failure in
-		 * the 'uao_ddl/alter_ao_table_constraint_column' test. To make that go
-		 * away, always force full rewrite on AO_ROW and AO_COLUMN tables. We
-		 * should be smarter..
+		 * Handling of default NULL for ao_column tables.
 		 */
-
-		if (RelationIsAppendOptimized(rel))
-		{
-			if (!defval)
-				defval = (Expr *) makeNullConst(typeOid, -1, collOid);
-			tab->rewrite |= AT_REWRITE_DEFAULT_VAL;
-		}
+		if (!defval && RelationIsAoCols(rel))
+			defval = (Expr *) makeNullConst(typeOid, -1, collOid);
 
 		if (defval)
 		{
 			NewColumnValue *newval;
 
-			/* If QE, AlteredTableInfo streamed from QD already contains newvals */
+			/*
+			 * GPDB: decide now, rather than at the missing-value block below,
+			 * whether the DEFAULT can be stored as a missing value, because
+			 * newval->op depends on it: the AOCO column writer does not write
+			 * a missing-mode column for the rows that already exist, and a
+			 * column-only rewrite is set up for AOCO even when the missing
+			 * value cannot be used.
+			 */
+			missingmode = (rel->rd_rel->relkind == RELKIND_RELATION &&
+						   !colDef->generated &&
+						   !has_domain_constraints &&
+						   !contain_volatile_functions((Node *) defval));
+
+			/* If QE, AlteredTableInfo streamed from QD already contains newcolvals */
 			if (Gp_role != GP_ROLE_EXECUTE)
 			{
 				newval = (NewColumnValue *) palloc0(sizeof(NewColumnValue));
 				newval->attnum = attribute.attnum;
 				newval->expr = expression_planner(defval);
 				newval->is_generated = (colDef->generated != '\0');
+				if (missingmode)
+					newval->op = AOCSADDCOLUMN_MISSINGMODE;
+				else
+					newval->op = AOCSADDCOLUMN;
 
 				/*
 				 * tab is null if this is called by "create or replace view" which
@@ -9149,6 +9707,24 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 				 */
 				Assert(tab);
 				tab->newvals = lappend(tab->newvals, newval);
+
+				/*
+				 * Similar like setupColumnOnlyRewrite(), we need to clear
+				 * AT_REWRITE_NEW_COLUMNS_ONLY to fallback to do table scan instead
+				 * of varblock header only scan for partitions in the case of
+				 * generating column based on existing column values.
+				 * 
+				 * TODO: currently we scan all columns in ATRewriteTable(),
+				 * it is optimizable to only scan the required columns.
+				 */
+				if (tab->rewrite & AT_REWRITE_NEW_COLUMNS_ONLY &&
+					newval->is_generated && contain_var_clause((Node *)newval->expr))
+				{
+					/* Assuming AT_REWRITE_NEW_COLUMNS_ONLY is only for ao_column tables. */
+					Assert(RelationIsAoCols(rel));
+					tab->rewrite &= ~AT_REWRITE_NEW_COLUMNS_ONLY;
+					tab->rewrite &= ~AT_REWRITE_REWRITE_COLUMNS_ONLY;
+				}
 			}
 			else
 			{
@@ -9163,23 +9739,59 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 			 * contain_volatile_functions deems CoerceToDomain immutable, but
 			 * here we consider that coercion to a domain with constraints is
 			 * volatile; else it might fail even when the table is empty.
+			 *
+			 * GPDB: missingmode, set above, holds those conditions.
 			 */
-			if (rel->rd_rel->relkind == RELKIND_RELATION &&
-				!colDef->generated &&
-				!has_domain_constraints &&
-				!contain_volatile_functions((Node *) defval))
+			if (missingmode)
 			{
-				EState	   *estate;
+				EState	   *estate = NULL;
 				ExprState  *exprState;
 				Datum		missingval;
 				bool		missingIsNull;
 
-				/* Evaluate the default expression */
-				estate = CreateExecutorState();
-				exprState = ExecPrepareExpr(defval, estate);
-				missingval = ExecEvalExpr(exprState,
-										  GetPerTupleExprContext(estate),
-										  &missingIsNull);
+				/*
+				 * GPDB: a stable default such as now() can evaluate to a
+				 * different value on each segment, so the QD evaluates it
+				 * once and dispatches the result in the ColumnDef as a
+				 * one-element array.  QEs store that value instead of
+				 * evaluating the expression themselves.
+				 */
+				if (colDef->hasCookedMissingVal)
+				{
+					missingIsNull = colDef->missingIsNull;
+					if (!missingIsNull)
+					{
+						int			idx = 1;
+
+						missingval = array_get_element(colDef->missingVal,
+													   1, &idx, -1,
+													   attribute.attlen,
+													   attribute.attbyval,
+													   attribute.attalign,
+													   &missingIsNull);
+					}
+				}
+				else
+				{
+					/* Evaluate the default expression */
+					estate = CreateExecutorState();
+					exprState = ExecPrepareExpr(defval, estate);
+					missingval = ExecEvalExpr(exprState,
+											  GetPerTupleExprContext(estate),
+											  &missingIsNull);
+
+					/* Remember the value so that it is dispatched to QEs */
+					colDef->hasCookedMissingVal = true;
+					colDef->missingIsNull = missingIsNull;
+					if (!missingIsNull)
+						colDef->missingVal =
+							PointerGetDatum(construct_array(&missingval, 1,
+															attribute.atttypid,
+															attribute.attlen,
+															attribute.attbyval,
+															attribute.attalign));
+				}
+
 				/* If it turns out NULL, nothing to do; else store it */
 				if (!missingIsNull)
 				{
@@ -9188,7 +9800,8 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 					CommandCounterIncrement();
 					has_missing = true;
 				}
-				FreeExecutorState(estate);
+				if (estate)
+					FreeExecutorState(estate);
 			}
 			else
 			{
@@ -9198,6 +9811,16 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 				 */
 				tab->rewrite |= AT_REWRITE_DEFAULT_VAL;
 			}
+
+			/*
+			 * We need to write the new column for AOCO tables. But don't do
+			 * that if we are going to rewrite the whole table anyway.
+			 *
+			 * ao_row tables need neither: the new column is missing for the
+			 * rows recorded in lastrownums, and written normally after that.
+			 */
+			if (RelationIsAoCols(rel) && tab->rewrite == 0)
+				tab->rewrite |= AT_REWRITE_NEW_COLUMNS_ONLY;
 		}
 
 		if (!has_missing)
@@ -9237,11 +9860,57 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 						NULL /* parentenc */,
 						false /* explicitOnly */,
 						RelationIsAoCols(rel) /* createDefaultOne */, true);
+
 		/*
-		 * Store the encoding clause for AO/CO tables.
+		 * Add a pg_attribute_encoding entry for the column.
+		 * For ao_row tables, only add if the column value is going to be missing
+		 * since only the lastrownums information is useful for them.
+		 * For ao_column tables, always add the entry.
 		 */
-		if (AMHandlerSupportEncodingClause(tam))
-			AddRelationAttributeEncodings(rel, enc);
+		if (RelationIsAoCols(rel) || (RelationStorageIsAoRows(rel) && missingmode))
+		{
+			Oid 	segrelid;
+			int64 	lastrownums[MAX_AOREL_CONCURRENCY];
+			Datum 	lastrownums_val = (Datum) 0;
+			List 	*filenums = GetNextNAvailableFilenums(myrelid, 1);
+			Datum 	attoptions = (Datum) 0;
+
+			/* lastrownums are only for both ao_row and ao_column table w/ storage (i.e. not partitioned table) */
+			if (RelationStorageIsAO(rel) && missingmode)
+			{
+				GetAppendOnlyEntryAuxOids(rel, &segrelid, NULL, NULL, NULL, NULL);
+				ReadAllLastSequences(segrelid, lastrownums);
+				lastrownums_val = transform_lastrownums(lastrownums);
+			}
+
+			/* encoding options are only for CO tables */
+			if (RelationIsAoCols(rel))
+			{
+				/* we're adding one column at a time */
+				Assert(enc->length == 1);
+				ColumnReferenceStorageDirective *crsd = lfirst(list_head(enc));
+				attoptions = transformRelOptions(PointerGetDatum(NULL),
+												 crsd->encoding,
+												 NULL,
+												 NULL,
+												 true,
+												 false);
+			}
+
+			add_attribute_encoding_entry(myrelid,
+										newattnum,
+										linitial_int(filenums),
+										lastrownums_val,
+										attoptions);
+		}
+		/*
+		 * GPDB_PORT: upstream writes the entry above for CO tables too, so the
+		 * AddCOAttributeEncodings() call cbdb had here would now insert a second
+		 * row for the same attnum.  It is still needed for any other AM whose
+		 * handler advertises encoding clauses but is not AO/CO.
+		 */
+		else if (AMHandlerSupportEncodingClause(tam))
+			AddCOAttributeEncodings(myrelid, enc);
 	}
 
 	/* MPP-6929: metadata tracking */
@@ -9290,50 +9959,8 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 	 * So, we only need to execute this block on QD.
 	 */
 	if (!recursing && (tab->relkind == RELKIND_PARTITIONED_TABLE || tab->relkind == RELKIND_RELATION) && Gp_role != GP_ROLE_EXECUTE)
-	{
-		bool	aocs_write_new_columns_only;
-		/*
-		 * ADD COLUMN for CO can be optimized only if it is the
-		 * only subcommand being performed.
-		 */
-		aocs_write_new_columns_only = true;
-		for (int i = 0; i < AT_NUM_PASSES; ++i)
-		{
-			if (i != AT_PASS_ADD_COL && tab->subcmds[i])
-			{
-				aocs_write_new_columns_only = false;
-				break;
-			}
-		}
-
-		if (aocs_write_new_columns_only)
-		{
-			/*
-			 * We have acquired lockmode on the root and first-level partitions
-			 * already. This leaves the deeper subpartitions unlocked, but no
-			 * operations can drop (or alter) those relations without locking
-			 * through the root. But we still lock them to meet the upstream 
-			 * expecation in relation_open that all callers should have acquired
-			 * a lock on the table except in bootstrap mode.
-
-			 * Note that find_all_inheritors() also includes the root partition 
-			 * in the returned list.
-			 */
-			List *all_inheritors = find_all_inheritors(tab->relid, AccessShareLock, NULL);
-			ListCell *lc;
-			foreach (lc, all_inheritors)
-			{
-				Oid r = lfirst_oid(lc);
-				Relation rel = heap_open(r, NoLock);
-				AlteredTableInfo *childtab;
-				childtab = ATGetQueueEntry(wqueue, rel);
-
-				if (RelationIsAoCols(rel))
-					childtab->rewrite |= AT_REWRITE_NEW_COLUMNS_ONLY_AOCS;
-				heap_close(rel, NoLock);
-			}
-		}
-	}
+		setupColumnOnlyRewrite(wqueue,
+							 tab, AT_AddColumn);
 
 	foreach(child, children)
 	{
@@ -9354,6 +9981,25 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 						lockmode, cur_pass, context);
 
 		table_close(childrel, NoLock);
+	}
+
+	/*
+	 * GPDB: if this table has no storage (e.g. a partitioned table), the
+	 * missing value was first evaluated on a child, in childcmd.  Only *cmd
+	 * is dispatched to QEs, so copy the value back to it; otherwise each QE
+	 * would evaluate the default on its own.
+	 */
+	if (!recursing && childcmd != *cmd)
+	{
+		ColumnDef  *origDef = castNode(ColumnDef, (*cmd)->def);
+		ColumnDef  *childDef = castNode(ColumnDef, childcmd->def);
+
+		if (childDef->hasCookedMissingVal && !origDef->hasCookedMissingVal)
+		{
+			origDef->hasCookedMissingVal = true;
+			origDef->missingIsNull = childDef->missingIsNull;
+			origDef->missingVal = childDef->missingVal;
+		}
 	}
 
 	ObjectAddressSubSet(address, RelationRelationId, myrelid, newattnum);
@@ -9452,6 +10098,137 @@ add_column_collation_dependency(Oid relid, int32 attnum, Oid collid)
 		referenced.objectSubId = 0;
 		recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
 	}
+}
+
+/*
+ * ALTER TABLE ... ALTER COLUMN a SET ENCODING (...)
+ *
+ * Update pg_attribute_encoding with the given encoding options.
+ * Normally this will need a table rewrite, except when
+ * (1) the table is a partitioned one,
+ * or
+ * (2) the encoding option isn't really changed (they are the same as the given ones).
+ */
+static void
+ATExecSetColumnEncoding(List **wqueue, AlteredTableInfo *tab, Relation rel, AlterTableCmd *cmd)
+{
+	ColumnReferenceStorageDirective 	*new_crsd;
+	char 					*colName;
+	bool 					is_updated;
+
+	if (OidIsValid(tab->newAccessMethod))
+	{
+		if (tab->newAccessMethod != AO_COLUMN_TABLE_AM_OID)
+			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+				errmsg("ALTER COLUMN SET ENCODING operation is only applicable to AOCO tables"),
+				errdetail("New access method for \"%s\" is not ao_column",
+						  RelationGetRelationName(rel))));
+	}
+	else if (rel->rd_rel->relam != AO_COLUMN_TABLE_AM_OID)
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+			errmsg("ALTER COLUMN SET ENCODING operation is only applicable to AOCO tables"),
+			errdetail("\"%s\" is not an AOCO table",
+					  RelationGetRelationName(rel))));
+
+
+	if (!tab->new_crsds) /* first iteration */
+		tab->new_crsds = rel_get_column_encodings(rel);
+
+	new_crsd = (ColumnReferenceStorageDirective *) cmd->def;
+	tab->new_crsds = updateEncodingList(tab->new_crsds, new_crsd, &is_updated);
+
+	/* Nothing needs to be done if we are not really changing the encodings */
+	if (!is_updated)
+		return;
+
+	/*
+	 * Get new encoding from the updated tab->new_crsds and use that to update
+	 * pg_attribute_encoding later. We do not directly transform the new_crsd
+	 * because we could miss existing options in the current relation.
+	 */
+	colName = ((ColumnReferenceStorageDirective *)cmd->def)->column;
+	new_crsd = find_crsd(colName, tab->new_crsds);
+	Assert(new_crsd);
+
+	if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+	{
+		/*
+		 * No table rewrite nor column rewrite will be performed for partitioned table,
+		 * so we'll just update encoding here. 
+		 *
+		 * Note that we could be altering AM from non-CO to CO as well, so the table may
+		 * not have any existing pg_attribute_encoding entry. Do update-or-add here.
+		 */
+		UpdateOrAddAttributeEncodingsAttoptionsOnly(rel, lappend(NIL, new_crsd));
+	}
+	else if (rel->rd_rel->relkind == RELKIND_RELATION)
+	{
+		/* this block is only for preparing stuff in 'tab'. QE gets those from QD */
+		if(Gp_role == GP_ROLE_EXECUTE)
+			return;
+
+		/* decide if we could rewrite column only */
+		setupColumnOnlyRewrite(wqueue, tab, AT_SetColumnEncoding);
+
+		/* if we are going to rewrite column only, prepare tab->newvals */
+		if (tab->rewrite & AT_REWRITE_REWRITE_COLUMNS_ONLY)
+		{
+			NewColumnValue 		*newval = (NewColumnValue *) palloc0(sizeof(NewColumnValue));
+			HeapTuple 		tup;
+			Form_pg_attribute 	attTup;
+			Node 			*transform;
+			bool 			col_has_rewrite = false;
+			ListCell 		*l;
+
+			/* Find the column tuple so we'll know its attnum */
+			tup = SearchSysCacheAttName(RelationGetRelid(rel), colName);
+			if (!HeapTupleIsValid(tup))
+				ereport(ERROR,
+						(errcode(ERRCODE_UNDEFINED_COLUMN),
+						errmsg("column \"%s\" of relation \"%s\" does not exist",
+						colName, RelationGetRelationName(rel))));
+			attTup = (Form_pg_attribute) GETSTRUCT(tup);
+
+			/*
+			 * Check if we already did an ALTER COLUMN TYPE on the this column, in which
+			 * case we will not add newval for the same column because we would be rewriting
+			 * that column anyway. So just need to update pg_attribute_encoding in that case.
+			 */
+			foreach(l, tab->newvals)
+			{
+				NewColumnValue *nv = lfirst(l);
+				if (nv->attnum == attTup->attnum && nv->op == AOCSREWRITECOLUMN)
+				{
+					col_has_rewrite = true;
+					nv->new_encoding = new_crsd->encoding;
+					break;
+				}
+			}
+
+			/* No rewrite has been planned for this column, let's plan one now. */
+			if (!col_has_rewrite)
+			{
+				newval->attnum = attTup->attnum;
+				/* no change to the column type */
+				transform = (Node *) makeVar(1, attTup->attnum,
+										 attTup->atttypid, attTup->atttypmod,
+										 attTup->attcollation,
+										 0);
+				newval->expr = expression_planner((Expr*) transform);
+				newval->is_generated = false;
+				newval->op = AOCSREWRITECOLUMN;
+				newval->new_encoding = new_crsd->encoding;
+				tab->newvals = lappend(tab->newvals, newval);
+			}
+
+			ReleaseSysCache(tup);
+		}
+		else
+			/* we are unable to do a column-only rewrite, perform a table rewrite instead */
+			tab->rewrite |= AT_REWRITE_COLUMN_REWRITE;
+	}
+	else
+		Assert(false); /* cannot reach here */
 }
 
 /*
@@ -9955,7 +10732,14 @@ ATExecCookedColumnDefault(Relation rel, AttrNumber attnum,
 {
 	ObjectAddress address;
 
-	/* We assume no checking is required */
+	/*
+	 * This is used for a cooked default copied by CREATE TABLE ... LIKE,
+	 * which adds new type dependencies.  Such a default doesn't go through
+	 * AddRelationNewConstraints(), and StoreAttrDefault() leaves the
+	 * privilege checks to its caller, so we must check for USAGE on the types
+	 * here.
+	 */
+	CheckUsageOnTypesInSingleRelExpr(newDefault, RelationGetRelid(rel), GetUserId());
 
 	/*
 	 * Remove any old default for the column.  We use RESTRICT here for
@@ -10733,6 +11517,83 @@ set_random_distribution_if_drop_distkey(Relation rel, AttrNumber attnum)
 }
 
 /*
+ * GPDB: Helper function for ATExecDropColumn(), only for CO tables.
+ *
+ * This function checks if the column indicated by 'attnum' is the last complete
+ * column (not missing values) in the table. If so, it rewrites the column.
+ * The 'colName' is of the same column, for logging purpose.
+ */
+static void
+rewrite_column_on_drop(Relation rel, AttrNumber attnum, const char *colName)
+{
+	AttrNumber 	natts = RelationGetNumberOfAttributes(rel);
+	AttrNumber 	nexistcols = 0;
+	AttrNumber 	ncompletecols = 0;
+	AttrNumber 	attnum_to_rewrite = 0;
+	bool 		*column_not_complete = ExistValidLastrownums(RelationGetRelid(rel), natts);
+
+	/* if we are not dropping a complete column, no need to worry */
+	if (column_not_complete[attnum - 1])
+		return;
+
+	/* check how many complete columns and existed columns in the table */
+	for (int i = 0; i < natts; i++)
+	{
+		HeapTuple atttup;
+		atttup = SearchSysCacheAttNum(RelationGetRelid(rel), i + 1);
+		/* column could be dropped */
+		if (!atttup)
+			continue;
+
+		/* pick the first non-dropped, incomplete column as the rewrite candidate */
+		nexistcols++;
+		if (!column_not_complete[i])
+			ncompletecols++;
+		else if (attnum_to_rewrite == 0)
+			attnum_to_rewrite = i + 1;
+
+		ReleaseSysCache(atttup);
+	}
+
+	/* sanity check: we should still have complete column in the table */
+	Assert(ncompletecols > 0 && nexistcols > 0);
+
+	/*
+	 * This is the case we care about: if we are about to drop the *last* complete
+	 * column which is not the last column in the table, we need to conduct a 
+	 * column rewrite to make sure there's still another complete column in the table.
+	 */
+	if (ncompletecols == 1 && nexistcols > 1)
+	{
+		HeapTuple 		atttup = SearchSysCacheAttNum(RelationGetRelid(rel), attnum_to_rewrite);
+		Form_pg_attribute 	atttupform = (Form_pg_attribute) GETSTRUCT(atttup);
+		NewColumnValue 		*newval = (NewColumnValue *) palloc0(sizeof(NewColumnValue));
+		Node       		*transform = (Node *) makeVar(1, attnum_to_rewrite,
+								 atttupform->atttypid, atttupform->atttypmod,
+								 atttupform->attcollation,
+								 0);
+
+		transform = (Node *) expression_planner((Expr *) transform);
+
+		ReleaseSysCache(atttup);
+
+		if (Gp_role == GP_ROLE_DISPATCH)
+			ereport(WARNING,
+					(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+					 errmsg("dropping the last complete column \"%s\" of the AOCO table incurs a column rewrite"
+						" of the incomplete column %s. This DROP COLUMN command might be slower than usual",
+							colName, atttupform->attname.data)));
+
+		newval->attnum = attnum_to_rewrite;
+		newval->expr = (Expr *) transform;
+		newval->is_generated = false;
+		newval->op = AOCSREWRITECOLUMN;
+		/* identity transform of one column: no constraint can change meaning */
+		table_relation_rewrite_columns(rel, lappend(NIL, newval), NIL,
+									   CreateTupleDescCopyConstr(RelationGetDescr(rel)));
+	}
+}
+/*
  * Drops column 'colName' from relation 'rel' and returns the address of the
  * dropped column.  The column is also dropped (or marked as no longer
  * inherited from relation) from the relation's inheritance children, if any.
@@ -10824,6 +11685,16 @@ ATExecDropColumn(List **wqueue, Relation rel, const char *colName,
 				(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 				 errmsg("cannot drop column \"%s\" because it is part of the partition key of relation \"%s\"",
 						colName, RelationGetRelationName(rel))));
+
+	/*
+	 * GPDB: although rare, but if it's the last complete column of an AOCO table, 
+	 * dropping it means losing row number information in the data files. So conduct
+	 * an ad-hoc column rewrite (for creating a new complete column) in that case.
+	 * We have to do this here before we drop it because column rewrite requires
+	 * at least one complete column.
+	 */
+	if (RelationStorageIsAoCols(rel))
+		rewrite_column_on_drop(rel, attnum, colName);
 
 	ReleaseSysCache(tuple);
 
@@ -14778,7 +15649,13 @@ ATPrepAlterColumnType(List **wqueue,
 		{
 			old_opfamily = get_opclass_family(old_opclass);
 
-			new_opclass = GetDefaultOpClass(targettype, HASH_AM_OID);
+			/*
+			 * A generic operator class, such as array_ops, is not enough:
+			 * its support functions must handle the actual element or field
+			 * types too.  Use the same check as when choosing distribution
+			 * keys for CREATE TABLE.
+			 */
+			new_opclass = cdb_default_distribution_opclass_for_type(targettype);
 			if (new_opclass)
 			{
 				new_opfamily = get_opclass_family(new_opclass);
@@ -14792,7 +15669,7 @@ ATPrepAlterColumnType(List **wqueue,
 			else
 			{
 				/*
-				 * The new datatype doesn't have a default operator class.
+				 * The new datatype doesn't have a usable default operator class.
 				 * We'll have to turn the table randomly distributed.
 				 */
 				new_opfamily = InvalidOid;
@@ -14884,13 +15761,27 @@ ATPrepAlterColumnType(List **wqueue,
 		/*
 		 * Add a work queue item to make ATRewriteTable update the column
 		 * contents.
+		 *
+		 * If QE, AlteredTableInfo streamed from QD already contains
+		 * newcolvals.  A QE runs ATPrepCmd() over the same commands whose work
+		 * queue the QD dispatched to it (see ATController()), so appending here
+		 * as well would leave two entries for the same column.  ATRewriteTable()
+		 * tolerates that -- it just evaluates the column twice -- but the AOCO
+		 * column rewrite does not: aocs_writecol_init() would create one datum
+		 * stream and one new segfile per duplicate, and the column's filenum
+		 * would be toggled twice, leaving the QE pointing back at the old file.
+		 * ATExecAddColumn() guards its newvals the same way.
 		 */
-		newval = (NewColumnValue *) palloc0(sizeof(NewColumnValue));
-		newval->attnum = attnum;
-		newval->expr = (Expr *) transform;
-		newval->is_generated = false;
+		if (Gp_role != GP_ROLE_EXECUTE)
+		{
+			newval = (NewColumnValue *) palloc0(sizeof(NewColumnValue));
+			newval->attnum = attnum;
+			newval->expr = (Expr *) transform;
+			newval->is_generated = false;
+			newval->op = AOCSREWRITECOLUMN;
 
-		tab->newvals = lappend(tab->newvals, newval);
+			tab->newvals = lappend(tab->newvals, newval);
+		}
 		if (ATColumnChangeRequiresRewrite(transform, attnum))
 			tab->rewrite |= AT_REWRITE_COLUMN_REWRITE;
 
@@ -15096,8 +15987,11 @@ ATColumnChangeRequiresRewrite(Node *expr, AttrNumber varattno)
  * Return the address of the modified column.
  */
 static ObjectAddress
-ATExecAlterColumnType(AlteredTableInfo *tab, Relation rel,
-					  AlterTableCmd *cmd, LOCKMODE lockmode)
+ATExecAlterColumnType(List **wqueue,
+					  AlteredTableInfo *tab,
+					  Relation rel,
+					  AlterTableCmd *cmd,
+					  LOCKMODE lockmode)
 {
 	char	   *colName = cmd->name;
 	ColumnDef  *def = (ColumnDef *) cmd->def;
@@ -15120,19 +16014,42 @@ ATExecAlterColumnType(AlteredTableInfo *tab, Relation rel,
 	ObjectAddress address;
 
 	/*
+	 * Leave a flag on tables in the partition hierarchy that can benefit from the
+	 * optimization for columnar tables.
+	 * We have to do it while processing the root partition because that's the
+	 * only level where the `ADD COLUMN` or `ALTER COLUMN TYPE` subcommands are
+	 * populated.
+	 *
+	 * QD will dispatch wqueue and the QE will get all the info
+	 * to perform the column optimized rewrite.
+	 * So, we only need to execute this block on QD.
+	 */
+	if ((tab->relkind == RELKIND_PARTITIONED_TABLE || tab->relkind == RELKIND_RELATION) && Gp_role != GP_ROLE_EXECUTE)
+		setupColumnOnlyRewrite(wqueue, tab, AT_AlterColumnType);
+
+	/*
 	 * Clear all the missing values if we're rewriting the table, since this
 	 * renders them pointless.
+	 * GPDB: we are not rewriting CO tables, only the column. So only clear the
+	 * column that we are altering.
 	 */
 	if (tab->rewrite)
 	{
 		Relation	newrel;
 
 		newrel = table_open(RelationGetRelid(rel), NoLock);
-		RelationClearMissing(newrel);
+		if (tab->rewrite & AT_REWRITE_REWRITE_COLUMNS_ONLY)
+		{
+			Assert(RelationIsAoCols(newrel));
+			RelationClearMissingByAttname(newrel, colName);
+		}
+		else
+			RelationClearMissing(newrel);
 		relation_close(newrel, NoLock);
 		/* make sure we don't conflict with later attribute modifications */
 		CommandCounterIncrement();
 	}
+
 
 	attrelation = table_open(AttributeRelationId, RowExclusiveLock);
 
@@ -15868,9 +16785,12 @@ ATPostAlterTypeCleanup(List **wqueue, AlteredTableInfo *tab, LOCKMODE lockmode,
 	/*
 	 * Re-parse the index and constraint definitions, and attach them to the
 	 * appropriate work queue entries.  We do this before dropping because in
-	 * the case of a FOREIGN KEY constraint, we might not yet have exclusive
-	 * lock on the table the constraint is attached to, and we need to get
-	 * that before reparsing/dropping.
+	 * the case of a constraint on another table, we might not yet have
+	 * exclusive lock on the table the constraint is attached to, and we need
+	 * to get that before reparsing/dropping.  (That's possible at least for
+	 * FOREIGN KEY, CHECK, and EXCLUSION constraints; in non-FK cases it
+	 * requires a dependency on the target table's composite type in the other
+	 * table's constraint expressions.)
 	 *
 	 * We can't rely on the output of deparsing to tell us which relation to
 	 * operate on, because concurrent activity might have made the name
@@ -15936,12 +16856,12 @@ ATPostAlterTypeCleanup(List **wqueue, AlteredTableInfo *tab, LOCKMODE lockmode,
 			continue;
 
 		/*
-		 * When rebuilding an FK constraint that references the table we're
-		 * modifying, we might not yet have any lock on the FK's table, so get
-		 * one now.  We'll need AccessExclusiveLock for the DROP CONSTRAINT
-		 * step, so there's no value in asking for anything weaker.
+		 * When rebuilding another table's constraint that references the
+		 * table we're modifying, we might not yet have any lock on the other
+		 * table, so get one now.  We'll need AccessExclusiveLock for the DROP
+		 * CONSTRAINT step, so there's no value in asking for anything weaker.
 		 */
-		if (relid != tab->relid && contype == CONSTRAINT_FOREIGN)
+		if (relid != tab->relid)
 			LockRelationOid(relid, AccessExclusiveLock);
 
 		ATPostAlterTypeParse(oldId, relid, confrelid,
@@ -15955,6 +16875,14 @@ ATPostAlterTypeCleanup(List **wqueue, AlteredTableInfo *tab, LOCKMODE lockmode,
 		Oid			relid;
 
 		relid = IndexGetRelation(oldId, false);
+
+		/*
+		 * As above, make sure we have lock on the index's table if it's not
+		 * the same table.
+		 */
+		if (relid != tab->relid)
+			LockRelationOid(relid, AccessExclusiveLock);
+
 		ATPostAlterTypeParse(oldId, relid, InvalidOid,
 							 (char *) lfirst(def_item),
 							 wqueue, lockmode, tab->rewrite, context);
@@ -15971,6 +16899,20 @@ ATPostAlterTypeCleanup(List **wqueue, AlteredTableInfo *tab, LOCKMODE lockmode,
 		Oid			relid;
 
 		relid = StatisticsGetRelation(oldId, false);
+
+		/*
+		 * As above, make sure we have lock on the statistics object's table
+		 * if it's not the same table.  However, we take
+		 * ShareUpdateExclusiveLock here, aligning with the lock level used in
+		 * CreateStatistics and RemoveStatisticsById.
+		 *
+		 * CAUTION: this should be done after all cases that grab
+		 * AccessExclusiveLock, else we risk causing deadlock due to needing
+		 * to promote our table lock.
+		 */
+		if (relid != tab->relid)
+			LockRelationOid(relid, ShareUpdateExclusiveLock);
+
 		ATPostAlterTypeParse(oldId, relid, InvalidOid,
 							 (char *) lfirst(def_item),
 							 wqueue, lockmode, tab->rewrite, context);
@@ -17110,7 +18052,8 @@ ATPrepSetTableSpace(AlteredTableInfo *tab, Relation rel, const char *tablespacen
  */
 static void
 ATExecSetRelOptions(Relation rel, List *defList, AlterTableType operation,
-					bool *aoopt_changed, Oid newAccessMethod, LOCKMODE lockmode)
+					bool *aoopt_changed, Datum *newOptions_out,
+					Oid newAccessMethod, LOCKMODE lockmode)
 {
 	Oid			relid;
 	Relation	pgclass;
@@ -17187,6 +18130,13 @@ ATExecSetRelOptions(Relation rel, List *defList, AlterTableType operation,
 	newOptions = transformRelOptions(isnull ? (Datum) 0 : datum,
 									 defList, NULL, validnsps, false,
 									 operation == AT_ResetRelOptions);
+
+	/*
+	 * Hand the proposed options back: the AOCO caller needs them to work out
+	 * which columns were following the old table-level default.
+	 */
+	if (newOptions_out)
+		*newOptions_out = newOptions;
 
 	/* Validate */
 	switch (rel->rd_rel->relkind)

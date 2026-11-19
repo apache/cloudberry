@@ -509,6 +509,9 @@ CopyMultiInsertBufferFlush(CopyMultiInsertInfo *miinfo,
 																	 NULL,
 																	 &inserted);
 
+			/* XXX See the comment in ExecBatchInsert() */
+			inserted = Min(inserted, size);
+
 			sent += size;
 
 			/* No need to do anything if there are no inserted rows */
@@ -1648,7 +1651,6 @@ BeginCopyFromDirectoryTable(ParseState *pstate,
 			}
 
 			// Increase buffer size to improve performance  (cmcdevitt)
-			/* GPDB_14_MERGE_FIXME: Ret value process. */
 			setvbuf(cstate->copy_file, NULL, _IOFBF, 393216); // 384 Kbytes
 
 			if (fstat(fileno(cstate->copy_file), &st))
@@ -3134,7 +3136,6 @@ BeginCopyFrom(ParseState *pstate,
 			}
 
 			// Increase buffer size to improve performance  (cmcdevitt)
-			/* GPDB_14_MERGE_FIXME: Ret value process. */
 			setvbuf(cstate->copy_file, NULL, _IOFBF, 393216); // 384 Kbytes
 
 			if (fstat(fileno(cstate->copy_file), &st))
@@ -3913,11 +3914,6 @@ EndCopyFrom(CopyFromState cstate)
 /*
  * Initialize data loader parsing state
  */
-/*
-* GPDB_14_MERGE_FIXME:
-* Do we need this function ?
-* Check comments in this function.
-*/
 static void CopyInitDataParser(CopyFromState cstate)
 {
 	MemoryContext oldcontext = MemoryContextSwitchTo(cstate->copycontext);

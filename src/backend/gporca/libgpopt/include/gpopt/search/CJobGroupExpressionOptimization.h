@@ -117,6 +117,20 @@ private:
 	// a handle object for required relational property computation
 	CExpressionHandle *m_pexprhdlRel;
 
+	// flag to indicate if the child contexts were reused from the child
+	// optimization memo instead of optimizing the children
+	BOOL m_fChildOptMemoHit;
+
+	// verify mode: child contexts the memo offered, compared with the ones
+	// reached by optimizing the children
+	COptimizationContextArray *m_pdrgpocMemo;
+
+	// verify mode: flag to indicate if the memo predicted pruning after a child
+	BOOL m_fMemoPredictsPrune;
+
+	// flag to indicate if child optimization was pruned after a child
+	BOOL m_fPrunedAfterChild;
+
 	// initialization routine for child groups optimization
 	void InitChildGroupsOptimization(CSchedulerContext *psc);
 
