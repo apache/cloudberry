@@ -184,6 +184,15 @@ The sketch above is the shape of a backend, not a correct one: Arrow's
 behind, so a backend built from it as written breaks the first two obligations
 below.  `dltest/` is the worked example that does not.
 
+The local backend writes into a private `.datalake-write-*` directory on the
+same filesystem and publishes the completed file with a non-overwriting hard
+link on `Close()`. The destination is not visible before close. Concurrent
+opens can succeed, but only one writer can publish a given name; a losing
+writer receives `AlreadyExists` on close. Abort and failed close remove only
+private staging data, never the destination pathname. The staging directory
+prefix is reserved and omitted from storage listings. A process crash can
+leave staging directories behind; they are not published objects.
+
 Three obligations are worth stating, because a backend that gets them wrong
 is wrong in ways tests elsewhere will not catch:
 
