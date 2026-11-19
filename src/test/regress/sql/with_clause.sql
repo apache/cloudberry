@@ -493,7 +493,7 @@ SELECT EXISTS(
 DROP TABLE foo_issue_1204_test;
 
 --
--- gp_cte_sharing_auto: a CTE referenced more than once is shared by the
+-- With gp_cte_sharing off, a CTE referenced more than once is shared by the
 -- references that have no quals to push down into it, and inlined, with the
 -- quals pushed down, for those that have.
 --
@@ -502,7 +502,6 @@ insert into cte_auto select i, i % 10 from generate_series(1, 1000) i;
 analyze cte_auto;
 set optimizer = off;
 set gp_cte_sharing = off;
-set gp_cte_sharing_auto = on;
 -- no quals on the references: shared
 explain (costs off)
 with c as (select b, count(*) n from cte_auto group by b)
@@ -540,7 +539,6 @@ with c as (select 1 as x)
 select x, random() >= 0 as r from c
 union all
 select x, random() >= 0 from c, gp_dist_random('gp_id');
-reset gp_cte_sharing_auto;
 reset gp_cte_sharing;
 reset optimizer;
 drop table cte_auto;

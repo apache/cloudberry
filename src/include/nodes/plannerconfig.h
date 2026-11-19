@@ -18,7 +18,8 @@ typedef struct PlannerConfig
 	bool		gp_enable_direct_dispatch;
 
 	bool		gp_cte_sharing; /* Indicate whether sharing is to be disabled on any CTEs */
-	bool		gp_cte_sharing_auto;	/* decide per CTE reference whether to share */
+	bool		cte_sharing_auto;	/* share CTE references without pushable quals;
+									 * turned off in lower-level subqueries */
 
 	bool		honor_order_by;
 

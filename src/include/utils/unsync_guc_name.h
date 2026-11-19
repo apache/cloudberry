@@ -174,7 +174,6 @@
 		"gp_cost_hashjoin_chainwalk",
 		"gp_create_table_random_default_distribution",
 		"gp_cte_sharing",
-		"gp_cte_sharing_auto",
 		"gp_dbid",
 		"gp_debug_pgproc",
 		"gp_debug_resqueue_priority",

@@ -286,7 +286,6 @@ bool		gp_enable_agg_pushdown = false;
 bool		gp_dynamic_partition_pruning = true;
 bool		gp_log_dynamic_partition_pruning = false;
 bool		gp_cte_sharing = false;
-bool		gp_cte_sharing_auto = false;
 bool		gp_enable_relsize_collection = false;
 bool		gp_recursive_cte = true;
 bool		gp_eager_two_phase_agg = false;
@@ -1797,19 +1796,6 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&gp_dynamic_partition_pruning,
 		true,
-		NULL, NULL, NULL
-	},
-
-	{
-		{"gp_cte_sharing_auto", PGC_USERSET, QUERY_TUNING_METHOD,
-			gettext_noop("Share CTE references that have no quals to push down."),
-			gettext_noop("Only used if gp_cte_sharing is off. A CTE referenced more than once is "
-						 "computed once and shared by the references that don't filter it; references "
-						 "with quals that can be pushed down into the CTE get their own filtered copy."),
-			GUC_NOT_IN_SAMPLE | GUC_EXPLAIN
-		},
-		&gp_cte_sharing_auto,
-		false,
 		NULL, NULL, NULL
 	},
 

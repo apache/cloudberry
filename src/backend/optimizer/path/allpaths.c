@@ -3431,7 +3431,7 @@ plan_shared_cte(PlannerInfo *root, PlannerInfo *cteroot, CtePlanInfo *cteplaninf
 	 * sharing of ctes at lower levels.
 	 */
 	config->gp_cte_sharing = false;
-	config->gp_cte_sharing_auto = false;
+	config->cte_sharing_auto = false;
 
 	config->honor_order_by = false;
 
@@ -3572,17 +3572,17 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			is_shared =  root->config->gp_cte_sharing && (cte->cterefcount > 1 || contain_volatile_function);
 
 			/*
-			 * GPDB: gp_cte_sharing_auto. Sharing a CTE computes it once for all
-			 * references, but then none of the references' quals can be pushed
-			 * down into it. When the references filter the CTE differently,
-			 * e.g. on different years, the shared CTE computes all of them, and
-			 * loses partition pruning too, which can be many times slower than
-			 * computing each filtered copy. So share only the references that
-			 * have no quals that could be pushed down; the others are planned
-			 * as separate subqueries with their quals pushed down, as without
-			 * sharing.
+			 * GPDB: when gp_cte_sharing is off, decide per reference. Sharing
+			 * a CTE computes it once for all references, but then none of the
+			 * references' quals can be pushed down into it. When the
+			 * references filter the CTE differently, e.g. on different years,
+			 * the shared CTE computes all of them, and loses partition pruning
+			 * too, which can be many times slower than computing each filtered
+			 * copy. So share only the references that have no quals that could
+			 * be pushed down; the others are planned as separate subqueries
+			 * with their quals pushed down, as without sharing.
 			 */
-			if (!is_shared && root->config->gp_cte_sharing_auto &&
+			if (!is_shared && root->config->cte_sharing_auto &&
 				cte->cterefcount > 1 && !contain_volatile_function &&
 				!cte->cterecursive && subquery->commandType == CMD_SELECT)
 			{
@@ -3600,13 +3600,14 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 		is_shared = false;
 
 	/*
-	 * GPDB: gp_cte_sharing_auto. Share the CTE only if its result is spread
-	 * across the segments. That is where sharing pays off, and otherwise a
-	 * reference executed in the QD, e.g. on a CTE without a FROM, and one
-	 * executed in the segments, e.g. joined with gp_dist_random(), would need
-	 * the same Shared Scan in the QD and in a primary gang, which is not
-	 * supported. Plan the shared CTE from a fresh copy, as subquery_planner()
-	 * may scribble on it, and 'subquery' is still needed if we inline it.
+	 * GPDB: a CTE that is shared because the reference has no quals to push
+	 * down is shared only if its result is spread across the segments. That
+	 * is where sharing pays off, and otherwise a reference executed in the
+	 * QD, e.g. on a CTE without a FROM, and one executed in the segments, e.g.
+	 * joined with gp_dist_random(), would need the same Shared Scan in the QD
+	 * and in a primary gang, which is not supported. Plan the shared CTE from
+	 * a fresh copy, as subquery_planner() may scribble on it, and 'subquery'
+	 * is still needed if we inline it.
 	 */
 	if (shared_by_auto)
 	{
@@ -3630,7 +3631,7 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 		 * disallow sharing of ctes at lower levels.
 		 */
 		config->gp_cte_sharing = false;
-		config->gp_cte_sharing_auto = false;
+		config->cte_sharing_auto = false;
 
 		config->honor_order_by = false;
 
