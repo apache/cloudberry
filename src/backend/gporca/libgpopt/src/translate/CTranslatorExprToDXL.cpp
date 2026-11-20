@@ -47,6 +47,7 @@
 #include "gpopt/operators/CPhysicalHashAgg.h"
 #include "gpopt/operators/CPhysicalHashAggDeduplicate.h"
 #include "gpopt/operators/CPhysicalHashJoin.h"
+#include "gpopt/operators/CPhysicalParallelHashJoin.h"
 #include "gpopt/operators/CPhysicalIndexOnlyScan.h"
 #include "gpopt/operators/CPhysicalIndexScan.h"
 #include "gpopt/operators/CPhysicalInnerIndexNLJoin.h"
@@ -54,6 +55,7 @@
 #include "gpopt/operators/CPhysicalLimit.h"
 #include "gpopt/operators/CPhysicalMotionGather.h"
 #include "gpopt/operators/CPhysicalMotionHashDistribute.h"
+#include "gpopt/operators/CPhysicalMotionHashDistributeWorkers.h"
 #include "gpopt/operators/CPhysicalMotionRandom.h"
 #include "gpopt/operators/CPhysicalMotionRoutedDistribute.h"
 #include "gpopt/operators/CPhysicalNLJoin.h"
@@ -106,6 +108,7 @@
 #include "naucrates/dxl/operators/CDXLPhysicalAssert.h"
 #include "naucrates/dxl/operators/CDXLPhysicalBitmapTableScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalBroadcastMotion.h"
+#include "naucrates/dxl/operators/CDXLPhysicalBroadcastWorkersMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalCTAS.h"
 #include "naucrates/dxl/operators/CDXLPhysicalCTEConsumer.h"
 #include "naucrates/dxl/operators/CDXLPhysicalCTEProducer.h"
@@ -117,6 +120,7 @@
 #include "naucrates/dxl/operators/CDXLPhysicalForeignScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalGatherMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalHashJoin.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelHashJoin.h"
 #include "naucrates/dxl/operators/CDXLPhysicalIndexOnlyScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalIndexScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalLimit.h"
@@ -126,6 +130,7 @@
 #include "naucrates/dxl/operators/CDXLPhysicalPartitionSelector.h"
 #include "naucrates/dxl/operators/CDXLPhysicalRandomMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalRedistributeMotion.h"
+#include "naucrates/dxl/operators/CDXLPhysicalHashDistributeWorkersMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalResult.h"
 #include "naucrates/dxl/operators/CDXLPhysicalRoutedDistributeMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalSequence.h"
@@ -473,11 +478,19 @@ CTranslatorExprToDXL::CreateDXLNode(CExpression *pexpr,
 				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
 				pfDML);
 			break;
+		case COperator::EopPhysicalParallelInnerHashJoin:
+		case COperator::EopPhysicalParallelLeftOuterHashJoin:
+			dxlnode = CTranslatorExprToDXL::PdxlnParallelHashJoin(
+				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
+				pfDML);
+			break;
 		case COperator::EopPhysicalMotionGather:
 		case COperator::EopPhysicalMotionBroadcast:
+		case COperator::EopPhysicalMotionBroadcastWorkers:
 		case COperator::EopPhysicalMotionHashDistribute:
 		case COperator::EopPhysicalMotionRoutedDistribute:
 		case COperator::EopPhysicalMotionRandom:
+		case COperator::EopPhysicalMotionHashDistributeWorkers:
 			dxlnode = CTranslatorExprToDXL::PdxlnMotion(
 				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
 				pfDML);
@@ -5449,10 +5462,12 @@ CTranslatorExprToDXL::EdxljtHashJoin(CPhysicalHashJoin *popHJ)
 
 	switch (popHJ->Eopid())
 	{
+		case COperator::EopPhysicalParallelInnerHashJoin:
 		case COperator::EopPhysicalInnerHashJoin:
 			return EdxljtInner;
 
 		case COperator::EopPhysicalLeftOuterHashJoin:
+		case COperator::EopPhysicalParallelLeftOuterHashJoin:
 			return EdxljtLeft;
 
 		case COperator::EopPhysicalRightOuterHashJoin:
@@ -5583,9 +5598,154 @@ CTranslatorExprToDXL::PdxlnHashJoin(CExpression *pexprHJ,
 		pdrgpexprRemainingPredicates->Release();
 	}
 
-	// construct a hash join node
+	// construct a regular hash join node
 	CDXLPhysicalHashJoin *pdxlopHJ =
 		GPOS_NEW(m_mp) CDXLPhysicalHashJoin(m_mp, join_type);
+
+	// construct projection list from required columns
+	GPOS_ASSERT(nullptr != pexprHJ->Prpp());
+	CColRefSet *pcrsOutput = pexprHJ->Prpp()->PcrsRequired();
+	CDXLNode *proj_list_dxlnode = PdxlnProjList(pcrsOutput, colref_array);
+
+	CDXLNode *pdxlnHJ = GPOS_NEW(m_mp) CDXLNode(m_mp, pdxlopHJ);
+	CDXLPhysicalProperties *dxl_properties = GetProperties(pexprHJ);
+	pdxlnHJ->SetProperties(dxl_properties);
+
+	// construct an empty plan filter
+	CDXLNode *filter_dxlnode = PdxlnFilter(nullptr);
+
+	// add children
+	pdxlnHJ->AddChild(proj_list_dxlnode);
+	pdxlnHJ->AddChild(filter_dxlnode);
+	pdxlnHJ->AddChild(dxlnode_join_filter);
+	pdxlnHJ->AddChild(pdxlnHashCondList);
+	pdxlnHJ->AddChild(pdxlnOuterChild);
+	pdxlnHJ->AddChild(pdxlnInnerChild);
+
+	// cleanup
+	pdrgpexprPredicates->Release();
+
+#ifdef GPOS_DEBUG
+	pdxlopHJ->AssertValid(pdxlnHJ, false /* validate_children */);
+#endif
+
+	return pdxlnHJ;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorExprToDXL::PdxlnParallelHashJoin
+//
+//	@doc:
+//		Create a DXL parallel hash join node from an optimizer parallel hash
+//		join expression.
+//
+//---------------------------------------------------------------------------
+CDXLNode *
+CTranslatorExprToDXL::PdxlnParallelHashJoin(
+	CExpression *pexprHJ, CColRefArray *colref_array,
+	CDistributionSpecArray *pdrgpdsBaseTables, ULONG *pulNonGatherMotions,
+	BOOL *pfDML)
+{
+	GPOS_ASSERT(nullptr != pexprHJ);
+	GPOS_ASSERT(3 == pexprHJ->Arity());
+
+	// extract components
+	CPhysicalParallelHashJoin *popParallelHJ =
+		CPhysicalParallelHashJoin::PopConvert(pexprHJ->Pop());
+	CExpression *pexprOuterChild = (*pexprHJ)[0];
+	CExpression *pexprInnerChild = (*pexprHJ)[1];
+	CExpression *pexprScalar = (*pexprHJ)[2];
+
+	EdxlJoinType join_type = EdxljtHashJoin(popParallelHJ);
+	GPOS_ASSERT(popParallelHJ->PdrgpexprOuterKeys()->Size() ==
+				popParallelHJ->PdrgpexprInnerKeys()->Size());
+
+	// translate relational child expression
+	CDXLNode *pdxlnOuterChild = CreateDXLNode(
+		pexprOuterChild, nullptr /*colref_array*/, pdrgpdsBaseTables,
+		pulNonGatherMotions, pfDML, false /*fRemap*/, false /*fRoot*/);
+	CDXLNode *pdxlnInnerChild = CreateDXLNode(
+		pexprInnerChild, nullptr /*colref_array*/, pdrgpdsBaseTables,
+		pulNonGatherMotions, pfDML, false /*fRemap*/, false /*fRoot*/);
+
+	// construct hash condition
+	CDXLNode *pdxlnHashCondList = GPOS_NEW(m_mp)
+		CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLScalarHashCondList(m_mp));
+
+#ifdef GPOS_DEBUG
+	ULONG ulHashJoinPreds = 0;
+#endif
+
+	CExpressionArray *pdrgpexprPredicates =
+		CPredicateUtils::PdrgpexprConjuncts(m_mp, pexprScalar);
+	CExpressionArray *pdrgpexprRemainingPredicates =
+		GPOS_NEW(m_mp) CExpressionArray(m_mp);
+	const ULONG size = pdrgpexprPredicates->Size();
+	for (ULONG ul = 0; ul < size; ul++)
+	{
+		CExpression *pexprPred = (*pdrgpexprPredicates)[ul];
+		if (CPhysicalJoin::FHashJoinCompatible(pexprPred, pexprOuterChild,
+											   pexprInnerChild))
+		{
+			CExpression *pexprPredOuter;
+			CExpression *pexprPredInner;
+			IMDId *mdid_scop;
+			CPhysicalJoin::AlignJoinKeyOuterInner(
+				pexprPred, pexprOuterChild, pexprInnerChild, &pexprPredOuter,
+				&pexprPredInner, &mdid_scop);
+
+			pexprPredOuter->AddRef();
+			pexprPredInner->AddRef();
+			// create hash join predicate based on conjunct type
+			if (CPredicateUtils::IsEqualityOp(pexprPred))
+			{
+				pexprPred = CUtils::PexprScalarCmp(m_mp, pexprPredOuter,
+												   pexprPredInner, mdid_scop);
+			}
+			else
+			{
+				GPOS_ASSERT(CPredicateUtils::FINDF(pexprPred));
+				pexprPred = CUtils::PexprINDF(m_mp, pexprPredOuter,
+											  pexprPredInner, mdid_scop);
+			}
+
+			CDXLNode *pdxlnPred = PdxlnScalar(pexprPred);
+			pdxlnHashCondList->AddChild(pdxlnPred);
+			pexprPred->Release();
+#ifdef GPOS_DEBUG
+			ulHashJoinPreds++;
+#endif	// GPOS_DEBUG
+		}
+		else
+		{
+			pexprPred->AddRef();
+			pdrgpexprRemainingPredicates->Append(pexprPred);
+		}
+	}
+	GPOS_ASSERT(popParallelHJ->PdrgpexprOuterKeys()->Size() ==
+				ulHashJoinPreds);
+
+	CDXLNode *dxlnode_join_filter = GPOS_NEW(m_mp)
+		CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLScalarJoinFilter(m_mp));
+	if (0 < pdrgpexprRemainingPredicates->Size())
+	{
+		CExpression *pexprJoinCond = CPredicateUtils::PexprConjunction(
+			m_mp, pdrgpexprRemainingPredicates);
+		CDXLNode *pdxlnJoinCond = PdxlnScalar(pexprJoinCond);
+		dxlnode_join_filter->AddChild(pdxlnJoinCond);
+		pexprJoinCond->Release();
+	}
+	else
+	{
+		pdrgpexprRemainingPredicates->Release();
+	}
+
+	// construct a parallel hash join node
+	ULONG ulProbeWorkers = popParallelHJ->UlProbeWorkers();
+	ULONG ulBuildWorkers = popParallelHJ->UlBuildWorkers();
+	CDXLPhysicalHashJoin *pdxlopHJ = GPOS_NEW(m_mp)
+		CDXLPhysicalParallelHashJoin(m_mp, join_type, ulProbeWorkers, ulBuildWorkers);
 
 	// construct projection list from required columns
 	GPOS_ASSERT(nullptr != pexprHJ->Prpp());
@@ -5654,6 +5814,10 @@ CTranslatorExprToDXL::PdxlnMotion(CExpression *pexprMotion,
 			motion = GPOS_NEW(m_mp) CDXLPhysicalBroadcastMotion(m_mp);
 			break;
 
+		case COperator::EopPhysicalMotionBroadcastWorkers:
+			motion = GPOS_NEW(m_mp) CDXLPhysicalBroadcastWorkersMotion(m_mp);
+			break;
+
 		case COperator::EopPhysicalMotionHashDistribute:
 			// If child is tainted-replicated, then we cannot use a result hash
 			// filter node because the values on each segment are not guaranteed
@@ -5689,6 +5853,16 @@ CTranslatorExprToDXL::PdxlnMotion(CExpression *pexprMotion,
 			motion = GPOS_NEW(m_mp)
 				CDXLPhysicalRandomMotion(m_mp, fDuplicateHazardMotion);
 			break;
+
+		case COperator::EopPhysicalMotionHashDistributeWorkers:
+		{
+			CPhysicalMotionHashDistributeWorkers *popWorkers =
+				CPhysicalMotionHashDistributeWorkers::PopConvert(
+					pexprMotion->Pop());
+			motion = GPOS_NEW(m_mp) CDXLPhysicalHashDistributeWorkersMotion(
+				m_mp, popWorkers->NumWorkers());
+			break;
+		}
 
 		case COperator::EopPhysicalMotionRoutedDistribute:
 		{
@@ -5750,6 +5924,23 @@ CTranslatorExprToDXL::PdxlnMotion(CExpression *pexprMotion,
 			CDistributionSpecHashed::PdsConvert(popHashDistribute->Pds());
 		CDXLNode *hash_expr_list =
 			PdxlnHashExprList(pdsHashed->Pdrgpexpr(), pdsHashed->Opfamilies());
+		pdxlnMotion->AddChild(hash_expr_list);
+	}
+
+	// For worker-level hash distribute motion, add hash expr list BEFORE child
+	// This is different from other motions - hash expr list comes before child
+	if (COperator::EopPhysicalMotionHashDistributeWorkers ==
+		pexprMotion->Pop()->Eopid())
+	{
+		CPhysicalMotionHashDistributeWorkers *popWorkers =
+			CPhysicalMotionHashDistributeWorkers::PopConvert(pexprMotion->Pop());
+		CExpressionArray *hash_exprs = popWorkers->GetHashExpressions();
+		IMdIdArray *opfamilies = popWorkers->GetHashOpfamilies();
+
+		GPOS_ASSERT(nullptr != hash_exprs);
+		GPOS_ASSERT(nullptr != opfamilies);
+
+		CDXLNode *hash_expr_list = PdxlnHashExprList(hash_exprs, opfamilies);
 		pdxlnMotion->AddChild(hash_expr_list);
 	}
 
@@ -7841,6 +8032,8 @@ CTranslatorExprToDXL::GetProperties(const CExpression *pexpr)
 	if (CDistributionSpec::EdtStrictReplicated ==
 			pexpr->GetDrvdPropPlan()->Pds()->Edt() ||
 		CDistributionSpec::EdtTaintedReplicated ==
+			pexpr->GetDrvdPropPlan()->Pds()->Edt() ||
+		CDistributionSpec::EdtReplicatedWorkers ==
 			pexpr->GetDrvdPropPlan()->Pds()->Edt())
 	{
 		// if distribution is replicated, multiply number of rows by number of segments
@@ -8589,9 +8782,11 @@ CTranslatorExprToDXL::GetOutputSegIdsArray(CExpression *pexprMotion)
 			break;
 		}
 		case COperator::EopPhysicalMotionBroadcast:
+		case COperator::EopPhysicalMotionBroadcastWorkers:
 		case COperator::EopPhysicalMotionHashDistribute:
 		case COperator::EopPhysicalMotionRoutedDistribute:
 		case COperator::EopPhysicalMotionRandom:
+		case COperator::EopPhysicalMotionHashDistributeWorkers:
 		{
 			m_pdrgpiSegments->AddRef();
 			pdrgpi = m_pdrgpiSegments;
@@ -8781,8 +8976,10 @@ CTranslatorExprToDXL::FNeedsMaterializeUnderResult(CDXLNode *proj_list_dxlnode,
 			// motions which can impose a hazard
 			gpdxl::Edxlopid rgeopid[] = {
 				EdxlopPhysicalMotionBroadcast,
+				EdxlopPhysicalMotionBroadcastWorkers,
 				EdxlopPhysicalMotionRedistribute,
 				EdxlopPhysicalMotionRandom,
+				EdxlopPhysicalMotionHashDistributeWorkers
 			};
 
 			fMotionHazard = CTranslatorExprToDXLUtils::FMotionHazard(

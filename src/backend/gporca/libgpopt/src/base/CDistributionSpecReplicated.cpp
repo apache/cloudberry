@@ -103,6 +103,11 @@ CDistributionSpecReplicated::FSatisfies(const CDistributionSpec *pdss) const
 			return false;
 		}
 
+		if (EdtReplicatedWorkers == pdss->Edt())
+		{
+			return false;
+		}
+
 		// a replicated distribution satisfies any non-singleton one,
 		// as well as singleton distributions that are not master-only
 		return !(EdtSingleton == pdss->Edt() &&

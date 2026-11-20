@@ -33,6 +33,7 @@
 #include "naucrates/dxl/operators/CDXLPhysicalAppend.h"
 #include "naucrates/dxl/operators/CDXLPhysicalParallelAppend.h"
 #include "naucrates/dxl/operators/CDXLPhysicalBroadcastMotion.h"
+#include "naucrates/dxl/operators/CDXLPhysicalBroadcastWorkersMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalGatherMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalHashJoin.h"
 #include "naucrates/dxl/operators/CDXLPhysicalLimit.h"
@@ -40,6 +41,7 @@
 #include "naucrates/dxl/operators/CDXLPhysicalMergeJoin.h"
 #include "naucrates/dxl/operators/CDXLPhysicalNLJoin.h"
 #include "naucrates/dxl/operators/CDXLPhysicalRandomMotion.h"
+#include "naucrates/dxl/operators/CDXLPhysicalHashDistributeWorkersMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalRedistributeMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalResult.h"
 #include "naucrates/dxl/operators/CDXLPhysicalRoutedDistributeMotion.h"
@@ -277,6 +279,29 @@ CDXLOperatorFactory::MakeDXLBroadcastMotion(
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CDXLOperatorFactory::MakeDXLBroadcastWorkersMotion
+//
+//	@doc:
+//		Construct a broadcast workers motion operator
+//
+//---------------------------------------------------------------------------
+CDXLPhysical *
+CDXLOperatorFactory::MakeDXLBroadcastWorkersMotion(
+	CDXLMemoryManager *dxl_memory_manager, const Attributes &attrs)
+{
+	// get the memory pool from the memory manager
+	CMemoryPool *mp = dxl_memory_manager->Pmp();
+
+	CDXLPhysicalBroadcastWorkersMotion *dxl_op =
+		GPOS_NEW(mp) CDXLPhysicalBroadcastWorkersMotion(mp);
+	SetSegmentInfo(dxl_memory_manager, dxl_op, attrs,
+				   EdxltokenPhysicalBroadcastWorkersMotion);
+
+	return dxl_op;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CDXLOperatorFactory::MakeDXLRedistributeMotion
 //
 //	@doc:
@@ -367,6 +392,37 @@ CDXLOperatorFactory::MakeDXLRandomMotion(CDXLMemoryManager *dxl_memory_manager,
 		GPOS_NEW(mp) CDXLPhysicalRandomMotion(mp, is_duplicate_sensitive);
 	SetSegmentInfo(dxl_memory_manager, dxl_op, attrs,
 				   EdxltokenPhysicalRandomMotion);
+
+	return dxl_op;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CDXLOperatorFactory::MakeDXLHashDistributeWorkersMotion
+//
+//	@doc:
+//		Construct a worker-level hash distribute motion operator
+//
+//---------------------------------------------------------------------------
+CDXLPhysical *
+CDXLOperatorFactory::MakeDXLHashDistributeWorkersMotion(
+	CDXLMemoryManager *dxl_memory_manager, const Attributes &attrs)
+{
+	// get the memory pool from the memory manager
+	CMemoryPool *mp = dxl_memory_manager->Pmp();
+
+	// extract number of workers
+	const XMLCh *parallel_workers_xml =
+		ExtractAttrValue(attrs, EdxltokenParallelWorkers,
+						 EdxltokenPhysicalHashDistributeWorkersMotion);
+	ULONG num_workers = ConvertAttrValueToUlong(
+		dxl_memory_manager, parallel_workers_xml, EdxltokenParallelWorkers,
+		EdxltokenPhysicalHashDistributeWorkersMotion);
+
+	CDXLPhysicalHashDistributeWorkersMotion *dxl_op =
+		GPOS_NEW(mp) CDXLPhysicalHashDistributeWorkersMotion(mp, num_workers);
+	SetSegmentInfo(dxl_memory_manager, dxl_op, attrs,
+				   EdxltokenPhysicalHashDistributeWorkersMotion);
 
 	return dxl_op;
 }

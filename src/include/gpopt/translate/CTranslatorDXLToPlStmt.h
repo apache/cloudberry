@@ -244,7 +244,15 @@ private:
 
 	// translate DXL hash join into a HashJoin node
 	Plan *TranslateDXLHashJoin(
-		const CDXLNode *TranslateDXLHashJoin,
+		const CDXLNode *hj_dxlnode,
+		CDXLTranslateContext *output_context,
+		CDXLTranslationContextArray *
+			ctxt_translation_prev_siblings	// translation contexts of previous siblings
+	);
+
+	// translate DXL parallel hash join into a parallel HashJoin node
+	Plan *TranslateDXLParallelHashJoin(
+		const CDXLNode *parallel_hashjoin_dxlnode,
 		CDXLTranslateContext *output_context,
 		CDXLTranslationContextArray *
 			ctxt_translation_prev_siblings	// translation contexts of previous siblings
@@ -320,6 +328,12 @@ private:
 		const CDXLNode *dxlnode, CDXLTranslateContext *output_context,
 		CDXLTranslationContextArray *
 			ctxt_translation_prev_siblings	// translation contexts of previous siblings
+	);
+
+	// translate a DXL node into a parallel-aware Hash node
+	Plan *TranslateDXLParallelHash(
+		const CDXLNode *dxlnode, CDXLTranslateContext *output_context,
+		CDXLTranslationContextArray *ctxt_translation_prev_siblings
 	);
 
 	// translate DXL Limit node into a Limit node

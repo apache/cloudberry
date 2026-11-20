@@ -180,8 +180,10 @@ CEnumeratorTest::FHasNoMotions(CExpression *pexpr)
 {
 	COperator::EOperatorId rgeopid[] = {
 		COperator::EopPhysicalMotionGather,
-		COperator::EopPhysicalMotionHashDistribute,
 		COperator::EopPhysicalMotionBroadcast,
+		COperator::EopPhysicalMotionBroadcastWorkers,
+		COperator::EopPhysicalMotionHashDistribute,
+		COperator::EopPhysicalMotionHashDistributeWorkers,
 		COperator::EopPhysicalMotionRandom,
 		COperator::EopPhysicalMotionRoutedDistribute};
 

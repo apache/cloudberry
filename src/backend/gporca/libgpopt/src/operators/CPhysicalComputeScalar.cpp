@@ -19,6 +19,7 @@
 #include "gpopt/base/CDistributionSpecReplicated.h"
 #include "gpopt/base/CDistributionSpecRouted.h"
 #include "gpopt/base/CDistributionSpecStrictSingleton.h"
+#include "gpopt/base/CDistributionSpecWorkerRandom.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/operators/CExpressionHandle.h"
 
@@ -215,6 +216,29 @@ CPhysicalComputeScalar::PdsRequired(CMemoryPool *mp, CExpressionHandle &exprhdl,
 		if (fUsesDefinedCols)
 		{
 			return GPOS_NEW(mp) CDistributionSpecAny(this->Eopid());
+		}
+	}
+
+	if (CDistributionSpec::EdtWorkerRandom == edtRequired)
+	{
+		CDistributionSpecWorkerRandom *pdsWorkerRandom =
+			CDistributionSpecWorkerRandom::PdsConvert(pdsRequired);
+
+		// if base distribution is hashed and uses any defined column,
+		// it has to be enforced on top of ComputeScalar
+		if (CDistributionSpec::EdtHashed ==
+			pdsWorkerRandom->PdsSegmentBase()->Edt())
+		{
+			CDistributionSpecHashed *pdsHashed =
+				CDistributionSpecHashed::PdsConvert(
+					pdsWorkerRandom->PdsSegmentBase());
+			CColRefSet *pcrs = pdsHashed->PcrsUsed(m_mp);
+			BOOL fUsesDefinedCols = FUnaryUsesDefinedColumns(pcrs, exprhdl);
+			pcrs->Release();
+			if (fUsesDefinedCols)
+			{
+				return GPOS_NEW(mp) CDistributionSpecAny(this->Eopid());
+			}
 		}
 	}
 

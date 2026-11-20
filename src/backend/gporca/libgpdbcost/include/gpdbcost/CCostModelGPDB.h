@@ -178,6 +178,11 @@ private:
 							  const CCostModelGPDB *pcmgpdb,
 							  const SCostingInfo *pci);
 
+	// cost of parallel hash join
+	static CCost CostParallelHashJoin(CMemoryPool *mp, CExpressionHandle &exprhdl,
+									   const CCostModelGPDB *pcmgpdb,
+									   const SCostingInfo *pci);
+
 	// cost of merge join
 	static CCost CostMergeJoin(CMemoryPool *mp, CExpressionHandle &exprhdl,
 							   const CCostModelGPDB *pcmgpdb,

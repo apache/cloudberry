@@ -190,31 +190,29 @@ select count(*) from pa_empty;
      0
 (1 row)
 
--- dynamic partition elimination: the partition selector stays on the
--- hash side, the parallel append consumes its selector id
+-- a partition selector cannot sit on input split among workers, so the
+-- parallel hash join has no partition selector and scans every partition
 explain (costs off)
 select count(*) from pa_ao join pa_dim using (d) where pa_dim.name = 'two';
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 6:1  (slice1; segments: 6)
          ->  Partial Aggregate
-               ->  Hash Join
+               ->  Parallel Hash Join
                      Hash Cond: (pa_ao_1_prt_1.d = pa_dim.d)
                      ->  Parallel Append
-                           Partition Selectors: $0
                            ->  Parallel Seq Scan on pa_ao_1_prt_1
                            ->  Parallel Seq Scan on pa_ao_1_prt_2
                            ->  Parallel Seq Scan on pa_ao_1_prt_3
                            ->  Parallel Seq Scan on pa_ao_1_prt_4
                            ->  Parallel Seq Scan on pa_ao_1_prt_5
-                     ->  Hash
-                           ->  Partition Selector (selector id: $0)
-                                 ->  Broadcast Motion 6:6  (slice2; segments: 6)
-                                       ->  Parallel Seq Scan on pa_dim
-                                             Filter: (name = 'two'::text)
+                     ->  Parallel Hash
+                           ->  Broadcast Workers Motion 6:6  (slice2; segments: 6)
+                                 ->  Parallel Seq Scan on pa_dim
+                                       Filter: (name = 'two'::text)
  Optimizer: GPORCA
-(18 rows)
+(16 rows)
 
 select count(*) from pa_ao join pa_dim using (d) where pa_dim.name = 'two';
  count 

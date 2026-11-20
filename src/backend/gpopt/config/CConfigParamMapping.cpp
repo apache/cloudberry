@@ -117,6 +117,16 @@ CConfigParamMapping::SConfigMappingElem CConfigParamMapping::m_elements[] = {
 	 true,	// m_negate_param
 	 GPOS_WSZ_LIT("Disable motion random nodes in optimizer.")},
 
+	{EopttraceDisableMotionHashDistributeWorkers,
+	 &optimizer_enable_motion_hash_distribute_workers,
+	 true,	// m_negate_param
+	 GPOS_WSZ_LIT("Disable motion hash-distribute-workers nodes in optimizer.")},
+
+	{EopttraceDisableMotionBroadcastWorkers,
+	 &optimizer_enable_motion_broadcast_workers,
+	 true,	// m_negate_param
+	 GPOS_WSZ_LIT("Disable motion broadcast-workers nodes in optimizer.")},
+
 	{EopttraceDisableMotionRountedDistribute,
 	 &optimizer_enable_motion_redistribute,
 	 true,	// m_negate_param
@@ -327,6 +337,9 @@ CConfigParamMapping::SConfigMappingElem CConfigParamMapping::m_elements[] = {
 	{EopttraceDisableInnerHashJoin, &optimizer_enable_hashjoin,
 	 true,	// m_negate_param
 	 GPOS_WSZ_LIT("Explore hash join alternatives")},
+	{EopttraceDisableParallelHashJoin, &optimizer_enable_parallel_hashjoin,
+	 true,	// m_negate_param
+	 GPOS_WSZ_LIT("Explore parallel hash join alternatives")},
 	{EopttraceDisableInnerNLJ, &optimizer_enable_nljoin,
 	 true,	// m_negate_param
 	 GPOS_WSZ_LIT("Enable nested loop join alternatives")},
