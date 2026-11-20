@@ -222,6 +222,9 @@ jobs:
           # Define base test configurations
           ALL_TESTS='{
             "include": [
+              },
+              {"test":"ic-gp-distribution-policy",
+               "make_configs":["gpcontrib/gp_distribution_policy:installcheck"]
             ]
           }'
 
