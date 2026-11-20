@@ -50,7 +50,8 @@ extern void DistributedLog_SetCommittedTree(TransactionId xid, int nxids, Transa
 								bool isRedo);
 extern bool DistributedLog_CommittedCheck(
 							  TransactionId localXid,
-							  DistributedTransactionId *distribXid);
+							  DistributedTransactionId *distribXid,
+							  DistributedTransactionId xminAllDistributedSnapshots);
 extern bool DistributedLog_ScanForPrevCommitted(
 									TransactionId *indexXid,
 									DistributedTransactionId *distribXid);
@@ -74,6 +75,14 @@ extern void DistributedLog_InitOldestXmin(void);
 /* XLOG stuff */
 #define DISTRIBUTEDLOG_ZEROPAGE		0x00
 #define DISTRIBUTEDLOG_TRUNCATE		0x10
+
+typedef struct xl_distributedlog_truncate
+{
+	int			page;
+	/* gxid bound of the truncated range; InvalidDistributedTransactionId in pre-bound records */
+	DistributedTransactionId	truncGXid;
+} xl_distributedlog_truncate;
+#define SizeOfDistributedLogTruncate	(sizeof(xl_distributedlog_truncate))
 
 extern void DistributedLog_redo(XLogReaderState *record);
 extern void DistributedLog_desc(StringInfo buf, XLogReaderState *record);
