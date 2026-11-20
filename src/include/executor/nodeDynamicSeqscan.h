@@ -21,4 +21,6 @@ extern TupleTableSlot *ExecDynamicSeqScan(PlanState *pstate);
 extern void ExecEndDynamicSeqScan(DynamicSeqScanState *node);
 extern void ExecReScanDynamicSeqScan(DynamicSeqScanState *node);
 
+extern void ExecDynamicSeqScanAddRuntimeFilters(DynamicSeqScanState *node, List *filters);
+
 #endif

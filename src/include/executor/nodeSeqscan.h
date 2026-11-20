@@ -30,6 +30,6 @@ extern void ExecSeqScanReInitializeDSM(SeqScanState *node, ParallelContext *pcxt
 extern void ExecSeqScanInitializeWorker(SeqScanState *node,
 										ParallelWorkerContext *pwcxt);
 
-extern bool PassByBloomFilter(PlanState *ps, List *filters, TupleTableSlot *slot);
+extern bool PassByBloomFilter(SeqScanState *node, TupleTableSlot *slot);
 
 #endif							/* NODESEQSCAN_H */

@@ -77,7 +77,7 @@ SeqNext(SeqScanState *node)
 
 		/*
 		 * Just when gp_enable_runtime_filter_pushdown enabled and
-		 * node->filter_in_seqscan is false means scankey need to be pushed to
+		 * table am support runtime filter, scankey need to be pushed to
 		 * AM.
 		 */
 		if (gp_enable_runtime_filter_pushdown && node->filter_in_seqscan && node->filters &&
@@ -108,7 +108,7 @@ SeqNext(SeqScanState *node)
 		while (table_scan_getnextslot(scandesc, direction, slot))
 		{
 			// TODO: later pushdown bloom filter to AM
-			if (!PassByBloomFilter(&node->ss.ps, node->filters, slot))
+			if (!PassByBloomFilter(node, slot))
 				continue;
 
 			return slot;
@@ -231,6 +231,10 @@ ExecInitSeqScanForPartition(SeqScan *node, EState *estate,
 		&& !estate->useMppParallelMode)
 	{
 		scanstate->filter_in_seqscan = true;
+	}
+	else 
+	{
+		scanstate->filter_in_seqscan = false;
 	}
 
 	return scanstate;
@@ -407,17 +411,33 @@ ExecSeqScanInitializeWorker(SeqScanState *node,
 	node->ss.ss_currentScanDesc = scandesc;
 }
 
+static int
+compare_bloom_scan_keys(const ListCell *left, const ListCell *right)
+{
+	const ScanKeyData *a = lfirst(left);
+	const ScanKeyData *b = lfirst(right);
+	int a_rank = a->sk_flags == SK_BLOOM_FILTER ?
+		bloom_runtime_probe_rank((bloom_filter *) DatumGetPointer(a->sk_argument)) : 0;
+	int b_rank = b->sk_flags == SK_BLOOM_FILTER ?
+		bloom_runtime_probe_rank((bloom_filter *) DatumGetPointer(b->sk_argument)) : 0;
+
+	return b_rank - a_rank;
+}
+
 /*
  * Returns true if the element may be in the bloom filter.
  */
 bool
-PassByBloomFilter(PlanState *ps, List *filters, TupleTableSlot *slot)
+PassByBloomFilter(SeqScanState *node, TupleTableSlot *slot)
 {
+	PlanState  *ps = &node->ss.ps;
+	List	   *filters = node->filters;
 	ScanKey	sk;
 	Datum	val;
 	bool	isnull;
 	ListCell *lc;
 	bloom_filter *blm_filter;
+	bool		rejected = false;
 
 	/*
 	 * Mark that the pushdown runtime filter is actually taking effect.
@@ -431,19 +451,30 @@ PassByBloomFilter(PlanState *ps, List *filters, TupleTableSlot *slot)
 		if (sk->sk_flags != SK_BLOOM_FILTER)
 			continue;
 
+		blm_filter = (bloom_filter *) DatumGetPointer(sk->sk_argument);
+		if (bloom_runtime_probe_disabled(blm_filter))
+			continue;
+
 		val = slot_getattr(slot, sk->sk_attno, &isnull);
 		if (isnull)
 			continue;
 
-		blm_filter = (bloom_filter *)DatumGetPointer(sk->sk_argument);
-		if (bloom_lacks_element(blm_filter, (unsigned char *)&val, sizeof(Datum)))
+		if (bloom_runtime_probe(blm_filter, (unsigned char *) &val, sizeof(Datum)))
 		{
 			InstrCountFilteredPRF(ps, 1);
-			return false;
+			rejected = true;
+			break;
 		}
 	}
 
-	return true;
+	/*
+	 * Sort once, after sampling the first rows in the original order.
+	 * Later filters may have partial samples because earlier filters reject.
+	 */
+	if (node->bloom_sample_rows < BLOOM_PROBE_SAMPLE_SIZE &&
+		++node->bloom_sample_rows == BLOOM_PROBE_SAMPLE_SIZE)
+		list_sort(filters, compare_bloom_scan_keys);
+	return !rejected;
 }
 
 /*
