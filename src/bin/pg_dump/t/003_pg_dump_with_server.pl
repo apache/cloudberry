@@ -52,4 +52,21 @@ command_ok(
 	[ "pg_dump", '-p', $port, '-a', '--include-foreign-data=s2', 'postgres' ],
 	"dump foreign server with no tables");
 
+# Dump both tables together so their column encodings must be read from
+# different rows of the same result set.
+$node->safe_psql(
+	'postgres', q{
+		CREATE TABLE aoco_first
+			(i int ENCODING (compresstype=zlib, compresslevel=1))
+			USING ao_column DISTRIBUTED BY (i);
+		CREATE TABLE aoco_second
+			(i int ENCODING (compresstype=zlib, compresslevel=7))
+			USING ao_column DISTRIBUTED BY (i);
+	});
+
+command_like(
+	[ 'pg_dump', '-p', $port, '--schema-only', '--table=aoco_*', 'postgres' ],
+	qr/^CREATE TABLE public\.aoco_second \([^;]*\bCOLUMN i ENCODING \([^)\n]*\bcompresslevel=7\b/m,
+	'schema dump preserves the second AOCO table column encoding');
+
 done_testing();
