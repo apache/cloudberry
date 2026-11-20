@@ -326,8 +326,11 @@ select wait_until_query_output_to_file('/tmp/bfv_cte.out');
 -- s/slice=4\): initialized xslice state/slice={2|4}): initialized xslice state/g
 -- s/One-Time Filter: \(gp_execution_segment\(\) =\d+\)/One-Time Filter: \(gp_execution_segment\(\) =#\)/
 -- end_matchsubs
--- Filter out irrelevant LOG messages from segments other than seg2.
-\! cat /tmp/bfv_cte.out | grep -P '^(?!LOG)|^(LOG.*seg2)' | grep -vP 'LOG.*fault|decreased xslice state refcount'
+-- Filter out irrelevant LOG messages from segments other than seg2.  The
+-- LOG messages come from different QE processes over separate connections,
+-- so the order in which the QD relays them is not deterministic.  Print
+-- them sorted, followed by the rest of the output.
+\! grep -P '^LOG.*seg2' /tmp/bfv_cte.out | grep -vP 'LOG.*fault|decreased xslice state refcount' | LC_ALL=C sort; grep -vP '^LOG' /tmp/bfv_cte.out
 
 -- cleanup
 select gp_inject_fault_infinite('all', 'reset', dbid) from gp_segment_configuration;
