@@ -37,6 +37,7 @@ test__DistributedSnapshotWithLocalMapping_CommittedTest(void **state)
 	 */
 	{
 		expect_any_count(DistributedLog_CommittedCheck, distribXid, -1);
+		expect_any_count(DistributedLog_CommittedCheck, snapshotXmin, -1);
 		will_return_count(DistributedLog_CommittedCheck, true, -1);
 
 		expect_value(DistributedLog_CommittedCheck, localXid, 10);
@@ -153,6 +154,26 @@ test__DistributedSnapshotWithLocalMapping_CommittedTest(void **state)
 	free(dslm.inProgressMappedLocalXids);
 }
 
+/* An older snapshot may hold xminAll back without making this reader stale. */
+static void
+test__DistributedSnapshotWithLocalMapping_UsesSnapshotXmin(void **state)
+{
+	DistributedSnapshotWithLocalMapping dslm = {0};
+
+	dslm.ds.xminAllDistributedSnapshots = 5;
+	dslm.ds.xmin = 20;
+	dslm.ds.xmax = 30;
+
+	expect_value(DistributedLog_CommittedCheck, localXid, 42);
+	expect_any(DistributedLog_CommittedCheck, distribXid);
+	expect_value(DistributedLog_CommittedCheck, snapshotXmin, 20);
+	will_assign_value(DistributedLog_CommittedCheck, distribXid, 25);
+	will_return(DistributedLog_CommittedCheck, true);
+
+	assert_true(DistributedSnapshotWithLocalMapping_CommittedTest(&dslm, 42, false) ==
+				DISTRIBUTEDSNAPSHOT_COMMITTED_VISIBLE);
+}
+
 int
 main(int argc, char* argv[])
 {
@@ -160,7 +181,8 @@ main(int argc, char* argv[])
 
 	const UnitTest tests[] =
 	{
-		unit_test(test__DistributedSnapshotWithLocalMapping_CommittedTest)
+		unit_test(test__DistributedSnapshotWithLocalMapping_CommittedTest),
+		unit_test(test__DistributedSnapshotWithLocalMapping_UsesSnapshotXmin)
 	};
 
 	MemoryContextInit();
