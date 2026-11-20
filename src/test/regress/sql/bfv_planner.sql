@@ -569,7 +569,7 @@ update t_part set b = 15, c = 2;
 select gp_debug_set_create_table_default_numsegments(3);
 
 create table t as select generate_series(1, 20) a distributed by (a);
-select count(*) from t_part_1_prt_2_2_prt_sp2 join t_part using (a);
+select count(*) from t_part_1_prt_2_2_prt_sp2 join t using (a);
 
 --cleanup
 select gp_debug_reset_create_table_default_numsegments();

@@ -1026,7 +1026,7 @@ select gp_debug_set_create_table_default_numsegments(3);
 (1 row)
 
 create table t as select generate_series(1, 20) a distributed by (a);
-select count(*) from t_part_1_prt_2_2_prt_sp2 join t_part using (a);
+select count(*) from t_part_1_prt_2_2_prt_sp2 join t using (a);
  count 
 -------
     20
