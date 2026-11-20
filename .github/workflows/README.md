@@ -32,8 +32,8 @@ This directory contains GitHub Actions workflows for Apache Cloudberry CI/CD.
 
 | Workflow | Purpose | Trigger |
 |----------|---------|---------|
-| `build-cloudberry.yml` | Main CI: build, test, create RPMs | Push, PR, Manual |
-| `build-dbg-cloudberry.yml` | Debug build with assertions enabled | Push, PR, Manual |
+| `build-cloudberry.yml` | Main CI: build, test, create RPMs | Push to REL_2_STABLE, PR, Manual |
+| `build-dbg-cloudberry.yml` | Debug build with assertions enabled | Push to REL_2_STABLE, PR, Manual |
 | `package-convenience-binaries.yml` | Build convenience DEB/RPM packages from an ASF-approved source release | Manual |
 | `apache-rat-audit.yml` | License header compliance check | Push, PR |
 | `coverity.yml` | Static code analysis with Coverity | Weekly, Manual |
