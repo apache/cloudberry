@@ -29,3 +29,23 @@ DB_PASSWORD=your_password_here
 MCP_HOST=localhost
 MCP_PORT=8000
 MCP_DEBUG=false
+
+# Query result limits: rows per execute_query call, characters per value
+# (longer values are cut and reported), and bytes of JSON per result. Each must
+# be a positive integer, or the server does not start.
+MCP_MAX_ROWS=1000
+MCP_MAX_VALUE_LENGTH=10000
+MCP_MAX_RESULT_BYTES=1000000
+
+# Seconds a statement may run before it is cancelled (fractions allowed)
+MCP_QUERY_TIMEOUT=60
+
+# Result write-back, off unless MCP_ENABLE_WRITE is true. When it is, the
+# tables write_results may write must be listed as schema.table or schema.*,
+# separated by commas; the other values bound one call and the wait for a lock
+# (seconds, less than MCP_QUERY_TIMEOUT). An invalid value stops the server.
+MCP_ENABLE_WRITE=false
+# MCP_WRITE_TABLES=results.*
+# MCP_WRITE_MAX_ROWS=1000
+# MCP_WRITE_MAX_BYTES=4194304
+# MCP_WRITE_LOCK_TIMEOUT=10
