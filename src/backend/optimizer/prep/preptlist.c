@@ -755,7 +755,7 @@ check_splitupdate(List *tlist, Index result_relation, Relation rel)
 		HeapTuple	tuple;
 		int2vector *distkey;
 		bool		isNull;
-		int			nattrs;
+		bool		noDistKeys;
 		Oid			relid = lfirst_oid(lc);
 
 		tuple = SearchSysCache1(GPPOLICYID, ObjectIdGetDatum(relid));
@@ -770,9 +770,9 @@ check_splitupdate(List *tlist, Index result_relation, Relation rel)
 							Anum_gp_distribution_policy_distkey,
 							&isNull));
 
-		nattrs = distkey->dim1;
+		noDistKeys = isNull || distkey->dim1 == 0;
 		ReleaseSysCache(tuple);
-		if (isNull || nattrs == 0)
+		if (noDistKeys)
 		{
 			list_free(inheritors);
 			return true;
