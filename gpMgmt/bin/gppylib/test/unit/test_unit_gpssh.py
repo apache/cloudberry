@@ -1,11 +1,10 @@
-import imp
 import os
 import io
 
 import sys
 from mock import patch
 
-from .gp_unittest import GpTestCase
+from .gp_unittest import GpTestCase, load_source
 
 
 class GpSshTestCase(GpTestCase):
@@ -15,7 +14,7 @@ class GpSshTestCase(GpTestCase):
         #   import gpssh
         #   self.subject = gpssh
         gpssh_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpssh")
-        self.subject = imp.load_source('gpssh', gpssh_file)
+        self.subject = load_source('gpssh', gpssh_file)
 
         self.old_sys_argv = sys.argv
         sys.argv = []
