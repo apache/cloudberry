@@ -32,3 +32,125 @@ CALL
 (1 row)
 2: drop table dummy2, dummy1;
 DROP
+
+-- Cursor readers must retain the writer's in-progress subtransaction IDs.
+8: CREATE SCHEMA sharedsnapshot_cursor;
+CREATE
+8: CREATE TABLE sharedsnapshot_cursor.anchor(v oid) DISTRIBUTED BY (v);
+CREATE
+8: INSERT INTO sharedsnapshot_cursor.anchor VALUES ('pg_class'::regclass::oid);
+INSERT 1
+8: CREATE TABLE sharedsnapshot_cursor.p(a int) USING ao_column DISTRIBUTED BY (a) PARTITION BY LIST (a);
+CREATE
+8: CREATE TABLE sharedsnapshot_cursor.p0 PARTITION OF sharedsnapshot_cursor.p FOR VALUES IN (0);
+CREATE
+8: CREATE FUNCTION sharedsnapshot_cursor.add_part(child text, partvalue int) RETURNS void LANGUAGE plpgsql AS $$ BEGIN /*in func*/ EXECUTE format('CREATE TABLE sharedsnapshot_cursor.%I PARTITION OF sharedsnapshot_cursor.p FOR VALUES IN (%s)', child, partvalue); /*in func*/ EXCEPTION WHEN OTHERS THEN /*in func*/ RAISE; /*in func*/ END; /*in func*/ $$;
+CREATE
+
+4: SET optimizer = off;
+SET
+4: SET enable_indexscan = off;
+SET
+4: SET enable_indexonlyscan = off;
+SET
+4: SET enable_bitmapscan = off;
+SET
+
+-- Keep the snapshot horizon below the DDL subtransaction.
+7: BEGIN;
+BEGIN
+7: DO $$ BEGIN PERFORM txid_current(); END $$;
+DO
+
+-- Reuse the entry DB reader with an older local snapshot.
+4: BEGIN;
+BEGIN
+4: DECLARE warm_class CURSOR FOR SELECT c.oid FROM pg_class c JOIN sharedsnapshot_cursor.anchor a ON c.oid = a.v;
+DECLARE
+4: FETCH ALL FROM warm_class;
+ oid  
+------
+ 1259 
+(1 row)
+4: COMMIT;
+COMMIT
+4: BEGIN;
+BEGIN
+4: DECLARE warm_type CURSOR FOR SELECT c.oid FROM pg_type c JOIN sharedsnapshot_cursor.anchor a ON c.oid = a.v;
+DECLARE
+4: FETCH ALL FROM warm_type;
+ oid 
+-----
+(0 rows)
+4: COMMIT;
+COMMIT
+
+5: BEGIN;
+BEGIN
+5: DO $$ BEGIN PERFORM txid_current(); END $$;
+DO
+5: SELECT sharedsnapshot_cursor.add_part('p1', 1);
+ add_part 
+----------
+          
+(1 row)
+
+-- A newer completed XID makes the subtransaction fall below snapshot xmax.
+6: DO $$ BEGIN PERFORM txid_current(); END $$;
+DO
+
+-- Scan the uncommitted catalog tuples without marking their xmin invalid.
+4: BEGIN;
+BEGIN
+4: DECLARE probe_class CURSOR FOR SELECT c.oid FROM pg_class c JOIN sharedsnapshot_cursor.anchor a ON c.oid = a.v;
+DECLARE
+4: FETCH ALL FROM probe_class;
+ oid  
+------
+ 1259 
+(1 row)
+4: COMMIT;
+COMMIT
+4: BEGIN;
+BEGIN
+4: DECLARE probe_type CURSOR FOR SELECT c.oid FROM pg_type c JOIN sharedsnapshot_cursor.anchor a ON c.oid = a.v;
+DECLARE
+4: FETCH ALL FROM probe_type;
+ oid 
+-----
+(0 rows)
+4: COMMIT;
+COMMIT
+5: COMMIT;
+COMMIT
+
+-- A fresh session must see the committed catalogs and build the partition tree.
+9: SELECT count(*) FROM pg_class WHERE relnamespace = 'sharedsnapshot_cursor'::regnamespace AND relname = 'p1';
+ count 
+-------
+ 1     
+(1 row)
+9: SELECT count(*) FROM pg_type WHERE typnamespace = 'sharedsnapshot_cursor'::regnamespace AND typname IN ('p1', '_p1');
+ count 
+-------
+ 2     
+(1 row)
+9: SELECT count(*) FROM sharedsnapshot_cursor.p;
+ count 
+-------
+ 0     
+(1 row)
+9: SELECT sharedsnapshot_cursor.add_part('p2', 2);
+ add_part 
+----------
+          
+(1 row)
+9: SELECT count(*) FROM pg_inherits WHERE inhparent = 'sharedsnapshot_cursor.p'::regclass;
+ count 
+-------
+ 3     
+(1 row)
+7: ROLLBACK;
+ROLLBACK
+9: DROP SCHEMA sharedsnapshot_cursor CASCADE;
+DROP
