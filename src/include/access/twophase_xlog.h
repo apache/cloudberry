@@ -14,32 +14,17 @@
 #ifndef TWOPHASE_XLOG_H
 #define TWOPHASE_XLOG_H
 
-/* GPDB-specific: TwoPhaseFileHeader is defined in twophase.c in Postgres */
-/*
- * Header for a 2PC state file
- */
-typedef struct TwoPhaseFileHeader
-{
-	uint32		magic;			/* format identifier */
-	uint32		total_len;		/* actual file length */
-	TransactionId xid;			/* original transaction XID */
-	Oid			database;		/* OID of database it was in */
-	TimestampTz prepared_at;	/* time of preparation */
-	Oid			owner;			/* user running the transaction */
-	int32		nsubxacts;		/* number of following subxact XIDs */
-	int32		ncommitrels;	/* number of delete-on-commit rels */
-	int32		nabortrels;		/* number of delete-on-abort rels */
-	int32		ncommitdbs;		/* number of delete-on-commit dbs */
-	int32		nabortdbs;		/* number of delete-on-abort dbs */
-	int32		ncommitstats;	/* number of stats to drop on commit */
-	int32		nabortstats;	/* number of stats to drop on abort */
-	int32		ninvalmsgs;		/* number of cache invalidation messages */
-	bool		initfileinval;	/* does relcache init file need invalidation? */
-	Oid			tablespace_oid_to_delete_on_abort;
-	Oid			tablespace_oid_to_delete_on_commit;
-	uint16		gidlen;			/* length of the GID - GID follows the header */
-	XLogRecPtr	origin_lsn;		/* lsn of this record at origin node */
-	TimestampTz origin_timestamp;	/* time of prepare at origin node */
-} TwoPhaseFileHeader;
+#include "access/xact.h"
 
-#endif							/* TWOPHASE_H */
+/*
+ * Header for a 2PC state file.
+ *
+ * Upstream PostgreSQL defines this typedef privately in twophase.c; GPDB
+ * exposes it here because the WAL descriptors need it too.  It is the same
+ * structure as the header of a XLOG_XACT_PREPARE record, so it is a typedef
+ * of xl_xact_prepare rather than a second copy of the field list -- keeping
+ * two copies in sync by hand is how the layouts drifted apart before.
+ */
+typedef xl_xact_prepare TwoPhaseFileHeader;
+
+#endif							/* TWOPHASE_XLOG_H */
