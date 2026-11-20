@@ -1,0 +1,240 @@
+--
+-- Licensed to the Apache Software Foundation (ASF) under one
+-- or more contributor license agreements.  See the NOTICE file
+-- distributed with this work for additional information
+-- regarding copyright ownership.  The ASF licenses this file
+-- to you under the Apache License, Version 2.0 (the
+-- "License"); you may not use this file except in compliance
+-- with the License.  You may obtain a copy of the License at
+--
+--   http://www.apache.org/licenses/LICENSE-2.0
+--
+-- Unless required by applicable law or agreed to in writing,
+-- software distributed under the License is distributed on an
+-- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+-- KIND, either express or implied.  See the License for the
+-- specific language governing permissions and limitations
+-- under the License.
+--
+--
+-- Test reject_partition_fullscan extension
+--
+-- Load extension via LOAD (alternative to shared_preload_libraries)
+LOAD 'reject_partition_fullscan';
+-- Create test partitioned table with 3 range partitions
+CREATE TABLE pfr_test (id int, dt date, val text)
+	PARTITION BY RANGE (dt);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE pfr_test_p1 PARTITION OF pfr_test
+	FOR VALUES FROM ('2025-01-01') TO ('2025-04-01');
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE pfr_test_p2 PARTITION OF pfr_test
+	FOR VALUES FROM ('2025-04-01') TO ('2025-07-01');
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE pfr_test_p3 PARTITION OF pfr_test
+	FOR VALUES FROM ('2025-07-01') TO ('2025-10-01');
+NOTICE:  table has parent, setting distribution columns to match parent table
+-- Single-partition table for exemption test
+CREATE TABLE pfr_single (id int, dt date)
+	PARTITION BY RANGE (dt);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE pfr_single_p1 PARTITION OF pfr_single
+	FOR VALUES FROM ('2025-01-01') TO ('2025-12-31');
+NOTICE:  table has parent, setting distribution columns to match parent table
+-- ==============================
+-- Test 1: Basic rejection - no WHERE clause
+-- ==============================
+SET reject_partition_fullscan = on;
+SET partition_fullscan_threshold = 0;
+SELECT * FROM pfr_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pfr_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  partitioned table "public.pfr_test" full partition scan is not allowed, 3 partitions would be scanned
+HINT:  Add a WHERE clause on the partition key to enable partition pruning.
+SELECT count(*) FROM pfr_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pfr_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  partitioned table "public.pfr_test" full partition scan is not allowed, 3 partitions would be scanned
+HINT:  Add a WHERE clause on the partition key to enable partition pruning.
+-- ==============================
+-- Test 2: Pruning passes - WHERE on partition key
+-- ==============================
+SELECT * FROM pfr_test WHERE dt = '2025-02-01';
+NOTICE:  One or more columns in the following table(s) do not have statistics: pfr_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ id | dt | val 
+----+----+-----
+(0 rows)
+
+SELECT * FROM pfr_test
+	WHERE dt >= '2025-01-01' AND dt < '2025-04-01';
+NOTICE:  One or more columns in the following table(s) do not have statistics: pfr_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ id | dt | val 
+----+----+-----
+(0 rows)
+
+-- ==============================
+-- Test 3: WHERE not on partition key - should reject
+-- ==============================
+SELECT * FROM pfr_test WHERE val = 'x';
+NOTICE:  One or more columns in the following table(s) do not have statistics: pfr_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  partitioned table "public.pfr_test" full partition scan is not allowed, 3 partitions would be scanned
+HINT:  Add a WHERE clause on the partition key to enable partition pruning.
+SELECT * FROM pfr_test WHERE id = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pfr_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  partitioned table "public.pfr_test" full partition scan is not allowed, 3 partitions would be scanned
+HINT:  Add a WHERE clause on the partition key to enable partition pruning.
+-- ==============================
+-- Test 4: WHERE 1=1 - should reject (constant folded to NIL)
+-- ==============================
+SELECT * FROM pfr_test WHERE 1 = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pfr_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  partitioned table "public.pfr_test" full partition scan is not allowed, 3 partitions would be scanned
+HINT:  Add a WHERE clause on the partition key to enable partition pruning.
+SELECT * FROM pfr_test WHERE true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pfr_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  partitioned table "public.pfr_test" full partition scan is not allowed, 3 partitions would be scanned
+HINT:  Add a WHERE clause on the partition key to enable partition pruning.
+-- ==============================
+-- Test 5: GUC off - allow full scan
+-- ==============================
+SET reject_partition_fullscan = off;
+SELECT * FROM pfr_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pfr_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ id | dt | val 
+----+----+-----
+(0 rows)
+
+SET reject_partition_fullscan = on;
+-- ==============================
+-- Test 6: enable_partition_pruning=off exemption
+-- ==============================
+SET enable_partition_pruning = off;
+SELECT * FROM pfr_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pfr_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ id | dt | val 
+----+----+-----
+(0 rows)
+
+SET enable_partition_pruning = on;
+-- ==============================
+-- Test 7: Single-partition table exemption
+-- ==============================
+SELECT * FROM pfr_single;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pfr_single
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ id | dt 
+----+----
+(0 rows)
+
+-- ==============================
+-- Test 8: Threshold mode
+-- ==============================
+SET partition_fullscan_threshold = 2;
+-- Pruned to 2 partitions, within threshold, should pass
+SELECT * FROM pfr_test
+	WHERE dt >= '2025-01-01' AND dt < '2025-07-01';
+NOTICE:  One or more columns in the following table(s) do not have statistics: pfr_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ id | dt | val 
+----+----+-----
+(0 rows)
+
+-- All 3 partitions exceed threshold of 2, should reject
+SELECT * FROM pfr_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pfr_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  partitioned table "public.pfr_test" full partition scan is not allowed, 3 partitions would be scanned
+HINT:  Add a WHERE clause on the partition key to enable partition pruning.
+SET partition_fullscan_threshold = 0;
+-- ==============================
+-- Test 9: Prepared statement with parameter (exemption)
+-- ==============================
+PREPARE pfr_q AS SELECT * FROM pfr_test WHERE dt = $1;
+EXECUTE pfr_q('2025-02-01');
+NOTICE:  One or more columns in the following table(s) do not have statistics: pfr_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ id | dt | val 
+----+----+-----
+(0 rows)
+
+DEALLOCATE pfr_q;
+-- ==============================
+-- Test 10: UPDATE/DELETE without WHERE - should reject
+-- ==============================
+UPDATE pfr_test SET val = 'y';
+ERROR:  partitioned table "public.pfr_test" full partition scan is not allowed, 3 partitions would be scanned
+HINT:  Add a WHERE clause on the partition key to enable partition pruning.
+DELETE FROM pfr_test;
+ERROR:  partitioned table "public.pfr_test" full partition scan is not allowed, 3 partitions would be scanned
+HINT:  Add a WHERE clause on the partition key to enable partition pruning.
+-- UPDATE/DELETE with partition key - should pass
+UPDATE pfr_test SET val = 'y' WHERE dt = '2025-02-01';
+DELETE FROM pfr_test WHERE dt = '2025-02-01';
+-- ==============================
+-- Test 11: Subquery containing partitioned table
+-- ==============================
+SELECT * FROM (SELECT * FROM pfr_test) sub;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pfr_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  partitioned table "public.pfr_test" full partition scan is not allowed, 3 partitions would be scanned
+HINT:  Add a WHERE clause on the partition key to enable partition pruning.
+-- ==============================
+-- Test 12: threshold=0 partial scan must NOT be rejected (issue #2342)
+--   Plan-time static pruning keeps 2 of 3 partitions under the Postgres
+--   planner, producing an Append with no PartitionPruneInfo.  This is a
+--   legitimate partial scan and must pass, not be rejected as a full scan.
+-- ==============================
+SET optimizer = off;
+SET partition_fullscan_threshold = 0;
+-- keeps p1 and p2, prunes p3 -> partial scan, should pass
+SELECT * FROM pfr_test
+	WHERE dt >= '2025-01-01' AND dt < '2025-07-01';
+ id | dt | val 
+----+----+-----
+(0 rows)
+
+-- all 3 partitions -> true full scan, should still reject
+SELECT count(*) FROM pfr_test;
+ERROR:  partitioned table "public.pfr_test" full partition scan is not allowed, 3 partitions would be scanned
+HINT:  Add a WHERE clause on the partition key to enable partition pruning.
+-- ==============================
+-- Test 13: ORCA dynamic scan full scan must be rejected (issue #2342)
+--   ORCA leaves relkind unset on the dynamic scan RTE; detection must look
+--   up relkind from the catalog, otherwise full scans slip through.
+-- ==============================
+SET optimizer = on;
+-- unfiltered full scan under ORCA -> should reject
+SELECT count(*) FROM pfr_test;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pfr_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ERROR:  partitioned table "public.pfr_test" full partition scan is not allowed, 3 partitions would be scanned
+HINT:  Add a WHERE clause on the partition key to enable partition pruning.
+-- pruning predicate keeping a single partition -> should pass
+SELECT * FROM pfr_test WHERE dt = '2025-02-01';
+NOTICE:  One or more columns in the following table(s) do not have statistics: pfr_test
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+ id | dt | val 
+----+----+-----
+(0 rows)
+
+SET optimizer = off;
+SET partition_fullscan_threshold = 0;
+-- ==============================
+-- Cleanup
+-- ==============================
+DROP TABLE pfr_test;
+DROP TABLE pfr_single;
+RESET reject_partition_fullscan;
+RESET partition_fullscan_threshold;
+RESET enable_partition_pruning;
+RESET optimizer;

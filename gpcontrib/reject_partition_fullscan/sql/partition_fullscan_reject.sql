@@ -123,6 +123,38 @@ DELETE FROM pfr_test WHERE dt = '2025-02-01';
 SELECT * FROM (SELECT * FROM pfr_test) sub;
 
 -- ==============================
+-- Test 12: threshold=0 partial scan must NOT be rejected (issue #2342)
+--   Plan-time static pruning keeps 2 of 3 partitions under the Postgres
+--   planner, producing an Append with no PartitionPruneInfo.  This is a
+--   legitimate partial scan and must pass, not be rejected as a full scan.
+-- ==============================
+SET optimizer = off;
+SET partition_fullscan_threshold = 0;
+
+-- keeps p1 and p2, prunes p3 -> partial scan, should pass
+SELECT * FROM pfr_test
+	WHERE dt >= '2025-01-01' AND dt < '2025-07-01';
+
+-- all 3 partitions -> true full scan, should still reject
+SELECT count(*) FROM pfr_test;
+
+-- ==============================
+-- Test 13: ORCA dynamic scan full scan must be rejected (issue #2342)
+--   ORCA leaves relkind unset on the dynamic scan RTE; detection must look
+--   up relkind from the catalog, otherwise full scans slip through.
+-- ==============================
+SET optimizer = on;
+
+-- unfiltered full scan under ORCA -> should reject
+SELECT count(*) FROM pfr_test;
+
+-- pruning predicate keeping a single partition -> should pass
+SELECT * FROM pfr_test WHERE dt = '2025-02-01';
+
+SET optimizer = off;
+SET partition_fullscan_threshold = 0;
+
+-- ==============================
 -- Cleanup
 -- ==============================
 DROP TABLE pfr_test;
@@ -130,3 +162,4 @@ DROP TABLE pfr_single;
 RESET reject_partition_fullscan;
 RESET partition_fullscan_threshold;
 RESET enable_partition_pruning;
+RESET optimizer;

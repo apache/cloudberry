@@ -242,14 +242,36 @@ check_append_no_pruneinfo(Plan *plan, List *rtable)
 	if (nsubplans <= 1)
 		return;
 
-	if (threshold == 0 || nsubplans > threshold)
 	{
 		RangeTblEntry *rte = rt_fetch(parent_rti, rtable);
-		char   *relname = get_rel_name(rte->relid);
-		char   *nspname = get_namespace_name(
-								get_rel_namespace(rte->relid));
+		bool		do_reject;
 
-		reject_fullscan(nspname, relname, nsubplans);
+		if (threshold == 0)
+		{
+			/*
+			 * threshold == 0: reject only true full scans.  Plan-time static
+			 * pruning can leave an Append covering a subset of partitions with
+			 * no PartitionPruneInfo attached; comparing the surviving subplan
+			 * count against the catalog partition count avoids rejecting such
+			 * legitimate partial scans.
+			 */
+			List	   *children = find_inheritance_children(rte->relid, NoLock);
+			int			ntotal = list_length(children);
+
+			list_free(children);
+			do_reject = (ntotal > 1 && nsubplans >= ntotal);
+		}
+		else
+			do_reject = (nsubplans > threshold);
+
+		if (do_reject)
+		{
+			char	   *relname = get_rel_name(rte->relid);
+			char	   *nspname = get_namespace_name(
+										get_rel_namespace(rte->relid));
+
+			reject_fullscan(nspname, relname, nsubplans);
+		}
 	}
 }
 
@@ -319,10 +341,14 @@ check_dynamic_scan_fullscan(Plan *plan, List *rtable)
 	if (nscanned <= 1)
 		return;
 
-	/* Verify this is a partitioned table */
+	/*
+	 * Verify this is a partitioned table.  ORCA does not set rte->relkind on
+	 * the dynamic scan's RTE, so look it up from the catalog instead of
+	 * trusting the (possibly unset) range-table field.
+	 */
 	rte = rt_fetch(scanrelid, rtable);
 	if (rte->rtekind != RTE_RELATION ||
-		rte->relkind != RELKIND_PARTITIONED_TABLE)
+		get_rel_relkind(rte->relid) != RELKIND_PARTITIONED_TABLE)
 		return;
 
 	threshold = fullscan_threshold;
