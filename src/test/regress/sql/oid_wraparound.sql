@@ -29,29 +29,35 @@ CREATE OR REPLACE FUNCTION gp_get_next_oid_segments()
 	AS :'regress_dll', 'gp_get_next_oid'
 	LANGUAGE C EXECUTE ON ALL SEGMENTS;
 
--- Scenario 1: QD is at 16384 while QE is at 4 billion
+-- Scenario 1: QD is at 16384 while QE is at 4 billion.  The OID
+-- counter is shared across backends, so check the relevant range rather
+-- than an exact value that a concurrent backend can advance.
 SELECT gp_set_next_oid_master(16384);
 SELECT gp_set_next_oid_segments(4290000000);
 
--- We expect the QE to fast-forward to 16384
-SELECT gp_get_next_oid_master();
-SELECT gp_get_next_oid_segments();
+-- The QD starts low and the QEs start high; creating the table must move
+-- the QEs into the low range when they process preassigned OIDs.
+SELECT next_oid BETWEEN 16384 AND 999999 AS qd_oid_low
+FROM gp_get_next_oid_master() AS t(next_oid);
+SELECT next_oid >= 4290000000 AS qe_oid_high
+FROM gp_get_next_oid_segments() AS t(next_oid);
 CREATE TABLE oid_wraparound_table (a int);
 DROP TABLE oid_wraparound_table;
-SELECT gp_get_next_oid_master();
-SELECT gp_get_next_oid_segments();
+SELECT next_oid BETWEEN 16384 AND 999999 AS qd_oid_low
+FROM gp_get_next_oid_master() AS t(next_oid);
+SELECT next_oid BETWEEN 16384 AND 999999 AS qe_oid_low
+FROM gp_get_next_oid_segments() AS t(next_oid);
 
 -- Scenario 2: QD is at 4 billion while QE is at 16384
 SELECT gp_set_next_oid_master(4290000000);
 SELECT gp_set_next_oid_segments(16384);
-
--- We expect the QE to increment once to 16385 and the QD should
--- fast-forward to 16388. The QD could possibly fast-forward to 16389
--- if the pg_type heap page was not pruned for dead pg_type entry for
--- oid_wraparound_table relation which will result in Oid 16386
--- collision.
-SELECT gp_get_next_oid_master();
-SELECT gp_get_next_oid_segments();
+SELECT next_oid >= 4290000000 AS qd_oid_high
+FROM gp_get_next_oid_master() AS t(next_oid);
+SELECT next_oid BETWEEN 16384 AND 999999 AS qe_oid_low
+FROM gp_get_next_oid_segments() AS t(next_oid);
 CREATE TABLE oid_wraparound_table_other AS SELECT 1 AS a;
-SELECT gp_get_next_oid_master() in (16390, 16391);
-SELECT gp_get_next_oid_segments();
+-- The QD must also move into the low range, and each QE must advance.
+SELECT next_oid BETWEEN 16384 AND 999999 AS qd_oid_low
+FROM gp_get_next_oid_master() AS t(next_oid);
+SELECT next_oid BETWEEN 16385 AND 999999 AS qe_oid_low
+FROM gp_get_next_oid_segments() AS t(next_oid);

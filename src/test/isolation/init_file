@@ -1,3 +1,9 @@
 -- start_matchignore
 m/^Optimizer: Pivotal Optimizer \(GPORCA\).*/
 -- end_matchignore
+
+-- start_matchsubs
+# matview-write-skew checks the error, not its source line in heapam.c.
+m/^ERROR:  tuple concurrently updated \(heapam\.c:\d+\)$/
+s/\(heapam\.c:\d+\)/(heapam.c:LINE)/
+-- end_matchsubs

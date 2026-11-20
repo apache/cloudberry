@@ -27,7 +27,7 @@ step s2_read: SELECT max(date) FROM order_summary;
 step s2_update: UPDATE orders SET num = num + 1; <waiting ...>
 step s1_commit: COMMIT;
 step s2_update: <... completed>
-ERROR:  tuple concurrently updated (heapam.c:4414)
+ERROR:  tuple concurrently updated (heapam.c:LINE)
 step s2_commit: COMMIT;
 
 starting permutation: s1_begin s2_begin s2_read s1_refresh s2_insert s1_commit s2_commit
@@ -57,7 +57,7 @@ step s1_refresh: REFRESH MATERIALIZED VIEW CONCURRENTLY order_summary;
 step s2_update: UPDATE orders SET num = num + 1; <waiting ...>
 step s1_commit: COMMIT;
 step s2_update: <... completed>
-ERROR:  tuple concurrently updated (heapam.c:4414)
+ERROR:  tuple concurrently updated (heapam.c:LINE)
 step s2_commit: COMMIT;
 
 starting permutation: s1_begin s2_begin s2_read s2_insert s1_refresh s1_commit s2_commit

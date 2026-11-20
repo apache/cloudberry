@@ -717,6 +717,7 @@ external_insert(ExternalInsertDesc extInsertDesc, TupleTableSlot *slot)
 		bytea	   *b;
 		LOCAL_FCINFO(fcinfo, 1);
 		HeapTuple instup;
+		Datum		rowdatum;
 
 		/*
 		 * There is some redundancy between FormatterData and
@@ -751,11 +752,8 @@ external_insert(ExternalInsertDesc extInsertDesc, TupleTableSlot *slot)
 		 */
 		instup = ExecCopySlotHeapTuple(slot);
 
-		HeapTupleHeaderSetDatumLength(instup->t_data, instup->t_len);
-		HeapTupleHeaderSetTypeId(instup->t_data, tupDesc->tdtypeid);
-		HeapTupleHeaderSetTypMod(instup->t_data, tupDesc->tdtypmod);
-
-		fcinfo->args[0].value = HeapTupleGetDatum(instup);
+		rowdatum = heap_copy_tuple_as_datum(instup, tupDesc);
+		fcinfo->args[0].value = rowdatum;
 		fcinfo->args[0].isnull = false;
 
 		d = FunctionCallInvoke(fcinfo);
@@ -769,6 +767,7 @@ external_insert(ExternalInsertDesc extInsertDesc, TupleTableSlot *slot)
 
 		CopyOneCustomRowTo(pstate, b);
 
+		pfree(DatumGetPointer(rowdatum));
 		heap_freetuple(instup);
 	}
 

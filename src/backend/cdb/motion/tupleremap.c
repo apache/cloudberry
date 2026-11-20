@@ -600,8 +600,10 @@ TRRemapRecord(TupleRemapper *remapper, RecordRemapInfo *remapinfo,
 
 		/* Apply the correct labeling for a local Datum. */
 		HeapTupleHeaderSetTypeId(atup->t_data, typid);
-		HeapTupleHeaderSetTypMod(atup->t_data, typmod);
-		HeapTupleHeaderSetDatumLength(atup->t_data, htup.t_len);
+		/* A named datum stores its attribute version in the typmod field. */
+		if (typid == RECORDOID)
+			HeapTupleHeaderSetTypMod(atup->t_data, typmod);
+		HeapTupleHeaderSetDatumLength(atup->t_data, atup->t_len);
 
 		/* And return the results. */
 		return PointerGetDatum(atup->t_data);
