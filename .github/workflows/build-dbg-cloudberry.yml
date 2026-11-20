@@ -227,6 +227,9 @@ jobs:
                                "contrib/intarray:installcheck",
                                "contrib/isn:installcheck",
                                "contrib/unaccent:installcheck"]
+              },
+              {"test":"ic-gp-distribution-policy",
+               "make_configs":["gpcontrib/gp_distribution_policy:installcheck"]
               }
             ]
           }'
