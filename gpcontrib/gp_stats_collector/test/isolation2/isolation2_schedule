@@ -1,0 +1,20 @@
+# pg_query_state isolation2 schedule.
+#
+# gpsc_pqs_backends   -- deterministic: an idle backend yields an empty backend
+#                        list (no fault injector required).
+# gpsc_pqs_running    -- happy path: a query suspended mid-execution on the QEs
+#                        is observed via pg_query_state_backends/pg_query_state.
+# gpsc_pqs_perms      -- permission gate: non-superuser non-owner is denied,
+#                        superuser is allowed.
+# gpsc_pqs_disabled   -- STAT_DISABLED: target with pg_query_state.enable=off
+#                        reports no backends despite a running query.
+# gpsc_pqs_seg_count  -- strict count: one participating backend per primary
+#                        segment for a single-gang query.
+#
+# The gpsc_pqs_* specs after gpsc_pqs_backends use gp_inject_fault (enabled by
+# default) to suspend a running query while it is polled.
+test: gpsc_pqs_backends
+test: gpsc_pqs_running
+test: gpsc_pqs_perms
+test: gpsc_pqs_disabled
+test: gpsc_pqs_seg_count
