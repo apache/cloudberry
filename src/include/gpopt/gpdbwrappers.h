@@ -813,6 +813,11 @@ bool TestexprIsHashable(Node *testexpr, List *param_ids);
 RTEPermissionInfo *
 GetRTEPermissionInfo(List *rteperminfos, const RangeTblEntry *rte);
 
+// rewrite the attribute numbers of the Vars with the given varno in expr,
+// which are those of from_relid, into those of its partition to_relid
+List *MapPartitionVarattnos(List *expr, int varno, Oid to_relid,
+							Oid from_relid);
+
 }  //namespace gpdb
 
 #define ForEach(cell, l) \

@@ -23,6 +23,8 @@
 #define GPDXL_ACL_UNDEFINED (gpos::ulong_max)
 // default value for m_assigned_query_id_for_target_rel - no assigned query for table descriptor
 #define UNASSIGNED_QUERYID 0
+// default value for m_security_quals_id - the scan has no security quals
+#define NO_SECURITY_QUALS_ID 0
 
 namespace gpdxl
 {
@@ -63,6 +65,14 @@ private:
 	// to the target (result) relation it has value UNASSIGNED_QUERYID
 	ULONG m_assigned_query_id_for_target_rel;
 
+	// identifier of the security quals (row level security policies) of
+	// the range table entry this table descriptor was created for; the
+	// translator from the query assigns it, and the translator to the plan
+	// looks the quals up with it. NO_SECURITY_QUALS_ID if there are none.
+	// Several range table entries can refer to the same relation with
+	// different security quals, so the relation's mdid can't be used.
+	ULONG m_security_quals_id;
+
 	void SerializeMDId(CXMLSerializer *xml_serializer) const;
 
 public:
@@ -71,7 +81,8 @@ public:
 	// ctor/dtor
 	CDXLTableDescr(CMemoryPool *mp, IMDId *mdid, CMDName *mdname,
 				   ULONG ulExecuteAsUser, int lockmode, ULONG acl_mode,
-				   ULONG assigned_query_id_for_target_rel = UNASSIGNED_QUERYID);
+				   ULONG assigned_query_id_for_target_rel = UNASSIGNED_QUERYID,
+				   ULONG security_quals_id = NO_SECURITY_QUALS_ID);
 
 	~CDXLTableDescr() override;
 
@@ -106,6 +117,13 @@ public:
 
 	// get assigned query id for target relation
 	ULONG GetAssignedQueryIdForTargetRel() const;
+
+	// get the identifier of the security quals of the range table entry
+	ULONG
+	GetSecurityQualsId() const
+	{
+		return m_security_quals_id;
+	}
 };
 }  // namespace gpdxl
 

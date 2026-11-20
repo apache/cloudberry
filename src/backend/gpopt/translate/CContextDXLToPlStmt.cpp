@@ -52,6 +52,8 @@ CContextDXLToPlStmt::CContextDXLToPlStmt(
 	  m_distribution_hashops(distribution_hashops),
 	  m_rtable_entries_list(nullptr),
 	  m_perminfo_list(nullptr),
+	  m_security_quals(NIL),
+	  m_security_quals_relids(NIL),
 	  m_subplan_entries_list(nullptr),
 	  m_subplan_sliceids_list(nullptr),
 	  m_slices_list(nullptr),
@@ -594,6 +596,42 @@ CContextDXLToPlStmt::AddPermInfo(RTEPermissionInfo *pi)
 	m_perminfo_list = gpdb::LAppend(m_perminfo_list, pi);
 }
 
+
+void
+CContextDXLToPlStmt::SetSecurityQuals(List *security_quals,
+									  List *security_quals_relids)
+{
+	GPOS_ASSERT(gpdb::ListLength(security_quals) ==
+				gpdb::ListLength(security_quals_relids));
+
+	m_security_quals = security_quals;
+	m_security_quals_relids = security_quals_relids;
+}
+
+List *
+CContextDXLToPlStmt::GetSecurityQuals(ULONG security_quals_id,
+									  OID *relid) const
+{
+	*relid = InvalidOid;
+
+	if (NO_SECURITY_QUALS_ID == security_quals_id)
+	{
+		return NIL;
+	}
+
+	// A scan of a relation with row level security must not go without its
+	// policies, e.g. when the plan was not translated from this query.
+	if (security_quals_id > (ULONG) gpdb::ListLength(m_security_quals))
+	{
+		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
+				   GPOS_WSZ_LIT("security quals of a scan not found"));
+	}
+
+	*relid = gpdb::ListNthOid(m_security_quals_relids,
+							  int(security_quals_id - 1));
+	return (List *) gpdb::ListNth(m_security_quals,
+								  int(security_quals_id - 1));
+}
 
 RTEPermissionInfo *
 CContextDXLToPlStmt::GetPermInfoByIndex(Index index)

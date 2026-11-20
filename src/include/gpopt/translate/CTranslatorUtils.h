@@ -37,6 +37,7 @@ extern "C" {
 #include "naucrates/dxl/operators/CDXLPhysicalMotion.h"
 #include "naucrates/dxl/operators/CDXLScalarAggref.h"
 #include "naucrates/dxl/operators/CDXLScalarSubPlan.h"
+#include "naucrates/dxl/operators/CDXLTableDescr.h"
 #include "naucrates/md/CMDRelationGPDB.h"
 #include "naucrates/md/IMDType.h"
 #include "naucrates/statistics/IStatistics.h"
@@ -156,7 +157,8 @@ public:
 										 const RangeTblEntry *rte,
 										 const RTEPermissionInfo *perminfo,
 										 ULONG assigned_query_id_for_target_rel,
-										 BOOL *is_distributed_table = nullptr);
+										 BOOL *is_distributed_table = nullptr,
+										 ULONG security_quals_id = NO_SECURITY_QUALS_ID);
 
 	// translate a RangeTableEntry into a CDXLLogicalTVF
 	static CDXLLogicalTVF *ConvertToCDXLLogicalTVF(CMemoryPool *mp,

@@ -550,6 +550,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenDoubleValue, GPOS_WSZ_LIT("DoubleValue")},
 		{EdxltokenAssignedQueryIdForTargetRel,
 		 GPOS_WSZ_LIT("AssignedQueryIdForTargetRel")},
+		{EdxltokenSecurityQualsId, GPOS_WSZ_LIT("SecurityQualsId")},
 
 		{EdxltokenRelTemporary, GPOS_WSZ_LIT("IsTemporary")},
 

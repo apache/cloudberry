@@ -33,14 +33,16 @@ using namespace gpdxl;
 CDXLTableDescr::CDXLTableDescr(CMemoryPool *mp, IMDId *mdid, CMDName *mdname,
 							   ULONG ulExecuteAsUser, int lockmode,
 							   ULONG acl_mode,
-							   ULONG assigned_query_id_for_target_rel)
+							   ULONG assigned_query_id_for_target_rel,
+							   ULONG security_quals_id)
 	: m_mdid(mdid),
 	  m_mdname(mdname),
 	  m_dxl_column_descr_array(nullptr),
 	  m_execute_as_user_id(ulExecuteAsUser),
 	  m_lockmode(lockmode),
 	  m_acl_mode(acl_mode),
-	  m_assigned_query_id_for_target_rel(assigned_query_id_for_target_rel)
+	  m_assigned_query_id_for_target_rel(assigned_query_id_for_target_rel),
+	  m_security_quals_id(security_quals_id)
 {
 	GPOS_ASSERT(nullptr != m_mdname);
 	m_dxl_column_descr_array = GPOS_NEW(mp) CDXLColDescrArray(mp);
@@ -239,6 +241,13 @@ CDXLTableDescr::SerializeToDXL(CXMLSerializer *xml_serializer) const
 		xml_serializer->AddAttribute(
 			CDXLTokens::GetDXLTokenStr(EdxltokenAssignedQueryIdForTargetRel),
 			m_assigned_query_id_for_target_rel);
+	}
+
+	if (NO_SECURITY_QUALS_ID != m_security_quals_id)
+	{
+		xml_serializer->AddAttribute(
+			CDXLTokens::GetDXLTokenStr(EdxltokenSecurityQualsId),
+			m_security_quals_id);
 	}
 
 	// serialize columns

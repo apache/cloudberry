@@ -40,6 +40,8 @@ extern "C" {
 #include "access/external.h"
 #include "access/genam.h"
 #include "access/parallel.h"
+#include "access/table.h"
+#include "catalog/partition.h"
 #include "catalog/pg_aggregate.h"
 #include "catalog/pg_inherits.h"
 #include "cdb/cdbvars.h"
@@ -2799,6 +2801,28 @@ gpdb::GetRTEPermissionInfo(List *rteperminfos, const RangeTblEntry *rte)
 		return getRTEPermissionInfo(rteperminfos, (RangeTblEntry *) rte);
 	}
 	GP_WRAP_END;
+}
+
+List *
+gpdb::MapPartitionVarattnos(List *expr, int varno, Oid to_relid,
+							Oid from_relid)
+{
+	GP_WRAP_START;
+	{
+		// both relations are locked already: the ancestor by the parser or
+		// the rewriter, the partition by the scan being translated
+		Relation to_rel = table_open(to_relid, NoLock);
+		Relation from_rel = table_open(from_relid, NoLock);
+
+		List *result = map_partition_varattnos(expr, varno, to_rel, from_rel);
+
+		table_close(from_rel, NoLock);
+		table_close(to_rel, NoLock);
+
+		return result;
+	}
+	GP_WRAP_END;
+	return NIL;
 }
 
 // check if parallel mode is OK (comprehensive check)

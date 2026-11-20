@@ -373,6 +373,127 @@ reset session authorization;
 drop policy p1 on parent;
 drop table parent cascade;
 
+--------------------------------------------------------------------------------
+------------ Partitions scanned one by one with RLS enabled --------------------
+--------------------------------------------------------------------------------
+-- The scans of the partitions under an Append get the policies of the
+-- partitioned table. The second partition has the columns at other
+-- attribute numbers, with a column of another type at the attribute number
+-- of the column in the policy.
+create table part_attno_rls (a int, b int, c text) distributed by (a)
+partition by range(a);
+create table part_attno_rls_1 partition of part_attno_rls
+for values from (0) to (100);
+create table part_attno_rls_2 (a int, c text, b int) distributed by (a);
+alter table part_attno_rls attach partition part_attno_rls_2
+for values from (100) to (200);
+insert into part_attno_rls values (1, 1, 'visible'), (2, 5, 'hidden'),
+(101, 1, 'visible'), (102, 5, 'hidden');
+analyze part_attno_rls;
+grant select on part_attno_rls, part_attno_rls_2 to new_user;
+alter table part_attno_rls enable row level security;
+create policy p1 on part_attno_rls using (b < 3);
+set session authorization new_user;
+explain (costs off) select * from part_attno_rls;
+select * from part_attno_rls order by a;
+-- The partition has no policies of its own when it is referenced directly:
+-- its direct scan returns all of its rows.
+explain (costs off) select p.a, p.b, q.a, q.b
+from part_attno_rls p, part_attno_rls_2 q;
+select p.a, p.b, q.a, q.b from part_attno_rls p, part_attno_rls_2 q
+order by 1, 3;
+-- Append of Seq Scans
+set optimizer_enable_dynamictablescan to off;
+set optimizer_enable_parallel_append to on;
+explain (costs off) select * from part_attno_rls;
+select * from part_attno_rls order by a;
+explain (costs off) select p.a, p.b, q.a, q.b
+from part_attno_rls p, part_attno_rls_2 q;
+select p.a, p.b, q.a, q.b from part_attno_rls p, part_attno_rls_2 q
+order by 1, 3;
+-- Parallel Append of Parallel Seq Scans
+set enable_parallel to on;
+set max_parallel_workers_per_gather to 2;
+set parallel_setup_cost to 0;
+set min_parallel_table_scan_size to 0;
+explain (costs off) select * from part_attno_rls;
+select * from part_attno_rls order by a;
+reset min_parallel_table_scan_size;
+reset parallel_setup_cost;
+reset max_parallel_workers_per_gather;
+reset enable_parallel;
+reset optimizer_enable_parallel_append;
+reset optimizer_enable_dynamictablescan;
+reset session authorization;
+drop policy p1 on part_attno_rls;
+drop table part_attno_rls;
+
+-- A foreign partition: the foreign scan can't apply the policies, so ORCA
+-- falls back to planner.
+create table part_ext_rls (a int, b int) distributed by (a)
+partition by range(a);
+create table part_ext_rls_1 partition of part_ext_rls
+for values from (0) to (100);
+insert into part_ext_rls values (1, 1), (2, 5);
+create external web table part_ext_rls_2 (a int, b int)
+execute 'printf "101|1\n102|5\n"' on coordinator
+format 'text' (delimiter '|');
+alter table part_ext_rls attach partition part_ext_rls_2
+for values from (100) to (200);
+grant select on part_ext_rls to new_user;
+alter table part_ext_rls enable row level security;
+create policy p1 on part_ext_rls using (b < 3);
+set session authorization new_user;
+explain (costs off) select * from part_ext_rls;
+select * from part_ext_rls order by a;
+reset session authorization;
+drop policy p1 on part_ext_rls;
+drop table part_ext_rls;
+
+--------------------------------------------------------------------------------
+------------- Relation referenced with different security quals ----------------
+--------------------------------------------------------------------------------
+-- Each scan of the relation gets the security quals of its own range table
+-- entry. The owner of the view bypasses row level security, so the scan of
+-- the table in the view has none.
+create table secret_rls (a int, b int, c text) distributed by (a);
+insert into secret_rls values (1, 1, 'visible'), (2, 5, 'hidden'),
+(3, 7, 'hidden');
+analyze secret_rls;
+alter table secret_rls enable row level security;
+create policy p1 on secret_rls using (b < 3);
+create view secret_cnt_rls as select count(*) as n from secret_rls;
+create function leak_text(text) returns boolean as $$
+begin
+  raise notice 'leak_text: %', $1;
+  return true;
+end;
+$$ language plpgsql cost 0.0000001;
+grant select on secret_rls, secret_cnt_rls to new_user;
+set session authorization new_user;
+-- References with the same security quals
+explain (costs off) select * from secret_rls t1 join secret_rls t2 using (a);
+select * from secret_rls t1 join secret_rls t2 using (a);
+-- The table is referenced with and without security quals: the direct
+-- reference returns the rows the policy lets through, the view counts all of
+-- them, whichever comes first in the query.
+explain (costs off) select s.*, c.n from secret_cnt_rls c, secret_rls s;
+select s.*, c.n from secret_cnt_rls c, secret_rls s;
+explain (costs off) select s.*, c.n from secret_rls s, secret_cnt_rls c;
+select s.*, c.n from secret_rls s, secret_cnt_rls c;
+select s.* from secret_rls s where exists (select 1 from secret_cnt_rls);
+select s.*, (select n from secret_cnt_rls) from secret_rls s;
+with c as (select * from secret_cnt_rls) select s.*, c.n from c, secret_rls s;
+-- A leaky function only sees the rows the policy lets through
+explain (costs off) select s.*, c.n from secret_cnt_rls c, secret_rls s
+where leak_text(s.c);
+select s.*, c.n from secret_cnt_rls c, secret_rls s where leak_text(s.c);
+reset session authorization;
+drop view secret_cnt_rls;
+drop policy p1 on secret_rls;
+drop table secret_rls;
+drop function leak_text(text);
+
 
 --------------------------------------------------------------------------------
 ----- INSERT queries on relation having row level security enabled -------------
