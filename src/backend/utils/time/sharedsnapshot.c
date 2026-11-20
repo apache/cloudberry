@@ -524,8 +524,7 @@ SharedSnapshotLookup(int32 slotId)
 
 
 /*
- * Used by the "writer" qExec to "release" the slot it had been using.
- *
+ * Release the shared snapshot slot owned by the coordinator or writer QE.
  */
 void
 SharedSnapshotRemove(volatile SharedSnapshotSlot *slot, char *creatorDescription)
@@ -537,8 +536,9 @@ SharedSnapshotRemove(volatile SharedSnapshotSlot *slot, char *creatorDescription
 	if (slot->snapshot_handle != DSM_HANDLE_INVALID)
 		dsm_unpin_segment(slot->snapshot_handle);
 
-	/* determine if we need to modify the next available slot to use.  we
-	 * only do this is our slotindex is lower then the existing one.
+	/*
+	 * Make this slot the next available one if no free slot was recorded
+	 * or this slot has a lower index.
 	 */
 	if (sharedSnapshotArray->nextSlot == -1 || slot->slotindex < sharedSnapshotArray->nextSlot)
 	{
@@ -557,6 +557,8 @@ SharedSnapshotRemove(volatile SharedSnapshotSlot *slot, char *creatorDescription
 	slot->segmateSync = 0;
 	slot->snapshot_handle = DSM_HANDLE_INVALID;
 	slot->snapshot_sz = 0;
+	MemSet(slot->dump, 0, sizeof(slot->dump));
+	slot->cur_dump_id = 0;
 
 	sharedSnapshotArray->numSlots -= 1;
 
@@ -564,6 +566,9 @@ SharedSnapshotRemove(volatile SharedSnapshotSlot *slot, char *creatorDescription
 
 	elog((Debug_print_full_dtm ? LOG : DEBUG5),"SharedSnapshotRemove removed slot for slotId = %d, creator = %s (address %p)",
 		 slotId, creatorDescription, SharedLocalSnapshotSlot);
+
+	/* Lets a test wait until an exiting backend has released its slot. */
+	SIMPLE_FAULT_INJECTOR("shared_snapshot_remove_done");
 }
 
 void
@@ -612,6 +617,7 @@ dumpSharedLocalSnapshot_forCursor(void)
 	char	   *dst_address;
 	dsm_segment *src_segment;
 	dsm_segment *dst_segment;
+	dsm_segment *old_segment = NULL;
 	ResourceOwner oldowner;
 	SharedSnapshotSlot *src = NULL;
 	volatile SnapshotDump *pDump;
@@ -637,17 +643,29 @@ dumpSharedLocalSnapshot_forCursor(void)
 	src_segment = dsm_attach(SharedLocalSnapshotSlot->snapshot_handle);
 	src_address = dsm_segment_address(src_segment);
 
-	dst_segment = dsm_create(src->snapshot_sz, 0);
+	if (pDump->handle != DSM_HANDLE_INVALID)
+	{
+		old_segment = dsm_find_mapping(pDump->handle);
+	}
+
+	/* Readers finish restoring under slotLock before we reuse the old dump. */
+	if (old_segment != NULL &&
+		dsm_segment_map_length(old_segment) >= src->snapshot_sz)
+		dst_segment = old_segment;
+	else
+		dst_segment = dsm_create(src->snapshot_sz, 0);
 	dst_address = dsm_segment_address(dst_segment);
 
 	/* Dump shared snapshot to dsm of destination */
 	memcpy(dst_address, src_address, src->snapshot_sz);
 
-	/* FIXME: can we just reuse the src dsm handler? */
 	pDump->handle = dsm_segment_handle(dst_segment);
 	pDump->segmateSync = src->segmateSync;
 	pDump->distributedXid = src->distributedXid;
 	pDump->localXid = src->fullXid;
+
+	if (old_segment != NULL && old_segment != dst_segment)
+		dsm_detach(old_segment);
 
 	dsm_detach(src_segment);
 

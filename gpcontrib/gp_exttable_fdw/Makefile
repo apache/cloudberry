@@ -7,7 +7,7 @@ SHLIB_LINK_INTERNAL = $(libpq)
 EXTENSION = gp_exttable_fdw
 DATA = gp_exttable_fdw--1.0.sql
 
-REGRESS = gp_exttable_fdw
+REGRESS = gp_exttable_fdw gzip_reader
 
 HEADERS = extaccess.h
 

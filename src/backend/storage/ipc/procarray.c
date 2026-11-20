@@ -2280,14 +2280,24 @@ updateSharedLocalSnapshot(DtxContextInfo *dtxContextInfo,
 
 	if (sz > SharedLocalSnapshotSlot->snapshot_sz)
 	{
-		if (SharedLocalSnapshotSlot->snapshot_handle != DSM_HANDLE_INVALID)
-			dsm_unpin_segment(SharedLocalSnapshotSlot->snapshot_handle);
+		dsm_handle	old_handle = SharedLocalSnapshotSlot->snapshot_handle;
 
+		/*
+		 * Create, pin, and publish the new segment before unpinning the old
+		 * one.  dsm_create() can fail (e.g. out of DSM slots or /dev/shm
+		 * space); if the old segment were already unpinned, the slot would
+		 * keep a stale handle and SharedSnapshotRemove() at backend exit
+		 * would fail with "cannot unpin unknown segment handle".
+		 */
+		SIMPLE_FAULT_INJECTOR("update_shared_local_snapshot_create_dsm");
 		snapshot_sgm = dsm_create(sz, 0);
 		dsm_pin_segment(snapshot_sgm);
 		dsm_pin_mapping(snapshot_sgm);
 		SharedLocalSnapshotSlot->snapshot_handle = dsm_segment_handle(snapshot_sgm);
 		SharedLocalSnapshotSlot->snapshot_sz = sz;
+
+		if (old_handle != DSM_HANDLE_INVALID)
+			dsm_unpin_segment(old_handle);
 	}
 	else
 		snapshot_sgm = dsm_attach(SharedLocalSnapshotSlot->snapshot_handle);
