@@ -484,6 +484,14 @@ bool		gp_allow_date_field_width_5digits = false;
 /* Avoid do a real REFRESH materialized view if possibile. */
 bool		gp_enable_refresh_fast_path = true;
 
+/*
+ * JIT cost thresholds for plans from ORCA, whose costs are on its own scale.
+ * Off by default: ORCA can cost a small plan with subqueries above any scan.
+ */
+double		optimizer_jit_above_cost;
+double		optimizer_jit_inline_above_cost;
+double		optimizer_jit_optimize_above_cost;
+
 static const struct config_enum_entry gp_log_format_options[] = {
 	{"text", 0},
 	{"csv", 1},
@@ -4856,6 +4864,39 @@ struct config_real ConfigureNamesReal_gp[] =
 		},
 		&optimizer_spilling_mem_threshold,
 		0.0, 0.0, DBL_MAX,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"optimizer_jit_above_cost", PGC_USERSET, QUERY_TUNING_COST,
+			gettext_noop("Perform JIT compilation if a plan from GPORCA is more expensive."),
+			gettext_noop("-1 disables JIT compilation."),
+			GUC_EXPLAIN
+		},
+		&optimizer_jit_above_cost,
+		-1, -1, DBL_MAX,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"optimizer_jit_inline_above_cost", PGC_USERSET, QUERY_TUNING_COST,
+			gettext_noop("Perform JIT inlining if a plan from GPORCA is more expensive."),
+			gettext_noop("-1 disables inlining."),
+			GUC_EXPLAIN
+		},
+		&optimizer_jit_inline_above_cost,
+		-1, -1, DBL_MAX,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"optimizer_jit_optimize_above_cost", PGC_USERSET, QUERY_TUNING_COST,
+			gettext_noop("Optimize JITed functions if a plan from GPORCA is more expensive."),
+			gettext_noop("-1 disables optimization."),
+			GUC_EXPLAIN
+		},
+		&optimizer_jit_optimize_above_cost,
+		-1, -1, DBL_MAX,
 		NULL, NULL, NULL
 	},
 

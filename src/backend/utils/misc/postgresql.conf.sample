@@ -420,6 +420,9 @@ max_prepared_transactions = 250		# can be 0 or more
 #jit_optimize_above_cost = 500000	# use expensive JIT optimizations if
 					# query is more expensive than this;
 					# -1 disables
+#optimizer_jit_above_cost = -1		# the same three for plans from
+#optimizer_jit_inline_above_cost = -1	# GPORCA, whose costs are on a
+#optimizer_jit_optimize_above_cost = -1	# different scale; -1 disables
 
 #min_parallel_table_scan_size = 8MB
 #min_parallel_index_scan_size = 512kB

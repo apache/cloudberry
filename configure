@@ -3047,7 +3047,7 @@ _ACEOF
 
 
 PG_MAJORVERSION=`expr "$PG_PACKAGE_VERSION" : '\([0-9][0-9]*\)'`
-PG_MINORVERSION=`expr "$PACKAGE_VERSION" : '.*\.\([0-9][0-9]*\)'`
+PG_MINORVERSION=`expr "$PG_PACKAGE_VERSION" : '.*\.\([0-9][0-9]*\)'`
 test -n "$PG_MINORVERSION" || PG_MINORVERSION=0
 
 
@@ -5539,7 +5539,7 @@ fi
 
   for pgac_option in `$LLVM_CONFIG --ldflags`; do
     case $pgac_option in
-      -L*) LDFLAGS="$LDFLAGS $pgac_option";;
+      -L*) LLVM_LIBS="$LLVM_LIBS $pgac_option";;
     esac
   done
 

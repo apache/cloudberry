@@ -231,6 +231,15 @@ installcheck-orca-parallel: all tablespace-setup twophase_pqexecparams
 	$(pg_regress_installcheck) $(REGRESS_OPTS) --exclude-file=$(srcdir)/excluded_tests.conf --schedule=$(srcdir)/parallel_schedule --schedule=$(srcdir)/greenplum_schedule --max-connections=4 --ignore-plans $(EXTRA_TESTS) \
 	)
 
+JIT_EXCLUDED_TESTS = explain cte_prune partition_prune_opfamily_append brin_bloom
+
+installcheck-jit: all tablespace-setup twophase_pqexecparams hooktest query_info_hook_test
+	awk -v skip='$(JIT_EXCLUDED_TESTS)' 'BEGIN { split(skip, s, " "); for (i in s) drop[s[i]] = 1 } $$1 == "test:" { t = ""; for (i = 2; i <= NF; i++) if (!($$i in drop)) t = t " " $$i; if (t != "") print "test:" t; next } { print }' $(srcdir)/parallel_schedule > jit_parallel_schedule
+	( \
+	export PGOPTIONS="$$PGOPTIONS -c jit=on -c jit_above_cost=0 -c jit_inline_above_cost=0 -c jit_optimize_above_cost=0 -c optimizer_jit_above_cost=0 -c optimizer_jit_inline_above_cost=0 -c optimizer_jit_optimize_above_cost=0"; \
+	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=jit_parallel_schedule --schedule=$(srcdir)/jit_schedule $(EXTRA_TESTS) \
+	)
+
 installcheck-tests: all
 	$(pg_regress_installcheck) $(REGRESS_OPTS) $(TESTS) $(EXTRA_TESTS)
 
@@ -284,7 +293,7 @@ clean maintainer-clean: clean-lib
 	$(MAKE) -C hooktest/ clean
 	$(MAKE) -C query_info_hook_test/ clean
 # things created by various check targets
-	rm -f $(output_files) $(input_files)
+	rm -f $(output_files) $(input_files) jit_parallel_schedule
 	rm -rf ./testtablespace ./testtablespace_*
 	rm -rf $(pg_regress_clean_files)
 
