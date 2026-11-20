@@ -27,11 +27,13 @@ FORCE_GENERATE_DBGSTR(CKeyCollection);
 //		ctor
 //
 //---------------------------------------------------------------------------
-CKeyCollection::CKeyCollection(CMemoryPool *mp) : m_pdrgpcrs(nullptr)
+CKeyCollection::CKeyCollection(CMemoryPool *mp)
+	: m_pdrgpcrs(nullptr), m_pbsNullsDistinct(nullptr)
 {
 	GPOS_ASSERT(nullptr != mp);
 
 	m_pdrgpcrs = GPOS_NEW(mp) CColRefSetArray(mp);
+	m_pbsNullsDistinct = GPOS_NEW(mp) CBitSet(mp);
 }
 
 
@@ -44,11 +46,12 @@ CKeyCollection::CKeyCollection(CMemoryPool *mp) : m_pdrgpcrs(nullptr)
 //
 //---------------------------------------------------------------------------
 CKeyCollection::CKeyCollection(CMemoryPool *mp, CColRefSet *pcrs)
-	: m_pdrgpcrs(nullptr)
+	: m_pdrgpcrs(nullptr), m_pbsNullsDistinct(nullptr)
 {
 	GPOS_ASSERT(nullptr != pcrs && 0 < pcrs->Size());
 
 	m_pdrgpcrs = GPOS_NEW(mp) CColRefSetArray(mp);
+	m_pbsNullsDistinct = GPOS_NEW(mp) CBitSet(mp);
 
 	// we own the set
 	Add(pcrs);
@@ -64,12 +67,13 @@ CKeyCollection::CKeyCollection(CMemoryPool *mp, CColRefSet *pcrs)
 //
 //---------------------------------------------------------------------------
 CKeyCollection::CKeyCollection(CMemoryPool *mp, CColRefArray *colref_array)
-	: m_pdrgpcrs(nullptr)
+	: m_pdrgpcrs(nullptr), m_pbsNullsDistinct(nullptr)
 {
 	GPOS_ASSERT(nullptr != mp);
 	GPOS_ASSERT(nullptr != colref_array);
 
 	m_pdrgpcrs = GPOS_NEW(mp) CColRefSetArray(mp);
+	m_pbsNullsDistinct = GPOS_NEW(mp) CBitSet(mp);
 
 	CColRefSet *pcrs = GPOS_NEW(mp) CColRefSet(mp);
 	pcrs->Include(colref_array);
@@ -91,6 +95,7 @@ CKeyCollection::CKeyCollection(CMemoryPool *mp, CColRefArray *colref_array)
 CKeyCollection::~CKeyCollection()
 {
 	m_pdrgpcrs->Release();
+	m_pbsNullsDistinct->Release();
 }
 
 
@@ -103,10 +108,14 @@ CKeyCollection::~CKeyCollection()
 //
 //---------------------------------------------------------------------------
 void
-CKeyCollection::Add(CColRefSet *pcrs)
+CKeyCollection::Add(CColRefSet *pcrs, BOOL fNullsDistinct)
 {
 	GPOS_ASSERT(!FKey(pcrs) && "no duplicates allowed");
 
+	if (fNullsDistinct)
+	{
+		m_pbsNullsDistinct->ExchangeSet(m_pdrgpcrs->Size());
+	}
 	m_pdrgpcrs->Append(pcrs);
 }
 
