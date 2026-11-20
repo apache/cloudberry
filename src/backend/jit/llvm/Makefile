@@ -24,8 +24,7 @@ NAME = llvmjit
 
 # Some functions called in LLVM 14 and LLVM 15 are marked with GCC deprecation
 # attributes.  For LLVM 16 and later, we use the newer replacement functions
-# instead, but warnings are suppressed unconditionally.  (Note that this is
-# only done in branches before REL_18_STABLE.)
+# instead, but warnings are suppressed unconditionally.
 ifeq ($(GCC), yes)
 LLVM_CFLAGS += -Wno-deprecated-declarations
 endif
