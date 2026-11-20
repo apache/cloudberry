@@ -10,6 +10,7 @@
 import os
 
 from gppylib.gparray import GpArray, Segment, createSegmentRows
+from gppylib.gpversion import MAIN_VERSION
 from gppylib import gplog
 from .gp_unittest import *
 from mock import patch, Mock
@@ -232,7 +233,10 @@ class GpArrayTestCase(GpTestCase):
     @patch('gppylib.db.dbconn.querySingleton', return_value='PostgreSQL 8.3.23 (Apache Cloudberry 5.0.0 build dev) on x86_64-pc-linux-gnu, compiled by GCC gcc (GCC) 4.4.7 20120313 (Red Hat 4.4.7-17) compiled on Feb  9 2017 23:06:31')
     @patch('gppylib.db.dbconn.connect', autospec=True)
     def test_initFromCatalog_mismatched_versions(self, mock_connect, mock_query):
-        with self.assertRaisesRegex(Exception, 'Cannot connect to GPDB version 5 from installed version 7'):
+        # The installed version is the major version of this source tree.
+        expected = ('Cannot connect to Cloudberry version 5 from installed '
+                    'version %d' % MAIN_VERSION[0])
+        with self.assertRaisesRegex(Exception, expected):
             GpArray.initFromCatalog(None)
 
     def test_get_min_primary_port_when_cluster_balanced(self):
