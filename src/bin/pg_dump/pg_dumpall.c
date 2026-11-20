@@ -1231,7 +1231,10 @@ dumpRoles(PGconn *conn)
 	 * external table auth on gpfdist, gpfdists and http if version support it get
 	 */
 
-	/* note: rolconfig is dumped later */
+	/*
+	 * rolconfig is dumped later.  Fetch role comments from pg_authid even
+	 * when role_catalog is pg_roles (for --no-role-passwords).
+	 */
 	if (server_version >= 140000)
 	{
 		printfPQExpBuffer(buf,
@@ -1241,12 +1244,12 @@ dumpRoles(PGconn *conn)
 				  		  "rolvaliduntil, rolreplication, rolbypassrls, "
 				  		  "rolenableprofile, prfname, rolaccountstatus, rolfailedlogins, "
 				  		  "rolpasswordsetat, rollockdate, rolpasswordexpire, "
-				  		  "pg_catalog.shobj_description(%s.oid, '%s') as rolcomment, "
+					  "pg_catalog.shobj_description(%s.oid, 'pg_authid') as rolcomment, "
 				  		  "rolname = current_user AS is_current_user "
 				  		  " %s %s %s %s"
 				  		  "FROM %s, %s "
 				  		  "WHERE rolname !~ '^pg_' and %s.rolprofile = %s.oid "
-				  		  "ORDER BY 2", role_catalog, role_catalog, role_catalog, resq_col, resgroup_col, extauth_col,
+					  "ORDER BY 2", role_catalog, role_catalog, resq_col, resgroup_col, extauth_col,
 								  hdfs_col, role_catalog, profile_catalog, role_catalog, profile_catalog);
 	}
 	else if (server_version >= 90600)
@@ -1255,35 +1258,35 @@ dumpRoles(PGconn *conn)
 						  "rolcreaterole, rolcreatedb, "
 						  "rolcanlogin, rolconnlimit, rolpassword, "
 						  "rolvaliduntil, rolreplication, rolbypassrls, "
-						  "pg_catalog.shobj_description(oid, '%s') as rolcomment, "
+						  "pg_catalog.shobj_description(oid, 'pg_authid') as rolcomment, "
 						  "rolname = current_user AS is_current_user "
-						  " %s %s %s %s"
-						  "FROM %s "
-						  "WHERE rolname !~ '^pg_' "
-						  "ORDER BY 2", role_catalog, resq_col, resgroup_col, extauth_col, hdfs_col, role_catalog);
+					  " %s %s %s %s"
+					  "FROM %s "
+					  "WHERE rolname !~ '^pg_' "
+					  "ORDER BY 2", resq_col, resgroup_col, extauth_col, hdfs_col, role_catalog);
 	else if (server_version >= 90500)
 		printfPQExpBuffer(buf,
 						  "SELECT oid, rolname, rolsuper, rolinherit, "
 						  "rolcreaterole, rolcreatedb, "
 						  "rolcanlogin, rolconnlimit, rolpassword, "
 						  "rolvaliduntil, rolreplication, rolbypassrls, "
-						  "pg_catalog.shobj_description(oid, '%s') as rolcomment, "
-						  "rolname = current_user AS is_current_user "
-						  " %s %s %s %s"
-						  "FROM %s "
-						  "ORDER BY 2", role_catalog, resq_col, resgroup_col, extauth_col, hdfs_col, role_catalog);
+						  "pg_catalog.shobj_description(oid, 'pg_authid') as rolcomment, "
+					  "rolname = current_user AS is_current_user "
+					  " %s %s %s %s"
+					  "FROM %s "
+					  "ORDER BY 2", resq_col, resgroup_col, extauth_col, hdfs_col, role_catalog);
 	else if (server_version >= 90100)
 		printfPQExpBuffer(buf,
 						  "SELECT oid, rolname, rolsuper, rolinherit, "
 						  "rolcreaterole, rolcreatedb, rolcatupdate, "
-						  "rolcanlogin, rolconnlimit, rolpassword, "
-						  "rolvaliduntil, rolreplication, "
-						  "false as rolbypassrls, "
-						  "pg_catalog.shobj_description(oid, '%s') as rolcomment, "
-						  "rolname = current_user AS is_current_user "
-						  " %s %s %s %s"
-						  "FROM %s "
-						  "ORDER BY 2", role_catalog, resq_col, resgroup_col, extauth_col, hdfs_col, role_catalog);
+					  "rolcanlogin, rolconnlimit, rolpassword, "
+					  "rolvaliduntil, rolreplication, "
+					  "false as rolbypassrls, "
+					  "pg_catalog.shobj_description(oid, 'pg_authid') as rolcomment, "
+					  "rolname = current_user AS is_current_user "
+					  " %s %s %s %s"
+					  "FROM %s "
+					  "ORDER BY 2", resq_col, resgroup_col, extauth_col, hdfs_col, role_catalog);
 	else
 		printfPQExpBuffer(buf,
 						  "SELECT oid, rolname, rolsuper, rolinherit, "
@@ -1291,11 +1294,11 @@ dumpRoles(PGconn *conn)
 						  "rolcanlogin, rolconnlimit, rolpassword, "
 						  "rolvaliduntil, false as rolreplication, "
 						  "false as rolbypassrls, "
-						  "pg_catalog.shobj_description(oid, '%s') as rolcomment, "
-						  "rolname = current_user AS is_current_user "
-						  " %s %s %s %s"
-						  "FROM %s "
-						  "ORDER BY 2", role_catalog, resq_col, resgroup_col, extauth_col, hdfs_col, role_catalog);
+					  "pg_catalog.shobj_description(oid, 'pg_authid') as rolcomment, "
+					  "rolname = current_user AS is_current_user "
+					  " %s %s %s %s"
+					  "FROM %s "
+					  "ORDER BY 2", resq_col, resgroup_col, extauth_col, hdfs_col, role_catalog);
 
 	res = executeQuery(conn, buf->data);
 

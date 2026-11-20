@@ -1598,8 +1598,15 @@ cdb_pull_up_eclass(PlannerInfo *root,
 	else
 		return NULL;
 
+	/*
+	 * cdbpullup_expr() can fail even after finding an EC member in the
+	 * targetlist.  For example, a PlaceHolderVar can match a whole item in
+	 * a bare expression list, but the pull-up tries to rewrite its inner
+	 * Vars, which need not be projected separately.  Let the caller handle
+	 * this as an unsuccessful pull-up.
+	 */
 	if (!newexpr)
-		elog(ERROR, "could not pull up equivalence class using projected target list");
+		return NULL;
 
 	/*
 	 * See https://github.com/apache/cloudberry/issues/593

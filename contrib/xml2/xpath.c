@@ -103,7 +103,8 @@ xml_is_well_formed(PG_FUNCTION_ARGS)
 
 	PG_TRY();
 	{
-		doctree = xmlParseMemory((char *) VARDATA_ANY(t), docsize);
+		doctree = xmlReadMemory((char *) VARDATA_ANY(t), docsize,
+								NULL, NULL, XML_PARSE_NOENT);
 
 		result = (doctree != NULL);
 

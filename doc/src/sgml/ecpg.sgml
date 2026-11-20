@@ -3279,7 +3279,7 @@ int PGTYPEStimestamp_fmt_asc(timestamp *ts, char *output, int str_len, char *fmt
            <literal>%z</literal> - is replaced by the time zone offset from
            UTC; a leading plus sign stands for east of UTC, a minus sign for
            west of UTC, hours and minutes follow with two digits each and no
-           delimiter between them (common form for <ulink url="https://tools.ietf.org/html/rfc822">RFC 822</ulink> date headers).
+           delimiter between them (common form for <ulink url="https://datatracker.ietf.org/doc/html/rfc822">RFC 822</ulink> date headers).
           </para>
          </listitem>
          <listitem>
@@ -5754,6 +5754,14 @@ EXEC SQL UPDATE Tbl SET col = MYNUMBER;
     <literal>#define</literal> for a constant that you are going to use in an
     embedded SQL query because in this case the embedded SQL precompiler is not
     able to see this declaration.
+   </para>
+
+   <para>
+    If multiple input files are named on the <command>ecpg</command>
+    preprocessor's command line, the effects of <literal>EXEC SQL
+    DEFINE</literal> and <literal>EXEC SQL UNDEF</literal> do not carry
+    across files: each file starts with only the symbols defined
+    by <option>-D</option> switches on the command line.
    </para>
   </sect2>
 
@@ -8847,7 +8855,7 @@ int dectodbl(decimal *np, double *dblp);
       <term><function>dectoint</function></term>
       <listitem>
        <para>
-        Convert a variable to type decimal to an integer.
+        Convert a variable of type decimal to an integer.
 <synopsis>
 int dectoint(decimal *np, int *ip);
 </synopsis>
@@ -8873,7 +8881,7 @@ int dectoint(decimal *np, int *ip);
       <term><function>dectolong</function></term>
       <listitem>
        <para>
-        Convert a variable to type decimal to a long integer.
+        Convert a variable of type decimal to a long integer.
 <synopsis>
 int dectolong(decimal *np, long *lngp);
 </synopsis>

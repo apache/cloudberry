@@ -224,6 +224,7 @@ test: pg_basebackup_with_tablespaces
 test: pg_basebackup_large_database_oid
 test: vacuum_progress_row
 test: vacuum_progress_column
+test: ao_vacuum_stats_abort
 
 test: autostats_locking
 
@@ -330,6 +331,7 @@ test: spilling_hashagg
 test: local_directory_table_mixed
 test: stat_activity_extended
 test: sharedsnapshot
+test: sharedsnapshot_dsm_error
 # test pg_export_snapshot with distributed snapshot functionality
 test: export_distributed_snapshot
 

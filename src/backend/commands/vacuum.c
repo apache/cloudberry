@@ -105,6 +105,15 @@ static BufferAccessStrategy vac_strategy;
 
 
 /*
+ * Cumulative time this process has spent in cost-based VACUUM delays, in
+ * microseconds.  Consumers take differences around an operation.  ANALYZE
+ * uses the same delay function but does not contribute to this accumulator.
+ * Updated only while track_cost_delay_timing is enabled.
+ */
+int64		VacuumDelayTime = 0;
+bool		track_cost_delay_timing = false;
+
+/*
  * Variables for cost-based parallel vacuum.  See comments atop
  * compute_parallel_delay to understand how it works.
  */
@@ -1961,6 +1970,8 @@ vac_update_datfrozenxid(void)
 	/*
 	 * We must seqscan pg_class to find the minimum Xid, because there is no
 	 * index that can help us here.
+	 *
+	 * See vac_truncate_clog() for the race condition to prevent.
 	 */
 	relation = table_open(RelationRelationId, AccessShareLock);
 
@@ -1969,7 +1980,9 @@ vac_update_datfrozenxid(void)
 
 	while ((classTup = systable_getnext(scan)) != NULL)
 	{
-		Form_pg_class classForm = (Form_pg_class) GETSTRUCT(classTup);
+		volatile FormData_pg_class *classForm = (Form_pg_class) GETSTRUCT(classTup);
+		TransactionId relfrozenxid = classForm->relfrozenxid;
+		TransactionId relminmxid = classForm->relminmxid;
 
 		/*
 		 * Only consider relations able to hold unfrozen XIDs (anything else
@@ -1983,8 +1996,8 @@ vac_update_datfrozenxid(void)
 			classForm->relkind != RELKIND_AOVISIMAP &&
 			classForm->relkind != RELKIND_AOBLOCKDIR)
 		{
-			Assert(!TransactionIdIsValid(classForm->relfrozenxid));
-			Assert(!MultiXactIdIsValid(classForm->relminmxid));
+			Assert(!TransactionIdIsValid(relfrozenxid));
+			Assert(!MultiXactIdIsValid(relminmxid));
 			continue;
 		}
 
@@ -2003,34 +2016,34 @@ vac_update_datfrozenxid(void)
 		 * before those relations have been scanned and cleaned up.
 		 */
 
-		if (TransactionIdIsValid(classForm->relfrozenxid))
+		if (TransactionIdIsValid(relfrozenxid))
 		{
-			Assert(TransactionIdIsNormal(classForm->relfrozenxid));
+			Assert(TransactionIdIsNormal(relfrozenxid));
 
 			/* check for values in the future */
-			if (TransactionIdPrecedes(lastSaneFrozenXid, classForm->relfrozenxid))
+			if (TransactionIdPrecedes(lastSaneFrozenXid, relfrozenxid))
 			{
 				bogus = true;
 				break;
 			}
 
 			/* determine new horizon */
-			if (TransactionIdPrecedes(classForm->relfrozenxid, newFrozenXid))
-				newFrozenXid = classForm->relfrozenxid;
+			if (TransactionIdPrecedes(relfrozenxid, newFrozenXid))
+				newFrozenXid = relfrozenxid;
 		}
 
-		if (MultiXactIdIsValid(classForm->relminmxid))
+		if (MultiXactIdIsValid(relminmxid))
 		{
 			/* check for values in the future */
-			if (MultiXactIdPrecedes(lastSaneMinMulti, classForm->relminmxid))
+			if (MultiXactIdPrecedes(lastSaneMinMulti, relminmxid))
 			{
 				bogus = true;
 				break;
 			}
 
 			/* determine new horizon */
-			if (MultiXactIdPrecedes(classForm->relminmxid, newMinMulti))
-				newMinMulti = classForm->relminmxid;
+			if (MultiXactIdPrecedes(relminmxid, newMinMulti))
+				newMinMulti = relminmxid;
 		}
 	}
 
@@ -2985,7 +2998,7 @@ vac_close_indexes(int nindexes, Relation *Irel, LOCKMODE lockmode)
  * typically once per page processed.
  */
 void
-vacuum_delay_point(void)
+vacuum_delay_point(bool is_analyze)
 {
 	double		msec = 0;
 
@@ -3007,12 +3020,27 @@ vacuum_delay_point(void)
 	/* Nap if appropriate */
 	if (msec > 0)
 	{
+		instr_time	delay_start;
+		instr_time	delay_end;
+
 		if (msec > VacuumCostDelay * 4)
 			msec = VacuumCostDelay * 4;
 
 		pgstat_report_wait_start(WAIT_EVENT_VACUUM_DELAY);
+		if (track_cost_delay_timing && !is_analyze)
+			INSTR_TIME_SET_CURRENT(delay_start);
 		pg_usleep(msec * 1000);
 		pgstat_report_wait_end();
+
+		if (track_cost_delay_timing && !is_analyze)
+		{
+			int64 delay_us;
+
+			INSTR_TIME_SET_CURRENT(delay_end);
+			INSTR_TIME_SUBTRACT(delay_end, delay_start);
+			delay_us = (int64) INSTR_TIME_GET_MICROSEC(delay_end);
+			VacuumDelayTime += delay_us;
+		}
 
 		/*
 		 * We don't want to ignore postmaster death during very long vacuums

@@ -759,17 +759,38 @@ getNdvBySegHeapTuple(AttStatsSlot * *ndvbsSlots, HeapTuple *heaptupleStats, floa
 		(void) get_attstatsslot(ndvbsSlots[i], heaptupleStats[i],
 			STATISTIC_KIND_NDV_BY_SEGMENTS, InvalidOid, ATTSTATSSLOT_VALUES);
 
-		if ((InvalidOid != ndvbsSlots[i]->valuetype && // result is not empty
-			// not empty partition with invalid ndvbs
-			(relTuples[i] > 0 && DatumGetFloat8(ndvbsSlots[i]->values[0]) == 0)) ||
-			// not empty partition without ndvbs
-			(InvalidOid == ndvbsSlots[i]->valuetype && relTuples[i] > 0)) {
+		if (ndvbsSlots[i]->valuetype != FLOAT8OID)
+		{
+			/*
+			 * NDV_BY_SEGMENTS slot not found or has unexpected type.
+			 * Non-empty partitions must have valid NDV_BY_SEGMENTS;
+			 * empty partitions (relTuples == 0) can be skipped.
+			 */
+			if (relTuples[i] > 0)
+			{
+				valid = false;
+				break;
+			}
+			free_attstatsslot(ndvbsSlots[i]);	
+			pfree(ndvbsSlots[i]);
+			ndvbsSlots[i] = NULL;
+			continue;
+		}
+
+		Assert(ndvbsSlots[i]->valuetype == FLOAT8OID);
+
+		if (ndvbsSlots[i]->nvalues != 1)
+		{
 			valid = false;
 			break;
 		}
 
-		Assert(ndvbsSlots[i]->valuetype == FLOAT8OID);
-		Assert(ndvbsSlots[i]->nvalues == 1);
+		/* Non-empty partition with zero NDV is suspicious */
+		if (relTuples[i] > 0 && DatumGetFloat8(ndvbsSlots[i]->values[0]) == 0)
+		{
+			valid = false;
+			break;
+		}
 	}
 	return valid;
 }

@@ -28,9 +28,15 @@
  */
 typedef struct AOVacuumRelStats
 {
-	int		nbytes_truncated;	/* current # of bytes truncated from segment file */
-	int		num_dead_tuples;	/* current # of dead tuples */
+	int64	nbytes_truncated;	/* current # of bytes truncated from segment file */
+	int64	num_dead_tuples;	/* current # of dead tuples */
 	int		num_index_vacuumed; /* current # of indexes been vacuumed */
+
+	/* Local log totals; collector timings are reported per phase. */
+	int64	vacuum_time;		/* time spent in the phases, in microseconds */
+	int64	delay_time;			/* of which the cost-based vacuum delay */
+	int64	dead_tuples_left;	/* tuples the post-cleanup found still hidden */
+	int64	total_file_segs;	/* segment metadata entries after post-cleanup */
 } AOVacuumRelStats;
 
 extern Bitmapset *AppendOptimizedCollectDeadSegments(Relation aorel);

@@ -1303,7 +1303,7 @@ static struct config_bool ConfigureNamesBool[] =
 		{"fsync", PGC_SIGHUP, WAL_SETTINGS,
 			gettext_noop("Forces synchronization of updates to disk."),
 			gettext_noop("The server will use the fsync() system call in several places to make "
-						 "sure that updates are physically written to disk. This insures "
+						 "sure that updates are physically written to disk. This ensures "
 						 "that a database cluster will recover to a consistent state after "
 						 "an operating system or hardware crash."),
 		  GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
@@ -1625,6 +1625,24 @@ static struct config_bool ConfigureNamesBool[] =
 		},
 		&pgstat_track_counts,
 		true,
+		NULL, NULL, NULL
+	},
+	{
+		{"track_vacuum_statistics", PGC_POSTMASTER, STATS_COLLECTOR,
+			gettext_noop("Collects statistics on what vacuum did and what it cost."),
+			gettext_noop("The counters are exposed by the vacuum_stats extension.")
+		},
+		&pgstat_track_vacuum_statistics,
+		false,
+		NULL, NULL, NULL
+	},
+	{
+		{"track_cost_delay_timing", PGC_SUSET, STATS_COLLECTOR,
+			gettext_noop("Collects timing statistics for cost-based vacuum delay."),
+			NULL
+		},
+		&track_cost_delay_timing,
+		false,
 		NULL, NULL, NULL
 	},
 	{

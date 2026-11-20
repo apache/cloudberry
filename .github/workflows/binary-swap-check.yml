@@ -24,7 +24,9 @@
 # current PR/push code against the latest release tag.
 #
 # Workflow:
-# 1. Resolve baseline: Find the latest release tag from REL_2_STABLE
+# 1. Resolve baseline: Find the latest release tag from REL_2_STABLE and
+#    fail early if the on-disk format identifiers (CATALOG_VERSION_NO,
+#    PG_CONTROL_VERSION, XLOG_PAGE_MAGIC) differ from it
 # 2. Build baseline: Build RPM from the baseline tag (parallel)
 # 3. Build current: Build RPM from current PR/push code (parallel)
 # 4. Binary swap test: Install baseline, create cluster, swap to current,
@@ -122,6 +124,51 @@ jobs:
           echo "Found baseline: ${BASELINE_VERSION} (${BASELINE_REF})"
           echo "baseline_ref=${BASELINE_REF}" >> "$GITHUB_OUTPUT"
           echo "baseline_version=${BASELINE_VERSION}" >> "$GITHUB_OUTPUT"
+
+      # Binaries are only swappable when they agree on the on-disk format
+      # identifiers.  Compare them from the sources first, so that a bump
+      # fails in seconds with a clear message instead of after two full
+      # builds.  Equal identifiers are necessary but not sufficient (a
+      # layout change without a bump still passes here), which is what the
+      # binary swap test below is for.
+      - name: Check on-disk format identifiers
+        env:
+          BASELINE_VERSION: ${{ steps.resolve.outputs.baseline_version }}
+        run: |
+          set -eo pipefail
+
+          git fetch --quiet --depth=1 origin "${BASELINE_VERSION}"
+
+          # <macro>:<header that defines it>
+          IDENTIFIERS=(
+            "CATALOG_VERSION_NO:src/include/catalog/catversion.h"
+            "PG_CONTROL_VERSION:src/include/catalog/pg_control.h"
+            "XLOG_PAGE_MAGIC:src/include/access/xlog_internal.h"
+          )
+
+          get_define() {
+            git show "$1:$3" | awk -v name="$2" '$1 == "#define" && $2 == name { print $3; exit }'
+          }
+
+          status=0
+          for entry in "${IDENTIFIERS[@]}"; do
+            name="${entry%%:*}"
+            file="${entry#*:}"
+            baseline=$(get_define FETCH_HEAD "$name" "$file")
+            current=$(get_define HEAD "$name" "$file")
+
+            if [[ -z "$baseline" || -z "$current" ]]; then
+              echo "::error file=${file}::Could not read ${name} (baseline: '${baseline}', current: '${current}')"
+              status=1
+            elif [[ "$baseline" != "$current" ]]; then
+              echo "::error file=${file}::${name} changed from ${baseline} (${BASELINE_VERSION}) to ${current}. Binaries with different on-disk format identifiers cannot be swapped on an existing cluster."
+              status=1
+            else
+              echo "${name}: ${current} (unchanged)"
+            fi
+          done
+
+          exit $status
 
   ## ======================================================================
   ## Job: build-baseline

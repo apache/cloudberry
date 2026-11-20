@@ -2177,7 +2177,7 @@ selectDumpableFunction(FuncInfo *finfo, Archive *fout)
 			simple_oid_list_member(&function_include_oids, finfo->dobj.catId.oid))
 		finfo->dobj.dump = DUMP_COMPONENT_ALL;
 	else if (finfo->dobj.namespace)
-		finfo->dobj.dump = finfo->dobj.namespace->dobj.dump;
+		finfo->dobj.dump = finfo->dobj.namespace->dobj.dump_contains;
 	else
 		finfo->dobj.dump = DUMP_COMPONENT_ALL;
 }
@@ -2202,7 +2202,7 @@ selectDumpableAggregate(AggInfo *agginfo, Archive *fout)
 			simple_oid_list_member(&function_include_oids, agginfo->aggfn.dobj.catId.oid))
 		agginfo->aggfn.dobj.dump = DUMP_COMPONENT_ALL;
 	else if (agginfo->aggfn.dobj.namespace)
-		agginfo->aggfn.dobj.dump = agginfo->aggfn.dobj.namespace->dobj.dump;
+		agginfo->aggfn.dobj.dump = agginfo->aggfn.dobj.namespace->dobj.dump_contains;
 	else
 		agginfo->aggfn.dobj.dump = DUMP_COMPONENT_ALL;
 }
@@ -2363,6 +2363,26 @@ selectDumpablePublicationTable(DumpableObject *dobj, Archive *fout)
 
 	dobj->dump = fout->dopt->include_everything ?
 		DUMP_COMPONENT_ALL : DUMP_COMPONENT_NONE;
+}
+
+/*
+ * selectDumpableStatisticsObject: policy-setting subroutine
+ *		Mark an extended statistics object as to be dumped or not
+ *
+ * We dump an extended statistics object if the schema it's in and the table
+ * it's for are being dumped.  (This'll need more thought if statistics
+ * objects ever support cross-table stats.)
+ */
+static void
+selectDumpableStatisticsObject(StatsExtInfo *sobj, Archive *fout)
+{
+	if (checkExtensionMembership(&sobj->dobj, fout))
+		return;					/* extension membership overrides all else */
+
+	sobj->dobj.dump = sobj->dobj.namespace->dobj.dump_contains;
+	if (sobj->stattable == NULL ||
+		!(sobj->stattable->dobj.dump & DUMP_COMPONENT_DEFINITION))
+		sobj->dobj.dump = DUMP_COMPONENT_NONE;
 }
 
 /*
@@ -8218,6 +8238,7 @@ getExtendedStatistics(Archive *fout)
 	int			i_stxname;
 	int			i_stxnamespace;
 	int			i_stxowner;
+	int			i_stxrelid;
 	int			i_stattarget;
 	int			i;
 
@@ -8229,13 +8250,12 @@ getExtendedStatistics(Archive *fout)
 
 	if (fout->remoteVersion < 130000)
 		appendPQExpBuffer(query, "SELECT tableoid, oid, stxname, "
-					"stxnamespace, stxowner, (-1) AS stxstattarget "
+					"stxnamespace, stxowner, stxrelid, (-1) AS stxstattarget "
 					"FROM pg_catalog.pg_statistic_ext");
 	else
 		appendPQExpBuffer(query, "SELECT tableoid, oid, stxname, "
-					"stxnamespace, stxowner, stxstattarget "
+					"stxnamespace, stxowner, stxrelid, stxstattarget "
 					"FROM pg_catalog.pg_statistic_ext");
-	
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
 
@@ -8246,6 +8266,7 @@ getExtendedStatistics(Archive *fout)
 	i_stxname = PQfnumber(res, "stxname");
 	i_stxnamespace = PQfnumber(res, "stxnamespace");
 	i_stxowner = PQfnumber(res, "stxowner");
+	i_stxrelid = PQfnumber(res, "stxrelid");
 	i_stattarget = PQfnumber(res, "stxstattarget");
 
 	statsextinfo = (StatsExtInfo *) pg_malloc(ntups * sizeof(StatsExtInfo));
@@ -8260,10 +8281,15 @@ getExtendedStatistics(Archive *fout)
 		statsextinfo[i].dobj.namespace =
 			findNamespace(atooid(PQgetvalue(res, i, i_stxnamespace)));
 		statsextinfo[i].rolname = getRoleName(PQgetvalue(res, i, i_stxowner));
+		statsextinfo[i].stattable =
+			findTableByOid(atooid(PQgetvalue(res, i, i_stxrelid)));
 		statsextinfo[i].stattarget = atoi(PQgetvalue(res, i, i_stattarget));
 
 		/* Decide whether we want to dump it */
-		selectDumpableObject(&(statsextinfo[i].dobj), fout);
+		selectDumpableStatisticsObject(&(statsextinfo[i]), fout);
+
+		/* Stats objects do not currently have ACLs. */
+		statsextinfo[i].dobj.dump &= ~DUMP_COMPONENT_ACL;
 	}
 
 	PQclear(res);
@@ -8735,7 +8761,7 @@ getTriggers(Archive *fout, TableInfo tblinfo[], int numTables)
 						  "SELECT t.tgrelid, t.tgname, "
 						  "t.tgfoid::pg_catalog.regproc AS tgfname, "
 						  "pg_catalog.pg_get_triggerdef(t.oid, false) AS tgdef, "
-						  "t.tgenabled, t.tableoid, t.oid, t.tgisinternal as tgispartition\n"
+						  "t.tgenabled, t.tableoid, t.oid, t.tgisinternal\n"
 						  "FROM unnest('%s'::pg_catalog.oid[]) AS src(tbloid)\n"
 						  "JOIN pg_catalog.pg_trigger t ON (src.tbloid = t.tgrelid) "
 						  "LEFT JOIN pg_catalog.pg_trigger u ON (u.oid = t.tgparentid) "
@@ -8756,7 +8782,7 @@ getTriggers(Archive *fout, TableInfo tblinfo[], int numTables)
 						  "SELECT t.tgrelid, t.tgname, "
 						  "t.tgfoid::pg_catalog.regproc AS tgfname, "
 						  "pg_catalog.pg_get_triggerdef(t.oid, false) AS tgdef, "
-						  "t.tgenabled, t.tableoid, t.oid, t.tgisinternal as tgispartition "
+						  "t.tgenabled, t.tableoid, t.oid, t.tgisinternal "
 						  "FROM unnest('%s'::pg_catalog.oid[]) AS src(tbloid)\n"
 						  "JOIN pg_catalog.pg_trigger t ON (src.tbloid = t.tgrelid) "
 						  "LEFT JOIN pg_catalog.pg_depend AS d ON "
@@ -15384,11 +15410,11 @@ dumpAgg(Archive *fout, const AggInfo *agginfo)
 		if (fout->remoteVersion >= 110000)
 			appendPQExpBufferStr(query,
 								 "aggfinalmodify,\n"
-								 "aggmfinalmodify\n");
+								 "aggmfinalmodify,\n");
 		else
 			appendPQExpBufferStr(query,
 								 "'0' AS aggfinalmodify,\n"
-								 "'0' AS aggmfinalmodify\n");
+								 "'0' AS aggmfinalmodify,\n");
 		
 		if (fout->remoteVersion >= 140000 && fout->version.type == Cloudberry && fout->version.version >= 2)
 			appendPQExpBufferStr(query,

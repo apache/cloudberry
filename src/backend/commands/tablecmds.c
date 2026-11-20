@@ -788,10 +788,6 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	}
 	else if (stmt->partbound)
 	{
-		/*
-		 * For partitions, when no other tablespace is specified, we default
-		 * the tablespace to the parent partitioned table's.
-		 */
 		Assert(list_length(inheritOids) == 1);
 		tablespaceId = get_rel_tablespace(linitial_oid(inheritOids));
 
@@ -8371,6 +8367,9 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 	TupleDesc	tupdesc;
 	FormData_pg_attribute *aattr[] = {&attribute};
 
+	/* since this function recurses, it could be driven to stack overflow */
+	check_stack_depth();
+
 	/* At top level, permission check was done in ATPrepCmd, else do it */
 	if (recursing)
 		ATSimplePermissions(rel, ATT_TABLE | ATT_FOREIGN_TABLE);
@@ -8431,6 +8430,10 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 							colDef->colname, RelationGetRelationName(rel))));
 
 			table_close(attrdesc, RowExclusiveLock);
+
+			/* Make the child column change visible */
+			CommandCounterIncrement();
+
 			return InvalidObjectAddress;
 		}
 	}
@@ -10370,6 +10373,10 @@ ATExecDropColumn(List **wqueue, Relation rel, const char *colName,
 
 	/* Initialize addrs on the first invocation */
 	Assert(!recursing || addrs != NULL);
+
+	/* since this function recurses, it could be driven to stack overflow */
+	check_stack_depth();
+
 	if (!recursing)
 		addrs = new_object_addresses();
 
@@ -12568,6 +12575,9 @@ ATExecAlterConstrRecurse(Constraint *cmdcon, Relation conrel, Relation tgrel,
 	Oid			refrelid;
 	bool		changed = false;
 
+	/* since this function recurses, it could be driven to stack overflow */
+	check_stack_depth();
+
 	currcon = (Form_pg_constraint) GETSTRUCT(contuple);
 	conoid = currcon->oid;
 	refrelid = currcon->confrelid;
@@ -13569,6 +13579,9 @@ ATExecDropConstraint(Relation rel, const char *constrName,
 	bool		is_no_inherit_constraint = false;
 	char		contype;
 
+	/* since this function recurses, it could be driven to stack overflow */
+	check_stack_depth();
+
 	/* At top level, permission check was done in ATPrepCmd, else do it */
 	if (recursing)
 		ATSimplePermissions(rel, ATT_TABLE | ATT_FOREIGN_TABLE);
@@ -14447,8 +14460,29 @@ ATExecAlterColumnType(AlteredTableInfo *tab, Relation rel,
 				RememberConstraintForRebuilding(foundObject.objectId, tab);
 				break;
 
+			case OCLASS_PROC:
+
+				/*
+				 * A new-style SQL function can depend on a column, if that
+				 * column is referenced in the parsed function body.  Ideally
+				 * we'd automatically update the function by deparsing and
+				 * reparsing it, but that's risky and might well fail anyhow.
+				 * FIXME someday.
+				 */
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("cannot alter type of a column used by a function or procedure"),
+						 errdetail("%s depends on column \"%s\"",
+								   getObjectDescription(&foundObject, false),
+								   colName)));
+				break;
+
 			case OCLASS_REWRITE:
-				/* XXX someday see if we can cope with revising views */
+
+				/*
+				 * View/rule bodies have pretty much the same issues as
+				 * function bodies.  FIXME someday.
+				 */
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("cannot alter type of a column used by a view or rule"),
@@ -14464,9 +14498,9 @@ ATExecAlterColumnType(AlteredTableInfo *tab, Relation rel,
 				 * specified as an update target, or because the column is
 				 * used in the trigger's WHEN condition.  The first case would
 				 * not require any extra work, but the second case would
-				 * require updating the WHEN expression, which will take a
-				 * significant amount of new code.  Since we can't easily tell
-				 * which case applies, we punt for both.  FIXME someday.
+				 * require updating the WHEN expression, which has the same
+				 * issues as above.  Since we can't easily tell which case
+				 * applies, we punt for both.  FIXME someday.
 				 */
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -14512,7 +14546,6 @@ ATExecAlterColumnType(AlteredTableInfo *tab, Relation rel,
 				RememberStatisticsForRebuilding(foundObject.objectId, tab);
 				break;
 
-			case OCLASS_PROC:
 			case OCLASS_TYPE:
 			case OCLASS_CAST:
 			case OCLASS_COLLATION:
@@ -20310,13 +20343,14 @@ AlterTableNamespaceInternal(Relation rel, Oid oldNspOid, Oid nspOid,
 	if (rel->rd_rel->relkind == RELKIND_RELATION ||
 		rel->rd_rel->relkind == RELKIND_DIRECTORY_TABLE ||
 		rel->rd_rel->relkind == RELKIND_MATVIEW ||
-		rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+		rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE ||
+		rel->rd_rel->relkind == RELKIND_FOREIGN_TABLE)
 	{
 		AlterIndexNamespaces(classRel, rel, oldNspOid, nspOid, objsMoved);
 		AlterSeqNamespaces(classRel, rel, oldNspOid, nspOid,
 						   objsMoved, AccessExclusiveLock);
 		AlterConstraintNamespaces(RelationGetRelid(rel), oldNspOid, nspOid,
-								  false, objsMoved);
+							  false, objsMoved);
 	}
 
 	table_close(classRel, RowExclusiveLock);
@@ -21178,30 +21212,6 @@ ComputePartitionAttrs(ParseState *pstate, Relation rel, List *partParams, AttrNu
 				*partexprs = lappend(*partexprs, expr);
 
 				/*
-				 * Try to simplify the expression before checking for
-				 * mutability.  The main practical value of doing it in this
-				 * order is that an inline-able SQL-language function will be
-				 * accepted if its expansion is immutable, whether or not the
-				 * function itself is marked immutable.
-				 *
-				 * Note that expression_planner does not change the passed in
-				 * expression destructively and we have already saved the
-				 * expression to be stored into the catalog above.
-				 */
-				expr = (Node *) expression_planner((Expr *) expr);
-
-				/*
-				 * Partition expression cannot contain mutable functions,
-				 * because a given row must always map to the same partition
-				 * as long as there is no change in the partition boundary
-				 * structure.
-				 */
-				if (contain_mutable_functions(expr))
-					ereport(ERROR,
-							(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
-							 errmsg("functions in partition key expression must be marked IMMUTABLE")));
-
-				/*
 				 * transformPartitionSpec() should have already rejected
 				 * subqueries, aggregates, window functions, and SRFs, based
 				 * on the EXPR_KIND_ for partition expressions.
@@ -21241,6 +21251,32 @@ ComputePartitionAttrs(ParseState *pstate, Relation rel, List *partParams, AttrNu
 										   get_attname(RelationGetRelid(rel), attno, false)),
 								 parser_errposition(pstate, pelem->location)));
 				}
+
+				/*
+				 * Preprocess the expression before checking for mutability.
+				 * This is essential for the reasons described in
+				 * contain_mutable_functions_after_planning.  However, we call
+				 * expression_planner for ourselves rather than using that
+				 * function, because if constant-folding reduces the
+				 * expression to a constant, we'd like to know that so we can
+				 * complain below.
+				 *
+				 * Like contain_mutable_functions_after_planning, assume that
+				 * expression_planner won't scribble on its input, so this
+				 * won't affect the partexprs entry we saved above.
+				 */
+				expr = (Node *) expression_planner((Expr *) expr);
+
+				/*
+				 * Partition expressions cannot contain mutable functions,
+				 * because a given row must always map to the same partition
+				 * as long as there is no change in the partition boundary
+				 * structure.
+				 */
+				if (contain_mutable_functions(expr))
+					ereport(ERROR,
+							(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+							 errmsg("functions in partition key expression must be marked IMMUTABLE")));
 
 				/*
 				 * While it is not exactly *wrong* for a partition expression
