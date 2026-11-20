@@ -924,7 +924,7 @@ create_tablespace_directories(const char *location, const Oid tablespaceoid)
 					(errcode_for_file_access(),
 					 errmsg("could not stat directory \"%s\": %m",
 							location_with_version_dir)));
-		else if (pg_mkdir_p(location_with_version_dir, S_IRWXU) < 0)
+		else if (pg_mkdir_p(location_with_version_dir, pg_dir_create_mode) < 0)
 			ereport(ERROR,
 					(errcode_for_file_access(),
 					 errmsg("could not create directory \"%s\": %m",

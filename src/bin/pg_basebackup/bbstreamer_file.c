@@ -16,6 +16,7 @@
 #include "bbstreamer.h"
 #include "common/logging.h"
 #include "common/file_perm.h"
+#include "common/relpath.h"
 #include "common/string.h"
 
 typedef struct bbstreamer_plain_writer
@@ -34,6 +35,7 @@ typedef struct bbstreamer_extractor
 	void		(*report_output_file) (const char *);
 	char		filename[MAXPGPATH];
 	FILE	   *file;
+	bool		force_overwrite;
 } bbstreamer_extractor;
 
 static void bbstreamer_plain_writer_content(bbstreamer *streamer,
@@ -55,7 +57,8 @@ static void bbstreamer_extractor_content(bbstreamer *streamer,
 										 bbstreamer_archive_context context);
 static void bbstreamer_extractor_finalize(bbstreamer *streamer);
 static void bbstreamer_extractor_free(bbstreamer *streamer);
-static void extract_directory(const char *filename, mode_t mode);
+static void extract_directory(const char *filename, mode_t mode,
+							  bool force_overwrite);
 static void extract_link(const char *filename, const char *linktarget);
 static FILE *create_file_for_extract(const char *filename, mode_t mode);
 
@@ -182,7 +185,8 @@ bbstreamer_plain_writer_free(bbstreamer *streamer)
 bbstreamer *
 bbstreamer_extractor_new(const char *basepath,
 						 const char *(*link_map) (const char *),
-						 void (*report_output_file) (const char *))
+						 void (*report_output_file) (const char *),
+						 bool force_overwrite)
 {
 	bbstreamer_extractor *streamer;
 
@@ -192,6 +196,7 @@ bbstreamer_extractor_new(const char *basepath,
 	streamer->basepath = pstrdup(basepath);
 	streamer->link_map = link_map;
 	streamer->report_output_file = report_output_file;
+	streamer->force_overwrite = force_overwrite;
 
 	return &streamer->base;
 }
@@ -230,7 +235,8 @@ bbstreamer_extractor_content(bbstreamer *streamer, bbstreamer_member *member,
 
 			/* Dispatch based on file type. */
 			if (member->is_directory)
-				extract_directory(mystreamer->filename, member->mode);
+				extract_directory(mystreamer->filename, member->mode,
+								  mystreamer->force_overwrite);
 			else if (member->is_link)
 			{
 				const char *linktarget = member->linktarget;
@@ -318,6 +324,13 @@ should_allow_existing_directory(const char *pathname)
 		return pg_tblspc != NULL && pg_tblspc + 11 == filename;
 	}
 
+	/*
+	 * Cloudberry: BaseBackup() creates the version directory of each
+	 * tablespace before it receives the archives.
+	 */
+	if (strcmp(filename, GP_TABLESPACE_VERSION_DIRECTORY) == 0)
+		return true;
+
 	return false;
 }
 
@@ -325,9 +338,15 @@ should_allow_existing_directory(const char *pathname)
  * Create a directory.
  */
 static void
-extract_directory(const char *filename, mode_t mode)
+extract_directory(const char *filename, mode_t mode, bool force_overwrite)
 {
-	if (pg_check_dir(filename) != 0)
+	/*
+	 * Cloudberry: with --force-overwrite, the target directory can contain
+	 * the files of an earlier data directory, so remove them.  Without it, a
+	 * directory can exist only because this backup created it, for example
+	 * pg_tblspc with an in-place tablespace in it.  Do not remove it.
+	 */
+	if (force_overwrite && pg_check_dir(filename) != 0)
 	{
 		/*
 		 * We want to retain the contents of pg_log. And for

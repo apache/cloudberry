@@ -86,28 +86,35 @@ $node->command_ok(
 $slot = $node->slot('test');
 isnt($slot->{'restart_lsn'}, '', 'restart lsn is defined for new slot');
 
-$node->safe_psql('postgres',
-	"BEGIN; INSERT INTO test_table values (11); PREPARE TRANSACTION 'test'");
-$node->safe_psql('postgres', "COMMIT PREPARED 'test'");
-$nextlsn = $node->safe_psql('postgres', 'SELECT pg_current_wal_insert_lsn()');
-chomp($nextlsn);
+# Cloudberry does not support PREPARE TRANSACTION in utility mode, so the
+# two-phase transaction cannot be replayed.
+SKIP:
+{
+	skip 'Cloudberry does not support PREPARE TRANSACTION', 2;
 
-$node->command_fails(
-	[
-		'pg_recvlogical', '-S',
-		'test', '-d',
-		$node->connstr('postgres'), '--start',
-		'--endpos', "$nextlsn",
-		'--two-phase', '--no-loop',
-		'-f', '-'
-	],
-	'incorrect usage');
+	$node->safe_psql('postgres',
+		"BEGIN; INSERT INTO test_table values (11); PREPARE TRANSACTION 'test'");
+	$node->safe_psql('postgres', "COMMIT PREPARED 'test'");
+	$nextlsn = $node->safe_psql('postgres', 'SELECT pg_current_wal_insert_lsn()');
+	chomp($nextlsn);
 
-$node->command_ok(
-	[
-		'pg_recvlogical', '-S', 'test', '-d', $node->connstr('postgres'),
-		'--start', '--endpos', "$nextlsn", '--no-loop', '-f', '-'
-	],
-	'replayed a two-phase transaction');
+	$node->command_fails(
+		[
+			'pg_recvlogical', '-S',
+			'test', '-d',
+			$node->connstr('postgres'), '--start',
+			'--endpos', "$nextlsn",
+			'--two-phase', '--no-loop',
+			'-f', '-'
+		],
+		'incorrect usage');
+
+	$node->command_ok(
+		[
+			'pg_recvlogical', '-S', 'test', '-d', $node->connstr('postgres'),
+			'--start', '--endpos', "$nextlsn", '--no-loop', '-f', '-'
+		],
+		'replayed a two-phase transaction');
+}
 
 done_testing();

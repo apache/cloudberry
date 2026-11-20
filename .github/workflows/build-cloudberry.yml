@@ -387,6 +387,7 @@ jobs:
               },
               {"test":"ic-tap",
                "make_configs":["src/bin/pg_archivecleanup:installcheck",
+                               "src/bin/pg_basebackup:installcheck",
                                "src/bin/pg_config:installcheck",
                                "src/bin/pg_controldata:installcheck",
                                "src/bin/pg_resetwal:installcheck",
