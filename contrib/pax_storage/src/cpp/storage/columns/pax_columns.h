@@ -73,7 +73,11 @@ class PaxColumns : public PaxColumn {
   // Get number of toast in columns
   size_t ToastCounts() override;
 
-  // Set the external toast buffer
+  // Do not hide the base class SetExternalToastDataBuffer(data) overload.
+  using PaxColumn::SetExternalToastDataBuffer;
+
+  // Set the external toast buffer, and hand each column its own part of it
+  // according to column_sizes.
   void SetExternalToastDataBuffer(
       std::shared_ptr<DataBuffer<char>> external_toast_data,
       const std::vector<size_t> &column_sizes);

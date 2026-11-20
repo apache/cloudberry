@@ -46,6 +46,8 @@ class PaxNonFixedEncodingColumn : public PaxNonFixedColumn {
            std::unique_ptr<DataBuffer<int32>> offsets,
            size_t total_size) override;
 
+  // Do not hide the base class GetBuffer(size_t position) overload.
+  using PaxNonFixedColumn::GetBuffer;
   std::pair<char *, size_t> GetBuffer() override;
 
   std::pair<char *, size_t> GetOffsetBuffer(bool append_last) override;

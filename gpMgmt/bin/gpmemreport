@@ -53,7 +53,7 @@ class ProcessListing(object):
     @classmethod
     def process(cls, ps_dictionary):
         cmd = ps_dictionary['COMMAND']
-        if re.match('^\S*postgres\S*\s', cmd) is not None:
+        if re.match('^\\S*postgres\\S*\\s', cmd) is not None:
             if cmd.startswith('postgres:'):
                 if re.search(r'con\d+', cmd):
                     return GPDBQueryProcess(ps_dictionary)

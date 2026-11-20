@@ -47,6 +47,8 @@ class PaxVecEncodingColumn : public PaxVecCommColumn<T> {
 
   void Set(std::shared_ptr<DataBuffer<T>> data, size_t non_null_rows) override;
 
+  // Do not hide the base class GetBuffer(size_t position) overload.
+  using PaxVecCommColumn<T>::GetBuffer;
   std::pair<char *, size_t> GetBuffer() override;
 
   int64 GetOriginLength() const override;
@@ -95,6 +97,8 @@ class PaxVecNonFixedEncodingColumn : public PaxVecNonFixedColumn {
            std::shared_ptr<DataBuffer<int32>> offsets, size_t total_size,
            size_t non_null_rows) override;
 
+  // Do not hide the base class GetBuffer(size_t position) overload.
+  using PaxVecNonFixedColumn::GetBuffer;
   std::pair<char *, size_t> GetBuffer() override;
 
   int64 GetOriginLength() const override;
