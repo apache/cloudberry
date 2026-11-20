@@ -8,8 +8,8 @@ PGFILEDESC = "bool_plperl - bool transform for plperl"
 
 PG_CPPFLAGS = -I$(top_srcdir)/src/pl/plperl
 
-EXTENSION = bool_plperlu bool_plperl
-DATA = bool_plperlu--1.0.sql bool_plperl--1.0.sql
+EXTENSION = bool_plperl
+DATA = bool_plperl--1.0.sql
 
 REGRESS = bool_plperl bool_plperlu
 
@@ -22,6 +22,11 @@ subdir = contrib/bool_plperl
 top_builddir = ../..
 include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
+endif
+
+ifeq ($(disable_plperlu_extension),no)
+EXTENSION += bool_plperlu
+DATA += bool_plperlu--1.0.sql
 endif
 
 # We must link libperl explicitly
