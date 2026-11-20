@@ -4711,17 +4711,16 @@ create index t_trgm_idx on t_test_trgm using gin (t gin_trgm_ops);
 insert into t_test_trgm values ('qwerty99'), ('qwerty01');
 explain (costs off)
 select count(*) from t_test_trgm where t like '%99%' and t like '%qwerty%';
-                                       QUERY PLAN                                        
------------------------------------------------------------------------------------------
- Finalize Aggregate
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Bitmap Heap Scan on t_test_trgm
-                     Recheck Cond: ((t ~~ '%99%'::text) AND (t ~~ '%qwerty%'::text))
-                     ->  Bitmap Index Scan on t_trgm_idx
-                           Index Cond: ((t ~~ '%99%'::text) AND (t ~~ '%qwerty%'::text))
- Optimizer: Postgres query optimizer
-(8 rows)
+         ->  Bitmap Heap Scan on t_test_trgm
+               Recheck Cond: ((t ~~ '%99%'::text) AND (t ~~ '%qwerty%'::text))
+               ->  Bitmap Index Scan on t_trgm_idx
+                     Index Cond: ((t ~~ '%99%'::text) AND (t ~~ '%qwerty%'::text))
+ Optimizer: GPORCA
+(7 rows)
 
 select count(*) from t_test_trgm where t like '%99%' and t like '%qwerty%';
  count 
@@ -4731,17 +4730,16 @@ select count(*) from t_test_trgm where t like '%99%' and t like '%qwerty%';
 
 explain (costs off)
 select count(*) from t_test_trgm where t like '%99%' and t like '%qw%';
-                                     QUERY PLAN                                      
--------------------------------------------------------------------------------------
- Finalize Aggregate
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Bitmap Heap Scan on t_test_trgm
-                     Recheck Cond: ((t ~~ '%99%'::text) AND (t ~~ '%qw%'::text))
-                     ->  Bitmap Index Scan on t_trgm_idx
-                           Index Cond: ((t ~~ '%99%'::text) AND (t ~~ '%qw%'::text))
- Optimizer: Postgres query optimizer
-(8 rows)
+         ->  Bitmap Heap Scan on t_test_trgm
+               Recheck Cond: ((t ~~ '%99%'::text) AND (t ~~ '%qw%'::text))
+               ->  Bitmap Index Scan on t_trgm_idx
+                     Index Cond: ((t ~~ '%99%'::text) AND (t ~~ '%qw%'::text))
+ Optimizer: GPORCA
+(7 rows)
 
 select count(*) from t_test_trgm where t like '%99%' and t like '%qw%';
  count 
@@ -5096,27 +5094,25 @@ create index test2_idx_gist on test2 using gist (t gist_trgm_ops);
 set enable_seqscan=off;
 explain (costs off)
   select * from test2 where t like '%BCD%';
-                   QUERY PLAN                    
--------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Bitmap Heap Scan on test2
-         Recheck Cond: (t ~~ '%BCD%'::text)
-         ->  Bitmap Index Scan on test2_idx_gist
-               Index Cond: (t ~~ '%BCD%'::text)
- Optimizer: Postgres query optimizer
-(6 rows)
+   ->  Index Scan using test2_idx_gist on test2
+         Index Cond: (t ~~ '%BCD%'::text)
+         Filter: (t ~~ '%BCD%'::text)
+ Optimizer: GPORCA
+(5 rows)
 
 explain (costs off)
   select * from test2 where t ilike '%BCD%';
-                   QUERY PLAN                    
--------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Bitmap Heap Scan on test2
-         Recheck Cond: (t ~~* '%BCD%'::text)
-         ->  Bitmap Index Scan on test2_idx_gist
-               Index Cond: (t ~~* '%BCD%'::text)
- Optimizer: Postgres query optimizer
-(6 rows)
+   ->  Index Scan using test2_idx_gist on test2
+         Index Cond: (t ~~* '%BCD%'::text)
+         Filter: (t ~~* '%BCD%'::text)
+ Optimizer: GPORCA
+(5 rows)
 
 select * from test2 where t like '%BCD%';
  t 
@@ -5161,27 +5157,25 @@ select * from test2 where t like '  z foo%';
 
 explain (costs off)
   select * from test2 where t ~ '[abc]{3}';
-                    QUERY PLAN                    
---------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Bitmap Heap Scan on test2
-         Recheck Cond: (t ~ '[abc]{3}'::text)
-         ->  Bitmap Index Scan on test2_idx_gist
-               Index Cond: (t ~ '[abc]{3}'::text)
- Optimizer: Postgres query optimizer
-(6 rows)
+   ->  Index Scan using test2_idx_gist on test2
+         Index Cond: (t ~ '[abc]{3}'::text)
+         Filter: (t ~ '[abc]{3}'::text)
+ Optimizer: GPORCA
+(5 rows)
 
 explain (costs off)
   select * from test2 where t ~* 'DEF';
-                   QUERY PLAN                    
--------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Bitmap Heap Scan on test2
-         Recheck Cond: (t ~* 'DEF'::text)
-         ->  Bitmap Index Scan on test2_idx_gist
-               Index Cond: (t ~* 'DEF'::text)
- Optimizer: Postgres query optimizer
-(6 rows)
+   ->  Index Scan using test2_idx_gist on test2
+         Index Cond: (t ~* 'DEF'::text)
+         Filter: (t ~* 'DEF'::text)
+ Optimizer: GPORCA
+(5 rows)
 
 select * from test2 where t ~ '[abc]{3}';
    t    
@@ -5313,15 +5307,14 @@ select * from test2 where t ~ '/\d+/-\d';
 -- test = operator
 explain (costs off)
   select * from test2 where t = 'abcdef';
-                   QUERY PLAN                    
--------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Bitmap Heap Scan on test2
-         Recheck Cond: (t = 'abcdef'::text)
-         ->  Bitmap Index Scan on test2_idx_gist
-               Index Cond: (t = 'abcdef'::text)
- Optimizer: Postgres query optimizer
-(6 rows)
+   ->  Index Scan using test2_idx_gist on test2
+         Index Cond: (t = 'abcdef'::text)
+         Filter: (t = 'abcdef'::text)
+ Optimizer: GPORCA
+(5 rows)
 
 select * from test2 where t = 'abcdef';
    t    
@@ -5331,15 +5324,14 @@ select * from test2 where t = 'abcdef';
 
 explain (costs off)
   select * from test2 where t = '%line%';
-                   QUERY PLAN                    
--------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Bitmap Heap Scan on test2
-         Recheck Cond: (t = '%line%'::text)
-         ->  Bitmap Index Scan on test2_idx_gist
-               Index Cond: (t = '%line%'::text)
- Optimizer: Postgres query optimizer
-(6 rows)
+   ->  Index Scan using test2_idx_gist on test2
+         Index Cond: (t = '%line%'::text)
+         Filter: (t = '%line%'::text)
+ Optimizer: GPORCA
+(5 rows)
 
 select * from test2 where t = '%line%';
  t 

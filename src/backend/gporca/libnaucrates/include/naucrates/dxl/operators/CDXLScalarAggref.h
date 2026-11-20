@@ -82,13 +82,19 @@ private:
 	// is the input already sorted by the ORDER BY of the aggregate
 	BOOL m_is_presorted;
 
+	// collation of the aggregated arguments (inputcollid in GPDB); an
+	// aggregate that only gets the partial results of an earlier stage
+	// cannot derive it from its own arguments
+	IMDId *m_mdid_input_collation;
+
 public:
 	CDXLScalarAggref(const CDXLScalarAggref &) = delete;
 
 	// ctor/dtor
 	CDXLScalarAggref(CMemoryPool *mp, IMDId *agg_mdid, IMDId *resolved_rettype,
 					 BOOL is_distinct, EdxlAggrefStage agg_stage,
-					 EdxlAggrefKind aggkind, ULongPtrArray *argtypes, BOOL isAggStar);
+					 EdxlAggrefKind aggkind, ULongPtrArray *argtypes, BOOL isAggStar,
+					 IMDId *mdid_input_collation = nullptr);
 
 	~CDXLScalarAggref() override;
 
@@ -138,6 +144,13 @@ public:
 	GetArgTypes() const
 	{
 		return m_argtypes;
+	}
+
+	// collation of the aggregated arguments, null if unknown
+	IMDId *
+	MdidInputCollation() const
+	{
+		return m_mdid_input_collation;
 	}
 
 	// serialize operator in DXL format

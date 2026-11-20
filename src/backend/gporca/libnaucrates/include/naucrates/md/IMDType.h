@@ -141,6 +141,14 @@ public:
 		return false;
 	}
 
+	// default collation of the type (pg_type.typcollation), 0 if the type
+	// is not collatable or the collation is unknown
+	virtual OID
+	TypeCollation() const
+	{
+		return 0;
+	}
+
 	// id of the relation corresponding to a composite type
 	virtual IMDId *GetBaseRelMdid() const = 0;
 

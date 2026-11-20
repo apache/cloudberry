@@ -120,7 +120,8 @@ CConstraint::PcnstrFromScalarArrayCmp(CMemoryPool *mp, CExpression *pexpr,
 		IMDType::ECmpType cmp_type =
 			CUtils::ParseCmpType(popScArrayCmp->MdIdOp());
 
-		if (IMDType::EcmptOther == cmp_type)
+		if (IMDType::EcmptOther == cmp_type ||
+			!CConstraintInterval::FColConstCmpSupported(colref, cmp_type))
 		{
 			// unsupported comparison operator for constraint derivation
 
@@ -946,6 +947,30 @@ CConstraint::Phmcolconstr(CMemoryPool *mp, CColRefSet *pcrs,
 	}
 
 	return phmcolconstr;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CConstraint::FRemapIsExact
+//
+//	@doc:
+//		Can all the given constraints be remapped exactly to the given column
+//
+//---------------------------------------------------------------------------
+BOOL
+CConstraint::FRemapIsExact(const CConstraintArray *pdrgpcnstr,
+						   const CColRef *colref)
+{
+	const ULONG length = pdrgpcnstr->Size();
+	for (ULONG ul = 0; ul < length; ul++)
+	{
+		if (!(*pdrgpcnstr)[ul]->FRemapIsExact(colref))
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 //---------------------------------------------------------------------------

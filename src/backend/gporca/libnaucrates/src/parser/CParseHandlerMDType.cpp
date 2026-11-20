@@ -60,6 +60,7 @@ CParseHandlerMDType::CParseHandlerMDType(
 	  m_is_hashable(false),
 	  m_is_composite(false),
 	  m_is_text_related(false),
+	  m_type_collation(0),
 	  m_mdid_base_rel(nullptr),
 	  m_mdid_array_type(nullptr)
 {
@@ -202,6 +203,17 @@ CParseHandlerMDType::StartElement(const XMLCh *const,  // element_uri,
 				m_is_text_related = CDXLOperatorFactory::ConvertAttrValueToBool(
 					m_parse_handler_mgr->GetDXLMemoryManager(),
 					xml_is_text_related, EdxltokenMDTypeIsTextRelated,
+					EdxltokenMDType);
+			}
+
+			// parse optional type collation
+			const XMLCh *xml_type_collation = attrs.getValue(
+				CDXLTokens::XmlstrToken(EdxltokenMDTypeCollation));
+			if (nullptr != xml_type_collation)
+			{
+				m_type_collation = CDXLOperatorFactory::ConvertAttrValueToUlong(
+					m_parse_handler_mgr->GetDXLMemoryManager(),
+					xml_type_collation, EdxltokenMDTypeCollation,
 					EdxltokenMDType);
 			}
 
@@ -400,7 +412,7 @@ CParseHandlerMDType::EndElement(const XMLCh *const,	 // element_uri,
 					m_mdid_max_op, m_mdid_avg_op, m_mdid_sum_op,
 					m_mdid_count_op, m_is_hashable, m_is_merge_joinable,
 					m_is_composite, m_is_text_related, m_mdid_base_rel,
-					m_mdid_array_type, m_type_length);
+					m_mdid_array_type, m_type_length, m_type_collation);
 				break;
 		}
 

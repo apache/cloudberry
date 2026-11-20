@@ -145,6 +145,9 @@ private:
 	// a null datum of this type (used for statistics comparison)
 	IDatum *m_datum_null;
 
+	// default collation of the type (pg_type.typcollation)
+	OID m_type_collation;
+
 public:
 	CMDTypeGenericGPDB(const CMDTypeGenericGPDB &) = delete;
 
@@ -159,7 +162,7 @@ public:
 		IMDId *pmdidMax, IMDId *pmdidAvg, IMDId *pmdidSum, IMDId *pmdidCount,
 		BOOL is_hashable, BOOL is_merge_joinable, BOOL is_composite_type,
 		BOOL is_text_related, IMDId *mdid_base_relation, IMDId *mdid_type_array,
-		INT gpdb_length);
+		INT gpdb_length, OID type_collation = 0);
 
 	// dtor
 	~CMDTypeGenericGPDB() override;
@@ -221,6 +224,12 @@ public:
 	IsTextRelated() const override
 	{
 		return m_is_text_related;
+	}
+
+	OID
+	TypeCollation() const override
+	{
+		return m_type_collation;
 	}
 
 	// is type merge joinable on '='

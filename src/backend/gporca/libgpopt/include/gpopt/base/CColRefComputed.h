@@ -39,7 +39,7 @@ public:
 
 	// ctor
 	CColRefComputed(const IMDType *pmdtype, INT type_modifier, ULONG id,
-					const CName *pname);
+					const CName *pname, OID collation = 0);
 
 	// dtor
 	~CColRefComputed() override;

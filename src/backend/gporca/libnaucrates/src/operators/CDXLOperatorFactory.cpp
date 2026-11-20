@@ -1242,9 +1242,18 @@ CDXLOperatorFactory::MakeDXLAggFunc(CDXLMemoryManager *dxl_memory_manager,
 			dxl_memory_manager, attrs, EdxltokenTypeId, EdxltokenScalarAggref);
 	}
 
-	CDXLScalarAggref *dxl_op =
-		GPOS_NEW(mp) CDXLScalarAggref(mp, agg_mdid, resolved_rettype, is_distinct,
-									  agg_stage, agg_kind, argtypelist, is_agg_star);
+	IMDId *mdid_input_collation = nullptr;
+	if (nullptr != attrs.getValue(CDXLTokens::XmlstrToken(
+					   EdxltokenAggrefInputCollation)))
+	{
+		mdid_input_collation = ExtractConvertAttrValueToMdId(
+			dxl_memory_manager, attrs, EdxltokenAggrefInputCollation,
+			EdxltokenScalarAggref);
+	}
+
+	CDXLScalarAggref *dxl_op = GPOS_NEW(mp) CDXLScalarAggref(
+		mp, agg_mdid, resolved_rettype, is_distinct, agg_stage, agg_kind,
+		argtypelist, is_agg_star, mdid_input_collation);
 	dxl_op->SetPresorted(is_presorted);
 
 	return dxl_op;
@@ -1758,8 +1767,20 @@ CDXLOperatorFactory::MakeColumnDescr(CDXLMemoryManager *dxl_memory_manager,
 
 	GPOS_DELETE(col_name);
 
+	// parse optional collation
+	IMDId *mdid_collation = nullptr;
+	const XMLCh *collation_xml =
+		attrs.getValue(CDXLTokens::XmlstrToken(EdxltokenColCollation));
+	if (nullptr != collation_xml)
+	{
+		mdid_collation = ExtractConvertAttrValueToMdId(
+			dxl_memory_manager, attrs, EdxltokenColCollation,
+			EdxltokenColDescr);
+	}
+
 	return GPOS_NEW(mp) CDXLColDescr(mdname, id, attno, mdid_type,
-									 type_modifier, col_dropped, col_len);
+									 type_modifier, col_dropped, col_len,
+									 mdid_collation);
 }
 
 //---------------------------------------------------------------------------
@@ -1811,7 +1832,18 @@ CDXLOperatorFactory::MakeDXLColRef(CDXLMemoryManager *dxl_memory_manager,
 		dxl_memory_manager, attrs, EdxltokenTypeMod, target_elem, true,
 		default_type_modifier);
 
-	return GPOS_NEW(mp) CDXLColRef(mdname, id, mdid_type, type_modifier);
+	// parse optional collation
+	IMDId *mdid_collation = nullptr;
+	const XMLCh *collation_xml =
+		attrs.getValue(CDXLTokens::XmlstrToken(EdxltokenColCollation));
+	if (nullptr != collation_xml)
+	{
+		mdid_collation = ExtractConvertAttrValueToMdId(
+			dxl_memory_manager, attrs, EdxltokenColCollation, target_elem);
+	}
+
+	return GPOS_NEW(mp)
+		CDXLColRef(mdname, id, mdid_type, type_modifier, mdid_collation);
 }
 
 //---------------------------------------------------------------------------

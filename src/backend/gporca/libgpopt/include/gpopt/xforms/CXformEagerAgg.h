@@ -102,6 +102,7 @@ private:
 		IMDId *agg_mdid,  // original global aggregate function
 		CWStringConst *agg_name, CExpressionArray *agg_arg_array,
 		BOOL is_distinct, BOOL is_agg_star, ULongPtrArray *arg_types,
+		OID input_collation,
 		CExpression **lower_proj_elem_expr	// output project element of the new
 											// lower aggregate
 	);
@@ -112,6 +113,7 @@ private:
 		IMDId *agg_mdid,  // aggregate mdid to create
 		CWStringConst *agg_name, CColRef *lower_colref, CColRef *output_colref,
 		BOOL is_distinct, BOOL is_agg_star, ULongPtrArray *arg_types,
+		OID input_collation,
 		CExpression **upper_proj_elem_expr	// output project element of the new
 											// upper aggregate
 	);

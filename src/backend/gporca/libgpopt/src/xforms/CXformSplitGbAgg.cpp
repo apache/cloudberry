@@ -211,7 +211,8 @@ CXformSplitGbAgg::PopulateLocalGlobalProjectList(
 			popScAggFunc->IsDistinct(), EaggfuncstageLocal, /* fGlobal */
 			true /* fSplit */, nullptr /* pmdidResolvedReturnType */,
 			EaggfunckindNormal, popScAggFunc->GetArgTypes(),
-			popScAggFunc->FRepSafe(), popScAggFunc->IsAggStar());
+			popScAggFunc->FRepSafe(), popScAggFunc->IsAggStar(),
+			popScAggFunc->InputCollation());
 
 		popScAggFunc->MDId()->AddRef();
 		popScAggFunc->GetArgTypes()->AddRef();
@@ -222,7 +223,8 @@ CXformSplitGbAgg::PopulateLocalGlobalProjectList(
 			false /* is_distinct */, EaggfuncstageGlobal, /* fGlobal */
 			true /* fSplit */, nullptr /* pmdidResolvedReturnType */,
 			EaggfunckindNormal, popScAggFunc->GetArgTypes(),
-			popScAggFunc->FRepSafe(), popScAggFunc->IsAggStar());
+			popScAggFunc->FRepSafe(), popScAggFunc->IsAggStar(),
+			popScAggFunc->InputCollation());
 
 		// determine column reference for the new project element
 		const IMDAggregate *pmdagg =

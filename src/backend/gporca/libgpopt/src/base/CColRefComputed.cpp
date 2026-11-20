@@ -26,8 +26,8 @@ using namespace gpopt;
 //
 //---------------------------------------------------------------------------
 CColRefComputed::CColRefComputed(const IMDType *pmdtype, INT type_modifier,
-								 ULONG id, const CName *pname)
-	: CColRef(pmdtype, type_modifier, id, pname)
+								 ULONG id, const CName *pname, OID collation)
+	: CColRef(pmdtype, type_modifier, id, pname, collation)
 {
 	GPOS_ASSERT(nullptr != pmdtype);
 	GPOS_ASSERT(pmdtype->MDId()->IsValid());

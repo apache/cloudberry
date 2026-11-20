@@ -129,8 +129,13 @@ CConstraint *
 CConstraintInterval::PcnstrCopyWithRemappedColumns(
 	CMemoryPool *mp, UlongToColRefMap *colref_mapping, BOOL must_exist)
 {
+	// the mapped columns are copies of the original ones (e.g. CTE consumer
+	// or partition columns) and compare the same way, so the ranges carry
+	// over as they are
 	CColRef *colref = CUtils::PcrRemap(m_pcr, colref_mapping, must_exist);
-	return PcnstrRemapForColumn(mp, colref);
+	m_pdrgprng->AddRef();
+	return GPOS_NEW(mp)
+		CConstraintInterval(mp, colref, m_pdrgprng, m_fIncludesNull);
 }
 
 //---------------------------------------------------------------------------
@@ -570,6 +575,11 @@ CConstraintInterval::PciIntervalFromColConstCmp(CMemoryPool *mp,
 												CScalarConst *popScConst,
 												BOOL infer_nulls_as)
 {
+	if (!FColConstCmpSupported(colref, cmp_type))
+	{
+		return nullptr;
+	}
+
 	CConstraintInterval *pcri = nullptr;
 	CRangeArray *pdrngprng = PciRangeFromColConstCmp(mp, cmp_type, popScConst);
 
@@ -584,6 +594,61 @@ CConstraintInterval::PciIntervalFromColConstCmp(CMemoryPool *mp,
 	return pcri;
 }
 
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CConstraintInterval::FColConstCmpSupported
+//
+//	@doc:
+//		Check if an interval can be derived from comparing the column with a
+//		constant using the given comparison type.
+//
+//		Range bounds are compared by CDefaultComparator, which evaluates the
+//		comparison on constants that carry the type's default collation. For
+//		a column whose collation differs from it (e.g. a text column declared
+//		COLLATE "C"), the resulting order is wrong, and so would be any
+//		contradiction or partition pruning derived from the ranges. Equality
+//		based comparisons only produce points, whose intersections and unions
+//		do not depend on the sort order, so they are still supported.
+//
+//---------------------------------------------------------------------------
+BOOL
+CConstraintInterval::FColConstCmpSupported(const CColRef *colref,
+										   IMDType::ECmpType cmp_type)
+{
+	if (IMDType::EcmptEq == cmp_type || IMDType::EcmptNEq == cmp_type ||
+		IMDType::EcmptIDF == cmp_type)
+	{
+		return true;
+	}
+
+	return FCollationMatchesType(colref);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CConstraintInterval::FCollationMatchesType
+//
+//	@doc:
+//		Do range bounds on the column, which are ordered by the default
+//		collation of its type, compare like the column itself. A column of a
+//		collatable type without a known collation (e.g. a computed column)
+//		may compare differently, so it does not qualify.
+//
+//---------------------------------------------------------------------------
+BOOL
+CConstraintInterval::FCollationMatchesType(const CColRef *colref)
+{
+	OID type_collation = colref->RetrieveType()->TypeCollation();
+
+	// not a collatable type, or metadata without collation information
+	if (0 == type_collation)
+	{
+		return true;
+	}
+
+	return colref->Collation() == type_collation;
+}
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -1237,9 +1302,50 @@ CConstraintInterval::PcnstrRemapForColumn(CMemoryPool *mp,
 										  CColRef *colref) const
 {
 	GPOS_ASSERT(nullptr != colref);
+
+	if (!FRemapIsExact(colref))
+	{
+		// the ranges are ordered by a collation the new column does not
+		// compare with; keep only the knowledge about NULLs
+		return PciUnbounded(mp, colref, m_fIncludesNull);
+	}
+
 	m_pdrgprng->AddRef();
 	return GPOS_NEW(mp)
 		CConstraintInterval(mp, colref, m_pdrgprng, m_fIncludesNull);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CConstraintInterval::FRemapIsExact
+//
+//	@doc:
+//		Can the interval be remapped to the given column without changing its
+//		meaning. Equivalent columns (e.g. both sides of an equality join) may
+//		have different collations: the points of the interval hold for both,
+//		but its ranges only hold for a column comparing like the original one.
+//
+//---------------------------------------------------------------------------
+BOOL
+CConstraintInterval::FRemapIsExact(const CColRef *colref) const
+{
+	if (m_pcr->Collation() == colref->Collation() ||
+		0 == colref->RetrieveType()->TypeCollation())
+	{
+		return true;
+	}
+
+	const ULONG length = m_pdrgprng->Size();
+	for (ULONG ul = 0; ul < length; ul++)
+	{
+		CRange *prange = (*m_pdrgprng)[ul];
+		if (!prange->FPoint() && !prange->IsConstraintUnbounded())
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 //---------------------------------------------------------------------------

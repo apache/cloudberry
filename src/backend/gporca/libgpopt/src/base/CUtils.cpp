@@ -1936,7 +1936,7 @@ CUtils::PopAggFunc(
 	BOOL is_distinct, EAggfuncStage eaggfuncstage, BOOL fSplit,
 	IMDId *pmdidResolvedReturnType,  // return type to be used if original return type is ambiguous
 	EAggfuncKind aggkind, ULongPtrArray *argtypes, BOOL fRepSafe,
-	BOOL is_agg_star)
+	BOOL is_agg_star, OID input_collation)
 {
 	GPOS_ASSERT(nullptr != pmdidAggFunc);
 	GPOS_ASSERT(nullptr != pstrAggFunc);
@@ -1945,7 +1945,8 @@ CUtils::PopAggFunc(
 
 	return GPOS_NEW(mp) CScalarAggFunc(
 		mp, pmdidAggFunc, pmdidResolvedReturnType, pstrAggFunc, is_distinct,
-		eaggfuncstage, fSplit, aggkind, argtypes, fRepSafe, is_agg_star);
+		eaggfuncstage, fSplit, aggkind, argtypes, fRepSafe, is_agg_star,
+		input_collation);
 }
 
 // generate an aggregate function
@@ -1966,7 +1967,8 @@ CUtils::PexprAggFunc(CMemoryPool *mp, IMDId *pmdidAggFunc,
 	// generate aggregate function
 	CScalarAggFunc *popScAggFunc =
 		PopAggFunc(mp, pmdidAggFunc, pstrAggFunc, is_distinct, eaggfuncstage,
-				   fSplit, nullptr, EaggfunckindNormal, argtypes, false, is_agg_star);
+				   fSplit, nullptr, EaggfunckindNormal, argtypes, false,
+				   is_agg_star, colref->Collation());
 
 	// generate function arguments
 	CExpressionArray *pdrgpexpr = GPOS_NEW(mp) CExpressionArray(mp);

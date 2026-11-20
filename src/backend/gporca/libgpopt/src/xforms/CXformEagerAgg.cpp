@@ -281,7 +281,7 @@ CXformEagerAgg::PopulateLowerUpperProjectList(
 				CWStringConst(mp, orig_agg_func->PstrAggFunc()->GetBuffer()),
 			orig_agg_expr->PdrgPexpr(), orig_agg_func->IsDistinct(),
 			orig_agg_func->IsAggStar(), orig_agg_func->GetArgTypes(),
-			&lower_proj_elem_expr);
+			orig_agg_func->InputCollation(), &lower_proj_elem_expr);
 		lower_proj_elem_array->Append(lower_proj_elem_expr);
 
 		CExpression *upper_proj_elem_expr = nullptr;
@@ -293,7 +293,7 @@ CXformEagerAgg::PopulateLowerUpperProjectList(
 				->Pcr(),
 			orig_proj_elem->Pcr(), orig_agg_func->IsDistinct(),
 			orig_agg_func->IsAggStar(), orig_agg_func->GetArgTypes(),
-			&upper_proj_elem_expr);
+			orig_agg_func->InputCollation(), &upper_proj_elem_expr);
 		upper_proj_elem_array->Append(upper_proj_elem_expr);
 	}  // end of loop over each project element
 
@@ -312,7 +312,7 @@ CXformEagerAgg::PopulateLowerProjectElement(
 	CMemoryPool *mp,  // memory pool
 	IMDId *agg_mdid,  // original global aggregate function
 	CWStringConst *agg_name, CExpressionArray *agg_arg_array, BOOL is_distinct,
-	BOOL is_agg_star, ULongPtrArray *arg_types,
+	BOOL is_agg_star, ULongPtrArray *arg_types, OID input_collation,
 	CExpression **
 		lower_proj_elem_expr  // output project element of the new lower aggregate
 )
@@ -324,7 +324,7 @@ CXformEagerAgg::PopulateLowerProjectElement(
 	arg_types->AddRef();
 	CScalarAggFunc *lower_agg_func = CUtils::PopAggFunc(
 		mp, agg_mdid, agg_name, is_distinct, EaggfuncstageLocal, true, nullptr,
-		EaggfunckindNormal, arg_types, false, is_agg_star);
+		EaggfunckindNormal, arg_types, false, is_agg_star, input_collation);
 	// add the arguments for the lower aggregate function, which is
 	// going to be the same as the original aggregate function
 	agg_arg_array->AddRef();
@@ -353,6 +353,7 @@ CXformEagerAgg::PopulateUpperProjectElement(
 	IMDId *agg_mdid,  // original global aggregate function
 	CWStringConst *agg_name, CColRef *lower_colref, CColRef *output_colref,
 	BOOL is_distinct, BOOL is_agg_star, ULongPtrArray *arg_types,
+	OID input_collation,
 	CExpression **
 		upper_proj_elem_expr  // output project element of the new lower aggregate
 )
@@ -362,7 +363,7 @@ CXformEagerAgg::PopulateUpperProjectElement(
 	arg_types->AddRef();
 	CScalarAggFunc *upper_agg_func = CUtils::PopAggFunc(
 		mp, agg_mdid, agg_name, is_distinct, EaggfuncstageGlobal, true, nullptr,
-		EaggfunckindNormal, arg_types, false, is_agg_star);
+		EaggfunckindNormal, arg_types, false, is_agg_star, input_collation);
 
 	// populate the argument list for the upper aggregate function
 	CExpressionArray *upper_agg_arg_array = GPOS_NEW(mp) CExpressionArray(mp);

@@ -290,6 +290,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenDatum, GPOS_WSZ_LIT("Datum")},
 
 		{EdxltokenTypeMod, GPOS_WSZ_LIT("TypeModifier")},
+		{EdxltokenColCollation, GPOS_WSZ_LIT("CollationMdid")},
 		{EdxltokenCoercionForm, GPOS_WSZ_LIT("CoercionForm")},
 		{EdxltokenLocation, GPOS_WSZ_LIT("Location")},
 		{EdxltokenIsExplicit, GPOS_WSZ_LIT("IsExplicit")},
@@ -372,6 +373,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenAggrefIsAggStar, GPOS_WSZ_LIT("AggStar")},
 		{EdxltokenAggrefIsPresorted, GPOS_WSZ_LIT("AggPresorted")},
 		{EdxltokenAggrefArgTypes, GPOS_WSZ_LIT("AggArgTypes")},
+		{EdxltokenAggrefInputCollation, GPOS_WSZ_LIT("InputCollation")},
 		{EdxltokenAggrefKind, GPOS_WSZ_LIT("AggKind")},
 		{EdxltokenAggrefStage, GPOS_WSZ_LIT("AggStage")},
 		{EdxltokenAggrefLookups, GPOS_WSZ_LIT("AggLookups")},
@@ -645,6 +647,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenMDTypeMergeJoinable, GPOS_WSZ_LIT("IsMergeJoinable")},
 		{EdxltokenMDTypeComposite, GPOS_WSZ_LIT("IsComposite")},
 		{EdxltokenMDTypeIsTextRelated, GPOS_WSZ_LIT("IsTextRelated")},
+		{EdxltokenMDTypeCollation, GPOS_WSZ_LIT("TypeCollation")},
 		{EdxltokenMDTypeFixedLength, GPOS_WSZ_LIT("IsFixedLength")},
 		{EdxltokenMDTypeLength, GPOS_WSZ_LIT("Length")},
 		{EdxltokenMDTypeByValue, GPOS_WSZ_LIT("PassByValue")},

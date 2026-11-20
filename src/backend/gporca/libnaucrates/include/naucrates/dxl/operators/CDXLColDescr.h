@@ -61,13 +61,17 @@ private:
 	// width of the column, for instance  char(10) column has width 10
 	ULONG m_column_width;
 
+	// collation OID
+	IMDId *m_mdid_collation;
+
 public:
 	CDXLColDescr(const CDXLColDescr &) = delete;
 
 	// ctor
 	CDXLColDescr(CMDName *, ULONG column_id, INT attr_no,
 				 IMDId *column_mdid_type, INT type_modifier, BOOL is_dropped,
-				 ULONG width = gpos::ulong_max);
+				 ULONG width = gpos::ulong_max,
+				 IMDId *mdid_collation = nullptr);
 
 	//dtor
 	~CDXLColDescr() override;
@@ -91,6 +95,12 @@ public:
 
 	// column width
 	ULONG Width() const;
+
+	// column collation
+	IMDId *MdidCollation() const;
+
+	// set column collation, takes ownership of the given mdid
+	void SetMdidCollation(IMDId *mdid_collation);
 
 	void SerializeToDXL(CXMLSerializer *xml_serializer) const;
 };

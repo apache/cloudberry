@@ -298,6 +298,7 @@ enum Edxltoken
 
 	// CoerceToDomain and CoerceViaIO and ArrayCoerceExpr related tokens
 	EdxltokenTypeMod,
+	EdxltokenColCollation,
 	EdxltokenCoercionForm,
 	EdxltokenLocation,
 	EdxltokenIsExplicit,
@@ -324,6 +325,7 @@ enum Edxltoken
 	EdxltokenAggrefIsAggStar,
 	EdxltokenAggrefIsPresorted,
 	EdxltokenAggrefArgTypes,
+	EdxltokenAggrefInputCollation,
 	EdxltokenAggrefKind,
 	EdxltokenAggrefStage,
 	EdxltokenAggrefLookups,
@@ -591,6 +593,7 @@ enum Edxltoken
 	EdxltokenMDTypeMergeJoinable,
 	EdxltokenMDTypeComposite,
 	EdxltokenMDTypeIsTextRelated,
+	EdxltokenMDTypeCollation,
 	EdxltokenMDTypeFixedLength,
 	EdxltokenMDTypeLength,
 	EdxltokenMDTypeByValue,

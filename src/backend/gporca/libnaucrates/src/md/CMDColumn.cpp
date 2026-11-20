@@ -29,14 +29,15 @@ using namespace gpmd;
 //---------------------------------------------------------------------------
 CMDColumn::CMDColumn(CMDName *mdname, INT attrnum, IMDId *mdid_type,
 					 INT type_modifier, BOOL is_nullable, BOOL is_dropped,
-					 ULONG length)
+					 ULONG length, OID collation)
 	: m_mdname(mdname),
 	  m_attno(attrnum),
 	  m_mdid_type(mdid_type),
 	  m_type_modifier(type_modifier),
 	  m_is_nullable(is_nullable),
 	  m_is_dropped(is_dropped),
-	  m_length(length)
+	  m_length(length),
+	  m_collation(collation)
 {
 }
 
@@ -171,6 +172,12 @@ CMDColumn::Serialize(CXMLSerializer *xml_serializer) const
 	{
 		xml_serializer->AddAttribute(
 			CDXLTokens::GetDXLTokenStr(EdxltokenColDropped), m_is_dropped);
+	}
+
+	if (0 != m_collation)
+	{
+		xml_serializer->AddAttribute(
+			CDXLTokens::GetDXLTokenStr(EdxltokenColCollation), m_collation);
 	}
 
 	xml_serializer->CloseElement(

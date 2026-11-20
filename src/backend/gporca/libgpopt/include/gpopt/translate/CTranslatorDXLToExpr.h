@@ -155,7 +155,8 @@ private:
 	// create new column reference and add to the hashmap maintaining
 	// the mapping between DXL ColIds and column reference.
 	CColRef *PcrCreate(const CColRef *colref, const IMDType *pmdtype,
-					   INT type_modifier, BOOL fStoreMapping, ULONG colid);
+					   INT type_modifier, OID collation, BOOL fStoreMapping,
+					   ULONG colid);
 
 	// check if we currently support the casting of such column types
 	static BOOL FCastingUnknownType(IMDId *pmdidSource, IMDId *mdid_dest);
