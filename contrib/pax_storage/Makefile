@@ -88,7 +88,7 @@ build: $(SRC) $(CSRC)
 			$(PAX_GTEST_OPT) \
 			.. ; \
 	fi
-	cd build && make -j8
+	$(MAKE) -C build
 # CMake emits libpax.so on both platforms (Linux SHARED, macOS MODULE).
 	@cp -f build/src/cpp/libpax.so pax.so
 
@@ -105,7 +105,7 @@ install-data: build
 install: install-data
 	$(INSTALL_SHLIB) pax.so '$(DESTDIR)$(pkglibdir)/pax.so'
 	@if [ -f build/src/cpp/pax_dump ]; then $(INSTALL_PROGRAM) build/src/cpp/pax_dump '$(DESTDIR)$(bindir)/pax_dump'; fi;
-	make -j10 -C build install
+	$(MAKE) -C build install
 
 .PHONY: pax-test
 pax-test: 
