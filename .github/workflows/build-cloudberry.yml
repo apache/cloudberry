@@ -408,6 +408,7 @@ jobs:
                                "src/test/modules/test_integerset:install installcheck",
                                "src/test/modules/test_lfind:install installcheck",
                                "src/test/modules/test_parser:install installcheck",
+                               "src/test/modules/test_pg_dump:install installcheck",
                                "src/test/modules/test_planner:install installcheck",
                                "src/test/modules/test_rbtree:install installcheck",
                                "src/test/modules/test_regex:install installcheck",
