@@ -29,7 +29,10 @@ change a GUC.  The Makefile in gpMgmt/bin will use this parser to
     def get_source_c_file_paths():
         mypath = os.path.realpath(__file__)
         misc_dir = os.path.join(os.path.dirname(mypath), "../../../src/backend/utils/misc")
-        return [os.path.join(misc_dir, "guc.c"), os.path.join(misc_dir, "guc_gp.c")]
+        # Since PostgreSQL 16, the GUC tables of PostgreSQL are in
+        # guc_tables.c, not in guc.c.
+        return [os.path.join(misc_dir, name)
+                for name in ("guc.c", "guc_tables.c", "guc_gp.c")]
 
     def parse_gucs(self, guc_path):
         with open(guc_path) as f:
