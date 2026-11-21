@@ -159,6 +159,7 @@
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
 
+#include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
 #include "utils/faultinjector.h"
 
@@ -736,6 +737,14 @@ AutoVacLauncherMain(int argc, char *argv[])
 		ResetLatch(MyLatch);
 
 		HandleAutoVacLauncherInterrupts();
+
+		/*
+		 * Coordinator workers enter cdb_setup(), which requires DTX recovery
+		 * to be complete.  Defer worker launches until they can initialize
+		 * successfully, keeping the launcher responsive to interrupts.
+		 */
+		if (IS_QUERY_DISPATCHER() && !IS_SINGLENODE() && !*shmDtmStarted)
+			continue;
 
 		/*
 		 * a worker finished, or postmaster signaled failure to start a worker
