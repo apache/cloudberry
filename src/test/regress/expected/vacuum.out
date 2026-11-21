@@ -88,8 +88,11 @@ DELETE FROM vactst WHERE i % 5 <> 0; -- delete a few rows inside
 ANALYZE vactst;
 COMMIT;
 -- Test ANALYZE setting relhassubclass=f for non-partitioning inheritance
+-- Unlike PostgreSQL, Cloudberry skips sampling for a table with no columns,
+-- so ANALYZE does not clear relhassubclass after its last child is dropped.
+-- Use a column here to exercise the inheritance case.
 BEGIN;
-CREATE TABLE past_inh_parent ();
+CREATE TABLE past_inh_parent (i int);
 CREATE TABLE past_inh_child () INHERITS (past_inh_parent);
 INSERT INTO past_inh_child DEFAULT VALUES;
 INSERT INTO past_inh_child DEFAULT VALUES;

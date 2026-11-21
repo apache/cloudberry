@@ -473,8 +473,8 @@ DROP TABLE parted_fk_naming;
 -- indexes (without constraints) on the partitioned table.  Ideally these should
 -- fail, but we don't dare change released behavior, so instead cope with it at
 -- DETACH time.
-CREATE TEMP TABLE t (a integer, b integer) PARTITION BY HASH (a, b);
-CREATE TEMP TABLE tp (a integer, b integer, PRIMARY KEY (a, b), UNIQUE (b, a));
+CREATE TEMP TABLE t (a integer, b integer) PARTITION BY HASH (a, b) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tp (a integer, b integer, PRIMARY KEY (a, b), UNIQUE (b, a)) DISTRIBUTED BY (a);
 ALTER TABLE t ATTACH PARTITION tp FOR VALUES WITH (MODULUS 1, REMAINDER 0);
 CREATE UNIQUE INDEX t_a_idx ON t (a, b);
 CREATE UNIQUE INDEX t_b_idx ON t (b, a);

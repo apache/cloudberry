@@ -161,8 +161,6 @@ RelationBuildPartitionDesc(Relation rel, bool omit_detached)
 	MemoryContext rbcontext;
 	int		   *mapping;
 
-retry:
-
 	/*
 	 * GPDB: Bring back the temporary memory context which gets removed in
 	 * upstream commit d3f48dfae42f9655425d1f58f396e495c7fb7812.
@@ -183,6 +181,9 @@ retry:
 									  "RelationBuildPartitionDesc",
 									  ALLOCSET_DEFAULT_SIZES);
 	saved_cxt = MemoryContextSwitchTo(rbcontext);
+
+	/* Reuse the scratch context when retrying a concurrent detach. */
+retry:
 
 	/*
 	 * Get partition oids from pg_inherits.  This uses a single snapshot to
