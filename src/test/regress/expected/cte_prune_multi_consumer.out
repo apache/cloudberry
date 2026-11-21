@@ -143,32 +143,33 @@ from agent x
 join agent y on x.p_id=y.p_id
 join agent z on x.p_id=z.p_id
 order by 1,2,3;
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: x.p_id, y.amnt, z.main_risk
    ->  Sort
          Sort Key: x.p_id, y.amnt, z.main_risk
          ->  Hash Join
-               Hash Cond: (x.p_id = z.p_id)
-               ->  Hash Join
-                     Hash Cond: (x.p_id = y.p_id)
-                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                           Hash Key: x.p_id
-                           ->  Subquery Scan on x
-                                 ->  Seq Scan on policy
-                     ->  Hash
-                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                 Hash Key: y.p_id
-                                 ->  Subquery Scan on y
-                                       ->  Seq Scan on policy policy_1
+               Hash Cond: (z.p_id = x.p_id)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: z.p_id
+                     ->  Subquery Scan on z
+                           ->  Shared Scan (share slice:id 2:0)
                ->  Hash
-                     ->  Redistribute Motion 3:3  (slice4; segments: 3)
-                           Hash Key: z.p_id
-                           ->  Subquery Scan on z
-                                 ->  Seq Scan on policy policy_2
+                     ->  Hash Join
+                           Hash Cond: (x.p_id = y.p_id)
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Hash Key: x.p_id
+                                 ->  Subquery Scan on x
+                                       ->  Shared Scan (share slice:id 3:0)
+                           ->  Hash
+                                 ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                       Hash Key: y.p_id
+                                       ->  Subquery Scan on y
+                                             ->  Shared Scan (share slice:id 4:0)
+                                                   ->  Seq Scan on policy
  Optimizer: Postgres query optimizer
-(23 rows)
+(24 rows)
 
 with agent as (select p_id, amnt, main_risk, premium from policy)
 select x.p_id, y.amnt, z.main_risk

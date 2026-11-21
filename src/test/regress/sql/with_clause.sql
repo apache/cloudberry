@@ -491,3 +491,54 @@ SELECT EXISTS(
 );
 
 DROP TABLE foo_issue_1204_test;
+
+--
+-- With gp_cte_sharing off, a CTE referenced more than once is shared by the
+-- references that have no quals to push down into it, and inlined, with the
+-- quals pushed down, for those that have.
+--
+create table cte_auto (a int, b int) distributed by (a);
+insert into cte_auto select i, i % 10 from generate_series(1, 1000) i;
+analyze cte_auto;
+set optimizer = off;
+set gp_cte_sharing = off;
+-- no quals on the references: shared
+explain (costs off)
+with c as (select b, count(*) n from cte_auto group by b)
+select count(*) from cte_auto where b in (select b from c)
+union all
+select count(*) from cte_auto where a in (select b from c);
+with c as (select b, count(*) n from cte_auto group by b)
+select count(*) from cte_auto where b in (select b from c)
+union all
+select count(*) from cte_auto where a in (select b from c);
+-- each reference filters differently: inlined, with the quals pushed down
+explain (costs off)
+with c as (select b, count(*) n from cte_auto group by b)
+select c1.n, c2.n from c c1, c c2 where c1.b = 1 and c2.b = 2;
+with c as (select b, count(*) n from cte_auto group by b)
+select c1.n, c2.n from c c1, c c2 where c1.b = 1 and c2.b = 2;
+-- one reference filters, the other doesn't: the first is inlined, the second
+-- reads a shared scan of the CTE that has no other consumer
+explain (costs off)
+with c as (select b, count(*) n from cte_auto group by b)
+select c1.b, c1.n, c2.n from c c1 join c c2 on c1.b = c2.b where c1.n > 99
+order by 1;
+with c as (select b, count(*) n from cte_auto group by b)
+select c1.b, c1.n, c2.n from c c1 join c c2 on c1.b = c2.b where c1.n > 99
+order by 1;
+-- a CTE whose result isn't spread across the segments is not shared: here one
+-- reference is executed in the QD, because of the volatile function, and the
+-- other in the segments, and they couldn't share a Shared Scan
+explain (costs off)
+with c as (select 1 as x)
+select x, random() >= 0 as r from c
+union all
+select x, random() >= 0 from c, gp_dist_random('gp_id');
+with c as (select 1 as x)
+select x, random() >= 0 as r from c
+union all
+select x, random() >= 0 from c, gp_dist_random('gp_id');
+reset gp_cte_sharing;
+reset optimizer;
+drop table cte_auto;

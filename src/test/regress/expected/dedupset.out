@@ -225,36 +225,38 @@ select * from pt1 where v1 in (select v3 from pt2 where v3 < 10);
 explain verbose with cte1 as (select v3 from t2) select count(*) from t1,t2 where t1.v1 in (select v3 from cte1) and t1.v1 in (select v3 from cte1 where v3 < 10);
                                                               QUERY PLAN                                                              
 --------------------------------------------------------------------------------------------------------------------------------------
- Finalize Aggregate  (cost=10000000015.48..10000000015.49 rows=1 width=8)
+ Finalize Aggregate  (cost=10000000015.96..10000000015.97 rows=1 width=8)
    Output: count(*)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000015.43..10000000015.48 rows=3 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000015.90..10000000015.95 rows=3 width=8)
          Output: (PARTIAL count(*))
-         ->  Partial Aggregate  (cost=10000000015.43..10000000015.44 rows=1 width=8)
+         ->  Partial Aggregate  (cost=10000000015.90..10000000015.91 rows=1 width=8)
                Output: PARTIAL count(*)
-               ->  Nested Loop  (cost=10000000004.85..10000000014.75 rows=270 width=0)
-                     ->  Result  (cost=4.85..4.86 rows=3 width=0)
-                           ->  Unique  (cost=4.85..4.86 rows=3 width=0)
+               ->  Nested Loop  (cost=10000000005.32..10000000015.23 rows=270 width=0)
+                     ->  Result  (cost=5.32..5.34 rows=3 width=0)
+                           ->  Unique  (cost=5.32..5.34 rows=3 width=0)
                                  Output: (RowIdExpr)
                                  Group Key: (RowIdExpr)
-                                 ->  Sort  (cost=4.85..4.86 rows=3 width=0)
+                                 ->  Sort  (cost=5.32..5.33 rows=3 width=0)
                                        Output: (RowIdExpr)
                                        Sort Key: (RowIdExpr)
-                                       ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=2.96..4.83 rows=3 width=0)
+                                       ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=2.93..5.30 rows=3 width=0)
                                              Output: (RowIdExpr)
                                              Hash Key: (RowIdExpr)
-                                             ->  Hash Join  (cost=2.96..4.78 rows=3 width=0)
+                                             ->  Hash Join  (cost=2.93..5.25 rows=3 width=0)
                                                    Output: (RowIdExpr)
-                                                   Hash Cond: (t2_1.v3 = t1.v1)
-                                                   ->  Seq Scan on public.t2 t2_1  (cost=0.00..1.33 rows=33 width=4)
-                                                         Output: t2_1.v3
-                                                   ->  Hash  (cost=2.93..2.93 rows=3 width=8)
+                                                   Hash Cond: (share0_ref1.v3 = t1.v1)
+                                                   ->  Shared Scan (share slice:id 2:0)  (cost=1.33..1.57 rows=33 width=4)
+                                                         Output: share0_ref1.v3
+                                                         ->  Seq Scan on public.t2 t2_1  (cost=0.00..1.33 rows=33 width=4)
+                                                               Output: t2_1.v3
+                                                   ->  Hash  (cost=2.90..2.90 rows=3 width=8)
                                                          Output: t1.v1, t2_2.v3, (RowIdExpr)
-                                                         ->  Hash Semi Join  (cost=1.48..2.93 rows=3 width=8)
+                                                         ->  Hash Semi Join  (cost=1.45..2.90 rows=3 width=8)
                                                                Output: t1.v1, t2_2.v3, RowIdExpr
                                                                Hash Cond: (t1.v1 = t2_2.v3)
                                                                ->  Seq Scan on public.t1  (cost=0.00..1.33 rows=33 width=4)
                                                                      Output: t1.v1, t1.v2
-                                                               ->  Hash  (cost=1.44..1.44 rows=3 width=4)
+                                                               ->  Hash  (cost=1.42..1.42 rows=3 width=4)
                                                                      Output: t2_2.v3
                                                                      ->  Seq Scan on public.t2 t2_2  (cost=0.00..1.42 rows=3 width=4)
                                                                            Output: t2_2.v3
@@ -264,7 +266,7 @@ explain verbose with cte1 as (select v3 from t2) select count(*) from t1,t2 wher
                                  ->  Seq Scan on public.t2  (cost=0.00..1.33 rows=33 width=0)
  Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(39 rows)
+(41 rows)
 
 explain verbose with cte1 as (select v3 from t2) select count(*) from t1,t2 where t1.v1 in (select v3 from cte1 where v3 < 10);
                                                   QUERY PLAN                                                   
@@ -309,36 +311,38 @@ set optimizer_cte_inlining_bound to 2;
 explain verbose with cte1 as (select v3 from t2) select count(*) from t1,t2 where t1.v1 in (select v3 from cte1) and t1.v1 in (select v3 from cte1 where v3 < 10);
                                                               QUERY PLAN                                                              
 --------------------------------------------------------------------------------------------------------------------------------------
- Finalize Aggregate  (cost=10000000015.48..10000000015.49 rows=1 width=8)
+ Finalize Aggregate  (cost=10000000015.96..10000000015.97 rows=1 width=8)
    Output: count(*)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000015.43..10000000015.48 rows=3 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000015.90..10000000015.95 rows=3 width=8)
          Output: (PARTIAL count(*))
-         ->  Partial Aggregate  (cost=10000000015.43..10000000015.44 rows=1 width=8)
+         ->  Partial Aggregate  (cost=10000000015.90..10000000015.91 rows=1 width=8)
                Output: PARTIAL count(*)
-               ->  Nested Loop  (cost=10000000004.85..10000000014.75 rows=270 width=0)
-                     ->  Result  (cost=4.85..4.86 rows=3 width=0)
-                           ->  Unique  (cost=4.85..4.86 rows=3 width=0)
+               ->  Nested Loop  (cost=10000000005.32..10000000015.23 rows=270 width=0)
+                     ->  Result  (cost=5.32..5.34 rows=3 width=0)
+                           ->  Unique  (cost=5.32..5.34 rows=3 width=0)
                                  Output: (RowIdExpr)
                                  Group Key: (RowIdExpr)
-                                 ->  Sort  (cost=4.85..4.86 rows=3 width=0)
+                                 ->  Sort  (cost=5.32..5.33 rows=3 width=0)
                                        Output: (RowIdExpr)
                                        Sort Key: (RowIdExpr)
-                                       ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=2.96..4.83 rows=3 width=0)
+                                       ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=2.93..5.30 rows=3 width=0)
                                              Output: (RowIdExpr)
                                              Hash Key: (RowIdExpr)
-                                             ->  Hash Join  (cost=2.96..4.78 rows=3 width=0)
+                                             ->  Hash Join  (cost=2.93..5.25 rows=3 width=0)
                                                    Output: (RowIdExpr)
-                                                   Hash Cond: (t2_1.v3 = t1.v1)
-                                                   ->  Seq Scan on public.t2 t2_1  (cost=0.00..1.33 rows=33 width=4)
-                                                         Output: t2_1.v3
-                                                   ->  Hash  (cost=2.93..2.93 rows=3 width=8)
+                                                   Hash Cond: (share0_ref1.v3 = t1.v1)
+                                                   ->  Shared Scan (share slice:id 2:0)  (cost=1.33..1.57 rows=33 width=4)
+                                                         Output: share0_ref1.v3
+                                                         ->  Seq Scan on public.t2 t2_1  (cost=0.00..1.33 rows=33 width=4)
+                                                               Output: t2_1.v3
+                                                   ->  Hash  (cost=2.90..2.90 rows=3 width=8)
                                                          Output: t1.v1, t2_2.v3, (RowIdExpr)
-                                                         ->  Hash Semi Join  (cost=1.48..2.93 rows=3 width=8)
+                                                         ->  Hash Semi Join  (cost=1.45..2.90 rows=3 width=8)
                                                                Output: t1.v1, t2_2.v3, RowIdExpr
                                                                Hash Cond: (t1.v1 = t2_2.v3)
                                                                ->  Seq Scan on public.t1  (cost=0.00..1.33 rows=33 width=4)
                                                                      Output: t1.v1, t1.v2
-                                                               ->  Hash  (cost=1.44..1.44 rows=3 width=4)
+                                                               ->  Hash  (cost=1.42..1.42 rows=3 width=4)
                                                                      Output: t2_2.v3
                                                                      ->  Seq Scan on public.t2 t2_2  (cost=0.00..1.42 rows=3 width=4)
                                                                            Output: t2_2.v3
@@ -348,7 +352,7 @@ explain verbose with cte1 as (select v3 from t2) select count(*) from t1,t2 wher
                                  ->  Seq Scan on public.t2  (cost=0.00..1.33 rows=33 width=0)
  Settings: enable_parallel = 'off', optimizer = 'off', optimizer_cte_inlining_bound = '2'
  Optimizer: Postgres query optimizer
-(39 rows)
+(41 rows)
 
 with cte1 as (select v3 from t2) select count(*) from t1,t2 where t1.v1 in (select v3 from cte1) and t1.v1 in (select v3 from cte1 where v3 < 10);
  count 
@@ -757,34 +761,36 @@ select count(*) from pt1 where v1 in (select v3 from pt2);
 explain verbose with cte1 as (select v3 from t2) select count(*) from t1,t2 where t1.v1 in (select v3 from cte1) and t1.v1 in (select v3 from cte1);
                                                   QUERY PLAN                                                   
 ---------------------------------------------------------------------------------------------------------------
- Finalize Aggregate  (cost=10000000137.03..10000000137.04 rows=1 width=8)
+ Finalize Aggregate  (cost=10000000139.36..10000000139.37 rows=1 width=8)
    Output: count(*)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000136.97..10000000137.02 rows=3 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000139.30..10000000139.35 rows=3 width=8)
          Output: (PARTIAL count(*))
-         ->  Partial Aggregate  (cost=10000000136.97..10000000136.98 rows=1 width=8)
+         ->  Partial Aggregate  (cost=10000000139.30..10000000139.31 rows=1 width=8)
                Output: PARTIAL count(*)
-               ->  Nested Loop  (cost=10000000004.17..10000000128.64 rows=3333 width=0)
-                     ->  Hash Semi Join  (cost=4.17..6.42 rows=33 width=0)
-                           Hash Cond: (t1.v1 = t2_2.v3)
-                           ->  Hash Semi Join  (cost=2.08..3.87 rows=33 width=8)
-                                 Output: t1.v1, t2_1.v3
-                                 Hash Cond: (t1.v1 = t2_1.v3)
+               ->  Nested Loop  (cost=10000000006.50..10000000130.97 rows=3333 width=0)
+                     ->  Hash Semi Join  (cost=6.50..8.75 rows=33 width=0)
+                           Hash Cond: (t1.v1 = share0_ref1.v3)
+                           ->  Hash Semi Join  (cost=3.25..5.04 rows=33 width=8)
+                                 Output: t1.v1, share0_ref2.v3
+                                 Hash Cond: (t1.v1 = share0_ref2.v3)
                                  ->  Seq Scan on public.t1  (cost=0.00..1.33 rows=33 width=4)
                                        Output: t1.v1, t1.v2
-                                 ->  Hash  (cost=1.67..1.67 rows=33 width=4)
-                                       Output: t2_1.v3
+                                 ->  Hash  (cost=2.00..2.00 rows=100 width=4)
+                                       Output: share0_ref2.v3
+                                       ->  Shared Scan (share slice:id 1:0)  (cost=1.33..1.57 rows=33 width=4)
+                                             Output: share0_ref2.v3
+                           ->  Hash  (cost=2.00..2.00 rows=100 width=4)
+                                 Output: share0_ref1.v3
+                                 ->  Shared Scan (share slice:id 1:0)  (cost=1.33..1.57 rows=33 width=4)
+                                       Output: share0_ref1.v3
                                        ->  Seq Scan on public.t2 t2_1  (cost=0.00..1.33 rows=33 width=4)
                                              Output: t2_1.v3
-                           ->  Hash  (cost=1.67..1.67 rows=33 width=4)
-                                 Output: t2_2.v3
-                                 ->  Seq Scan on public.t2 t2_2  (cost=0.00..1.33 rows=33 width=4)
-                                       Output: t2_2.v3
                      ->  Materialize  (cost=0.00..3.17 rows=100 width=0)
                            ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..2.67 rows=100 width=0)
                                  ->  Seq Scan on public.t2  (cost=0.00..1.33 rows=33 width=0)
  Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(27 rows)
+(29 rows)
 
 explain verbose with cte1 as (select v3 from t2) select count(*) from t1,t2 where t1.v1 in (select v3 from cte1);
                                                   QUERY PLAN                                                   
@@ -830,34 +836,36 @@ set optimizer_cte_inlining_bound to 2;
 explain verbose with cte1 as (select v3 from t2) select count(*) from t1,t2 where t1.v1 in (select v3 from cte1) and t1.v1 in (select v3 from cte1);
                                                   QUERY PLAN                                                   
 ---------------------------------------------------------------------------------------------------------------
- Finalize Aggregate  (cost=10000000137.03..10000000137.04 rows=1 width=8)
+ Finalize Aggregate  (cost=10000000139.36..10000000139.37 rows=1 width=8)
    Output: count(*)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000136.97..10000000137.02 rows=3 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000139.30..10000000139.35 rows=3 width=8)
          Output: (PARTIAL count(*))
-         ->  Partial Aggregate  (cost=10000000136.97..10000000136.98 rows=1 width=8)
+         ->  Partial Aggregate  (cost=10000000139.30..10000000139.31 rows=1 width=8)
                Output: PARTIAL count(*)
-               ->  Nested Loop  (cost=10000000004.17..10000000128.64 rows=3333 width=0)
-                     ->  Hash Semi Join  (cost=4.17..6.42 rows=33 width=0)
-                           Hash Cond: (t1.v1 = t2_2.v3)
-                           ->  Hash Semi Join  (cost=2.08..3.87 rows=33 width=8)
-                                 Output: t1.v1, t2_1.v3
-                                 Hash Cond: (t1.v1 = t2_1.v3)
+               ->  Nested Loop  (cost=10000000006.50..10000000130.97 rows=3333 width=0)
+                     ->  Hash Semi Join  (cost=6.50..8.75 rows=33 width=0)
+                           Hash Cond: (t1.v1 = share0_ref1.v3)
+                           ->  Hash Semi Join  (cost=3.25..5.04 rows=33 width=8)
+                                 Output: t1.v1, share0_ref2.v3
+                                 Hash Cond: (t1.v1 = share0_ref2.v3)
                                  ->  Seq Scan on public.t1  (cost=0.00..1.33 rows=33 width=4)
                                        Output: t1.v1, t1.v2
-                                 ->  Hash  (cost=1.67..1.67 rows=33 width=4)
-                                       Output: t2_1.v3
+                                 ->  Hash  (cost=2.00..2.00 rows=100 width=4)
+                                       Output: share0_ref2.v3
+                                       ->  Shared Scan (share slice:id 1:0)  (cost=1.33..1.57 rows=33 width=4)
+                                             Output: share0_ref2.v3
+                           ->  Hash  (cost=2.00..2.00 rows=100 width=4)
+                                 Output: share0_ref1.v3
+                                 ->  Shared Scan (share slice:id 1:0)  (cost=1.33..1.57 rows=33 width=4)
+                                       Output: share0_ref1.v3
                                        ->  Seq Scan on public.t2 t2_1  (cost=0.00..1.33 rows=33 width=4)
                                              Output: t2_1.v3
-                           ->  Hash  (cost=1.67..1.67 rows=33 width=4)
-                                 Output: t2_2.v3
-                                 ->  Seq Scan on public.t2 t2_2  (cost=0.00..1.33 rows=33 width=4)
-                                       Output: t2_2.v3
                      ->  Materialize  (cost=0.00..3.17 rows=100 width=0)
                            ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..2.67 rows=100 width=0)
                                  ->  Seq Scan on public.t2  (cost=0.00..1.33 rows=33 width=0)
  Settings: enable_parallel = 'off', optimizer = 'off', optimizer_cte_inlining_bound = '2'
  Optimizer: Postgres query optimizer
-(27 rows)
+(29 rows)
 
 with cte1 as (select v3 from t2) select count(*) from t1,t2 where t1.v1 in (select v3 from cte1) and t1.v1 in (select v3 from cte1);
  count 
@@ -1359,20 +1367,22 @@ select * from pt1 where v1 in (select v3 from pt2,t3 where v4=v6 and v4 < 10);
 explain verbose with cte1 as (select v3 from t2) select * from t1,t2 where t1.v1 in (select v3 from cte1) and t1.v1 in (select v3 from cte1,t3 where v4=v6);
                                                       QUERY PLAN                                                       
 -----------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000002.08..10000000192.76 rows=5000 width=16)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000003.25..10000000193.93 rows=5000 width=16)
    Output: t1.v1, t1.v2, t2.v3, t2.v4
-   ->  Nested Loop  (cost=10000000002.08..10000000126.10 rows=1667 width=16)
+   ->  Nested Loop  (cost=10000000003.25..10000000127.26 rows=1667 width=16)
          Output: t1.v1, t1.v2, t2.v3, t2.v4
          Join Filter: (SubPlan 1)
-         ->  Hash Semi Join  (cost=2.08..3.87 rows=33 width=8)
+         ->  Hash Semi Join  (cost=3.25..5.04 rows=33 width=8)
                Output: t1.v1, t1.v2
-               Hash Cond: (t1.v1 = t2_1.v3)
+               Hash Cond: (t1.v1 = share0_ref1.v3)
                ->  Seq Scan on public.t1  (cost=0.00..1.33 rows=33 width=8)
                      Output: t1.v1, t1.v2
-               ->  Hash  (cost=1.67..1.67 rows=33 width=4)
-                     Output: t2_1.v3
-                     ->  Seq Scan on public.t2 t2_1  (cost=0.00..1.33 rows=33 width=4)
-                           Output: t2_1.v3
+               ->  Hash  (cost=2.00..2.00 rows=100 width=4)
+                     Output: share0_ref1.v3
+                     ->  Shared Scan (share slice:id 1:0)  (cost=1.33..1.57 rows=33 width=4)
+                           Output: share0_ref1.v3
+                           ->  Seq Scan on public.t2 t2_1  (cost=0.00..1.33 rows=33 width=4)
+                                 Output: t2_1.v3
          ->  Materialize  (cost=0.00..3.17 rows=100 width=8)
                Output: t2.v3, t2.v4
                ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..2.67 rows=100 width=8)
@@ -1401,25 +1411,27 @@ explain verbose with cte1 as (select v3 from t2) select * from t1,t2 where t1.v1
                                                Output: t3.v6
  Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(42 rows)
+(44 rows)
 
 explain verbose with cte1 as (select v3 from t2) select * from t1,t2 where t1.v1 in (select v3 from cte1) and t1.v1 in (select v3 from t3,cte1 where v4=v6);
                                                       QUERY PLAN                                                       
 -----------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000002.08..10000000192.76 rows=5000 width=16)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000003.25..10000000193.93 rows=5000 width=16)
    Output: t1.v1, t1.v2, t2.v3, t2.v4
-   ->  Nested Loop  (cost=10000000002.08..10000000126.10 rows=1667 width=16)
+   ->  Nested Loop  (cost=10000000003.25..10000000127.26 rows=1667 width=16)
          Output: t1.v1, t1.v2, t2.v3, t2.v4
          Join Filter: (SubPlan 1)
-         ->  Hash Semi Join  (cost=2.08..3.87 rows=33 width=8)
+         ->  Hash Semi Join  (cost=3.25..5.04 rows=33 width=8)
                Output: t1.v1, t1.v2
-               Hash Cond: (t1.v1 = t2_1.v3)
+               Hash Cond: (t1.v1 = share0_ref1.v3)
                ->  Seq Scan on public.t1  (cost=0.00..1.33 rows=33 width=8)
                      Output: t1.v1, t1.v2
-               ->  Hash  (cost=1.67..1.67 rows=33 width=4)
-                     Output: t2_1.v3
-                     ->  Seq Scan on public.t2 t2_1  (cost=0.00..1.33 rows=33 width=4)
-                           Output: t2_1.v3
+               ->  Hash  (cost=2.00..2.00 rows=100 width=4)
+                     Output: share0_ref1.v3
+                     ->  Shared Scan (share slice:id 1:0)  (cost=1.33..1.57 rows=33 width=4)
+                           Output: share0_ref1.v3
+                           ->  Seq Scan on public.t2 t2_1  (cost=0.00..1.33 rows=33 width=4)
+                                 Output: t2_1.v3
          ->  Materialize  (cost=0.00..3.17 rows=100 width=8)
                Output: t2.v3, t2.v4
                ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..2.67 rows=100 width=8)
@@ -1448,7 +1460,7 @@ explain verbose with cte1 as (select v3 from t2) select * from t1,t2 where t1.v1
                                                Output: t3.v6
  Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(42 rows)
+(44 rows)
 
 explain verbose with cte1 as (select v3 from t2) select * from t1,t2 where t1.v1 in (select v3 from cte1,t3 where v4=v6 and v4 < 10);
                                                          QUERY PLAN                                                          
@@ -1496,20 +1508,22 @@ explain verbose with cte1 as (select v3 from t2) select * from t1,t2 where t1.v1
 explain verbose with cte1 as (select v3 from t2) select * from t1,t2 where t1.v1 in (select v3 from cte1) and t1.v1 in (select v3 from cte1,t3 where v4=v6 and v4 < 10);
                                                          QUERY PLAN                                                          
 -----------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000002.08..10000000192.76 rows=5000 width=16)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000003.25..10000000193.93 rows=5000 width=16)
    Output: t1.v1, t1.v2, t2.v3, t2.v4
-   ->  Nested Loop  (cost=10000000002.08..10000000126.10 rows=1667 width=16)
+   ->  Nested Loop  (cost=10000000003.25..10000000127.26 rows=1667 width=16)
          Output: t1.v1, t1.v2, t2.v3, t2.v4
          Join Filter: (SubPlan 1)
-         ->  Hash Semi Join  (cost=2.08..3.87 rows=33 width=8)
+         ->  Hash Semi Join  (cost=3.25..5.04 rows=33 width=8)
                Output: t1.v1, t1.v2
-               Hash Cond: (t1.v1 = t2_1.v3)
+               Hash Cond: (t1.v1 = share0_ref1.v3)
                ->  Seq Scan on public.t1  (cost=0.00..1.33 rows=33 width=8)
                      Output: t1.v1, t1.v2
-               ->  Hash  (cost=1.67..1.67 rows=33 width=4)
-                     Output: t2_1.v3
-                     ->  Seq Scan on public.t2 t2_1  (cost=0.00..1.33 rows=33 width=4)
-                           Output: t2_1.v3
+               ->  Hash  (cost=2.00..2.00 rows=100 width=4)
+                     Output: share0_ref1.v3
+                     ->  Shared Scan (share slice:id 1:0)  (cost=1.33..1.57 rows=33 width=4)
+                           Output: share0_ref1.v3
+                           ->  Seq Scan on public.t2 t2_1  (cost=0.00..1.33 rows=33 width=4)
+                                 Output: t2_1.v3
          ->  Materialize  (cost=0.00..3.17 rows=100 width=8)
                Output: t2.v3, t2.v4
                ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..2.67 rows=100 width=8)
@@ -1541,7 +1555,7 @@ explain verbose with cte1 as (select v3 from t2) select * from t1,t2 where t1.v1
                                                      Output: t3.v6
  Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(45 rows)
+(47 rows)
 
 with cte1 as (select v3 from t2) select sum(v1) from t1,t2 where t1.v1 in (select v3 from cte1) and t1.v1 in (select v3 from cte1,t3 where v4=v6 and v4 < 10);
   sum  
@@ -1560,20 +1574,22 @@ set optimizer_cte_inlining_bound to 2;
 explain verbose with cte1 as (select v3 from t2) select * from t1,t2 where t1.v1 in (select v3 from cte1) and t1.v1 in (select v3 from cte1,t3 where v4=v6 and v4 < 10);
                                                          QUERY PLAN                                                          
 -----------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000002.08..10000000192.76 rows=5000 width=16)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000003.25..10000000193.93 rows=5000 width=16)
    Output: t1.v1, t1.v2, t2.v3, t2.v4
-   ->  Nested Loop  (cost=10000000002.08..10000000126.10 rows=1667 width=16)
+   ->  Nested Loop  (cost=10000000003.25..10000000127.26 rows=1667 width=16)
          Output: t1.v1, t1.v2, t2.v3, t2.v4
          Join Filter: (SubPlan 1)
-         ->  Hash Semi Join  (cost=2.08..3.87 rows=33 width=8)
+         ->  Hash Semi Join  (cost=3.25..5.04 rows=33 width=8)
                Output: t1.v1, t1.v2
-               Hash Cond: (t1.v1 = t2_1.v3)
+               Hash Cond: (t1.v1 = share0_ref1.v3)
                ->  Seq Scan on public.t1  (cost=0.00..1.33 rows=33 width=8)
                      Output: t1.v1, t1.v2
-               ->  Hash  (cost=1.67..1.67 rows=33 width=4)
-                     Output: t2_1.v3
-                     ->  Seq Scan on public.t2 t2_1  (cost=0.00..1.33 rows=33 width=4)
-                           Output: t2_1.v3
+               ->  Hash  (cost=2.00..2.00 rows=100 width=4)
+                     Output: share0_ref1.v3
+                     ->  Shared Scan (share slice:id 1:0)  (cost=1.33..1.57 rows=33 width=4)
+                           Output: share0_ref1.v3
+                           ->  Seq Scan on public.t2 t2_1  (cost=0.00..1.33 rows=33 width=4)
+                                 Output: t2_1.v3
          ->  Materialize  (cost=0.00..3.17 rows=100 width=8)
                Output: t2.v3, t2.v4
                ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..2.67 rows=100 width=8)
@@ -1605,7 +1621,7 @@ explain verbose with cte1 as (select v3 from t2) select * from t1,t2 where t1.v1
                                                      Output: t3.v6
  Settings: enable_parallel = 'off', optimizer = 'off', optimizer_cte_inlining_bound = '2'
  Optimizer: Postgres query optimizer
-(45 rows)
+(47 rows)
 
 with cte1 as (select v3 from t2) select sum(v1) from t1,t2 where t1.v1 in (select v3 from cte1) and t1.v1 in (select v3 from cte1,t3 where v4=v6 and v4 < 10);
   sum  
