@@ -4128,44 +4128,6 @@ EncodeTimezone(char *str, int tz, int style)
 }
 
 
-/* 
- * Convenience routine for encoding dates faster than sprintf does.
- * tm is the timestamp structure, str is the string, pos is position in
- * the string which we are at. Upon returning, it is set to the offset of the
- * last character we set in str.
- */
-inline static void
-fast_encode_date(struct pg_tm * tm, char *str, int *pos)
-{
-	/*
-	 * sprintf() is very slow so we just convert the numbers to
-	 * a string manually. Since we allow dates in the range
-	 * 4713 BC to 5874897 AD, we have to check for years
-	 * with 7, 6 and 5 digits, being careful to not add
-	 * leading zeros for those. We only zero pad to four digits.
-	 */
-	int y = (tm->tm_year > 0) ? tm->tm_year : -(tm->tm_year - 1);
-	
-	if (y >= 1000000)
-		str[(*pos)++] = y / 1000000 % 10 + '0';
-	if (y >= 100000)
-		str[(*pos)++] = y / 100000 % 10 + '0';
-	if (y >= 10000)
-		str[(*pos)++] = y / 10000 % 10 + '0';
-	
-	str[(*pos)++] = y/1000 % 10 + '0';
-	str[(*pos)++] = y/100 % 10 + '0';
-	str[(*pos)++] = y/10 % 10 + '0';
-	str[(*pos)++] = y % 10 + '0';
-	str[(*pos)++] = '-';
-	str[(*pos)++] = tm->tm_mon/10 + '0'; 
-	str[(*pos)++] = tm->tm_mon % 10 + '0';
-	str[(*pos)++] = '-';
-	str[(*pos)++] = tm->tm_mday/10 + '0';
-	str[(*pos)++] = tm->tm_mday % 10 + '0';
-	str[(*pos)] = '\0';
-}
-
 /* EncodeDateOnly()
  * Encode date as local time.
  */
