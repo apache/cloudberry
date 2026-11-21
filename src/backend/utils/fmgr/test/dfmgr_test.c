@@ -57,6 +57,8 @@ errmsg_impl(const char *fmt, ...)
 {
 }
 
+static void errdetail_internal_impl(const char *fmt, ...) pg_attribute_printf(1, 2);
+
 static void
 errdetail_internal_impl(const char* fmt, ...)
 {
@@ -66,6 +68,7 @@ errdetail_internal_impl(const char* fmt, ...)
     va_start(args, fmt);
 
 	appendStringInfoVA(&buf, fmt, args);
+	va_end(args);
 	strncpy(lastErrorMsg, buf.data, sizeof(lastErrorMsg) / sizeof(lastErrorMsg[0]));
 
 	pfree(buf.data);
