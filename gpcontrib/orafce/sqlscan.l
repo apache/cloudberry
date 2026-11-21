@@ -8,12 +8,7 @@
 /* Not needed now that this file is compiled as part of gram.y */
 /* #include "parser/parse.h" */
 #include "parser/scansup.h"
-
-#if PG_VERSION_NUM >= 130000
-
 #include "port/pg_bitutils.h"
-
-#endif
 
 #include "mb/pg_wchar.h"
 
@@ -388,7 +383,8 @@ other			.
 					addlit(yytext, yyleng);
 				}
 
-<xc><<EOF>>		{ 
+<xc><<EOF>>		{
+					BEGIN(INITIAL);
 					yylval.val.str = litbufdup();
 					yylval.val.modificator = "ecu";
 					yylval.val.keycode = -1;
@@ -427,7 +423,8 @@ other			.
 <xb>{quotecontinue}	{
 					/* ignore */
 				}
-<xb><<EOF>>		{ 
+<xb><<EOF>>		{
+					BEGIN(INITIAL);
 					yylval.val.str = litbufdup();
 					yylval.val.modificator = "bu";
 					yylval.val.keycode = -1;
@@ -457,7 +454,8 @@ other			.
 					yylval.val.sep = NULL;
 					return X_NCONST;
 				}
-<xh><<EOF>>		{ 
+<xh><<EOF>>		{
+					BEGIN(INITIAL);
 					yylval.val.str = litbufdup();
 					yylval.val.modificator = "xu";
 					yylval.val.keycode = -1;
@@ -536,13 +534,14 @@ other			.
 					/* This is only needed for \ just before EOF */
 					addlitchar(yytext[0]);
 				}
-<xq,xe><<EOF>>		{ 
+<xq,xe><<EOF>>	{
+					BEGIN(INITIAL);
 					yylval.val.str = litbufdup();
 					yylval.val.modificator = extended_string ? "esu" : "qsu";
 					yylval.val.keycode = -1;
 					yylval.val.sep = NULL;
 					return X_SCONST;
-				}    
+				}
 
 {dolqdelim}		{
 					SET_YYLLOC();
@@ -591,7 +590,8 @@ other			.
 					/* This is only needed for inside the quoted text */
 					addlitchar(yytext[0]);
 				}
-<xdolq><<EOF>>	{ 
+<xdolq><<EOF>>	{
+					BEGIN(INITIAL);
 					yylval.val.sep = dolqstart;
 					yylval.val.modificator = "dolqu";
 					yylval.val.str = litbufdup();
@@ -626,7 +626,8 @@ other			.
 <xd>{xdinside}	{
 					addlit(yytext, yyleng);
 				}
-<xd><<EOF>>		{ 
+<xd><<EOF>>		{
+					BEGIN(INITIAL);
 					yylval.val.modificator = "dqu";
 					yylval.val.str = litbufdup();
 					yylval.val.keycode = -1;
@@ -757,10 +758,8 @@ other			.
 					errno = 0;
 					val = strtol(yytext, &endptr, 10);
 					if (*endptr != '\0' || errno == ERANGE
-#ifdef HAVE_LONG_INT_64
 						/* if long > 32 bits, check for overflow of int4 */
 						|| val != (long) ((int32) val)
-#endif
 						)
 					{
 						/* integer too large, treat it as a float */
@@ -887,18 +886,9 @@ lexer_errposition(void)
 	pos = _pg_mbstrlen_with_len(scanbuf, orafce_sql_yylval.val.lloc) + 1;
 	/* And pass it to the ereport mechanism */
 
-#if PG_VERSION_NUM >= 120000
-
 	errposition(pos);
 
 	return pos;
-
-#else
-
-	return errposition(pos);
-
-#endif
-
 }
 
 /*

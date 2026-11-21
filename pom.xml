@@ -78,6 +78,9 @@ code or new licensing patterns.
             <exclude>gpcontrib/orafce/msvc/orafce.2010.vcxproj.filters</exclude>
             <exclude>gpcontrib/orafce/msvc/orafce.2010.sln</exclude>
             <exclude>gpcontrib/orafce/README.msvc</exclude>
+            <exclude>gpcontrib/orafce/README.meson_msvc</exclude>
+            <exclude>gpcontrib/orafce/meson.build</exclude>
+            <exclude>gpcontrib/orafce/LICENSE</exclude>
             <exclude>gpcontrib/orafce/README.asciidoc</exclude>
             <exclude>gpcontrib/orafce/Makefile</exclude>
             <exclude>gpcontrib/orafce/sqlparse.y</exclude>

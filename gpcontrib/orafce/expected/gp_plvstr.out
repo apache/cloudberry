@@ -1,0 +1,20 @@
+-- plvstr.normalize() drops leading and trailing whitespace and folds inner
+-- whitespace into one space.
+SELECT '[' || plvstr.normalize(E'  \t a  b \n c  ') || ']' AS normalized;
+ normalized 
+------------
+ [a b c]
+(1 row)
+
+SELECT '[' || plvstr.normalize(E' \t\n ') || ']' AS only_whitespace;
+ only_whitespace 
+-----------------
+ []
+(1 row)
+
+SELECT '[' || plvstr.normalize('a') || ']' AS one_char;
+ one_char 
+----------
+ [a]
+(1 row)
+

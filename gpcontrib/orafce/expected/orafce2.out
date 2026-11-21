@@ -7,3 +7,36 @@ select decode('2012-01-01', '2012-01-01', 23, '2012-01-02', 24);
    23
 (1 row)
 
+-- (a) a finite value modulo infinity is the value itself
+select oracle.remainder(1::numeric, 'infinity'::numeric)  as remainder_says,  -- nan (wrong)
+       mod(1::numeric, 'infinity'::numeric)               as builtin_mod;     -- 1   (right)
+ERROR:  invalid input syntax for type numeric: "infinity"
+LINE 1: select oracle.remainder(1::numeric, 'infinity'::numeric)  as...
+                                            ^
+select oracle.remainder(5::numeric, '-infinity'::numeric) as remainder_neg_inf,  -- nan (wrong)
+       mod(5::numeric, '-infinity'::numeric)              as builtin_mod;        -- 5
+ERROR:  invalid input syntax for type numeric: "-infinity"
+LINE 1: select oracle.remainder(5::numeric, '-infinity'::numeric) as...
+                                            ^
+-- (b) nan must win over the division-by-zero check
+select mod('nan'::numeric, 0::numeric) as builtin_mod_nan_zero;   -- nan
+ builtin_mod_nan_zero 
+----------------------
+                  NaN
+(1 row)
+
+select oracle.remainder('nan'::numeric, 0::numeric) as should_be_nan;  -- error
+ should_be_nan 
+---------------
+           NaN
+(1 row)
+
+-- (c) nan as the second argument only survives by accident: it reaches the
+--     division-by-zero test too, and passes it because "nan == 0" is false.
+select oracle.remainder(1::numeric, 'nan'::numeric) as one_mod_nan,  -- nan, by luck
+       mod(1::numeric, 'nan'::numeric)              as builtin_mod;  -- nan
+ one_mod_nan | builtin_mod 
+-------------+-------------
+         NaN |         NaN
+(1 row)
+
