@@ -715,7 +715,6 @@ CREATE RULE "_RETURN" AS ON SELECT TO tt28 DO INSTEAD SELECT * FROM tt26;
 CREATE RULE "_RETURN" AS ON SELECT TO tt28 DO INSTEAD SELECT * FROM tt26;
 ROLLBACK;
 
-
 -- test restriction on non-system view expansion.
 create table tt27v_tbl (a int);
 create view tt27v as select a from tt27v_tbl;

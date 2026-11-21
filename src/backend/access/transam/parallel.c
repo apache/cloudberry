@@ -1465,8 +1465,6 @@ ParallelWorkerMain(Datum main_arg)
 	/* Restore GUC values from launching backend. */
 	gucspace = shm_toc_lookup(toc, PARALLEL_KEY_GUC, false);
 	RestoreGUCState(gucspace);
-	/* make sure GUC functions doesn't set the sanpshot */
-	Assert(!FirstSnapshotSet);
 	CommitTransactionCommand();
 
 	/* CDB: we skip restore Gp_role and Gp_is_writer, please see can_skip_gucvar().
