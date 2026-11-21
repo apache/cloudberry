@@ -9,111 +9,65 @@ import unittest
 
 from gpversion import *
 
+# Cloudberry: GpVersion keeps at most three version numbers, compares
+# releases by the major number only, and has no "<<" operator.  Build the
+# test versions from MAIN_VERSION, so that the tests do not break when the
+# major version changes.
+CURRENT = MAIN_VERSION[0]
+OLDER = CURRENT - 1
+
+
 class GpVersionTestCase(unittest.TestCase):
-    def setUp(self):
-        pass
-        
-    def test_case_1(self):
+
+    def _assert_older_release(self, v, build):
+        self.assertFalse(v.isVersionCurrentRelease())
+        self.assertEqual(v.getVersionBuild(), build)
+        self.assertEqual(v.getVersionRelease(), str(OLDER))
+        self.assertTrue(v.isVersionRelease("%d.1" % OLDER))
+        self.assertTrue(v.isVersionRelease("%d.9" % OLDER))
+        self.assertFalse(v.isVersionRelease(str(CURRENT)))
+        self.assertTrue(v > "%d.0.5" % OLDER)
+        self.assertTrue(v < "%d.0" % CURRENT)
+
+    def test_main(self):
         vMain = GpVersion("main")
 
         self.assertTrue(vMain.isVersionCurrentRelease())
-        self.assertTrue(vMain.getVersionBuild() == 'dev')
-        self.assertTrue(str(vMain) == 'main build dev')
+        self.assertEqual(vMain.getVersionBuild(), 'dev')
+        self.assertEqual(str(vMain), 'main build dev')
 
-    def test_case_2(self):
-        vTuple = GpVersion([3,3,0,0])
+    def test_list(self):
+        self._assert_older_release(GpVersion([OLDER, 1, 0]), 'dev')
 
-        self.assertTrue(vTuple.isVersionCurrentRelease() == False )
-        self.assertTrue(vTuple.getVersionBuild() == 'dev')
-        self.assertTrue(vTuple.getVersionRelease() == "3.3")
-        self.assertTrue(vTuple.isVersionRelease("3.3"))
-        self.assertTrue(vTuple.isVersionRelease("3.2") == False)
-        self.assertTrue(vTuple > "3.2.0.5")
-        self.assertTrue(vTuple < "4.0")
+    def test_string_with_build(self):
+        self._assert_older_release(GpVersion("%d.1 build dev" % OLDER), 'dev')
 
-    def test_case_3(self):
-        v33 = GpVersion("3.3 build dev")
+    def test_special_build(self):
+        self._assert_older_release(GpVersion("%d.1.filerep" % OLDER), 'filerep')
 
-        self.assertTrue(v33.isVersionCurrentRelease() == False )
-        self.assertTrue(v33.getVersionBuild() == 'dev')
-        self.assertTrue(v33.getVersionRelease() == "3.3")
-        self.assertTrue(v33.isVersionRelease("3.3"))
-        self.assertTrue(v33.isVersionRelease("3.2") == False)
-        self.assertTrue(v33 > "3.2.0.5")
-        self.assertTrue(v33 < "4.0")
+    def test_gp_version_output(self):
+        # Format of "postgres --gp-version"
+        v = GpVersion("postgres (Apache Cloudberry) %d.1.0 build 3" % OLDER)
+        self._assert_older_release(v, '3')
 
-    def test_case_4(self):
-        v34 = GpVersion("3.4.filerep")
+    def test_select_version_output(self):
+        # Format of "SELECT version()"
+        v = GpVersion("PostgreSQL 16.9 (Apache Cloudberry %d.0.0-devel build dev) "
+                      "on x86_64-pc-linux-gnu, compiled by gcc (GCC) 11.5.0, "
+                      "64-bit compiled on Nov 16 2026 19:03:57" % CURRENT)
+        self.assertTrue(v.isVersionCurrentRelease())
+        self.assertEqual(v.getVersionRelease(), str(CURRENT))
+        self.assertTrue(v.isVersionRelease("%d.0" % CURRENT))
+        self.assertFalse(v.isVersionRelease(str(OLDER)))
+        self.assertTrue(v > "%d.9.9" % OLDER)
 
-        self.assertTrue(v34.isVersionCurrentRelease() == False )
-        self.assertTrue(v34.getVersionBuild() == 'filerep')
-        self.assertTrue(v34.getVersionRelease() == "3.4")
-        self.assertTrue(v34.isVersionRelease("3.4"))
-        self.assertTrue(v34.isVersionRelease("3.2") == False)
-        self.assertTrue(v34 > "3.2.0.5")
-        self.assertTrue(v34 < "4.0")
+    def test_version_too_long(self):
+        with self.assertRaisesRegex(Exception, 'Version too long'):
+            GpVersion([OLDER, 1, 0, 0])
 
-    def test_case_5(self):
-        vShort = GpVersion("postgres (Apache Cloudberry) 3.3.5.0 build 3")
-
-        self.assertTrue(vShort.isVersionCurrentRelease() == False )
-        self.assertTrue(vShort.getVersionBuild() == '3')
-        self.assertTrue(vShort.getVersionRelease() == "3.3")
-        self.assertTrue(vShort.isVersionRelease("3.3"))
-        self.assertTrue(vShort.isVersionRelease("3.2") == False)
-        self.assertTrue(vShort > "3.2.0.5")
-        self.assertTrue(vShort < "4.0")
-
-
-    def test_case_6(self):
-        vLong = GpVersion("PostgreSQL 8.2.14 (Apache Cloudberry 3.4.filerep build 0) on i386-apple-darwin9.8.0, compiled by GCC i686-apple-darwin9-gcc-4.0.1 (GCC) 4.0.1 (Apple Inc. build 5465) compiled on Feb 16 2010 11:25:31 (with assert checking)")
-    
-        self.assertTrue(vLong.isVersionCurrentRelease() == False )
-        self.assertTrue(vLong.getVersionBuild() == 'filerep')
-        self.assertTrue(vLong.getVersionRelease() == "3.4")
-        self.assertTrue(vLong.isVersionRelease("3.4"))
-        self.assertTrue(vLong.isVersionRelease("3.2") == False)
-        self.assertTrue(vLong > "3.2.0.5")
-        self.assertTrue(vLong < "4.0")
-
-    def test_lshift(self):
-        v = GpVersion('4.3')
-        v_1 = v << 1
-        v_2 = v << 2
-        self.assertEqual(v_1 << 1, v_2)
-        self.assertLess(v_1, v)
-        self.assertLess(v_2, v)
-        self.assertEqual(v.getVersionRelease(), "4.3")
-        self.assertEqual(v_1.getVersionRelease(), "4.2")
-        self.assertEqual(v_2.getVersionRelease(), "4.1")
-
-    def test_50(self):
-        v = GpVersion('5.0')
-        v_1 = v << 1
-        v_2 = v << 2
-        self.assertEqual(v_1 << 1, v_2)
-        self.assertLess(v_1, v)
-        self.assertLess(v_2, v)
-        self.assertEqual(v.getVersionRelease(), "5")
-        self.assertEqual(v_1.getVersionRelease(), "4.3")
-        self.assertEqual(v_2.getVersionRelease(), "4.2")
-       
-    def test_case_7(self):
-        vLong = GpVersion("PostgreSQL 9.4.20 (Apache Cloudberry 7.0.0 build dev) on x86_64-unknown-linux-gnu, compiled by gcc (Ubuntu 7.4.0-1ubuntu1~18.04.1) 7.4.0, 64-bit compiled on Jul  8 2019 16:27:59")
-        self.assertTrue(vLong.isVersionCurrentRelease() == True )
-        self.assertTrue(vLong.getVersionBuild() == 'dev')
-        self.assertTrue(vLong.getVersionRelease() == "7")
-        self.assertTrue(vLong.isVersionRelease("7.0"))
-        self.assertTrue(vLong.isVersionRelease("3.2") == False)
-        self.assertTrue(vLong > "4.0.0")
-        self.assertTrue(vLong > "4.0")
-
-    def test_lshift_negative(self):
-        v = GpVersion('3.2')
-        with self.assertRaisesRegex(Exception, 'invalid version shift'):
-            v << -1
-        with self.assertRaisesRegex(Exception, 'invalid version shift'):
-            v << 1
+    def test_unrecognised_version(self):
+        with self.assertRaisesRegex(Exception, 'unable to coerce to version'):
+            GpVersion("nodigits")
 
 
 #------------------------------- Mainline --------------------------------
