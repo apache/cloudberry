@@ -62,6 +62,18 @@ class SegmentReconfiguerTestCase(GpTestCase):
         self.connect.assert_has_calls([call(self.db_url), call(self.db_url), call(self.db_url), ])
         self.conn.close.assert_any_call()
 
+    def test_it_closes_each_connection_only_once(self):
+        failed_conn = Mock(name='failed_conn')
+        failed_conn.cursor.return_value.execute.side_effect = pgdb.DatabaseError
+        self.connect.side_effect = [failed_conn, pgdb.DatabaseError, self.conn]
+
+        reconfigurer = SegmentReconfigurer(logger=self.logger,
+                worker_pool=self.worker_pool, timeout=self.timeout)
+        reconfigurer.reconfigure()
+
+        failed_conn.close.assert_called_once_with()
+        self.conn.close.assert_called_once_with()
+
     @patch('time.time')
     def test_it_gives_up_after_600_seconds(self, now_mock):
         start_datetime = datetime.datetime(2018, 5, 9, 16, 0, 0)
@@ -83,7 +95,8 @@ class SegmentReconfiguerTestCase(GpTestCase):
                 worker_pool=self.worker_pool, timeout=self.timeout)
         with self.assertRaises(RuntimeError) as context:
             reconfigurer.reconfigure()
-            self.assertEqual("Mirror promotion did not complete in {0} seconds.".format(self.timeout), context.exception.message)
+        self.assertEqual("Mirror promotion did not complete in {0} seconds.".format(self.timeout),
+                         str(context.exception))
 
         self.connect.assert_has_calls([call(self.db_url), call(self.db_url), ])
-        self.conn.close.assert_has_calls([])
+        self.assertFalse(self.conn.close.called)

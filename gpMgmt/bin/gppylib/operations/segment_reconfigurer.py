@@ -32,6 +32,7 @@ class SegmentReconfigurer:
         start_time = time.time()
         while True:
             time.sleep(1)
+            conn = None
             try:
                 # Empty block of 'BEGIN' and 'END' won't start a distributed transaction,
                 # execute a DDL query to start a distributed transaction.
@@ -42,7 +43,8 @@ class SegmentReconfigurer:
             except Exception as e:
                 # Should close conn here
                 # Otherwise, the postmaster will be blocked by abort transaction
-                conn.close()
+                if conn is not None:
+                    conn.close()
                 now = time.time()
                 if now < start_time + self.timeout:
                     continue
