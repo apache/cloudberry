@@ -766,6 +766,17 @@ readSharedLocalSnapshot_forCursor(Snapshot snapshot, DtxContext distributedTrans
 	/* zero out the slack in the xip-array */
 	memset(snapshot->xip + snapshot->xcnt, 0, (xipEntryCount - snapshot->xcnt)*sizeof(TransactionId));
 
+	/* Preserve the writer's view of in-progress subtransactions. */
+	if (dumpsnapshot->subxcnt < 0 ||
+		dumpsnapshot->subxcnt > GetMaxSnapshotSubxidCount())
+		elog(ERROR, "shared cursor snapshot has invalid subxid count %d",
+			 dumpsnapshot->subxcnt);
+	snapshot->subxcnt = dumpsnapshot->subxcnt;
+	snapshot->suboverflowed = dumpsnapshot->suboverflowed;
+	if (snapshot->subxcnt > 0)
+		memcpy(snapshot->subxip, dumpsnapshot->subxip,
+			   snapshot->subxcnt * sizeof(TransactionId));
+
 	snapshot->curcid = dumpsnapshot->curcid;
 
 	SetSharedTransactionId_reader(
