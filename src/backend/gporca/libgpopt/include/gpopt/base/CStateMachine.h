@@ -349,8 +349,8 @@ public:
 	}
 
 	// get initial state
-	TEnumState
-	TesInitial() const
+	static TEnumState
+	TesInitial()
 	{
 		return (TEnumState) 0;
 	}
