@@ -14,7 +14,9 @@
 SET gp_workfile_compression = on;
 
 DROP TABLE IF EXISTS test_zlib_hashjoin;
-CREATE TABLE test_zlib_hashjoin (i1 int, i2 int, i3 int, i4 int, i5 int, i6 int, i7 int, i8 int) WITH (APPENDONLY=true) DISTRIBUTED BY (i1) ; 
+-- No parallel scan: a Parallel Hash Join spills to shared files, which are
+-- not created by BufFileCreateTempInSet() and do not hit the fault below.
+CREATE TABLE test_zlib_hashjoin (i1 int, i2 int, i3 int, i4 int, i5 int, i6 int, i7 int, i8 int) WITH (APPENDONLY=true, parallel_workers=0) DISTRIBUTED BY (i1) ; 
 INSERT INTO test_zlib_hashjoin SELECT i,i,i,i,i,i,i,i FROM 
 	(select generate_series(1, nsegments * 333333) as i from 
 	(select count(*) as nsegments from gp_segment_configuration where role='p' and content >= 0) foo) bar;

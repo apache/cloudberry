@@ -5188,35 +5188,12 @@ compute_parallel_worker(PlannerInfo *root, RelOptInfo *rel, double heap_pages, d
 	else
 	{
 		/*
-		 * We need to reconsider parallel workers for AO/AOCO tables
-		 * because page number in ao is quite hard to estimate.
-		 * The parallel for AO/AOCO tables is based on segment file count in
-		 * pg_appendonly which will be updated by analyze/vacuum/truncate processes.
+		 * Parallel index scans are not supported on AO/AOCO tables.
 		 */
-		if (rel->reloptkind == RELOPT_BASEREL && (AMHandlerIsAO(rel->amhandler)))
-		{
-			Oid			aorelid = root->simple_rte_array[rel->relid]->relid;
-			HeapTuple	aotup;
-			Form_pg_appendonly aoform;
-			aotup = SearchSysCache1(AORELID, ObjectIdGetDatum(aorelid));
-			if (!HeapTupleIsValid(aotup))
-				ereport(ERROR,
-					(errcode(ERRCODE_UNDEFINED_OBJECT),
-					errmsg("appendonly table relid %u does not exist in pg_appendonly", aorelid)));
+		if (rel->reloptkind == RELOPT_BASEREL && AMHandlerIsAO(rel->amhandler) &&
+			index_pages >= 0)
+			parallel_workers = 0;
 
-			aoform = (Form_pg_appendonly) GETSTRUCT(aotup);
-			Assert(aoform->segfilecount >= 0);
-			parallel_workers = Min(aoform->segfilecount, max_workers);
-			ReleaseSysCache(aotup);
-
-			/*
-			 * Disable parallel for AO/AOCO for:
-			 * 1.We don't support parallel/non-parallel IndexScan/IndexOnlyScan.
-			 * 2.If parallel_workers is 1, it is pointless in gp parallel mode.
-			 */
-			if (parallel_workers == 1 || index_pages >= 0)
-				parallel_workers = 0;
-		}
 		else
 		{
 			/*
