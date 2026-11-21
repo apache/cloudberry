@@ -1,8 +1,8 @@
 
 use strict;
 use warnings;
-use TestLib;
-use Test::More tests => 13;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 use FindBin;
 use lib $FindBin::RealBin;
@@ -101,4 +101,4 @@ sub run_test
 run_test('local');
 run_test('remote');
 
-exit(0);
+done_testing();
