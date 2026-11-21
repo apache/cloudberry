@@ -229,6 +229,9 @@ jobs:
                                "contrib/isn:installcheck",
                                "contrib/unaccent:installcheck"]
               },
+              {"test":"ic-gp-distribution-policy",
+               "make_configs":["gpcontrib/gp_distribution_policy:installcheck"]
+              },
               {"test":"ic-cbdb-parallel",
                "make_configs":["src/test/regress:installcheck-cbdb-parallel"]
               }

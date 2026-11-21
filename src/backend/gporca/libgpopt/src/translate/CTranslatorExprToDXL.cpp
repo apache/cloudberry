@@ -1691,7 +1691,7 @@ CTranslatorExprToDXL::PdxlnParallelAppendTableScan(
 	{
 		const CBitSet *bs = pps_reqd->SelectorIds(popDTS->ScanId());
 		CBitSetIter bsi(*bs);
-		for (ULONG ul = 0; bsi.Advance(); ul++)
+		while (bsi.Advance())
 		{
 			selector_ids->Append(GPOS_NEW(m_mp) ULONG(bsi.Bit()));
 		}
@@ -1836,7 +1836,7 @@ CTranslatorExprToDXL::PdxlnDynamicScanToAppend(CExpression *pexprDTS,
 	{
 		const CBitSet *bs = pps_reqd->SelectorIds(popDTS->ScanId());
 		CBitSetIter bsi(*bs);
-		for (ULONG ul = 0; bsi.Advance(); ul++)
+		while (bsi.Advance())
 		{
 			selector_ids->Append(GPOS_NEW(m_mp) ULONG(bsi.Bit()));
 		}

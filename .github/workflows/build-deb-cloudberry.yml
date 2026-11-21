@@ -259,6 +259,7 @@ jobs:
               {"test":"ic-deb-gpcontrib",
                "make_configs":["gpcontrib/orafce:installcheck",
                                "gpcontrib/zstd:installcheck",
+                               "gpcontrib/gp_distribution_policy:installcheck",
                                "gpcontrib/gp_sparse_vector:installcheck",
                                "gpcontrib/gp_toolkit:installcheck"]
               },
