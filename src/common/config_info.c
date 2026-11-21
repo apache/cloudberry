@@ -24,25 +24,25 @@
 
 
 /*
- * get_configdata(const char *my_exec_path, size_t *configdata_len)
+ * get_configdata(const char *exec_path, size_t *configdata_len)
  *
  * Get configure-time constants. The caller is responsible
  * for pfreeing the result.
  */
 ConfigData *
-get_configdata(const char *my_exec_path, size_t *configdata_len)
+get_configdata(const char *exec_path, size_t *configdata_len)
 {
 	ConfigData *configdata;
 	char		path[MAXPGPATH];
 	char	   *lastsep;
-	int			i = 0;
+	size_t		i = 0;
 
 	/* Adjust this to match the number of items filled below */
 	*configdata_len = 23;
 	configdata = palloc_array(ConfigData, *configdata_len);
 
 	configdata[i].name = pstrdup("BINDIR");
-	strlcpy(path, my_exec_path, sizeof(path));
+	strlcpy(path, exec_path, sizeof(path));
 	lastsep = strrchr(path, '/');
 	if (lastsep)
 		*lastsep = '\0';
@@ -51,73 +51,73 @@ get_configdata(const char *my_exec_path, size_t *configdata_len)
 	i++;
 
 	configdata[i].name = pstrdup("DOCDIR");
-	get_doc_path(my_exec_path, path);
+	get_doc_path(exec_path, path);
 	cleanup_path(path);
 	configdata[i].setting = pstrdup(path);
 	i++;
 
 	configdata[i].name = pstrdup("HTMLDIR");
-	get_html_path(my_exec_path, path);
+	get_html_path(exec_path, path);
 	cleanup_path(path);
 	configdata[i].setting = pstrdup(path);
 	i++;
 
 	configdata[i].name = pstrdup("INCLUDEDIR");
-	get_include_path(my_exec_path, path);
+	get_include_path(exec_path, path);
 	cleanup_path(path);
 	configdata[i].setting = pstrdup(path);
 	i++;
 
 	configdata[i].name = pstrdup("PKGINCLUDEDIR");
-	get_pkginclude_path(my_exec_path, path);
+	get_pkginclude_path(exec_path, path);
 	cleanup_path(path);
 	configdata[i].setting = pstrdup(path);
 	i++;
 
 	configdata[i].name = pstrdup("INCLUDEDIR-SERVER");
-	get_includeserver_path(my_exec_path, path);
+	get_includeserver_path(exec_path, path);
 	cleanup_path(path);
 	configdata[i].setting = pstrdup(path);
 	i++;
 
 	configdata[i].name = pstrdup("LIBDIR");
-	get_lib_path(my_exec_path, path);
+	get_lib_path(exec_path, path);
 	cleanup_path(path);
 	configdata[i].setting = pstrdup(path);
 	i++;
 
 	configdata[i].name = pstrdup("PKGLIBDIR");
-	get_pkglib_path(my_exec_path, path);
+	get_pkglib_path(exec_path, path);
 	cleanup_path(path);
 	configdata[i].setting = pstrdup(path);
 	i++;
 
 	configdata[i].name = pstrdup("LOCALEDIR");
-	get_locale_path(my_exec_path, path);
+	get_locale_path(exec_path, path);
 	cleanup_path(path);
 	configdata[i].setting = pstrdup(path);
 	i++;
 
 	configdata[i].name = pstrdup("MANDIR");
-	get_man_path(my_exec_path, path);
+	get_man_path(exec_path, path);
 	cleanup_path(path);
 	configdata[i].setting = pstrdup(path);
 	i++;
 
 	configdata[i].name = pstrdup("SHAREDIR");
-	get_share_path(my_exec_path, path);
+	get_share_path(exec_path, path);
 	cleanup_path(path);
 	configdata[i].setting = pstrdup(path);
 	i++;
 
 	configdata[i].name = pstrdup("SYSCONFDIR");
-	get_etc_path(my_exec_path, path);
+	get_etc_path(exec_path, path);
 	cleanup_path(path);
 	configdata[i].setting = pstrdup(path);
 	i++;
 
 	configdata[i].name = pstrdup("PGXS");
-	get_pkglib_path(my_exec_path, path);
+	get_pkglib_path(exec_path, path);
 	strlcat(path, "/pgxs/src/makefiles/pgxs.mk", sizeof(path));
 	cleanup_path(path);
 	configdata[i].setting = pstrdup(path);

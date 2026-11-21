@@ -12,8 +12,8 @@
 
 #include "catalog/pg_control.h"
 
-extern ControlFileData *get_controlfile(const char *DataDir, bool *crc_ok_p);
-extern void update_controlfile(const char *DataDir,
+extern ControlFileData *get_controlfile(const char *data_dir, bool *crc_ok_p);
+extern void update_controlfile(const char *data_dir,
 							   ControlFileData *ControlFile, bool do_sync);
 
 #endif							/* COMMON_CONTROLDATA_UTILS_H */

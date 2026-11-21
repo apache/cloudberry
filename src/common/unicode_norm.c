@@ -286,7 +286,7 @@ recompose_code(uint32 start, uint32 code, uint32 *result)
 
 #else
 
-		int			i;
+		size_t		i;
 
 		for (i = 0; i < lengthof(UnicodeDecompMain); i++)
 		{
@@ -432,7 +432,7 @@ unicode_normalize(UnicodeNormalizationForm form, const pg_wchar *input)
 	for (p = input; *p; p++)
 	{
 		decomp_size += get_decomposed_size(*p, compat);
-		if (unlikely(decomp_size > MaxAllocSize / sizeof(pg_wchar)))
+		if (unlikely((size_t) decomp_size > MaxAllocSize / sizeof(pg_wchar)))
 		{
 #ifndef FRONTEND
 			/* Exit loop and let palloc() throw error below */

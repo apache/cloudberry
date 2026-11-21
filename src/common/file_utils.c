@@ -514,9 +514,9 @@ pg_pwritev_with_retry(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 		offset += part;
 
 		/* Step over iovecs that are done. */
-		while (iovcnt > 0 && iov->iov_len <= part)
+		while (iovcnt > 0 && iov->iov_len <= (size_t) part)
 		{
-			part -= iov->iov_len;
+			part -= (ssize_t) iov->iov_len;
 			++iov;
 			--iovcnt;
 		}
@@ -535,7 +535,7 @@ pg_pwritev_with_retry(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 		 */
 		Assert(iovcnt > 0);
 		memmove(iov_copy, iov, sizeof(*iov) * iovcnt);
-		Assert(iov->iov_len > part);
+		Assert(iov->iov_len > (size_t) part);
 		iov_copy[0].iov_base = (char *) iov_copy[0].iov_base + part;
 		iov_copy[0].iov_len -= part;
 		iov = iov_copy;
@@ -592,7 +592,7 @@ pg_pwrite_zeros(int fd, size_t size, off_t offset)
 		total_written += written;
 	}
 
-	Assert(total_written == size);
+	Assert(total_written >= 0 && (size_t) total_written == size);
 
 	return total_written;
 }
