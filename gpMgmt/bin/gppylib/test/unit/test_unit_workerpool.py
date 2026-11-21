@@ -290,6 +290,7 @@ class WorkerPoolTest(unittest.TestCase):
             # failure.
             event.set()
             join_thread.join()
+            read_end.close()
 
     def test_join_and_indicate_progress_flushes_every_dot(self):
         duration = 0.005
