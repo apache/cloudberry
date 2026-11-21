@@ -28,4 +28,3 @@ cdbgang.t: \
 	$(MOCK_DIR)/backend/access/hash/hash_mock.o \
 	$(MOCK_DIR)/backend/utils/fmgr/fmgr_mock.o \
 
-include $(top_srcdir)/src/backend/mock.mk
