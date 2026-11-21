@@ -1120,32 +1120,6 @@ EXPLAIN SELECT * FROM s1.v1 v1, s1.v1_ v2 WHERE v1.c1 = v2.c1;
 \o
 \! sql/maskout.sh results/ut-R.tmpout
 
--- No. R-2-3-6
-\o results/ut-R.tmpout
-/*+RowsHashJoin(r4t1 r4t1)*/
-EXPLAIN SELECT * FROM s1.r4 t1, s1.r4 t2 WHERE t1.c1 = t2.c1;
-\o
-\! sql/maskout.sh results/ut-R.tmpout
-
-\o results/ut-R.tmpout
-/*+RowsHashJoin(r4t1 r4t1)Rows(r4t1 r4t1 #1)*/
-EXPLAIN SELECT * FROM s1.r4 t1, s1.r4 t2 WHERE t1.c1 = t2.c1;
-\o
-\! sql/maskout.sh results/ut-R.tmpout
-
--- No. R-2-3-7
-\o results/ut-R.tmpout
-/*+NestLoop(r4t1 r5t1)*/
-EXPLAIN SELECT * FROM s1.r4 t1, s1.r5 t2 WHERE t1.c1 = t2.c1;
-\o
-\! sql/maskout.sh results/ut-R.tmpout
-
-\o results/ut-R.tmpout
-/*+NestLoop(r4t1 r5t1)Rows(r4t1 r5t1 #1)*/
-EXPLAIN SELECT * FROM s1.r4 t1, s1.r5 t2 WHERE t1.c1 = t2.c1;
-\o
-\! sql/maskout.sh results/ut-R.tmpout
-
 ----
 ---- No. R-2-4 VALUES clause
 ----

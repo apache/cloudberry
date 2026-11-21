@@ -1,0 +1,277 @@
+# LANGUAGE message translation file for pg_hint_plan hint details.
+# Copyright (C) 2012-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+# This file is distributed under the same license as the pg_hint_plan
+# package.
+# Julien Rouhaud <rjuju123@gmail.com>, 2023.
+# Tatsuro Yamada <yamatattsu@gmail.com>, 2023.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: pg_hint_plan\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-03-02 12:25+0800\n"
+"PO-Revision-Date: 2023-06-05 16:21+0900\n"
+"Last-Translator: Tatsuro Yamada <yamatattsu@gmail.com>\n"
+"Language-Team: \n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.12.1\n"
+"X-Generator: Poedit 3.3.1\n"
+
+#: ../../hint_details.md:1 693f0f4d9eb74147bbd70fd662533301
+msgid "Details in hinting"
+msgstr "ヒントの詳細"
+
+#: ../../hint_details.md:3 b701aac340744d01b1b5581d1eff3fcf
+msgid "Syntax and placement"
+msgstr "構文と配置"
+
+#: ../../hint_details.md:5 ab77d6f8ecef4caca7b8b1ec9b23e28c
+msgid ""
+"`pg_hint_plan` reads hints from only the first block comment and any "
+"characters except alphabets, digits, spaces, underscores, commas and "
+"parentheses stops parsing immediately. In the following example `HashJoin(a "
+"b)` and `SeqScan(a)` are parsed as hints but `IndexScan(a)` and `MergeJoin(a "
+"b)` are not."
+msgstr ""
+"`pg_hint_plan`は最初のブロックコメントのみからヒントを読み、アルファベット、数"
+"字、スペース、アンダースコア、カンマ、括弧以外の文字は直ちに構文解析を停止しま"
+"す。以下の例では、`HashJoin(a b)`と`SeqScan(a)`はヒントとして構文解析されます"
+"が、`IndexScan(a)`と`MergeJoin(a b)`はヒントとしては構文解析されません。"
+
+#: ../../hint_details.md:34 b460c8a84bec418a9c1068caa073b596
+msgid "Using with PL/pgSQL"
+msgstr "PL/pgSQLでの使用"
+
+#: ../../hint_details.md:36 8a94b49c7ceb45aaac4e47b04574644a
+msgid ""
+"`pg_hint_plan` works for queries in PL/pgSQL scripts with some restrictions."
+msgstr ""
+"`pg_hint_plan`はPL/pgSQLスクリプト内のクエリに対してはいくつかの制限付きで動作"
+"します。"
+
+#: ../../hint_details.md:38 6ba14dce61574358b29630cff33f55e0
+msgid "Hints affect only on the following kind of queries."
+msgstr "ヒントは以下のような種類のクエリにのみ影響します。"
+
+#: ../../hint_details.md:39 b96677e33bba41cf8974d20ae22aaf44
+msgid "Queries that returns one row. (`SELECT`, `INSERT`, `UPDATE` and `DELETE`)"
+msgstr "1行を返すクエリ (`SELECT`、`INSERT`、`UPDATE`、`DELETE`)"
+
+#: ../../hint_details.md:40 12545ff4869e499baa5b622e340efa0b
+msgid "Queries that returns multiple rows. (`RETURN QUERY`)"
+msgstr "複数行を返すクエリ (`RETURNクエリ`)"
+
+#: ../../hint_details.md:41 90ec2340d8794f05a0033e1727409b18
+msgid "Dynamic SQL statements. (`EXECUTE`)"
+msgstr "動的なSQL文 (`EXECUTE`)"
+
+#: ../../hint_details.md:42 b55ec7478c944ad7bec52372d06b3e0f
+msgid "Cursor open. (`OPEN`)"
+msgstr "カーソルを開く (`OPEN`)"
+
+#: ../../hint_details.md:43 8e27730ad5eb40eba41c2bbbe98833a6
+msgid "Loop over result of a query (`FOR`)"
+msgstr "クエリ結果をループ (`FOR`)"
+
+#: ../../hint_details.md:44 49f605e431504d82bb104064d474843e
+msgid ""
+"A hint comment have to be placed after the first word in a query as the "
+"following since preceding comments are not sent as a part of the query."
+msgstr ""
+"ヒントコメントは次のようにクエリの最初の単語の後に配置する必要があります。クエ"
+"リよりも先行するコメントはクエリの一部として送信されません。"
+
+#: ../../hint_details.md:62 05c2b66829c0435a881028d578b5ca9b
+msgid "Letter case in the object names"
+msgstr "オブジェクト名の大文字と小文字の区別"
+
+#: ../../hint_details.md:64 dcf2c7b08e3b4008a4e9203a35be208d
+msgid ""
+"Unlike the way PostgreSQL handles object names, `pg_hint_plan` compares bare "
+"object names in hints against the database internal object names in case "
+"sensitive way. Therefore an object name TBL in a hint matches only \"TBL\" in "
+"database and does not match any unquoted names like TBL, tbl or Tbl."
+msgstr ""
+"PostgreSQLがオブジェクト名を扱う方法とは異なり、`pg_hint_plan`はヒントに含まれ"
+"るオブジェクト名とデータベース内部のオブジェクト名を大文字・小文字を区別して比"
+"較します。したがって、ヒント内のオブジェクト名TBLはデータベース内の \"TBL \"に"
+"のみマッチし、TBL、tbl、Tblのような引用符のない名前にはマッチしません。"
+
+#: ../../hint_details.md:69 5980dd00180049d9bf6982b608deeb93
+msgid "Escaping special chacaters in object names"
+msgstr "オブジェクト名の特殊文字のエスケープ"
+
+#: ../../hint_details.md:71 df3b243db1c445b8bdee23d54b7c5a96
+msgid ""
+"The objects as the hint parameter should be enclosed by double quotes if they "
+"includes parentheses, double quotes and white spaces. The escaping rule is the "
+"same as PostgreSQL."
+msgstr ""
+"ヒントのパラメータであるオブジェクト名は、括弧、二重引用符、空白を含む場合、二"
+"重引用符で囲む必要があります。エスケープのルールはPostgreSQLと同じです。"
+
+#: ../../hint_details.md:75 7fd718fc94a540379515d0f3f01596c9
+msgid "Distinction between multiple occurances of a table"
+msgstr "複数出現するテーブルの区別"
+
+#: ../../hint_details.md:77 8739f95e0eba44608680e0cedfa281dc
+msgid ""
+"`pg_hint_plan` identifies the target object by using aliases if exists. This "
+"behavior is usable to point a specific occurance among multiple occurances of "
+"one table."
+msgstr ""
+"`pg_hint_plan`は別名が存在する場合、それを使用して対象オブジェクトを特定しま"
+"す。この動作は、1つのテーブルが複数出現する中から特定のものを指し示すために使用"
+"されます。"
+
+#: ../../hint_details.md:100 3cc460e3c63b49d29daa5ddbbd5e432c
+msgid "Underlying tables of views or rules"
+msgstr "ビューまたはルールの根底にあるテーブル"
+
+#: ../../hint_details.md:102 c5e203be5e7e415a814e743161eb24ae
+msgid ""
+"Hints are not applicable on views itself, but they can affect the queries "
+"within if the object names match the object names in the expanded query on the "
+"view. Assigning aliases to the tables in a view enables them to be manipulated "
+"from outside the view."
+msgstr ""
+"ヒントはビュー自体には適用されませんが、オブジェクト名がビュー上に展開されたク"
+"エリ内のオブジェクト名と一致する場合、クエリ内部に影響を与えることができます。"
+"ビューのテーブルに別名を割り当てると、ビューの外からテーブルを操作することがで"
+"きます。"
+
+#: ../../hint_details.md:120 600ca488a1884ebaa0b33cb1b31f30a4
+msgid "Inheritance tables"
+msgstr "継承テーブル"
+
+#: ../../hint_details.md:122 d9c234efc84646c0bd0e1c8fbd35d8fe
+msgid ""
+"Hints can point only the parent of an inheritance tables and the hint affect "
+"all the inheritance. Hints simultaneously point directly to children are not "
+"in effect."
+msgstr ""
+"ヒントは継承テーブルの親だけを指すことができ、そのヒントはすべての継承に影響し"
+"ます。同時に子テーブルを直接指定するヒントは無効です。"
+
+#: ../../hint_details.md:126 297ea1b1411d4acaa5efbe31a802fdc0
+msgid "Hinting on multistatements"
+msgstr "マルチステートメントでのヒント"
+
+#: ../../hint_details.md:128 61e9d455a2964ccbb9505b42ab7c56e8
+msgid ""
+"One multistatement can have exactly one hint comment and the hints affects all "
+"of the individual statement in the multistatement. Notice that the seemingly "
+"multistatement on the interactive interface of psql is internally a sequence "
+"of single statements so hints affects only on the statement just following."
+msgstr ""
+"1つのマルチステートメントには1つのヒントコメントを含めることができ、ヒントはマ"
+"ルチステートメント内のすべてのステートメントに影響します。psqlの対話型インタ"
+"フェース上では一見マルチステートメントに見えますが、内部的には単一のステートメ"
+"ントのシーケンスであるため、ヒントは直後のステートメントにのみ影響することに注"
+"意してください。"
+
+#: ../../hint_details.md:133 76e8e046afdf4e859ffca69ad346b63a
+msgid "VALUES expressions"
+msgstr "VALUES式"
+
+#: ../../hint_details.md:135 18ddb5a3de55446d966bb6ad7b0b0da3
+msgid ""
+"`VALUES` expressions in `FROM` clause are named as `*VALUES*` internally so it "
+"is hintable if it is the only `VALUES` in a query. Two or more `VALUES` "
+"expressions in a query seem distinguishable looking at its explain result. But "
+"in reality, it is merely a cosmetic and they are not distinguishable."
+msgstr ""
+"`FROM`句の`VALUES`式は、内部的には`*VALUES*`と名付けられ、クエリ内の唯一の"
+"`VALUES`であればヒントを使用できる可能性があります。クエリ内の2つ以上の`VALUES`"
+"式は、`EXPLAIN`の結果を見ると区別がつくように見えます。しかし、実際にはそれは単"
+"なる表面上のものであり、区別はできません。"
+
+#: ../../hint_details.md:155 011ff73775074882bcdd3f3abbb62f5a
+msgid "Subqueries"
+msgstr "副問い合わせ"
+
+#: ../../hint_details.md:157 dd3132ada14d45e287217b9f73c31da1
+msgid ""
+"Subqueries in the following context occasionally can be hinted using the name "
+"`ANY_subquery`."
+msgstr ""
+"以下のコンテキストにある副問い合わせは、`ANY_subquery`という名前を使ってヒント"
+"を与えることができます。"
+
+#: ../../hint_details.md:164 2c10050069874e09927931d16fea12f3
+msgid ""
+"For these syntaxes, planner internally assigns the name to the subquery when "
+"planning joins on tables including it, so join hints are applicable on such "
+"joins using the implicit name as the following."
+msgstr ""
+"これらの構文では、プランナは副問い合わせを含むテーブルの結合を計画する際に、副"
+"問い合わせに内部的に名前を割り当てます。そのため、そのような結合では以下のよう"
+"に暗黙の名前を使用して結合方法ヒントが適用できます。"
+
+#: ../../hint_details.md:184 f618ca075f8a4cbb8446fbfb23d3f109
+msgid "Using `IndexOnlyScan` hint"
+msgstr "IndexOnlyScanヒントの使用"
+
+#: ../../hint_details.md:186 5cd9de39be384363b4bce3ebed069068
+msgid ""
+"Index scan may unexpectedly performed on another index when the index specifed "
+"in IndexOnlyScan hint cannot perform index only scan."
+msgstr ""
+"IndexOnlyScanヒントで指定されたインデックスでインデックスオンリースキャンを実行"
+"できない場合、インデックススキャンは予期せず別のインデックスで実行されることが"
+"あります。"
+
+#: ../../hint_details.md:189 f85708792b94499da8f268b87e8fc338
+msgid "Behavior of `NoIndexScan`"
+msgstr "NoIndexScanの動作"
+
+#: ../../hint_details.md:191 aea68918ae7046f08eefe37079640035
+msgid "`NoIndexScan` hint involes `NoIndexOnlyScan`."
+msgstr "NoIndexScanヒントはNoIndexOnlyScanを含んでいます。"
+
+#: ../../hint_details.md:193 14213ece855f45e3bbd563a0dd918e38
+msgid "Parallel hint and `UNION`"
+msgstr "Parallelヒントと`UNION`"
+
+#: ../../hint_details.md:195 b078859750714d80a7f231449fb8f233
+msgid ""
+"A `UNION` can run in parallel only when all underlying subqueries are parallel-"
+"safe. Conversely enforcing parallel on any of the subqueries let a parallel-"
+"executable `UNION` run in parallel. Meanwhile, a parallel hint with zero "
+"workers hinhibits a scan from executed in parallel."
+msgstr ""
+"UNIONが並列に実行できるのは、その下にあるすべてのサブクエリの並列実行が安全であ"
+"る場合のみです。サブクエリのいずれかに並列実行を強制することで、並列実行可能な"
+"UNIONが並列で実行されます。一方、ワーカーがゼロのPARALLELヒントは、スキャンの並"
+"列実行を禁止します。"
+
+#: ../../hint_details.md:200 f051a03d8d5b4b7baf74adf5465650f5
+msgid "Setting `pg_hint_plan` parameters by Set hints"
+msgstr "Set ヒントによる`pg_hint_plan`のパラメータ設定"
+
+#: ../../hint_details.md:202 768486a50e1c4208a800f25260b02304
+msgid ""
+"`pg_hint_plan` parameters change the behavior of itself so some parameters "
+"doesn't work as expected."
+msgstr ""
+"`pg_hint_plan`のパラメータはそれ自体の動作を変更するため、一部のパラメータは期"
+"待通りに動作しません。"
+
+#: ../../hint_details.md:205 6aa6255ae67a4589ba094fd354280c4b
+msgid ""
+"Hints to change `enable_hint`, `enable_hint_table` are ignored even though "
+"they are reported as \"used hints\" in debug logs."
+msgstr ""
+"`enable_hint`, `enable_hint_table`を変更するヒントは、デバッグログに\"used "
+"hints\"として報告されても無視されます。"
+
+#: ../../hint_details.md:207 01117a88f48e4d0989993d4d65a1c535
+msgid ""
+"Setting `debug_print` and `message_level` works from midst of the processing "
+"of the target query."
+msgstr ""
+"`debug_print`と`message_level`の設定は、対象クエリの処理の途中から動作します。"

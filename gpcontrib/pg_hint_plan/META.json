@@ -1,8 +1,8 @@
 {
-  "name": "pg_hint_plan12",
+  "name": "pg_hint_plan16",
   "abstract": "Query hints in SQL comments",
-  "description": "This library adds support for query hints in SQL comments in PostgreSQL 12.",
-  "version": "1.3.9",
+  "description": "This library adds support for query hints in SQL comments in PostgreSQL 16.",
+  "version": "1.6.3",
   "maintainer": [
     "Michael Paquier <michael@paquier.xyz>"
   ],
@@ -10,7 +10,7 @@
   "prereqs": {
     "runtime": {
       "requires": {
-        "PostgreSQL": ">= 12.0.0, < 13.0.0"
+        "PostgreSQL": ">= 16.0.0, < 17.0.0"
       }
     }
   },
@@ -19,7 +19,7 @@
       "abstract": "Query hints in SQL comments",
       "file": "pg_hint_plan--1.3.0.sql",
       "docfile": "README.md",
-      "version": "1.3.9"
+      "version": "1.6.3"
      }
   },
   "resources": {

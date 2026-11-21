@@ -472,16 +472,16 @@ EXPLAIN (COSTS false) SELECT * FROM s1.p1 t1, s1.p1 t2 WHERE t1.c1 = t2.c1;
  Hash Join
    Hash Cond: (t1.c1 = t2.c1)
    ->  Append
-         ->  Seq Scan on p1 t1
-         ->  Seq Scan on p1c1 t1_1
-         ->  Seq Scan on p1c2 t1_2
-         ->  Seq Scan on p1c3 t1_3
+         ->  Seq Scan on p1 t1_1
+         ->  Seq Scan on p1c1 t1_2
+         ->  Seq Scan on p1c2 t1_3
+         ->  Seq Scan on p1c3 t1_4
    ->  Hash
          ->  Append
-               ->  Seq Scan on p1 t2
-               ->  Seq Scan on p1c1 t2_1
-               ->  Seq Scan on p1c2 t2_2
-               ->  Seq Scan on p1c3 t2_3
+               ->  Seq Scan on p1 t2_1
+               ->  Seq Scan on p1c1 t2_2
+               ->  Seq Scan on p1c2 t2_3
+               ->  Seq Scan on p1c3 t2_4
 (13 rows)
 
 /*+NestLoop(t1 t2)*/
@@ -497,18 +497,18 @@ error hint:
 --------------------------------------------------
  Nested Loop
    ->  Append
-         ->  Seq Scan on p1 t1
-         ->  Seq Scan on p1c1 t1_1
-         ->  Seq Scan on p1c2 t1_2
-         ->  Seq Scan on p1c3 t1_3
+         ->  Seq Scan on p1 t1_1
+         ->  Seq Scan on p1c1 t1_2
+         ->  Seq Scan on p1c2 t1_3
+         ->  Seq Scan on p1c3 t1_4
    ->  Append
-         ->  Seq Scan on p1 t2
+         ->  Seq Scan on p1 t2_1
                Filter: (t1.c1 = c1)
-         ->  Index Scan using p1c1_i on p1c1 t2_1
+         ->  Index Scan using p1c1_i on p1c1 t2_2
                Index Cond: (c1 = t1.c1)
-         ->  Index Scan using p1c2_i on p1c2 t2_2
+         ->  Index Scan using p1c2_i on p1c2 t2_3
                Index Cond: (c1 = t1.c1)
-         ->  Index Scan using p1c3_i on p1c3 t2_3
+         ->  Index Scan using p1c3_i on p1c3 t2_4
                Index Cond: (c1 = t1.c1)
 (15 rows)
 
@@ -668,7 +668,7 @@ error hint:
                  QUERY PLAN                  
 ---------------------------------------------
  Nested Loop
-   Join Filter: ("*VALUES*".column1 = t2.c1)
+   Join Filter: (t2.c1 = "*VALUES*".column1)
    ->  Seq Scan on t2
    ->  Materialize
          ->  Values Scan on "*VALUES*"
@@ -960,7 +960,7 @@ error hint:
    InitPlan 1 (returns $0)
      ->  Aggregate
            ->  Nested Loop
-                 Join Filter: (b1t2.c1 = b1t1.c1)
+                 Join Filter: (b1t1.c1 = b1t2.c1)
                  ->  Hash Join
                        Hash Cond: (b1t4.c1 = b1t2.c1)
                        ->  Tid Scan on t4 b1t4
@@ -1146,7 +1146,7 @@ error hint:
    InitPlan 1 (returns $0)
      ->  Aggregate
            ->  Nested Loop
-                 Join Filter: (b1t2.c1 = b1t1.c1)
+                 Join Filter: (b1t1.c1 = b1t2.c1)
                  ->  Hash Join
                        Hash Cond: (b1t4.c1 = b1t2.c1)
                        ->  Tid Scan on t4 b1t4
@@ -1267,7 +1267,7 @@ error hint:
 -----------------------------------------------------------------------
  Aggregate
    ->  Nested Loop
-         Join Filter: (bmt2.c1 = bmt1.c1)
+         Join Filter: (bmt1.c1 = bmt2.c1)
          ->  Hash Join
                Hash Cond: (bmt2.c1 = bmt3.c1)
                ->  Seq Scan on t2 bmt2
@@ -1327,7 +1327,7 @@ error hint:
 -----------------------------------------------------------------------
  Aggregate
    ->  Nested Loop
-         Join Filter: (bmt2.c1 = bmt1.c1)
+         Join Filter: (bmt1.c1 = bmt2.c1)
          ->  Hash Join
                Hash Cond: (bmt2.c1 = bmt3.c1)
                ->  Seq Scan on t2 bmt2
@@ -1448,7 +1448,7 @@ error hint:
    InitPlan 1 (returns $0)
      ->  Aggregate
            ->  Nested Loop
-                 Join Filter: (b1t2.c1 = b1t1.c1)
+                 Join Filter: (b1t1.c1 = b1t2.c1)
                  ->  Hash Join
                        Hash Cond: (b1t4.c1 = b1t2.c1)
                        ->  Tid Scan on t4 b1t4
@@ -1636,7 +1636,7 @@ error hint:
    InitPlan 1 (returns $0)
      ->  Aggregate
            ->  Nested Loop
-                 Join Filter: (b1t2.c1 = b1t1.c1)
+                 Join Filter: (b1t1.c1 = b1t2.c1)
                  ->  Hash Join
                        Hash Cond: (b1t4.c1 = b1t2.c1)
                        ->  Tid Scan on t4 b1t4
@@ -1851,7 +1851,7 @@ error hint:
                                                          Sort Key: (max(b1t1.c1))
                                                          ->  Aggregate
                                                                ->  Nested Loop
-                                                                     Join Filter: (b1t2.c1 = b1t1.c1)
+                                                                     Join Filter: (b1t1.c1 = b1t2.c1)
                                                                      ->  Hash Join
                                                                            Hash Cond: (b1t4.c1 = b1t2.c1)
                                                                            ->  Tid Scan on t4 b1t4
@@ -1929,7 +1929,7 @@ AND bmt1.c1 = c3.c1
                      ->  Nested Loop
                            Join Filter: (bmt1.c1 = bmt2.c1)
                            ->  Nested Loop
-                                 Join Filter: ((max(b1t1.c1)) = bmt1.c1)
+                                 Join Filter: (bmt1.c1 = (max(b1t1.c1)))
                                  ->  Merge Join
                                        Merge Cond: ((max(b1t1.c1)) = (max(b2t1.c1)))
                                        ->  Sort
@@ -2058,7 +2058,7 @@ error hint:
                            ->  Sort
                                  Sort Key: bmt1.c1
                                  ->  Nested Loop
-                                       Join Filter: ((max(b1t1.c1)) = bmt1.c1)
+                                       Join Filter: (bmt1.c1 = (max(b1t1.c1)))
                                        ->  Hash Join
                                              Hash Cond: ((max(b2t1.c1)) = (max(b1t1.c1)))
                                              ->  Merge Join
@@ -2110,7 +2110,7 @@ error hint:
                                              ->  Hash
                                                    ->  Aggregate
                                                          ->  Nested Loop
-                                                               Join Filter: (b1t2.c1 = b1t1.c1)
+                                                               Join Filter: (b1t1.c1 = b1t2.c1)
                                                                ->  Hash Join
                                                                      Hash Cond: (b1t4.c1 = b1t2.c1)
                                                                      ->  Tid Scan on t4 b1t4
@@ -2536,7 +2536,7 @@ error hint:
                  ->  Sort
                        Sort Key: b2t2.c1
                        ->  Nested Loop
-                             Join Filter: (b2t3.c1 = b2t2.c1)
+                             Join Filter: (b2t2.c1 = b2t3.c1)
                              ->  Hash Join
                                    Hash Cond: (b2t3.c1 = b2t4.c1)
                                    ->  Tid Scan on t3 b2t3
@@ -2557,7 +2557,7 @@ error hint:
                  ->  Sort
                        Sort Key: b3t2.c1
                        ->  Nested Loop
-                             Join Filter: (b3t3.c1 = b3t2.c1)
+                             Join Filter: (b3t2.c1 = b3t3.c1)
                              ->  Hash Join
                                    Hash Cond: (b3t3.c1 = b3t4.c1)
                                    ->  Tid Scan on t3 b3t3
@@ -2576,7 +2576,7 @@ error hint:
          ->  Sort
                Sort Key: bmt2.c1
                ->  Nested Loop
-                     Join Filter: (bmt3.c1 = bmt2.c1)
+                     Join Filter: (bmt2.c1 = bmt3.c1)
                      ->  Hash Join
                            Hash Cond: (bmt3.c1 = bmt4.c1)
                            ->  Tid Scan on t3 bmt3
@@ -2596,7 +2596,7 @@ error hint:
                                                          ->  Sort
                                                                Sort Key: b1t2.c1
                                                                ->  Nested Loop
-                                                                     Join Filter: (b1t3.c1 = b1t2.c1)
+                                                                     Join Filter: (b1t2.c1 = b1t3.c1)
                                                                      ->  Hash Join
                                                                            Hash Cond: (b1t3.c1 = b1t4.c1)
                                                                            ->  Tid Scan on t3 b1t3
@@ -2737,7 +2737,7 @@ error hint:
          ->  Sort
                Sort Key: bmt2.c1
                ->  Nested Loop
-                     Join Filter: (bmt3.c1 = bmt2.c1)
+                     Join Filter: (bmt2.c1 = bmt3.c1)
                      ->  Hash Join
                            Hash Cond: (bmt3.c1 = bmt4.c1)
                            ->  Tid Scan on t3 bmt3
@@ -2753,7 +2753,7 @@ error hint:
                                              Sort Key: (max(b1t1.c1))
                                              ->  Aggregate
                                                    ->  Nested Loop
-                                                         Join Filter: (b1t2.c1 = b1t1.c1)
+                                                         Join Filter: (b1t1.c1 = b1t2.c1)
                                                          ->  Hash Join
                                                                Hash Cond: (b1t2.c1 = b1t3.c1)
                                                                ->  Seq Scan on t2 b1t2
@@ -2837,7 +2837,7 @@ error hint:
                      TID Cond: (ctid = '(1,1)'::tid)
                ->  Hash
                      ->  Nested Loop
-                           Join Filter: (t3.c1 = t2.c1)
+                           Join Filter: (t2.c1 = t3.c1)
                            ->  Merge Join
                                  Merge Cond: (t3.c1 = t4.c1)
                                  ->  Sort
@@ -2908,7 +2908,7 @@ error hint:
                      TID Cond: (ctid = '(1,1)'::tid)
                ->  Hash
                      ->  Nested Loop
-                           Join Filter: (b1t3.c1 = b1t2.c1)
+                           Join Filter: (b1t2.c1 = b1t3.c1)
                            ->  Merge Join
                                  Merge Cond: (b1t3.c1 = b1t4.c1)
                                  ->  Sort
@@ -3011,7 +3011,7 @@ error hint:
                      TID Cond: (ctid = '(1,1)'::tid)
                ->  Hash
                      ->  Nested Loop
-                           Join Filter: (t3.c1 = t2.c1)
+                           Join Filter: (t2.c1 = t3.c1)
                            ->  Merge Join
                                  Merge Cond: (t3.c1 = t4.c1)
                                  ->  Sort
@@ -3036,7 +3036,7 @@ error hint:
                      TID Cond: (ctid = '(1,1)'::tid)
                ->  Hash
                      ->  Nested Loop
-                           Join Filter: (t3.c1 = t2.c1)
+                           Join Filter: (t2.c1 = t3.c1)
                            ->  Merge Join
                                  Merge Cond: (t3.c1 = t4.c1)
                                  ->  Sort
@@ -3312,7 +3312,7 @@ error hint:
                      TID Cond: (ctid = '(1,1)'::tid)
                ->  Hash
                      ->  Nested Loop
-                           Join Filter: (t3.c1 = t2.c1)
+                           Join Filter: (t2.c1 = t3.c1)
                            ->  Merge Join
                                  Merge Cond: (t3.c1 = t4.c1)
                                  ->  Sort
@@ -3337,7 +3337,7 @@ error hint:
                      TID Cond: (ctid = '(1,1)'::tid)
                ->  Hash
                      ->  Nested Loop
-                           Join Filter: (t3.c1 = t2.c1)
+                           Join Filter: (t2.c1 = t3.c1)
                            ->  Merge Join
                                  Merge Cond: (t3.c1 = t4.c1)
                                  ->  Sort
@@ -3362,7 +3362,7 @@ error hint:
                      TID Cond: (ctid = '(1,1)'::tid)
                ->  Hash
                      ->  Nested Loop
-                           Join Filter: (t3.c1 = t2.c1)
+                           Join Filter: (t2.c1 = t3.c1)
                            ->  Merge Join
                                  Merge Cond: (t3.c1 = t4.c1)
                                  ->  Sort
@@ -3660,65 +3660,6 @@ error hint:
    ->  Seq Scan on t1 v1t1
    ->  Index Scan using t1_i1 on t1 v1t1_
          Index Cond: (c1 = v1t1.c1)
-(4 rows)
-
--- No. J-2-3-6
-EXPLAIN (COSTS false) SELECT * FROM s1.r4 t1, s1.r4 t2 WHERE t1.c1 = t2.c1;
-             QUERY PLAN             
-------------------------------------
- Hash Join
-   Hash Cond: (r4t1.c1 = r4t1_1.c1)
-   ->  Seq Scan on t1 r4t1
-   ->  Hash
-         ->  Seq Scan on t1 r4t1_1
-(5 rows)
-
-/*+HashJoin(r4t1 r4t1)*/
-EXPLAIN (COSTS false) SELECT * FROM s1.r4 t1, s1.r4 t2 WHERE t1.c1 = t2.c1;
-INFO:  pg_hint_plan: hint syntax error at or near "HashJoin(r4t1 r4t1)"
-DETAIL:  Relation name "r4t1" is ambiguous.
-LOG:  pg_hint_plan:
-used hint:
-not used hint:
-duplication hint:
-error hint:
-HashJoin(r4t1 r4t1)
-
-             QUERY PLAN             
-------------------------------------
- Hash Join
-   Hash Cond: (r4t1.c1 = r4t1_1.c1)
-   ->  Seq Scan on t1 r4t1
-   ->  Hash
-         ->  Seq Scan on t1 r4t1_1
-(5 rows)
-
--- No. J-2-3-7
-EXPLAIN (COSTS false) SELECT * FROM s1.r4 t1, s1.r5 t2 WHERE t1.c1 = t2.c1;
-            QUERY PLAN            
-----------------------------------
- Hash Join
-   Hash Cond: (r4t1.c1 = r5t1.c1)
-   ->  Seq Scan on t1 r4t1
-   ->  Hash
-         ->  Seq Scan on t1 r5t1
-(5 rows)
-
-/*+NestLoop(r4t1 r5t1)*/
-EXPLAIN (COSTS false) SELECT * FROM s1.r4 t1, s1.r5 t2 WHERE t1.c1 = t2.c1;
-LOG:  pg_hint_plan:
-used hint:
-NestLoop(r4t1 r5t1)
-not used hint:
-duplication hint:
-error hint:
-
-               QUERY PLAN                
------------------------------------------
- Nested Loop
-   ->  Seq Scan on t1 r4t1
-   ->  Index Scan using t1_i1 on t1 r5t1
-         Index Cond: (c1 = r4t1.c1)
 (4 rows)
 
 ----
@@ -4248,27 +4189,27 @@ SET enable_hashjoin TO on;
 ---- No. J-3-2 join inherit tables
 ----
 EXPLAIN (COSTS false) SELECT * FROM s1.p1, s1.p2 WHERE p1.c1 = p2.c1;
-             QUERY PLAN             
-------------------------------------
+               QUERY PLAN                
+-----------------------------------------
  Hash Join
    Hash Cond: (p2.c1 = p1.c1)
    ->  Append
-         ->  Seq Scan on p2
-         ->  Seq Scan on p2c1
-         ->  Seq Scan on p2c2
-         ->  Seq Scan on p2c3
-         ->  Seq Scan on p2c1c1
-         ->  Seq Scan on p2c1c2
-         ->  Seq Scan on p2c2c1
-         ->  Seq Scan on p2c2c2
-         ->  Seq Scan on p2c3c1
-         ->  Seq Scan on p2c3c2
+         ->  Seq Scan on p2 p2_1
+         ->  Seq Scan on p2c1 p2_2
+         ->  Seq Scan on p2c2 p2_3
+         ->  Seq Scan on p2c3 p2_4
+         ->  Seq Scan on p2c1c1 p2_5
+         ->  Seq Scan on p2c1c2 p2_6
+         ->  Seq Scan on p2c2c1 p2_7
+         ->  Seq Scan on p2c2c2 p2_8
+         ->  Seq Scan on p2c3c1 p2_9
+         ->  Seq Scan on p2c3c2 p2_10
    ->  Hash
          ->  Append
-               ->  Seq Scan on p1
-               ->  Seq Scan on p1c1
-               ->  Seq Scan on p1c2
-               ->  Seq Scan on p1c3
+               ->  Seq Scan on p1 p1_1
+               ->  Seq Scan on p1c1 p1_2
+               ->  Seq Scan on p1c2 p1_3
+               ->  Seq Scan on p1c3 p1_4
 (19 rows)
 
 -- No. J-3-2-1
@@ -4281,30 +4222,30 @@ not used hint:
 duplication hint:
 error hint:
 
-              QUERY PLAN              
---------------------------------------
+                 QUERY PLAN                 
+--------------------------------------------
  Merge Join
    Merge Cond: (p1.c1 = p2.c1)
    ->  Sort
          Sort Key: p1.c1
          ->  Append
-               ->  Seq Scan on p1
-               ->  Seq Scan on p1c1
-               ->  Seq Scan on p1c2
-               ->  Seq Scan on p1c3
+               ->  Seq Scan on p1 p1_1
+               ->  Seq Scan on p1c1 p1_2
+               ->  Seq Scan on p1c2 p1_3
+               ->  Seq Scan on p1c3 p1_4
    ->  Sort
          Sort Key: p2.c1
          ->  Append
-               ->  Seq Scan on p2
-               ->  Seq Scan on p2c1
-               ->  Seq Scan on p2c2
-               ->  Seq Scan on p2c3
-               ->  Seq Scan on p2c1c1
-               ->  Seq Scan on p2c1c2
-               ->  Seq Scan on p2c2c1
-               ->  Seq Scan on p2c2c2
-               ->  Seq Scan on p2c3c1
-               ->  Seq Scan on p2c3c2
+               ->  Seq Scan on p2 p2_1
+               ->  Seq Scan on p2c1 p2_2
+               ->  Seq Scan on p2c2 p2_3
+               ->  Seq Scan on p2c3 p2_4
+               ->  Seq Scan on p2c1c1 p2_5
+               ->  Seq Scan on p2c1c2 p2_6
+               ->  Seq Scan on p2c2c1 p2_7
+               ->  Seq Scan on p2c2c2 p2_8
+               ->  Seq Scan on p2c3c1 p2_9
+               ->  Seq Scan on p2c3c2 p2_10
 (22 rows)
 
 -- No. J-3-2-2
@@ -4317,53 +4258,53 @@ MergeJoin(p1c1 p2c1)
 duplication hint:
 error hint:
 
-             QUERY PLAN             
-------------------------------------
+               QUERY PLAN                
+-----------------------------------------
  Hash Join
    Hash Cond: (p2.c1 = p1.c1)
    ->  Append
-         ->  Seq Scan on p2
-         ->  Seq Scan on p2c1
-         ->  Seq Scan on p2c2
-         ->  Seq Scan on p2c3
-         ->  Seq Scan on p2c1c1
-         ->  Seq Scan on p2c1c2
-         ->  Seq Scan on p2c2c1
-         ->  Seq Scan on p2c2c2
-         ->  Seq Scan on p2c3c1
-         ->  Seq Scan on p2c3c2
+         ->  Seq Scan on p2 p2_1
+         ->  Seq Scan on p2c1 p2_2
+         ->  Seq Scan on p2c2 p2_3
+         ->  Seq Scan on p2c3 p2_4
+         ->  Seq Scan on p2c1c1 p2_5
+         ->  Seq Scan on p2c1c2 p2_6
+         ->  Seq Scan on p2c2c1 p2_7
+         ->  Seq Scan on p2c2c2 p2_8
+         ->  Seq Scan on p2c3c1 p2_9
+         ->  Seq Scan on p2c3c2 p2_10
    ->  Hash
          ->  Append
-               ->  Seq Scan on p1
-               ->  Seq Scan on p1c1
-               ->  Seq Scan on p1c2
-               ->  Seq Scan on p1c3
+               ->  Seq Scan on p1 p1_1
+               ->  Seq Scan on p1c1 p1_2
+               ->  Seq Scan on p1c2 p1_3
+               ->  Seq Scan on p1c3 p1_4
 (19 rows)
 
 ----
 ---- No. J-3-2-2 join partitioned tables
 ----
 EXPLAIN (COSTS false) SELECT * FROM s1.pt1, s1.p2 WHERE pt1.c1 = p2.c1;
-              QUERY PLAN              
---------------------------------------
+                 QUERY PLAN                 
+--------------------------------------------
  Hash Join
-   Hash Cond: (p2.c1 = pt1_c1.c1)
+   Hash Cond: (p2.c1 = pt1.c1)
    ->  Append
-         ->  Seq Scan on p2
-         ->  Seq Scan on p2c1
-         ->  Seq Scan on p2c2
-         ->  Seq Scan on p2c3
-         ->  Seq Scan on p2c1c1
-         ->  Seq Scan on p2c1c2
-         ->  Seq Scan on p2c2c1
-         ->  Seq Scan on p2c2c2
-         ->  Seq Scan on p2c3c1
-         ->  Seq Scan on p2c3c2
+         ->  Seq Scan on p2 p2_1
+         ->  Seq Scan on p2c1 p2_2
+         ->  Seq Scan on p2c2 p2_3
+         ->  Seq Scan on p2c3 p2_4
+         ->  Seq Scan on p2c1c1 p2_5
+         ->  Seq Scan on p2c1c2 p2_6
+         ->  Seq Scan on p2c2c1 p2_7
+         ->  Seq Scan on p2c2c2 p2_8
+         ->  Seq Scan on p2c3c1 p2_9
+         ->  Seq Scan on p2c3c2 p2_10
    ->  Hash
          ->  Append
-               ->  Seq Scan on pt1_c1
-               ->  Seq Scan on pt1_c2
-               ->  Seq Scan on pt1_c3
+               ->  Seq Scan on pt1_c1 pt1_1
+               ->  Seq Scan on pt1_c2 pt1_2
+               ->  Seq Scan on pt1_c3 pt1_3
 (18 rows)
 
 /*+MergeJoin(pt1 p2)*/
@@ -4375,29 +4316,29 @@ not used hint:
 duplication hint:
 error hint:
 
-              QUERY PLAN              
---------------------------------------
+                 QUERY PLAN                 
+--------------------------------------------
  Merge Join
-   Merge Cond: (pt1_c1.c1 = p2.c1)
+   Merge Cond: (pt1.c1 = p2.c1)
    ->  Sort
-         Sort Key: pt1_c1.c1
+         Sort Key: pt1.c1
          ->  Append
-               ->  Seq Scan on pt1_c1
-               ->  Seq Scan on pt1_c2
-               ->  Seq Scan on pt1_c3
+               ->  Seq Scan on pt1_c1 pt1_1
+               ->  Seq Scan on pt1_c2 pt1_2
+               ->  Seq Scan on pt1_c3 pt1_3
    ->  Sort
          Sort Key: p2.c1
          ->  Append
-               ->  Seq Scan on p2
-               ->  Seq Scan on p2c1
-               ->  Seq Scan on p2c2
-               ->  Seq Scan on p2c3
-               ->  Seq Scan on p2c1c1
-               ->  Seq Scan on p2c1c2
-               ->  Seq Scan on p2c2c1
-               ->  Seq Scan on p2c2c2
-               ->  Seq Scan on p2c3c1
-               ->  Seq Scan on p2c3c2
+               ->  Seq Scan on p2 p2_1
+               ->  Seq Scan on p2c1 p2_2
+               ->  Seq Scan on p2c2 p2_3
+               ->  Seq Scan on p2c3 p2_4
+               ->  Seq Scan on p2c1c1 p2_5
+               ->  Seq Scan on p2c1c2 p2_6
+               ->  Seq Scan on p2c2c1 p2_7
+               ->  Seq Scan on p2c2c2 p2_8
+               ->  Seq Scan on p2c3c1 p2_9
+               ->  Seq Scan on p2c3c2 p2_10
 (21 rows)
 
 /*+MergeJoin(pt1_c1 p2c1)*/ /* will ignored */
@@ -4409,26 +4350,26 @@ MergeJoin(p2c1 pt1_c1)
 duplication hint:
 error hint:
 
-              QUERY PLAN              
---------------------------------------
+                 QUERY PLAN                 
+--------------------------------------------
  Hash Join
-   Hash Cond: (p2.c1 = pt1_c1.c1)
+   Hash Cond: (p2.c1 = pt1.c1)
    ->  Append
-         ->  Seq Scan on p2
-         ->  Seq Scan on p2c1
-         ->  Seq Scan on p2c2
-         ->  Seq Scan on p2c3
-         ->  Seq Scan on p2c1c1
-         ->  Seq Scan on p2c1c2
-         ->  Seq Scan on p2c2c1
-         ->  Seq Scan on p2c2c2
-         ->  Seq Scan on p2c3c1
-         ->  Seq Scan on p2c3c2
+         ->  Seq Scan on p2 p2_1
+         ->  Seq Scan on p2c1 p2_2
+         ->  Seq Scan on p2c2 p2_3
+         ->  Seq Scan on p2c3 p2_4
+         ->  Seq Scan on p2c1c1 p2_5
+         ->  Seq Scan on p2c1c2 p2_6
+         ->  Seq Scan on p2c2c1 p2_7
+         ->  Seq Scan on p2c2c2 p2_8
+         ->  Seq Scan on p2c3c1 p2_9
+         ->  Seq Scan on p2c3c2 p2_10
    ->  Hash
          ->  Append
-               ->  Seq Scan on pt1_c1
-               ->  Seq Scan on pt1_c2
-               ->  Seq Scan on pt1_c3
+               ->  Seq Scan on pt1_c1 pt1_1
+               ->  Seq Scan on pt1_c2 pt1_2
+               ->  Seq Scan on pt1_c3 pt1_3
 (18 rows)
 
 ----
@@ -4717,3 +4658,70 @@ error hint:
          ->  Seq Scan on t2  (cost=xxx..xxx rows=100 width=xxx)
 
 \! rm results/ut-J.tmpout
+-- Memoize
+EXPLAIN (COSTS false) SELECT * FROM t1, t2, t3 WHERE t1.val = t2.val and t2.id = t3.id;
+                 QUERY PLAN                 
+--------------------------------------------
+ Nested Loop
+   ->  Merge Join
+         Merge Cond: (t2.id = t3.id)
+         ->  Index Scan using t2_pkey on t2
+         ->  Sort
+               Sort Key: t3.id
+               ->  Seq Scan on t3
+   ->  Memoize
+         Cache Key: t2.val
+         Cache Mode: logical
+         ->  Index Scan using t1_val on t1
+               Index Cond: (val = t2.val)
+(12 rows)
+
+/*+ nomemoize(t1 t2)*/
+EXPLAIN (COSTS false) SELECT * FROM t1, t2, t3 WHERE t1.val = t2.val and t2.id = t3.id;  -- doesn't work
+LOG:  pg_hint_plan:
+used hint:
+NoMemoize(t1 t2)
+not used hint:
+duplication hint:
+error hint:
+
+                 QUERY PLAN                 
+--------------------------------------------
+ Nested Loop
+   ->  Merge Join
+         Merge Cond: (t2.id = t3.id)
+         ->  Index Scan using t2_pkey on t2
+         ->  Sort
+               Sort Key: t3.id
+               ->  Seq Scan on t3
+   ->  Memoize
+         Cache Key: t2.val
+         Cache Mode: logical
+         ->  Index Scan using t1_val on t1
+               Index Cond: (val = t2.val)
+(12 rows)
+
+/*+ nomemoize(t1 t2 t3)*/
+EXPLAIN (COSTS false) SELECT * FROM t1, t2, t3 WHERE t1.val = t2.val and t2.id = t3.id;
+LOG:  pg_hint_plan:
+used hint:
+NoMemoize(t1 t2 t3)
+not used hint:
+duplication hint:
+error hint:
+
+                    QUERY PLAN                    
+--------------------------------------------------
+ Merge Join
+   Merge Cond: (t1.val = t2.val)
+   ->  Index Scan using t1_val on t1
+   ->  Sort
+         Sort Key: t2.val
+         ->  Merge Join
+               Merge Cond: (t2.id = t3.id)
+               ->  Index Scan using t2_pkey on t2
+               ->  Sort
+                     Sort Key: t3.id
+                     ->  Seq Scan on t3
+(11 rows)
+
