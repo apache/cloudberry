@@ -74,8 +74,9 @@
 #   - CPU: Recommended 4+ cores.
 #
 # Triggers:
-# - Push to `main` branch.
-# - Pull requests to `main` branch.
+# - Push to `REL_2_STABLE` branch (a push to `main` is a merged pull
+#   request that was already tested, see the `on:` section).
+# - Pull requests to `main` or `REL_2_STABLE` branch.
 # - Manual workflow dispatch.
 #
 # Container Images:
@@ -101,8 +102,13 @@
 name: Apache Cloudberry Build Debug
 
 on:
+  # No push trigger for main.  Its branch protection (.asf.yaml) requires
+  # a pull request to be up to date with main before it is merged, and
+  # only squash and rebase merges are allowed, so the merged tree is the
+  # tree this workflow already ran on for the pull request.  REL_2_STABLE
+  # has no such protection, so pushes there are still tested.
   push:
-    branches: [main, REL_2_STABLE]
+    branches: [REL_2_STABLE]
   pull_request:
     branches: [main, REL_2_STABLE]
     types: [opened, synchronize, reopened, edited]
