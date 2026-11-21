@@ -1766,6 +1766,18 @@ EXPLAIN(COSTS OFF, VERBOSE) WITH ins AS (
   RETURNING a
 )
 SELECT sum(a) INTO t_w_cte_relp_1 FROM ins;
+
+-- A sorted GatherSingle can receive the result of a replicated DML CTE.
+SET optimizer = off;
+EXPLAIN (COSTS OFF)
+WITH ins AS (INSERT INTO t_w_cte_relp VALUES (1),(1) RETURNING a)
+SELECT a FROM ins ORDER BY a;
+WITH ins AS (INSERT INTO t_w_cte_relp VALUES (1),(1) RETURNING a)
+SELECT a FROM ins ORDER BY a;
+-- An unsorted GatherSingle control.
+WITH ins AS (INSERT INTO t_w_cte_relp VALUES (2),(2) RETURNING a)
+SELECT a FROM ins;
+RESET optimizer;
 DROP TABLE t_w_cte_relp;
 
 --
