@@ -9556,6 +9556,7 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 						 "a.attalign,\n"
 						 "a.attislocal,\n"
 						 "pg_catalog.format_type(t.oid, a.atttypmod) AS atttypname,\n"
+						 "pg_catalog.array_to_string(e.attoptions, ',') AS attencoding,\n"
 						 "array_to_string(a.attoptions, ', ') AS attoptions,\n"
 						 "CASE WHEN a.attcollation <> t.typcollation "
 						 "THEN a.attcollation ELSE 0 END AS attcollation,\n"
@@ -9601,6 +9602,8 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 					  "JOIN pg_catalog.pg_attribute a ON (src.tbloid = a.attrelid) "
 					  "LEFT JOIN pg_catalog.pg_type t "
 					  "ON (a.atttypid = t.oid)\n"
+					  "LEFT JOIN pg_catalog.pg_attribute_encoding e "
+					  "ON (e.attrelid = a.attrelid AND e.attnum = a.attnum) "
 					  "WHERE a.attnum > 0::pg_catalog.int2\n"
 					  "ORDER BY a.attrelid, a.attnum",
 					  tbloids->data);
@@ -9629,6 +9632,7 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 	i_attfdwoptions = PQfnumber(res, "attfdwoptions");
 	i_attmissingval = PQfnumber(res, "attmissingval");
 	i_atthasdef = PQfnumber(res, "atthasdef");
+	i_attencoding = PQfnumber(res, "attencoding");
 
 	/* Within the next loop, we'll accumulate OIDs of tables with defaults */
 	resetPQExpBuffer(tbloids);
@@ -9669,9 +9673,6 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 			pg_fatal("unexpected column data for table \"%s\"",
 					 tbinfo->dobj.name);
 
-		i_attencoding = PQfnumber(res, "attencoding");
-		
-		tbinfo->attencoding = (char **) pg_malloc(ntups * sizeof(char *));
 		/* Save data for this table */
 		tbinfo->numatts = numatts;
 		tbinfo->attnames = (char **) pg_malloc(numatts * sizeof(char *));
@@ -9693,6 +9694,7 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 		tbinfo->notnull = (bool *) pg_malloc(numatts * sizeof(bool));
 		tbinfo->inhNotNull = (bool *) pg_malloc(numatts * sizeof(bool));
 		tbinfo->attrdefs = (AttrDefInfo **) pg_malloc(numatts * sizeof(AttrDefInfo *));
+		tbinfo->attencoding = (char **) pg_malloc(numatts * sizeof(char *));
 		hasdefaults = false;
 
 		for (int j = 0; j < numatts; j++, r++)
@@ -9725,8 +9727,8 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 			tbinfo->inhNotNull[j] = false;
 
 			/* column storage attributes */
-			if (!PQgetisnull(res, j, i_attencoding))
-				tbinfo->attencoding[j] = pg_strdup(PQgetvalue(res, j, i_attencoding));
+			if (!PQgetisnull(res, r, i_attencoding))
+				tbinfo->attencoding[j] = pg_strdup(PQgetvalue(res, r, i_attencoding));
 			else
 				tbinfo->attencoding[j] = NULL;
 		}
