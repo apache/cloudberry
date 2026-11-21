@@ -39,6 +39,9 @@
 #   - "Y of X tests failed."
 #   - "X of Y tests passed, Z failed test(s) ignored."
 #   - "X of Y tests failed, Z of these failures ignored."
+#   - TAP/prove: "Files=N, Tests=N, ..." and "Result: PASS|FAIL"
+#   - GoogleTest: "[==========] N tests from M test suites ran.",
+#     "[  PASSED  ] N tests." and "[  FAILED  ] N tests, listed below:"
 #
 #   And failed or ignored test entries in format:
 #   - "test_name ... FAILED"
@@ -108,8 +111,35 @@ open(my $fh, '<', $file) or do {
 my ($status, $total_tests, $failed_tests, $ignored_tests, $passed_tests) = ('', 0, 0, 0, 0);
 my @failed_test_list = ();
 my @ignored_test_list = ();
+my $in_gtest_failed_list = 0;
 
 while (<$fh>) {
+    # GoogleTest prints each failed test twice: once with its timing as it
+    # runs, and once in the summary list after "listed below:".  Only take
+    # the names from the summary list.
+    if ($in_gtest_failed_list) {
+        if (/^\[  FAILED  \] (\S+?),?(?:\s|$)/) {
+            push @failed_test_list, $1;
+            next;
+        }
+        $in_gtest_failed_list = 0;
+    }
+
+    # GoogleTest summary format
+    if (/^\[==========\] (\d+) tests? from \d+ test (?:suites?|cases?) ran\./) {
+        $total_tests = $1;
+        next;
+    } elsif (/^\[  PASSED  \] (\d+) tests?\./) {
+        $status = 'passed' if $status eq '';
+        $passed_tests = $1;
+        next;
+    } elsif (/^\[  FAILED  \] (\d+) tests?, listed below:/) {
+        $status = 'failed';
+        $failed_tests = $1;
+        $in_gtest_failed_list = 1;
+        next;
+    }
+
     # Match the summary lines (pg_regress format)
     if (/All (\d+) tests passed\./) {
         $status = 'passed';

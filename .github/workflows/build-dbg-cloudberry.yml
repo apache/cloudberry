@@ -109,7 +109,7 @@ on:
   workflow_dispatch:
     inputs:
       test_selection:
-        description: 'Select tests to run (comma-separated). Examples: ic-good-opt-off,ic-contrib'
+        description: 'Select tests to run (comma-separated). Examples: ic-good-opt-on,ic-isolation2'
         required: false
         default: 'all'
         type: string
@@ -234,6 +234,59 @@ jobs:
               },
               {"test":"ic-cbdb-parallel",
                "make_configs":["src/test/regress:installcheck-cbdb-parallel"]
+              },
+              {"test":"ic-good-opt-off",
+               "make_configs":["src/test/regress:installcheck-good"],
+               "pg_settings":{"optimizer":"off"}
+              },
+              {"test":"ic-good-opt-on",
+               "make_configs":["src/test/regress:installcheck-good"],
+               "pg_settings":{"optimizer":"on"}
+              },
+              {"test":"pax-unit-test",
+               "make_configs":["contrib/pax_storage/:pax-unit-test"]
+              },
+              {"test":"pax-ic-good-opt-off",
+               "make_configs":[
+                "contrib/pax_storage/:pax-test",
+                "contrib/pax_storage/:regress_test"
+              ],
+               "pg_settings":{
+                 "optimizer":"off",
+                 "default_table_access_method":"pax"
+                }
+              },
+              {"test":"ic-orca-parallel",
+               "make_configs":["src/test/regress:installcheck-orca-parallel"]
+              },
+              {"test":"ic-isolation2",
+               "make_configs":["src/test/isolation2:installcheck-isolation2"]
+              },
+              {"test":"ic-isolation2-crash",
+               "make_configs":["src/test/isolation2:installcheck-isolation2-crash"],
+               "enable_core_check":false
+              },
+              {"test":"ic-recovery",
+               "make_configs":["src/test/recovery:installcheck"],
+               "enable_core_check":false
+              },
+              {"test":"ic-walrep",
+               "make_configs":["src/test/walrep:installcheck"]
+              },
+              {"test":"ic-pl-modules",
+               "make_configs":["src/pl/plperl:installcheck",
+                               "src/test/modules/dummy_index_am:install installcheck",
+                               "src/test/modules/dummy_seclabel:install installcheck",
+                               "src/test/modules/test_bloomfilter:install installcheck",
+                               "src/test/modules/test_ddl_deparse:install installcheck",
+                               "src/test/modules/test_ginpostinglist:install installcheck",
+                               "src/test/modules/test_integerset:install installcheck",
+                               "src/test/modules/test_lfind:install installcheck",
+                               "src/test/modules/test_parser:install installcheck",
+                               "src/test/modules/test_planner:install installcheck",
+                               "src/test/modules/test_rbtree:install installcheck",
+                               "src/test/modules/test_regex:install installcheck",
+                               "src/test/modules/test_shm_mq:install installcheck"]
               }
             ]
           }'
@@ -1186,9 +1239,14 @@ jobs:
         if: success() && needs.check-skip.outputs.should_skip != 'true'
         env:
           SRC_DIR: ${{ github.workspace }}
+          BUILD_DESTINATION: /usr/local/cloudberry-db
         shell: bash {0}
         run: |
           set -o pipefail
+
+          # Grant gpadmin write access to the install directory
+          # -H follows the command-line symlink to the real directory.
+          chown -RH gpadmin:gpadmin "${BUILD_DESTINATION}/"
 
           # Initialize test status
           overall_status=0
@@ -1215,8 +1273,12 @@ jobs:
             PG_OPTS="$PG_OPTS -c optimizer=${{ matrix.pg_settings.optimizer }}"
           fi
 
+          if [[ "${{ matrix.pg_settings.default_table_access_method != '' }}" == "true" ]]; then
+            PG_OPTS="$PG_OPTS -c default_table_access_method=${{ matrix.pg_settings.default_table_access_method }}"
+          fi
+
           # Read configs into array
-          IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
+          mapfile -t configs <<< "${{ join(matrix.make_configs, fromJSON('"\n"')) }}"
 
           echo "=== Starting test execution for ${{ matrix.test }} ==="
           echo "Number of configurations to execute: ${#configs[@]}"
@@ -1321,7 +1383,7 @@ jobs:
           overall_status=0
 
           # Get configs array to create context for results
-          IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
+          mapfile -t configs <<< "${{ join(matrix.make_configs, fromJSON('"\n"')) }}"
 
           echo "=== Starting results parsing for ${{ matrix.test }} ==="
           echo "Number of configurations to parse: ${#configs[@]}"
@@ -1516,7 +1578,7 @@ jobs:
             fi
 
             # Process results for each configuration
-            IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
+            mapfile -t configs <<< "${{ join(matrix.make_configs, fromJSON('"\n"')) }}"
 
             for ((i=0; i<NUM_CONFIGS; i++)); do
               config="${configs[$i]}"
