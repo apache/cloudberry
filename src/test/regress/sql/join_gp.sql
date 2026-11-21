@@ -1376,3 +1376,36 @@ select k from using_coerce_t3 full join using_coerce_t4 using(k) order by 1;
 
 drop table using_coerce_t3;
 drop table using_coerce_t4;
+
+--
+-- gp_composite_key_join_selectivity: equijoin clauses between the same two
+-- relations on a composite key are estimated together. Multiplying their
+-- selectivities would estimate far fewer rows than the 3000 that match.
+--
+create table ck_sales (item int, ord int, v int) distributed by (ord);
+create table ck_returns (item int, ord int, v int) distributed by (ord);
+insert into ck_sales select i % 1000, i / 3, i from generate_series(1, 30000) i;
+insert into ck_returns select item, ord, v from ck_sales where v % 10 = 0;
+analyze ck_sales;
+analyze ck_returns;
+create function ck_join_rows() returns int language plpgsql as $$
+declare
+  l text;
+begin
+  for l in execute 'explain select * from ck_sales s join ck_returns r on s.item = r.item and s.ord = r.ord' loop
+    if l ~ 'Hash Join' then
+      return substring(l from 'rows=(\d+)')::int;
+    end if;
+  end loop;
+  return null;
+end $$;
+set optimizer = off;
+set gp_composite_key_join_selectivity = off;
+select ck_join_rows() < 100 as underestimated;
+set gp_composite_key_join_selectivity = on;
+select ck_join_rows() between 500 and 2000 as close_to_actual;
+select count(*) from ck_sales s join ck_returns r on s.item = r.item and s.ord = r.ord;
+reset gp_composite_key_join_selectivity;
+reset optimizer;
+drop function ck_join_rows();
+drop table ck_sales, ck_returns;

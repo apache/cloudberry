@@ -191,6 +191,11 @@ static double calc_joinrel_size_estimate(PlannerInfo *root,
 										 double inner_rows,
 										 SpecialJoinInfo *sjinfo,
 										 List *restrictlist);
+static Selectivity get_composite_key_join_selectivity(PlannerInfo *root,
+													  Relids outer_relids,
+													  Relids inner_relids,
+													  SpecialJoinInfo *sjinfo,
+													  List **restrictlist);
 static Selectivity get_foreign_key_join_selectivity(PlannerInfo *root,
 													Relids outer_relids,
 													Relids inner_relids,
@@ -5780,6 +5785,17 @@ calc_joinrel_size_estimate(PlannerInfo *root,
 											   &restrictlist);
 
 	/*
+	 * GPDB: Likewise for groups of equality clauses between the same two
+	 * relations, whose combined selectivity is underestimated if the columns
+	 * are correlated, like a composite key.
+	 */
+	fkselec *= get_composite_key_join_selectivity(root,
+												  outer_rel->relids,
+												  inner_rel->relids,
+												  sjinfo,
+												  &restrictlist);
+
+	/*
 	 * For an outer join, we have to distinguish the selectivity of the join's
 	 * own clauses (JOIN/ON conditions) from any clauses that were "pushed
 	 * down".  For inner joins we just count them all as joinclauses.
@@ -5916,6 +5932,200 @@ calc_joinrel_size_estimate(PlannerInfo *root,
 		nrows = adjnrows;
 
 	return clamp_row_est(nrows);
+}
+
+/*
+ * Estimate the number of distinct combinations of 'exprs', all of relation
+ * 'rel', as the product of their numbers of distinct values, clamped to the
+ * number of rows of 'rel'. Returns false if any of them has no statistics.
+ */
+static bool
+combination_ndistinct(PlannerInfo *root, List *exprs, RelOptInfo *rel, double *result)
+{
+	double		nd = 1.0;
+	ListCell   *lc;
+
+	foreach(lc, exprs)
+	{
+		VariableStatData vardata;
+		bool		isdefault;
+		double		n;
+
+		examine_variable(root, (Node *) lfirst(lc), 0, &vardata);
+		n = get_variable_numdistinct(&vardata, &isdefault);
+		ReleaseVariableStats(vardata);
+		if (isdefault)
+			return false;
+		nd *= n;
+	}
+	*result = Min(nd, Max(rel->rows, 1.0));
+	return true;
+}
+
+/*
+ * get_composite_key_join_selectivity
+ *		GPDB: estimate groups of equijoin clauses between the same two base
+ *		relations together, if multiplying their selectivities would give an
+ *		impossibly small result.
+ *
+ * With clauses "a.x = b.x AND a.y = b.y", clauselist_selectivity() multiplies
+ * the selectivities of the two clauses, assuming that the columns are
+ * independent. When (x, y) is in fact a composite key, like (item, order
+ * number) in TPC-DS catalog_sales and catalog_returns, that is off by orders
+ * of magnitude: every catalog_returns row matches exactly one catalog_sales
+ * row, but the estimate is 1 / (ndistinct(x) * ndistinct(y)), which is far
+ * less than one match per row.
+ *
+ * The number of distinct (x, y) combinations on each side can't be more than
+ * the number of rows, and with the usual containment assumption of eqjoinsel
+ * the selectivity of the combined equality is 1 / max(ndistinct(a.x, a.y),
+ * ndistinct(b.x, b.y)). We estimate the number of combinations on each side
+ * as the product of the columns' ndistincts, clamped to the number of rows.
+ * (Not with estimate_num_groups(), which for several columns of one relation
+ * clamps to 10% of the rows, assuming correlation; that is reasonable for
+ * GROUP BY, but would make a unique composite key look 10 times less
+ * selective than it is.) If the product is below the number of rows, this is
+ * the same as the product of the clause selectivities; it only differs when
+ * the product exceeds the number of rows, which is impossible. So we use the
+ * larger of the two, but never more than the selectivity of the most
+ * selective clause alone.
+ *
+ * Like get_foreign_key_join_selectivity(), the clauses we estimate this way
+ * are removed from *restrictlist, and the returned selectivity applies to
+ * them. Only inner joins are handled.
+ */
+static Selectivity
+get_composite_key_join_selectivity(PlannerInfo *root,
+								   Relids outer_relids,
+								   Relids inner_relids,
+								   SpecialJoinInfo *sjinfo,
+								   List **restrictlist)
+{
+	Selectivity result = 1.0;
+	List	   *pairs = NIL;	/* list of (outer relid, inner relid) int pairs */
+	List	   *groups = NIL;	/* list of lists of RestrictInfos, per pair */
+	ListCell   *lc;
+	int			i;
+
+	if (!gp_composite_key_join_selectivity || sjinfo->jointype != JOIN_INNER)
+		return 1.0;
+
+	/* Group the equality clauses of the form "a.x = b.y" by (a, b) */
+	foreach(lc, *restrictlist)
+	{
+		RestrictInfo *rinfo = lfirst_node(RestrictInfo, lc);
+		int			left_relid;
+		int			right_relid;
+		int			outer_relid;
+		int			inner_relid;
+		ListCell   *lc2;
+		ListCell   *lc3;
+		bool		found = false;
+
+		if (rinfo->pseudoconstant || rinfo->mergeopfamilies == NIL ||
+			!is_opclause(rinfo->clause) ||
+			list_length(((OpExpr *) rinfo->clause)->args) != 2)
+			continue;
+		if (!bms_get_singleton_member(rinfo->left_relids, &left_relid) ||
+			!bms_get_singleton_member(rinfo->right_relids, &right_relid))
+			continue;
+		if (bms_is_member(left_relid, outer_relids) &&
+			bms_is_member(right_relid, inner_relids))
+		{
+			outer_relid = left_relid;
+			inner_relid = right_relid;
+		}
+		else if (bms_is_member(right_relid, outer_relids) &&
+				 bms_is_member(left_relid, inner_relids))
+		{
+			outer_relid = right_relid;
+			inner_relid = left_relid;
+		}
+		else
+			continue;
+
+		forboth(lc2, pairs, lc3, groups)
+		{
+			List	   *pair = (List *) lfirst(lc2);
+
+			if (linitial_int(pair) == outer_relid && lsecond_int(pair) == inner_relid)
+			{
+				lfirst(lc3) = lappend((List *) lfirst(lc3), rinfo);
+				found = true;
+				break;
+			}
+		}
+		if (!found)
+		{
+			pairs = lappend(pairs, list_make2_int(outer_relid, inner_relid));
+			groups = lappend(groups, list_make1(rinfo));
+		}
+	}
+
+	i = 0;
+	foreach(lc, groups)
+	{
+		List	   *group = (List *) lfirst(lc);
+		List	   *pair = (List *) list_nth(pairs, i++);
+		RelOptInfo *outer_rel;
+		RelOptInfo *inner_rel;
+		List	   *outer_exprs = NIL;
+		List	   *inner_exprs = NIL;
+		Selectivity product = 1.0;
+		Selectivity minsel = 1.0;
+		Selectivity combined;
+		double		outer_nd;
+		double		inner_nd;
+		ListCell   *lc2;
+
+		if (list_length(group) < 2)
+			continue;
+
+		outer_rel = find_base_rel(root, linitial_int(pair));
+		inner_rel = find_base_rel(root, lsecond_int(pair));
+
+		foreach(lc2, group)
+		{
+			RestrictInfo *rinfo = lfirst_node(RestrictInfo, lc2);
+			OpExpr	   *opexpr = (OpExpr *) rinfo->clause;
+			Selectivity s;
+
+			if (bms_is_member(linitial_int(pair), rinfo->left_relids))
+			{
+				outer_exprs = lappend(outer_exprs, linitial(opexpr->args));
+				inner_exprs = lappend(inner_exprs, lsecond(opexpr->args));
+			}
+			else
+			{
+				outer_exprs = lappend(outer_exprs, lsecond(opexpr->args));
+				inner_exprs = lappend(inner_exprs, linitial(opexpr->args));
+			}
+
+			s = clause_selectivity(root, (Node *) rinfo, 0, JOIN_INNER, sjinfo, false);
+			product *= s;
+			minsel = Min(minsel, s);
+		}
+
+		if (!combination_ndistinct(root, outer_exprs, outer_rel, &outer_nd) ||
+			!combination_ndistinct(root, inner_exprs, inner_rel, &inner_nd))
+			continue;			/* no statistics */
+		combined = 1.0 / Max(Max(outer_nd, inner_nd), 1.0);
+		combined = Min(Max(combined, product), minsel);
+
+		if (combined <= product)
+			continue;			/* nothing to correct */
+
+		elog(DEBUG1, "composite key join selectivity: %d clauses between rels %d and %d, "
+			 "product %g, ndistinct %.0f / %.0f, using %g",
+			 list_length(group), linitial_int(pair), lsecond_int(pair),
+			 product, outer_nd, inner_nd, combined);
+
+		/* Use this estimate for these clauses */
+		*restrictlist = list_difference_ptr(*restrictlist, group);
+		result *= combined;
+	}
+
+	return result;
 }
 
 /*
