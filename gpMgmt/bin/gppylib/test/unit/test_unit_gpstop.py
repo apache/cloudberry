@@ -237,7 +237,7 @@ class GpStop(GpTestCase):
         self.assertIn("   sdw1   /data/mirror3    50003   u", log_messages)
 
         for line in log_messages:
-            self.assertNotRegexpMatches(line, "sdw2")
+            self.assertNotRegex(line, "sdw2")
 
         self.assertIn("Successfully shutdown 4 of 8 segment instances ", log_messages)
 
