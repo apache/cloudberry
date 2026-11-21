@@ -1,0 +1,4 @@
+{"id":0,"note":"1MiB","plain_lb":{"bytes":524288,"md5":"a33c402bb72411890e8c5835be72744d"},"blob":{"bytes":1048576,"md5":"c409b415b13a574799a730c5f7e0587c"}}
+{"id":1,"note":"empty","plain_lb":{"bytes":0,"md5":"d41d8cd98f00b204e9800998ecf8427e"},"blob":{"bytes":0,"md5":"d41d8cd98f00b204e9800998ecf8427e"}}
+{"id":2,"note":"null","plain_lb":null,"blob":null}
+{"id":3,"note":"2MiB","plain_lb":{"bytes":1048576,"md5":"b5758185b0d609bd495b33fdccf09936"},"blob":{"bytes":2097152,"md5":"7cdb2d558e2345685a2db577e46aeb83"}}

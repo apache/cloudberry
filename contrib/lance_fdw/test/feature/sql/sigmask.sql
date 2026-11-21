@@ -1,0 +1,39 @@
+-- sigmask: the observable half of how lance-c's threads treat signals.
+--
+-- lance-c builds its thread pools lazily - tokio's runtime on the first
+-- block_on(), lance's own IO and compute pools on the first read - and a new
+-- thread inherits the signal mask of the thread that created it.  The wrapper
+-- therefore makes every call into lance-c with all signals blocked on the
+-- backend's main thread, so that no Rust thread can ever take SIGINT, SIGUSR1,
+-- SIGALRM or SIGTERM and run a PostgreSQL signal handler.  This suite reads the
+-- masks back out of /proc after a scan that ran in this very backend
+-- (mpp_execute 'coordinator'), and also checks that the main thread got its
+-- own mask back afterwards.
+--
+-- Thread counts follow the core count, so only the verdicts are printed.
+\pset format unaligned
+DO $$
+BEGIN
+  EXECUTE format('CREATE SERVER sigmask_files FOREIGN DATA WRAPPER lance_fdw OPTIONS (base_uri %L)',
+                 current_setting('regress.fixture_dir'));
+END
+$$;
+CREATE FOREIGN TABLE lance_feature.sigmask_frag3 (id integer, v text, n bigint)
+  SERVER sigmask_files OPTIONS (uri 'frag_3.lance', mpp_execute 'coordinator');
+SELECT count(*) FROM lance_feature.sigmask_frag3;
+-- SIGHUP, SIGINT, SIGQUIT, SIGUSR1, SIGUSR2, SIGPIPE, SIGALRM, SIGTERM and
+-- SIGCHLD are bits 0, 1, 2, 9, 11, 12, 13, 14 and 16: 0x17a07 = 96775.  The
+-- mask is never all ones - Linux refuses to block SIGKILL and SIGSTOP and glibc
+-- keeps two realtime signals - so the check is for these nine.  A thread that
+-- exits between the directory listing and the read (tokio retires idle blocking
+-- threads) yields NULL, which the aggregates skip.
+WITH threads AS (
+  SELECT tid::int AS tid,
+         ('x' || lpad((regexp_match(pg_read_file('/proc/self/task/' || tid || '/status', 0, 65536, true),
+                                    'SigBlk:\s+([0-9a-f]+)'))[1], 16, '0'))::bit(64)::bigint AS sigblk
+  FROM pg_ls_dir('/proc/self/task') AS tid
+)
+SELECT count(*) FILTER (WHERE tid <> pg_backend_pid()) >= 2 AS has_worker_threads,
+       bool_and((sigblk & 96775) = 96775) FILTER (WHERE tid <> pg_backend_pid()) AS workers_block_backend_signals,
+       bool_and((sigblk & 96775) <> 96775) FILTER (WHERE tid = pg_backend_pid()) AS main_thread_takes_signals
+FROM threads;

@@ -1,0 +1,6 @@
+{"id":0,"c_struct":{"a":1,"b":"x"},"c_nested":{"inner":{"x":1,"y":"y"},"z":2},"c_list_struct":[{"a":1,"b":"x"}],"c_struct_list":{"arr":[1,2,3],"name":"n0"}}
+{"id":1,"c_struct":null,"c_nested":null,"c_list_struct":null,"c_struct_list":null}
+{"id":2,"c_struct":{"a":null,"b":null},"c_nested":{"inner":null,"z":null},"c_list_struct":[],"c_struct_list":{"arr":[],"name":""}}
+{"id":3,"c_struct":{"a":-1,"b":""},"c_nested":{"inner":{"x":null,"y":null},"z":-1},"c_list_struct":[{"a":null,"b":null},{"a":2,"b":"yy"}],"c_struct_list":{"arr":[null,7],"name":null}}
+{"id":4,"c_struct":{"a":2147483647,"b":"\u00fcnic\u00f8de"},"c_nested":{"inner":{"x":-2147483648,"y":"tab\tnl\n"},"z":0},"c_list_struct":[{"a":0,"b":""}],"c_struct_list":{"arr":[-2147483648,2147483647],"name":"edge"}}
+{"id":5,"c_struct":{"a":0,"b":"quote\"back\\slash"},"c_nested":{"inner":{"x":0,"y":""},"z":2147483647},"c_list_struct":[null,{"a":5,"b":"e"}],"c_struct_list":{"arr":null,"name":"n5"}}
