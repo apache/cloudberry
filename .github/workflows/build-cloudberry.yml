@@ -387,7 +387,8 @@ jobs:
                "make_configs":["src/test/walrep:installcheck"]
               },
               {"test":"ic-tap",
-               "make_configs":["src/bin/pg_archivecleanup:installcheck",
+               "make_configs":["src/bin/initdb:installcheck",
+                               "src/bin/pg_archivecleanup:installcheck",
                                "src/bin/pg_config:installcheck",
                                "src/bin/pg_controldata:installcheck",
                                "src/bin/pg_resetwal:installcheck",
