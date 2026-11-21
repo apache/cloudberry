@@ -227,8 +227,7 @@ $psql_primaryB->query_until(
 # vacuum_count.
 $node_primary->poll_query_until($test_db,
 	qq[
-	SELECT vacuum_count > 0
-	FROM pg_stat_all_tables WHERE relname = '${table1}';
+	SELECT pg_stat_get_vacuum_count('${table1}'::regclass) > 0;
 	]
 	, 't');
 
