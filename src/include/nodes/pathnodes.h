@@ -238,6 +238,17 @@ typedef struct PlannerGlobal
 	 */
 	int			numSlices;
 	struct PlanSlice *slices;
+
+	/*
+	 * GPDB: scalar subqueries that appear more than once in the statement
+	 * (dedupInitplanCandidates), and for those that have been made into an
+	 * initplan, the subquery, the CTEs it refers to, and the Param that holds
+	 * its result (parallel lists).
+	 */
+	List	   *dedupInitplanCandidates;
+	List	   *dedupInitplanQueries;
+	List	   *dedupInitplanCtes;
+	List	   *dedupInitplanParams;
 } PlannerGlobal;
 
 /* macro for fetching the Plan associated with a SubPlan node */
