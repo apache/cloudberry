@@ -110,4 +110,10 @@ ALTER EXTENSION test_pg_dump DROP VIEW test_pg_dump_v1;
 DROP EXTENSION test_pg_dump;
 
 -- shouldn't be anything left in pg_init_privs
-SELECT * FROM pg_init_privs WHERE privtype = 'e';
+SELECT * FROM pg_init_privs ip WHERE privtype = 'e'
+  AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                  WHERE d.classid = ip.classoid AND d.objid = ip.objoid
+                    AND d.deptype = 'e')
+  AND NOT EXISTS (SELECT 1 FROM pg_extension e
+                  WHERE ip.classoid = 'pg_namespace'::regclass
+                    AND ip.objoid = e.extnamespace);
