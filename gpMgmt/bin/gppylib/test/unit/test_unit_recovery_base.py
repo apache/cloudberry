@@ -1,6 +1,8 @@
 import unittest
 from contextlib import redirect_stderr
 import io
+import json
+import subprocess
 from mock import call, Mock, patch, ANY
 import sys
 
@@ -57,6 +59,17 @@ class RecoveryBaseTestCase(GpTestCase):
         self.assertEqual(0, self.mock_logger.error.call_count)
         self.assertEqual(warn_count, self.mock_logger.warn.call_count)
         self.assertEqual(0, self.mock_logger.exception.call_count)
+
+    def _invalid_cmd_errors(self):
+        # The "command not found" message depends on the bash version: bash
+        # 5.1 and later add "line 1: ".  Ask the local bash for it instead of
+        # hard-coding one form.
+        bash_msg = subprocess.run(['/bin/bash', '-c', 'invalid_cmd_str'],
+                                  stderr=subprocess.PIPE,
+                                  universal_newlines=True).stderr
+        error = {"error_type": "default", "error_msg": bash_msg, "dbid": None,
+                 "datadir": None, "port": None, "progress_file": None}
+        return json.dumps([error, error])
 
     def _asserts_for_failing_tests(self, ex, stderr_buf, expected_message, info_count=1):
         self.assertEqual(1, ex.exception.code)
@@ -211,10 +224,7 @@ class RecoveryBaseTestCase(GpTestCase):
 
         stderr_buf, ex = self.run_recovery_base_get_stderr()
         self._asserts_for_failing_tests(ex, stderr_buf,
-                                        '[{"error_type": "default", "error_msg": "/bin/bash: invalid_cmd_str: command not found\\n",'
-                                        ' "dbid": null, "datadir": null, "port": null, "progress_file": null},'
-                                        ' {"error_type": "default", "error_msg": "/bin/bash: invalid_cmd_str: command not found\\n",'
-                                        ' "dbid": null, "datadir": null, "port": null, "progress_file": null}]')
+                                        self._invalid_cmd_errors())
 
     #TODO do we need this test where an invalid command fails but with a wrapper error?
     # def test_invalid_cmd_fails_with_wrapper_error(self):
@@ -239,10 +249,7 @@ class RecoveryBaseTestCase(GpTestCase):
 
         stderr_buf, ex = self.run_recovery_base_get_stderr()
         self._asserts_for_failing_tests(ex, stderr_buf,
-                                        '[{"error_type": "default", "error_msg": "/bin/bash: invalid_cmd_str: command not found\\n",'
-                                        ' "dbid": null, "datadir": null, "port": null, "progress_file": null},'
-                                        ' {"error_type": "default", "error_msg": "/bin/bash: invalid_cmd_str: command not found\\n",'
-                                        ' "dbid": null, "datadir": null, "port": null, "progress_file": null}]')
+                                        self._invalid_cmd_errors())
 
         self.assertEqual(1, self.mock_enable_verbose_logging.call_count)
         self.assertEqual(1, self.mock_logger.exception.call_count)
