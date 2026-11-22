@@ -42,6 +42,7 @@
 #include "rewrite/rewriteManip.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+#include "utils/selfuncs.h"
 #include "utils/syscache.h"
 
 #include "cdb/cdbllize.h"
@@ -88,8 +89,8 @@ static List *generate_subquery_params(PlannerInfo *root, List *tlist,
 static Node *convert_testexpr_mutator(Node *node,
 									  convert_testexpr_context *context);
 
-static bool subplan_is_hashable(Plan *plan);
-static bool subpath_is_hashable(Path *path);
+static bool subplan_is_hashable(PlannerInfo *subroot, Plan *plan);
+static bool subpath_is_hashable(PlannerInfo *subroot, Path *path);
 static bool test_opexpr_is_hashable(OpExpr *testexpr, List *param_ids);
 static bool hash_ok_operator(OpExpr *expr);
 #if 0
@@ -508,7 +509,7 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 			best_path = final_rel->cheapest_total_path;
 
 			/* Now we can check if it'll fit in hash_mem */
-			if (subpath_is_hashable(best_path))
+			if (subpath_is_hashable(subroot, best_path))
 			{
 				SubPlan    *hashplan;
 				AlternativeSubPlan *asplan;
@@ -760,7 +761,7 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		 */
 		if (subLinkType == ANY_SUBLINK &&
 			splan->parParam == NIL &&
-			subplan_is_hashable(plan) &&
+			subplan_is_hashable(subroot, plan) &&
 			testexpr_is_hashable(splan->testexpr, splan->paramIds))
 			splan->useHashTable = true;
 
@@ -966,10 +967,44 @@ convert_testexpr_mutator(Node *node,
  * This is not responsible for checking whether the combining testexpr
  * is suitable for hashing.  We only look at the subquery itself.
  */
+/*
+ * GPDB: The hash table of a hashed SubPlan only
+ * holds the distinct values of the subquery's output, not every row, so
+ * estimate its size from the number of distinct values. With the number of
+ * rows, a subquery returning many duplicates, like the customer keys of all
+ * catalog_sales rows of a period in TPC-DS query 35, looks too big to hash,
+ * and is then executed again for every outer row instead.
+ *
+ * Note that a hashed SubPlan cannot spill to disk, so if this underestimates
+ * the number of distinct values, the hash table uses more memory than
+ * hash_mem.
+ */
+static double
+subquery_hash_entries(PlannerInfo *subroot, List *exprs, double rows)
+{
+	double		nd;
+
+	if (subroot == NULL || exprs == NIL ||
+		rows <= 1)
+		return rows;
+	nd = estimate_num_groups(subroot, exprs, rows, NULL, NULL);
+	return Min(rows, nd);
+}
+
 static bool
-subplan_is_hashable(Plan *plan)
+subplan_is_hashable(PlannerInfo *subroot, Plan *plan)
 {
 	double		subquery_size;
+	List	   *exprs = NIL;
+	ListCell   *lc;
+
+	foreach(lc, plan->targetlist)
+	{
+		TargetEntry *tle = lfirst_node(TargetEntry, lc);
+
+		if (!tle->resjunk)
+			exprs = lappend(exprs, tle->expr);
+	}
 
 	/*
 	 * The estimated size of the subquery result must fit in hash_mem. (Note:
@@ -977,7 +1012,7 @@ subplan_is_hashable(Plan *plan)
 	 * stored as MinimalTuples; this provides some fudge factor for hashtable
 	 * overhead.)
 	 */
-	subquery_size = plan->plan_rows *
+	subquery_size = subquery_hash_entries(subroot, exprs, plan->plan_rows) *
 		(MAXALIGN(plan->plan_width) + MAXALIGN(SizeofHeapTupleHeader));
 	if (subquery_size > get_hash_memory_limit())
 		return false;
@@ -991,7 +1026,7 @@ subplan_is_hashable(Plan *plan)
  * Identical to subplan_is_hashable, but work from a Path for the subplan.
  */
 static bool
-subpath_is_hashable(Path *path)
+subpath_is_hashable(PlannerInfo *subroot, Path *path)
 {
 	double		subquery_size;
 
@@ -1001,7 +1036,8 @@ subpath_is_hashable(Path *path)
 	 * stored as MinimalTuples; this provides some fudge factor for hashtable
 	 * overhead.)
 	 */
-	subquery_size = path->rows *
+	subquery_size = subquery_hash_entries(subroot, path->pathtarget->exprs,
+										  path->rows) *
 		(MAXALIGN(path->pathtarget->width) + MAXALIGN(SizeofHeapTupleHeader));
 	if (subquery_size > get_hash_memory_limit())
 		return false;

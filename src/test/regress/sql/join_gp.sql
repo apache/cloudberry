@@ -1376,3 +1376,62 @@ select k from using_coerce_t3 full join using_coerce_t4 using(k) order by 1;
 
 drop table using_coerce_t3;
 drop table using_coerce_t4;
+
+--
+-- Containment assumptions in cardinality estimates. A fact table references
+-- only 200 of the 10000 rows of a dimension table; the dimension's other
+-- columns are restricted, or joined to, in ways that keep only those rows.
+--
+create table cn_dim (id int, grp int) distributed by (id);
+create table cn_cust (id int, name text) distributed by (id);
+create table cn_fact (did int, cust int, v int) distributed by (v);
+insert into cn_dim select i, i / 10 from generate_series(0, 9999) i;
+insert into cn_cust select i, 'name' || i from generate_series(0, 1999) i;
+insert into cn_fact select (i / 10) % 200, i / 10, i from generate_series(0, 19999) i;
+create statistics cn_fact_stats (ndistinct) on cust, did from cn_fact;
+analyze cn_dim;
+analyze cn_cust;
+analyze cn_fact;
+-- estimated number of rows of a query's top plan node
+create function cn_rows(q text) returns int language plpgsql as $$
+declare
+  l text;
+begin
+  for l in execute 'explain ' || q loop
+    return substring(l from 'rows=(\d+)')::int;
+  end loop;
+end $$;
+set optimizer = off;
+-- parallel plans add up the estimates of the workers
+set enable_parallel = off;
+
+-- The dimension is restricted to the 200 rows that the fact table references,
+-- and all 20000 fact rows match. Without assuming containment, the estimate
+-- would be below 1000.
+select cn_rows('select * from cn_fact f join cn_dim d on f.did = d.id where d.grp < 20') >= 10000 as close_to_actual;
+select count(*) from cn_fact f join cn_dim d on f.did = d.id where d.grp < 20;
+
+-- A restriction on the grouping column keeps whole groups, 20 of them, not
+-- the more than 100 that a random sample of the rows would have.
+select cn_rows('select grp, count(*) from cn_dim where grp < 20 group by grp') between 10 and 40 as close_to_actual;
+
+-- Joined to the fact table on its key, the dimension has only 20 distinct
+-- values of grp left, not 1000.
+select cn_rows('select * from cn_fact f join cn_dim d2 on f.did = d2.id join cn_dim d1 on d1.grp = d2.grp where d1.id < 200') >= 20000 as closer_to_actual;
+select count(*) from cn_fact f join cn_dim d2 on f.did = d2.id join cn_dim d1 on d1.grp = d2.grp where d1.id < 200;
+
+-- The groups of (name, id) are those of the fact table's (cust, did), whose
+-- correlation the extended statistics capture.
+select cn_rows('select distinct c.name, d.id from cn_fact f join cn_cust c on f.cust = c.id join cn_dim d on f.did = d.id where d.grp < 10') between 500 and 2000 as close_to_actual;
+select count(*) from (select distinct c.name, d.id from cn_fact f join cn_cust c on f.cust = c.id join cn_dim d on f.did = d.id where d.grp < 10) s;
+
+-- The subquery returns 10000 rows, but only 1000 distinct values, whose hash
+-- table fits in work_mem, so the SubPlan is hashed.
+set work_mem = '64kB';
+explain (costs off) select count(*) from cn_fact f where f.did not in (select grp from cn_dim) or f.v < 0;
+select count(*) from cn_fact f where f.did not in (select grp from cn_dim) or f.v < 0;
+reset work_mem;
+reset optimizer;
+reset enable_parallel;
+drop function cn_rows(text);
+drop table cn_fact, cn_dim, cn_cust;

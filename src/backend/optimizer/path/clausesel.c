@@ -803,11 +803,17 @@ clause_selectivity_ext(PlannerInfo *root,
 		 * result won't change if we are switching the input relations or
 		 * considering a unique-ified case, so we only need one cache variable
 		 * for all non-JOIN_INNER cases.
+		 *
+		 * GPDB: while estimating the size of a join relation, the selectivity
+		 * of a join clause depends on the join inputs it is evaluated for
+		 * (see clamp_ndistinct_to_join_input()), so it mustn't be cached.
 		 */
-		if (varRelid == 0 ||
-			rinfo->num_base_rels == 0 ||
-			(rinfo->num_base_rels == 1 &&
-			 bms_is_member(varRelid, rinfo->clause_relids)))
+		if (!(gp_in_joinrel_size_estimate && sjinfo != NULL &&
+			  rinfo->num_base_rels > 1) &&
+			(varRelid == 0 ||
+			 rinfo->num_base_rels == 0 ||
+			 (rinfo->num_base_rels == 1 &&
+			  bms_is_member(varRelid, rinfo->clause_relids))))
 		{
 			/* Cacheable --- do we already have the result? */
 			if (jointype == JOIN_INNER)

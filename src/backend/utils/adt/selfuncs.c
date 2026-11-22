@@ -158,6 +158,13 @@ get_relation_stats_hook_type get_relation_stats_hook = NULL;
 get_index_stats_hook_type get_index_stats_hook = NULL;
 
 static double eqsel_internal(PG_FUNCTION_ARGS, bool negate);
+static double clamp_ndistinct_to_restricted_rows(VariableStatData *vardata, double nd);
+static List *unique_key_join_partners(PlannerInfo *root, RelOptInfo *xrel);
+static double estimate_num_groups_internal(PlannerInfo *root, List *groupExprs,
+											double input_rows, List **pgset,
+											EstimationInfo *estinfo);
+static double clamp_ndistinct_to_join_input(PlannerInfo *root, VariableStatData *vardata,
+											Relids side, double nd);
 static double eqjoinsel_inner(Oid opfuncoid, Oid collation,
 							  VariableStatData *vardata1, VariableStatData *vardata2,
 							  double nd1, double nd2,
@@ -2345,6 +2352,19 @@ eqjoinsel(PG_FUNCTION_ARGS)
 										  ATTSTATSSLOT_VALUES | ATTSTATSSLOT_NUMBERS);
 	}
 
+	/* GPDB: assume containment, see clamp_ndistinct_to_restricted_rows() */
+	nd1 = clamp_ndistinct_to_restricted_rows(&vardata1, nd1);
+	nd2 = clamp_ndistinct_to_restricted_rows(&vardata2, nd2);
+	if (gp_in_joinrel_size_estimate && sjinfo->jointype == JOIN_INNER)
+	{
+		nd1 = clamp_ndistinct_to_join_input(root, &vardata1,
+											join_is_reversed ? sjinfo->min_righthand : sjinfo->min_lefthand,
+											nd1);
+		nd2 = clamp_ndistinct_to_join_input(root, &vardata2,
+											join_is_reversed ? sjinfo->min_lefthand : sjinfo->min_righthand,
+											nd2);
+	}
+
 	/* We need to compute the inner-join selectivity in all cases */
 	selec_inner = eqjoinsel_inner(opfuncoid, collation,
 								  &vardata1, &vardata2,
@@ -2359,6 +2379,11 @@ eqjoinsel(PG_FUNCTION_ARGS)
 		case JOIN_INNER:
 		case JOIN_LEFT:
 		case JOIN_FULL:
+			/*
+			 * GPDB: try_runtime_filter() estimates the size of a right join
+			 * with a SpecialJoinInfo whose jointype it set to JOIN_RIGHT.
+			 */
+		case JOIN_RIGHT:
 			selec = selec_inner;
 			break;
 		case JOIN_SEMI:
@@ -2426,6 +2451,180 @@ eqjoinsel(PG_FUNCTION_ARGS)
 	CLAMP_PROBABILITY(selec);
 
 	PG_RETURN_FLOAT8((float8) selec);
+}
+
+/*
+ * GPDB: assume containment of join values
+ *
+ * eqjoinsel_inner() estimates the selectivity of "a.x = b.y" as
+ * 1 / max(ndistinct(a.x), ndistinct(b.y)), using the ndistinct of the
+ * whole columns, while the join is applied to the relations as restricted by
+ * their own quals. That assumes the restrictions are independent of the join
+ * columns. A typical star schema join breaks it: in TPC-DS,
+ *
+ *     store_sales JOIN date_dim ON ss_sold_date_sk = d_date_sk
+ *     WHERE d_year = 2000
+ *
+ * date_dim covers 200 years, 73049 dates, but store_sales only 1818 of them.
+ * The estimate is 1/73049, as if the 366 dates of 2000 were spread over
+ * the 200 years and only 9 of them had sales; it is off by a factor of 40.
+ *
+ * Instead, assume containment: after the restrictions, a side has at most as
+ * many distinct values as rows, and the values of the side with fewer
+ * distinct values all occur on the other side. That's what clamping the
+ * ndistinct of a restricted relation to its number of rows does. ORCA makes
+ * the same assumption. It overestimates if the restriction selects values
+ * that don't occur on the other side.
+ */
+static double
+clamp_ndistinct_to_restricted_rows(VariableStatData *vardata, double nd)
+{
+	RelOptInfo *rel = vardata->rel;
+
+	if (rel == NULL ||
+		(rel->reloptkind != RELOPT_BASEREL &&
+		 rel->reloptkind != RELOPT_OTHER_MEMBER_REL))
+		return nd;
+	if (rel->rows <= 0 || rel->tuples <= 0 || rel->rows >= rel->tuples)
+		return nd;
+	return Min(nd, Max(rel->rows, 1.0));
+}
+
+/*
+ * unique_key_join_partners
+ *		GPDB: find the columns of other relations that a unique key of the
+ *		base relation xrel is equated to.
+ *
+ * Returns a list of EquivalenceMembers, each a single-relation expression
+ * of another relation that belongs to an equivalence class with a column
+ * of xrel that is unique in xrel.  Joining xrel to such a relation R makes
+ * every xrel row in the join determined by R's value of the member.
+ */
+static List *
+unique_key_join_partners(PlannerInfo *root, RelOptInfo *xrel)
+{
+	List	   *result = NIL;
+	Index		xrelid;
+	ListCell   *lc;
+
+	if (xrel == NULL || bms_membership(xrel->relids) != BMS_SINGLETON)
+		return NIL;
+	xrelid = bms_singleton_member(xrel->relids);
+
+	foreach(lc, root->eq_classes)
+	{
+		EquivalenceClass *ec = (EquivalenceClass *) lfirst(lc);
+		EquivalenceMember *xem = NULL;
+		ListCell   *lc2;
+
+		if (ec->ec_has_const || ec->ec_has_volatile ||
+			list_length(ec->ec_members) < 2 ||
+			!bms_is_member(xrelid, ec->ec_relids))
+			continue;
+
+		foreach(lc2, ec->ec_members)
+		{
+			EquivalenceMember *em = (EquivalenceMember *) lfirst(lc2);
+
+			if (!em->em_is_child && !em->em_is_const &&
+				bms_equal(em->em_relids, xrel->relids))
+			{
+				xem = em;
+				break;
+			}
+		}
+		if (xem == NULL)
+			continue;
+
+		/* Is X's member unique in X? */
+		{
+			VariableStatData xvd;
+			bool		isdefault;
+			double		xnd;
+			bool		unique;
+
+			examine_variable(root, (Node *) xem->em_expr, 0, &xvd);
+			xnd = get_variable_numdistinct(&xvd, &isdefault);
+			unique = xvd.isunique ||
+				(!isdefault && xrel->tuples > 0 && xnd >= 0.9 * xrel->tuples);
+			ReleaseVariableStats(xvd);
+			if (!unique)
+				continue;
+		}
+
+		foreach(lc2, ec->ec_members)
+		{
+			EquivalenceMember *em = (EquivalenceMember *) lfirst(lc2);
+
+			if (em->em_is_child || em->em_is_const ||
+				bms_membership(em->em_relids) != BMS_SINGLETON ||
+				bms_equal(em->em_relids, xrel->relids))
+				continue;
+			result = lappend(result, em);
+		}
+	}
+	return result;
+}
+
+/*
+ * clamp_ndistinct_to_join_input
+ *		GPDB: like clamp_ndistinct_to_restricted_rows, but for a join column
+ *		whose side of the join is itself a join relation.
+ *
+ * A join input of N rows cannot hold more than N distinct values of the
+ * join column, however many the column's base table has.  Without this,
+ * a key of a dimension table that has been narrowed down by joining it to
+ * another restricted relation (rather than by a qual of its own) keeps the
+ * dimension's full n_distinct, and the join to the fact table is
+ * underestimated by the ratio of the dimension's size to the fact's domain.
+ */
+static double
+clamp_ndistinct_to_join_input(PlannerInfo *root, VariableStatData *vardata,
+							  Relids side, double nd)
+{
+	RelOptInfo *input;
+
+	if (vardata->rel == NULL || side == NULL ||
+		bms_membership(side) != BMS_MULTIPLE ||
+		!bms_is_subset(vardata->rel->relids, side))
+		return nd;
+	input = find_join_rel(root, side);
+	if (input != NULL && input->rows > 0)
+		nd = Min(nd, Max(input->rows, 1.0));
+
+	/*
+	 * If the column's relation X is joined, within this input, to another
+	 * relation R on a column that is unique in X, then each row of X in the
+	 * input is determined by R's join value: X's columns can't have more
+	 * distinct values there than R's join column has.  (A dimension joined
+	 * to a fact table on its key keeps only the dimension rows the fact
+	 * table references.)
+	 */
+	{
+		List	   *partners = unique_key_join_partners(root, vardata->rel);
+		ListCell   *lc;
+
+		foreach(lc, partners)
+		{
+			EquivalenceMember *em = (EquivalenceMember *) lfirst(lc);
+			VariableStatData rvd;
+			bool		isdefault;
+			double		rnd;
+
+			if (!bms_is_subset(em->em_relids, side))
+				continue;
+			examine_variable(root, (Node *) em->em_expr, 0, &rvd);
+			rnd = get_variable_numdistinct(&rvd, &isdefault);
+			if (!isdefault)
+			{
+				rnd = clamp_ndistinct_to_restricted_rows(&rvd, rnd);
+				nd = Min(nd, Max(rnd, 1.0));
+			}
+			ReleaseVariableStats(rvd);
+		}
+		list_free(partners);
+	}
+	return nd;
 }
 
 /*
@@ -3355,6 +3554,32 @@ add_unique_group_var(PlannerInfo *root, List *varinfos,
 }
 
 /*
+ * GPDB: Do all the restriction clauses of 'rel' refer only to columns in
+ * 'attnos' (offset by FirstLowInvalidHeapAttributeNumber, as pull_varattnos()
+ * returns them)?
+ */
+static bool
+restriction_only_on_attnos(RelOptInfo *rel, Bitmapset *attnos)
+{
+	ListCell   *lc;
+
+	if (rel->baserestrictinfo == NIL || attnos == NULL)
+		return false;
+	foreach(lc, rel->baserestrictinfo)
+	{
+		RestrictInfo *rinfo = lfirst_node(RestrictInfo, lc);
+		Bitmapset  *clauseattnos = NULL;
+
+		if (rinfo->pseudoconstant)
+			continue;
+		pull_varattnos((Node *) rinfo->clause, rel->relid, &clauseattnos);
+		if (clauseattnos == NULL || !bms_is_subset(clauseattnos, attnos))
+			return false;
+	}
+	return true;
+}
+
+/*
  * estimate_num_groups		- Estimate number of groups in a grouped query
  *
  * Given a query having a GROUP BY clause, estimate how many groups there
@@ -3428,6 +3653,141 @@ add_unique_group_var(PlannerInfo *root, List *varinfos,
 double
 estimate_num_groups(PlannerInfo *root, List *groupExprs, double input_rows,
 					List **pgset, EstimationInfo *estinfo)
+{
+	double		numgroups;
+	List	   *mapped = NIL;
+	bool		changed = false;
+	Index		factrelid = 0;
+	bool		single_fact = true;
+	ListCell   *lc;
+
+	numgroups = estimate_num_groups_internal(root, groupExprs, input_rows,
+											 pgset, estinfo);
+	if (pgset != NULL || groupExprs == NIL)
+		return numgroups;
+
+	/*
+	 * GPDB: a grouping column of a dimension relation X joined on its unique
+	 * key to a fact relation R can't have more distinct values, in the join,
+	 * than R's join column has: replace X's grouping columns by R's join
+	 * column.  If all grouping columns end up in R, their combined number
+	 * of distinct values in R (which can use R's extended statistics, and so
+	 * capture correlations between R's foreign keys) is scaled down by the
+	 * fraction of R's rows in the input.
+	 */
+	foreach(lc, groupExprs)
+	{
+		Node	   *expr = (Node *) lfirst(lc);
+		Relids		relids = pull_varnos(root, expr);
+		Node	   *repl = expr;
+		int			relid;
+
+		if (bms_get_singleton_member(relids, &relid) &&
+			relid < root->simple_rel_array_size &&
+			root->simple_rel_array[relid] != NULL &&
+			root->simple_rel_array[relid]->reloptkind == RELOPT_BASEREL)
+		{
+			List	   *partners = unique_key_join_partners(root, root->simple_rel_array[relid]);
+			ListCell   *lc2;
+
+			foreach(lc2, partners)
+			{
+				EquivalenceMember *em = (EquivalenceMember *) lfirst(lc2);
+				Node	   *e = (Node *) em->em_expr;
+
+				while (IsA(e, RelabelType))
+					e = (Node *) ((RelabelType *) e)->arg;
+				if (IsA(e, Var) && ((Var *) e)->varlevelsup == 0)
+				{
+					repl = e;
+					changed = true;
+					break;
+				}
+			}
+			list_free(partners);
+		}
+
+		relids = pull_varnos(root, repl);
+		if (!bms_get_singleton_member(relids, &relid))
+			single_fact = false;
+		else if (factrelid == 0)
+			factrelid = relid;
+		else if (factrelid != relid)
+			single_fact = false;
+		mapped = list_append_unique(mapped, repl);
+	}
+
+	/*
+	 * Only trust the mapping when extended ndistinct statistics on the fact
+	 * relation cover all the mapped columns: without them, the fact's
+	 * columns are assumed independent, which tells us nothing the original
+	 * estimate didn't, and scaling that down only compounds the error.
+	 */
+	if (changed && single_fact && factrelid < root->simple_rel_array_size &&
+		root->simple_rel_array[factrelid] != NULL)
+	{
+		RelOptInfo *factrel = root->simple_rel_array[factrelid];
+		Bitmapset  *attnos = NULL;	/* offset by FirstLowInvalidHeapAttributeNumber */
+		Bitmapset  *keys = NULL;	/* plain attribute numbers */
+		bool		covered = false;
+		int			k = -1;
+
+		pull_varattnos((Node *) mapped, factrelid, &attnos);
+		while ((k = bms_next_member(attnos, k)) >= 0)
+		{
+			AttrNumber	attnum = k + FirstLowInvalidHeapAttributeNumber;
+
+			/* statistics only cover user columns, not ctid or a whole row */
+			if (attnum <= 0)
+			{
+				keys = NULL;
+				break;
+			}
+			keys = bms_add_member(keys, attnum);
+		}
+
+		foreach(lc, mapped)
+		{
+			if (!IsA(lfirst(lc), Var))
+				keys = NULL;	/* only plain columns are covered */
+		}
+
+		if (keys != NULL && bms_num_members(keys) > 1)
+		{
+			foreach(lc, factrel->statlist)
+			{
+				StatisticExtInfo *info = (StatisticExtInfo *) lfirst(lc);
+
+				if (info->kind == STATS_EXT_NDISTINCT &&
+					bms_is_subset(keys, info->keys))
+				{
+					covered = true;
+					break;
+				}
+			}
+		}
+
+		if (covered && factrel->reloptkind == RELOPT_BASEREL &&
+			factrel->tuples > input_rows &&
+			(factrel->baserestrictinfo == NIL ||
+			 restriction_only_on_attnos(factrel, attnos)))
+		{
+			double		mappedgroups;
+
+			mappedgroups = estimate_num_groups_internal(root, mapped,
+														factrel->tuples,
+														NULL, NULL);
+			mappedgroups = clamp_row_est(mappedgroups * input_rows / factrel->tuples);
+			numgroups = Min(numgroups, mappedgroups);
+		}
+	}
+	list_free(mapped);
+	return numgroups;
+}
+
+static double
+estimate_num_groups_internal(PlannerInfo *root, List *groupExprs, double input_rows,
+							 List **pgset, EstimationInfo *estinfo)
 {
 	List	   *varinfos = NIL;
 	double		srf_multiplier = 1.0;
@@ -3594,6 +3954,7 @@ estimate_num_groups(PlannerInfo *root, List *groupExprs, double input_rows,
 		int			relvarcount = 0;
 		List	   *newvarinfos = NIL;
 		List	   *relvarinfos = NIL;
+		Bitmapset  *relgroupattnos = NULL;
 
 		/*
 		 * Split the list of varinfos in two - one for the current rel, one
@@ -3609,6 +3970,7 @@ estimate_num_groups(PlannerInfo *root, List *groupExprs, double input_rows,
 				/* varinfos on current rel */
 				relvarinfos = lappend(relvarinfos, varinfo2);
 			}
+
 			else
 			{
 				/* not time to process varinfo2 yet */
@@ -3628,6 +3990,11 @@ estimate_num_groups(PlannerInfo *root, List *groupExprs, double input_rows,
 		 * apply.  We apply a fudge factor below, but only if we multiplied
 		 * more than one such values.
 		 */
+		/* GPDB: remember which columns of this rel we group by */
+		foreach(l, relvarinfos)
+			pull_varattnos(((GroupVarInfo *) lfirst(l))->var, rel->relid,
+						   &relgroupattnos);
+
 		while (relvarinfos)
 		{
 			double		mvndistinct;
@@ -3734,9 +4101,24 @@ estimate_num_groups(PlannerInfo *root, List *groupExprs, double input_rows,
 				 * the table is large.  It turns out that this formula also
 				 * works well even when n is small.
 				 */
+				double		unrestricted = reldistinct;
+
 				reldistinct *=
 					(1 - pow((rel->tuples - rel->rows) / rel->tuples,
 							 rel->tuples / reldistinct));
+
+				/*
+				 * GPDB: The formula above assumes that the restriction selects
+				 * rows at random. If all the restriction clauses only refer to
+				 * columns we group by, e.g. "WHERE d_year = 2000 GROUP BY
+				 * d_year, d_moy", they select or reject whole groups instead,
+				 * so the number of groups shrinks in proportion to the rows.
+				 * (In TPC-DS query 47, 14 months of date_dim remain of 2400,
+				 * but the formula above estimates 391.)
+				 */
+				if (restriction_only_on_attnos(rel, relgroupattnos))
+					reldistinct = Min(reldistinct,
+									  unrestricted * rel->rows / rel->tuples);
 			}
 			reldistinct = clamp_row_est(reldistinct);
 

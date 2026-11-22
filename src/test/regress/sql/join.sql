@@ -718,6 +718,8 @@ analyze tbl_ra;
 
 set enable_hashjoin to off;
 set enable_nestloop to off;
+-- GPDB: merge joins are disabled by default
+set enable_mergejoin to on;
 
 -- ensure we get a merge right anti join
 explain (costs off)
@@ -730,6 +732,7 @@ where not exists (select 1 from tbl_ra t2 where t2.b = t1.a) and t1.b < 2;
 
 reset enable_hashjoin;
 reset enable_nestloop;
+reset enable_mergejoin;
 
 --
 -- regression test for bug #13908 (hash join with skew tuples & nbatch increase)

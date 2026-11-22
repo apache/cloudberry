@@ -9883,14 +9883,14 @@ where c.cid = s.cid and s.date_sk = d.date_sk and
       ((d.year = 2001 and lower(s.type) = 't1' and plusone(d.moy) = 5) or (d.moy = 4 and upper(s.type) = 'T2'));
                                                                                QUERY PLAN                                                                               
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=738.36..913.37 rows=109 width=72)
-   ->  Hash Join  (cost=738.36..911.92 rows=36 width=72)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=740.46..913.85 rows=11 width=72)
+   ->  Hash Join  (cost=740.46..913.70 rows=4 width=72)
          Hash Cond: (c.cid = s.cid)
          ->  Seq Scan on cust c  (cost=0.00..145.33 rows=11133 width=68)
-         ->  Hash  (cost=738.33..738.33 rows=2 width=8)
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=314.24..738.33 rows=2 width=8)
+         ->  Hash  (cost=740.43..740.43 rows=2 width=8)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=314.24..740.43 rows=2 width=8)
                      Hash Key: s.cid
-                     ->  Hash Join  (cost=314.24..738.28 rows=2 width=8)
+                     ->  Hash Join  (cost=314.24..740.38 rows=2 width=8)
                            Hash Cond: (d.date_sk = s.date_sk)
                            Join Filter: (((d.year = 2001) AND (lower(s.type) = 't1'::text) AND (plusone(d.moy) = 5)) OR ((d.moy = 4) AND (upper(s.type) = 'T2'::text)))
                            ->  Seq Scan on datedim d  (cost=0.00..423.50 rows=52 width=12)
@@ -10905,10 +10905,10 @@ FROM   (SELECT *
         FROM   tab_3)a;
                                                       QUERY PLAN                                                      
 ----------------------------------------------------------------------------------------------------------------------
- Finalize Aggregate  (cost=3.21..3.22 rows=1 width=8)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=3.16..3.21 rows=3 width=8)
-         ->  Partial Aggregate  (cost=3.16..3.17 rows=1 width=8)
-               ->  Append  (cost=1.04..3.13 rows=2 width=64)
+ Finalize Aggregate  (cost=3.19..3.20 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=3.13..3.18 rows=3 width=8)
+         ->  Partial Aggregate  (cost=3.13..3.14 rows=1 width=8)
+               ->  Append  (cost=1.04..3.12 rows=2 width=64)
                      ->  Hash Left Join  (cost=1.04..2.09 rows=1 width=6)
                            Hash Cond: ((tab_1.id)::text = (tab_2.id)::text)
                            ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1.03 rows=1 width=5)
