@@ -229,6 +229,8 @@ CREATE INDEX nametbl_c1_c2_idx ON nametbl (c2, c1) INCLUDE (c3);
 INSERT INTO nametbl VALUES(1, 'two', 3.0);
 VACUUM nametbl;
 SET enable_seqscan = 0;
+-- A concurrent snapshot can keep VACUUM from marking the heap page all-visible.
+SET optimizer_enable_indexscan = off;
 
 -- Ensure we get an index only scan plan
 EXPLAIN (COSTS OFF) SELECT c2, c1, c3 FROM nametbl WHERE c2 = 'two' AND c1 = 1;
@@ -236,6 +238,7 @@ EXPLAIN (COSTS OFF) SELECT c2, c1, c3 FROM nametbl WHERE c2 = 'two' AND c1 = 1;
 -- Validate the results look sane
 SELECT c2, c1, c3 FROM nametbl WHERE c2 = 'two' AND c1 = 1;
 
+RESET optimizer_enable_indexscan;
 RESET enable_seqscan;
 
 DROP TABLE nametbl;
