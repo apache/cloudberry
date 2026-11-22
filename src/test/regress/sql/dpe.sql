@@ -648,3 +648,37 @@ set enable_seqscan=off;
 -- force_explain
 explain (analyze, timing off, summary off)
 select * from pt, t where t.dist = pt.dist and t.tid = pt.ptid order by t.tid, t.sk;
+
+--
+-- The Postgres planner takes the partitions that a Partition Selector will
+-- skip into account when choosing the join order. Without join pruning, all
+-- partitions are scanned, so joining the fact table to the more selective item
+-- dimension first is cheaper. With it, the fact table is joined to the date
+-- dimension first, which prunes it before the item join.
+--
+create table dpe_cost_fact (id int, date_sk int, item_sk int, amount int)
+  distributed by (id)
+  partition by range (date_sk) (start (0) end (360) every (30));
+create table dpe_cost_date (date_sk int, month int) distributed by (date_sk);
+create table dpe_cost_item (item_sk int, category int) distributed by (item_sk);
+insert into dpe_cost_fact select i, i % 360, i % 1000, i from generate_series(1, 100000) i;
+insert into dpe_cost_date select i, i / 30 from generate_series(0, 359) i;
+insert into dpe_cost_item select i, i % 100 from generate_series(0, 999) i;
+analyze dpe_cost_fact;
+analyze dpe_cost_date;
+analyze dpe_cost_item;
+
+set gp_dynamic_partition_pruning = off;
+explain (costs off)
+select count(*) from dpe_cost_fact f, dpe_cost_date d, dpe_cost_item i
+where f.date_sk = d.date_sk and d.month = 3
+  and f.item_sk = i.item_sk and i.category = 7;
+
+reset gp_dynamic_partition_pruning;
+explain (costs off)
+select count(*) from dpe_cost_fact f, dpe_cost_date d, dpe_cost_item i
+where f.date_sk = d.date_sk and d.month = 3
+  and f.item_sk = i.item_sk and i.category = 7;
+select count(*) from dpe_cost_fact f, dpe_cost_date d, dpe_cost_item i
+where f.date_sk = d.date_sk and d.month = 3
+  and f.item_sk = i.item_sk and i.category = 7;
