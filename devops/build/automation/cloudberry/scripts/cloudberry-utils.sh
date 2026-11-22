@@ -158,6 +158,9 @@ detect_os() {
     . /etc/os-release
     OS_ID=$ID
     OS_VERSION=$VERSION_ID
+  elif [ "$(uname)" = "Darwin" ]; then
+    OS_ID="darwin"
+    OS_VERSION=$(sw_vers -productVersion)
   else
     echo "Unsupported system: cannot detect OS" >&2
     exit 99
