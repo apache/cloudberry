@@ -227,6 +227,7 @@ jobs:
                                "contrib/intarray:installcheck",
                                "contrib/isn:installcheck",
                                "contrib/unaccent:installcheck"]
+              }
             ]
           }'
 
