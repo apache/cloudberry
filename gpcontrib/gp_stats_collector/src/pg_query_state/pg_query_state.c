@@ -1090,6 +1090,18 @@ pg_query_state_backends(PG_FUNCTION_ARGS)
  *
  * Receives an array of gp_segment_pid, filters those belonging to this
  * segment, and fires QueryStatePollReason at each matching backend.
+ *
+ * This is granted to PUBLIC because CdbDispatchCommand() runs it on the QEs as
+ * the session user, so it cannot be restricted to superusers without breaking
+ * the feature for everyone else.  That makes it directly callable, which means
+ * it must repeat the ownership check pg_query_state() performs on the
+ * coordinator rather than trusting that it was reached by dispatch: otherwise
+ * any user could name an arbitrary (segid, pid) here and have another role's
+ * live plan collected and pushed to the UDS sink.
+ *
+ * The check cannot reject a legitimate dispatch.  The coordinator has already
+ * established that the caller is the superuser or owns the polled query, and
+ * the QEs of that query run under the same role as its coordinator backend.
  */
 PG_FUNCTION_INFO_V1(cbdb_mpp_query_state);
 Datum
@@ -1115,6 +1127,19 @@ cbdb_mpp_query_state(PG_FUNCTION_ARGS)
 
 		if (!proc || proc->backendId == InvalidBackendId)
 			continue;
+
+		/*
+		 * Same gate as pg_query_state() applies on the coordinator.  Fail
+		 * closed and loudly: a caller reaching here without rights on the
+		 * target is either a bug in the dispatch path or an attempt to poll
+		 * somebody else's query, and neither should be answered quietly.
+		 */
+		if (proc->roleId == InvalidOid ||
+			!(superuser() || GetUserId() == proc->roleId))
+			ereport(ERROR,
+					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+					 errmsg("permission denied to inspect query state of pid %d",
+							proc->pid)));
 
 		/* Stamp the target's own trace slot before signalling it. */
 		memcpy(qs_trace_slots[proc->backendId], VARDATA_ANY(trace_id),
