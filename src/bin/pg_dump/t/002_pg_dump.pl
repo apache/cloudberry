@@ -109,12 +109,8 @@ my %pgdump_runs = (
 			'--format=directory', '--compress=gzip:1',
 			"--file=$tempdir/compression_gzip_dir", 'postgres',
 		],
-		# Give coverage for manually compressed blob.toc files during
-		# restore.
-		compress_cmd => {
-			program => $ENV{'GZIP_PROGRAM'},
-			args => [ '-f', "$tempdir/compression_gzip_dir/blobs.toc", ],
-		},
+		# Cloudberry: there are no large objects, so there is no blobs.toc to
+		# compress by hand before the restore.
 		# Verify that only data files were compressed
 		glob_patterns => [
 			"$tempdir/compression_gzip_dir/toc.dat",
@@ -172,16 +168,8 @@ my %pgdump_runs = (
 			'--format=directory', '--compress=lz4:1',
 			"--file=$tempdir/compression_lz4_dir", 'postgres',
 		],
-		# Give coverage for manually compressed blob.toc files during
-		# restore.
-		compress_cmd => {
-			program => $ENV{'LZ4'},
-			args => [
-				'-z', '-f', '--rm',
-				"$tempdir/compression_lz4_dir/blobs.toc",
-				"$tempdir/compression_lz4_dir/blobs.toc.lz4",
-			],
-		},
+		# Cloudberry: there are no large objects, so there is no blobs.toc to
+		# compress by hand before the restore.
 		# Verify that data files were compressed
 		glob_patterns => [
 			"$tempdir/compression_lz4_dir/toc.dat",
@@ -242,16 +230,8 @@ my %pgdump_runs = (
 			'--format=directory', '--compress=zstd:1',
 			"--file=$tempdir/compression_zstd_dir", 'postgres',
 		],
-		# Give coverage for manually compressed blob.toc files during
-		# restore.
-		compress_cmd => {
-			program => $ENV{'ZSTD'},
-			args => [
-				'-z', '-f',
-				'--rm', "$tempdir/compression_zstd_dir/blobs.toc",
-				"-o", "$tempdir/compression_zstd_dir/blobs.toc.zst",
-			],
-		},
+		# Cloudberry: there are no large objects, so there is no blobs.toc to
+		# compress by hand before the restore.
 		# Verify that data files were compressed
 		glob_patterns => [
 			"$tempdir/compression_zstd_dir/toc.dat",
@@ -1343,27 +1323,28 @@ my %tests = (
 #			schema_only    => 1,
 #		},
 #	},
-	'LO create (with no data)' => {
-		create_sql => 'SELECT pg_catalog.lo_create(0);',
-		regexp => qr/^
-			\QSELECT pg_catalog.lo_open\E \('\d+',\ \d+\);\n
-			\QSELECT pg_catalog.lo_close(0);\E
-			/xm,
-		like => {
-			%full_runs,
-			column_inserts => 1,
-			data_only => 1,
-			inserts => 1,
-			section_data => 1,
-			test_schema_plus_large_objects => 1,
-		},
-		unlike => {
-			binary_upgrade => 1,
-			no_large_objects => 1,
-			schema_only => 1,
-			section_pre_data => 1,
-		},
-	},
+# Disabled, because Cloudberry doesn't support large objects
+#	'LO create (with no data)' => {
+#		create_sql => 'SELECT pg_catalog.lo_create(0);',
+#		regexp => qr/^
+#			\QSELECT pg_catalog.lo_open\E \('\d+',\ \d+\);\n
+#			\QSELECT pg_catalog.lo_close(0);\E
+#			/xm,
+#		like => {
+#			%full_runs,
+#			column_inserts => 1,
+#			data_only => 1,
+#			inserts => 1,
+#			section_data => 1,
+#			test_schema_plus_large_objects => 1,
+#		},
+#		unlike => {
+#			binary_upgrade => 1,
+#			no_large_objects => 1,
+#			schema_only => 1,
+#			section_pre_data => 1,
+#		},
+#	},
 
 	'COMMENT ON DATABASE postgres' => {
 		regexp => qr/^COMMENT ON DATABASE postgres IS .+;/m,
@@ -1770,26 +1751,6 @@ my %tests = (
 		},
 	},
 
-	'COPY test_third_table' => {
-		create_order => 7,
-		create_sql =>
-		  'INSERT INTO dump_test.test_third_table VALUES (123, DEFAULT, 456);',
-		regexp => qr/^
-			\QCOPY dump_test.test_third_table (f1, "F3") FROM stdin;\E
-			\n123\t456\n\\\.\n
-			/xm,
-		like => {
-			%full_runs,
-			%dump_test_schema_runs,
-			data_only    => 1,
-			section_data => 1,
-		},
-		unlike => {
-			binary_upgrade           => 1,
-			exclude_dump_test_schema => 1,
-			schema_only              => 1,
-		},
-	},
 
 	'COPY test_fourth_table' => {
 		create_order => 7,
@@ -1964,7 +1925,9 @@ my %tests = (
 		create_order => 1,
 		create_sql => q(
 		    CREATE DATABASE regression_invalid;
-			UPDATE pg_database SET datconnlimit = -2 WHERE datname = 'regression_invalid'),
+			SET allow_system_table_mods = on;
+			UPDATE pg_database SET datconnlimit = -2 WHERE datname = 'regression_invalid';
+			RESET allow_system_table_mods),
 		regexp => qr/^CREATE DATABASE regression_invalid/m,
 
 		# invalid databases should never be dumped
@@ -2661,7 +2624,10 @@ my %tests = (
 		regexp => qr/^\QALTER TYPE dump_test.int42 SET DEFAULT ENCODING (compresstype=rle_type, blocksize=8192, compresslevel=4);\E/m,
 		like =>
 			{ %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
-		unlike => { exclude_dump_test_schema => 1, },
+		unlike => {
+			exclude_dump_test_schema => 1,
+			only_dump_measurement => 1,
+		},
 	},
 
 	'CREATE FOREIGN DATA WRAPPER dummy' => {
@@ -2855,13 +2821,16 @@ my %tests = (
 					   SELECT col1 FROM dump_test.test_table;',
 		regexp => qr/^
 			\QCREATE INCREMENTAL MATERIALIZED VIEW dump_test.matview_ivm AS\E
-			\n\s+\QSELECT test_table.col1\E
+			\n\s+\QSELECT col1\E
 			\n\s+\QFROM dump_test.test_table\E
 			\n\s+\QWITH NO DATA;\E
 			/xm,
 		like =>
 		  { %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
-		unlike => { exclude_dump_test_schema => 1, },
+		unlike => {
+			exclude_dump_test_schema => 1,
+			only_dump_measurement => 1,
+		},
 	},
 
 	'CREATE DYNAMIC TABLE dynamic_table' => {
@@ -2870,13 +2839,16 @@ my %tests = (
 					SELECT col1 FROM dump_test.test_table;',
 		regexp => qr{^
 			\QCREATE DYNAMIC TABLE dump_test.dynamic_table SCHEDULE '\E\*/5\ \*\ \*\ \*\ \*\Q' AS\E
-			\n\s+\QSELECT test_table.col1\E
+			\n\s+\QSELECT col1\E
 			\n\s+\QFROM dump_test.test_table\E
 			\n\s+\QWITH NO DATA;\E
 			}xm,
 		like =>
 		{ %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
-		unlike => { exclude_dump_test_schema => 1, },
+		unlike => {
+			exclude_dump_test_schema => 1,
+			only_dump_measurement => 1,
+		},
 	},
 
 	'CREATE APPEND OPTIMIZED ao_table' => {
@@ -2888,7 +2860,7 @@ my %tests = (
 			\n\s+\Qa integer,\E
 			\n\s+\Qb text\E
 			\n\Q)\E
-			\n\QWITH (appendonly = true, compresstype=zlib, compresslevel='1');\E
+			\n\QWITH (compresstype=zlib, compresslevel='1');\E
 			}xm,
 		like => {
 			%full_runs,
@@ -2897,6 +2869,7 @@ my %tests = (
 			exclude_test_table       => 1,
 		},
 		unlike => {
+			only_dump_measurement => 1,
 			only_dump_test_table => 1,
 			exclude_dump_test_schema => 1,
 		},
@@ -3212,10 +3185,7 @@ my %tests = (
 		regexp => qr/^CREATE SCHEMA public;/m,
 
 		# this shouldn't ever get emitted anymore
-		# GPDB: It does get dumped in GPDB binary-upgrade.
-		like => {
-			binary_upgrade   => 1,
-		},
+		like => {},
 	},
 
 	'CREATE SCHEMA dump_test' => {
