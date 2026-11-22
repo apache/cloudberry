@@ -1,0 +1,83 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+# Apache Cloudberry Deployment Variables
+#
+# Note: kernel.shmall, kernel.shmmax, vm.overcommit_ratio, vm.min_free_kbytes,
+# and vm.dirty_* parameters are NOT set here. They are dynamically calculated
+# at deploy time based on each host's actual RAM and swap size.
+# See the "Calculate dynamic sysctl values" tasks in site.yml.
+
+# Cloudberry version
+# Used for both RPM/DEB package naming and source build download URL.
+cloudberry_version: "2.1.0"
+
+# Apache Xerces-C version (required for source build on RHEL/Rocky Linux)
+# Ubuntu uses the system libxerces-c-dev package instead.
+# Download from https://xerces.apache.org/xerces-c/download.cgi and pass via:
+#   -e xerces_path=/path/to/xerces-c-3.3.0.tar.gz
+xerces_version: "3.3.0"
+
+# Admin user
+cloudberry_admin_user: "gpadmin"
+cloudberry_admin_password: "changeme"
+
+# Package path (override via -e package_path=... on the command line)
+# Example: -e package_path=/root/apache-cloudberry-db-incubating-2.1.0-1.el9.x86_64.rpm
+# package_path: /home/gpadmin/apache-cloudberry-db-incubating-2.1.0-1.el9.x86_64.rpm
+
+# Data disk device and mount point.
+# Must be set manually before running the playbook.
+# Run 'lsblk' on each host to identify the correct device name.
+#
+# Common device names by environment:
+#   /dev/sdb       — physical servers, VMware
+#   /dev/vdb       — KVM / OpenStack / Cloud ECS
+#   /dev/nvme0n1   — NVMe SSD (physical or cloud)
+#   /dev/xvdb      — AWS EC2 (older instance types)
+#
+# If you are using a cloud VM with only a single system disk (no dedicated
+# data disk), leave data_disk empty and create the data directory manually:
+#   mkdir -p /data && chown -R gpadmin:gpadmin /data
+# The XFS formatting and mount steps in site.yml will be skipped automatically.
+data_disk: "/dev/sdb"
+data_mount: "/data"
+
+# Data directories
+# coordinator_data_dir is used on both cdw and scdw.
+# primary_data_dir and mirror_data_dir are used on segment hosts.
+coordinator_data_dir: "/data/coordinator"
+primary_data_dir: "/data/primary"
+mirror_data_dir: "/data/mirror"
+
+# Number of primary segment instances per segment host.
+# Mirror instances are created 1:1 with primaries.
+# Recommended: set to the number of CPU cores / 4, or 2 for test environments.
+segments_per_host: 2
+
+# Ports
+# Ensure these ranges do not overlap with net.ipv4.ip_local_port_range (10000-65535).
+coordinator_port: 5432
+port_base: 6000
+mirror_port_base: 7000
+
+# Default database created during gpinitsystem
+database_name: "warehouse"
+
+# Coordinator and standby hostnames (must match inventory/hosts and /etc/hosts)
+coordinator_hostname: "cdw"
+standby_hostname: "scdw"
