@@ -8,9 +8,53 @@
 #include "utils/resowner.h"
 #include "utils/faultinjector.h"
 #include "utils/snapshot.h"
+#include "utils/snapmgr.h"
 #include "storage/fd.h"
+#include "storage/dsm.h"
 
 #include "../sharedsnapshot.c"
+
+static char *testSharedSnapshotAddress;
+
+extern dsm_segment *__wrap_dsm_attach(dsm_handle handle);
+extern void *__wrap_dsm_segment_address(dsm_segment *segment);
+extern void __wrap_dsm_detach(dsm_segment *segment);
+extern bool __wrap_LWLockAcquire(LWLock *lock, LWLockMode mode);
+extern void __wrap_LWLockRelease(LWLock *lock);
+
+dsm_segment *
+__wrap_dsm_attach(dsm_handle handle)
+{
+	(void) handle;
+	return (dsm_segment *) (uintptr_t) 1;
+}
+
+void *
+__wrap_dsm_segment_address(dsm_segment *segment)
+{
+	(void) segment;
+	return testSharedSnapshotAddress;
+}
+
+void
+__wrap_dsm_detach(dsm_segment *segment)
+{
+	(void) segment;
+}
+
+bool
+__wrap_LWLockAcquire(LWLock *lock, LWLockMode mode)
+{
+	(void) lock;
+	(void) mode;
+	return true;
+}
+
+void
+__wrap_LWLockRelease(LWLock *lock)
+{
+	(void) lock;
+}
 
 static void
 test_boundaries_of_CreateSharedSnapshotArray(void **state)
@@ -65,13 +109,119 @@ test_boundaries_of_CreateSharedSnapshotArray(void **state)
 	}
 }
 
+static void
+test_read_shared_snapshot_preserves_recovery_flag(void **state)
+{
+	SnapshotData original;
+	SnapshotData reader;
+	SharedSnapshotSlot slot;
+	TransactionId subxip[] = {43};
+	Size		snapshotSize;
+	char	   *serialized;
+	TransactionId readerXip[1];
+	TransactionId readerSubxip[1];
+
+	MemSet(&original, 0, sizeof(original));
+	original.snapshot_type = SNAPSHOT_MVCC;
+	original.xmin = 40;
+	original.xmax = 50;
+	original.subxip = subxip;
+	original.subxcnt = lengthof(subxip);
+	original.suboverflowed = true;
+	original.takenDuringRecovery = true;
+	snapshotSize = EstimateSnapshotSpace(&original);
+	serialized = malloc(snapshotSize);
+	assert_true(serialized != NULL);
+	SerializeSnapshot(&original, serialized);
+
+	MemSet(&reader, 0, sizeof(reader));
+	reader.xip = readerXip;
+	reader.subxip = readerSubxip;
+	MemSet(&slot, 0, sizeof(slot));
+	slot.snapshot_handle = 1;
+	SharedLocalSnapshotSlot = &slot;
+	testSharedSnapshotAddress = serialized;
+	TransactionXmin = original.xmin;
+
+	ReadSharedLocalSnapshot(&reader);
+
+	assert_true(reader.takenDuringRecovery);
+	assert_true(reader.suboverflowed);
+	assert_int_equal(reader.subxcnt, 1);
+	assert_int_equal(reader.subxip[0], subxip[0]);
+
+	SharedLocalSnapshotSlot = NULL;
+	testSharedSnapshotAddress = NULL;
+	free(serialized);
+}
+
+static void
+test_cursor_reader_preserves_recovery_flag(void **state)
+{
+	SnapshotData original;
+	SnapshotData reader;
+	SharedSnapshotSlot slot;
+	LWLock		lock;
+	TransactionId subxip[] = {43};
+	TransactionId readerXip[64];
+	TransactionId readerSubxip[1];
+	Size		snapshotSize;
+	char	   *serialized;
+	const uint32 segmateSync = 123;
+	const DistributedTransactionId distributedXid = 456;
+	const FullTransactionId localXid = FullTransactionIdFromU64(987654321);
+
+	MemSet(&original, 0, sizeof(original));
+	original.snapshot_type = SNAPSHOT_MVCC;
+	original.xmin = 40;
+	original.xmax = 50;
+	original.subxip = subxip;
+	original.subxcnt = lengthof(subxip);
+	original.suboverflowed = true;
+	original.takenDuringRecovery = true;
+	snapshotSize = EstimateSnapshotSpace(&original);
+	serialized = malloc(snapshotSize);
+	assert_true(serialized != NULL);
+	SerializeSnapshot(&original, serialized);
+
+	MemSet(&reader, 0, sizeof(reader));
+	reader.xip = readerXip;
+	reader.subxip = readerSubxip;
+	MemSet(&slot, 0, sizeof(slot));
+	slot.slotLock = &lock;
+	slot.cur_dump_id = 0;
+	slot.dump[0].segmateSync = segmateSync;
+	slot.dump[0].distributedXid = distributedXid;
+	slot.dump[0].handle = 1;
+	slot.dump[0].localXid = localXid;
+	SharedLocalSnapshotSlot = &slot;
+	testSharedSnapshotAddress = serialized;
+	QEDtxContextInfo.segmateSync = segmateSync;
+	QEDtxContextInfo.distributedXid = distributedXid;
+	Gp_role = GP_ROLE_EXECUTE;
+	Gp_is_writer = false;
+
+	readSharedLocalSnapshot_forCursor(&reader, DTX_CONTEXT_QE_READER);
+
+	assert_true(reader.takenDuringRecovery);
+	assert_true(reader.suboverflowed);
+	assert_int_equal(reader.subxcnt, 1);
+	assert_int_equal(reader.subxip[0], subxip[0]);
+
+	SharedLocalSnapshotSlot = NULL;
+	testSharedSnapshotAddress = NULL;
+	free(serialized);
+}
+
 int
 main(int argc, char* argv[])
 {
 	cmockery_parse_arguments(argc, argv);
 
 	const UnitTest tests[] = {
-		unit_test(test_boundaries_of_CreateSharedSnapshotArray)
+		unit_test(test_boundaries_of_CreateSharedSnapshotArray),
+		unit_test(test_read_shared_snapshot_preserves_recovery_flag),
+		unit_test(test_cursor_reader_preserves_recovery_flag)
 	};
 	MemoryContextInit();
 	InitFileAccess();
