@@ -2188,15 +2188,6 @@ RemoveAttributeById(Oid relid, AttrNumber attnum)
 		attStruct->attgenerated = '\0';
 
 		/*
-		 * The distribution policy was already switched to random by
-		 * set_random_distribution_if_drop_distkey() above.  Don't consult
-		 * rel->rd_cdbpolicy again here: a relcache rebuild in between (e.g.
-		 * after a sinval reset) reloads the not-yet-visible old policy, and
-		 * a second GpPolicyReplace() on the same gp_distribution_policy row
-		 * fails with "tuple already updated by self".
-		 */
-
-		/*
 		 * Change the column name to something that isn't likely to conflict
 		 */
 		snprintf(newattname, sizeof(newattname),

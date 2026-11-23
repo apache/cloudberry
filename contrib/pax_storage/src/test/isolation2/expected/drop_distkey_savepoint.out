@@ -1,0 +1,108 @@
+-- A failed DROP COLUMN must not leave stale distribution policy state in the
+-- relcache after rolling back to a savepoint. Cover heap and AO relations.
+drop table if exists drop_distkey_ao;
+DROP
+drop table if exists drop_distkey_heap;
+DROP
+
+create table drop_distkey_ao (a int, b int) with (appendonly=true) distributed by (a);
+CREATE
+create table drop_distkey_heap (a int, b int) distributed by (a);
+CREATE
+insert into drop_distkey_ao select i, i from generate_series(1, 10) i;
+INSERT 10
+insert into drop_distkey_heap select i, i from generate_series(1, 10) i;
+INSERT 10
+
+-- Load both relcache entries in session 1 before session 2 locks the catalog.
+1: select count(*) from drop_distkey_ao;
+ count
+-------
+    10
+(1 row)
+
+1: select count(*) from drop_distkey_heap;
+ count
+-------
+    10
+(1 row)
+
+1: begin;
+BEGIN
+1: savepoint s1;
+SAVEPOINT
+2: begin;
+BEGIN
+2: lock table gp_distribution_policy in access exclusive mode;
+LOCK TABLE
+1: set local lock_timeout = '1s';
+SET
+1: alter table drop_distkey_ao drop column a;
+ERROR:  canceling statement due to lock timeout
+1: rollback to s1;
+ROLLBACK
+1: savepoint s2;
+SAVEPOINT
+1: set local lock_timeout = '1s';
+SET
+1: alter table drop_distkey_heap drop column a;
+ERROR:  canceling statement due to lock timeout
+1: rollback to s2;
+ROLLBACK
+2: commit;
+COMMIT
+
+-- The failed statements did not change the catalog.
+1: select localoid::regclass, distkey from gp_distribution_policy where localoid in ('drop_distkey_ao'::regclass, 'drop_distkey_heap'::regclass) order by 1;
+      localoid      | distkey
+--------------------+---------
+ drop_distkey_ao    | 1
+ drop_distkey_heap  | 1
+(2 rows)
+
+-- Retrying after the catalog lock is released must switch both tables to
+-- random distribution.
+1: alter table drop_distkey_ao drop column a;
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+ALTER TABLE
+1: alter table drop_distkey_heap drop column a;
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+ALTER TABLE
+1: commit;
+COMMIT
+
+select localoid::regclass, distkey from gp_distribution_policy where localoid in ('drop_distkey_ao'::regclass, 'drop_distkey_heap'::regclass) order by 1;
+      localoid      | distkey
+--------------------+---------
+ drop_distkey_ao    |
+ drop_distkey_heap  |
+(2 rows)
+select count(*) from drop_distkey_ao;
+ count
+-------
+    10
+(1 row)
+select count(*) from drop_distkey_heap;
+ count
+-------
+    10
+(1 row)
+insert into drop_distkey_ao values (100, 100);
+INSERT 1
+insert into drop_distkey_heap values (100, 100);
+INSERT 1
+select count(*) from drop_distkey_ao;
+ count
+-------
+    11
+(1 row)
+select count(*) from drop_distkey_heap;
+ count
+-------
+    11
+(1 row)
+
+drop table drop_distkey_ao;
+DROP
+drop table drop_distkey_heap;
+DROP
