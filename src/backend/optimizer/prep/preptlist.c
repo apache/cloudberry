@@ -620,8 +620,7 @@ is_partkey_updated(Oid rootoid, List *inheritors, Bitmapset *changed_cols)
 		if (get_rel_relkind(relid) != RELKIND_PARTITIONED_TABLE)
 			continue;
 
-		/* already locked by find_all_inheritors() */
-		r = table_open(relid, NoLock);
+		r = table_open(relid, AccessShareLock);
 		key = RelationGetPartitionKey(r);
 
 		for (int i = 0; i < key->partnatts; i++)
@@ -633,7 +632,7 @@ is_partkey_updated(Oid rootoid, List *inheritors, Bitmapset *changed_cols)
 		/* partition expressions always use varno 1 */
 		pull_varattnos((Node *) key->partexprs, 1, &attnos);
 
-		table_close(r, NoLock);
+		table_close(r, AccessShareLock);
 
 		for (int x = -1; (x = bms_next_member(attnos, x)) >= 0; )
 		{
@@ -740,7 +739,7 @@ check_splitupdate(List *tlist, Index result_relation, Relation rel)
 		return false;
 	}
 
-	inheritors = find_all_inheritors(RelationGetRelid(rel), AccessShareLock, NULL);
+	inheritors = find_all_inheritors(RelationGetRelid(rel), NoLock, NULL);
 
 	/* Check if partition key is updated */
 	if (!is_partkey_updated(RelationGetRelid(rel), inheritors, changed_cols))
