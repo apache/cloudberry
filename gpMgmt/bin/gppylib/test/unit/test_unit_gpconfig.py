@@ -1,5 +1,4 @@
 import errno
-import imp
 import os
 import base64, pickle
 import shutil
@@ -40,7 +39,7 @@ class GpConfig(GpTestCase):
         #   import gpconfig
         #   self.subject = gpconfig
         gpconfig_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpconfig")
-        self.subject = imp.load_source('gpconfig', gpconfig_file)
+        self.subject = load_source('gpconfig', gpconfig_file)
         self.subject.LOGGER = Mock(spec=['log', 'warn', 'info', 'debug', 'error', 'warning', 'fatal'])
         self.subject.check_gpexpand = lambda : (True, "")
 
