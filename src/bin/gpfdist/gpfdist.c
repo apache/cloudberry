@@ -3990,9 +3990,11 @@ int gpfdist_init(int argc, const char* const argv[])
 		errno = 0;
 		val = strtol(wd, &endptr, 10);
 
-		if (errno || endptr == wd || val > INT_MAX)
+		if (errno || endptr == wd || *endptr != '\0' ||
+			val < 0 || val > INT_MAX)
 		{
-			fprintf(stderr, "incorrect watchdog timer: %s\n", strerror(errno));
+			fprintf(stderr, "incorrect watchdog timer \"%s\": expected an integer between 0 and %d\n",
+					wd, INT_MAX);
 			return -1;
 		}
 
