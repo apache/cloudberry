@@ -1303,7 +1303,7 @@ PG_TRY();
 	pushed_snapshot = false;
 	while (es)
 	{
-		bool		completed;
+		bool		completed = false;
 
 		if (es->status == F_EXEC_START)
 		{
@@ -1333,7 +1333,14 @@ PG_TRY();
 			PushActiveSnapshot(es->qd->snapshot);
 			pushed_snapshot = true;
 		}
-		if (!tuplestore_has_remaining_tuples(fcache->tstore) || completed || !fcache->returnsSet)
+		/*
+		 * Only a lazily-evaluated query may wait while we consume buffered
+		 * tuples.  Other commands, including rule actions following an
+		 * INSERT/UPDATE/DELETE RETURNING, must run to completion even if the
+		 * tuplestore already contains the function's result.
+		 */
+		if (!es->lazyEval || !fcache->returnsSet ||
+			!tuplestore_has_remaining_tuples(fcache->tstore))
 			completed = postquel_getnext(es, fcache);
 
 		/*
