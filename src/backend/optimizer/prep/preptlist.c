@@ -641,7 +641,13 @@ is_partkey_updated(Oid rootoid, List *inheritors, Bitmapset *changed_cols)
 			AttrNumber	rootattno;
 
 			/* attno is not InvalidAttrNumber and not a system column */
-			Assert (attno > 0);
+			Assert (attno >= 0);
+
+			if (attno == InvalidAttrNumber) /* whole-row partition key */
+			{
+				bms_free(attnos);
+				return true;
+			}
 
 			if (relid == rootoid)
 				rootattno = attno;
