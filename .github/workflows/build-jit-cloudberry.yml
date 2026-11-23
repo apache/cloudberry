@@ -23,9 +23,9 @@ name: LLVM JIT CI Pipeline
 
 on:
   push:
-    branches: [REL_2_STABLE]
+    branches: [main]
   pull_request:
-    branches: [REL_2_STABLE]
+    branches: [main]
     types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
 
