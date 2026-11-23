@@ -761,7 +761,8 @@ readSharedLocalSnapshot_forCursor(Snapshot snapshot, DtxContext distributedTrans
 	snapshot->xmax = dumpsnapshot->xmax;
 	snapshot->xcnt = dumpsnapshot->xcnt;
 
-	memcpy(snapshot->xip, dumpsnapshot->xip, snapshot->xcnt * sizeof(TransactionId));
+	if (snapshot->xcnt > 0)
+		memcpy(snapshot->xip, dumpsnapshot->xip, snapshot->xcnt * sizeof(TransactionId));
 
 	/* zero out the slack in the xip-array */
 	memset(snapshot->xip + snapshot->xcnt, 0, (xipEntryCount - snapshot->xcnt)*sizeof(TransactionId));

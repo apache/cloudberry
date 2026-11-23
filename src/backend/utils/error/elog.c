@@ -3914,11 +3914,7 @@ append_string_to_pipe_chunk(PipeProtoChunk *buffer, const char* input)
 	if(MyBackendType == B_LOGGER)
 		return;
 
-	int len = 0;
-	if (input != NULL)
-	{
-		len = strlen(input);
-	}
+	int len = input != NULL ? strlen(input) : 0;
 
 	/*
 	 * If this is a really long message, it does not really
@@ -3935,7 +3931,8 @@ append_string_to_pipe_chunk(PipeProtoChunk *buffer, const char* input)
 	while (buffer->hdr.len + len >= PIPE_MAX_PAYLOAD)
 	{
 		int bytes = PIPE_MAX_PAYLOAD - buffer->hdr.len;
-		memcpy(data, input + offset, bytes);
+		if (bytes > 0 && len > 0)
+			memcpy(data, input + offset, bytes);
 
 		Assert(bytes + buffer->hdr.len == PIPE_MAX_PAYLOAD);
 		buffer->hdr.len = PIPE_MAX_PAYLOAD;
@@ -3951,7 +3948,8 @@ append_string_to_pipe_chunk(PipeProtoChunk *buffer, const char* input)
 	}
 
 	/* Copy the remaining data, and add '\0' at the end */
-	memcpy(data, input + offset, len);
+	if (len > 0)
+		memcpy(data, input + offset, len);
 	data[len] = 0;
 	buffer->hdr.len += len+1;
 
