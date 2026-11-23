@@ -244,7 +244,7 @@ jobs:
               return 0
             fi
 
-            grep -E '\.\.\. FAILED' "build-logs/details/make-${name}.log" | sed 's/^/  - /' | tee -a "$GITHUB_STEP_SUMMARY"
+            grep -E '^not ok [0-9]+' "build-logs/details/make-${name}.log" | sed 's/^/  - /' | tee -a "$GITHUB_STEP_SUMMARY"
             if [ -f src/test/regress/regression.diffs ]; then
               cp src/test/regress/regression.diffs "build-logs/${name}.diffs"
               head -n 500 "build-logs/${name}.diffs"
