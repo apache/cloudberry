@@ -11,5 +11,6 @@ fe-secure-gssapi.c
 fe-secure-openssl.c
 fe-secure.c
 getpeereid.c
+libpq-events.c
 pqexpbuffer.c
 fe-trace.c

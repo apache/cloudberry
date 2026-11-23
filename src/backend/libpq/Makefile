@@ -55,7 +55,7 @@ ifeq ($(with_gssapi),yes)
 OBJS += fe-gssapi-common.o fe-secure-gssapi.o
 endif
 
-fe-protocol3.c fe-connect.c fe-exec.c libpq-events.o pqexpbuffer.c fe-auth.c fe-auth-scram.c fe-misc.c fe-protocol2.c fe-secure.c fe-secure-openssl.c fe-secure-common.c fe-secure-gssapi.c fe-gssapi-common.c fe-trace.c: % : $(top_srcdir)/src/interfaces/libpq/%
+fe-protocol3.c fe-connect.c fe-exec.c libpq-events.c pqexpbuffer.c fe-auth.c fe-auth-scram.c fe-misc.c fe-protocol2.c fe-secure.c fe-secure-openssl.c fe-secure-common.c fe-secure-gssapi.c fe-gssapi-common.c fe-trace.c: % : $(top_srcdir)/src/interfaces/libpq/%
 	rm -f $@ && $(LN_S) $< .
 
 getpeereid.c: % : $(top_srcdir)/src/port/%
@@ -69,7 +69,7 @@ $(top_builddir)/src/port/pg_config_paths.h:
 clean distclean: clean-symlinks
 
 clean-symlinks:
-	rm -f fe-protocol3.c fe-connect.c fe-exec.c pqexpbuffer.c fe-auth.c fe-auth-scram.c fe-misc.c fe-protocol2.c fe-secure.c fe-secure-openssl.c fe-secure-common.c fe-secure-gssapi.c fe-gssapi-common.c fe-trace.c
+	rm -f fe-protocol3.c fe-connect.c fe-exec.c libpq-events.c pqexpbuffer.c fe-auth.c fe-auth-scram.c fe-misc.c fe-protocol2.c fe-secure.c fe-secure-openssl.c fe-secure-common.c fe-secure-gssapi.c fe-gssapi-common.c fe-trace.c
 	rm -f getpeereid.c
 
 include $(top_srcdir)/src/backend/common.mk
