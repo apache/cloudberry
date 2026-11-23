@@ -251,8 +251,14 @@ llvm_create_context(int jitFlags)
 static void
 llvm_release_context(JitContext *context)
 {
-	LLVMJitContext *llvm_context = (LLVMJitContext *) context;
+	LLVMJitContext *llvm_jit_context = (LLVMJitContext *) context;
 	ListCell   *lc;
+
+	/*
+	 * Consider as cleaned up even if we skip doing so below, that way we can
+	 * verify the tracking is correct (see llvm_shutdown()).
+	 */
+	llvm_jit_context_in_use_count--;
 
 	/*
 	 * When this backend is exiting, don't clean up LLVM. As an error might
@@ -264,13 +270,13 @@ llvm_release_context(JitContext *context)
 
 	llvm_enter_fatal_on_oom();
 
-	if (llvm_context->module)
+	if (llvm_jit_context->module)
 	{
 		LLVMDisposeModule(llvm_jit_context->module);
 		llvm_jit_context->module = NULL;
 	}
 
-	foreach(lc, llvm_context->handles)
+	foreach(lc, llvm_jit_context->handles)
 	{
 		LLVMJitHandle *jit_handle = (LLVMJitHandle *) lfirst(lc);
 
@@ -300,8 +306,10 @@ llvm_release_context(JitContext *context)
 
 		pfree(jit_handle);
 	}
-	list_free(llvm_context->handles);
-	llvm_context->handles = NIL;
+	list_free(llvm_jit_context->handles);
+	llvm_jit_context->handles = NIL;
+
+	llvm_leave_fatal_on_oom();
 }
 
 /*
@@ -1036,6 +1044,10 @@ llvm_shutdown(int code, Datum arg)
 		Assert(proc_exit_inprogress);
 		return;
 	}
+
+	if (llvm_jit_context_in_use_count != 0)
+		elog(PANIC, "LLVMJitContext in use count not 0 at exit (is %zu)",
+			 llvm_jit_context_in_use_count);
 
 #if LLVM_VERSION_MAJOR > 11
 	{
