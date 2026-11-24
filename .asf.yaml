@@ -100,7 +100,6 @@ github:
         # prefix
         contexts:
           - rat-check
-          - check-skip
           - Build Apache Cloudberry RPM
           - RPM Install Test Apache Cloudberry
           - ic-good-opt-off
