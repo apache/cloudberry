@@ -224,6 +224,11 @@ main(int argc, char* argv[])
 		unit_test(test_cursor_reader_preserves_recovery_flag)
 	};
 	MemoryContextInit();
+	/* RestoreSnapshot() and hash_create() allocate in this context. */
+	TopTransactionContext =
+		AllocSetContextCreate(TopMemoryContext,
+							  "mock TopTransactionContext",
+							  ALLOCSET_DEFAULT_SIZES);
 	InitFileAccess();
 	return run_tests(tests);
 }
