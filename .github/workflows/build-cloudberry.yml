@@ -395,6 +395,7 @@ jobs:
               {"test":"ic-tap",
                "make_configs":["src/bin/initdb:installcheck",
                                "src/bin/pg_archivecleanup:installcheck",
+                               "src/bin/pg_checksums:installcheck",
                                "src/bin/pg_config:installcheck",
                                "src/bin/pg_controldata:installcheck",
                                "src/bin/pg_dump:installcheck",
