@@ -607,12 +607,10 @@ CREATE TRIGGER recursive_trigger_trig
 INSERT INTO recursive_trigger_test VALUES (0, 0);
 NOTICE:  TD[event] => INSERT, expecting INSERT
 UPDATE recursive_trigger_test SET a = 11 WHERE b = 0;
-NOTICE:  TD[event] => INSERT, expecting INSERT
-NOTICE:  TD[event] => UPDATE, expecting UPDATE
+ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 SELECT * FROM recursive_trigger_test;
- a  | b 
-----+---
- 11 | 0
-  1 | 2
-(2 rows)
+ a | b 
+---+---
+ 0 | 0
+(1 row)
 
