@@ -96,40 +96,8 @@ env:
   ENABLE_DEBUG: false
 
 jobs:
-  ## ======================================================================
-  ## Job: check-skip
-  ## Honour the [skip ci] markers documented in the PR template, the same
-  ## way build-cloudberry.yml does. Without this a doc-only PR still pays
-  ## for a full hour of Behave.
-  ## ======================================================================
-  check-skip:
-    runs-on: ubuntu-22.04
-    outputs:
-      should_skip: ${{ steps.skip-check.outputs.should_skip }}
-    steps:
-      - id: skip-check
-        shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_TITLE: ${{ github.event.pull_request.title || '' }}
-          PR_BODY: ${{ github.event.pull_request.body || '' }}
-        run: |
-          echo "should_skip=false" >> "$GITHUB_OUTPUT"
-
-          if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            MESSAGE="${PR_TITLE}\n${PR_BODY}"
-            ESCAPED_MESSAGE=$(printf "%s" "$MESSAGE")
-            if echo -e "$ESCAPED_MESSAGE" | grep -qEi '\[skip[ -]ci\]|\[ci[ -]skip\]|\[no[ -]ci\]'; then
-              echo "should_skip=true" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo "Skip logic is not applied for $EVENT_NAME events."
-          fi
-
   prepare-behave-matrix:
     runs-on: ubuntu-22.04
-    needs: check-skip
-    if: needs.check-skip.outputs.should_skip != 'true'
     outputs:
       behave-matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -336,8 +304,6 @@ jobs:
 
   build:
     name: Build Apache Cloudberry RPM
-    needs: check-skip
-    if: needs.check-skip.outputs.should_skip != 'true'
     env:
       JOB_TYPE: build
     runs-on: ubuntu-22.04
@@ -353,25 +319,25 @@ jobs:
         -v /usr/local:/host_usr_local
         -v /opt:/host_opt
     steps:
-      - name: Free Disk Space
-        run: |
-          echo "=== Disk space before cleanup ==="
-          df -h /
-
-          rm -rf /host_opt/hostedtoolcache || true
-          rm -rf /host_usr_local/lib/android || true
-          rm -rf /host_usr_share/dotnet || true
-          rm -rf /host_opt/ghc || true
-          rm -rf /host_usr_local/.ghcup || true
-          rm -rf /host_usr_share/swift || true
-          rm -rf /host_usr_local/share/powershell || true
-          rm -rf /host_usr_local/share/chromium || true
-          rm -rf /host_usr_share/miniconda || true
-          rm -rf /host_opt/az || true
-          rm -rf /host_usr_share/sbt || true
-
-          echo "=== Disk space after cleanup ==="
-          df -h /
+      # - name: Free Disk Space
+      #   run: |
+      #     echo "=== Disk space before cleanup ==="
+      #     df -h /
+      #
+      #     rm -rf /host_opt/hostedtoolcache || true
+      #     rm -rf /host_usr_local/lib/android || true
+      #     rm -rf /host_usr_share/dotnet || true
+      #     rm -rf /host_opt/ghc || true
+      #     rm -rf /host_usr_local/.ghcup || true
+      #     rm -rf /host_usr_share/swift || true
+      #     rm -rf /host_usr_local/share/powershell || true
+      #     rm -rf /host_usr_local/share/chromium || true
+      #     rm -rf /host_usr_share/miniconda || true
+      #     rm -rf /host_opt/az || true
+      #     rm -rf /host_usr_share/sbt || true
+      #
+      #     echo "=== Disk space after cleanup ==="
+      #     df -h /
 
       - name: Set build timestamp
         id: set_timestamp
@@ -500,10 +466,9 @@ jobs:
 
   behave:
     name: ${{ matrix.test }}
-    needs: [check-skip, build, prepare-behave-matrix]
+    needs: [build, prepare-behave-matrix]
     if: |
       !cancelled() &&
-      needs.check-skip.outputs.should_skip != 'true' &&
       needs.prepare-behave-matrix.result == 'success' &&
       needs.build.result == 'success'
     runs-on: ubuntu-22.04
@@ -525,25 +490,25 @@ jobs:
         -v /usr/local:/host_usr_local
         -v /opt:/host_opt
     steps:
-      - name: Free Disk Space
-        run: |
-          echo "=== Disk space before cleanup ==="
-          df -h /
-
-          rm -rf /host_opt/hostedtoolcache || true
-          rm -rf /host_usr_local/lib/android || true
-          rm -rf /host_usr_share/dotnet || true
-          rm -rf /host_opt/ghc || true
-          rm -rf /host_usr_local/.ghcup || true
-          rm -rf /host_usr_share/swift || true
-          rm -rf /host_usr_local/share/powershell || true
-          rm -rf /host_usr_local/share/chromium || true
-          rm -rf /host_usr_share/miniconda || true
-          rm -rf /host_opt/az || true
-          rm -rf /host_usr_share/sbt || true
-
-          echo "=== Disk space after cleanup ==="
-          df -h /
+      # - name: Free Disk Space
+      #   run: |
+      #     echo "=== Disk space before cleanup ==="
+      #     df -h /
+      #
+      #     rm -rf /host_opt/hostedtoolcache || true
+      #     rm -rf /host_usr_local/lib/android || true
+      #     rm -rf /host_usr_share/dotnet || true
+      #     rm -rf /host_opt/ghc || true
+      #     rm -rf /host_usr_local/.ghcup || true
+      #     rm -rf /host_usr_share/swift || true
+      #     rm -rf /host_usr_local/share/powershell || true
+      #     rm -rf /host_usr_local/share/chromium || true
+      #     rm -rf /host_usr_share/miniconda || true
+      #     rm -rf /host_opt/az || true
+      #     rm -rf /host_usr_share/sbt || true
+      #
+      #     echo "=== Disk space after cleanup ==="
+      #     df -h /
 
       - name: Cloudberry Environment Initialization
         env:
@@ -1112,8 +1077,8 @@ jobs:
 
   report:
     name: Generate Apache Cloudberry Behave Report
-    needs: [check-skip, build, prepare-behave-matrix, behave]
-    if: always() && needs.check-skip.outputs.should_skip != 'true'
+    needs: [build, prepare-behave-matrix, behave]
+    if: always()
     runs-on: ubuntu-22.04
     steps:
       - name: Generate Final Report
