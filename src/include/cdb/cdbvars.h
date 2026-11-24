@@ -652,6 +652,7 @@ extern bool trace_sort;
  * Enable dynamic pruning of partitions based on join condition.
  */
 extern bool gp_dynamic_partition_pruning;
+extern bool gp_composite_key_join_selectivity;
 
 /* Sharing of plan fragments for common table expressions */
 extern bool gp_cte_sharing;
