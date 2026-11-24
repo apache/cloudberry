@@ -275,40 +275,35 @@ linterp_abscissa(PG_FUNCTION_ARGS, bool *p_eq_bounds, bool *p_eq_abscissas)
 Datum
 linterp_int64(PG_FUNCTION_ARGS)
 {
-	float8 y0;
-	float8 y1;
+	int64 y0 = PG_GETARG_INT64(2);
+	int64 y1 = PG_GETARG_INT64(4);
 	float8 p;
 	float8 r;
-	int64 result;
 	bool eq_bounds = false;
 	bool eq_abscissas = false;
-	
-	/* Common */
+
 	p = linterp_abscissa(fcinfo, &eq_bounds, &eq_abscissas);
-	
-	/* Ordinate type specific code*/
-	y0 = (float8)PG_GETARG_INT64(2);
-	y1 = (float8)PG_GETARG_INT64(4);
-	
-	if ( eq_bounds )
+
+	if (eq_bounds)
 	{
-		if ( eq_abscissas && y0 == y1 )
-			r = y0;
-		else 
-			PG_RETURN_NULL();
-	}
-	else 
-	{
-		r = round(y0+p*(y1-y0));
-		if ( r < LONG_MIN || r > LONG_MAX )
-			ereport(ERROR,
-					(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
-					 errmsg("value \"%f\" is out of range for type bigint", r)));
+		if (eq_abscissas && y0 == y1)
+			PG_RETURN_INT64(y0);
+		PG_RETURN_NULL();
 	}
 
-	result = (int64)r;
+	/* A known ordinate can be returned exactly even beyond float8 precision. */
+	if (p == 0.0 || (y0 == y1 && isfinite(p)))
+		PG_RETURN_INT64(y0);
+	if (p == 1.0)
+		PG_RETURN_INT64(y1);
 
-	PG_RETURN_INT64(result);
+	r = round((float8) y0 + p * ((float8) y1 - (float8) y0));
+	if (isnan(r) || !FLOAT8_FITS_IN_INT64(r))
+		ereport(ERROR,
+				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+				 errmsg("value \"%f\" is out of range for type bigint", r)));
+
+	PG_RETURN_INT64((int64) r);
 }
 
 Datum
