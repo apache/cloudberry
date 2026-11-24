@@ -925,6 +925,27 @@ static void paxProcessUtility(PlannedStmt *pstmt, const char *queryString,
   switch (nodeTag(pstmt->utilityStmt)) {
     case T_ClusterStmt: {
       ClusterStmt *stmt = (ClusterStmt *)pstmt->utilityStmt;
+      ListCell *lc;
+
+      /*
+       * Column-based clustering bypasses cluster(), so validate options
+       * before either the single-table or database-wide PAX path runs.
+       */
+      foreach (lc, stmt->params) {
+        DefElem *opt = (DefElem *)lfirst(lc);
+
+        if (strcmp(opt->defname, "verbose") == 0) {
+          (void)defGetBoolean(opt);
+        } else {
+          ParseState *pstate = make_parsestate(NULL);
+          pstate->p_sourcetext = queryString;
+          ereport(ERROR,
+                  (errcode(ERRCODE_SYNTAX_ERROR),
+                   errmsg("unrecognized CLUSTER option \"%s\"", opt->defname),
+                   parser_errposition(pstate, opt->location)));
+        }
+      }
+
       if (stmt->relation) {
         Relation rel = table_openrv(stmt->relation, AccessShareLock);
         if (RelationIsPAX(rel)) {
