@@ -26,117 +26,142 @@ CREATE TABLE gp_single_row(a int) distributed by (a);
 insert into gp_single_row values(1);
 
 -- Set up test functions first.
+--
+-- Cloudberry: some arguments are statements, not expressions, so run
+-- them with exec().  In Python 3, exec() cannot create locals of the
+-- calling function, so give it an explicit namespace and read y back.
 CREATE FUNCTION test_return_void(s text) 
 RETURNS void AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 CREATE FUNCTION test_return_bool(s text) 
 RETURNS bool AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 CREATE FUNCTION test_return_text(s text) 
 RETURNS text AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 CREATE FUNCTION test_return_bytea(s text) 
 RETURNS bytea AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 CREATE FUNCTION test_return_circle(s text) 
 RETURNS circle AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 CREATE FUNCTION test_return_array_int(s text) 
 RETURNS int[] AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 CREATE FUNCTION test_return_array_text(s text) 
 RETURNS text[] AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 CREATE FUNCTION test_return_setof_void(s text) 
 RETURNS setof void AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 CREATE FUNCTION test_return_setof_bool(s text) 
 RETURNS setof bool AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 CREATE FUNCTION test_return_setof_text(s text) 
 RETURNS setof text AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 CREATE FUNCTION test_return_setof_bytea(s text) 
 RETURNS setof bytea AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 CREATE FUNCTION test_return_setof_circle(s text) 
 RETURNS setof circle AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 
 -- RETURNS record types
 CREATE FUNCTION test_return_table_record(s text) 
 RETURNS table_record AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 CREATE FUNCTION test_return_type_record(s text) 
 RETURNS type_record AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 CREATE FUNCTION test_return_setof_table_record(s text) 
 RETURNS table_record AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 CREATE FUNCTION test_return_setof_type_record(s text) 
 RETURNS type_record AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 
 -- RETURNS with OUT Parameters
 CREATE FUNCTION test_return_out_text(s text, OUT text) 
 AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 CREATE FUNCTION test_return_out_setof_text(s text, OUT text) 
 RETURNS setof text AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 CREATE FUNCTION test_return_out_record(s text, OUT first text, OUT second int4) 
 AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 CREATE FUNCTION test_return_out_setof_record(s text, OUT first text, OUT second int4)
 RETURNS setof record AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 
 -- RETURNS TABLE
 CREATE FUNCTION test_return_table(s text) RETURNS TABLE(first text, second int4)
 AS $$
-  exec('y = ' + s)
-  return y
-$$ LANGUAGE plpythonu;
+  ns = {}
+  exec('y = ' + s, ns)
+  return ns['y']
+$$ LANGUAGE plpython3u;
 
 
 
@@ -309,6 +334,8 @@ SELECT test_return_text(
 --     b) The returned string contains null characters (valid in Python)
 
 -- [ERROR] From Python String with null characters
+-- Cloudberry: with Python 3, PLyUnicode_Bytes() stops at the first NUL,
+-- so the string is silently truncated instead of rejected.
 SELECT test_return_text(E'"test\\0"');
 SELECT * FROM test_return_text(E'"test\\0"');
 
@@ -320,12 +347,24 @@ SELECT * FROM test_return_text(
     E'1; exec("class Foo:\\n  def __str__(self): return None"); y = Foo()'
 );
 
+-- [ERROR] From Python float with bad repr() function
+SELECT test_return_text(
+    E'1; exec("class Foo(float):\\n  def __repr__(self): return None"); y = Foo()'
+);
+SELECT test_return_text(
+    E'1; exec("class Foo(float):\\n  def __repr__(self): return None"); y = Foo()'
+) FROM gp_single_row;
+
 
 --
 -- Case 4: Return Bytea
 --
 -- Bytea is like text, except that it allows return strings to contain null 
 -- characters
+--
+-- Cloudberry: with Python 3, only bytes-like objects convert to bytea, so
+-- str, bool and non-empty dict values now fail, and lists of ints and
+-- empty dicts become bytes.
 --
 
 -- From Python None
@@ -1005,7 +1044,7 @@ SELECT * FROM test_return_table_record('"a4"');
 
 -- From Python Dictionary, with extra fields
 SELECT test_return_table_record('{"first": "value", "second": 4, "third": "ignored"}');
-SELECT * FROM test_return_table_record('{"first": "value", "second": 4}, "third": "ignored"}');
+SELECT * FROM test_return_table_record('{"first": "value", "second": 4, "third": "ignored"}');
 
 
 -- =====================================================
@@ -1094,7 +1133,7 @@ SELECT * FROM test_return_setof_type_record('{}');
 
 -- From Python Dictionary, with extra fields
 SELECT test_return_setof_type_record('[{"first": "value", "second": 4, "third": "ignored"}]');
-SELECT * FROM test_return_setof_type_record('[{"first": "value", "second": 4}, "third": "ignored"}]');
+SELECT * FROM test_return_setof_type_record('[{"first": "value", "second": 4, "third": "ignored"}]');
 
 
 
@@ -1172,7 +1211,7 @@ SELECT * FROM test_return_setof_table_record('{}');
 
 -- From Python Dictionary, with extra fields
 SELECT test_return_setof_table_record('[{"first": "value", "second": 4, "third": "ignored"}]');
-SELECT * FROM test_return_setof_table_record('[{"first": "value", "second": 4}, "third": "ignored"}]');
+SELECT * FROM test_return_setof_table_record('[{"first": "value", "second": 4, "third": "ignored"}]');
 
 
 
@@ -1467,7 +1506,7 @@ SELECT * FROM test_return_out_setof_record('{}');
 
 -- From Python Dictionary, with extra fields
 SELECT test_return_out_setof_record('[{"first": "value", "second": 4, "third": "ignored"}]');
-SELECT * FROM test_return_out_setof_record('[{"first": "value", "second": 4}, "third": "ignored"}]');
+SELECT * FROM test_return_out_setof_record('[{"first": "value", "second": 4, "third": "ignored"}]');
 
 -- From Python List of String (one character per column)
 SELECT test_return_out_setof_record('["a4"]');
