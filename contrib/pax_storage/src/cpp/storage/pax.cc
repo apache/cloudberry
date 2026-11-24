@@ -611,11 +611,15 @@ void TableDeleter::DeleteWithVisibilityMap(
   min_max_col_idxs = cbdb::GetMinMaxColumnIndexes(rel_);
   bf_col_idxs = cbdb::GetBloomFilterColumnIndexes(rel_);
 
-  // Projection must cover minmax ∪ bloomfilter columns; otherwise
-  // AddRow reads uninitialized slot values for bf columns (issue #1749).
-  std::set_union(min_max_col_idxs.begin(), min_max_col_idxs.end(),
-                 bf_col_idxs.begin(), bf_col_idxs.end(),
-                 std::back_inserter(stats_proj_col_idxs));
+  // AddRow maintains null counts (hasnull / allnull / nonnullrows) for every
+  // column, so the recompute reader must load every column. A projection
+  // limited to minmax / bloomfilter columns leaves the rest unloaded: their
+  // tts_isnull stays false, the refreshed stats claim hasnull=false for an
+  // all-NULL column, and the sparse filter drops the block for IS NULL after
+  // a DELETE (issue #2091). Reading all attributes also subsumes issue #1749.
+  for (int i = 0; i < rel_->rd_att->natts; i++) {
+    stats_proj_col_idxs.push_back(i);
+  }
   stats_updater_projection->SetColumnProjection(stats_proj_col_idxs,
                                                 rel_->rd_att->natts);
   do {
