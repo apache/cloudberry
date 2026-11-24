@@ -352,22 +352,22 @@ jobs:
           - {target_os: ubuntu24.04, target_arch: arm64, package_type: deb, runner: ubuntu-24.04-arm, build_container_image: apache/incubator-cloudberry:cbdb-build-ubuntu24.04-latest}
 
     steps:
-      - name: Free disk space
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf /host_opt/hostedtoolcache || true
-          rm -rf /host_usr_local/lib/android || true
-          rm -rf /host_usr_share/dotnet || true
-          rm -rf /host_opt/ghc || true
-          rm -rf /host_usr_local/.ghcup || true
-          rm -rf /host_usr_share/swift || true
-          rm -rf /host_usr_local/share/powershell || true
-          rm -rf /host_usr_local/share/chromium || true
-          rm -rf /host_usr_share/miniconda || true
-          rm -rf /host_opt/az || true
-          rm -rf /host_usr_share/sbt || true
-          df -h /
+      # - name: Free disk space
+      #   shell: bash
+      #   run: |
+      #     set -euo pipefail
+      #     rm -rf /host_opt/hostedtoolcache || true
+      #     rm -rf /host_usr_local/lib/android || true
+      #     rm -rf /host_usr_share/dotnet || true
+      #     rm -rf /host_opt/ghc || true
+      #     rm -rf /host_usr_local/.ghcup || true
+      #     rm -rf /host_usr_share/swift || true
+      #     rm -rf /host_usr_local/share/powershell || true
+      #     rm -rf /host_usr_local/share/chromium || true
+      #     rm -rf /host_usr_share/miniconda || true
+      #     rm -rf /host_opt/az || true
+      #     rm -rf /host_usr_share/sbt || true
+      #     df -h /
 
       - name: Initialize build container
         shell: bash

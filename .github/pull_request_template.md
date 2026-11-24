@@ -42,15 +42,6 @@ Fixes #ISSUE_Number
 ### Additional Context
 <!-- Any other information that would help reviewers? Remove if none -->
 
-### CI Skip Instructions
-<!--
-To skip CI builds, add the appropriate CI skip identifier to your PR title.
-The identifier must:
-- Be in square brackets []
-- Include the word "ci" and either "skip" or "no"
-- Only use for documentation-only changes or when absolutely necessary
--->
-
 ---
 <!-- Join our community:
 - Mailing list: [dev@cloudberry.apache.org](https://lists.apache.org/list.html?dev@cloudberry.apache.org) (subscribe: dev-subscribe@cloudberry.apache.org)

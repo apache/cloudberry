@@ -40,47 +40,11 @@ env:
   LOG_RETENTION_DAYS: 7
 
 jobs:
-  check-skip:
-    runs-on: ubuntu-22.04
-    outputs:
-      should_skip: ${{ steps.skip-check.outputs.should_skip }}
-    steps:
-      - id: skip-check
-        shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_TITLE: ${{ github.event.pull_request.title || '' }}
-          PR_BODY: ${{ github.event.pull_request.body || '' }}
-        run: |
-          echo "should_skip=false" >> "$GITHUB_OUTPUT"
-
-          if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            MESSAGE="${PR_TITLE}\n${PR_BODY}"
-
-            ESCAPED_MESSAGE=$(printf "%s" "$MESSAGE")
-
-            echo "Checking PR title and body (escaped): $ESCAPED_MESSAGE"
-
-            if echo -e "$ESCAPED_MESSAGE" | grep -qEi '\[skip[ -]ci\]|\[ci[ -]skip\]|\[no[ -]ci\]'; then
-              echo "should_skip=true" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo "Skip logic is not applied for $EVENT_NAME events."
-          fi
-
-      - name: Report Skip Status
-        if: steps.skip-check.outputs.should_skip == 'true'
-        run: |
-          echo "CI Skip flag detected in PR - skipping all checks."
-          exit 0
-
   # Build once per image.  The built source tree and the installation
   # are handed to test-jit, which runs installcheck-jit for each
   # optimizer setting in parallel.
   build-jit:
     name: Build with LLVM JIT (${{ matrix.image }})
-    needs: [check-skip]
-    if: needs.check-skip.outputs.should_skip != 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 90
 
@@ -222,10 +186,10 @@ jobs:
 
   test-jit:
     name: Test with LLVM JIT (${{ matrix.image }}, optimizer=${{ matrix.optimizer }})
-    needs: [check-skip, build-jit]
+    needs: [build-jit]
     # Run even when the build failed on another image; a missing build
     # artifact fails only this image's tests.
-    if: ${{ !cancelled() && needs.check-skip.outputs.should_skip != 'true' }}
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-22.04
     timeout-minutes: 120
 

@@ -141,56 +141,11 @@ env:
 jobs:
 
   ## ======================================================================
-  ## Job: check-skip
-  ## ======================================================================
-
-  check-skip:
-    runs-on: ubuntu-22.04
-    outputs:
-      should_skip: ${{ steps.skip-check.outputs.should_skip }}
-    steps:
-      - id: skip-check
-        shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_TITLE: ${{ github.event.pull_request.title || '' }}
-          PR_BODY: ${{ github.event.pull_request.body || '' }}
-        run: |
-          # Default to not skipping
-          echo "should_skip=false" >> "$GITHUB_OUTPUT"
-
-          # Apply skip logic only for pull_request events
-          if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            # Combine PR title and body for skip check
-            MESSAGE="${PR_TITLE}\n${PR_BODY}"
-
-            # Escape special characters using printf %s
-            ESCAPED_MESSAGE=$(printf "%s" "$MESSAGE")
-
-            echo "Checking PR title and body (escaped): $ESCAPED_MESSAGE"
-
-            # Check for skip patterns
-            if echo -e "$ESCAPED_MESSAGE" | grep -qEi '\[skip[ -]ci\]|\[ci[ -]skip\]|\[no[ -]ci\]'; then
-              echo "should_skip=true" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo "Skip logic is not applied for $EVENT_NAME events."
-          fi
-
-      - name: Report Skip Status
-        if: steps.skip-check.outputs.should_skip == 'true'
-        run: |
-          echo "CI Skip flag detected in PR - skipping all checks."
-          exit 0
-
-  ## ======================================================================
   ## Job: prepare-test-matrix-deb
   ## ======================================================================
 
   prepare-test-matrix-deb:
     runs-on: ubuntu-22.04
-    needs: [check-skip]
-    if: needs.check-skip.outputs.should_skip != 'true'
     outputs:
       test-matrix: ${{ steps.set-matrix.outputs.matrix }}
 
@@ -383,7 +338,6 @@ jobs:
     name: ${{ matrix.ubuntu_version == '22.04' && 'Build Apache Cloudberry DEB' || format('Build Apache Cloudberry DEB (Ubuntu {0})', matrix.ubuntu_version) }}
     env:
       JOB_TYPE: build
-    needs: [check-skip]
     runs-on: ubuntu-22.04
     timeout-minutes: 120
     if: github.event.inputs.reuse_artifacts_from_run_id == ''
@@ -405,33 +359,26 @@ jobs:
         -v /opt:/host_opt
 
     steps:
-      - name: Free Disk Space
-        if: needs.check-skip.outputs.should_skip != 'true'
-        run: |
-          echo "=== Disk space before cleanup ==="
-          df -h /
-
-          # Remove pre-installed tools from host to free disk space
-          rm -rf /host_opt/hostedtoolcache || true   # GitHub Actions tool cache
-          rm -rf /host_usr_local/lib/android || true # Android SDK
-          rm -rf /host_usr_share/dotnet || true      # .NET SDK
-          rm -rf /host_opt/ghc || true               # Haskell GHC
-          rm -rf /host_usr_local/.ghcup || true      # Haskell GHCup
-          rm -rf /host_usr_share/swift || true       # Swift
-          rm -rf /host_usr_local/share/powershell || true  # PowerShell
-          rm -rf /host_usr_local/share/chromium || true    # Chromium
-          rm -rf /host_usr_share/miniconda || true   # Miniconda
-          rm -rf /host_opt/az || true                # Azure CLI
-          rm -rf /host_usr_share/sbt || true         # Scala Build Tool
-
-          echo "=== Disk space after cleanup ==="
-          df -h /
-
-      - name: Skip Check
-        if: needs.check-skip.outputs.should_skip == 'true'
-        run: |
-          echo "Build skipped via CI skip flag" >> "$GITHUB_STEP_SUMMARY"
-          exit 0
+      # - name: Free Disk Space
+      #   run: |
+      #     echo "=== Disk space before cleanup ==="
+      #     df -h /
+      #
+      #     # Remove pre-installed tools from host to free disk space
+      #     rm -rf /host_opt/hostedtoolcache || true   # GitHub Actions tool cache
+      #     rm -rf /host_usr_local/lib/android || true # Android SDK
+      #     rm -rf /host_usr_share/dotnet || true      # .NET SDK
+      #     rm -rf /host_opt/ghc || true               # Haskell GHC
+      #     rm -rf /host_usr_local/.ghcup || true      # Haskell GHCup
+      #     rm -rf /host_usr_share/swift || true       # Swift
+      #     rm -rf /host_usr_local/share/powershell || true  # PowerShell
+      #     rm -rf /host_usr_local/share/chromium || true    # Chromium
+      #     rm -rf /host_usr_share/miniconda || true   # Miniconda
+      #     rm -rf /host_opt/az || true                # Azure CLI
+      #     rm -rf /host_usr_share/sbt || true         # Scala Build Tool
+      #
+      #     echo "=== Disk space after cleanup ==="
+      #     df -h /
 
       - name: Set build timestamp
         id: set_timestamp  # Add an ID to reference this step
@@ -654,7 +601,6 @@ jobs:
           } 2>&1 | tee -a build-logs/details/artifact-creation.log
 
       - name: Run Apache Cloudberry unittest script
-        if: needs.check-skip.outputs.should_skip != 'true'
         shell: bash
         env:
           SRC_DIR: ${{ github.workspace }}
@@ -710,7 +656,7 @@ jobs:
 
   deb-install-test:
     name: ${{ matrix.ubuntu_version == '22.04' && 'DEB Install Test Apache Cloudberry' || format('DEB Install Test Apache Cloudberry (Ubuntu {0})', matrix.ubuntu_version) }}
-    needs: [check-skip, build-deb]
+    needs: [build-deb]
     if: |
       !cancelled() &&
       (needs.build-deb.result == 'success' || needs.build-deb.result == 'skipped') &&
@@ -733,36 +679,28 @@ jobs:
         -v /opt:/host_opt
 
     steps:
-      - name: Free Disk Space
-        if: needs.check-skip.outputs.should_skip != 'true'
-        run: |
-          echo "=== Disk space before cleanup ==="
-          df -h /
-
-          # Remove pre-installed tools from host to free disk space
-          rm -rf /host_opt/hostedtoolcache || true   # GitHub Actions tool cache
-          rm -rf /host_usr_local/lib/android || true # Android SDK
-          rm -rf /host_usr_share/dotnet || true      # .NET SDK
-          rm -rf /host_opt/ghc || true               # Haskell GHC
-          rm -rf /host_usr_local/.ghcup || true      # Haskell GHCup
-          rm -rf /host_usr_share/swift || true       # Swift
-          rm -rf /host_usr_local/share/powershell || true  # PowerShell
-          rm -rf /host_usr_local/share/chromium || true    # Chromium
-          rm -rf /host_usr_share/miniconda || true   # Miniconda
-          rm -rf /host_opt/az || true                # Azure CLI
-          rm -rf /host_usr_share/sbt || true         # Scala Build Tool
-
-          echo "=== Disk space after cleanup ==="
-          df -h /
-
-      - name: Skip Check
-        if: needs.check-skip.outputs.should_skip == 'true'
-        run: |
-          echo "DEB install test skipped via CI skip flag" >> "$GITHUB_STEP_SUMMARY"
-          exit 0
+      # - name: Free Disk Space
+      #   run: |
+      #     echo "=== Disk space before cleanup ==="
+      #     df -h /
+      #
+      #     # Remove pre-installed tools from host to free disk space
+      #     rm -rf /host_opt/hostedtoolcache || true   # GitHub Actions tool cache
+      #     rm -rf /host_usr_local/lib/android || true # Android SDK
+      #     rm -rf /host_usr_share/dotnet || true      # .NET SDK
+      #     rm -rf /host_opt/ghc || true               # Haskell GHC
+      #     rm -rf /host_usr_local/.ghcup || true      # Haskell GHCup
+      #     rm -rf /host_usr_share/swift || true       # Swift
+      #     rm -rf /host_usr_local/share/powershell || true  # PowerShell
+      #     rm -rf /host_usr_local/share/chromium || true    # Chromium
+      #     rm -rf /host_usr_share/miniconda || true   # Miniconda
+      #     rm -rf /host_opt/az || true                # Azure CLI
+      #     rm -rf /host_usr_share/sbt || true         # Scala Build Tool
+      #
+      #     echo "=== Disk space after cleanup ==="
+      #     df -h /
 
       - name: Download Cloudberry DEB build artifacts
-        if: needs.check-skip.outputs.should_skip != 'true'
         uses: actions/download-artifact@v8
         with:
           name: apache-cloudberry-db-incubating-deb-build-artifacts-ubuntu${{ matrix.ubuntu_version }}
@@ -772,7 +710,6 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cloudberry Environment Initialization
-        if: needs.check-skip.outputs.should_skip != 'true'
         shell: bash
         env:
           LOGS_DIR: install-logs
@@ -921,7 +858,7 @@ jobs:
 
   test-deb:
     name: ${{ matrix.ubuntu_version == '22.04' && matrix.test || format('{0} (Ubuntu {1})', matrix.test, matrix.ubuntu_version) }}
-    needs: [check-skip, build-deb, prepare-test-matrix-deb]
+    needs: [build-deb, prepare-test-matrix-deb]
     if: |
       !cancelled() &&
       (needs.build-deb.result == 'success' || needs.build-deb.result == 'skipped')
@@ -947,36 +884,28 @@ jobs:
         -v /opt:/host_opt
 
     steps:
-      - name: Free Disk Space
-        if: needs.check-skip.outputs.should_skip != 'true'
-        run: |
-          echo "=== Disk space before cleanup ==="
-          df -h /
-
-          # Remove pre-installed tools from host to free disk space
-          rm -rf /host_opt/hostedtoolcache || true   # GitHub Actions tool cache
-          rm -rf /host_usr_local/lib/android || true # Android SDK
-          rm -rf /host_usr_share/dotnet || true      # .NET SDK
-          rm -rf /host_opt/ghc || true               # Haskell GHC
-          rm -rf /host_usr_local/.ghcup || true      # Haskell GHCup
-          rm -rf /host_usr_share/swift || true       # Swift
-          rm -rf /host_usr_local/share/powershell || true  # PowerShell
-          rm -rf /host_usr_local/share/chromium || true    # Chromium
-          rm -rf /host_usr_share/miniconda || true   # Miniconda
-          rm -rf /host_opt/az || true                # Azure CLI
-          rm -rf /host_usr_share/sbt || true         # Scala Build Tool
-
-          echo "=== Disk space after cleanup ==="
-          df -h /
-
-      - name: Skip Check
-        if: needs.check-skip.outputs.should_skip == 'true'
-        run: |
-          echo "Test ${{ matrix.test }} skipped via CI skip flag" >> "$GITHUB_STEP_SUMMARY"
-          exit 0
+      # - name: Free Disk Space
+      #   run: |
+      #     echo "=== Disk space before cleanup ==="
+      #     df -h /
+      #
+      #     # Remove pre-installed tools from host to free disk space
+      #     rm -rf /host_opt/hostedtoolcache || true   # GitHub Actions tool cache
+      #     rm -rf /host_usr_local/lib/android || true # Android SDK
+      #     rm -rf /host_usr_share/dotnet || true      # .NET SDK
+      #     rm -rf /host_opt/ghc || true               # Haskell GHC
+      #     rm -rf /host_usr_local/.ghcup || true      # Haskell GHCup
+      #     rm -rf /host_usr_share/swift || true       # Swift
+      #     rm -rf /host_usr_local/share/powershell || true  # PowerShell
+      #     rm -rf /host_usr_local/share/chromium || true    # Chromium
+      #     rm -rf /host_usr_share/miniconda || true   # Miniconda
+      #     rm -rf /host_opt/az || true                # Azure CLI
+      #     rm -rf /host_usr_share/sbt || true         # Scala Build Tool
+      #
+      #     echo "=== Disk space after cleanup ==="
+      #     df -h /
 
       - name: Use timestamp from previous job
-        if: needs.check-skip.outputs.should_skip != 'true'
         run: |
           echo "Timestamp from output: ${{ needs.build-deb.outputs.build_timestamp }}"
 
@@ -1014,7 +943,6 @@ jobs:
           echo "SRC_DIR=${GITHUB_WORKSPACE}" | tee -a "$GITHUB_ENV"
 
       - name: Setup cgroups
-        if: needs.check-skip.outputs.should_skip != 'true'
         shell: bash
         run: |
           set -uxo pipefail
@@ -1165,16 +1093,10 @@ jobs:
             echo "## Environment"
             echo "- Start Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
-            if [[ "${{ needs.check-skip.outputs.should_skip }}" == "true" ]]; then
-              echo "## Skip Status"
-              echo "✓ Test execution skipped via CI skip flag"
-            else
-              echo "- OS Version: $(cat /etc/redhat-release)"
-            fi
+            echo "- OS Version: $(cat /etc/redhat-release)"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Download Cloudberry DEB build artifacts
-        if: needs.check-skip.outputs.should_skip != 'true'
         uses: actions/download-artifact@v8
         with:
           name: apache-cloudberry-db-incubating-deb-build-artifacts-ubuntu${{ matrix.ubuntu_version }}
@@ -1184,7 +1106,6 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download Cloudberry Source build artifacts
-        if: needs.check-skip.outputs.should_skip != 'true'
         uses: actions/download-artifact@v8
         with:
           name: apache-cloudberry-db-incubating-deb-source-build-artifacts-ubuntu${{ matrix.ubuntu_version }}
@@ -1194,7 +1115,6 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify DEB artifacts
-        if: needs.check-skip.outputs.should_skip != 'true'
         id: verify-artifacts
         shell: bash
         run: |
@@ -1264,7 +1184,7 @@ jobs:
           } 2>&1 | tee -a build-logs/details/deb-verification.log
 
       - name: Install Cloudberry DEB
-        if: success() && needs.check-skip.outputs.should_skip != 'true'
+        if: success()
         shell: bash
         env:
           DEB_FILE: ${{ steps.verify-artifacts.outputs.deb_file }}
@@ -1306,7 +1226,7 @@ jobs:
           } 2>&1 | tee -a build-logs/details/deb-installation.log
 
       - name: Extract source tarball
-        if: success() && needs.check-skip.outputs.should_skip != 'true'
+        if: success()
         shell: bash
         env:
           SRC_TARBALL_FILE: ${{ steps.verify-artifacts.outputs.src_tarball_file }}
@@ -1333,7 +1253,7 @@ jobs:
           } 2>&1 | tee -a build-logs/details/source-extraction.log
 
       - name: Prepare DEB Environment
-        if: success() && needs.check-skip.outputs.should_skip != 'true'
+        if: success()
         shell: bash
         env:
           SRC_DIR: ${{ github.workspace }}
@@ -1365,7 +1285,7 @@ jobs:
           } 2>&1 | tee -a build-logs/details/prepare-deb-env.log
 
       - name: Create Apache Cloudberry demo cluster
-        if: success() && needs.check-skip.outputs.should_skip != 'true'
+        if: success()
         shell: bash
         env:
           SRC_DIR: ${{ github.workspace }}
@@ -1390,7 +1310,7 @@ jobs:
           } 2>&1 | tee -a build-logs/details/create-cloudberry-demo-cluster.log
 
       - name: "Run Tests: ${{ matrix.test }}"
-        if: success() && needs.check-skip.outputs.should_skip != 'true'
+        if: success()
         env:
           SRC_DIR: ${{ github.workspace }}
           BUILD_DESTINATION: ${{ github.workspace }}/debian/build
@@ -1548,7 +1468,7 @@ jobs:
 
       - name: "Parse Test Results: ${{ matrix.test }}"
         id: test-results
-        if: always() && needs.check-skip.outputs.should_skip != 'true'
+        if: always()
         env:
           SRC_DIR: ${{ github.workspace }}
         shell: bash {0}
@@ -1678,7 +1598,7 @@ jobs:
           fi
 
       - name: "Check for Core Dumps Across All Configurations: ${{ matrix.test }}"
-        if: always() && needs.check-skip.outputs.should_skip != 'true'
+        if: always()
         shell: bash {0}
         run: |
           # Look for any core analysis files from this test matrix entry
@@ -1706,12 +1626,6 @@ jobs:
         shell: bash {0}
         run: |
           {
-            if [[ "${{ needs.check-skip.outputs.should_skip }}" == "true" ]]; then
-              echo "## Test Results - SKIPPED"
-              echo "- End Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-              exit 0
-            fi
-
             echo "## Test Results"
             echo "- End Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
@@ -1892,7 +1806,7 @@ jobs:
 
   report-deb:
     name: Generate Apache Cloudberry Build Report
-    needs: [check-skip, build-deb, prepare-test-matrix-deb, deb-install-test, test-deb]
+    needs: [build-deb, prepare-test-matrix-deb, deb-install-test, test-deb]
     if: always()
     runs-on: ubuntu-22.04
     steps:
@@ -1901,37 +1815,30 @@ jobs:
           {
             echo "# Apache Cloudberry Build Pipeline Report"
 
-            if [[ "${{ needs.check-skip.outputs.should_skip }}" == "true" ]]; then
-              echo "## CI Skip Status"
-              echo "✅ CI checks skipped via skip flag"
-              echo "- Completion Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            echo "## Job Status"
+            echo "- Build Job: ${{ needs.build-deb.result }}"
+            echo "- Test Job: ${{ needs.test-deb.result }}"
+            echo "- Completion Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+            if [[ "${{ needs.build-deb.result }}" == "success" && "${{ needs.test-deb.result }}" == "success" ]]; then
+              echo "✅ Pipeline completed successfully"
             else
-              echo "## Job Status"
-              echo "- Build Job: ${{ needs.build-deb.result }}"
-              echo "- Test Job: ${{ needs.test-deb.result }}"
-              echo "- Completion Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+              echo "⚠️ Pipeline completed with failures"
 
-              if [[ "${{ needs.build-deb.result }}" == "success" && "${{ needs.test-deb.result }}" == "success" ]]; then
-                echo "✅ Pipeline completed successfully"
-              else
-                echo "⚠️ Pipeline completed with failures"
+              if [[ "${{ needs.build-deb.result }}" != "success" ]]; then
+                echo "### Build Job Failure"
+                echo "Check build logs for details"
+              fi
 
-                if [[ "${{ needs.build-deb.result }}" != "success" ]]; then
-                  echo "### Build Job Failure"
-                  echo "Check build logs for details"
-                fi
-
-                if [[ "${{ needs.test-deb.result }}" != "success" ]]; then
-                  echo "### Test Job Failure"
-                  echo "Check test logs and regression files for details"
-                fi
+              if [[ "${{ needs.test-deb.result }}" != "success" ]]; then
+                echo "### Test Job Failure"
+                echo "Check test logs and regression files for details"
               fi
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Notify on failure
         if: |
-          needs.check-skip.outputs.should_skip != 'true' &&
           (needs.build-deb.result != 'success' || needs.test-deb.result != 'success')
         run: |
           echo "::error::Build/Test pipeline failed! Check job summaries and logs for details"
