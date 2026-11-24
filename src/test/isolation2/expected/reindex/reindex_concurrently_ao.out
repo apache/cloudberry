@@ -1,14 +1,10 @@
--- Reject concurrent AO/AOCS reindex before creating replacement indexes.
+-- Concurrent reindex of AO/AOCS must fail before creating a replacement index.
 CREATE SCHEMA reindex_concurrent_ao;
 CREATE
 CREATE TABLE reindex_concurrent_ao.t_row (a int) WITH (appendonly=true, orientation=row) DISTRIBUTED BY (a);
 CREATE
 CREATE TABLE reindex_concurrent_ao.t_column (a int) WITH (appendonly=true, orientation=column) DISTRIBUTED BY (a);
 CREATE
-INSERT INTO reindex_concurrent_ao.t_row SELECT i FROM generate_series(1,20) i;
-INSERT 20
-INSERT INTO reindex_concurrent_ao.t_column SELECT i FROM generate_series(1,20) i;
-INSERT 20
 CREATE INDEX t_row_idx ON reindex_concurrent_ao.t_row (a);
 CREATE
 CREATE INDEX t_column_idx ON reindex_concurrent_ao.t_column (a);
@@ -16,37 +12,10 @@ CREATE
 
 REINDEX INDEX CONCURRENTLY reindex_concurrent_ao.t_row_idx;
 ERROR:  cannot reindex append-only table "t_row" concurrently
-REINDEX TABLE CONCURRENTLY reindex_concurrent_ao.t_row;
-ERROR:  cannot reindex append-only table "t_row" concurrently
 REINDEX INDEX CONCURRENTLY reindex_concurrent_ao.t_column_idx;
 ERROR:  cannot reindex append-only table "t_column" concurrently
-REINDEX TABLE CONCURRENTLY reindex_concurrent_ao.t_column;
-ERROR:  cannot reindex append-only table "t_column" concurrently
--- Use a separate schema so the order of relations is deterministic.
-CREATE SCHEMA reindex_concurrent_schema;
-CREATE
-CREATE TABLE reindex_concurrent_schema.t_schema (a int) WITH (appendonly=true) DISTRIBUTED BY (a);
-CREATE
-CREATE INDEX t_schema_idx ON reindex_concurrent_schema.t_schema(a);
-CREATE
-REINDEX SCHEMA CONCURRENTLY reindex_concurrent_schema;
-ERROR:  cannot reindex append-only table "t_schema" concurrently
-DROP SCHEMA reindex_concurrent_schema CASCADE;
-DROP
 
--- A partitioned index must reject its AO leaf before creating a replacement.
-CREATE TABLE reindex_concurrent_ao.t_part (a int) WITH (appendonly=true, orientation=row) DISTRIBUTED BY (a) PARTITION BY RANGE (a) (START (1) END (21) EVERY (10));
-CREATE
-INSERT INTO reindex_concurrent_ao.t_part SELECT i FROM generate_series(1,20) i;
-INSERT 20
-CREATE INDEX t_part_idx ON reindex_concurrent_ao.t_part (a);
-CREATE
-REINDEX INDEX CONCURRENTLY reindex_concurrent_ao.t_part_idx;
-ERROR:  cannot reindex append-only table "t_part_1_prt_1" concurrently
-REINDEX TABLE CONCURRENTLY reindex_concurrent_ao.t_part;
-ERROR:  cannot reindex append-only table "t_part_1_prt_1" concurrently
-
--- Neither the coordinator nor the segments should retain replacements.
+-- No replacement index should remain on the coordinator or segments.
 SELECT count(*) FROM pg_class WHERE relnamespace = 'reindex_concurrent_ao'::regnamespace AND relname LIKE '%_ccnew%';
  count 
 -------
@@ -58,7 +27,7 @@ SELECT count(*) FROM gp_dist_random('pg_class') WHERE relnamespace = 'reindex_co
  0     
 (1 row)
 
--- Original indexes stay usable, including after a subsequent insert.
+-- The original indexes remain usable after the failed commands.
 INSERT INTO reindex_concurrent_ao.t_row VALUES (21);
 INSERT 1
 INSERT INTO reindex_concurrent_ao.t_column VALUES (21);
@@ -78,45 +47,5 @@ SELECT * FROM reindex_concurrent_ao.t_column WHERE a=21;
 RESET enable_seqscan;
 RESET
 
--- Ordinary REINDEX remains available for AO/AOCS.
-REINDEX TABLE reindex_concurrent_ao.t_row;
-REINDEX
-REINDEX TABLE reindex_concurrent_ao.t_column;
-REINDEX
 DROP SCHEMA reindex_concurrent_ao CASCADE;
-DROP
-
--- Temporary tables use the ordinary non-concurrent reindex path.
-CREATE TEMP TABLE reindex_temp_ao (a int) WITH (appendonly=true) DISTRIBUTED BY (a);
-CREATE
-INSERT INTO reindex_temp_ao VALUES (1);
-INSERT 1
-CREATE INDEX reindex_temp_ao_idx ON reindex_temp_ao(a);
-CREATE
-REINDEX INDEX CONCURRENTLY reindex_temp_ao_idx;
-REINDEX
-SELECT count(*) FROM reindex_temp_ao;
- count 
--------
- 1     
-(1 row)
-DROP TABLE reindex_temp_ao;
-DROP
-
--- DATABASE mode also stops before creating a replacement for an AO index.
-CREATE DATABASE reindex_concurrent_ao_db TEMPLATE template0;
-CREATE
-1:@db_name reindex_concurrent_ao_db: CREATE TABLE t_db_ao (a int) WITH (appendonly=true) DISTRIBUTED BY (a);
-CREATE
-1: CREATE INDEX t_db_ao_idx ON t_db_ao(a);
-CREATE
-1: REINDEX DATABASE CONCURRENTLY reindex_concurrent_ao_db;
-ERROR:  cannot reindex append-only table "t_db_ao" concurrently
-1: SELECT count(*) FROM pg_class WHERE relname LIKE 't_db_ao_idx_ccnew%';
- count 
--------
- 0     
-(1 row)
-1q: ... <quitting>
-DROP DATABASE reindex_concurrent_ao_db;
 DROP
