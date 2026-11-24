@@ -36,6 +36,7 @@ extern Node *remove_useless_EXISTS_sublink(PlannerInfo *root,
                                            Query *subselect, bool under_not);
 extern Node *SS_replace_correlation_vars(PlannerInfo *root, Node *expr);
 extern Node *SS_process_sublinks(PlannerInfo *root, Node *expr, bool isQual);
+extern List *find_duplicate_expr_sublinks(Query *parse);
 extern void SS_identify_outer_params(PlannerInfo *root);
 extern void SS_charge_for_initplans(PlannerInfo *root, RelOptInfo *final_rel);
 extern void SS_attach_initplans(PlannerInfo *root, Plan *plan);
