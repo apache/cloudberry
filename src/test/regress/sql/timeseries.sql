@@ -169,6 +169,22 @@ from ( values
     ) r(v,w,r,s);
 
 -- Test limits
+-- Keep exact bigint ordinates at endpoints and when the ordinate is constant.
+with bounds(m) as (values (9223372036854775807::bigint))
+select linear_interpolate(0, 0, m, 2, 0::bigint) = m as left_ok,
+       linear_interpolate(2, 0, 0::bigint, 2, m) = m as right_ok,
+       linear_interpolate(1, 0, m, 2, m) = m as constant_ok,
+       linear_interpolate(1, 1, m, 1, m) = m as coincident_ok,
+       linear_interpolate(1, 1, m, 1, m - 1) is null as distinct_ok
+from bounds;
+
+-- The computed bigint range includes -2^63 and excludes +2^63.
+select linear_interpolate(2, 0, 0::bigint, 1, '-4611686018427387904'::bigint) as lower_limit;
+select linear_interpolate(2, 0, 0::bigint, 1, 4611686018427387904::bigint);
+\set VERBOSITY sqlstate
+select linear_interpolate('NaN'::float8, 0::float8, 1::bigint, 1::float8, 1::bigint);
+\set VERBOSITY default
+
 select linear_interpolate(3, 0, 0::bigint, 1, (2^62)::bigint);
 select linear_interpolate(3, 0, 0::bigint, 1, (-2^62)::bigint);
 select linear_interpolate(3, 0, 0::integer, 1, (2^30)::integer);
