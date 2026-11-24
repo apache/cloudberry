@@ -1894,10 +1894,16 @@ cdbcomponent_getCdbComponentsList(void)
 }
 
 
-int16 
-cdbcomponent_get_maxdbid(void)
+/*
+ * The planner only needs the shared lock while scanning the catalog, so release
+ * it when the scan ends. Segment allocation must retain its exclusive lock
+ * until transaction end to serialize with other allocators.
+ */
+int16
+cdbcomponent_get_maxdbid(bool exclusive)
 {
-	Relation	rel = table_open(GpSegmentConfigRelationId, AccessExclusiveLock);
+	Relation	rel = table_open(GpSegmentConfigRelationId,
+							 exclusive ? AccessExclusiveLock : AccessShareLock);
 	int16		dbid = 0;
 	HeapTuple	tuple;
 	SysScanDesc sscan;
@@ -1909,7 +1915,7 @@ cdbcomponent_get_maxdbid(void)
 				   ((Form_gp_segment_configuration) GETSTRUCT(tuple))->dbid);
 	}
 	systable_endscan(sscan);
-	table_close(rel, NoLock);
+	table_close(rel, exclusive ? NoLock : AccessShareLock);
 
 	return dbid;
 }
@@ -4092,14 +4098,16 @@ contentid_get_dbid(int16 contentid, char role, bool getPreferredRoleNotCurrentRo
 	return dbid;
 }
 
-int16 
-cdbcomponent_get_maxdbid(void)
+int16
+cdbcomponent_get_maxdbid(bool exclusive)
 {
 	int16		dbid = 0;
 	int total_dbs;
 	GpSegConfigEntry *configs = NULL;
 	GpSegConfigEntry *config = NULL;
 
+	/* ETCD-backed configurations do not use a relation lock. */
+	(void) exclusive;
 	configs = readGpSegConfigFromETCD(&total_dbs, false);
 
 	for (int i = 0; i < total_dbs; i++)

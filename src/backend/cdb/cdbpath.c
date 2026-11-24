@@ -3301,7 +3301,7 @@ cdbpath_motion_for_parallel_join(PlannerInfo *root,
 			 */
 			if (outerParallel > 1)
 			{
-				int segs = cdbcomponent_get_maxdbid();
+				int segs = cdbcomponent_get_maxdbid(false);
 				int parallel_bits = pg_leftmost_one_pos32(outerParallel) + 1;
 				int seg_bits = pg_leftmost_one_pos32(segs) + 1;
 				if (parallel_bits + seg_bits > 16)
@@ -3345,7 +3345,7 @@ cdbpath_motion_for_parallel_join(PlannerInfo *root,
 			outer.ok_to_replicate = false;
 			if (innerParallel > 1)
 			{
-				int segs = cdbcomponent_get_maxdbid();
+				int segs = cdbcomponent_get_maxdbid(false);
 				int parallel_bits = pg_leftmost_one_pos32(innerParallel) + 1;
 				int seg_bits = pg_leftmost_one_pos32(segs) + 1;
 				if (parallel_bits + seg_bits > 16)
