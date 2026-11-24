@@ -350,6 +350,32 @@ from ( values
 (8 rows)
 
 -- Test limits
+-- Keep exact bigint ordinates at endpoints and when the ordinate is constant.
+with bounds(m) as (values (9223372036854775807::bigint))
+select linear_interpolate(0, 0, m, 2, 0::bigint) = m as left_ok,
+       linear_interpolate(2, 0, 0::bigint, 2, m) = m as right_ok,
+       linear_interpolate(1, 0, m, 2, m) = m as constant_ok,
+       linear_interpolate(1, 1, m, 1, m) = m as coincident_ok,
+       linear_interpolate(1, 1, m, 1, m - 1) is null as distinct_ok
+from bounds;
+ left_ok | right_ok | constant_ok | coincident_ok | distinct_ok 
+---------+----------+-------------+---------------+-------------
+ t       | t        | t           | t             | t
+(1 row)
+
+-- The computed bigint range includes -2^63 and excludes +2^63.
+select linear_interpolate(2, 0, 0::bigint, 1, '-4611686018427387904'::bigint) as lower_limit;
+     lower_limit      
+----------------------
+ -9223372036854775808
+(1 row)
+
+select linear_interpolate(2, 0, 0::bigint, 1, 4611686018427387904::bigint);
+ERROR:  value "9223372036854775808.000000" is out of range for type bigint
+\set VERBOSITY sqlstate
+select linear_interpolate('NaN'::float8, 0::float8, 1::bigint, 1::float8, 1::bigint);
+ERROR:  22003
+\set VERBOSITY default
 select linear_interpolate(3, 0, 0::bigint, 1, (2^62)::bigint);
 ERROR:  value "13835058055282163712.000000" is out of range for type bigint
 select linear_interpolate(3, 0, 0::bigint, 1, (-2^62)::bigint);
