@@ -23,15 +23,15 @@ name: LLVM JIT CI Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [REL_2_STABLE]
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, edited]
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -100,27 +100,6 @@ jobs:
       BUILD_DESTINATION: /usr/local/cloudberry-db
 
     steps:
-      - name: Free Disk Space
-        run: |
-          echo "=== Disk space before cleanup ==="
-          df -h /
-
-          # Remove pre-installed tools from host to free disk space
-          rm -rf /host_opt/hostedtoolcache || true
-          rm -rf /host_usr_local/lib/android || true
-          rm -rf /host_usr_share/dotnet || true
-          rm -rf /host_opt/ghc || true
-          rm -rf /host_usr_local/.ghcup || true
-          rm -rf /host_usr_share/swift || true
-          rm -rf /host_usr_local/share/powershell || true
-          rm -rf /host_usr_local/share/chromium || true
-          rm -rf /host_usr_share/miniconda || true
-          rm -rf /host_opt/az || true
-          rm -rf /host_usr_share/sbt || true
-
-          echo "=== Disk space after cleanup ==="
-          df -h /
-
       - name: Checkout Apache Cloudberry
         uses: actions/checkout@v7
         with:
