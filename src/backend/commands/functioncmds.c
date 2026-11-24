@@ -772,7 +772,7 @@ interpret_exec_location(DefElem *defel)
 	else if (strcmp(str, "all_segments") == 0)
 		exec_location = PROEXECLOCATION_ALL_SEGMENTS;
 	else
-		elog(ERROR, "invalid data access \"%s\"", str);
+		elog(ERROR, "invalid exec location \"%s\"", str);
 
 	return exec_location;
 }
