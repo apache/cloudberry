@@ -17,6 +17,16 @@ typedef struct bloom_filter bloom_filter;
 
 extern bloom_filter *bloom_create(int64 total_elems, int bloom_work_mem,
 								  uint64 seed);
+/* minimum_bytes must be a power of two, at most 512 MiB */
+extern bloom_filter *bloom_create_with_minimum(int64 total_elems,
+											   int bloom_work_mem, uint64 seed,
+											   Size minimum_bytes);
+extern bloom_filter *bloom_create_from_bitset_with_minimum(int64 total_elems,
+														   int bloom_work_mem,
+														   uint64 seed,
+														   const unsigned char *bitset,
+														   Size bitset_len,
+														   Size minimum_bytes);
 extern void bloom_free(bloom_filter *filter);
 extern void bloom_add_element(bloom_filter *filter, unsigned char *elem,
 							  size_t len);

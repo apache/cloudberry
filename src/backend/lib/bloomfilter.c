@@ -103,6 +103,17 @@ static inline uint32 mod_m(uint32 val, uint64 m);
 bloom_filter *
 bloom_create(int64 total_elems, int bloom_work_mem, uint64 seed)
 {
+	return bloom_create_with_minimum(total_elems, bloom_work_mem, seed, 1024 * 1024);
+}
+
+/*
+ * Like bloom_create, with a caller-selected power-of-two minimum bitset size
+ * in bytes.  bloom_create keeps its historical 1 MiB floor.
+ */
+bloom_filter *
+bloom_create_with_minimum(int64 total_elems, int bloom_work_mem, uint64 seed,
+						  Size minimum_bytes)
+{
 	bloom_filter *filter;
 	int			bloom_power;
 	uint64		bitset_bytes;
@@ -116,7 +127,9 @@ bloom_create(int64 total_elems, int bloom_work_mem, uint64 seed)
 	 * false positive rate still won't exceed 2% in almost all cases.
 	 */
 	bitset_bytes = Min(bloom_work_mem * UINT64CONST(1024), total_elems * 2);
-	bitset_bytes = Max(1024 * 1024, bitset_bytes);
+	Assert(minimum_bytes > 0 && minimum_bytes <= UINT64CONST(512) * 1024 * 1024);
+	Assert((minimum_bytes & (minimum_bytes - 1)) == 0);
+	bitset_bytes = Max(minimum_bytes, bitset_bytes);
 
 	/*
 	 * Size in bits should be the highest power of two <= target.  bitset_bits
@@ -426,12 +439,25 @@ bloom_filter *
 bloom_create_from_bitset(int64 total_elems, int bloom_work_mem, uint64 seed,
 						 const unsigned char *bitset, Size bitset_len)
 {
+	return bloom_create_from_bitset_with_minimum(total_elems, bloom_work_mem,
+												   seed, bitset, bitset_len, 1024 * 1024);
+}
+
+/*
+ * Like bloom_create_from_bitset, for a filter created with
+ * bloom_create_with_minimum: pass the same minimum the producer used.
+ */
+bloom_filter *
+bloom_create_from_bitset_with_minimum(int64 total_elems, int bloom_work_mem,
+									 uint64 seed, const unsigned char *bitset,
+									 Size bitset_len, Size minimum_bytes)
+{
 	bloom_filter *filter;
 
 	if (bitset == NULL)
 		return NULL;
 
-	filter = bloom_create(total_elems, bloom_work_mem, seed);
+	filter = bloom_create_with_minimum(total_elems, bloom_work_mem, seed, minimum_bytes);
 	if (bitset_len != (Size) (filter->m / BITS_PER_BYTE))
 	{
 		bloom_free(filter);
