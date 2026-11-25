@@ -873,9 +873,17 @@ anser_bloom_scan_qual(ExprState *expr, ExprContext *context, bool *isnull)
 	return BoolGetDatum(ExecQual(qual->original, context));
 }
 
-/* Hand the received filter to the deepest eligible scan before projection.
- * Narrow keys use the normalized qual above; full-width keys can use core's
- * SK_BLOOM_FILTER path, including table-AM block pruning. */
+/*
+ * Hand the received filter to the deepest eligible scan before projection.
+ *
+ * Preferred is core's SK_BLOOM_FILTER path: the scan passes the key to a
+ * table AM that takes runtime filters -- PAX checks it before it loads the
+ * other columns and orders it among its own filters -- and checks it itself
+ * otherwise.  Keys of every width are hashed the way core and PAX probe them
+ * (AnserNormalizeBloomDatum).  A scan that cannot take a key -- in MPP
+ * parallel mode, or one whose AM took earlier keys and has started -- gets
+ * an Anser-owned qual instead where the AM runs the executor's qual as is.
+ */
 static void
 anser_consume_pushdown(CustomScanState *node)
 {
@@ -885,16 +893,10 @@ anser_consume_pushdown(CustomScanState *node)
 	AttrNumber	sk_attno;
 	ScanKey		sk;
 	MemoryContext oldcxt;
-	bool		scan_qual = st->key_length < sizeof(Datum);
+	bool		scan_qual = false;
 
-	target = anser_pushdown_target(child, st->key_attno, &sk_attno, scan_qual);
-
-	/*
-	 * A full-width key prefers core's scan-key path, which a table AM can use
-	 * for block pruning, but that path needs gp_enable_runtime_filter_pushdown.
-	 * Without it, use our own qual: it works for every key width.
-	 */
-	if (target == NULL && !scan_qual)
+	target = anser_pushdown_target(child, st->key_attno, &sk_attno, false);
+	if (target == NULL)
 	{
 		scan_qual = true;
 		target = anser_pushdown_target(child, st->key_attno, &sk_attno, true);
@@ -904,8 +906,8 @@ anser_consume_pushdown(CustomScanState *node)
 		/* Probing in this node costs a slot copy per row; say why. */
 		elog(DEBUG1,
 			 "anser bloom consumer: no scan to push the filter into, probing here "
-			 "(key position %d, %s key, child %s)",
-			 st->key_attno, scan_qual ? "narrow" : "full-width",
+			 "(key position %d, child %s)",
+			 st->key_attno,
 			 IsA(child, SeqScanState) ?
 			 (((SeqScanState *) child)->filter_in_seqscan ? "SeqScan" :
 			  "SeqScan without runtime filters") :

@@ -99,28 +99,28 @@ intermediate result cannot filter the table it is being joined to.
 
 ### Bloom key representation
 
-Producer and consumer keys use the same width-normalized Datum bytes. For
-allowlisted by-value types narrower than a Datum, Anser clears the unused high
-bits before hashing. This matters for negative integers: heap tuple access can
-sign-extend an `int4`, while AOCO can zero-extend the same value. The type and
-plain-column checks alone do not make those whole-Datum representations equal.
+Producer and consumer keys use the same width-normalized Datum bytes, the
+ones core's runtime filters use: for allowlisted by-value types narrower than
+a Datum, the low bytes are taken as a signed value and sign-extended to 64
+bits (`bloom_normalize_datum`). This matters for negative integers: heap
+tuple access can sign-extend an `int4`, while AOCO can zero-extend the same
+value. The type and plain-column checks alone do not make those whole-Datum
+representations equal.
 
-Narrow keys use an Anser-owned scan qualification that normalizes the table
-value before projection and then checks the scan's existing quals. This does
-not depend on `gp_enable_runtime_filter_pushdown` or `filter_in_seqscan` and
-also works for parallel scans. It supports stacked filters and reports
-pushdown pruning on the scan. Full-width keys prefer core's Bloom scan-key
-path, which a table AM can use for block pruning, but that path needs
-`gp_enable_runtime_filter_pushdown`; without it they use the Anser qual too.
-The Anser qual is never put on an AOCO scan, which evaluates a qual before
-it loads the columns the plan's own qual does not use, nor on a scan whose
-table AM takes runtime filters itself (PAX), which may rebuild the scan's
-qual from the plan and drop ours; there the consumer probes the rows itself.
-
-Core's own filters canonicalize narrow keys differently: they sign-extend
-them. A narrow key never crosses between the two forms: Anser builds and
-probes every filter it makes, exchanged or in-place, and hands core only
-full-width keys, where the two agree.
+A consumer hands its filter to the probe scan before projection. It prefers
+core's Bloom scan-key path for keys of every width: the scan passes the key
+to a table AM that takes runtime filters -- PAX checks it before it loads the
+other columns and orders it among its own filters -- and checks the rows
+itself otherwise. This needs neither `gp_enable_runtime_filter_pushdown` nor
+any setting of PAX's. A scan in MPP parallel mode, or one whose AM took
+earlier keys and has already started, cannot take a key; it gets an
+Anser-owned scan qualification instead, which normalizes the table value
+before projection and then checks the scan's existing quals. The Anser qual
+is never put on an AOCO scan, which evaluates a qual before it loads the
+columns the plan's own qual does not use, nor on a scan whose table AM takes
+runtime filters itself (PAX), which may rebuild the scan's qual from the plan
+and drop ours; there the consumer probes the rows itself. Either way the scan
+reports the rows it pruned.
 
 ### Adaptive probing
 

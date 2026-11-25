@@ -210,7 +210,8 @@ int main(void)
 		Datum high = ~(Datum) 0; /* -1, sign-extended by heap */
 
 		qual.key_length = lengths[i];
-		expected = low;
+		expected = high;	/* core's canonical form, sign-extended */
+		CHECK(AnserNormalizeBloomDatum(low, lengths[i]) == expected);
 		CHECK(AnserNormalizeBloomDatum(high, lengths[i]) == expected);
 		ExecAnserBloomFilterProduceAddDatum(&producer, low, false, lengths[i]);
 		ExecAnserBloomFilterProduceAddDatum(&producer, high, false, lengths[i]);
@@ -274,7 +275,7 @@ int main(void)
 
 		for (k = 0; k < lengthof(keys); ++k)
 		{
-			expected = (Datum) (uint32) keys[k];
+			expected = Int64GetDatum((int64) keys[k]);
 			ExecAnserBloomFilterProduceAddDatum(&producer, Int32GetDatum(keys[k]),
 											  false, sizeof(int32));
 		}

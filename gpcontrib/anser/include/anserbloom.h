@@ -36,25 +36,19 @@
 
 /*
  * Only the low attlen bytes of a by-value Datum belong to the value. Heap
- * access may sign-extend them while AOCO zero-extends them. Clear the unused
- * high bits before hashing, independent of storage and projection paths.
- * Callers validate by-value key types before reaching the executor.
+ * access may sign-extend them while AOCO zero-extends them. Hash the value in
+ * core's canonical form, sign-extended to 64 bits (bloom_normalize_datum),
+ * independent of storage and projection paths: a filter handed to a scan as
+ * an SK_BLOOM_FILTER key is probed by core (PassByBloomFilter) and by table
+ * AMs such as PAX in that form.  Callers validate by-value key types before
+ * reaching the executor.
  */
 static inline Datum
 AnserNormalizeBloomDatum(Datum value, int16 key_length)
 {
-	switch (key_length)
-	{
-		case 1:
-			return (Datum) (uint8) value;
-		case 2:
-			return (Datum) (uint16) value;
-		case 4:
-			return (Datum) (uint32) value;
-		default:
-			Assert(key_length == sizeof(Datum));
-			return value;
-	}
+	Assert(key_length == 1 || key_length == 2 || key_length == 4 ||
+		   key_length == sizeof(Datum));
+	return bloom_normalize_datum(value, key_length);
 }
 
 /* ERROR-free for a valid by-value key width; NULL handling is the caller's. */
