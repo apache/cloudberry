@@ -2471,6 +2471,23 @@ CheckTargetNode(PlanState *node, AttrNumber attno, AttrNumber *lattno)
 	return true;
 }
 
+/* Does every output row of this join carry an outer row's values unchanged? */
+static bool
+JoinKeepsOuterValues(JoinType jointype)
+{
+	switch (jointype)
+	{
+		case JOIN_INNER:
+		case JOIN_LEFT:
+		case JOIN_SEMI:
+		case JOIN_ANTI:
+		case JOIN_LASJ_NOTIN:
+			return true;
+		default:
+			return false;
+	}
+}
+
 /*
  * it's just allowed like this:
  *   HashJoin
@@ -2542,6 +2559,17 @@ FindTargetNodes(HashJoinState *hjstate, AttrNumber attno, AttrNumber *lattno)
 		 *     ...
 		 */
 		if (!IsA(child, HashJoinState) && !IsA(child, ResultState) && !IsA(child, AppendState))
+			return NULL;
+
+		/*
+		 * Only through a join whose output carries its outer rows' values as
+		 * they are.  Below the outer side of a right or full join, a row the
+		 * filter drops does not vanish: its partner comes out NULL-extended
+		 * instead, and a NULL-tolerant condition above (IS NOT DISTINCT FROM,
+		 * whose null test sits in hashqualclauses) can then match it.
+		 */
+		if (IsA(child, HashJoinState) &&
+			!JoinKeepsOuterValues(castNode(HashJoinState, child)->js.jointype))
 			return NULL;
 
 		/* child is hashjoin, result or append node */
