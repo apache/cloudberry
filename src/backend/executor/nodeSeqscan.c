@@ -76,11 +76,12 @@ SeqNext(SeqScanState *node)
 		ScanKey keys = NULL;
 
 		/*
-		 * Just when gp_enable_runtime_filter_pushdown enabled and
-		 * table am support runtime filter, scankey need to be pushed to
-		 * AM.
+		 * Runtime filters that are here when the scan starts go to the table
+		 * AM if it supports them.  They are only here because something asked
+		 * for them: hash joins under gp_enable_runtime_filter_pushdown, or an
+		 * extension such as Anser.
 		 */
-		if (gp_enable_runtime_filter_pushdown && node->filter_in_seqscan && node->filters &&
+		if (node->filter_in_seqscan && node->filters &&
 			(table_scan_flags(node->ss.ss_currentRelation) &
 			 (SCAN_SUPPORT_RUNTIME_FILTER)))
 		{
@@ -226,17 +227,10 @@ ExecInitSeqScanForPartition(SeqScan *node, EState *estate,
 		ExecInitQual(node->scan.plan.qual, (PlanState *) scanstate);
 
 	/*
-	 * check scan slot with bloom filters in seqscan node or not.
+	 * Runtime filters are applied in the scan unless the plan runs in MPP
+	 * parallel mode.  Whether any arrive is up to the nodes above.
 	 */
-	if (gp_enable_runtime_filter_pushdown
-		&& !estate->useMppParallelMode)
-	{
-		scanstate->filter_in_seqscan = true;
-	}
-	else 
-	{
-		scanstate->filter_in_seqscan = false;
-	}
+	scanstate->filter_in_seqscan = !estate->useMppParallelMode;
 
 	return scanstate;
 }
@@ -310,8 +304,7 @@ ExecReScanSeqScan(SeqScanState *node)
 		node->ss.ss_currentScanDesc = NULL;
 		node->filters_in_am = false;
 		/* The AM may have turned executor-side checking off; restore it. */
-		node->filter_in_seqscan = gp_enable_runtime_filter_pushdown &&
-			!node->ss.ps.state->useMppParallelMode;
+		node->filter_in_seqscan = !node->ss.ps.state->useMppParallelMode;
 	}
 	else if (scan != NULL)
 		table_rescan(scan,		/* scan desc */
