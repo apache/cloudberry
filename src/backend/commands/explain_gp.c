@@ -1930,13 +1930,12 @@ gpexplain_formatSlicesOutput(struct CdbExplain_ShowStatCtx *showstatctx,
 
 			nNotDispatched = list_length(slice->segments) - ds->nResult + ds->nNotDispatched;
 
-			es->str->data[flag] = (ss->dispatchSummary.nError > 0) ? 'X' : '_';
-
 			initStringInfo(&workersInformationText);
 			appendStringInfo(&workersInformationText, "Workers:");
 
             if (es->format == EXPLAIN_FORMAT_TEXT)
             {
+				es->str->data[flag] = (ds->nError > 0) ? 'X' : '_';
                 if (ds->nError == 1)
                 {
                     appendStringInfo(&workersInformationText,
