@@ -439,6 +439,10 @@ PassByBloomFilter(PlanState *ps, List *filters, TupleTableSlot *slot)
 		if (isnull)
 			continue;
 
+		/* Hash the same bytes the Hash node hashed, see bloom_normalize_datum. */
+		val = bloom_normalize_datum(val,
+									TupleDescAttr(slot->tts_tupleDescriptor,
+												  sk->sk_attno - 1)->attlen);
 		blm_filter = (bloom_filter *)DatumGetPointer(sk->sk_argument);
 		if (bloom_lacks_element(blm_filter, (unsigned char *)&val, sizeof(Datum)))
 		{

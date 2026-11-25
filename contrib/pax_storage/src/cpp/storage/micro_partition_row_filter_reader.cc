@@ -102,6 +102,9 @@ bool MicroPartitionRowFilterReader::EvalBloomNode(
   std::tie(val, isnull) =
       group->GetColumnValue(desc, sk->sk_attno - 1, row_index);
   if (isnull) return true;
+  // Hash the same bytes the build side hashed, see bloom_normalize_datum().
+  val = bloom_normalize_datum(val,
+                              TupleDescAttr(desc, sk->sk_attno - 1)->attlen);
   bloom_filter *bf = (bloom_filter *)DatumGetPointer(sk->sk_argument);
   return !bloom_lacks_element(bf, (unsigned char *)&val, sizeof(Datum));
 }

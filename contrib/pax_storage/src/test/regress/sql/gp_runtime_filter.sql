@@ -262,8 +262,79 @@ DROP TABLE IF EXISTS t2;
 
 SET optimizer TO off;
 
-RESET enable_parallel;
-
--- Clean up: reset guc
+-- Isolate executor pushdown from the planner's separate RuntimeFilter node.
+-- That node hashes raw integer Datums on this co-located join.
 SET gp_enable_runtime_filter TO off;
+-- Execute a plain SELECT in each mode and compare its complete row multiset.
+-- In particular, the correlated rescan query must not acquire CTAS writer
+-- distribution requirements. Sort on the coordinator after execution.
+CREATE FUNCTION rf_query_rows(q text, pushdown boolean) RETURNS jsonb[]
+LANGUAGE plpgsql AS $$
+DECLARE
+    r record;
+    rows jsonb[] := '{}';
+    previous text := current_setting('gp_enable_runtime_filter_pushdown');
+BEGIN
+    PERFORM set_config('gp_enable_runtime_filter_pushdown', pushdown::text, true);
+    FOR r IN EXECUTE q LOOP
+        rows := array_append(rows, to_jsonb(r));
+    END LOOP;
+    PERFORM set_config('gp_enable_runtime_filter_pushdown', previous, true);
+    RETURN ARRAY(SELECT v FROM unnest(rows) AS t(v) ORDER BY v);
+END $$;
+
+-- Negative keys with range keys pushed into PAX.  The build side is AOCO and
+-- co-located with the probe, so the Hash node receives AOCO's zero-extended
+-- int4 Datums; the Bloom filter and the min/max range must still describe the
+-- negative values, or PAX drops rows that join.  The int8 build key checks
+-- that equal int4 and int8 keys hash and compare as the same integer.
+SET optimizer TO off;
+SET pax.enable_row_filter TO on;
+CREATE TABLE rf_neg_probe (k int, v int) USING pax DISTRIBUTED BY (k);
+INSERT INTO rf_neg_probe SELECT -(i % 1000), i FROM generate_series(1, 50000) i;
+CREATE TABLE rf_neg_build4 (k int) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO rf_neg_build4 SELECT -i FROM generate_series(1, 20) i;
+CREATE TABLE rf_neg_build8 (k int8) USING ao_column DISTRIBUTED RANDOMLY;
+INSERT INTO rf_neg_build8 SELECT -i FROM generate_series(1, 20) i;
+ANALYZE rf_neg_probe, rf_neg_build4, rf_neg_build8;
+DO $$
+DECLARE
+    build text;
+    q text;
+    baseline jsonb[];
+    filtered jsonb[];
+    line text;
+    planner_filter boolean := false;
+BEGIN
+    FOREACH build IN ARRAY ARRAY['rf_neg_build4', 'rf_neg_build8'] LOOP
+        q := format('SELECT p.v FROM rf_neg_probe p JOIN %I b ON p.k = b.k', build);
+        baseline := rf_query_rows(q, false);
+        filtered := rf_query_rows(q, true);
+        IF cardinality(baseline) <> 1000 OR filtered IS DISTINCT FROM baseline THEN
+            RAISE EXCEPTION 'negative-key mismatch for % (baseline rows %, filtered rows %)',
+                build, cardinality(baseline), cardinality(filtered);
+        END IF;
+    END LOOP;
+    -- Exercise the planner's node separately on the same AOCO/PAX join.
+    q := 'SELECT p.v FROM rf_neg_probe p JOIN rf_neg_build4 b ON p.k = b.k';
+    baseline := rf_query_rows(q, false);
+    PERFORM set_config('gp_enable_runtime_filter', 'on', true);
+    FOR line IN EXECUTE 'EXPLAIN (COSTS OFF) ' || q LOOP
+        planner_filter := planner_filter OR line LIKE '%->  RuntimeFilter%';
+    END LOOP;
+    filtered := rf_query_rows(q, false);
+    PERFORM set_config('gp_enable_runtime_filter', 'off', true);
+    IF NOT planner_filter OR filtered IS DISTINCT FROM baseline THEN
+        RAISE EXCEPTION 'planner RuntimeFilter failed negative-key check (planned %, rows %)',
+            planner_filter, cardinality(filtered);
+    END IF;
+END $$;
+
+DROP TABLE rf_neg_probe, rf_neg_build4, rf_neg_build8;
+
+DROP FUNCTION rf_query_rows(text, boolean);
+RESET gp_enable_runtime_filter_pushdown;
+RESET pax.enable_row_filter;
+
+RESET enable_parallel;
 SET optimizer TO default;

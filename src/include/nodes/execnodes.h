@@ -3226,7 +3226,9 @@ typedef struct RuntimeFilterState
 	uint64 inner_processed;
 	uint64 inner_threshold;
 	Datum *value_buf;
-	bool  *raw_value;
+	/* Datum widths per key, or zero to use the join hash functions. */
+	int16 *outer_raw_width;
+	int16 *inner_raw_width;
 
 	bloom_filter *bf;
 } RuntimeFilterState;

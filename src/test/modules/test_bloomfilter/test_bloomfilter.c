@@ -136,3 +136,37 @@ test_bloomfilter(PG_FUNCTION_ARGS)
 
 	PG_RETURN_VOID();
 }
+
+/*
+ * Runtime filters hash and compare a narrow key in its canonical form, see
+ * bloom_normalize_datum(): the same value must give the same Datum whether
+ * it was sign-extended (heap) or zero-extended (AOCO), and equal integers of
+ * different widths must give the same Datum.
+ */
+PG_FUNCTION_INFO_V1(test_bloomfilter_normalize);
+Datum
+test_bloomfilter_normalize(PG_FUNCTION_ARGS)
+{
+	bloom_filter *filter = bloom_create(32, 8, 123);
+	Datum		key;
+
+	key = bloom_normalize_datum(Int32GetDatum(-5), sizeof(int32));
+	bloom_add_element(filter, (unsigned char *) &key, sizeof(Datum));
+
+	key = bloom_normalize_datum((Datum) (uint32) -5, sizeof(int32));
+	if (bloom_lacks_element(filter, (unsigned char *) &key, sizeof(Datum)))
+		elog(ERROR, "zero-extended key not found after a sign-extended insert");
+	key = bloom_normalize_datum(Int64GetDatum(-5), sizeof(int64));
+	if (bloom_lacks_element(filter, (unsigned char *) &key, sizeof(Datum)))
+		elog(ERROR, "int8 key not found after an equal int4 insert");
+
+	if (DatumGetInt64(bloom_normalize_datum((Datum) (uint16) -1, sizeof(int16))) != -1 ||
+		DatumGetInt64(bloom_normalize_datum((Datum) (uint32) -7, sizeof(int32))) != -7 ||
+		DatumGetInt64(bloom_normalize_datum((Datum) (uint8) -3, 1)) != -3 ||
+		DatumGetInt64(bloom_normalize_datum(Int32GetDatum(PG_INT32_MAX), sizeof(int32))) != PG_INT32_MAX ||
+		bloom_normalize_datum(Int64GetDatum(-1), sizeof(int64)) != Int64GetDatum(-1))
+		elog(ERROR, "unexpected normalized Datum");
+
+	bloom_free(filter);
+	PG_RETURN_VOID();
+}

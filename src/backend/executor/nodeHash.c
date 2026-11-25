@@ -2184,8 +2184,10 @@ ExecHashGetHashValue(HashState *hashState, HashJoinTable hashtable,
 		{
 			Datum *dp = palloc(sizeof(Datum));
 
-			/* consider use raw value or hash value */
-			*dp = hashState->rfstate->raw_value[i] ? keyval : hkey;
+			int16		raw_width = hashState->rfstate->inner_raw_width[i];
+
+			/* Match the canonical Datum bytes used by the probe. */
+			*dp = raw_width != 0 ? bloom_normalize_datum(keyval, raw_width) : hkey;
 			keyvalues = lappend(keyvalues, dp);
 		}
 
@@ -4392,10 +4394,20 @@ AddTupleValuesIntoRF(HashState *node, TupleTableSlot *slot)
 
 		attr_filter->empty = false;
 
-		if ((int64_t)val < (int64_t)attr_filter->min)
+		/*
+		 * Use the canonical form, not the raw Datum: a narrow negative key
+		 * that arrives zero-extended would otherwise compare as a large
+		 * positive one, push a range that excludes it, and hash differently
+		 * from the probe side.
+		 */
+		val = bloom_normalize_datum(val,
+									TupleDescAttr(slot->tts_tupleDescriptor,
+												  attr_filter->rattno - 1)->attlen);
+
+		if (DatumGetInt64(val) < DatumGetInt64(attr_filter->min))
 			attr_filter->min = val;
 
-		if ((int64_t)val > (int64_t)attr_filter->max)
+		if (DatumGetInt64(val) > DatumGetInt64(attr_filter->max))
 			attr_filter->max = val;
 
 		if (attr_filter->blm_filter)

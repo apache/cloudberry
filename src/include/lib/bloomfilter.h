@@ -34,4 +34,30 @@ extern bloom_filter *bloom_create_from_bitset(int64 total_elems,
 											  const unsigned char *bitset,
 											  Size bitset_len);
 
+/*
+ * Runtime filters hash a by-value key as the bytes of its Datum, so both sides
+ * of a filter must give equal keys the same bytes.  Only the low typlen bytes
+ * of a narrow Datum carry the value, and the rest depends on where it came
+ * from: heap tuples sign-extend, AOCO zero-extends.  Sign-extending the low
+ * bytes gives one canonical Datum per value -- for an integer, its int64 value
+ * -- so the same value hashes the same whatever produced it, and equal
+ * integers of different widths (int4 = int8) hash the same too.  Range keys use
+ * the same canonical value as an int64.
+ */
+static inline Datum
+bloom_normalize_datum(Datum value, int16 typlen)
+{
+	switch (typlen)
+	{
+		case 1:
+			return Int64GetDatum((int64) (int8) value);
+		case 2:
+			return Int64GetDatum((int64) (int16) value);
+		case 4:
+			return Int64GetDatum((int64) (int32) value);
+		default:
+			return value;
+	}
+}
+
 #endif							/* BLOOMFILTER_H */
