@@ -47,7 +47,7 @@ ScanKeywordLookup(const char *str,
 	 * hashing and downcasing work on long strings.
 	 */
 	len = strlen(str);
-	if (len > keywords->max_kw_len)
+	if (len > (size_t) keywords->max_kw_len)
 		return -1;
 
 	/*

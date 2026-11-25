@@ -591,7 +591,7 @@ pg_encoding_to_char(int encoding)
 	{
 		const pg_enc2name *p = &pg_enc2name_tbl[encoding];
 
-		Assert(encoding == p->encoding);
+		Assert(encoding == (int) p->encoding);
 		return p->name;
 	}
 	return "";

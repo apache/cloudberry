@@ -711,5 +711,6 @@ uint32_hash(const void *key, Size keysize)
 uint32
 int32_hash(const void *key, Size keysize)
 {
+	Assert(keysize == sizeof(int32));
 	return *(uint32 *)key;
 }

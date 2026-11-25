@@ -49,7 +49,7 @@
  * file data is correct.
  */
 ControlFileData *
-get_controlfile(const char *DataDir, bool *crc_ok_p)
+get_controlfile(const char *data_dir, bool *crc_ok_p)
 {
 	ControlFileData *ControlFile;
 	int			fd;
@@ -64,7 +64,7 @@ get_controlfile(const char *DataDir, bool *crc_ok_p)
 	Assert(crc_ok_p);
 
 	ControlFile = palloc_object(ControlFileData);
-	snprintf(ControlFilePath, MAXPGPATH, "%s/global/pg_control", DataDir);
+	snprintf(ControlFilePath, MAXPGPATH, "%s/global/pg_control", data_dir);
 
 #ifdef FRONTEND
 	INIT_CRC32C(last_crc);
@@ -172,7 +172,7 @@ retry:
  * routine in the backend.
  */
 void
-update_controlfile(const char *DataDir,
+update_controlfile(const char *data_dir,
 				   ControlFileData *ControlFile, bool do_sync)
 {
 	int			fd;
@@ -197,7 +197,7 @@ update_controlfile(const char *DataDir,
 	memset(buffer, 0, PG_CONTROL_FILE_SIZE);
 	memcpy(buffer, ControlFile, sizeof(ControlFileData));
 
-	snprintf(ControlFilePath, sizeof(ControlFilePath), "%s/%s", DataDir, XLOG_CONTROL_FILE);
+	snprintf(ControlFilePath, sizeof(ControlFilePath), "%s/%s", data_dir, XLOG_CONTROL_FILE);
 
 #ifndef FRONTEND
 

@@ -141,7 +141,7 @@ pg_hmac_create(pg_cryptohash_type type)
 int
 pg_hmac_init(pg_hmac_ctx *ctx, const uint8 *key, size_t len)
 {
-	int			i;
+	size_t		i;
 	int			digest_size;
 	int			block_size;
 	uint8	   *shrinkbuf = NULL;
@@ -159,7 +159,7 @@ pg_hmac_init(pg_hmac_ctx *ctx, const uint8 *key, size_t len)
 	 * If the key is longer than the block size, pass it through the hash once
 	 * to shrink it down.
 	 */
-	if (len > block_size)
+	if (len > (size_t) block_size)
 	{
 		pg_cryptohash_ctx *hash_ctx;
 
