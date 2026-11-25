@@ -34,7 +34,7 @@ This directory contains GitHub Actions workflows for Apache Cloudberry CI/CD.
 |----------|---------|---------|
 | `build-cloudberry.yml` | Main CI: build, test, create RPMs | Push to REL_2_STABLE, PR, Manual |
 | `build-dbg-cloudberry.yml` | Debug build with assertions enabled | Push to REL_2_STABLE, PR, Manual |
-| `build-jit-cloudberry.yml` | Build with the LLVM JIT on each build image, run `installcheck-jit` under each optimizer | Push to REL_2_STABLE, PR, Manual |
+| `build-jit-cloudberry.yml` | Build with the LLVM JIT once per build image, then run `installcheck-jit` with optimizer=off and optimizer=on in parallel jobs | Push to REL_2_STABLE, PR, Manual |
 | `package-convenience-binaries.yml` | Build convenience DEB/RPM packages from an ASF-approved source release | Manual |
 | `apache-rat-audit.yml` | License header compliance check | Push, PR |
 | `coverity.yml` | Static code analysis with Coverity | Weekly, Manual |

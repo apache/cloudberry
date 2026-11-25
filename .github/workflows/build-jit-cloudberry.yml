@@ -74,12 +74,15 @@ jobs:
           echo "CI Skip flag detected in PR - skipping all checks."
           exit 0
 
-  build-and-test:
-    name: Build and test with LLVM JIT (${{ matrix.image }})
+  # Build once per image.  The built source tree and the installation
+  # are handed to test-jit, which runs installcheck-jit for each
+  # optimizer setting in parallel.
+  build-jit:
+    name: Build with LLVM JIT (${{ matrix.image }})
     needs: [check-skip]
     if: needs.check-skip.outputs.should_skip != 'true'
     runs-on: ubuntu-22.04
-    timeout-minutes: 180
+    timeout-minutes: 90
 
     strategy:
       fail-fast: false
@@ -185,65 +188,162 @@ jobs:
           fi
           echo "- llvmjit.so links $(awk '/libLLVM/ {print $1}' build-logs/details/llvmjit-ldd.log)" | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - name: Run installcheck-jit with optimizer=off and with optimizer=on
+      # test-jit runs in a fresh container at the same paths, so the
+      # tarballs keep absolute paths in Makefile.global valid, and tar
+      # keeps the mtimes so make does not rebuild anything.
+      - name: Pack the build tree and the installation
         shell: bash
+        run: |
+          set -eo pipefail
+          top=$(basename "${SRC_DIR}")
+          mkdir -p jit-build
+          tar -czf jit-build/install.tgz -C "${BUILD_DESTINATION}" .
+          tar -czf jit-build/source.tgz -C "${SRC_DIR}/.." \
+              --exclude="${top}/build-logs" --exclude="${top}/jit-build" \
+              "${top}"
+          ls -lh jit-build
+
+      - name: Upload the build tree and the installation
+        uses: actions/upload-artifact@v7
+        with:
+          name: jit-build-${{ matrix.image }}
+          path: jit-build/
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jit-build-logs-${{ matrix.image }}
+          path: |
+            build-logs/
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+  test-jit:
+    name: Test with LLVM JIT (${{ matrix.image }}, optimizer=${{ matrix.optimizer }})
+    needs: [check-skip, build-jit]
+    # Run even when the build failed on another image; a missing build
+    # artifact fails only this image's tests.
+    if: ${{ !cancelled() && needs.check-skip.outputs.should_skip != 'true' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['rocky8', 'rocky9', 'rocky10', 'ubuntu22.04', 'ubuntu24.04']
+        optimizer: ['off', 'on']
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-${{ matrix.image }}-latest
+      options: >-
+        --user root
+        --hostname cdw
+        --shm-size=2gb
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
+
+    env:
+      BUILD_DESTINATION: /usr/local/cloudberry-db
+
+    steps:
+      - name: Download the build tree and the installation
+        uses: actions/download-artifact@v8
+        with:
+          name: jit-build-${{ matrix.image }}
+          path: jit-build
+
+      # llvmjit.so needs the LLVM shared library at run time.
+      - name: Install LLVM
+        shell: bash
+        run: |
+          set -eo pipefail
+          . /etc/os-release
+          case "${ID}" in
+            rocky)
+              dnf install -y --setopt=retries=10 llvm-devel clang
+              ;;
+            ubuntu)
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y llvm-dev clang
+              ;;
+            *)
+              echo "::error::No LLVM packages known for ${PRETTY_NAME}"
+              exit 1
+              ;;
+          esac
+
+      - name: Cloudberry Environment Initialization
+        shell: bash
+        env:
+          LOGS_DIR: build-logs
+        run: |
+          set -eo pipefail
+          if ! su - gpadmin -c "/tmp/init_system.sh"; then
+            echo "::error::Container initialization failed"
+            exit 1
+          fi
+
+          mkdir -p "${BUILD_DESTINATION}"
+          tar -xzf jit-build/install.tgz -C "${BUILD_DESTINATION}"
+          tar -xzf jit-build/source.tgz -C "${GITHUB_WORKSPACE}/.."
+          rm -rf jit-build
+
+          mkdir -p "${LOGS_DIR}/details"
+          chown -R gpadmin:gpadmin . "${BUILD_DESTINATION}"
+          chmod 777 "${LOGS_DIR}"
+
+          echo "SRC_DIR=${GITHUB_WORKSPACE}" | tee -a "$GITHUB_ENV"
+
+      - name: Run installcheck-jit with optimizer=${{ matrix.optimizer }}
+        shell: bash
+        env:
+          OPTIMIZER: ${{ matrix.optimizer }}
         run: |
           set -o pipefail
           scripts="${SRC_DIR}/devops/build/automation/cloudberry/scripts"
+          name="ic-jit-opt-${OPTIMIZER}"
 
-          installcheck_jit() {
-            local optimizer=$1 name="ic-jit-opt-$1" status verdict
+          if ! su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${scripts}/create-cloudberry-demo-cluster.sh" \
+               2>&1 | tee "build-logs/details/${name}-cluster.log"; then
+            echo "::error::Demo cluster creation failed"
+            exit 1
+          fi
 
-            if [ -f gpAux/gpdemo/gpdemo-env.sh ]; then
-              if ! su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${scripts}/destroy-cloudberry-demo-cluster.sh"; then
-                echo "::error::Demo cluster removal failed"
-                return 1
-              fi
-            fi
-            if ! su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${scripts}/create-cloudberry-demo-cluster.sh" \
-                 2>&1 | tee "build-logs/details/${name}-cluster.log"; then
-              echo "::error::Demo cluster creation failed"
-              return 1
-            fi
+          su - gpadmin -c "cd ${SRC_DIR} && \
+               MAKE_NAME=${name} \
+               MAKE_TARGET=installcheck-jit \
+               MAKE_DIRECTORY='-C src/test/regress' \
+               PGOPTIONS='-c optimizer=${OPTIMIZER}' \
+               SRC_DIR=${SRC_DIR} \
+               ${scripts}/test-cloudberry.sh" \
+               2>&1 | tee "build-logs/details/make-${name}.log"
+          status=$?
 
-            su - gpadmin -c "cd ${SRC_DIR} && \
-                 MAKE_NAME=${name} \
-                 MAKE_TARGET=installcheck-jit \
-                 MAKE_DIRECTORY='-C src/test/regress' \
-                 PGOPTIONS='-c optimizer=${optimizer}' \
-                 SRC_DIR=${SRC_DIR} \
-                 ${scripts}/test-cloudberry.sh" \
-                 2>&1 | tee "build-logs/details/make-${name}.log"
-            status=$?
+          verdict=$(grep -E -o '(All [0-9]+ tests passed|[0-9]+ of [0-9]+ tests failed)' "build-logs/details/make-${name}.log" | tail -n 1)
+          echo "- ${{ matrix.image }}, installcheck-jit, optimizer=${OPTIMIZER}: ${verdict:-no result}" | tee -a "$GITHUB_STEP_SUMMARY"
 
-            verdict=$(grep -E -o '(All [0-9]+ tests passed|[0-9]+ of [0-9]+ tests failed)' "build-logs/details/make-${name}.log" | tail -n 1)
-            echo "- installcheck-jit, optimizer=${optimizer}: ${verdict:-no result}" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "${status}" -eq 0 ] && grep -q -E '^All [1-9][0-9]* tests passed$' <<< "${verdict}"; then
+            exit 0
+          fi
 
-            if [ "${status}" -eq 0 ] && grep -q -E '^All [1-9][0-9]* tests passed$' <<< "${verdict}"; then
-              return 0
-            fi
-
-            grep -E '^not ok [0-9]+' "build-logs/details/make-${name}.log" | sed 's/^/  - /' | tee -a "$GITHUB_STEP_SUMMARY"
-            if [ -f src/test/regress/regression.diffs ]; then
-              cp src/test/regress/regression.diffs "build-logs/${name}.diffs"
-              head -n 500 "build-logs/${name}.diffs"
-            fi
-            find gpAux/gpdemo/datadirs -type d -name log -print0 2>/dev/null |
-              tar -czf "build-logs/${name}-server-logs.tar.gz" --null -T - || true
-            echo "::error::installcheck-jit failed with optimizer=${optimizer}"
-            return 1
-          }
-
-          overall_status=0
-          installcheck_jit off || overall_status=1
-          installcheck_jit on || overall_status=1
-          exit ${overall_status}
+          grep -E '^not ok [0-9]+' "build-logs/details/make-${name}.log" | sed 's/^/  - /' | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ -f src/test/regress/regression.diffs ]; then
+            cp src/test/regress/regression.diffs "build-logs/${name}.diffs"
+            head -n 500 "build-logs/${name}.diffs"
+          fi
+          find gpAux/gpdemo/datadirs -type d -name log -print0 2>/dev/null |
+            tar -czf "build-logs/${name}-server-logs.tar.gz" --null -T - || true
+          echo "::error::installcheck-jit failed with optimizer=${OPTIMIZER}"
+          exit 1
 
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: jit-logs-${{ matrix.image }}
+          name: jit-logs-${{ matrix.image }}-opt-${{ matrix.optimizer }}
           path: |
             build-logs/
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
