@@ -121,7 +121,8 @@ AnserScanOutputVar(const Scan *scan, AttrNumber position)
 			return NULL;
 		var = (Var *) tle->expr;
 	}
-	if (scan->scanrelid == 0 || var->varno != scan->scanrelid || var->varattno < 1)
+	if (var->varno <= 0 || (Index) var->varno != scan->scanrelid ||
+		var->varattno < 1)
 		return NULL;
 	return var;
 }

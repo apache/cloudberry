@@ -238,6 +238,63 @@ AnserIsRuntimeFilterScan(const Plan *plan)
 		cscan->methods == &anser_consume_scan_methods;
 }
 
+/* Other extensions' identity filter nodes; see AnserIsFilterScan. */
+#define ANSER_MAX_FILTER_METHODS 8
+static const CustomScanMethods *anser_filter_methods[ANSER_MAX_FILTER_METHODS];
+static int	anser_n_filter_methods = 0;
+
+void
+AnserRegisterFilterScanMethods(const CustomScanMethods *methods)
+{
+	int			i;
+
+	for (i = 0; i < anser_n_filter_methods; i++)
+		if (anser_filter_methods[i] == methods)
+			return;
+	if (anser_n_filter_methods >= ANSER_MAX_FILTER_METHODS)
+		elog(ERROR, "too many Anser filter scan providers");
+	anser_filter_methods[anser_n_filter_methods++] = methods;
+}
+
+/*
+ * An identity filter node with its one child: ours, or one registered with
+ * AnserRegisterFilterScanMethods.
+ */
+bool
+AnserIsFilterScan(const Plan *plan)
+{
+	const CustomScan *cscan;
+	int			i;
+
+	if (plan == NULL || !IsA(plan, CustomScan))
+		return false;
+	cscan = (const CustomScan *) plan;
+	if (list_length(cscan->custom_plans) != 1)
+		return false;
+	if (AnserIsRuntimeFilterScan(plan))
+		return true;
+	for (i = 0; i < anser_n_filter_methods; i++)
+		if (cscan->methods == anser_filter_methods[i])
+			return true;
+	return false;
+}
+
+/* The consumer's key position in its identity output target list. */
+AttrNumber
+AnserBloomConsumerKey(const Plan *plan)
+{
+	const CustomScan *scan;
+
+	if (plan == NULL || !IsA(plan, CustomScan))
+		return InvalidAttrNumber;
+
+	scan = (const CustomScan *) plan;
+	if (scan->methods != &anser_consume_scan_methods)
+		return InvalidAttrNumber;
+
+	return (AttrNumber) intVal(list_nth(scan->custom_private, ANSER_RF_PRIV_KEY_ATTNO));
+}
+
 CustomScan *
 AnserBuildBloomProducerScan(Plan *child, AttrNumber key_attno,
 							uint32 condition_id, const char *condition_key,

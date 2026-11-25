@@ -186,6 +186,20 @@ main(void)
 bool		gp_anser_debug = false;
 
 bloom_filter *
+bloom_create_with_minimum(int64 elems, int mem, uint64 seed, Size minimum)
+{
+	NOT_ON_THIS_PATH("bloom_create_with_minimum");
+	return NULL;
+}
+bloom_filter *
+bloom_create_from_bitset_with_minimum(int64 elems, int mem, uint64 seed,
+	const unsigned char *bits, Size len, Size minimum)
+{
+	NOT_ON_THIS_PATH("bloom_create_from_bitset_with_minimum");
+	return NULL;
+}
+
+bloom_filter *
 bloom_create(int64 total_elems, int bloom_work_mem, uint64 seed)
 {
 	NOT_ON_THIS_PATH("bloom_create");

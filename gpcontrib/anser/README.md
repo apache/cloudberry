@@ -168,6 +168,17 @@ build side adds its keys again, and a filter that only grows stays correct.
 `anser.runtime_filter_inplace = off` makes newly planned queries use the
 exchange where eligible.
 
+An extension that places its own exchanges, like `robust_predicate_transfer`,
+can leave the remaining same-slice joins to in-place filters without turning
+on `anser.runtime_filter`: `AnserApplyInplaceRuntimeFilters` tells the
+coordinator whether any join qualifies, and a callback registered with
+`AnserSetInplaceRequest` tells the segments to build them. In that mode a
+probe key that already has an Anser consumer keeps just that filter. Its own
+identity filter nodes, registered with `AnserRegisterFilterScanMethods`, are
+looked through like Anser's. Should the two sides still disagree about a
+join, it ends up with two filters or none, and the answer is the same either
+way.
+
 ### Only across a Motion
 
 Apart from in-place filters, a join is injected into only when its build and
@@ -246,8 +257,9 @@ published, and only the fold and the fan-out are left. Where the probe side
 travels through its own Motion, the consumer sits in that scan's slice and runs
 alongside the build, so it waits the build side out as well.
 
-Measured on 4 segments, 5000 build rows, a 1 MB filter (`bloom_create` floors
-every bitset at 1 MB, whatever the cardinality):
+Measured on 4 segments, 5000 build rows, a 1 MiB filter (historical
+measurements with the former 1 MiB minimum;
+the current Anser minimum is 8 KiB):
 
 | Slice width | Subscribers | Fan-in | Fan-out | Consumer stalls |
 | --- | --- | --- | --- | --- |
@@ -467,8 +479,8 @@ coordinator until it is done — the consumer drives the flow. Under
 | --- | --- | --- | --- |
 | `anser.enable` | `off` | SIGHUP | Master switch. With it off the plan pass never injects anything and no filters are exchanged. |
 | `anser.runtime_filter` | `off` | USERSET | Enables the post-planning pass that injects bloom-filter producer/consumer nodes into a matching plan. Requires `anser.enable`. |
-| `anser.runtime_filter_inplace` | `on` | USERSET | Joins whose probe scan runs in the join's own slice get an in-place filter built by core from the join's Hash node instead of an exchanged one. See [In-place filters](#in-place-filters). |
-| `anser.max_info_size` | `65 MB` | SUSET | Maximum serialized payload (merged bloom filter + part header) a channel may hold; caps the effective bloom-filter size. The default is `64 MB + 1 MB` so a full 64 MB power-of-two bitset fits with its header; `bloom_create` also floors every bitset at 1 MB. The ceiling is a little under 1 GB: every payload is held whole in a single palloc on each end — the coordinator's merged payload and the consumer's assembly buffer, plus the base64 copy of a part on a producer — so it must stay inside `MaxAllocSize`. Both ends read it — see [Changing max_info_size](#changing-max_info_size) before touching it on a live session. |
+| `anser.runtime_filter_inplace` | `on` | USERSET | Joins whose probe scan runs in the join's own slice get an in-place filter, built on each segment from the join's Hash node, instead of an exchanged one. See [In-place filters](#in-place-filters). |
+| `anser.max_info_size` | `65 MB` | SUSET | Maximum serialized payload (merged bloom filter + part header) a channel may hold; caps the effective bloom-filter size. The default is `64 MB + 1 MB` so a full 64 MB power-of-two bitset fits with its header; Anser floors its bitsets at 8 KiB; serialized headers and framing add overhead. The ceiling is a little under 1 GB: every payload is held whole in a single palloc on each end — the coordinator's merged payload and the consumer's assembly buffer, plus the base64 copy of a part on a producer — so it must stay inside `MaxAllocSize`. Both ends read it — see [Changing max_info_size](#changing-max_info_size) before touching it on a live session. |
 | `anser.timeout_ms` | `10 s` | USERSET | How long a consumer waits for its filter before running unfiltered. What the wait covers depends on the plan — see [Delivery cost](#delivery-cost). The deadline matters because a producer that gets squelched never publishes at all: `ExecSquelchNode` only marks a `CustomScanState`, it does not call the node back. |
 | `anser.debug` | `off` | SUSET | Traces the exchange — publish, merge, delivery, receive — in the log of the process each step happens in. See below. |
 | `anser.debug_min_filter_bytes` | `0` | SUSET | Test knob: a floor on the bitset size, so a small table still produces a full-size filter. |
@@ -633,11 +645,17 @@ and artifacts are unchanged. Missing compiler profiles are reported.
 Sanitizer leak checking is disabled because fixture allocations intentionally
 live until process exit; address and undefined-behavior checks remain active.
 
+`make -C gpcontrib/anser/test unitcheck` includes a real Bloom sizing test:
+small filters use an 8 KiB bitset, planner and runtime sizes agree, merged
+parts round-trip without losing keys, and legacy core callers retain their
+1 MiB minimum. The constructor API addition requires rebuilding the server
+as well as the extensions.
+
 `make installcheck` runs two suites:
 
 - `anser_test` — the payload protocol (serialize, fold, reject a mismatched
   part) and the four give-up decisions, each walked along its boundary: the
-  estimate either side of 4 bits/key, the payload cap either side of "1 MB plus
+  estimate either side of 4 bits/key, the payload cap either side of "8 KiB plus
   a header", fill either side of the 95% limit, and a producer whose filter
   saturates. The case tables live in the `.sql` file, so the expected output
   records real sizes rather than a bare `t`.

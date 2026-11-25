@@ -31,6 +31,7 @@
 
 #include "executor/execdesc.h"	/* QueryDesc */
 #include "nodes/execnodes.h"	/* PlanState, for the pushdown helpers */
+#include "nodes/extensible.h"	/* CustomScanMethods */
 #include "nodes/plannodes.h"
 
 /* Small shared key checks; traversal and placement policy stay with callers.
@@ -56,6 +57,35 @@ extern PGDLLEXPORT bool AnserKeyPassthroughNode(const Plan *plan);
 extern PGDLLEXPORT void AnserApplyRuntimeFilters(PlannedStmt *stmt);
 
 /*
+ * For an extension that plans its own exchanges (see the implementations):
+ * the pass above without the anser.runtime_filter gate, a check for joins
+ * that would get in-place filters, and a visit of those joins' scans.
+ */
+extern PGDLLEXPORT bool AnserApplyRuntimeFilterFallback(PlannedStmt *stmt);
+extern PGDLLEXPORT bool AnserApplyInplaceRuntimeFilters(PlannedStmt *stmt);
+typedef void (*AnserInplaceCandidateFn)(Plan *build, AttrNumber build_key,
+										Plan *probe, AttrNumber probe_key,
+										void *arg);
+extern PGDLLEXPORT void AnserVisitInplaceCandidates(PlannedStmt *stmt,
+													AnserInplaceCandidateFn visit,
+													void *arg);
+
+/*
+ * Segments build in-place filters when anser.runtime_filter and
+ * anser.runtime_filter_inplace are on.  An extension that relies on
+ * AnserApplyInplaceRuntimeFilters without anser.runtime_filter registers a
+ * callback here, in every backend, that says whether it wants them for the
+ * current statement; it must decide from settings synchronized to the
+ * segments.  Such filters skip a probe key that already has an Anser
+ * consumer, as AnserApplyInplaceRuntimeFilters does.
+ */
+typedef bool (*AnserInplaceRequestFn)(void);
+extern PGDLLEXPORT void AnserSetInplaceRequest(AnserInplaceRequestFn request);
+
+/* The probe key position of an Anser consumer node, else InvalidAttrNumber. */
+extern PGDLLEXPORT AttrNumber AnserBloomConsumerKey(const Plan *plan);
+
+/*
  * Register the two CustomScan providers (producer, consumer) so their methods
  * resolve by name when a dispatched plan is deserialized.  Must run once per
  * backend (QD and every QE) before any plan execution.
@@ -78,11 +108,21 @@ extern PGDLLEXPORT void AnserRegisterRuntimeFilterMethods(void);
  */
 extern PGDLLEXPORT bool AnserIsRuntimeFilterScan(const Plan *plan);
 
+/*
+ * Identity filter nodes: built with AnserInitFilterScan, they pass their one
+ * child's rows on unchanged or drop them.  Anser's own nodes are, and an
+ * extension registers its methods here (in every backend, from _PG_init) so
+ * that in-place filters can be pushed through its nodes too.
+ */
+extern PGDLLEXPORT void AnserRegisterFilterScanMethods(const CustomScanMethods *methods);
+extern PGDLLEXPORT bool AnserIsFilterScan(const Plan *plan);
+
 /* In-place runtime filters: see AnserInplaceEligible (anserplan.c) and
  * anserinplace.c. */
 extern PGDLLEXPORT bool AnserInplaceEligible(HashJoin *hj, PlannedStmt *stmt,
 											 int slice_index,
-											 Bitmapset *nestloop_params);
+											 Bitmapset *nestloop_params,
+											 bool skip_filtered_key);
 extern void AnserInplaceExecutorStart(QueryDesc *queryDesc, int eflags);
 
 extern PGDLLEXPORT CustomScan *AnserBuildBloomProducerScan(

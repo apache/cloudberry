@@ -62,7 +62,7 @@ anserfilter.o: $(srcdir)/../src/anserfilter.c
 # Not called "check": pgxs.mk already defines that target, and overriding it
 # here would only earn a warning from make.
 .PHONY: unitcheck
-unitcheck: $(PROGRAM) anserdetach_test ansernormalize_test anserplanwalk_test ansercancel_test anserapi_test anserinplace_test
+unitcheck: $(PROGRAM) anserdetach_test ansernormalize_test anserplanwalk_test ansercancel_test anserapi_test anserinplace_test ansersize_test
 	./$(PROGRAM)
 	./anserdetach_test
 	./ansernormalize_test
@@ -70,6 +70,7 @@ unitcheck: $(PROGRAM) anserdetach_test ansernormalize_test anserplanwalk_test an
 	./ansercancel_test
 	./anserapi_test
 	./anserinplace_test
+	./ansersize_test
 
 # Only teardown code from the included transport source is linked. Any
 # allocation, wait or error-reporting dependency in that path is unresolved,
@@ -129,3 +130,10 @@ anserinplace_test: $(srcdir)/anserinplace_test.c $(srcdir)/../src/anserinplace.c
 	  $(DETACH_TEST_LDFLAGS) $< -o $@
 
 EXTRA_CLEAN += anserinplace_test
+
+# Use real core Bloom allocation/serialization, not constructor stubs.
+ansersize_test: $(srcdir)/ansersize_test.c $(srcdir)/../src/anserplan.c $(srcdir)/../src/anserfilter.c $(top_srcdir)/src/backend/lib/bloomfilter.c $(wildcard $(srcdir)/../include/*.h)
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(PG_CPPFLAGS) -ffunction-sections -fdata-sections \
+	  $(DETACH_TEST_LDFLAGS) $< -L$(top_builddir)/src/common -L$(top_builddir)/src/port -lpgcommon -lpgport -lm -o $@
+
+EXTRA_CLEAN += ansersize_test

@@ -32,6 +32,8 @@
 
 #include "lib/bloomfilter.h"
 
+#define ANSER_BLOOM_MIN_BYTES		8192 /* bitset only; framing is additional */
+
 #define ANSER_BLOOM_PART_MAGIC		0x41424631U /* ABF1 */
 #define ANSER_BLOOM_PART_VERSION		1U
 

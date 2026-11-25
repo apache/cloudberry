@@ -31,33 +31,32 @@ SET anser.max_info_size = 68157440;
 -- injected and no consumer is left waiting.  A 64 MB bitset is 536870912 bits,
 -- so 134217728 estimated keys is exactly 4 bits/key and one more key is not.
 -- A zero or negative estimate is treated as one key, not as "no filter"; the
--- 1 MB bitset floor then raises the declared count to match, so every estimate
--- the floor covers shows the same 524288 elements.
+-- 8 KiB bitset floor then raises the declared count to match, so every estimate
+-- the floor covers shows the same 4096 elements.
 SELECT t.est_rows, s.injected, s.total_elems, s.planned_bytes
 FROM (VALUES (0), (-5), (1), (1000), (1000000), (10000000),
              (134217728), (134217729), (150000000), (1000000000))
        AS t(est_rows),
      LATERAL anser_test_rf_size(t.est_rows) AS s;
 
--- 2. Filter construction.  bloom_create floors every bitset at 1 MB and that
--- floor overrides the work_mem cap, so a cap below "1 MB + header" can only
--- yield a filter too large to send -- which is why a flat 1 MB cap is refused
--- while 1048592 (the floor plus exactly one header) is accepted and serializes
--- to precisely the cap.  fits_cap is the invariant that must never be false.
+-- 2. Filter construction. Anser uses an 8 KiB bitset floor. The serialized
+-- part also needs a 16-byte header: 8192 alone is refused, while 8208 fits
+-- exactly. Existing core Bloom callers retain their historical 1 MiB floor.
+-- fits_cap is the invariant that must never be false.
 SELECT t.what, t.elems, t.cap, s.built, s.bits, s.serialized,
        round(s.bits_per_key::numeric, 3) AS bits_per_key,
        (NOT s.built OR s.serialized <= t.cap) AS fits_cap
 FROM (VALUES
-        ('no keys',                      0::bigint, 1048640::bigint),
-        ('negative keys',                       -1,         1048640),
+        ('no keys',                      0::bigint, 8256::bigint),
+        ('negative keys',                       -1,         8256),
         ('cap equals the header',                32,              16),
         ('cap one byte over the header',         32,              17),
-        ('cap is 1 MB, no header room',          32,         1048576),
-        ('cap is 1 MB plus a header',            32,         1048592),
-        ('cap one byte short of that',           32,         1048591),
-        ('a single key',                          1,         1048640),
-        ('exactly 4 bits/key',              2097152,         1048640),
-        ('one key too many',                2097153,         1048640),
+        ('cap is 8 kB, no header room',          32,         8192),
+        ('cap is 8 kB plus a header',            32,         8208),
+        ('cap one byte short of that',           32,         8207),
+        ('a single key',                          1,         8256),
+        ('exactly 4 bits/key',              16384,         8256),
+        ('one key too many',                16385,         8256),
         ('exactly 4 bits/key at 2 MB',      4194304,         2097216),
         ('one key too many at 2 MB',        4194305,         2097216),
         ('a billion keys',               1000000000,        68157440))
@@ -95,12 +94,12 @@ FROM (VALUES
 SELECT t.what,
        anser_test_producer_decision(t.elems, t.cap, t.n_keys) AS decision
 FROM (VALUES
-        ('sparse filter',                          32::bigint, 1048640::bigint,     100),
-        ('cap with no header room',                        32,         1048576,     100),
-        ('no keys declared',                                0,         1048640,       0),
-        ('one key past the floor',                    2097153,         1048640,       0),
-        ('exactly 4 bits/key',                        2097152,         1048640,  100000),
-        ('estimate of 32, three million inserted',         32,         1048640, 3000000))
+        ('sparse filter',                          32::bigint, 8256::bigint,     100),
+        ('cap with no header room',                        32,         8192,     100),
+        ('no keys declared',                                0,         8256,       0),
+        ('one key past the floor',                    16385,         8256,       0),
+        ('exactly 4 bits/key',                        16384,         8256,    1000),
+        ('estimate of 32, three million inserted',         32,         8256, 3000000))
        AS t(what, elems, cap, n_keys);
 
 -- ---------------------------------------------------------------------------

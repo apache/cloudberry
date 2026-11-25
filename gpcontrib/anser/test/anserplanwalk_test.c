@@ -49,6 +49,13 @@ counted_outer_plan(Plan *plan)
 
 static Plan *identity_filter;
 bool AnserIsRuntimeFilterScan(const Plan *plan) { return plan == identity_filter; }
+bool AnserIsFilterScan(const Plan *plan) { return plan == identity_filter; }
+
+static const Plan *test_consumer;
+AttrNumber AnserBloomConsumerKey(const Plan *plan)
+{
+	return plan == test_consumer ? 1 : InvalidAttrNumber;
+}
 
 void ExceptionalCondition(const char *a, const char *b, int c) { abort(); }
 
@@ -240,10 +247,10 @@ inplace_target(void)
 
 	/* HashJoin over the scan. */
 	join.join.plan.lefttree = &scan.scan.plan;
-	CHECK(anser_inplace_has_target(&join, 1));
-	CHECK(!anser_inplace_has_target(&join, 2));
+	CHECK(anser_inplace_has_target(&join, 1, false));
+	CHECK(!anser_inplace_has_target(&join, 2, false));
 	vars[0].varattno = 0;			/* a system column */
-	CHECK(!anser_inplace_has_target(&join, 1));
+	CHECK(!anser_inplace_has_target(&join, 1, false));
 	vars[0].varattno = 3;
 
 	/* A Motion between the scan and the join: the filter must be exchanged. */
@@ -253,7 +260,7 @@ inplace_target(void)
 	vars[1].varattno = 1;
 	motion.plan.lefttree = &scan.scan.plan;
 	join.join.plan.lefttree = &motion.plan;
-	CHECK(!anser_inplace_has_target(&join, 1));
+	CHECK(!anser_inplace_has_target(&join, 1, false));
 
 	/* Through a lower join's outer side, not its inner side. */
 	lower.join.plan.type = T_HashJoin;
@@ -262,17 +269,17 @@ inplace_target(void)
 	vars[2].varno = OUTER_VAR;
 	vars[2].varattno = 1;
 	join.join.plan.lefttree = &lower.join.plan;
-	CHECK(anser_inplace_has_target(&join, 1));
+	CHECK(anser_inplace_has_target(&join, 1, false));
 	vars[2].varno = INNER_VAR;
-	CHECK(!anser_inplace_has_target(&join, 1));
+	CHECK(!anser_inplace_has_target(&join, 1, false));
 	vars[2].varno = OUTER_VAR;
 	/* Not below the nullable outer side of a right or full join. */
 	lower.join.jointype = JOIN_RIGHT;
-	CHECK(!anser_inplace_has_target(&join, 1));
+	CHECK(!anser_inplace_has_target(&join, 1, false));
 	lower.join.jointype = JOIN_FULL;
-	CHECK(!anser_inplace_has_target(&join, 1));
+	CHECK(!anser_inplace_has_target(&join, 1, false));
 	lower.join.jointype = JOIN_LEFT;
-	CHECK(anser_inplace_has_target(&join, 1));
+	CHECK(anser_inplace_has_target(&join, 1, false));
 	lower.join.jointype = JOIN_INNER;
 
 	/* Through one of our own nodes, and only when it says it only filters. */
@@ -287,11 +294,15 @@ inplace_target(void)
 	filter.custom_plans = &children;
 	lower.join.plan.lefttree = &filter.scan.plan;
 	identity_filter = NULL;			/* some other CustomScan */
-	CHECK(!anser_inplace_has_target(&join, 1));
-	identity_filter = &filter.scan.plan;	/* one of ours */
-	CHECK(anser_inplace_has_target(&join, 1));
+	CHECK(!anser_inplace_has_target(&join, 1, false));
+	identity_filter = &filter.scan.plan;	/* an identity filter */
+	CHECK(anser_inplace_has_target(&join, 1, false));
+	test_consumer = &filter.scan.plan;	/* a consumer on the same key */
+	CHECK(!anser_inplace_has_target(&join, 1, true));
+	test_consumer = NULL;
+	CHECK(anser_inplace_has_target(&join, 1, true));
 	vars[3].varno = OUTER_VAR;		/* not the identity tlist */
-	CHECK(!anser_inplace_has_target(&join, 1));
+	CHECK(!anser_inplace_has_target(&join, 1, false));
 	vars[3].varno = INDEX_VAR;
 
 	/* An Append whose children are all scans. */
@@ -304,9 +315,9 @@ inplace_target(void)
 	children.length = children.max_length = 2;
 	append.appendplans = &children;
 	join.join.plan.lefttree = &append.plan;
-	CHECK(anser_inplace_has_target(&join, 1));
+	CHECK(anser_inplace_has_target(&join, 1, false));
 	child_cells[1].ptr_value = &motion.plan;
-	CHECK(!anser_inplace_has_target(&join, 1));
+	CHECK(!anser_inplace_has_target(&join, 1, false));
 }
 
 /* Fixed-capacity lists suffice for the two probe scans in this fixture. */

@@ -37,6 +37,12 @@
  *	   for every table AM; a qual would not on AOCO, which evaluates the
  *	   qual before it loads columns the plan's own qual does not use.
  *
+ * The coordinator and the segments only agree if they see the same inputs.
+ * Where they might not -- an extension's own exchanges placed after the
+ * coordinator's walk, say -- the outcome is a join with both an exchanged and
+ * an in-place filter, or with neither.  Both filters only drop rows whose key
+ * the build side lacks, so either way the answer is the same.
+ *
  * The filter never makes the scan wait: a join that fetches its first outer
  * tuple before building its hash table just sees that tuple unfiltered.
  * Keys are hashed in Anser's normalized form (AnserNormalizeBloomDatum) on
@@ -103,6 +109,9 @@ typedef struct AnserInplaceWalk
 	int			local_slice;
 	int			slice_index;
 } AnserInplaceWalk;
+
+/* An extension's say on in-place filters; see AnserSetInplaceRequest. */
+static AnserInplaceRequestFn inplace_request = NULL;
 
 static AnserInplaceFilter *
 anser_inplace_lookup(PlanState *build)
@@ -319,7 +328,7 @@ anser_inplace_find_scans(HashJoinState *hjs, AttrNumber attno, List **scans,
 			return false;
 		var = (Var *) te->expr;
 
-		if (IsA(child, CustomScanState) && AnserIsRuntimeFilterScan(child->plan) &&
+		if (IsA(child, CustomScanState) && AnserIsFilterScan(child->plan) &&
 			list_length(((CustomScanState *) child)->custom_ps) == 1)
 		{
 			if (var->varno != INDEX_VAR || var->varattno < 1)
@@ -466,6 +475,12 @@ anser_inplace_walk(PlanState *ps, AnserInplaceWalk *walk)
  * Called after standard executor start.  Only segments build in-place
  * filters: the coordinator's slice is never eligible.
  */
+void
+AnserSetInplaceRequest(AnserInplaceRequestFn request)
+{
+	inplace_request = request;
+}
+
 void
 AnserInplaceExecutorStart(QueryDesc *queryDesc, int eflags)
 {
