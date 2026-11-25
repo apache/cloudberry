@@ -25,6 +25,7 @@ extern bool bloom_lacks_element(bloom_filter *filter, unsigned char *elem,
 /* Optional runtime probes may stop rejecting rows after sampling. */
 #define BLOOM_PROBE_SAMPLE_SIZE 1024
 extern bool bloom_runtime_probe_disabled(const bloom_filter *filter);
+extern bool bloom_runtime_probe_skip(bloom_filter *filter);
 extern bool bloom_runtime_probe(bloom_filter *filter, unsigned char *elem,
 								size_t len);
 extern int bloom_runtime_probe_rank(const bloom_filter *filter);

@@ -20,6 +20,7 @@
 #include "fmgr.h"
 #include "lib/bloomfilter.h"
 #include "miscadmin.h"
+#include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
 
@@ -99,6 +100,83 @@ check_runtime_probing(void)
 	FreeTupleDesc(desc);
 }
 
+/* Probe "n" times with "key"; return how many probes rejected it. */
+static int
+probe_n(bloom_filter *filter, Datum key, int n)
+{
+	int			rejected = 0;
+
+	for (int i = 0; i < n; i++)
+		rejected += bloom_runtime_probe(filter, (unsigned char *) &key,
+										sizeof(Datum));
+	return rejected;
+}
+
+/*
+ * Skip until the filter samples again.  Return the number of rows skipped, or
+ * -1 if it is still skipping after "limit" rows.
+ */
+static int
+rows_until_resample(bloom_filter *filter, int limit)
+{
+	for (int i = 0; i < limit; i++)
+	{
+		if (!bloom_runtime_probe_skip(filter))
+			return i;
+	}
+	return -1;
+}
+
+/*
+ * A disabled filter samples again after a gap of skipped rows.  The gap
+ * doubles while the filter stays ineffective, and goes back to its start once
+ * a sample shows it rejects rows again.
+ */
+static void
+check_runtime_recheck(void)
+{
+	bloom_filter *filter = bloom_create(32, 8, 123);
+	Datum		present = Int64GetDatum(1);
+	Datum		absent = Int64GetDatum(2);
+	int			save_pct = gp_runtime_filter_min_reject_pct;
+
+	bloom_add_element(filter, (unsigned char *) &present, sizeof(Datum));
+
+	if (bloom_runtime_probe_skip(filter))
+		elog(ERROR, "a new runtime filter skipped a row");
+	probe_n(filter, present, BLOOM_PROBE_SAMPLE_SIZE);
+	if (!bloom_runtime_probe_disabled(filter))
+		elog(ERROR, "ineffective runtime filter stayed enabled");
+	if (rows_until_resample(filter, 10 * BLOOM_PROBE_SAMPLE_SIZE) !=
+		BLOOM_PROBE_SAMPLE_SIZE - 1)
+		elog(ERROR, "first resample did not come after %d rows",
+			 BLOOM_PROBE_SAMPLE_SIZE);
+
+	/* The data changed: the filter rejects again and stays on. */
+	if (probe_n(filter, absent, BLOOM_PROBE_SAMPLE_SIZE) != BLOOM_PROBE_SAMPLE_SIZE ||
+		bloom_runtime_probe_disabled(filter) || bloom_runtime_probe_skip(filter))
+		elog(ERROR, "effective runtime filter was not re-enabled");
+
+	/* Ineffective again: the gap starts over, then doubles. */
+	probe_n(filter, present, BLOOM_PROBE_SAMPLE_SIZE);
+	if (rows_until_resample(filter, 10 * BLOOM_PROBE_SAMPLE_SIZE) !=
+		BLOOM_PROBE_SAMPLE_SIZE - 1)
+		elog(ERROR, "resample gap did not start over");
+	probe_n(filter, present, BLOOM_PROBE_SAMPLE_SIZE);
+	if (rows_until_resample(filter, 10 * BLOOM_PROBE_SAMPLE_SIZE) !=
+		2 * BLOOM_PROBE_SAMPLE_SIZE - 1)
+		elog(ERROR, "resample gap did not double");
+
+	/* A threshold of 0 never disables a filter. */
+	gp_runtime_filter_min_reject_pct = 0;
+	probe_n(filter, present, 2 * BLOOM_PROBE_SAMPLE_SIZE);
+	gp_runtime_filter_min_reject_pct = save_pct;
+	if (bloom_runtime_probe_disabled(filter))
+		elog(ERROR, "runtime filter disabled with a threshold of 0");
+
+	bloom_free(filter);
+}
+
 static void
 check_partition_runtime_keys(void)
 {
@@ -154,6 +232,7 @@ Datum
 test_bloomfilter_runtime_probe(PG_FUNCTION_ARGS)
 {
 	check_runtime_probing();
+	check_runtime_recheck();
 	check_partition_runtime_keys();
 	PG_RETURN_VOID();
 }

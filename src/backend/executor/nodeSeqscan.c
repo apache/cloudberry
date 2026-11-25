@@ -472,7 +472,7 @@ PassByBloomFilter(SeqScanState *node, TupleTableSlot *slot)
 			continue;
 
 		blm_filter = (bloom_filter *) DatumGetPointer(sk->sk_argument);
-		if (bloom_runtime_probe_disabled(blm_filter))
+		if (bloom_runtime_probe_skip(blm_filter))
 			continue;
 
 		val = slot_getattr(slot, sk->sk_attno, &isnull);

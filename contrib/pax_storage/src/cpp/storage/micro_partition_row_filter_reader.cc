@@ -80,7 +80,7 @@ bool MicroPartitionRowFilterReader::EvalBloomNode(
          (size_t)bloom_index < ctx->runtime_bloom_keys.size());
   const auto &key = ctx->runtime_bloom_keys[bloom_index];
   auto *filter = (bloom_filter *)DatumGetPointer(key.sk_argument);
-  if (bloom_runtime_probe_disabled(filter)) return true;
+  if (bloom_runtime_probe_skip(filter)) return true;
 
   auto [value, isnull] =
       group->GetColumnValue(desc, key.sk_attno - 1, row_index);

@@ -38,9 +38,17 @@
 #include "common/hashfn.h"
 #include "lib/bloomfilter.h"
 #include "port/pg_bitutils.h"
+#include "utils/guc.h"
 
 #define MAX_HASH_FUNCS		10
-#define BLOOM_PROBE_MIN_REJECT_PCT 5
+
+/*
+ * A disabled runtime probe samples again after this many skipped rows, doubling
+ * the gap every time the sample confirms the filter is still ineffective, up to
+ * BLOOM_PROBE_MAX_SKIP rows between samples.
+ */
+#define BLOOM_PROBE_MIN_SKIP	((uint64) BLOOM_PROBE_SAMPLE_SIZE)
+#define BLOOM_PROBE_MAX_SKIP	(UINT64CONST(64) * 1024 * 1024)
 
 struct bloom_filter
 {
@@ -49,9 +57,14 @@ struct bloom_filter
 	uint64		seed;
 	/* m is bitset size, in bits.  Must be a power of two <= 2^32.  */
 	uint64		m;
-	int			probe_sample_count;
-	int			probe_sample_rejected;
+	/* Runtime probe sampling, see bloom_runtime_probe() */
+	int			probe_sample_count;		/* probes in the current window */
+	int			probe_sample_rejected;	/* rejections in the current window */
+	int			probe_last_rejected;	/* rejections in the last full window,
+										 * or -1 if no window completed yet */
 	bool		probe_disabled;
+	uint64		probe_skip_left;		/* rows to skip before sampling again */
+	uint64		probe_skip_gap;			/* current gap between samples */
 	unsigned char bitset[FLEXIBLE_ARRAY_MEMBER];
 };
 
@@ -119,6 +132,7 @@ bloom_create(int64 total_elems, int bloom_work_mem, uint64 seed)
 	filter->k_hash_funcs = optimal_k(bitset_bits, total_elems);
 	filter->seed = seed;
 	filter->m = bitset_bits;
+	filter->probe_last_rejected = -1;
 
 	return filter;
 }
@@ -181,12 +195,41 @@ bloom_runtime_probe_disabled(const bloom_filter *filter)
 	return filter->probe_disabled;
 }
 
+/*
+ * Should the caller skip probing for this row?  Call once per row, before
+ * reading the key and calling bloom_runtime_probe().  A disabled filter is
+ * skipped, but it counts
+ * the skipped rows and starts a new sample window once its gap is used up, so
+ * that a filter switched off by an unrepresentative first sample (rows loaded
+ * in key order, for instance) gets switched on again.
+ */
+bool
+bloom_runtime_probe_skip(bloom_filter *filter)
+{
+	if (!filter->probe_disabled)
+		return false;
+	if (filter->probe_skip_left > 1)
+	{
+		filter->probe_skip_left--;
+		return true;
+	}
+
+	/* Gap used up: sample a new window with this row. */
+	filter->probe_disabled = false;
+	filter->probe_skip_left = 0;
+	filter->probe_sample_count = 0;
+	filter->probe_sample_rejected = 0;
+	return false;
+}
+
 /* Rank by rejection rate, including partial samples. */
 int
 bloom_runtime_probe_rank(const bloom_filter *filter)
 {
 	if (filter->probe_disabled)
 		return -1;
+	if (filter->probe_last_rejected >= 0)
+		return filter->probe_last_rejected;
 	if (filter->probe_sample_count == 0)
 		return 0;
 	return filter->probe_sample_rejected * BLOOM_PROBE_SAMPLE_SIZE /
@@ -194,26 +237,44 @@ bloom_runtime_probe_rank(const bloom_filter *filter)
 }
 
 /*
- * Return true for a definite miss. Once a sample rejects fewer than 5% of
- * its non-null keys, subsequent calls pass rows through. The last sampled
- * probe still returns its actual result. The sample belongs to this filter and
- * lasts across partitions and rescans that reuse it.
+ * Return true for a definite miss.
+ *
+ * Probes are counted in windows of BLOOM_PROBE_SAMPLE_SIZE.  When a window
+ * rejects fewer than gp_runtime_filter_min_reject_pct percent of its keys, the
+ * filter is disabled: bloom_runtime_probe_skip() then tells the caller to pass
+ * rows through, and after a gap of skipped rows a new window is sampled.  The
+ * gap starts at BLOOM_PROBE_MIN_SKIP and doubles each time a window confirms
+ * the filter is still ineffective, up to BLOOM_PROBE_MAX_SKIP; a window that
+ * rejects enough keys resets it.  The last probe of a window still returns its
+ * actual result.  The state belongs to this filter and lasts across partitions
+ * and rescans that reuse it.  A threshold of 0 never disables the filter.
  */
 bool
 bloom_runtime_probe(bloom_filter *filter, unsigned char *elem, size_t len)
 {
-	bool lacks;
+	bool		lacks;
 
 	if (filter->probe_disabled)
 		return false;
 
 	lacks = bloom_lacks_element(filter, elem, len);
-	if (filter->probe_sample_count < BLOOM_PROBE_SAMPLE_SIZE)
+	filter->probe_sample_rejected += lacks;
+	if (++filter->probe_sample_count == BLOOM_PROBE_SAMPLE_SIZE)
 	{
-		filter->probe_sample_rejected += lacks;
-		if (++filter->probe_sample_count == BLOOM_PROBE_SAMPLE_SIZE)
-			filter->probe_disabled = filter->probe_sample_rejected * 100 <
-				BLOOM_PROBE_SAMPLE_SIZE * BLOOM_PROBE_MIN_REJECT_PCT;
+		filter->probe_last_rejected = filter->probe_sample_rejected;
+		if (filter->probe_sample_rejected * 100 <
+			BLOOM_PROBE_SAMPLE_SIZE * gp_runtime_filter_min_reject_pct)
+		{
+			filter->probe_skip_gap = filter->probe_skip_gap == 0 ?
+				BLOOM_PROBE_MIN_SKIP :
+				Min(filter->probe_skip_gap * 2, BLOOM_PROBE_MAX_SKIP);
+			filter->probe_skip_left = filter->probe_skip_gap;
+			filter->probe_disabled = true;
+		}
+		else
+			filter->probe_skip_gap = 0;
+		filter->probe_sample_count = 0;
+		filter->probe_sample_rejected = 0;
 	}
 	return lacks;
 }
@@ -437,6 +498,7 @@ bloom_create_aggresive(int64 total_elems, int work_mem, uint64 seed)
 	filter->k_hash_funcs = bits_per_elem >= 3.5 ? 3 : 2;
 	filter->seed = seed;
 	filter->m = bitset_bits;
+	filter->probe_last_rejected = -1;
 
 	return filter;
 }
