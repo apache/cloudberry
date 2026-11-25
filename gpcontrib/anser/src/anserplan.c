@@ -381,6 +381,159 @@ AnserResolveKeyScan(Plan *top, AttrNumber key_attno, int slice_index,
 	return true;
 }
 
+/* One of our own filter nodes: it passes its single child's rows on or drops them. */
+static bool
+anser_is_own_filter(const Plan *plan)
+{
+	return plan != NULL && AnserIsRuntimeFilterScan(plan) &&
+		list_length(((const CustomScan *) plan)->custom_plans) == 1;
+}
+
+/* A scan an in-place filter can be installed on: a plain SeqScan emitting
+ * the key as a column of its relation. */
+static bool
+anser_inplace_scan_accepts(const Plan *scan, AttrNumber attno)
+{
+	if (!IsA(scan, SeqScan))
+		return false;
+	return AnserScanOutputVar((const Scan *) scan, attno) != NULL;
+}
+
+/*
+ * Is there a scan for this join's in-place filter, and which way to it?
+ *
+ * Down the join's outer side through HashJoins (their outer side only, and
+ * only joins that keep their outer rows' values), Results and our own nodes,
+ * to a SeqScan, or to an Append whose children all are.  Anything else --
+ * above all a Motion -- ends the search: a scan below a Motion is not joined
+ * in this process, and this process's hash table says nothing about it.
+ * anserinplace.c follows the same path on the PlanState tree.
+ */
+static bool
+anser_inplace_has_target(HashJoin *hj, AttrNumber attno)
+{
+	Plan	   *parent = (Plan *) hj;
+	Plan	   *child = outerPlan(hj);
+
+	for (;;)
+	{
+		TargetEntry *te;
+		Var		   *var;
+
+		if (IsA(parent, Append) && child == NULL)
+		{
+			List	   *subplans = ((Append *) parent)->appendplans;
+			ListCell   *lc;
+
+			if (subplans == NIL)
+				return false;
+			foreach(lc, subplans)
+			{
+				if (!anser_inplace_scan_accepts((Plan *) lfirst(lc), attno))
+					return false;
+			}
+			return true;
+		}
+		if (child == NULL)
+			return false;
+
+		if (IsA(child, SeqScan))
+			return anser_inplace_scan_accepts(child, attno);
+
+		if (attno < 1 || attno > list_length(child->targetlist))
+			return false;
+		te = (TargetEntry *) list_nth(child->targetlist, attno - 1);
+		if (te == NULL || !IsA(te->expr, Var))
+			return false;
+		var = (Var *) te->expr;
+
+		if (anser_is_own_filter(child))
+		{
+			if (var->varno != INDEX_VAR || var->varattno < 1)
+				return false;
+			attno = var->varattno;
+			parent = child;
+			child = (Plan *) linitial(((CustomScan *) child)->custom_plans);
+			continue;
+		}
+
+		if (!IsA(child, HashJoin) && !IsA(child, Result) && !IsA(child, Append))
+			return false;
+		if (var->varno == INNER_VAR)
+			return false;
+		if (IsA(child, HashJoin) &&
+			!AnserJoinSidePushdownSafe(((HashJoin *) child)->join.jointype, false))
+			return false;
+
+		attno = var->varattno;
+		parent = child;
+		child = outerPlan(child);
+	}
+}
+
+/*
+ * Does this join get an in-place filter rather than an exchanged one?
+ *
+ * A hash join runs on every segment against that segment's hash table.  When
+ * its probe scan runs in the join's own slice -- no Motion between the two --
+ * every row the scan produces on a segment is joined on that segment, so the
+ * keys that segment's Hash node receives are all the keys those rows can
+ * match.  That holds however the build side got there: broadcast,
+ * redistributed on the join key, or co-located.  A filter built from them is
+ * complete, needs no exchange, and never makes the scan wait: until the hash
+ * table is built, rows simply pass unfiltered.  The keys are also those left
+ * after everything the build side does -- joins, semi-joins, predicates --
+ * where an exchanged filter holds the whole key column of a base scan.
+ *
+ * The coordinator calls this to skip the exchange for such a join, and every
+ * segment calls it again on the plan it received to build the filter
+ * (anserinplace.c).  Nothing marks the join in the plan, so the two must see
+ * the same inputs: the plan, the slice table, the nested loops above, and the
+ * anser.* settings, which are synchronized to the segments.
+ *
+ * Refused: a build side a nested loop above re-runs with new parameter values
+ * (the filter only grows, so it would hold keys of earlier iterations); a
+ * slice on the coordinator or in MPP parallel mode; a join without a target
+ * scan; and a build side the filter size rules refuse.
+ */
+bool
+AnserInplaceEligible(HashJoin *hj, PlannedStmt *stmt, int slice_index,
+					 Bitmapset *nestloop_params)
+{
+	Plan	   *hash = innerPlan(hj);
+	PlanSlice  *slice;
+	Var		   *outer_var;
+	Var		   *inner_var;
+	Oid			key_type;
+	int64		total_elems;
+	int64		max_payload;
+	int64		planned_bytes;
+
+	if (!AnserJoinSideReducible(hj->join.jointype, false))
+		return false;
+	if (hash == NULL || !IsA(hash, Hash) || outerPlan(hj) == NULL)
+		return false;
+	if (bms_overlap(hash->extParam, nestloop_params))
+		return false;
+	if (list_length(hj->hashclauses) != 1 ||
+		!AnserEqualityKeys((Node *) linitial(hj->hashclauses),
+						   &outer_var, &inner_var, &key_type))
+		return false;
+
+	if (stmt->slices == NULL || slice_index < 0 || slice_index >= stmt->numSlices)
+		return false;
+	slice = &stmt->slices[slice_index];
+	if (slice->gangType == GANGTYPE_UNALLOCATED || slice->parallel_workers != 0)
+		return false;
+
+	if (!anser_inplace_has_target(hj, outer_var->varattno))
+		return false;
+
+	/* Sized from what the Hash node receives: the build side's output. */
+	return AnserRuntimeFilterSize(hash->plan_rows, &total_elems, &max_payload,
+								  &planned_bytes);
+}
+
 /*
  * If this HashJoin is the supported shape, inject a producer above the base
  * scan its build key comes from and a consumer above the base scan its probe
@@ -444,6 +597,17 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 	 * Not worth it for a shape this narrow.
 	 */
 	if (bms_overlap(hash->extParam, ctx->nestloop_params))
+		return;
+
+	/*
+	 * A probe scan in the join's own slice gets its filter in place, built by
+	 * each segment from the join's Hash node (AnserInplaceEligible,
+	 * anserinplace.c).  That also takes the joins whose scans the exchange
+	 * declines below because both sides are co-located.
+	 */
+	if (gp_anser_runtime_filter_inplace &&
+		AnserInplaceEligible(hj, ctx->stmt, ctx->slice_index,
+							 ctx->nestloop_params))
 		return;
 
 	if (!anser_hashjoin_keys(hj, &inner_attno, &outer_attno))

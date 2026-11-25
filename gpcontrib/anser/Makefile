@@ -35,6 +35,7 @@ OBJS = \
 	src/anserpayload.o \
 	src/anserplan.o \
 	src/anserplankeys.o \
+	src/anserinplace.o \
 	src/anserplanexec.o \
 	src/ansersideband.o
 
@@ -50,7 +51,7 @@ PGFILEDESC = "anser - adaptive information sharing runtime filters"
 # the regression driver drops any file that calls one (faultinjector_prep in
 # src/Makefile.global.in).  Keeping them in anser_runtime_filter would take the
 # rest of that file down with them wherever the extensions are off.
-REGRESS = anser_test anser_runtime_filter anser_faults anser_multijoin
+REGRESS = anser_test anser_runtime_filter anser_faults anser_multijoin anser_inplace
 
 # src/anserdispatch.c writes sideband messages onto the dispatcher's own libpq
 # connections, so it needs libpq's internal headers (as the dispatcher itself

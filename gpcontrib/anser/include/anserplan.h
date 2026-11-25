@@ -29,6 +29,7 @@
 #ifndef ANSERPLAN_H
 #define ANSERPLAN_H
 
+#include "executor/execdesc.h"	/* QueryDesc */
 #include "nodes/execnodes.h"	/* PlanState, for the pushdown helpers */
 #include "nodes/plannodes.h"
 
@@ -76,6 +77,13 @@ extern PGDLLEXPORT void AnserRegisterRuntimeFilterMethods(void);
  * the same base relation; coordinator-only, see the implementation.
  */
 extern PGDLLEXPORT bool AnserIsRuntimeFilterScan(const Plan *plan);
+
+/* In-place runtime filters: see AnserInplaceEligible (anserplan.c) and
+ * anserinplace.c. */
+extern PGDLLEXPORT bool AnserInplaceEligible(HashJoin *hj, PlannedStmt *stmt,
+											 int slice_index,
+											 Bitmapset *nestloop_params);
+extern void AnserInplaceExecutorStart(QueryDesc *queryDesc, int eflags);
 
 extern PGDLLEXPORT CustomScan *AnserBuildBloomProducerScan(
 										Plan *child,

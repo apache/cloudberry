@@ -72,6 +72,18 @@ AnserBloomLacksKey(bloom_filter *filter, Datum value, int16 key_length)
 	return bloom_lacks_element(filter, (unsigned char *) &value, sizeof(Datum));
 }
 
+/*
+ * AnserBloomLacksKey with adaptive probing: a filter that rejects too few keys
+ * turns itself off and samples again later (bloom_runtime_probe).  Ask
+ * bloom_runtime_probe_skip() first, once per row; this only probes.
+ */
+static inline bool
+AnserBloomProbe(bloom_filter *filter, Datum value, int16 key_length)
+{
+	value = AnserNormalizeBloomDatum(value, key_length);
+	return bloom_runtime_probe(filter, (unsigned char *) &value, sizeof(Datum));
+}
+
 /* Output position, not table attno. No allocation or catalog access. */
 static inline int16
 AnserKeyLength(PlanState *child, AttrNumber attno)

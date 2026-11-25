@@ -8,6 +8,10 @@
 -- Deterministic plan shape: force a hash join.
 SET enable_nestloop = off;
 SET enable_mergejoin = off;
+-- This file tests the Anser exchange.  A join whose probe scan runs in the
+-- join's own slice would otherwise get an in-place filter instead; that path
+-- is tested in anser_inplace.
+SET anser.runtime_filter_inplace = off;
 -- A regress test must not inherit the production deadline.  anser.timeout_ms
 -- defaults to 10 s, which is a budget for an exchange that has gone wrong; a
 -- test that waits it out has turned a delivery failure into a slow pass.
@@ -1104,6 +1108,7 @@ DECLARE
     plan jsonb;
     consumers int;
     pruned numeric;
+    consumer_pruned numeric;
     double_counted numeric;
 BEGIN
     PERFORM set_config('gp_enable_runtime_filter', 'off', true);
@@ -1138,13 +1143,16 @@ BEGIN
                 )
                 SELECT count(*) FILTER (WHERE node->>'Custom Plan Provider' = 'Anser Bloom Consumer'),
                     coalesce(sum((node->>'Rows Removed by Pushdown Runtime Filter')::numeric), 0),
+                    coalesce(sum((node->>'Rows Removed by Bloom Filter')::numeric)
+                        FILTER (WHERE node->>'Custom Plan Provider' = 'Anser Bloom Consumer'), 0),
                     coalesce(sum(CASE WHEN node->>'Node Type' = 'Seq Scan'
                         THEN (node->>'Rows Removed by Filter')::numeric END), 0)
-                INTO consumers, pruned, double_counted FROM walk;
-                -- Narrow keys use a scan qual even with core pushdown off.
-                -- These scans have no SQL quals, so generic filter counts
-                -- must remain zero while pushdown rejects the extra keys.
-                IF consumers = 0 OR pruned <= 0 OR double_counted <> 0 THEN
+                INTO consumers, pruned, consumer_pruned, double_counted FROM walk;
+                -- An AOCO probe checks narrow keys after projection. A heap
+                -- probe uses its scan qual even with core pushdown off.
+                IF consumers = 0 OR double_counted <> 0 OR
+                   (storage = 'heap' AND (pruned <> 0 OR consumer_pruned <= 0)) OR
+                   (storage = 'ao' AND (pruned <= 0 OR consumer_pruned <> 0)) THEN
                     RAISE EXCEPTION 'negative-key filtering not exercised (optimizer=%, build=%, pushdown=%): %',
                         opt, storage, push, plan;
                 END IF;

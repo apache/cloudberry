@@ -1,0 +1,221 @@
+-- Anser runtime filters built in place (anser.runtime_filter_inplace).
+--
+-- Requires the cluster to run with anser.enable=on, like the rest of the suite.
+--
+-- A hash join whose probe scan runs in the join's own slice -- no Motion
+-- between the scan and the join -- gets its filter from its own Hash node:
+-- the plan has no Anser nodes for it, yet under EXPLAIN ANALYZE the scan
+-- reports "Rows Removed by Pushdown Runtime Filter".  A probe scan below a
+-- Motion still gets an exchanged filter.  Either way the answers must not
+-- change.
+--
+-- The checks print facts, not plans, so that a costing change that moves a
+-- Broadcast to a Redistribute does not break them: both build sides are
+-- in-place cases.
+
+SET enable_nestloop = off;
+SET enable_mergejoin = off;
+SET optimizer = off;
+SET anser.timeout_ms = 5000;
+SET anser.runtime_filter = on;
+SET anser.runtime_filter_inplace = on;
+
+-- How a query's filters are placed: 'in-place', 'exchange', 'both' or 'none'.
+-- An exchanged filter shows up as an Anser Bloom Consumer, which pushes into
+-- at most one scan; a scan reporting pushdown rows beyond that has a filter
+-- built in place.
+CREATE FUNCTION anser_ip_mode(q text) RETURNS text
+LANGUAGE plpgsql AS $$
+DECLARE
+    line text;
+    consumers int := 0;
+    pushed int := 0;
+    inplace bool;
+    exchange bool;
+BEGIN
+    FOR line IN EXECUTE 'EXPLAIN (ANALYZE, TIMING OFF, COSTS OFF) ' || q LOOP
+        IF line ~ 'Anser Bloom Consumer' THEN
+            consumers := consumers + 1;
+        END IF;
+        IF line ~ 'Rows Removed by Pushdown Runtime Filter' THEN
+            pushed := pushed + 1;
+        END IF;
+    END LOOP;
+    inplace := pushed > consumers;
+    exchange := consumers > 0;
+    RETURN CASE WHEN inplace AND exchange THEN 'both'
+                WHEN inplace THEN 'in-place'
+                WHEN exchange THEN 'exchange'
+                ELSE 'none' END;
+END $$;
+
+-- Rows the runtime filters removed in the scans (EXPLAIN ANALYZE reports the
+-- busiest segment's count for each scan).
+CREATE FUNCTION anser_ip_pruned(q text) RETURNS bigint
+LANGUAGE plpgsql AS $$
+DECLARE
+    line text;
+    removed bigint := 0;
+BEGIN
+    FOR line IN EXECUTE 'EXPLAIN (ANALYZE, TIMING OFF, COSTS OFF) ' || q LOOP
+        IF line ~ 'Rows Removed by Pushdown Runtime Filter' THEN
+            removed := removed + coalesce(substring(line from ': *([0-9]+)')::bigint, 0);
+        END IF;
+    END LOOP;
+    RETURN removed;
+END $$;
+
+-- The query's rows with filters on, compared to its rows with filters off.
+CREATE FUNCTION anser_ip_same(q text) RETURNS boolean
+LANGUAGE plpgsql AS $$
+DECLARE
+    with_filters text;
+    without_filters text;
+BEGIN
+    EXECUTE 'SELECT md5(string_agg(r::text, '','' ORDER BY r::text)) FROM ('
+        || q || ') r' INTO with_filters;
+    PERFORM set_config('anser.runtime_filter', 'off', true);
+    EXECUTE 'SELECT md5(string_agg(r::text, '','' ORDER BY r::text)) FROM ('
+        || q || ') r' INTO without_filters;
+    PERFORM set_config('anser.runtime_filter', 'on', true);
+    RETURN with_filters IS NOT DISTINCT FROM without_filters;
+END $$;
+
+-- fact is distributed on a column no query joins on, so every segment holds
+-- every key; dim is small enough to be broadcast or redistributed to it.
+CREATE TABLE anser_ip_fact (k int, d date, v int) DISTRIBUTED BY (v);
+INSERT INTO anser_ip_fact
+    SELECT g % 1000, date '2000-01-01' + g % 1000, g FROM generate_series(1, 100000) g;
+CREATE TABLE anser_ip_dim (k int, d date, grp int, name text) DISTRIBUTED BY (name);
+INSERT INTO anser_ip_dim
+    SELECT g, date '2000-01-01' + g, g % 100, 'n' || g FROM generate_series(0, 999) g;
+ANALYZE anser_ip_fact;
+ANALYZE anser_ip_dim;
+
+
+-- A selective dimension: 10 of the 1000 keys.
+SELECT anser_ip_mode($$SELECT f.k, f.v FROM anser_ip_fact f JOIN anser_ip_dim d ON f.k = d.k WHERE d.grp = 7$$) AS dim_filter_mode;
+SELECT anser_ip_pruned($$SELECT f.k, f.v FROM anser_ip_fact f JOIN anser_ip_dim d ON f.k = d.k WHERE d.grp = 7$$) > 0 AS dim_filter_pruned;
+SELECT anser_ip_same($$SELECT f.k, f.v FROM anser_ip_fact f JOIN anser_ip_dim d ON f.k = d.k WHERE d.grp = 7$$) AS dim_filter_same;
+SELECT count(*) AS dim_filter_rows FROM anser_ip_fact f JOIN anser_ip_dim d ON f.k = d.k WHERE d.grp = 7;
+
+-- The TPC-DS q58 shape: the selective part of the build side is a semi-join
+-- above the dimension's scan.  An exchanged filter would hold every date of
+-- the dimension; the in-place one holds the 10 the semi-join leaves.  The key
+-- is a date, which core's own runtime filter does not take by itself.
+SELECT anser_ip_mode($$SELECT f.v FROM anser_ip_fact f JOIN anser_ip_dim d ON f.d = d.d WHERE d.d IN (SELECT d FROM anser_ip_dim WHERE grp = 3)$$) IN ('in-place', 'both') AS semi_join_inplace;
+SELECT anser_ip_pruned($$SELECT f.v FROM anser_ip_fact f JOIN anser_ip_dim d ON f.d = d.d WHERE d.d IN (SELECT d FROM anser_ip_dim WHERE grp = 3)$$) > 0 AS semi_join_pruned;
+SELECT anser_ip_same($$SELECT f.v FROM anser_ip_fact f JOIN anser_ip_dim d ON f.d = d.d WHERE d.d IN (SELECT d FROM anser_ip_dim WHERE grp = 3)$$) AS semi_join_same;
+SELECT count(*) AS semi_join_rows FROM anser_ip_fact f JOIN anser_ip_dim d ON f.d = d.d
+    WHERE d.d IN (SELECT d FROM anser_ip_dim WHERE grp = 3);
+
+-- A left join keeps every probe row: no filter at all.
+SELECT anser_ip_mode($$SELECT f.k FROM anser_ip_fact f LEFT JOIN anser_ip_dim d ON f.k = d.k AND d.grp = 7$$) AS left_join_mode;
+
+-- Both sides distributed on other columns, and broadcasting made to look
+-- expensive. Equal input cardinalities avoid a cheap broadcast alternative.
+-- Both get redistributed on the key, the probe scan sits below a
+-- Redistribute Motion, and its filter has to be exchanged.
+SET gp_segments_for_planner = 100;
+CREATE TABLE anser_ip_big1 (k int, pad int) DISTRIBUTED BY (pad);
+CREATE TABLE anser_ip_big2 (k int, pad int) DISTRIBUTED BY (pad);
+INSERT INTO anser_ip_big1 SELECT g, g FROM generate_series(1, 200000) g;
+INSERT INTO anser_ip_big2 SELECT g * 10, g FROM generate_series(1, 200000) g;
+ANALYZE anser_ip_big1;
+ANALYZE anser_ip_big2;
+DO $$
+DECLARE
+    line text;
+    motions int := 0;
+BEGIN
+    FOR line IN EXECUTE 'EXPLAIN (COSTS OFF) SELECT b1.k FROM anser_ip_big1 b1 JOIN anser_ip_big2 b2 ON b1.k = b2.k' LOOP
+        IF line LIKE '%Redistribute Motion%' THEN motions := motions + 1; END IF;
+    END LOOP;
+    IF motions <> 2 THEN
+        RAISE EXCEPTION 'exchange fixture requires two Redistribute Motions, found %', motions;
+    END IF;
+END
+$$;
+SELECT anser_ip_mode($$SELECT b1.k FROM anser_ip_big1 b1 JOIN anser_ip_big2 b2 ON b1.k = b2.k$$) AS motion_mode;
+SELECT anser_ip_same($$SELECT b1.k FROM anser_ip_big1 b1 JOIN anser_ip_big2 b2 ON b1.k = b2.k$$) AS motion_same;
+DROP TABLE anser_ip_big1, anser_ip_big2;
+RESET gp_segments_for_planner;
+
+-- Negative int4 keys: heap tuples sign-extend them, AOCO zero-extends them.
+-- The build side hashes what the Hash node receives, the AOCO scan what it
+-- reads; both are normalized, so the 10 matching keys still match.
+CREATE TABLE anser_ip_neg_fact (k int, v int)
+    WITH (appendonly = true, orientation = column) DISTRIBUTED BY (v);
+INSERT INTO anser_ip_neg_fact SELECT -(g % 1000), g FROM generate_series(1, 100000) g;
+CREATE TABLE anser_ip_neg_dim (k int) DISTRIBUTED BY (k);
+INSERT INTO anser_ip_neg_dim SELECT -g FROM generate_series(1, 10) g;
+ANALYZE anser_ip_neg_fact;
+ANALYZE anser_ip_neg_dim;
+SELECT anser_ip_mode($$SELECT f.v FROM anser_ip_neg_fact f JOIN anser_ip_neg_dim d ON f.k = d.k$$) AS negative_mode;
+SELECT anser_ip_same($$SELECT f.v FROM anser_ip_neg_fact f JOIN anser_ip_neg_dim d ON f.k = d.k$$) AS negative_same;
+SELECT count(*) AS negative_rows FROM anser_ip_neg_fact f JOIN anser_ip_neg_dim d ON f.k = d.k;
+DROP TABLE anser_ip_neg_fact, anser_ip_neg_dim;
+
+-- The other way round: an AOCO build side co-located with the probe hands the
+-- Hash node zero-extended Datums, which have to find the heap probe's
+-- sign-extended ones.  No Motion at all: the exchange never took such joins.
+CREATE TABLE anser_ip_neg_probe (k int, v int) DISTRIBUTED BY (k);
+INSERT INTO anser_ip_neg_probe SELECT -(g % 1000), g FROM generate_series(1, 100000) g;
+CREATE TABLE anser_ip_neg_build (k int)
+    WITH (appendonly = true, orientation = column) DISTRIBUTED BY (k);
+INSERT INTO anser_ip_neg_build SELECT -g FROM generate_series(1, 10) g;
+ANALYZE anser_ip_neg_probe;
+ANALYZE anser_ip_neg_build;
+SELECT anser_ip_mode($$SELECT p.v FROM anser_ip_neg_probe p JOIN anser_ip_neg_build b ON p.k = b.k$$) AS colocated_mode;
+SELECT anser_ip_pruned($$SELECT p.v FROM anser_ip_neg_probe p JOIN anser_ip_neg_build b ON p.k = b.k$$) > 0 AS colocated_pruned;
+SELECT anser_ip_same($$SELECT p.v FROM anser_ip_neg_probe p JOIN anser_ip_neg_build b ON p.k = b.k$$) AS colocated_same;
+SELECT count(*) AS colocated_rows FROM anser_ip_neg_probe p JOIN anser_ip_neg_build b ON p.k = b.k;
+DROP TABLE anser_ip_neg_probe, anser_ip_neg_build;
+
+-- A filter that rejects only 1% of the rows switches itself off after its
+-- first sample and only samples again now and then
+-- (gp_runtime_filter_min_reject_pct): it removes fewer rows than a filter
+-- kept on throughout, but some.  The answer is the same either way.  The
+-- predicate is not on the join key: the planner would copy one that is to the
+-- probe scan, whose own qual would then drop the rows first.
+SET gp_runtime_filter_min_reject_pct = 0;
+SELECT anser_ip_pruned($$SELECT f.v FROM anser_ip_fact f JOIN anser_ip_dim d ON f.k = d.k WHERE d.grp <> 7$$) AS always_pruned \gset
+RESET gp_runtime_filter_min_reject_pct;
+SELECT anser_ip_pruned($$SELECT f.v FROM anser_ip_fact f JOIN anser_ip_dim d ON f.k = d.k WHERE d.grp <> 7$$) BETWEEN 1 AND :always_pruned - 1 AS weak_filter_skipped;
+SELECT anser_ip_same($$SELECT f.v FROM anser_ip_fact f JOIN anser_ip_dim d ON f.k = d.k WHERE d.grp <> 7$$) AS weak_filter_same;
+
+-- An IS NOT DISTINCT FROM join above the nullable side of an outer join must
+-- not filter that side: a dropped row would come back NULL-extended and match
+-- the build side's NULL.  See the same case in anser_runtime_filter.
+SET optimizer = on;
+SET gp_enable_runtime_filter = off;
+CREATE TABLE anser_ip_s (x int, y int) DISTRIBUTED BY (x);
+CREATE TABLE anser_ip_r (x int, k int) DISTRIBUTED BY (x);
+CREATE TABLE anser_ip_b (k int) DISTRIBUTED RANDOMLY;
+INSERT INTO anser_ip_s SELECT g, g FROM generate_series(1, 100000) g;
+INSERT INTO anser_ip_r SELECT g, g + 1000000 FROM generate_series(1, 100000) g;
+INSERT INTO anser_ip_b VALUES (NULL);
+INSERT INTO anser_ip_b SELECT g FROM generate_series(1, 10) g;
+ANALYZE anser_ip_s;
+ANALYZE anser_ip_r;
+ANALYZE anser_ip_b;
+SELECT count(*) AS indf_rows FROM (anser_ip_s s LEFT JOIN anser_ip_r r ON s.x = r.x)
+    JOIN anser_ip_b b ON r.k IS NOT DISTINCT FROM b.k;
+DROP TABLE anser_ip_s, anser_ip_r, anser_ip_b;
+RESET gp_enable_runtime_filter;
+SET optimizer = off;
+
+-- With anser.runtime_filter_inplace off, the same join is exchanged again.
+SET anser.runtime_filter_inplace = off;
+SELECT anser_ip_mode($$SELECT f.k, f.v FROM anser_ip_fact f JOIN anser_ip_dim d ON f.k = d.k WHERE d.grp = 7$$) AS inplace_off_mode;
+RESET anser.runtime_filter_inplace;
+
+DROP TABLE anser_ip_fact, anser_ip_dim;
+DROP FUNCTION anser_ip_mode(text);
+DROP FUNCTION anser_ip_pruned(text);
+DROP FUNCTION anser_ip_same(text);
+RESET anser.runtime_filter;
+RESET anser.timeout_ms;
+RESET optimizer;
+RESET enable_mergejoin;
+RESET enable_nestloop;

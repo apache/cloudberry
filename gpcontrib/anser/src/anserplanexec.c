@@ -37,6 +37,8 @@
  */
 #include "postgres.h"
 
+#include "access/tableam.h"
+
 #include "anserplanutils.h"
 
 #include "access/skey.h"
@@ -56,6 +58,7 @@
 #include "nodes/pg_list.h"
 #include "nodes/value.h"
 #include "utils/guc.h"
+#include "utils/rel.h"
 
 /*
  * Positional layout of CustomScan.custom_private shared with anserplan.c.
@@ -113,6 +116,7 @@ typedef struct AnserBloomConsumeScanState
 								 * building its hash; see anser_consume_receive() */
 	bool		probed;			/* has the join pulled a tuple from us before? */
 	bool		pushed_down;	/* child scan applies the filter before projection */
+	bool		pushdown_tried;	/* anser_consume_pushdown() ran, whatever it did */
 } AnserBloomConsumeScanState;
 
 /* Provider callbacks. */
@@ -568,6 +572,7 @@ anser_consume_begin(CustomScanState *node, EState *estate, int eflags)
 	st->defer_first = (intVal(list_nth(priv, ANSER_RF_PRIV_DEFER_FIRST)) != 0);
 	st->probed = false;
 	st->pushed_down = false;
+	st->pushdown_tried = false;
 
 	anser_rf_build_key(cscan, &key);
 	anser_rf_part_info(cscan, &part_index, &expected_parts);
@@ -748,6 +753,31 @@ AnserPushdownAccepts(PlanState *ps, AttrNumber attno, AttrNumber *sk_attno_out)
  * directly above the scan, and the only thing that later gets between them is
  * another one of ours.
  */
+/*
+ * Keep Anser quals off scans whose table AM does not simply run the
+ * executor's qual; the consumer probes the rows itself there.
+ *
+ *	 - AOCO can evaluate a scan's qual before it loads the columns absent from
+ *	   the original SQL qual, so an Anser qual there could read a key that is
+ *	   not loaded yet.
+ *	 - An AM that takes runtime filters (SCAN_SUPPORT_RUNTIME_FILTER; PAX) may
+ *	   rebuild its own row filter from the plan's qual and clear the
+ *	   executor's, which would drop ours: the filter would be lost while the
+ *	   consumer believes it was pushed down.
+ */
+static bool
+anser_runtime_qual_accepts(PlanState *ps, AttrNumber attno,
+						   AttrNumber *sk_attno_out)
+{
+	Relation	rel;
+
+	if (!anser_scan_qual_accepts(ps, attno, sk_attno_out))
+		return false;
+	rel = ((SeqScanState *) ps)->ss.ss_currentRelation;
+	return rel != NULL && !RelationIsAoCols(rel) &&
+		(table_scan_flags(rel) & SCAN_SUPPORT_RUNTIME_FILTER) == 0;
+}
+
 static PlanState *
 anser_pushdown_target(PlanState *top, AttrNumber attno,
 					  AttrNumber *sk_attno_out, bool scan_qual)
@@ -764,7 +794,7 @@ anser_pushdown_target(PlanState *top, AttrNumber attno,
 		TargetEntry *tle;
 		Var		   *var;
 
-		if (scan_qual ? anser_scan_qual_accepts(cur, cur_attno, &sk_attno) :
+		if (scan_qual ? anser_runtime_qual_accepts(cur, cur_attno, &sk_attno) :
 			AnserPushdownAccepts(cur, cur_attno, &sk_attno))
 		{
 			best = cur;
@@ -825,10 +855,12 @@ anser_bloom_scan_qual(ExprState *expr, ExprContext *context, bool *isnull)
 	Datum		value;
 
 	*isnull = false;
+	if (bloom_runtime_probe_skip(qual->filter))
+		return BoolGetDatum(ExecQual(qual->original, context));
 	value = slot_getattr(context->ecxt_scantuple, qual->key_attno, &key_isnull);
 	if (!key_isnull)
 	{
-		if (AnserBloomLacksKey(qual->filter, value, qual->key_length))
+		if (AnserBloomProbe(qual->filter, value, qual->key_length))
 		{
 			InstrCountFilteredPRF(qual->scan, 1);
 			/* ExecScan adds one to nfiltered1 when this qual returns false.
@@ -855,12 +887,31 @@ anser_consume_pushdown(CustomScanState *node)
 	MemoryContext oldcxt;
 	bool		scan_qual = st->key_length < sizeof(Datum);
 
-	if (!scan_qual && !gp_enable_runtime_filter_pushdown)
-		return;
-
 	target = anser_pushdown_target(child, st->key_attno, &sk_attno, scan_qual);
+
+	/*
+	 * A full-width key prefers core's scan-key path, which a table AM can use
+	 * for block pruning, but that path needs gp_enable_runtime_filter_pushdown.
+	 * Without it, use our own qual: it works for every key width.
+	 */
+	if (target == NULL && !scan_qual)
+	{
+		scan_qual = true;
+		target = anser_pushdown_target(child, st->key_attno, &sk_attno, true);
+	}
 	if (target == NULL)
+	{
+		/* Probing in this node costs a slot copy per row; say why. */
+		elog(DEBUG1,
+			 "anser bloom consumer: no scan to push the filter into, probing here "
+			 "(key position %d, %s key, child %s)",
+			 st->key_attno, scan_qual ? "narrow" : "full-width",
+			 IsA(child, SeqScanState) ?
+			 (((SeqScanState *) child)->filter_in_seqscan ? "SeqScan" :
+			  "SeqScan without runtime filters") :
+			 "not a SeqScan");
 		return;
+	}
 
 	/* Both eligibility paths require a plain SeqScan. */
 	Assert(IsA(target, SeqScanState));
@@ -906,11 +957,15 @@ anser_consume_next(CustomScanState *node)
 	anser_consume_receive(st);
 
 	/*
-	 * When the pushdown machinery is enabled, hand the filter to the scan and
-	 * pass tuples through untouched; otherwise probe the filter here.
+	 * Hand the filter to the scan once, and pass tuples through untouched if
+	 * it took it; otherwise probe the filter here.  Once: a scan that cannot
+	 * take it now will not later, and the search is not free.
 	 */
-	if (st->filter != NULL && !st->pushed_down)
+	if (st->filter != NULL && !st->pushdown_tried)
+	{
+		st->pushdown_tried = true;
 		anser_consume_pushdown(node);
+	}
 
 	for (;;)
 	{
@@ -926,6 +981,10 @@ anser_consume_next(CustomScanState *node)
 		 * projection): pass everything.
 		 */
 		if (st->filter == NULL || st->pushed_down)
+			return AnserFilterChildSlot(node, slot);
+
+		/* The filter turned itself off for now; see bloom_runtime_probe(). */
+		if (bloom_runtime_probe_skip(st->filter))
 			return AnserFilterChildSlot(node, slot);
 
 		/*
@@ -946,7 +1005,7 @@ anser_consume_next(CustomScanState *node)
 			 * segment-executed nodes too.
 			 */
 			InstrCountFiltered1(node, 1);
-			if (AnserBloomLacksKey(st->filter, value, st->key_length))
+			if (AnserBloomProbe(st->filter, value, st->key_length))
 			{
 				/* Definitely absent from the build side -> prune. */
 				InstrCountFiltered2(node, 1);
