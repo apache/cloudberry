@@ -1203,12 +1203,16 @@ tsCompareString(char *a, int _lena, char *b, int _lenb, bool prefix)
 	else
 	{
 
+#if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
 
 		cmp = memcmp(a, b, Min(lena, lenb));
 
+#if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic pop
+#endif
 
 		if (prefix)
 		{

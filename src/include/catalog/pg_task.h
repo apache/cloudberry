@@ -39,6 +39,7 @@
 CATALOG(pg_task,9637,TaskRelationId) BKI_SHARED_RELATION
 {
 	Oid			jobid;
+#ifdef CATALOG_VARLEN			/* variable-length fields start here */
 	text		schedule;
 	text		command;
 	text		nodename;
@@ -47,6 +48,7 @@ CATALOG(pg_task,9637,TaskRelationId) BKI_SHARED_RELATION
 	text		username;
 	bool		active BKI_DEFAULT(t);
 	text		jobname;
+#endif
 } FormData_pg_task;
 
 typedef FormData_pg_task *Form_pg_task;

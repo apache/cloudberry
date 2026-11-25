@@ -27,6 +27,9 @@ PGFILEDESC = "pax - PAX table access method"
 PAX_REGRESS_DIR = src/test/regress
 PAX_ISOLATION2_DIR = src/test/isolation2
 
+# CMake builds pax.so. PGXS has no PAX objects to install as LLVM bitcode.
+with_llvm = no
+
 ifdef USE_PGXS
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
