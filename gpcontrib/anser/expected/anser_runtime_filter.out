@@ -1186,10 +1186,16 @@ BEGIN
     EXECUTE 'CREATE TABLE anser_pax_build (id int, pad int) DISTRIBUTED BY (pad)';
     EXECUTE 'CREATE TABLE anser_pax_probe (id int, v int) USING pax DISTRIBUTED BY (v)';
     EXECUTE 'INSERT INTO anser_pax_build SELECT -g, g FROM generate_series(1, 1000) g';
-    EXECUTE 'INSERT INTO anser_pax_probe SELECT -(g % 1000 + 1), g FROM generate_series(1, 100000) g';
-    EXECUTE 'INSERT INTO anser_pax_probe SELECT -(g % 1000 + 1001), g FROM generate_series(1, 10000) g';
+    -- Mix 100,000 matches and 10,000 misses in the same scan groups.
+    EXECUTE 'INSERT INTO anser_pax_probe
+             SELECT CASE WHEN g % 11 = 0 THEN -(g % 1000 + 1001)
+                         ELSE -(g % 1000 + 1) END, g
+             FROM generate_series(1, 110000) g';
     EXECUTE 'ANALYZE anser_pax_build';
     EXECUTE 'ANALYZE anser_pax_probe';
+    -- This fixture checks scan placement. Keep adaptive backoff from
+    -- masking probe rejections on either the SeqScan or PAX path.
+    PERFORM set_config('gp_runtime_filter_min_reject_pct', '0', true);
     PERFORM set_config('gp_enable_runtime_filter', 'off', true);
     PERFORM set_config('gp_enable_runtime_filter_pushdown', 'off', true);
     FOREACH opt IN ARRAY ARRAY['off', 'on'] LOOP
