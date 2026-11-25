@@ -769,6 +769,10 @@ table mutable;
 -- the only invalidation, and each ANALYZE case gets its own table because
 -- ANALYZE only invalidates when it actually changes the statistics.
 set debug_discard_caches = 0;
+-- Cloudberry: the SELECT reads the row through a Motion from a segment, and
+-- a Motion does not send system columns, so the ctid of each source row is
+-- (4294967295,0).  The checks still show whether the assignment copies the
+-- source tuple (dst = src) or converts it (dst is NULL).
 create table sysmove(f1 int);
 insert into sysmove values (1);
 create domain sysmoved as sysmove;
@@ -779,7 +783,7 @@ begin
   d := s;
   raise notice 'rowtype -> rowtype: src %, dst %', s.ctid, d.ctid;
 end$$;
-NOTICE:  rowtype -> rowtype: src (0,1), dst (0,1)
+NOTICE:  rowtype -> rowtype: src (4294967295,0), dst (4294967295,0)
 do $$
 declare s record; d sysmove;
 begin
@@ -787,7 +791,7 @@ begin
   d := s;
   raise notice 'record  -> rowtype: src %, dst %', s.ctid, d.ctid;
 end$$;
-NOTICE:  record  -> rowtype: src (0,1), dst <NULL>
+NOTICE:  record  -> rowtype: src (4294967295,0), dst <NULL>
 do $$
 declare s sysmoved; d sysmove;
 begin
@@ -795,7 +799,7 @@ begin
   d := s;
   raise notice 'domain  -> rowtype: src %, dst %', s.ctid, d.ctid;
 end$$;
-NOTICE:  domain  -> rowtype: src (0,1), dst (0,1)
+NOTICE:  domain  -> rowtype: src (4294967295,0), dst (4294967295,0)
 do $$
 declare s sysmoved; d record;
 begin
@@ -803,7 +807,7 @@ begin
   d := s;
   raise notice 'domain  -> record:  src %, dst %', s.ctid, d.ctid;
 end$$;
-NOTICE:  domain  -> record:  src (0,1), dst (0,1)
+NOTICE:  domain  -> record:  src (4294967295,0), dst (4294967295,0)
 create table sysmove2(f1 int);
 insert into sysmove2 values (1);
 create domain sysmoved2 as sysmove2;
@@ -815,7 +819,7 @@ begin
   d := s;
   raise notice 'domain  -> rowtype, invalidated: src %, dst %', s.ctid, d.ctid;
 end$$;
-NOTICE:  domain  -> rowtype, invalidated: src (0,1), dst (0,1)
+NOTICE:  domain  -> rowtype, invalidated: src (4294967295,0), dst (4294967295,0)
 create table sysmove3(f1 int);
 insert into sysmove3 values (1);
 create domain sysmoved3 as sysmove3;
@@ -827,7 +831,7 @@ begin
   d := s;
   raise notice 'domain  -> record,  invalidated: src %, dst %', s.ctid, d.ctid;
 end$$;
-NOTICE:  domain  -> record,  invalidated: src (0,1), dst (0,1)
+NOTICE:  domain  -> record,  invalidated: src (4294967295,0), dst (4294967295,0)
 -- A rename round trip also invalidates the descriptor without changing the
 -- row type.  Copying the tuple should still preserve its system columns.
 do $$
@@ -839,7 +843,7 @@ begin
   d := s;
   raise notice 'domain  -> rowtype, renamed: src %, dst %', s.ctid, d.ctid;
 end$$;
-NOTICE:  domain  -> rowtype, renamed: src (0,1), dst (0,1)
+NOTICE:  domain  -> rowtype, renamed: src (4294967295,0), dst (4294967295,0)
 drop domain sysmoved, sysmoved2, sysmoved3;
 drop table sysmove, sysmove2, sysmove3;
 reset debug_discard_caches;
