@@ -32,8 +32,6 @@
 #include "catalog/pg_task_run_history_d.h"
 #include "datatype/timestamp.h"
 
-#define timestamptz Datum
-
 /* ----------------
  *		pg_task_run_history definition.  cpp turns this into
  *		typedef struct FormData_pg_task_run_history
@@ -44,6 +42,7 @@ CATALOG(pg_task_run_history,9993,TaskRunHistoryRelationId) BKI_SHARED_RELATION
 	Oid         runid;
 	Oid         jobid;
 	int32		job_pid BKI_DEFAULT(0);
+#ifdef CATALOG_VARLEN			/* variable-length fields start here */
 	text		database;
 	text		username;
 	text		command;
@@ -51,6 +50,7 @@ CATALOG(pg_task_run_history,9993,TaskRunHistoryRelationId) BKI_SHARED_RELATION
     text        return_message;
     timestamptz start_time;
     timestamptz end_time;
+#endif
 } FormData_pg_task_run_history;
 
 typedef FormData_pg_task_run_history *Form_pg_task_run_history;
@@ -70,7 +70,5 @@ extern void TaskRunHistoryUpdate(Oid runid, int32 *job_pid, const char *status,
 extern void MarkRunningTaskAsFailed(void);
 
 extern void RemoveTaskRunHistoryByJobId(Oid jobid);
-
-#undef timestamptz
 
 #endif			/* PG_TASK_RUN_HISTORY_H */

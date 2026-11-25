@@ -12625,12 +12625,12 @@ pg_get_dynamic_table_schedule(PG_FUNCTION_ARGS)
 {
 	Oid			relid = PG_GETARG_OID(0);
 	Relation 	pg_task;
-	StringInfoData buf;
+	char		*jobname;
 	char		*username;
 	SysScanDesc		scanDescriptor = NULL;
 	ScanKeyData scanKey[2];
 	HeapTuple		heapTuple = NULL;
-	Form_pg_task	task = NULL;
+	text		*result;
 
 	if (!get_rel_relisdynamic(relid))
 	{
@@ -12647,14 +12647,13 @@ pg_get_dynamic_table_schedule(PG_FUNCTION_ARGS)
 		PG_RETURN_TEXT_P(cstring_to_text(""));
 	}
 
-	initStringInfo(&buf);
-	appendStringInfo(&buf, "%s%u", DYNAMIC_TASK_PREFIX, relid);
+	jobname = psprintf("%s%u", DYNAMIC_TASK_PREFIX, relid);
 
 	/* FIXME: is it possible that supersuers try to dump task? */
 	username = GetUserNameFromId(GetUserId(), false);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_task_jobname,
-				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(buf.data));
+				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(jobname));
 	ScanKeyInit(&scanKey[1], Anum_pg_task_username,
 				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(username));
 
@@ -12666,20 +12665,23 @@ pg_get_dynamic_table_schedule(PG_FUNCTION_ARGS)
 	{
 		ereport(WARNING,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("task \"%s\" does not exist", buf.data)));
-		table_close(pg_task, AccessShareLock);
-		PG_RETURN_TEXT_P(cstring_to_text(""));
+				 errmsg("task \"%s\" does not exist", jobname)));
+		result = cstring_to_text("");
 	}
+	else
+	{
+		Datum		schedule;
+		bool		isnull;
 
-	task = (Form_pg_task) GETSTRUCT(heapTuple);
-
-	resetStringInfo(&buf);
-	appendStringInfo(&buf, "%s", text_to_cstring(&task->schedule));
+		schedule = heap_getattr(heapTuple, Anum_pg_task_schedule,
+							   RelationGetDescr(pg_task), &isnull);
+		result = isnull ? cstring_to_text("") : DatumGetTextPCopy(schedule);
+	}
 
 	systable_endscan(scanDescriptor);
 	table_close(pg_task, AccessShareLock);
 
-	PG_RETURN_TEXT_P(string_to_text(buf.data));
+	PG_RETURN_TEXT_P(result);
 }
 
 /* ----------
