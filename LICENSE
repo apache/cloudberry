@@ -394,6 +394,12 @@ The PostgreSQL software includes:
       contrib/pgcrypto/imath.c
       see licenses/LICENSE-imath.txt
 
+      RPT+ transfer-graph code adapted from dynamic-predicate-transfer:
+      gpcontrib/robust_predicate_transfer/include/rpt.h
+      gpcontrib/robust_predicate_transfer/src/rptgraph.cpp
+      gpcontrib/robust_predicate_transfer/src/rptplan.cpp
+      see licenses/LICENSE-mit-duckdb-rpt.txt
+
 ----------------------------
    Apache License v2.0 with LLVM Exceptions
 

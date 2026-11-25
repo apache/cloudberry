@@ -194,6 +194,9 @@ jobs:
               {"test":"ic-anser",
                "make_configs":["gpcontrib/anser:installcheck-with-install"]
               },
+              {"test":"ic-rpt",
+               "make_configs":["gpcontrib/robust_predicate_transfer:installcheck-with-install"]
+              },
               {"test":"pax-ic-good-opt-off",
                "make_configs":[
                 "contrib/pax_storage/:pax-test",

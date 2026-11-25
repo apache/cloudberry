@@ -57,6 +57,11 @@ ifeq "$(with_anser)" "yes"
 	recurse_targets += anser
 endif
 
+# RPT+ rides on Anser: --with-rpt (off by default, needs --with-anser).
+ifeq "$(with_rpt)" "yes"
+	recurse_targets += robust_predicate_transfer
+endif
+
 $(call recurse,all install clean distclean, $(recurse_targets))
 
 all: gpcloud orafce

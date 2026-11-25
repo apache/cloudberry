@@ -10,3 +10,12 @@ This product includes software originally developed by VMware.
 
 Greenplum Database
 Copyright (c) 2004-2020 VMware, Inc. or its affiliates. All Rights Reserved.
+
+---------------------------------------------------------------------------
+
+This product includes RPT+ transfer-graph code in
+gpcontrib/robust_predicate_transfer adapted from the
+dynamic-predicate-transfer artifact:
+https://github.com/embryo-labs/dynamic-predicate-transfer
+
+Copyright 2018-2025 Stichting DuckDB Foundation

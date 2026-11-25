@@ -1,0 +1,8 @@
+/test/graph_test
+/test/inject_test
+/test/forward_walk_test
+/test/local_hash_test
+/test/*.dSYM
+
+# Local design notes and implementation plans.
+/docs/
