@@ -1877,6 +1877,9 @@ aoco_index_build_range_scan(Relation heapRelation,
 			if (idxproj[i])
 				aocoscan->columnScanInfo.proj_atts[aocoscan->columnScanInfo.num_proj_atts++] = i;
 		}
+		/* A constant-only index still needs an anchor column to scan tuples. */
+		if (aocoscan->columnScanInfo.num_proj_atts == 0)
+			aocoscan->columnScanInfo.projKind = AOCS_PROJ_ANY;
 		pfree(idxproj);
 	}
 
@@ -2103,7 +2106,13 @@ aoco_index_build_range_scan(Relation heapRelation,
 		 * directory, otherwise we need to scan only the columns projected. So,
 		 * calculate the total blocks accordingly.
 		 */
-		if (need_create_blk_directory)
+		/*
+		 * A constant-only index has no projected attributes.  The AOCS scan
+		 * will choose an anchor column when it is initialized, but use the
+		 * whole-relation total for progress reporting before then.
+		 */
+		if (need_create_blk_directory ||
+			aocoscan->columnScanInfo.num_proj_atts == 0)
 			fileSegTotals = GetAOCSSSegFilesTotals(heapRelation,
 												   aocoscan->appendOnlyMetaDataSnapshot);
 		else
