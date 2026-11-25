@@ -1,0 +1,94 @@
+-- errors_ddl: storage errors seen from DDL.  A bad path, a bad bucket, bad credentials
+-- and an endpoint nothing listens on all have to come back as a "lance: "
+-- error and leave the backend usable.
+--
+-- Their messages quote paths, buckets and lance's own wording, none of which
+-- is comparable across environments, so the statements run through
+-- lance_feature.capture(): it reports the shape of the failure and swallows
+-- the text.
+\pset format unaligned
+-- A local path that is not there.
+CREATE SERVER lance_missing FOREIGN DATA WRAPPER lance_fdw
+  OPTIONS (base_uri 'file:///lance_fdw_no_such_directory');
+SELECT lance_feature.capture($$IMPORT FOREIGN SCHEMA x LIMIT TO ("nope.lance")
+  FROM SERVER lance_missing INTO lance_feature$$) AS missing_path;
+missing_path
+lance error
+(1 row)
+-- Nothing was left half-created.
+SELECT count(*) AS leftovers
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'lance_feature' AND c.relname LIKE 'nope%';
+leftovers
+0
+(1 row)
+DO $$
+BEGIN
+  -- a bucket that does not exist, with working credentials
+  EXECUTE format('CREATE SERVER lance_badbucket FOREIGN DATA WRAPPER lance_fdw '
+                 'OPTIONS (base_uri %L, aws_endpoint %L, aws_region %L, allow_http %L)',
+                 's3://lance-fdw-no-such-bucket/fixtures',
+                 current_setting('regress.s3_endpoint'),
+                 current_setting('regress.s3_region'), 'true');
+  EXECUTE format('CREATE USER MAPPING FOR PUBLIC SERVER lance_badbucket '
+                 'OPTIONS (aws_access_key_id %L, aws_secret_access_key %L)',
+                 current_setting('regress.s3_key'),
+                 current_setting('regress.s3_secret'));
+  -- the real bucket, with credentials that are not
+  EXECUTE format('CREATE SERVER lance_badcreds FOREIGN DATA WRAPPER lance_fdw '
+                 'OPTIONS (base_uri %L, aws_endpoint %L, aws_region %L, allow_http %L)',
+                 's3://' || current_setting('regress.s3_bucket') || '/fixtures',
+                 current_setting('regress.s3_endpoint'),
+                 current_setting('regress.s3_region'), 'true');
+  EXECUTE 'CREATE USER MAPPING FOR PUBLIC SERVER lance_badcreds '
+          'OPTIONS (aws_access_key_id ''wrong-key'', aws_secret_access_key ''wrong-secret'')';
+  -- an endpoint nothing listens on; object_store retries a refused connection
+  -- with backoff, so this one takes about a minute to give up
+  EXECUTE format('CREATE SERVER lance_badendpoint FOREIGN DATA WRAPPER lance_fdw '
+                 'OPTIONS (base_uri %L, aws_endpoint %L, aws_region %L, allow_http %L)',
+                 's3://' || current_setting('regress.s3_bucket') || '/fixtures',
+                 'http://127.0.0.1:1',
+                 current_setting('regress.s3_region'), 'true');
+  EXECUTE format('CREATE USER MAPPING FOR PUBLIC SERVER lance_badendpoint '
+                 'OPTIONS (aws_access_key_id %L, aws_secret_access_key %L)',
+                 current_setting('regress.s3_key'),
+                 current_setting('regress.s3_secret'));
+END
+$$;
+SELECT lance_feature.capture($$IMPORT FOREIGN SCHEMA x LIMIT TO ("frag_3.lance")
+  FROM SERVER lance_badbucket INTO lance_feature$$) AS missing_bucket;
+missing_bucket
+lance error
+(1 row)
+SELECT lance_feature.capture($$IMPORT FOREIGN SCHEMA x LIMIT TO ("frag_3.lance")
+  FROM SERVER lance_badcreds INTO lance_feature$$) AS bad_credentials;
+bad_credentials
+lance error
+(1 row)
+SELECT lance_feature.capture($$IMPORT FOREIGN SCHEMA x LIMIT TO ("frag_3.lance")
+  FROM SERVER lance_badendpoint INTO lance_feature$$) AS unreachable_endpoint;
+unreachable_endpoint
+lance error
+(1 row)
+-- After all of that, the same backend still reads a real dataset.
+DO $$
+BEGIN
+  EXECUTE format('CREATE SERVER lance_ok FOREIGN DATA WRAPPER lance_fdw OPTIONS (base_uri %L)',
+                 current_setting('regress.fixture_dir'));
+END
+$$;
+SELECT lance_feature.capture($$IMPORT FOREIGN SCHEMA x LIMIT TO ("frag_7.lance")
+  FROM SERVER lance_ok INTO lance_feature$$) AS after_errors;
+after_errors
+no error
+(1 row)
+SELECT format('%s %s', a.attname, format_type(a.atttypid, a.atttypmod)) AS definition
+  FROM pg_attribute a
+  WHERE a.attrelid = 'lance_feature."frag_7.lance"'::regclass
+    AND a.attnum > 0 AND NOT a.attisdropped
+  ORDER BY a.attnum;
+definition
+id integer
+v text
+n bigint
+(3 rows)

@@ -1,0 +1,8 @@
+{"id":0,"small":"s0","txt":{"chars":0,"bytes":0,"md5":"d41d8cd98f00b204e9800998ecf8427e"}}
+{"id":1,"small":"s1","txt":{"chars":1,"bytes":1,"md5":"0cc175b9c0f1b6a831c399e269772661"}}
+{"id":2,"small":"s2","txt":{"chars":4096,"bytes":4096,"md5":"add393b0c444e104a2d1dbf082ca8de6"}}
+{"id":3,"small":"s3","txt":{"chars":65536,"bytes":65536,"md5":"5ffbfab2940035c7af087e83e1672bdf"}}
+{"id":4,"small":"s4","txt":{"chars":1048576,"bytes":1048576,"md5":"b0b0f223932ffc0bda1ea21ab89d2f6f"}}
+{"id":5,"small":"s5","txt":null}
+{"id":6,"small":"s6","txt":{"chars":4000,"bytes":12000,"md5":"806ac04f7b9a5adef2f76fb2d13a620b"}}
+{"id":7,"small":"s7","txt":{"chars":10,"bytes":10,"md5":"167a299539880e2f347a417e0f15c1e2"}}
