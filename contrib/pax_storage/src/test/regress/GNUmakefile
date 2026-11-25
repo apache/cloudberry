@@ -47,7 +47,5 @@ icw_test: tablespace-setup
 regress_link:
 	ln -sf $(REGRESS_DIR)/twophase_pqexecparams twophase_pqexecparams
 	ln -sf $(PKGLIBDIR)/regress.so regress.so
-	rm -rf hooktest && mkdir hooktest
-	ln -sf $(PKGLIBDIR)/test_hook.so hooktest/test_hook.so
 	rm -rf query_info_hook_test && mkdir query_info_hook_test
 	ln -sf $(PKGLIBDIR)/query_info_hook_test.so query_info_hook_test/query_info_hook_test.so
