@@ -1672,6 +1672,8 @@ typedef struct SeqScanState
 	List		*filters;			/* the list of struct ScanKeyData */
 	bool		filter_in_seqscan;	/* check scan slot with runtime filters in
                                        seqscan node or in am */
+	bool		filters_in_am;		/* the scan began with runtime filters
+									 * handed to the table AM */
 } SeqScanState;
 
 /* ----------------

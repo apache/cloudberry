@@ -86,6 +86,7 @@ SeqNext(SeqScanState *node)
 		{
 			// pushdown runtime filter to AM
 			keys = ScanKeyListToArray(node->filters, &nkeys);
+			node->filters_in_am = true;
 		}
 
 		/*
@@ -293,7 +294,26 @@ ExecReScanSeqScan(SeqScanState *node)
 
 	scan = node->ss.ss_currentScanDesc;
 
-	if (scan != NULL)
+	if (scan != NULL && node->filters_in_am)
+	{
+		/*
+		 * The table AM keeps copies of the runtime filter keys it was given,
+		 * such as the min/max range.  A rescan of the join above may rebuild
+		 * its hash table, which frees those filters and builds new ones
+		 * (ResetRuntimeFilter), but table_rescan() hands the AM no new keys
+		 * and PAX's ignores them.  Start a fresh scan instead: the next
+		 * SeqNext() hands the AM the current filters, and the AM's copies go
+		 * away with the old scan.
+		 */
+		ExecClearTuple(node->ss.ss_ScanTupleSlot);
+		table_endscan(scan);
+		node->ss.ss_currentScanDesc = NULL;
+		node->filters_in_am = false;
+		/* The AM may have turned executor-side checking off; restore it. */
+		node->filter_in_seqscan = gp_enable_runtime_filter_pushdown &&
+			!node->ss.ps.state->useMppParallelMode;
+	}
+	else if (scan != NULL)
 		table_rescan(scan,		/* scan desc */
 					 NULL);		/* new scan keys */
 

@@ -4361,6 +4361,22 @@ PushdownRuntimeFilter(HashState *node)
 		if (IsA(attr_filter->target, SeqScanState))
 		{
 			SeqScanState *sss = castNode(SeqScanState, attr_filter->target);
+
+			/*
+			 * A scan that has already started -- the join fetched its first
+			 * outer tuple before building the hash table -- no longer hands
+			 * filters to the table AM.  If the AM took the earlier ones and
+			 * turned executor-side checking off, leave those with the AM and
+			 * check only the new ones here: probing the AM's filters again
+			 * would cost twice and skew their adaptive sampling, which would
+			 * then only see the rows the AM let through.
+			 */
+			if (sss->ss.ss_currentScanDesc != NULL && !sss->filter_in_seqscan)
+			{
+				list_free(sss->filters);
+				sss->filters = NIL;
+				sss->filter_in_seqscan = true;
+			}
 			sss->filters = list_concat(sss->filters, scankeys);
 		}
 		else if (IsA(attr_filter->target, DynamicSeqScanState))

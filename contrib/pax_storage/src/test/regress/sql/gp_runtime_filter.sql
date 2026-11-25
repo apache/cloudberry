@@ -332,7 +332,53 @@ END $$;
 
 DROP TABLE rf_neg_probe, rf_neg_build4, rf_neg_build8;
 
+-- A hash join rescanned with new build keys: for each outer row the nested
+-- loop runs the LATERAL subquery again, and the hash table is rebuilt from the
+-- build rows of that row's group, a different set of keys every time.  The
+-- PAX scan below must use the new filter on every iteration, not keep the
+-- copy of the first one it was given (its rescan does not take new keys, so
+-- the executor restarts the scan instead).
+CREATE TABLE rf_rs_outer (g int) DISTRIBUTED REPLICATED;
+INSERT INTO rf_rs_outer SELECT i FROM generate_series(1, 5) i;
+CREATE TABLE rf_rs_probe (k int, v int) USING pax DISTRIBUTED REPLICATED;
+INSERT INTO rf_rs_probe SELECT i % 100, i FROM generate_series(1, 20000) i;
+CREATE TABLE rf_rs_build (k int, g int) DISTRIBUTED REPLICATED;
+INSERT INTO rf_rs_build SELECT i, i % 5 + 1 FROM generate_series(0, 99) i;
+ANALYZE rf_rs_outer, rf_rs_probe, rf_rs_build;
+SET enable_mergejoin TO off;
+
+DO $$
+DECLARE
+    q constant text := 'SELECT o.g, s.c, s.total FROM rf_rs_outer o,
+        LATERAL (SELECT count(*) AS c, sum(p.v) AS total
+          FROM rf_rs_probe p JOIN rf_rs_build b ON p.k = b.k WHERE b.g = o.g) s';
+    line text;
+    nestloop boolean := false;
+    hashjoin boolean := false;
+    baseline jsonb[];
+    filtered jsonb[];
+    matches bigint;
+BEGIN
+    FOR line IN EXECUTE 'EXPLAIN (COSTS OFF) ' || q LOOP
+        nestloop := nestloop OR line LIKE '%Nested Loop%';
+        hashjoin := hashjoin OR line LIKE '%Hash Join%';
+    END LOOP;
+    IF NOT (nestloop AND hashjoin) THEN
+        RAISE EXCEPTION 'expected a rescanned hash join below a nested loop';
+    END IF;
+    baseline := rf_query_rows(q, false);
+    filtered := rf_query_rows(q, true);
+    SELECT sum((v->>'c')::bigint) INTO matches FROM unnest(baseline) AS t(v);
+    IF cardinality(baseline) <> 5 OR matches IS DISTINCT FROM 20000::bigint OR
+        filtered IS DISTINCT FROM baseline THEN
+        RAISE EXCEPTION 'rescan mismatch (groups %, matches %, filtered groups %)',
+            cardinality(baseline), matches, cardinality(filtered);
+    END IF;
+END $$;
+
 DROP FUNCTION rf_query_rows(text, boolean);
+DROP TABLE rf_rs_outer, rf_rs_probe, rf_rs_build;
+RESET enable_mergejoin;
 RESET gp_enable_runtime_filter_pushdown;
 RESET pax.enable_row_filter;
 
