@@ -15,6 +15,7 @@
 #include "gpos/test/CUnittest.h"
 
 #include "gpopt/base/CMaxCard.h"
+#include "gpopt/operators/CLogicalLimit.h"
 
 #include "unittest/gpopt/CTestUtils.h"
 
@@ -33,6 +34,7 @@ CMaxCardTest::EresUnittest()
 {
 	CUnittest rgut[] = {
 		GPOS_UNITTEST_FUNC(CMaxCardTest::EresUnittest_Basics),
+		GPOS_UNITTEST_FUNC(CMaxCardTest::EresUnittest_LimitCardinality),
 		GPOS_UNITTEST_FUNC(CMaxCardTest::EresUnittest_RunMinidumpTests)};
 
 	return CUnittest::EresExecute(rgut, GPOS_ARRAY_SIZE(rgut));
@@ -72,6 +74,54 @@ CMaxCardTest::EresUnittest_Basics()
 	GPOS_UNITTEST_ASSERT(GPOPT_MAX_CARD == mcFour);
 
 #endif
+
+	return GPOS_OK;
+}
+
+GPOS_RESULT
+CMaxCardTest::EresUnittest_LimitCardinality()
+{
+	CTestUtils::CTestSetup test_setup;
+	CMemoryPool *mp = test_setup.Pmp();
+
+	CExpression *pexprInnerLimit = CTestUtils::PexprLogicalLimit(
+		mp, CTestUtils::PexprLogicalGet(mp), 0, 7, true, true);
+	CExpression *pexprOuterLimit = CTestUtils::PexprLogicalLimit(
+		mp, pexprInnerLimit, 0, 4294967296LL, true, true);
+
+	GPOS_UNITTEST_ASSERT(7 == pexprOuterLimit->DeriveMaxCard().Ull());
+	pexprOuterLimit->Release();
+
+	CExpression *pexprInnerLimitWithoutCount = CTestUtils::PexprLogicalLimit(
+		mp, CTestUtils::PexprLogicalGet(mp), 0, 7, true, true);
+	CExpression *pexprLimitWithoutCount = CTestUtils::PexprLogicalLimit(
+		mp, pexprInnerLimitWithoutCount, 0, 0, true, false);
+
+	GPOS_UNITTEST_ASSERT(7 == pexprLimitWithoutCount->DeriveMaxCard().Ull());
+	pexprLimitWithoutCount->Release();
+
+	CExpression *pexprInnerLimitNegative = CTestUtils::PexprLogicalLimit(
+		mp, CTestUtils::PexprLogicalGet(mp), 0, 7, true, true);
+	COrderSpec *pos = GPOS_NEW(mp) COrderSpec(mp);
+	CExpression *pexprNegativeLimit = GPOS_NEW(mp) CExpression(
+		mp,
+		GPOS_NEW(mp) CLogicalLimit(mp, pos, true, true, false),
+		pexprInnerLimitNegative, CUtils::PexprScalarConstInt8(mp, 0),
+		CUtils::PexprScalarConstInt8(mp, -1));
+
+	GPOS_UNITTEST_ASSERT(7 == pexprNegativeLimit->DeriveMaxCard().Ull());
+	pexprNegativeLimit->Release();
+
+	CExpression *pexprInnerLimitNull = CTestUtils::PexprLogicalLimit(
+		mp, CTestUtils::PexprLogicalGet(mp), 0, 7, true, true);
+	COrderSpec *posNull = GPOS_NEW(mp) COrderSpec(mp);
+	CExpression *pexprNullLimit = GPOS_NEW(mp) CExpression(
+		mp, GPOS_NEW(mp) CLogicalLimit(mp, posNull, true, true, false),
+		pexprInnerLimitNull, CUtils::PexprScalarConstInt8(mp, 0),
+		CUtils::PexprScalarConstInt8(mp, 0, true));
+
+	GPOS_UNITTEST_ASSERT(7 == pexprNullLimit->DeriveMaxCard().Ull());
+	pexprNullLimit->Release();
 
 	return GPOS_OK;
 }
