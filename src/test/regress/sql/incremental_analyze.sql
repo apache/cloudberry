@@ -931,3 +931,30 @@ select c.relname, a.attname,
  order by 2, 1;
 reset default_statistics_target;
 drop table ndvbs_part_seg;
+
+-- A value occurring once in each leaf can land on different segments in
+-- different leaves.  The leaf segments-per-value ratio is one, but must not
+-- limit the root to one segment per value.  Being part of a multi-column
+-- distribution key does not make a column's values colocated either.
+set default_statistics_target = 100;
+create table ndvbs_sparse (id int, pk int, v int) distributed by (id, v)
+  partition by range (pk) (start (0) end (3) every (1));
+insert into ndvbs_sparse
+  select p * 100 + v, p, v
+  from generate_series(0, 2) p, generate_series(1, 100) v;
+analyze ndvbs_sparse;
+select ndv_by_segments > 1.5 * ndistinct as spans_segments,
+       ndv_by_segments <= least(300, 3 * ndistinct) as bounded
+from (
+  select ((case 8 when s.stakind1 then s.stavalues1::text when s.stakind2 then s.stavalues2::text
+                 when s.stakind3 then s.stavalues3::text when s.stakind4 then s.stavalues4::text
+                 when s.stakind5 then s.stavalues5::text end)::float8[])[1] as ndv_by_segments,
+         case when s.stadistinct < 0 then -s.stadistinct * c.reltuples
+              else s.stadistinct end as ndistinct
+    from pg_statistic s
+    join pg_class c on c.oid = s.starelid
+    join pg_attribute a on a.attrelid = s.starelid and a.attnum = s.staattnum
+   where s.starelid = 'ndvbs_sparse'::regclass and a.attname = 'v'
+) s;
+reset default_statistics_target;
+drop table ndvbs_sparse;

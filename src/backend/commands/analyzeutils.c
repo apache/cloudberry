@@ -1361,13 +1361,11 @@ bool
 aggregate_leaf_partition_ndvbs(int nParts,
 							   HeapTuple *heaptupleStats,
 							   float4 *relTuples,
-							   float8 *result,
-							   float8 *ndistinct_sum)
+							   float8 *result)
 {
 	bool valid;
 	Assert(nParts > 0);
 	Assert(result);
-	Assert(ndistinct_sum);
 
 	AttStatsSlot **ndvbsSlots = (AttStatsSlot **) palloc0((nParts) * sizeof(AttStatsSlot *));
 	valid = getNdvBySegHeapTuple(ndvbsSlots, heaptupleStats, relTuples, nParts);
@@ -1375,19 +1373,7 @@ aggregate_leaf_partition_ndvbs(int nParts,
 		for (int i = 0; i < nParts; i++)
 		{
 			if (ndvbsSlots[i]) {
-				Form_pg_statistic stat;
-
 				*result += DatumGetFloat8(ndvbsSlots[i]->values[0]);
-
-				/*
-				 * Sum the leaves' own ndistinct as well.  Both sums are over
-				 * the same leaves and on the same (absolute) scale, so their
-				 * ratio tells how many segments a distinct value of this
-				 * column sits on, on average.  See merge_leaf_stats().
-				 */
-				stat = (Form_pg_statistic) GETSTRUCT(heaptupleStats[i]);
-				*ndistinct_sum += stat->stadistinct < 0 ?
-					-stat->stadistinct * relTuples[i] : stat->stadistinct;
 			}
 		}
 	}

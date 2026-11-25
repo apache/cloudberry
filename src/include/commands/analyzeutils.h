@@ -64,6 +64,5 @@ extern bool leaf_parts_analyzed(Oid attrelid, Oid relid_exclude, List *va_cols, 
 extern bool aggregate_leaf_partition_ndvbs(int nParts,
 								HeapTuple *heaptupleStats,
 								float4 *relTuples,
-								float8 *result,
-								float8 *ndistinct_sum);
+								float8 *result);
 #endif  /* ANALYZEUTILS_H */

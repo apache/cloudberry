@@ -5018,12 +5018,10 @@ merge_leaf_stats(VacAttrStatsP stats,
 		old_context = MemoryContextSwitchTo(stats->anl_context);
 		bool valid;
 		double ndinstinct_by_segs = 0;
-		double leaf_ndistinct_sum = 0;
 		Datum *ndvbs;
 
 		valid = aggregate_leaf_partition_ndvbs(
-			numPartitions, heaptupleStats, relTuples, &ndinstinct_by_segs,
-			&leaf_ndistinct_sum);
+			numPartitions, heaptupleStats, relTuples, &ndinstinct_by_segs);
 
 		if (valid)
 		{
@@ -5034,17 +5032,12 @@ merge_leaf_stats(VacAttrStatsP stats,
 			 * with the number of partitions and ORCA overestimates the output of
 			 * a local aggregate.
 			 *
-			 * This statistic counts a distinct value once per segment holding
-			 * it, so it is the column's ndistinct times the average number of
-			 * segments a value sits on.  That average does not depend on the
-			 * partitioning, so take it from the leaves, where the sums are free
-			 * of the double counting, and apply it to the root's ndistinct.
-			 * For a partitioning key, whose values belong to one leaf each, the
-			 * result is the plain sum as before.
-			 *
-			 * The average is between one and the number of segments.  Keeping
-			 * the sum as an upper bound guards against the root's ndistinct and
-			 * the leaves' one disagreeing, as they are estimated separately.
+			 * Estimate segment occupancy from root-level frequencies rather
+			 * than the leaves' segments-per-value ratio.  Under independent
+			 * placement, k occurrences occupy S * (1 - (1 - 1/S)^k) segments
+			 * on average.  Use the MCV frequencies and distribute the remaining
+			 * non-null rows uniformly among the remaining distinct values.
+			 * Equal values of the sole hash distribution key are colocated.
 			 */
 			double		root_ndistinct = stats->stadistinct < 0 ?
 				-stats->stadistinct * totalTuples : stats->stadistinct;
@@ -5054,16 +5047,50 @@ merge_leaf_stats(VacAttrStatsP stats,
 				GpPolicy   *policy = GpPolicyFetch(stats->attr->attrelid);
 				int			numsegments = policy->numsegments > 0 ?
 					policy->numsegments : getgpsegmentCount();
-				double		segs_per_value;
+				double		nonnull_rows = Max(0.0,
+					totalTuples * (1.0 - stats->stanullfrac));
+				double		estimate = 0.0;
+				double		upper_bound;
 
+				if (numsegments == 1 ||
+					(GpPolicyIsHashPartitioned(policy) && policy->nattrs == 1 &&
+					 policy->attrs[0] == stats->attr->attnum))
+					estimate = root_ndistinct;
+				else
+				{
+					double		remaining_rows = nonnull_rows;
+					double		remaining_distinct = root_ndistinct;
+					double		log_absent = log1p(-1.0 / numsegments);
+
+					for (int slot = 0; slot < slot_idx; slot++)
+					{
+						if (stats->stakind[slot] != STATISTIC_KIND_MCV)
+							continue;
+
+						for (int mcv = 0; mcv < stats->numnumbers[slot]; mcv++)
+						{
+							double		count = Max(0.0,
+								totalTuples * stats->stanumbers[slot][mcv]);
+
+							estimate -= numsegments * expm1(count * log_absent);
+							remaining_rows -= count;
+							remaining_distinct -= 1.0;
+						}
+						break;
+					}
+
+					if (remaining_distinct > 0 && remaining_rows > 0)
+						estimate -= numsegments * remaining_distinct *
+							expm1(remaining_rows / remaining_distinct * log_absent);
+				}
+
+				upper_bound = Min(ndinstinct_by_segs,
+								  root_ndistinct * numsegments);
+				upper_bound = Min(upper_bound, nonnull_rows);
+				/* Prefer the upper bound if separately estimated bounds cross. */
+				ndinstinct_by_segs = Min(upper_bound,
+										 Max(root_ndistinct, estimate));
 				pfree(policy);
-
-				segs_per_value = leaf_ndistinct_sum > 0 ?
-					ndinstinct_by_segs / leaf_ndistinct_sum : numsegments;
-				segs_per_value = Min(Max(segs_per_value, 1.0), numsegments);
-
-				ndinstinct_by_segs = Min(ndinstinct_by_segs,
-										 root_ndistinct * segs_per_value);
 			}
 
 			ndvbs = (Datum *) palloc(sizeof(Datum));
