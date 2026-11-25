@@ -87,7 +87,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: ['rocky8', 'rocky9', 'rocky10', 'ubuntu22.04', 'ubuntu24.04']
+        image: ['rocky8', 'rocky9', 'rocky10', 'ubuntu22.04', 'ubuntu24.04', 'ubuntu26.04']
 
     container:
       image: apache/incubator-cloudberry:cbdb-build-${{ matrix.image }}-latest
@@ -232,7 +232,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: ['rocky8', 'rocky9', 'rocky10', 'ubuntu22.04', 'ubuntu24.04']
+        image: ['rocky8', 'rocky9', 'rocky10', 'ubuntu22.04', 'ubuntu24.04', 'ubuntu26.04']
         optimizer: ['off', 'on']
 
     container:
