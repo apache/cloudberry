@@ -68,8 +68,8 @@ typedef struct TableFunctionContext
 
 Datum directory_table(PG_FUNCTION_ARGS);
 
-static Oid
-chooseTableSpace(CreateDirectoryTableStmt *stmt)
+Oid
+GetDirectoryTableTablespace(CreateDirectoryTableStmt *stmt)
 {
 	Oid tablespaceId = InvalidOid;
 
@@ -115,14 +115,14 @@ chooseTableSpace(CreateDirectoryTableStmt *stmt)
 }
 
 void
-CreateDirectoryTable(CreateDirectoryTableStmt *stmt, Oid relId)
+CreateDirectoryTable(CreateDirectoryTableStmt *stmt, Oid relId, Oid tablespaceId)
 {
 	Relation 	dirRelation;
 	Datum 		values[Natts_pg_directory_table];
 	bool 		nulls[Natts_pg_directory_table];
 	HeapTuple	tuple;
 	char 		*dirTablePath;
-	Oid 		spcId = chooseTableSpace(stmt);
+	Oid 		spcId = tablespaceId;
 
 	if (stmt->location)
 	{
