@@ -182,18 +182,29 @@ BEGIN
         PERFORM pg_temp.rpt_bw_expect(
             'SELECT * FROM rpt_bw_root r JOIN rpt_bw_local l ON r.k = l.k',
             'l', 'local edge uses core runtime filtering');
-        q := 'SELECT r.k FROM rpt_bw_root r JOIN rpt_bw_local l ON r.k = l.k';
+        -- A selective local build makes the segment-side filter reject
+        -- actual probe rows. Isolate it from the forward reducer and core
+        -- pushdown so the scan counter can only come from Anser in-place.
+        q := 'SELECT r.k FROM rpt_bw_root r JOIN rpt_bw_local l ON r.k = l.k WHERE l.k < 5';
+        PERFORM set_config('rpt.forward', 'off', true);
         PERFORM set_config('gp_enable_runtime_filter_pushdown', 'off', true);
         PERFORM set_config('anser.runtime_filter_inplace', 'on', true);
         plan := pg_temp.rpt_bw_plan(q);
-        IF plan::text NOT LIKE '%Runtime Filter%in-place%' OR
-           plan::text LIKE '%Anser Bloom Producer%' THEN
-            RAISE EXCEPTION 'expected an in-place filter without an exchange (optimizer=%): %', opt, plan;
+        IF NOT EXISTS (
+               SELECT FROM pg_temp.rpt_bw_nodes(plan) n
+               WHERE n->>'Relation Name' = 'rpt_bw_root'
+                 AND (n->>'Rows Removed by Pushdown Runtime Filter')::float8 > 0
+           ) OR EXISTS (
+               SELECT FROM pg_temp.rpt_bw_nodes(plan) n
+               WHERE n->>'Custom Plan Provider' IN ('Anser Bloom Producer', 'Anser Bloom Consumer')
+           ) THEN
+            RAISE EXCEPTION 'expected in-place pruning without an exchange (optimizer=%): %', opt, plan;
         END IF;
         IF pg_temp.rpt_bw_result(q, true, true) IS DISTINCT FROM
            pg_temp.rpt_bw_result(q, false, false) THEN
             RAISE EXCEPTION 'in-place RPT filter changed results (optimizer=%)', opt;
         END IF;
+        PERFORM set_config('rpt.forward', 'on', true);
         -- Narrow projection makes the smaller member the hash build side.
         PERFORM pg_temp.rpt_bw_expect(
             'SELECT count(*) FROM rpt_bw_root r JOIN rpt_bw_member m ON r.k = m.k',
