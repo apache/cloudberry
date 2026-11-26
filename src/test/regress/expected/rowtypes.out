@@ -1327,29 +1327,27 @@ explain (verbose, costs off)
 with cte(c) as materialized (select row(1, 2)),
      cte2(c) as (select * from cte)
 select (c).f1 from cte2 as t;
-            QUERY PLAN             
------------------------------------
- CTE Scan on cte
-   Output: (cte.c).f1
-   CTE cte
-     ->  Result
-           Output: '(1,2)'::record
-(5 rows)
+              QUERY PLAN
+---------------------------------------
+ Subquery Scan on t
+   Output: (t.c).f1
+   ->  Shared Scan (share slice:id 0:0)
+         Output: share0_ref1."row"
+         ->  Result
+               Output: ROW(1, 2)
+(8 rows)
 
 explain (verbose, costs off)
 with cte(c) as materialized (select row(1, 2)),
      cte2(c) as (select * from cte)
 select (c).f1 from cte2 as t
 where false;
-            QUERY PLAN             
------------------------------------
+       QUERY PLAN
+-------------------------
  Result
-   Output: (cte.c).f1
+   Output: (c).f1
    One-Time Filter: false
-   CTE cte
-     ->  Result
-           Output: '(1,2)'::record
-(6 rows)
+(5 rows)
 
 --
 -- Tests for component access / FieldSelect

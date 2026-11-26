@@ -1325,7 +1325,6 @@ select set_and_report_role();
 select set_role_and_error(0);
 ERROR:  division by zero
 CONTEXT:  SQL function "set_role_and_error" statement 1
-parallel worker
 reset force_parallel_mode;
 drop function set_and_report_role();
 drop function set_role_and_error(int);
