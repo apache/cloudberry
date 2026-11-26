@@ -51,6 +51,8 @@
 #include "executor/nodeShareInputScan.h"
 #include "pgstat.h"
 
+static void ExecSetParamPlanInternal(SubPlanState *node, ExprContext *econtext,
+									 QueryDesc *queryDesc, bool predispatched);
 static Datum ExecHashSubPlan(SubPlanState *node,
 							 ExprContext *econtext,
 							 bool *isNull);
@@ -1132,6 +1134,25 @@ ExecInitSubPlan(SubPlan *subplan, PlanState *parent)
 void
 ExecSetParamPlan(SubPlanState *node, ExprContext *econtext, QueryDesc *queryDesc)
 {
+	ExecSetParamPlanInternal(node, econtext, queryDesc, false);
+}
+
+/*
+ * CDB: Like ExecSetParamPlan(), but the caller has already dispatched the
+ * initplan's slices and set up the interconnect, and will tear it down and
+ * wait for the QEs itself. Used by preprocess_initplans() to run several
+ * independent initplans with one dispatch.
+ */
+void
+ExecSetParamPlanPredispatched(SubPlanState *node, ExprContext *econtext, QueryDesc *queryDesc)
+{
+	ExecSetParamPlanInternal(node, econtext, queryDesc, true);
+}
+
+static void
+ExecSetParamPlanInternal(SubPlanState *node, ExprContext *econtext, QueryDesc *queryDesc,
+						 bool predispatched)
+{
 	SubPlan    *subplan = node->subplan;
 	PlanState  *planstate = node->planstate;
 	SubLinkType subLinkType = subplan->subLinkType;
@@ -1149,7 +1170,8 @@ ExecSetParamPlan(SubPlanState *node, ExprContext *econtext, QueryDesc *queryDesc
 	bool		shouldDispatch = false;
 	volatile bool explainRecvStats = false;
 
-	if (Gp_role == GP_ROLE_DISPATCH &&
+	if (!predispatched &&
+		Gp_role == GP_ROLE_DISPATCH &&
 		planstate != NULL &&
 		planstate->plan != NULL &&
 		queryDesc)
@@ -1408,8 +1430,9 @@ PG_TRY();
 		prm->isnull = false;
 	}
 
-	/* Clean up the interconnect. */
-	if (queryDesc && queryDesc->estate && queryDesc->estate->es_interconnect_is_setup)
+	/* Clean up the interconnect, unless the caller owns it. */
+	if (!predispatched &&
+		queryDesc && queryDesc->estate && queryDesc->estate->es_interconnect_is_setup)
 	{
 		Assert(CurrentMotionIPCLayer);
 		CurrentMotionIPCLayer->TeardownInterconnect(queryDesc->estate->interconnect_context, false); /* following success on QD */
@@ -1466,10 +1489,11 @@ PG_CATCH();
 	estate->es_direction = dir;
 
 	/*
-	 * Clean up the interconnect.
+	 * Clean up the interconnect, unless the caller owns it.
 	 * CDB TODO: Is this needed following failure on QD?
 	 */
-	if (queryDesc && queryDesc->estate && queryDesc->estate->es_interconnect_is_setup)
+	if (!predispatched &&
+		queryDesc && queryDesc->estate && queryDesc->estate->es_interconnect_is_setup)
 	{
 		Assert(CurrentMotionIPCLayer);
 		CurrentMotionIPCLayer->TeardownInterconnect(queryDesc->estate->interconnect_context, true);
