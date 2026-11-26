@@ -1627,6 +1627,7 @@ code or new licensing patterns.
             <exclude>licenses/LICENSE-pg_dump.txt</exclude>
             <exclude>licenses/LICENSE-termcolor.txt</exclude>
             <exclude>licenses/LICENSE-vixie-cron.txt</exclude>
+            <exclude>licenses/LICENSE-wcwidth.txt</exclude>
             <exclude>licenses/LICENSE-x0213.txt</exclude>
 
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/tabulateConfig.cmake.in</exclude>
@@ -1662,6 +1663,42 @@ code or new licensing patterns.
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/unicode.cpp</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/.clang-format</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/.travis.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/.github/workflows/ci.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/bump-version.py</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/ansi_escape_width.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/benchmark.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/black_color.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/border_styles.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/format_after_print.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/indentation.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/locale_preserved.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/multi_byte_wrapping.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/nested_table_colors.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/nested_table_hidden_border.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/pagination.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/preserve_indentation.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/remove_column.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/streaming_rows.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/table_dimensions.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/unicode_borders.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/test/CMakeLists.txt</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/test/alignment_and_wrapping.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/test/black_color.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/test/border_corner_styles.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/test/column_operations.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/test/empty_rows.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/test/format_propagation.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/test/indentation.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/test/iterators.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/test/multi_byte_wrapping.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/test/nested_tables.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/test/no_global_namespace_pollution.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/test/pagination.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/test/streaming_rows.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/test/table_dimensions.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/test/test_utils.hpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/test/trim_mode.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/test/unicode_borders.cpp</exclude>
 
             <!-- Exclude python requirements files, since they are just a list of packages and do not support any comments
             -->
