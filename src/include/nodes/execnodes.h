@@ -402,7 +402,7 @@ typedef struct ProjectionInfo
 typedef struct JunkFilter JunkFilter;
 typedef TupleTableSlot* (*ExecFilterJunkFunc)(JunkFilter *junkfilter,
 											  TupleTableSlot *slot);
-typedef struct JunkFilter
+struct JunkFilter
 {
 	NodeTag		type;
 	List	   *jf_targetList;
@@ -410,7 +410,7 @@ typedef struct JunkFilter
 	AttrNumber *jf_cleanMap;
 	TupleTableSlot *jf_resultSlot;
 	ExecFilterJunkFunc jf_execFilterJunkFunc;
-} JunkFilter;
+};
 
 /*
  * OnConflictSetState

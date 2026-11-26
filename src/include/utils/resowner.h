@@ -21,7 +21,6 @@
 
 #include "storage/fd.h"
 #include "utils/catcache.h"
-#include "utils/plancache.h"
 #include "utils/snapshot.h"
 
 /*
@@ -29,7 +28,7 @@
  * resowner.c.
  */
 typedef struct ResourceOwnerData *ResourceOwner;
-typedef struct CachedPlan CachedPlan;
+struct CachedPlan;
 
 
 /*
@@ -121,9 +120,9 @@ extern void ResourceOwnerForgetRelationRef(ResourceOwner owner,
 /* support for plancache refcount management */
 extern void ResourceOwnerEnlargePlanCacheRefs(ResourceOwner owner);
 extern void ResourceOwnerRememberPlanCacheRef(ResourceOwner owner,
-								  CachedPlan *plan);
+								  struct CachedPlan *plan);
 extern void ResourceOwnerForgetPlanCacheRef(ResourceOwner owner,
-								CachedPlan *plan);
+								struct CachedPlan *plan);
 
 /* support for tupledesc refcount management */
 extern void ResourceOwnerEnlargeTupleDescs(ResourceOwner owner);
