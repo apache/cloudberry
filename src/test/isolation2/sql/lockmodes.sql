@@ -332,12 +332,6 @@ create table t_lockmods_ao1 (c int) with (appendonly=true) distributed randomly;
 1: select * from show_locks_lockmodes;
 1: ROLLBACK;
 
-1: BEGIN;
-1: INSERT INTO t_lockmods_part_tbl_dml SELECT i, 1, i FROM generate_series(1,10)i;
--- without GDD, it will lock all leaf partitions on QD
-1: select * from show_locks_lockmodes;
-1: ROLLBACK;
-
 --
 -- The session cannot be reused.
 --
@@ -359,6 +353,13 @@ create table t_lockmods_ao1 (c int) with (appendonly=true) distributed randomly;
 --
 -- To make the test results stable, we do not reuse the sessions in the test,
 -- all the tests are performed without the relcache.
+1q:
+
+1: BEGIN;
+1: INSERT INTO t_lockmods_part_tbl_dml SELECT i, 1, i FROM generate_series(1,10)i;
+-- without GDD, it will lock all leaf partitions on QD
+1: select * from show_locks_lockmodes;
+1: ROLLBACK;
 1q:
 
 1: BEGIN;
