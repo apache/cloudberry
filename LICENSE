@@ -703,6 +703,21 @@ Apache Cloudberry includes codes from
       (also shipped in-tree as
        contrib/pax_storage/src/cpp/contrib/tabulate/utils/amalgamate/LICENSE.md)
 
+----------------------------
+   Other permissive licenses
+
+      mk_wcwidth() (https://www.cl.cam.ac.uk/~mgk25/ucs/wcwidth.c),
+      Markus Kuhn's wcwidth implementation (2007-05-26, Unicode 5.0
+      version), ported to char32_t and embedded by tabulate for Windows
+      builds.  It is distributed under Markus Kuhn's permission notice
+      rather than under tabulate's own MIT license.  This license covers
+      the embedded portion -- the unicode_interval table, in_interval_table()
+      and mk_wcwidth() -- and not the files as a whole:
+         contrib/pax_storage/src/cpp/contrib/tabulate/include/tabulate/utf8.hpp
+         contrib/pax_storage/src/cpp/contrib/tabulate/single_include/tabulate/tabulate.hpp
+
+      see licenses/LICENSE-wcwidth.txt
+
 ================================================================================
 Build system and generated parser files
 
