@@ -958,3 +958,154 @@ from (
 ) s;
 reset default_statistics_target;
 drop table ndvbs_sparse;
+
+-- Compare root NDV_BY_SEGMENTS with actual non-null (segment, value) pairs.
+-- These fixtures fit in the sample, so no statistical tolerance beyond
+-- floating-point roundoff is needed.
+create function ndvbs_value(rel regclass, col name) returns float8
+language sql stable as $$
+  select ((case 8 when s.stakind1 then s.stavalues1::text
+                 when s.stakind2 then s.stavalues2::text
+                 when s.stakind3 then s.stavalues3::text
+                 when s.stakind4 then s.stavalues4::text
+                 when s.stakind5 then s.stavalues5::text end)::float8[])[1]
+    from pg_statistic s
+    join pg_attribute a on a.attrelid = s.starelid and a.attnum = s.staattnum
+   where s.starelid = rel and a.attname = col and s.stainherit
+$$;
+create function ndvbs_matches(rel regclass, col name) returns boolean
+language plpgsql as $$
+declare
+  actual bigint;
+begin
+  execute format('select count(distinct (gp_segment_id, %I)) from %s where %I is not null',
+                 col, rel, col) into actual;
+  return abs(ndvbs_value(rel, col) - actual) < 0.01;
+end
+$$;
+
+set default_statistics_target = 100;
+set gp_autostats_mode = none;
+-- A copy and a one-to-one transformation of the distribution key are
+-- colocated too.  A many-to-one transformation need not be colocated.
+-- Include partial correlation, skew, NULLs, an all-null leaf and an empty leaf.
+create table ndvbs_colocated
+  (a int, pk int, key_copy int, derived int, many_to_one int,
+   mixed int, skewed int, nullable int, all_null int)
+  distributed by (a)
+  partition by range (pk) (start (0) end (8) every (1));
+insert into ndvbs_colocated
+  select v, p, v, v + 1000, v % 2,
+         case when v <= 50 then v else v % 2 end,
+         case when v <= 90 then 0 else v end,
+         case when v % 4 = 0 then null else v end, null
+    from generate_series(0, 5) p, generate_series(1, 100) v,
+         generate_series(1, 10) k;
+insert into ndvbs_colocated (a, pk) select v, 6 from generate_series(1, 100) v;
+analyze ndvbs_colocated;
+select col, ndvbs_matches('ndvbs_colocated', col::name) as correct
+  from (values ('key_copy'), ('derived'), ('many_to_one'), ('mixed'),
+               ('skewed'), ('nullable'), ('all_null')) cols(col)
+ order by col;
+
+-- A sample required for extended statistics should be reused, while the
+-- ordinary root statistics continue to be merged from the leaves.
+create statistics ndvbs_dependencies (dependencies)
+  on a, key_copy from ndvbs_colocated;
+analyze rootpartition ndvbs_colocated;
+select ndvbs_matches('ndvbs_colocated', 'key_copy') as reused_sample;
+drop statistics ndvbs_dependencies;
+
+-- Removing a leaf slot must not silently use the other leaves' partial sum.
+begin;
+set local allow_system_table_mods = on;
+update pg_statistic
+   set stakind1 = case when stakind1 = 8 then 0 else stakind1 end,
+       stakind2 = case when stakind2 = 8 then 0 else stakind2 end,
+       stakind3 = case when stakind3 = 8 then 0 else stakind3 end,
+       stakind4 = case when stakind4 = 8 then 0 else stakind4 end,
+       stakind5 = case when stakind5 = 8 then 0 else stakind5 end
+ where starelid = 'ndvbs_colocated_1_prt_1'::regclass and staattnum = 3;
+analyze rootpartition ndvbs_colocated;
+select ndvbs_matches('ndvbs_colocated', 'key_copy') as missing_leaf_slot;
+rollback;
+
+-- Invalid numbers and contradictory leaf bounds must also use the root sample.
+begin;
+set local allow_system_table_mods = on;
+do $$
+declare
+  ndvslot int;
+  bad text;
+begin
+  select case 8 when stakind1 then 1 when stakind2 then 2
+                when stakind3 then 3 when stakind4 then 4
+                when stakind5 then 5 end into ndvslot
+    from pg_statistic
+   where starelid = 'ndvbs_colocated_1_prt_1'::regclass and staattnum = 3;
+  foreach bad in array array['{0}', '{NaN}', '{10000}'] loop
+    execute format('update pg_statistic set stavalues%s =
+                      pg_catalog.array_in(%L::cstring, ''float8''::regtype::oid, -1)
+                    where starelid = ''ndvbs_colocated_1_prt_1''::regclass
+                      and staattnum = 3', ndvslot, bad);
+    analyze rootpartition ndvbs_colocated;
+    if ndvbs_matches('ndvbs_colocated', 'key_copy') is not true then
+      raise exception 'invalid leaf NDV % was not handled', bad;
+    end if;
+  end loop;
+end
+$$;
+rollback;
+
+-- A root sample with no non-null observations must keep the bounded frequency
+-- fallback, not interpret zero observations as proof of colocation.  Leave
+-- leaf statistics unchanged here to exercise this otherwise rare path.
+begin;
+update ndvbs_colocated set key_copy = null;
+analyze rootpartition ndvbs_colocated;
+select ndvbs_value('ndvbs_colocated', 'key_copy') between 299.9 and 300
+       as no_nonnull_sample_fallback;
+rollback;
+
+-- Each leaf has one segment per value, but the segment can change between
+-- leaves.  A correction based only on the leaf ratio would underestimate.
+create table ndvbs_moving (a int, pk int, b int) distributed by (a)
+  partition by range (pk) (start (0) end (6) every (1));
+insert into ndvbs_moving
+  select p * 1000 + v, p, v
+    from generate_series(0, 5) p, generate_series(1, 100) v,
+         generate_series(1, 10) k;
+analyze ndvbs_moving;
+select ndvbs_matches('ndvbs_moving', 'b') as changes_segment,
+       ndvbs_value('ndvbs_moving', 'b') > 100 as spans_segments;
+
+-- With only one occurrence per leaf the colocation coefficient would be 0/0.
+-- Test both a stable key copy and a changing key, in addition to ndvbs_sparse.
+create table ndvbs_singletons (a int, pk int, b int) distributed by (a)
+  partition by range (pk) (start (0) end (3) every (1));
+insert into ndvbs_singletons
+  select v, p, v from generate_series(0, 2) p, generate_series(1, 100) v;
+analyze ndvbs_singletons;
+select ndvbs_matches('ndvbs_singletons', 'b') as colocated_singletons;
+update ndvbs_singletons set a = a + 1000 * pk;
+analyze ndvbs_singletons;
+select ndvbs_matches('ndvbs_singletons', 'b') as moving_singletons;
+
+-- One segment must avoid log1p(-1) and needs no colocation inference.
+-- start_ignore
+create extension if not exists gp_debug_numsegments;
+-- end_ignore
+select gp_debug_set_create_table_default_numsegments(1);
+create table ndvbs_one_segment (a int, pk int, b int) distributed by (a)
+  partition by range (pk) (start (0) end (3) every (1));
+select gp_debug_reset_create_table_default_numsegments();
+insert into ndvbs_one_segment
+  select v, p, v from generate_series(0, 2) p, generate_series(1, 100) v;
+analyze ndvbs_one_segment;
+select ndvbs_matches('ndvbs_one_segment', 'b') as one_segment;
+
+drop table ndvbs_colocated, ndvbs_moving, ndvbs_singletons, ndvbs_one_segment;
+drop function ndvbs_matches(regclass, name);
+drop function ndvbs_value(regclass, name);
+reset gp_autostats_mode;
+reset default_statistics_target;
