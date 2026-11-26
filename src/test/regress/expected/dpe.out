@@ -3009,3 +3009,105 @@ select * from pt, t where t.dist = pt.dist and t.tid = pt.ptid order by t.tid, t
  Optimizer: Postgres query optimizer
 (23 rows)
 
+--
+-- The Postgres planner takes the partitions that a Partition Selector will
+-- skip into account when choosing the join order. Without join pruning, all
+-- partitions are scanned, so joining the fact table to the more selective item
+-- dimension first is cheaper. With it, the fact table is joined to the date
+-- dimension first, which prunes it before the item join.
+--
+create table dpe_cost_fact (id int, date_sk int, item_sk int, amount int)
+  distributed by (id)
+  partition by range (date_sk) (start (0) end (360) every (30));
+create table dpe_cost_date (date_sk int, month int) distributed by (date_sk);
+create table dpe_cost_item (item_sk int, category int) distributed by (item_sk);
+insert into dpe_cost_fact select i, i % 360, i % 1000, i from generate_series(1, 100000) i;
+insert into dpe_cost_date select i, i / 30 from generate_series(0, 359) i;
+insert into dpe_cost_item select i, i % 100 from generate_series(0, 999) i;
+analyze dpe_cost_fact;
+analyze dpe_cost_date;
+analyze dpe_cost_item;
+set gp_dynamic_partition_pruning = off;
+explain (costs off)
+select count(*) from dpe_cost_fact f, dpe_cost_date d, dpe_cost_item i
+where f.date_sk = d.date_sk and d.month = 3
+  and f.item_sk = i.item_sk and i.category = 7;
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Hash Join
+               Hash Cond: (f.date_sk = d.date_sk)
+               ->  Hash Join
+                     Hash Cond: (f.item_sk = i.item_sk)
+                     ->  Append
+                           ->  Seq Scan on dpe_cost_fact_1_prt_1 f_1
+                           ->  Seq Scan on dpe_cost_fact_1_prt_2 f_2
+                           ->  Seq Scan on dpe_cost_fact_1_prt_3 f_3
+                           ->  Seq Scan on dpe_cost_fact_1_prt_4 f_4
+                           ->  Seq Scan on dpe_cost_fact_1_prt_5 f_5
+                           ->  Seq Scan on dpe_cost_fact_1_prt_6 f_6
+                           ->  Seq Scan on dpe_cost_fact_1_prt_7 f_7
+                           ->  Seq Scan on dpe_cost_fact_1_prt_8 f_8
+                           ->  Seq Scan on dpe_cost_fact_1_prt_9 f_9
+                           ->  Seq Scan on dpe_cost_fact_1_prt_10 f_10
+                           ->  Seq Scan on dpe_cost_fact_1_prt_11 f_11
+                           ->  Seq Scan on dpe_cost_fact_1_prt_12 f_12
+                     ->  Hash
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 ->  Seq Scan on dpe_cost_item i
+                                       Filter: (category = 7)
+               ->  Hash
+                     ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                           ->  Seq Scan on dpe_cost_date d
+                                 Filter: (month = 3)
+ Optimizer: Postgres query optimizer
+(28 rows)
+
+reset gp_dynamic_partition_pruning;
+explain (costs off)
+select count(*) from dpe_cost_fact f, dpe_cost_date d, dpe_cost_item i
+where f.date_sk = d.date_sk and d.month = 3
+  and f.item_sk = i.item_sk and i.category = 7;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Hash Join
+               Hash Cond: (f.item_sk = i.item_sk)
+               ->  Hash Join
+                     Hash Cond: (f.date_sk = d.date_sk)
+                     ->  Append
+                           Partition Selectors: $0
+                           ->  Seq Scan on dpe_cost_fact_1_prt_1 f_1
+                           ->  Seq Scan on dpe_cost_fact_1_prt_2 f_2
+                           ->  Seq Scan on dpe_cost_fact_1_prt_3 f_3
+                           ->  Seq Scan on dpe_cost_fact_1_prt_4 f_4
+                           ->  Seq Scan on dpe_cost_fact_1_prt_5 f_5
+                           ->  Seq Scan on dpe_cost_fact_1_prt_6 f_6
+                           ->  Seq Scan on dpe_cost_fact_1_prt_7 f_7
+                           ->  Seq Scan on dpe_cost_fact_1_prt_8 f_8
+                           ->  Seq Scan on dpe_cost_fact_1_prt_9 f_9
+                           ->  Seq Scan on dpe_cost_fact_1_prt_10 f_10
+                           ->  Seq Scan on dpe_cost_fact_1_prt_11 f_11
+                           ->  Seq Scan on dpe_cost_fact_1_prt_12 f_12
+                     ->  Hash
+                           ->  Partition Selector (selector id: $0)
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                       ->  Seq Scan on dpe_cost_date d
+                                             Filter: (month = 3)
+               ->  Hash
+                     ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                           ->  Seq Scan on dpe_cost_item i
+                                 Filter: (category = 7)
+ Optimizer: Postgres query optimizer
+(30 rows)
+
+select count(*) from dpe_cost_fact f, dpe_cost_date d, dpe_cost_item i
+where f.date_sk = d.date_sk and d.month = 3
+  and f.item_sk = i.item_sk and i.category = 7;
+ count 
+-------
+    56
+(1 row)
+

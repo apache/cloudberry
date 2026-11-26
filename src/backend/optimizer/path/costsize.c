@@ -88,6 +88,7 @@
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
 #include "optimizer/cost.h"
+#include "optimizer/joinpartprune.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
@@ -4544,6 +4545,13 @@ final_cost_hashjoin(PlannerInfo *root, HashPath *path,
 	/* tlist eval costs are paid per output row, not per tuple scanned */
 	startup_cost += path->jpath.path.pathtarget->cost.startup;
 	run_cost += path->jpath.path.pathtarget->cost.per_tuple * path->jpath.path.rows;
+
+	/*
+	 * CDB: A Partition Selector on the inner side may let the outer side
+	 * skip partitions, which the outer path's cost doesn't know about.
+	 */
+	run_cost -= cost_join_partition_pruning(root, &path->jpath);
+	run_cost = Max(run_cost, 0);
 
 	path->jpath.path.startup_cost = startup_cost;
 	path->jpath.path.total_cost = startup_cost + run_cost;

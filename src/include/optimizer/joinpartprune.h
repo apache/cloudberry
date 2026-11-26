@@ -31,4 +31,6 @@ extern List *make_partition_join_pruneinfos(struct PlannerInfo *root,
 
 extern Plan *create_partition_selector_plan(PlannerInfo *root, PartitionSelectorPath *pspath);
 
+extern Cost cost_join_partition_pruning(PlannerInfo *root, JoinPath *jpath);
+
 #endif /* JOINPARTPRUNE_H */

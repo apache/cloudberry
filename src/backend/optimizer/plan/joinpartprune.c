@@ -70,9 +70,10 @@
  *
  *
  * Note: All this happens in the create_plan() stage,  after we have already
- * constructed the paths and decided the plan shape, so the possibility of
- * pruning doesn't affect cost estimates or the chosen plan shape. That's not
- * great, but will do for now...
+ * constructed the paths and decided the plan shape. To let the possibility
+ * of pruning affect the chosen plan shape, final_cost_hashjoin() estimates
+ * the effect of pruning with cost_join_partition_pruning(), which applies the
+ * same checks that are made here at create_plan() time.
  *
  * Portions Copyright (c) 2011-2013, EMC Corporation
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
@@ -86,12 +87,18 @@
 
 #include "postgres.h"
 
+#include <math.h>
+
+#include "miscadmin.h"
 #include "optimizer/clauses.h"
 #include "optimizer/joinpartprune.h"
+#include "optimizer/optimizer.h"
 #include "optimizer/paramassign.h"
 #include "optimizer/planmain.h"
 #include "optimizer/pathnode.h"
 #include "partitioning/partprune.h"
+#include "utils/memutils.h"
+#include "utils/selfuncs.h"
 #include "cdb/cdbvars.h"
 
 static Path *create_partition_selector_path(PlannerInfo *root,
@@ -393,4 +400,321 @@ make_partition_join_pruneinfos(PlannerInfo *root, RelOptInfo *parentrel,
 	}
 
 	return result;
+}
+
+/*
+ * The fraction of the estimated saving from join partition pruning that
+ * cost_join_partition_pruning() subtracts from a join's cost.
+ *
+ * The planner's row estimates for long join chains can be off by orders of
+ * magnitude (e.g. 5 rows estimated vs 175k actual in TPC-DS query 64), and
+ * the full saving readily tips the choice towards such a misestimated plan.
+ */
+#define PARTITION_PRUNING_COSTING_FACTOR	0.25
+
+static List *join_prune_clauses_for_append(PlannerInfo *root, JoinPath *jpath,
+										   Path *apath);
+
+/*
+ * Is this a join at which create_plan() could place Partition Selectors?
+ * Same conditions as push_partition_selector_candidate_for_join(), but we
+ * only handle hash joins for now.
+ */
+static bool
+is_join_prune_candidate(JoinPath *jpath)
+{
+	return jpath->path.pathtype == T_HashJoin &&
+		(jpath->jointype == JOIN_INNER ||
+		 jpath->jointype == JOIN_RIGHT ||
+		 jpath->jointype == JOIN_SEMI);
+}
+
+/*
+ * Collect the Append and MergeAppend paths under 'path' that a Partition
+ * Selector at a join above 'path' could prune.
+ *
+ * This mirrors what create_plan() does later: create_append_plan() looks for
+ * Partition Selector candidates among all the joins it's on the outer side of,
+ * within the same slice. So we descend into both sides of joins, and through
+ * nodes that don't start a new slice or a new planner level, and stop at
+ * Motions.
+ *
+ * Appends that a join further down can already prune are left out: their
+ * pruning has already been accounted for in that join's cost, and counting it
+ * again would make plans that put more joins below the pruning join look
+ * cheaper than they are.
+ */
+static void
+collect_join_prunable_appends(PlannerInfo *root, Path *path, List **appends)
+{
+	check_stack_depth();
+
+	if (path == NULL)
+		return;
+
+	switch (nodeTag(path))
+	{
+		case T_AppendPath:
+		case T_MergeAppendPath:
+			*appends = lappend(*appends, path);
+			break;
+
+		case T_NestPath:
+		case T_MergePath:
+		case T_HashPath:
+			{
+				JoinPath   *jpath = (JoinPath *) path;
+				List	   *outer_appends = NIL;
+				ListCell   *lc;
+
+				collect_join_prunable_appends(root, jpath->outerjoinpath, &outer_appends);
+				foreach(lc, outer_appends)
+				{
+					Path	   *apath = (Path *) lfirst(lc);
+
+					if (is_join_prune_candidate(jpath) &&
+						join_prune_clauses_for_append(root, jpath, apath) != NIL)
+						continue;	/* already accounted for at this join */
+					*appends = lappend(*appends, apath);
+				}
+				collect_join_prunable_appends(root, jpath->innerjoinpath, appends);
+			}
+			break;
+
+		case T_ProjectionPath:
+			collect_join_prunable_appends(root, ((ProjectionPath *) path)->subpath, appends);
+			break;
+		case T_RuntimeFilterPath:
+			collect_join_prunable_appends(root, ((RuntimeFilterPath *) path)->subpath, appends);
+			break;
+		case T_MaterialPath:
+			collect_join_prunable_appends(root, ((MaterialPath *) path)->subpath, appends);
+			break;
+		case T_SortPath:
+		case T_IncrementalSortPath:
+			collect_join_prunable_appends(root, ((SortPath *) path)->subpath, appends);
+			break;
+		case T_UniquePath:
+			collect_join_prunable_appends(root, ((UniquePath *) path)->subpath, appends);
+			break;
+
+		default:
+			/*
+			 * CdbMotionPath: the pruning result can't be passed through a
+			 * Motion. Scans, subquery scans, aggregates etc.: we don't
+			 * bother.
+			 */
+			break;
+	}
+}
+
+/*
+ * Return the join clauses of 'jpath' that create_plan() could build pruning
+ * steps from, to prune the Append 'apath' on its outer side. NIL if none.
+ *
+ * Each clause is checked separately: only the clauses on the partition key
+ * determine how many partitions are skipped.
+ */
+static List *
+join_prune_clauses_for_append(PlannerInfo *root, JoinPath *jpath, Path *apath)
+{
+	RelOptInfo *arel = apath->parent;
+	Relids		inner_relids = jpath->innerjoinpath->parent->relids;
+	List	   *subpaths;
+	List	   *clauses = NIL;
+	MemoryContext tmpcxt;
+	MemoryContext oldcxt;
+	ListCell   *lc;
+
+	/* create_append_plan() doesn't do join pruning for these */
+	if (apath->param_info)
+		return NIL;
+
+	if (IsA(apath, AppendPath))
+		subpaths = ((AppendPath *) apath)->subpaths;
+	else
+		subpaths = ((MergeAppendPath *) apath)->subpaths;
+	if (list_length(subpaths) < 2)
+		return NIL;
+
+	tmpcxt = AllocSetContextCreate(CurrentMemoryContext,
+								   "partition pruning costing",
+								   ALLOCSET_SMALL_SIZES);
+	foreach(lc, jpath->joinrestrictinfo)
+	{
+		RestrictInfo *rinfo = lfirst_node(RestrictInfo, lc);
+		bool		prunable;
+
+		if (!bms_overlap(rinfo->clause_relids, arel->relids) ||
+			!bms_overlap(rinfo->clause_relids, inner_relids) ||
+			!bms_is_subset(rinfo->clause_relids,
+						   bms_union(arel->relids, inner_relids)))
+			continue;
+
+		/* Do the same check create_plan() does, and throw away the result */
+		oldcxt = MemoryContextSwitchTo(tmpcxt);
+		prunable = (make_partition_pruneinfo_ext(root, arel, subpaths,
+												 list_make1(rinfo),
+												 inner_relids) != NULL);
+		MemoryContextSwitchTo(oldcxt);
+		MemoryContextReset(tmpcxt);
+
+		if (prunable)
+			clauses = lappend(clauses, rinfo);
+	}
+	MemoryContextDelete(tmpcxt);
+
+	return clauses;
+}
+
+/*
+ * Does joining on 'clauses' leave the number of outer rows unchanged, i.e. is
+ * the inner side a single table on which the join key is unique?
+ *
+ * The saving estimate in cost_join_partition_pruning() assumes that. If the
+ * inner side is a join, or the key isn't unique, the pruning join can multiply
+ * the rows that survive pruning, and the planner tends to underestimate by
+ * how much (e.g. in TPC-DS query 72, inventory is pruned by a join of two
+ * date_dim rows per day of the same week: the pruning join produces 40 times
+ * more rows than estimated). The extra cost of that then easily outweighs
+ * the saving, so we don't count on pruning at such joins.
+ */
+static bool
+inner_join_key_is_unique(PlannerInfo *root, JoinPath *jpath, List *clauses)
+{
+	RelOptInfo *inner_rel = jpath->innerjoinpath->parent;
+	ListCell   *lc;
+
+	if (inner_rel->reloptkind != RELOPT_BASEREL ||
+		inner_rel->rtekind != RTE_RELATION)
+		return false;
+
+	foreach(lc, clauses)
+	{
+		RestrictInfo *rinfo = lfirst_node(RestrictInfo, lc);
+		OpExpr	   *opexpr;
+		Node	   *inner_arg;
+		VariableStatData vardata;
+		double		ndistinct;
+		double		tuples;
+		bool		isdefault;
+
+		if (!is_opclause(rinfo->clause) ||
+			list_length(((OpExpr *) rinfo->clause)->args) != 2)
+			return false;
+		opexpr = (OpExpr *) rinfo->clause;
+
+		if (bms_is_subset(rinfo->left_relids, inner_rel->relids))
+			inner_arg = linitial(opexpr->args);
+		else if (bms_is_subset(rinfo->right_relids, inner_rel->relids))
+			inner_arg = lsecond(opexpr->args);
+		else
+			return false;
+
+		examine_variable(root, inner_arg, 0, &vardata);
+		ndistinct = get_variable_numdistinct(&vardata, &isdefault);
+		tuples = vardata.rel ? vardata.rel->tuples : 0;
+		ReleaseVariableStats(vardata);
+
+		if (isdefault || tuples <= 0 || ndistinct < 0.9 * tuples)
+			return false;
+	}
+
+	return true;
+}
+
+/*
+ * Estimate how much cheaper the outer side of a hash join gets, if a
+ * Partition Selector on the inner side lets Appends on the outer side skip
+ * partitions.
+ *
+ * Partition Selectors are only added in the create_plan() stage, after the
+ * plan shape has been chosen (see the comment at the top of this file). If we
+ * don't account for them while comparing paths, a join order that would
+ * allow pruning (e.g. joining a large fact table to a filtered date dimension
+ * first) is costed as if it scanned all partitions, and loses to join orders
+ * that cannot prune at all.
+ *
+ * The estimate: the fraction of outer rows that have a match on the inner
+ * side is selectivity(partition key clauses) * inner rows, assuming the inner
+ * join key is unique (if it isn't, we overestimate, which is the safe side).
+ * Assuming further that the partition key is correlated with partitions, as
+ * it is with range partitioning, those rows live in about that fraction of
+ * the partitions, plus one for the partition boundaries.
+ *
+ * Returns the cost that can be subtracted from the join path's run cost.
+ */
+Cost
+cost_join_partition_pruning(PlannerInfo *root, JoinPath *jpath)
+{
+	Path	   *inner_path = jpath->innerjoinpath;
+	Relids		inner_relids = inner_path->parent->relids;
+	List	   *appends = NIL;
+	Cost		saving = 0;
+	ListCell   *lc;
+
+	if (!gp_dynamic_partition_pruning ||
+		Gp_role != GP_ROLE_DISPATCH)
+		return 0;
+
+	if (!is_join_prune_candidate(jpath))
+		return 0;
+
+	collect_join_prunable_appends(root, jpath->outerjoinpath, &appends);
+
+	foreach(lc, appends)
+	{
+		Path	   *apath = (Path *) lfirst(lc);
+		RelOptInfo *arel = apath->parent;
+		List	   *clauses;
+		int			nparts;
+		ListCell   *lc2;
+		SpecialJoinInfo sjinfo;
+		Selectivity selec = 1.0;
+		double		match_frac;
+		double		scan_frac;
+		Cost		run_cost;
+
+		clauses = join_prune_clauses_for_append(root, jpath, apath);
+		if (clauses == NIL)
+			continue;
+
+		if (!inner_join_key_is_unique(root, jpath, clauses))
+			continue;
+
+		if (IsA(apath, AppendPath))
+			nparts = list_length(((AppendPath *) apath)->subpaths);
+		else
+			nparts = list_length(((MergeAppendPath *) apath)->subpaths);
+
+		/* Fraction of the Append's rows that will find a match */
+		memset(&sjinfo, 0, sizeof(sjinfo));
+		sjinfo.type = T_SpecialJoinInfo;
+		sjinfo.min_lefthand = arel->relids;
+		sjinfo.min_righthand = inner_relids;
+		sjinfo.syn_lefthand = arel->relids;
+		sjinfo.syn_righthand = inner_relids;
+		sjinfo.jointype = JOIN_INNER;
+		foreach(lc2, clauses)
+			selec *= clause_selectivity(root, (Node *) lfirst(lc2), 0,
+										JOIN_INNER, &sjinfo, false);
+		match_frac = selec * inner_path->parent->rows;
+		match_frac = Min(Max(match_frac, 0.0), 1.0);
+
+		/* ... and the fraction of partitions those are in */
+		scan_frac = (ceil(match_frac * nparts) + 1) / nparts;
+		scan_frac = Min(scan_frac, 1.0);
+
+		run_cost = apath->total_cost - apath->startup_cost;
+		saving += (1.0 - scan_frac) * run_cost;
+
+		elog(DEBUG1, "partition pruning costing: rel %s, %d partitions, "
+			 "selectivity %g, inner rows %.0f, match fraction %g, "
+			 "scan fraction %g, saving %.2f of %.2f",
+			 bmsToString(arel->relids), nparts, selec,
+			 inner_path->parent->rows, match_frac, scan_frac,
+			 (1.0 - scan_frac) * run_cost, run_cost);
+	}
+
+	return saving * PARTITION_PRUNING_COSTING_FACTOR;
 }
