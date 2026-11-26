@@ -66,17 +66,8 @@ Preloading and the session settings above are sufficient for runtime filtering.
 
 RPT uses Anser's adaptive Bloom probing for exchanged filters and for
 in-process reducer hops. A consumer can skip an ineffective filter and
-sample again later. RPT schedules its own producers and consumers, including
-filters built from a bridge's surviving rows. With `rpt.backward` and
-`anser.runtime_filter_inplace` enabled, RPT also uses Anser's in-place
-policy for eligible same-slice hash joins. These filters use the actual
-Hash input and need no exchange. A scan key that already has an Anser
-consumer keeps its existing filter. The plan does not mark these joins: each
-segment builds the filters at executor start, asking RPT through
-`AnserSetInplaceRequest` whether to, so `rpt.enable` and `rpt.backward` are
-synchronized to the segments. RPT's local filter nodes are registered with
-`AnserRegisterFilterScanMethods`, so an in-place filter can reach a scan
-below them.
+sample again later. RPT also uses [Anser's in-place filters](#build-filters-in-place-when-the-probe-shares-the-join-slice)
+for eligible hash joins.
 
 ## How it works on an example
 
@@ -394,9 +385,36 @@ forward filters before building the backward filter from the surviving
 keys. Eligible class members can probe that filter as they scan. Backward
 placement depends on the hash join and slice order proving that the
 producer can make progress while the consumer waits. Bridge-led backward
-chains are deferred. Co-located joins can use core in-place filters built
-from the hash input. When full RPT installs no exchanges, it can fall back
+chains are deferred. When full RPT installs no exchanges, it can fall back
 to ordinary Anser placement. [Paper](https://doi.org/10.14778/3797919.3797934)
+
+### Build filters in place when the probe shares the join slice
+
+Cloudberry divides a distributed plan into slices at Motion boundaries.
+An exchanged filter carries a part from each producer to the coordinator,
+which merges the parts and sends the completed filter back to each
+consumer. This adds network traffic and can make consumers wait.
+
+When the probe scan runs in the hash join's own slice, each segment's Hash
+input already contains the keys that its probe rows can match. Anser builds
+the Bloom filter from those rows on the segment. The build input can be a
+joined subtree, and it can arrive through a Broadcast or Redistribute
+Motion. What matters is that the probe scan can use the filter in the same
+slice as the join. The filter needs neither a separate reducer scan nor a
+network trip through the coordinator. When a transfer is unsafe and an
+in-place filter is unavailable, RPT leaves the scan unfiltered.
+
+With `rpt.prefer_inplace` enabled by default, RPT skips planned
+forward and backward deliveries on probe keys covered by an eligible
+Anser in-place filter. A forward reducer that no longer feeds a consumer
+is removed. In-place filters are built from the actual Hash input after
+its joins and predicates, which can make them more selective than a filter
+from an extra base-table scan. Enable or disable Anser's in-place policy
+with `anser.runtime_filter_inplace`. For A/B tests, set
+`rpt.prefer_inplace = off` to retain the exchange candidates for those keys.
+If an exchanged consumer remains on a scan, `anser.inplace_with_consumer`
+allows the same scan to use an eligible local filter as well.
+[Anser in-place filters](../anser/README.md#in-place-filters)
 
 ### Estimate whether forward reduction pays off
 

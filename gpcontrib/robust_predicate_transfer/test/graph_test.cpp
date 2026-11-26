@@ -125,6 +125,8 @@ void appendStringInfoChar(StringInfo str, char ch)
 	appendStringInfo(str, "%c", ch);
 }
 }
+double RptBaseRows(const RptVertexInfo &) { return -1; }
+
 bool rpt_enable = false;
 bool rpt_debug = false;
 bool rpt_backward = true;
@@ -1153,6 +1155,43 @@ static void forward_filter_reaches_root_and_returns()
 	CHECK(std::abs(subscriber.est_cost_ms - 2.4) < 1e-9);
 }
 
+static void forward_key_survival_and_selection()
+{
+	CHECK(std::abs(RptRetainedKeys(100, 100, 0.4) - 40) < 1e-9);
+	CHECK(std::abs(RptRetainedKeys(100000, 100, 0.4) - 100) < 1e-9);
+
+	RptTransferMgr analysis;
+	vertex(analysis, 1, 1000000, false);
+	vertex(analysis, 2, 40000, true);
+	connect(analysis, edge(1, 2));
+	connect(analysis, edge(1, 2, false, false, 2, 2));
+	RptBuildClasses(&analysis);
+	RptTransferMgr forward;
+	RptBuildForwardPlan(&analysis, &forward);
+
+	RptForwardParams params = forward_params(-1, 0);
+	params.use_total_cost = true;
+	std::map<int, RptForwardVertexEst> estimates;
+	estimates[2].rows = 100000;
+	estimates[2].selectivity = 0.4;
+	std::vector<RptForwardComponent> components;
+	auto ndv = [](const RptVertexInfo &, AttrNumber key) -> double {
+		return key == 1 ? 100 : 100000;
+	};
+
+	RptSelectForward(forward, params, estimates, size_one_mib, ndv, &components);
+	CHECK(components[0].channels[0].source_key.attno == 1);
+	params.key_survival = true;
+	RptSelectForward(forward, params, estimates, size_one_mib, ndv, &components);
+	CHECK(components[0].channels.size() == 1);
+	CHECK(components[0].channels[0].source_key.attno == 2);
+	CHECK(std::abs(components[0].channels[0].est_keep - 0.4) < 1e-9);
+
+	RptSelectForward(forward, params, estimates, size_one_mib,
+		[](const RptVertexInfo &, AttrNumber) -> double { return 100; }, &components);
+	CHECK(!components[0].accepted && components[0].channels.empty());
+}
+
 static void forward_selection_gates()
 {
 	RptTransferMgr forward = forward_star();
@@ -1313,7 +1352,13 @@ static void forward_selection_in_process()
 	estimates[3].selectivity = 0.1;
 	RptSelectForward(forward, params, estimates, size_one_mib, nullptr, &comps);
 	CHECK(comps[0].accepted && comps[0].channels.size() == 2);
+	params.inplace_probe_keys.insert(comps[0].channels.back().target_key);
+	RptSelectForward(forward, params, estimates, size_one_mib, nullptr, &comps);
+	CHECK(!comps[0].accepted && comps[0].channels.empty());
+	CHECK(comps[0].chain_rtindexes.empty());
+	CHECK(comps[0].reason == "in-place filter covers 1.1");
 
+	params.inplace_probe_keys.clear();
 	params.use_total_cost = false;
 	params.inplace_transfers.clear();
 	forward = forward_chain(false);
@@ -1347,6 +1392,11 @@ static void qual_function_allowlist()
 	CHECK(RptQualFunctionSafe(F_OIDGE));
 	CHECK(RptQualFunctionSafe(F_NUMERIC_GE));
 	CHECK(RptQualFunctionSafe(F_NUMERIC_LE));
+	CHECK(RptExtendedQualFunctionSafe(F_DATE_LE_TIMESTAMP));
+	CHECK(RptExtendedQualFunctionSafe(F_FLOAT84GE));
+	CHECK(RptExtendedQualFunctionSafe(F_NUMERIC_NE));
+	CHECK(!RptExtendedQualFunctionSafe(F_TEXT_LT));
+	CHECK(!RptExtendedQualFunctionSafe(F_NUMERIC_DIV));
 	CHECK(!RptQualFunctionSafe(F_INT4DIV));
 	CHECK(!RptQualFunctionSafe(F_INT4PL));
 	CHECK(!RptQualFunctionSafe(1000000)); /* user function, even if leakproof */
@@ -1386,6 +1436,12 @@ static void backward_selection()
 	select();
 	CHECK(classes.size() == 1 && classes[0].accepted);
 	CHECK(classes[0].consumers[0].accepted);
+	params.inplace_probe_keys.insert(decision.consumer_key);
+	select();
+	CHECK(!classes[0].accepted && !classes[0].consumers[0].accepted);
+	CHECK(classes[0].consumers[0].reason == "in-place filter covers 2.1");
+	params.inplace_probe_keys.clear();
+	select();
 	CHECK(classes[0].est_cost_ms > 15.29 && classes[0].est_cost_ms < 15.31);
 	/* 1000 rows in each of the producer slice's 3 processes */
 	CHECK(classes[0].estimated_producer_rows == 3000);
@@ -1478,6 +1534,7 @@ int main()
 	forward_selection_in_process();
 	forward_selection_star();
 	forward_selection_gates();
+	forward_key_survival_and_selection();
 	forward_total_cost_and_weak_channels();
 	forward_filter_reaches_root_and_returns();
 	bypass_direction(false);

@@ -62,6 +62,7 @@ typedef struct AnserInjectCtx
 {
 	bool		inplace_only;	/* only find in-place joins, inject nothing */
 	bool		found_inplace;	/* some join was left to an in-place filter */
+	AnserInplaceProbeFn visit_probe;
 	AnserInplaceCandidateFn visit_inplace;	/* see AnserVisitInplaceCandidates */
 	void	   *visit_arg;
 	PlannedStmt *stmt;			/* for slices[]: see AnserSliceProducers */
@@ -156,14 +157,8 @@ AnserApplyRuntimeFilterFallback(PlannedStmt *stmt)
 }
 
 /*
- * Would any join of this plan get an in-place filter, for an extension that
- * places its own exchanges and leaves the rest to in-place filters?
- *
- * Nothing in the plan changes: in-place filters are not marked in the plan.
- * The segments build them at executor start when the extension's
- * AnserSetInplaceRequest callback says so, deciding join by join the way
- * this walk does, and skipping a probe key that already has an Anser
- * consumer below the join (the extension's own exchange filters it).
+ * Mark eligible same-slice joins for an extension that places its own
+ * exchanges. Segments install the marked filters from the dispatched plan.
  */
 bool
 AnserApplyInplaceRuntimeFilters(PlannedStmt *stmt)
@@ -200,6 +195,24 @@ AnserVisitInplaceCandidates(PlannedStmt *stmt, AnserInplaceCandidateFn visit,
 	ctx.stmt = stmt;
 	ctx.inplace_only = true;
 	ctx.visit_inplace = visit;
+	ctx.visit_arg = arg;
+	anser_inject_walk(stmt->planTree, &ctx);
+}
+
+/* Visit eligible probe keys without constraining the Hash input shape. */
+void
+AnserVisitInplaceProbes(PlannedStmt *stmt, AnserInplaceProbeFn visit, void *arg)
+{
+	AnserInjectCtx ctx = {0};
+
+	if (visit == NULL || !gp_anser_enable || !gp_anser_runtime_filter_inplace ||
+		Gp_role != GP_ROLE_DISPATCH || stmt == NULL ||
+		stmt->commandType != CMD_SELECT || stmt->planTree == NULL)
+		return;
+
+	ctx.stmt = stmt;
+	ctx.inplace_only = true;
+	ctx.visit_probe = visit;
 	ctx.visit_arg = arg;
 	anser_inject_walk(stmt->planTree, &ctx);
 }
@@ -497,12 +510,17 @@ anser_inplace_find_target(HashJoin *hj, AttrNumber attno, bool skip_filtered_key
 			List	   *subplans = ((Append *) parent)->appendplans;
 			ListCell   *lc;
 
-			if (subplans == NIL || scan != NULL)
+			if (subplans == NIL)
 				return false;
 			foreach(lc, subplans)
 			{
 				if (!anser_inplace_scan_accepts((Plan *) lfirst(lc), attno))
 					return false;
+			}
+			if (scan != NULL)
+			{
+				*scan = parent;
+				*scan_attno = attno;
 			}
 			return true;
 		}
@@ -586,13 +604,44 @@ anser_report_inplace_candidate(HashJoin *hj, AnserInjectCtx *ctx)
 		!AnserResolveKeyScan(innerPlan(hj), inner_attno, ctx->slice_index, false,
 							 &build_parent, &build_scan, &build_attno, &build_slice) ||
 		build_scan != input ||
-		!anser_inplace_find_target(hj, outer_attno, true, &probe_scan, &probe_attno))
+		!anser_inplace_find_target(hj, outer_attno, true, &probe_scan, &probe_attno) ||
+		!IsA(probe_scan, SeqScan))
 		return;
 	build_key = AnserScanOutputVar((Scan *) build_scan, build_attno);
 	probe_key = AnserScanOutputVar((Scan *) probe_scan, probe_attno);
 	if (build_key != NULL && probe_key != NULL)
 		ctx->visit_inplace(build_scan, build_key->varattno, probe_scan,
 						   probe_key->varattno, ctx->visit_arg);
+}
+
+static void
+anser_report_inplace_probes(HashJoin *hj, AttrNumber outer_attno, AnserInjectCtx *ctx)
+{
+	Plan	   *probe;
+	AttrNumber	position;
+	ListCell   *lc;
+
+	if (!anser_inplace_find_target(hj, outer_attno, false, &probe, &position))
+		return;
+
+	if (IsA(probe, Append))
+	{
+		foreach(lc, ((Append *) probe)->appendplans)
+		{
+			Scan *scan = (Scan *) lfirst(lc);
+			Var *key = AnserScanOutputVar(scan, position);
+
+			if (key != NULL)
+				ctx->visit_probe(&scan->plan, key->varattno, hj, ctx->visit_arg);
+		}
+	}
+	else
+	{
+		Var *key = AnserScanOutputVar((Scan *) probe, position);
+
+		if (key != NULL)
+			ctx->visit_probe(probe, key->varattno, hj, ctx->visit_arg);
+	}
 }
 
 /*
@@ -756,12 +805,21 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 	 */
 	if (gp_anser_runtime_filter_inplace &&
 		AnserInplaceEligible(hj, ctx->stmt, ctx->slice_index,
-							 ctx->nestloop_params, ctx->inplace_only))
+							 ctx->nestloop_params, ctx->inplace_only &&
+							 ctx->visit_probe == NULL && !gp_anser_inplace_with_consumer))
 	{
 		ctx->found_inplace = true;
 		if (ctx->visit_inplace != NULL)
 			anser_report_inplace_candidate(hj, ctx);
-		else
+		if (ctx->visit_probe != NULL)
+		{
+			AttrNumber inner_attno;
+			AttrNumber outer_attno;
+
+			if (anser_hashjoin_keys(hj, &inner_attno, &outer_attno))
+				anser_report_inplace_probes(hj, outer_attno, ctx);
+		}
+		if (ctx->visit_inplace == NULL && ctx->visit_probe == NULL)
 			hj->anser_inplace_filter = true;
 		return;
 	}

@@ -46,6 +46,7 @@
 /* libstdc++ locale headers may include libintl.h. Parse them before
  * postgres.h defines gettext macros in builds without NLS. */
 #include <algorithm>
+#include <cmath>
 #include <cstdarg>
 #include <cstdlib>
 #include <exception>
@@ -238,6 +239,9 @@ struct RptBackwardConsumer
 	bool eligible = false;
 	bool defer_first = true;
 	double estimated_rows_removed = -1; /* unknown without column statistics */
+	double producer_base_rows = -1;
+	double producer_ndv = -1;
+	double consumer_ndv = -1;
 	std::string reason;
 };
 
@@ -299,6 +303,7 @@ struct RptForwardChannel
 	int64		max_payload = 0;
 	int64		planned_bytes = 0;
 	double		est_cost_ms = 0;
+	double		est_keep = 1;
 };
 
 /* One root's forward chain and the decision about it. */
@@ -307,6 +312,7 @@ struct RptForwardComponent
 	int			root_rtindex = 0;
 	std::vector<int> chain_rtindexes;			/* reducer scans, producers before consumers */
 	std::vector<RptForwardChannel> channels;
+	std::set<RptKey> inplace_refusals;
 	double		est_cost_ms = 0;	/* sum of hop estimates */
 	double		est_work_ms = 0;	/* reducer, probes and exchange */
 	double		est_benefit_ms = 0;	/* downstream work avoided */
@@ -318,6 +324,12 @@ struct RptForwardComponent
 struct RptForwardParams
 {
 	bool		use_total_cost = false;
+	bool		key_survival = false;
+	double		reducer_scan_ms_per_row = 0.00015;
+	double		reducer_scan_ms_per_byte = 0.000002;
+	double		bloom_build_ms_per_row = 0.00010;
+	double		bloom_probe_ms_per_row = 0.00008;
+	double		downstream_ms_per_row = 0.00060;
 	int			width = 0;			/* reducer gang size: producers per channel */
 	double		delivery_ms_per_mib = 0;
 	double		ms_per_mib_part = 0;	/* c in c * n_producers * filter_MiB */
@@ -327,6 +339,7 @@ struct RptForwardParams
 	std::map<int, int> main_consumer_processes; /* rtindex -> main scan width */
 	std::set<RptKey> main_consumer_keys;
 	std::set<std::pair<RptKey, RptKey>> inplace_transfers;
+	std::set<RptKey> inplace_probe_keys;
 };
 
 /*
@@ -342,6 +355,23 @@ struct RptForwardVertexEst
 	double		selectivity = 1;
 	bool		quals_dropped = false;
 };
+
+/* Expected retained keys under independent sampling of rows within a key. */
+inline double
+RptRetainedKeys(double rows, double ndv, double row_keep)
+{
+	if (row_keep <= 0)
+		return 0;
+	if (row_keep >= 1)
+		return ndv;
+	return ndv * -std::expm1(std::max(1.0, rows / ndv) * std::log1p(-row_keep));
+}
+
+extern double RptBaseRows(const RptVertexInfo &vertex);
+extern bool rpt_key_survival;
+extern bool rpt_extended_safe_quals;
+extern double rpt_cost_scan_row, rpt_cost_scan_byte, rpt_cost_build_row,
+	rpt_cost_probe_row, rpt_cost_downstream_row;
 
 /* Distinct values of a column over the whole table, or < 0 when unknown. */
 typedef double (*RptNdvFn) (const RptVertexInfo &vertex, AttrNumber attno);
@@ -409,6 +439,7 @@ extern double rpt_forward_ms_per_mib_part;
 extern double rpt_delivery_ms_per_mib;
 extern double rpt_forward_max_exchange_ms;
 extern bool rpt_forward_total_cost;
+extern bool rpt_prefer_inplace;
 extern double rpt_forward_min_root_rows;
 extern double rpt_forward_max_selectivity;
 
@@ -428,7 +459,8 @@ extern void RptBuildForwardPlan(const RptTransferMgr *analysis,
 								RptTransferMgr *forward);
 extern void RptAttachReducerInitPlan(PlannedStmt *stmt, List *children, int width,
 									int next_plan_node_id);
-extern void RptCheckBackwardConsumers(PlannedStmt *stmt, RptTransferMgr *mgr);
+extern void RptCheckBackwardConsumers(PlannedStmt *stmt, RptTransferMgr *mgr,
+									 bool key_survival = false);
 extern double RptEstimateDistinct(const RptVertexInfo &vertex, AttrNumber attno);
 extern void RptDumpTransferPlan(const PlannedStmt *stmt,
 								const RptTransferMgr *mgr, StringInfo out);

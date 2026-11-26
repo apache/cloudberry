@@ -32,6 +32,7 @@
 
 MemoryContext CurrentMemoryContext;
 int work_mem;
+bool gp_anser_zero_copy;
 static TupleTableSlot input;
 static bool exhausted;
 static Datum stored;

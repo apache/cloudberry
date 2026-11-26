@@ -24,6 +24,7 @@ CREATE EXTENSION IF NOT EXISTS anser_test;
 -- end_ignore
 CREATE EXTENSION robust_predicate_transfer;
 SET anser.runtime_filter = off;
+SET rpt.key_survival = off;
 SET rpt.enable = on;
 SET rpt.forward = off;
 SET rpt.backward = on;
@@ -229,6 +230,7 @@ RESET rpt.enable;
 RESET rpt.forward;
 RESET rpt.backward;
 RESET rpt.forward_max_exchange_ms;
+RESET rpt.key_survival;
 RESET anser.runtime_filter;
 RESET anser.timeout_ms;
 RESET optimizer;

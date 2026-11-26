@@ -32,6 +32,7 @@ and fixture tables. Use your normal libpq connection settings.
 | [diagnose_forward.py](diagnose_forward.py) | Compatibility entry point for the diagnostic runner |
 | [compare_tpcds_results.py](compare_tpcds_results.py) | Compare exact results with filters off, Anser on, and RPT on |
 | [survey.py](survey.py) | Survey RPT and Anser decisions on benchmark queries |
+| [tpcds_rf_metrics.sql](tpcds_rf_metrics.sql) | Install a JSON EXPLAIN runtime-filter metrics helper for TPC-DS |
 
 ## Collect the bridge example
 
@@ -139,3 +140,36 @@ python3 gpcontrib/robust_predicate_transfer/scripts/compare_tpcds_results.py \
 Each statement reports missing and extra rows against the no-filter
 baseline, including duplicate counts. A mismatch or query error returns
 a nonzero exit status. Use `--optimizer on` to repeat with GPORCA.
+
+
+## Collect TPC-DS runtime-filter metrics
+
+Install the helper in a benchmark database that already has the TPC-DS
+extension and generated queries.
+
+```sh
+psql -X -d rpt_tpcds -f gpcontrib/robust_predicate_transfer/scripts/tpcds_rf_metrics.sql
+```
+
+Run `SELECT * FROM tpcds.rf_metrics(93);` in the benchmark session. The
+helper executes the query and reports filter nodes, scan pruning, and
+InitPlan timings by statement. The difference between a wrapper's
+reported time and its child's is an approximation. In distributed plans,
+the two times can come from different workers.
+
+The tuning switches default to on. For A/B testing, disable one switch
+at a time to measure its effect.
+
+| Setting | Enables |
+| --- | --- |
+| `anser.zero_copy` | Return child slots from identity filter wrappers |
+| `rpt.prefer_inplace` | Prefer eligible local Hash filters over exchanges on the same probe key |
+| `anser.inplace_with_consumer` | Allow in-place filters alongside existing Anser consumers |
+| `rpt.key_survival` | Use retained distinct-key estimates and choose the strongest equality on multi-key forward edges |
+| `rpt.extended_safe_quals` | Evaluate additional built-in comparisons in the reducer |
+
+With `rpt.key_survival` enabled, tune `rpt.cost_scan_row`,
+`rpt.cost_scan_byte`, `rpt.cost_build_row`, `rpt.cost_probe_row`, and
+`rpt.cost_downstream_row` in milliseconds. The defaults are the existing
+model coefficients. Save the session settings and exact query results
+alongside each benchmark run.

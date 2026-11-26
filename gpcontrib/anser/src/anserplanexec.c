@@ -449,6 +449,7 @@ anser_produce_begin(CustomScanState *node, EState *estate, int eflags)
 				max_payload, st->produce != NULL ? "ok" : "NULL");
 
 	node->custom_ps = list_make1(ExecInitNode(child, estate, eflags));
+	AnserInitFilterChildSlot(node, gp_anser_zero_copy);
 	st->key_length = AnserKeyLength((PlanState *) linitial(node->custom_ps), st->key_attno);
 }
 
@@ -640,6 +641,7 @@ anser_consume_begin(CustomScanState *node, EState *estate, int eflags)
 												  expected_parts);
 
 	node->custom_ps = list_make1(ExecInitNode(child, estate, eflags));
+	AnserInitFilterChildSlot(node, gp_anser_zero_copy);
 	st->key_length = AnserKeyLength((PlanState *) linitial(node->custom_ps), st->key_attno);
 }
 

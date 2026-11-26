@@ -215,6 +215,17 @@ one_entry_tlist(Var *var, TargetEntry *entry, ListCell *cell, List *list)
 	return list;
 }
 
+static void
+record_inplace_probe(Plan *plan, AttrNumber key, HashJoin *join, void *arg)
+{
+	int *probes = (int *) arg;
+
+	CHECK(IsA(plan, SeqScan));
+	CHECK(key == 3);
+	CHECK(IsA(outerPlan(innerPlan(join)), HashJoin));
+	++*probes;
+}
+
 /*
  * anser_inplace_has_target: down the outer side only, through HashJoin,
  * Result, Append and our own nodes, to a SeqScan -- never through a Motion.
@@ -226,6 +237,9 @@ inplace_target(void)
 	SeqScan		scan2 = {0};
 	HashJoin	join = {0};
 	HashJoin	lower = {0};
+	Hash		build = {0};
+	AnserInjectCtx ctx = {0};
+	int probes = 0;
 	Motion		motion = {0};
 	CustomScan	filter = {0};
 	Append		append = {0};
@@ -316,6 +330,13 @@ inplace_target(void)
 	append.appendplans = &children;
 	join.join.plan.lefttree = &append.plan;
 	CHECK(anser_inplace_has_target(&join, 1, false));
+	build.plan.type = T_Hash;
+	build.plan.lefttree = &lower.join.plan;
+	join.join.plan.righttree = &build.plan;
+	ctx.visit_probe = record_inplace_probe;
+	ctx.visit_arg = &probes;
+	anser_report_inplace_probes(&join, 1, &ctx);
+	CHECK(probes == 2);
 	child_cells[1].ptr_value = &motion.plan;
 	CHECK(!anser_inplace_has_target(&join, 1, false));
 }

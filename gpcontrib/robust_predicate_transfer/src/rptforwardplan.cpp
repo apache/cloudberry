@@ -73,32 +73,6 @@ rpt_forward_member_rtindexes(const RptTransferMgr &forward, int root_rtindex)
 	return member_rtindexes;
 }
 
-/* The fraction of `to` rows a filter from `from` keeps. */
-static double
-rpt_transfer_keep(const RptTransferMgr &forward, const RptForwardChannel &ch,
-				  double from_keep, RptNdvFn ndv_fn)
-{
-	double		d = ndv_fn ? ndv_fn(forward.vertices[forward.vertex_index_by_rtindex.at(ch.source_rtindex)],
-									ch.source_key.attno) : -1;
-	double		n = ndv_fn ? ndv_fn(forward.vertices[forward.vertex_index_by_rtindex.at(ch.target_rtindex)],
-									ch.target_key.attno) : -1;
-
-	if (d > 0 && n > 0 && d < n)
-		return from_keep * d / n;
-	return from_keep;
-}
-
-/* First-pass millisecond estimates per segment. The exchange estimate
- * already sums serial hops. The avoided work is downstream of the scan:
- * Bloom probing does not imply that the scan can skip I/O. */
-static constexpr double reducer_startup_ms = 1.0;
-static constexpr double reducer_scan_ms_per_row = 0.00015;
-static constexpr double reducer_scan_ms_per_byte = 0.000002;
-static constexpr double bloom_build_ms_per_row = 0.00010;
-static constexpr double bloom_probe_ms_per_row = 0.00008;
-static constexpr double downstream_ms_per_row = 0.00060;
-static constexpr double minimum_hop_rejection = 0.05;
-
 static double
 rpt_estimated_scan_rows(const RptTransferMgr &forward,
 						const std::map<int, RptForwardVertexEst> &est, int rtindex)
@@ -108,6 +82,38 @@ rpt_estimated_scan_rows(const RptTransferMgr &forward,
 		return entry->second.rows;
 	return forward.vertices[forward.vertex_index_by_rtindex.at(rtindex)].cardinality;
 }
+
+/* The fraction of `to` rows a filter from `from` keeps. */
+static double
+rpt_transfer_keep(const RptTransferMgr &forward, const RptForwardChannel &ch,
+				  double from_keep, RptNdvFn ndv_fn,
+				  const RptForwardParams &params,
+				  const std::map<int, RptForwardVertexEst> &est)
+{
+	double		d = ndv_fn ? ndv_fn(forward.vertices[forward.vertex_index_by_rtindex.at(ch.source_rtindex)],
+									ch.source_key.attno) : -1;
+	double		n = ndv_fn ? ndv_fn(forward.vertices[forward.vertex_index_by_rtindex.at(ch.target_rtindex)],
+									ch.target_key.attno) : -1;
+
+	if (params.key_survival && d > 0 && n > 0)
+	{
+		const auto &source = forward.vertices[forward.vertex_index_by_rtindex.at(ch.source_rtindex)];
+		double rows = rpt_estimated_scan_rows(forward, est, ch.source_rtindex) *
+			(source.replicated ? 1 : std::max(1, source.numsegments));
+		/* A catalog NDV larger than the source row count is stale. */
+		if (rows > 0)
+			return std::min(1.0, RptRetainedKeys(rows, std::min(d, rows), from_keep) / n);
+	}
+	if (d > 0 && n > 0 && d < n)
+		return from_keep * d / n;
+	return from_keep;
+}
+
+/* First-pass millisecond estimates per segment. The exchange estimate
+ * already sums serial hops. The avoided work is downstream of the scan:
+ * Bloom probing does not imply that the scan can skip I/O. */
+static constexpr double reducer_startup_ms = 1.0;
+static constexpr double minimum_hop_rejection = 0.05;
 
 static void
 rpt_add_forward_subscribers(const RptTransferMgr &forward,
@@ -145,6 +151,11 @@ rpt_add_forward_subscribers(const RptTransferMgr &forward,
 					!params.main_consumer_keys.count(to) ||
 					params.inplace_transfers.count({from, to}))
 					continue;
+				if (params.inplace_probe_keys.count(to))
+				{
+					comp.inplace_refusals.insert(to);
+					continue;
+				}
 				RptForwardChannel extra = ch;
 				extra.target_rtindex = to.rtindex;
 				extra.target_key = to;
@@ -152,11 +163,13 @@ rpt_add_forward_subscribers(const RptTransferMgr &forward,
 				extra.main_only = true;
 				extra.est_cost_ms = params.delivery_ms_per_mib * deliveries->second *
 					((double) ch.planned_bytes / (1024.0 * 1024.0));
-				double rejected = 1 - rpt_transfer_keep(forward, extra, keep.at(ch.source_rtindex), ndv_fn);
+				extra.est_keep = rpt_transfer_keep(forward, extra, keep.at(ch.source_rtindex),
+												   ndv_fn, params, est);
+				double rejected = 1 - extra.est_keep;
 				double work = extra.est_cost_ms +
-					rpt_estimated_scan_rows(forward, est, to.rtindex) * bloom_probe_ms_per_row;
+					rpt_estimated_scan_rows(forward, est, to.rtindex) * params.bloom_probe_ms_per_row;
 				double benefit = forward.vertices[forward.vertex_index_by_rtindex.at(to.rtindex)].cardinality *
-					rejected * downstream_ms_per_row;
+					rejected * params.downstream_ms_per_row;
 				if (rejected < minimum_hop_rejection || benefit <= work ||
 					(params.max_exchange_ms >= 0 &&
 					 comp.est_cost_ms + extra.est_cost_ms > params.max_exchange_ms))
@@ -173,10 +186,7 @@ rpt_add_forward_subscribers(const RptTransferMgr &forward,
 }
 
 static void
-rpt_cost_forward_component(const RptTransferMgr &forward,
-						   const std::map<int, RptForwardVertexEst> &est,
-						   const std::map<int, double> &keep,
-						   RptForwardComponent &comp)
+rpt_prune_disconnected(RptForwardComponent &comp)
 {
 	/* After pruning, remove producer subtrees with no path to the root. */
 	std::set<int> reachable = {comp.root_rtindex};
@@ -192,8 +202,15 @@ rpt_cost_forward_component(const RptTransferMgr &forward,
 		comp.chain_rtindexes.end(), [&](int rtindex) {
 			return !reachable.count(rtindex);
 		}), comp.chain_rtindexes.end());
+}
 
-	comp.est_cost_ms = 0;
+static void
+rpt_cost_forward_component(const RptTransferMgr &forward,
+						   const RptForwardParams &params,
+						   const std::map<int, RptForwardVertexEst> &est,
+						   const std::map<int, double> &keep,
+						   RptForwardComponent &comp)
+{
 	for (int rtindex : comp.chain_rtindexes)
 	{
 		const auto &vertex = forward.vertices[forward.vertex_index_by_rtindex.at(rtindex)];
@@ -202,21 +219,20 @@ rpt_cost_forward_component(const RptTransferMgr &forward,
 
 		/* Charge decoded rows and retained-qual evaluation even when an
 		 * incoming filter rejects most of the tuples. */
-		comp.est_work_ms += rows * (reducer_scan_ms_per_row +
-									width * reducer_scan_ms_per_byte);
+		comp.est_work_ms += rows * (params.reducer_scan_ms_per_row +
+									width * params.reducer_scan_ms_per_byte);
 	}
 	for (const auto &ch : comp.channels)
 	{
-		comp.est_cost_ms += ch.est_cost_ms;
 		comp.est_work_ms += ch.est_cost_ms +
 			rpt_estimated_scan_rows(forward, est, ch.source_rtindex) *
-			keep.at(ch.source_rtindex) * bloom_build_ms_per_row +
+			keep.at(ch.source_rtindex) * params.bloom_build_ms_per_row +
 			rpt_estimated_scan_rows(forward, est, ch.target_rtindex) *
-			bloom_probe_ms_per_row;
+			params.bloom_probe_ms_per_row;
 	}
 	const auto &root = forward.vertices[forward.vertex_index_by_rtindex.at(comp.root_rtindex)];
 	comp.est_benefit_ms = root.cardinality * (1 - comp.est_selectivity) *
-		downstream_ms_per_row;
+		params.downstream_ms_per_row;
 }
 
 void
@@ -258,7 +274,7 @@ RptSelectForward(const RptTransferMgr &forward, const RptForwardParams &params,
 				if (in.target_rtindex == rtindex)
 				{
 					has_incoming = true;
-					k *= rpt_transfer_keep(forward, in, keep[in.source_rtindex], ndv_fn);
+					k *= in.est_keep;
 				}
 			keep[rtindex] = k;
 
@@ -270,18 +286,37 @@ RptSelectForward(const RptTransferMgr &forward, const RptForwardParams &params,
 					continue;
 				ch.source_rtindex = rtindex;
 				ch.target_rtindex = edge.other_rtindex;
-				ch.source_key = edge.left_keys[0];	/* out-edge: left = this side */
-				ch.target_key = edge.right_keys[0];
+				ch.source_key = edge.left_keys.front(); /* out-edge: left = this side */
+				ch.target_key = edge.right_keys.front();
+				ch.est_keep = rpt_transfer_keep(forward, ch, k, ndv_fn, params, est);
+				if (params.key_survival)
+					for (size_t key = 1; key < edge.left_keys.size(); ++key)
+					{
+						RptForwardChannel candidate = ch;
+						candidate.source_key = edge.left_keys[key];
+						candidate.target_key = edge.right_keys[key];
+						candidate.est_keep = rpt_transfer_keep(forward, candidate, k, ndv_fn, params, est);
+						if (candidate.est_keep < ch.est_keep)
+							ch = candidate;
+					}
 				ch.local = edge.local;
 				ch.in_process = ch.local && ch.target_rtindex != root_rtindex;
 				/* The Hash input preserves the base predicates. Without a
 				 * reducer-only incoming filter, the exchange cannot improve
 				 * on that key set and requires an extra scan. */
+				if (ch.target_rtindex == root_rtindex &&
+					params.inplace_probe_keys.count(ch.target_key))
+				{
+					comp.inplace_refusals.insert(ch.target_key);
+					comp.reason = "in-place filter covers " + std::to_string(ch.target_key.rtindex) +
+						"." + std::to_string(ch.target_key.attno);
+					continue;
+				}
 				if (!has_incoming && ch.target_rtindex == root_rtindex &&
 					params.inplace_transfers.count({ch.source_key, ch.target_key}))
 					continue;
 				if (params.use_total_cost &&
-					rpt_transfer_keep(forward, ch, k, ndv_fn) > 1 - minimum_hop_rejection)
+					ch.est_keep > 1 - minimum_hop_rejection)
 					continue;
 
 				/* Sized for what the reducer scan inserts: its rows after its
@@ -327,17 +362,27 @@ RptSelectForward(const RptTransferMgr &forward, const RptForwardParams &params,
 
 		for (const RptForwardChannel &ch : comp.channels)
 			if (ch.target_rtindex == root_rtindex)
-				comp.est_selectivity *= rpt_transfer_keep(forward, ch, keep[ch.source_rtindex], ndv_fn);
+				comp.est_selectivity *= ch.est_keep;
 
+		if (sized && (params.use_total_cost || !params.inplace_probe_keys.empty()))
+		{
+			rpt_prune_disconnected(comp);
+			comp.est_cost_ms = 0;
+			for (const auto &ch : comp.channels)
+				comp.est_cost_ms += ch.est_cost_ms;
+		}
 		if (params.use_total_cost && sized)
-			rpt_cost_forward_component(forward, est, keep, comp);
+			rpt_cost_forward_component(forward, params, est, keep, comp);
 
 		const RptVertexInfo &rootv = forward.vertices[forward.vertex_index_by_rtindex.at(root_rtindex)];
 
 		if (!sized)
 			;					/* reason already set */
 		else if (comp.channels.empty())
-			comp.reason = "no forward edges";
+		{
+			if (comp.reason.empty())
+				comp.reason = "no forward edges";
+		}
 		else if ((double) rootv.cardinality < params.min_root_rows)
 			comp.reason = "root rows below rpt.forward_min_root_rows";
 		else if (params.max_selectivity < 1 &&
@@ -386,6 +431,8 @@ RptDumpForward(const std::vector<RptForwardComponent> &components, std::string *
 				 << " est_benefit_ms=" << comp.est_benefit_ms
 				 << " est_sel=" << comp.est_selectivity
 			 << " decision=" << comp.reason << '\n';
+		for (const auto &key : comp.inplace_refusals)
+			text << "forward: in-place filter covers " << key.rtindex << '.' << key.attno << '\n';
 		for (const RptForwardChannel &ch : comp.channels)
 			text << "forward channel " << ch.source_key.rtindex << '.' << ch.source_key.attno
 				 << "->" << ch.target_key.rtindex << '.' << ch.target_key.attno

@@ -63,24 +63,17 @@ extern PGDLLEXPORT void AnserApplyRuntimeFilters(PlannedStmt *stmt);
  */
 extern PGDLLEXPORT bool AnserApplyRuntimeFilterFallback(PlannedStmt *stmt);
 extern PGDLLEXPORT bool AnserApplyInplaceRuntimeFilters(PlannedStmt *stmt);
+typedef void (*AnserInplaceProbeFn)(Plan *probe, AttrNumber probe_key,
+									 HashJoin *join, void *arg);
+extern PGDLLEXPORT void AnserVisitInplaceProbes(PlannedStmt *stmt,
+												AnserInplaceProbeFn visit, void *arg);
+
 typedef void (*AnserInplaceCandidateFn)(Plan *build, AttrNumber build_key,
 										Plan *probe, AttrNumber probe_key,
 										void *arg);
 extern PGDLLEXPORT void AnserVisitInplaceCandidates(PlannedStmt *stmt,
 													AnserInplaceCandidateFn visit,
 													void *arg);
-
-/*
- * Segments build in-place filters when anser.runtime_filter and
- * anser.runtime_filter_inplace are on.  An extension that relies on
- * AnserApplyInplaceRuntimeFilters without anser.runtime_filter registers a
- * callback here, in every backend, that says whether it wants them for the
- * current statement; it must decide from settings synchronized to the
- * segments.  Such filters skip a probe key that already has an Anser
- * consumer, as AnserApplyInplaceRuntimeFilters does.
- */
-typedef bool (*AnserInplaceRequestFn)(void);
-extern PGDLLEXPORT void AnserSetInplaceRequest(AnserInplaceRequestFn request);
 
 /* The probe key position of an Anser consumer node, else InvalidAttrNumber. */
 extern PGDLLEXPORT AttrNumber AnserBloomConsumerKey(const Plan *plan);

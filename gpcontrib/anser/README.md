@@ -170,14 +170,9 @@ exchange where eligible.
 
 An extension that places its own exchanges, like `robust_predicate_transfer`,
 can leave the remaining same-slice joins to in-place filters without turning
-on `anser.runtime_filter`: `AnserApplyInplaceRuntimeFilters` tells the
-coordinator whether any join qualifies, and a callback registered with
-`AnserSetInplaceRequest` tells the segments to build them. In that mode a
-probe key that already has an Anser consumer keeps just that filter. Its own
-identity filter nodes, registered with `AnserRegisterFilterScanMethods`, are
-looked through like Anser's. Should the two sides still disagree about a
-join, it ends up with two filters or none, and the answer is the same either
-way.
+on `anser.runtime_filter`. `AnserApplyInplaceRuntimeFilters` marks the eligible
+joins in the plan. An extension can register its identity filter nodes with
+`AnserRegisterFilterScanMethods` so the walk can reach the underlying scans.
 
 ### Only across a Motion
 

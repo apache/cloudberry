@@ -930,6 +930,11 @@ test_filter_child_slot_and_recheck(void)
 	node.ss.ss_ScanTupleSlot = &scan_slot;
 	CHECK(AnserFilterChildSlot(&node, &child_slot) == &scan_slot);
 	CHECK(copied_dst == &scan_slot && copied_src == &child_slot);
+	copied_dst = copied_src = NULL;
+	AnserInitFilterChildSlot(&node, true);
+	CHECK(AnserFilterChildSlot(&node, &child_slot) == &child_slot);
+	CHECK(!node.ss.ps.resultopsfixed && node.ss.ps.resultopsset);
+	CHECK(copied_dst == NULL && copied_src == NULL);
 	CHECK(AnserFilterRecheck(&node, &scan_slot));
 	CHECK(AnserFilterRecheck(NULL, NULL));
 }

@@ -21,6 +21,8 @@
 -- result query is dynamic SQL, so GUC changes cannot reuse an earlier plan.
 CREATE EXTENSION robust_predicate_transfer;
 SET anser.runtime_filter = off;
+SET rpt.prefer_inplace = off;
+SET rpt.key_survival = off;
 SET anser.timeout_ms = 600000;
 -- This suite forces reducer shapes; admission policy is tested separately.
 SET rpt.forward_total_cost = off;
@@ -186,6 +188,8 @@ BEGIN
         -- actual probe rows. Isolate it from the forward reducer and core
         -- pushdown so the scan counter can only come from Anser in-place.
         q := 'SELECT r.k FROM rpt_bw_root r JOIN rpt_bw_local l ON r.k = l.k WHERE l.k < 5';
+        PERFORM set_config('rpt.prefer_inplace', 'on', true);
+        PERFORM set_config('anser.inplace_with_consumer', 'on', true);
         PERFORM set_config('rpt.forward', 'off', true);
         PERFORM set_config('gp_enable_runtime_filter_pushdown', 'off', true);
         PERFORM set_config('anser.runtime_filter_inplace', 'on', true);
@@ -204,6 +208,8 @@ BEGIN
            pg_temp.rpt_bw_result(q, false, false) THEN
             RAISE EXCEPTION 'in-place RPT filter changed results (optimizer=%)', opt;
         END IF;
+        PERFORM set_config('rpt.prefer_inplace', 'off', true);
+        PERFORM set_config('anser.inplace_with_consumer', 'off', true);
         PERFORM set_config('rpt.forward', 'on', true);
         -- Narrow projection makes the smaller member the hash build side.
         PERFORM pg_temp.rpt_bw_expect(
@@ -327,6 +333,8 @@ $$;
 DROP TABLE rpt_bw_root, rpt_bw_member, rpt_bw_dim, rpt_bw_bridge, rpt_bw_empty,
            rpt_bw_local, rpt_bw_replica, rpt_bw_part;
 DROP EXTENSION robust_predicate_transfer;
+RESET rpt.prefer_inplace;
+RESET rpt.key_survival;
 RESET anser.runtime_filter;
 RESET anser.timeout_ms;
 RESET statement_timeout;

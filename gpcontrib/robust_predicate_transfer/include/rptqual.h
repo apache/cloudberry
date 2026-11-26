@@ -112,6 +112,76 @@ RptQualFunctionSafe(Oid function)
 	}
 }
 
+/* Built-in comparisons with no row-dependent errors or timezone lookup. */
+static inline bool
+RptExtendedQualFunctionSafe(Oid function)
+{
+	switch (function)
+	{
+		case F_FLOAT4EQ:
+		case F_FLOAT4NE:
+		case F_FLOAT4LT:
+		case F_FLOAT4LE:
+		case F_FLOAT4GT:
+		case F_FLOAT4GE:
+		case F_FLOAT8EQ:
+		case F_FLOAT8NE:
+		case F_FLOAT8LT:
+		case F_FLOAT8LE:
+		case F_FLOAT8GT:
+		case F_FLOAT8GE:
+		case F_FLOAT48EQ:
+		case F_FLOAT48NE:
+		case F_FLOAT48LT:
+		case F_FLOAT48LE:
+		case F_FLOAT48GT:
+		case F_FLOAT48GE:
+		case F_FLOAT84EQ:
+		case F_FLOAT84NE:
+		case F_FLOAT84LT:
+		case F_FLOAT84LE:
+		case F_FLOAT84GT:
+		case F_FLOAT84GE:
+		case F_DATE_EQ:
+		case F_DATE_NE:
+		case F_DATE_LT:
+		case F_DATE_LE:
+		case F_DATE_GT:
+		case F_DATE_GE:
+		case F_TIMESTAMP_EQ:
+		case F_TIMESTAMP_NE:
+		case F_TIMESTAMP_LT:
+		case F_TIMESTAMP_LE:
+		case F_TIMESTAMP_GT:
+		case F_TIMESTAMP_GE:
+		case F_TIMESTAMPTZ_EQ:
+		case F_TIMESTAMPTZ_NE:
+		case F_TIMESTAMPTZ_LT:
+		case F_TIMESTAMPTZ_LE:
+		case F_TIMESTAMPTZ_GT:
+		case F_TIMESTAMPTZ_GE:
+		case F_DATE_EQ_TIMESTAMP:
+		case F_DATE_NE_TIMESTAMP:
+		case F_DATE_LT_TIMESTAMP:
+		case F_DATE_LE_TIMESTAMP:
+		case F_DATE_GT_TIMESTAMP:
+		case F_DATE_GE_TIMESTAMP:
+		case F_TIMESTAMP_EQ_DATE:
+		case F_TIMESTAMP_NE_DATE:
+		case F_TIMESTAMP_LT_DATE:
+		case F_TIMESTAMP_LE_DATE:
+		case F_TIMESTAMP_GT_DATE:
+		case F_TIMESTAMP_GE_DATE:
+		case F_NUMERIC_EQ:
+		case F_NUMERIC_NE:
+		case F_NUMERIC_LT:
+		case F_NUMERIC_GT:
+			return true;
+		default:
+			return false;
+	}
+}
+
 /* ScalarArrayOpExpr can call these in addition to its comparison function. */
 static inline bool
 RptQualHashFunctionSafe(Oid function)

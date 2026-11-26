@@ -343,7 +343,7 @@ rpt_consumer_verdicts(RptTransferMgr *mgr)
 }
 
 void
-RptCheckBackwardConsumers(PlannedStmt *stmt, RptTransferMgr *mgr)
+RptCheckBackwardConsumers(PlannedStmt *stmt, RptTransferMgr *mgr, bool key_survival)
 {
 	RptPlacementContext context;
 	for (const auto &vertex : mgr->vertices)
@@ -411,7 +411,23 @@ RptCheckBackwardConsumers(PlannedStmt *stmt, RptTransferMgr *mgr)
 						{
 							double root_rows = producer.cardinality *
 								(producer.replicated ? 1.0 : std::max(1, producer.numsegments));
-							root_ndv = std::min(root_ndv, root_rows);
+							if (key_survival)
+							{
+								double base = RptBaseRows(producer);
+								if (base > 0)
+								{
+									decision.producer_base_rows = base *
+										(producer.replicated ? 1 : std::max(1, producer.numsegments));
+									decision.producer_ndv = std::min(root_ndv, decision.producer_base_rows);
+									decision.consumer_ndv = member_ndv;
+									root_ndv = RptRetainedKeys(decision.producer_base_rows,
+										decision.producer_ndv, std::min(1.0, root_rows / decision.producer_base_rows));
+								}
+								else
+									root_ndv = std::min(root_ndv, root_rows);
+							}
+							else
+								root_ndv = std::min(root_ndv, root_rows);
 							decision.estimated_rows_removed = consumer.cardinality *
 								(1.0 - std::min(1.0, root_ndv / member_ndv));
 						}

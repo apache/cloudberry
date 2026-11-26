@@ -58,6 +58,8 @@ void		_PG_init(void);
 bool		gp_anser_enable = false;
 bool		gp_anser_runtime_filter = false;
 bool		gp_anser_runtime_filter_inplace = true;
+bool		gp_anser_inplace_with_consumer = true;
+bool		gp_anser_zero_copy = true;
 bool		gp_anser_debug = false;
 int			gp_anser_max_info_size = 64 * 1024 * 1024 + 1024 * 1024;
 int			gp_anser_timeout_ms = 10000;
@@ -181,6 +183,15 @@ anser_define_gucs(void)
 							 PGC_USERSET,
 							 GUC_EXPLAIN | GUC_GPDB_NEED_SYNC,
 							 NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("anser.inplace_with_consumer",
+							 "Allow in-place filters on keys already covered by an exchange.",
+							 NULL, &gp_anser_inplace_with_consumer, true, PGC_USERSET,
+							 GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC, NULL, NULL, NULL);
+	DefineCustomBoolVariable("anser.zero_copy",
+							 "Pass through child tuple slots in runtime filter nodes.",
+							 NULL, &gp_anser_zero_copy, true, PGC_USERSET,
+							 GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable("anser.runtime_filter_inplace",
 							 "Builds the runtime filter of a co-located probe scan in place.",

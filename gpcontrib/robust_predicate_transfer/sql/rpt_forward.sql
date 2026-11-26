@@ -24,6 +24,9 @@
 -- Faults live in rpt_forward_faults.
 CREATE EXTENSION robust_predicate_transfer;
 SET anser.runtime_filter = off;
+SET rpt.prefer_inplace = off;
+SET rpt.key_survival = off;
+SET rpt.extended_safe_quals = off;
 SET rpt.backward = off;
 SET statement_timeout = '120s';
 -- Star: two dimensions on two different fact keys (two hops into the root).
@@ -330,6 +333,43 @@ BEGIN
     END LOOP;
 END
 $$;
+-- Extended comparisons may run in an eager reducer. Check admission and
+-- compare the same execution with and without zero-copy filter wrappers.
+CREATE TABLE rpt_fwd_typed (k int, label varchar(8), day date) DISTRIBUTED RANDOMLY;
+INSERT INTO rpt_fwd_typed
+    SELECT i, CASE WHEN i < 20 THEN 'keep' ELSE 'skip' END, date '2001-01-01' + i
+    FROM generate_series(0, 999) i;
+ANALYZE rpt_fwd_typed;
+DO $$
+DECLARE
+    q constant text := $query$SELECT f.id, f.v FROM rpt_fwd_fact f JOIN rpt_fwd_typed d ON f.d1 = d.k
+        WHERE d.label = 'keep' AND d.day BETWEEN timestamp '2001-01-01' AND timestamp '2001-01-10'$query$;
+    dump text;
+    expected text;
+BEGIN
+    PERFORM set_config('optimizer', 'off', true);
+    PERFORM set_config('rpt.enable', 'on', true);
+    PERFORM set_config('rpt.forward_min_root_rows', '0', true);
+    PERFORM set_config('rpt.extended_safe_quals', 'on', true);
+    dump := rpt_transfer_plan(q);
+    IF dump NOT LIKE '%forward component%decision=inject%' OR dump LIKE '%quals of % dropped%' THEN
+        RAISE EXCEPTION 'extended reducer predicates did not survive: %', dump;
+    END IF;
+    PERFORM set_config('anser.zero_copy', 'off', true);
+    expected := pg_temp.rpt_fwd_result(q, false);
+    IF expected = '<empty>' OR pg_temp.rpt_fwd_result(q, true) IS DISTINCT FROM expected THEN
+        RAISE EXCEPTION 'extended reducer predicates changed results';
+    END IF;
+    PERFORM set_config('anser.zero_copy', 'on', true);
+    IF pg_temp.rpt_fwd_count(pg_temp.rpt_fwd_plan(q, true), 'Anser Bloom Consumer', false) = 0 THEN
+        RAISE EXCEPTION 'zero-copy fixture did not execute the filter';
+    END IF;
+    IF pg_temp.rpt_fwd_result(q, true) IS DISTINCT FROM expected THEN
+        RAISE EXCEPTION 'zero-copy filter wrappers changed results';
+    END IF;
+END
+$$;
+DROP TABLE rpt_fwd_typed;
 -- PL/pgSQL (SPI) runs the reducer like any other caller.  Its static
 -- statements keep the plan of their first call, so the function runs once,
 -- with RPT on, and the baseline comes from uncached dynamic SQL.
@@ -370,6 +410,9 @@ $$;
 DROP TABLE rpt_fwd_fact, rpt_fwd_aoco, rpt_fwd_d1, rpt_fwd_d2, rpt_fwd_empty,
            rpt_fwd_dl, rpt_fwd_dr, rpt_fwd_sub;
 DROP EXTENSION robust_predicate_transfer;
+RESET rpt.prefer_inplace;
+RESET rpt.key_survival;
+RESET rpt.extended_safe_quals;
 RESET anser.runtime_filter;
 RESET rpt.backward;
 RESET statement_timeout;

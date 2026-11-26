@@ -79,11 +79,21 @@ RptSelectBackward(const RptTransferMgr &schedule,
 			{
 				kept = std::max(0.0, std::min(1.0,
 					1 - decision.estimated_rows_removed / rows)) * root_keep;
+				if (params.key_survival && decision.producer_base_rows > 0)
+				{
+					double surviving = std::min(1.0, cls.estimated_producer_rows / decision.producer_base_rows);
+					kept = std::min(1.0,
+						RptRetainedKeys(decision.producer_base_rows, decision.producer_ndv, surviving) /
+						decision.consumer_ndv);
+				}
 				target.estimated_rows_removed = rows * (1 - kept);
 			}
 			if (decision.eligible)
 			{
-				if (target.processes <= 0)
+				if (params.inplace_probe_keys.count(decision.consumer_key))
+					target.reason = "in-place filter covers " + std::to_string(decision.consumer_key.rtindex) +
+						"." + std::to_string(decision.consumer_key.attno);
+				else if (target.processes <= 0)
 					target.reason = "unknown consumer process count";
 				else if (params.max_selectivity < 1 && kept >= params.max_selectivity)
 					target.reason = "estimated member selectivity not below rpt.forward_max_selectivity";

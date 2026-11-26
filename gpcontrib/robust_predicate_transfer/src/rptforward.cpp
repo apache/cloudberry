@@ -198,7 +198,7 @@ RptRelinkStack(RptInjectionState *state, Plan *scan, Plan *top)
 /* Deterministic bpchar equality and hashing trim trailing spaces and
  * compare or hash bytes. Nondeterministic collations use sort keys. */
 static bool
-rpt_safe_bpchar_collation(Oid collation)
+rpt_safe_deterministic_collation(Oid collation)
 {
 	return OidIsValid(collation) && get_collation_isdeterministic(collation);
 }
@@ -207,7 +207,11 @@ static bool
 rpt_safe_comparison(Oid function, Oid collation)
 {
 	return RptQualFunctionSafe(function) ||
-		(function == F_BPCHAREQ && rpt_safe_bpchar_collation(collation));
+		(function == F_BPCHAREQ && rpt_safe_deterministic_collation(collation)) ||
+		(rpt_extended_safe_quals &&
+		 (RptExtendedQualFunctionSafe(function) ||
+		  ((function == F_TEXTEQ || function == F_TEXTNE || function == F_BPCHARNE) &&
+		   rpt_safe_deterministic_collation(collation))));
 }
 
 static bool
@@ -244,9 +248,11 @@ rpt_unsafe_qual_walker(Node *node, void *context)
 
 			set_sa_opfuncid(op);
 			if (!rpt_safe_comparison(op->opfuncid, op->inputcollid) ||
-				(OidIsValid(op->negfuncid) && !RptQualFunctionSafe(op->negfuncid)) ||
+				(OidIsValid(op->negfuncid) && !rpt_safe_comparison(op->negfuncid, op->inputcollid)) ||
 				(OidIsValid(op->hashfuncid) && !RptQualHashFunctionSafe(op->hashfuncid) &&
-				 !(op->hashfuncid == F_HASHBPCHAR && rpt_safe_bpchar_collation(op->inputcollid))))
+				 !((op->hashfuncid == F_HASHBPCHAR ||
+				   (rpt_extended_safe_quals && op->hashfuncid == F_HASHTEXT)) &&
+				  rpt_safe_deterministic_collation(op->inputcollid))))
 				return true;
 			break;
 		}
@@ -278,8 +284,8 @@ rpt_reducer_quals(List *quals)
 /* Rows per segment before quals, from pg_class.reltuples; < 0 when unknown.
  * Partitioned tables spread them over numsegments, a replicated table keeps
  * them all on each segment (as costsize.c's adjust_reloptinfo). */
-static double
-rpt_base_rows(const RptVertexInfo &v)
+double
+RptBaseRows(const RptVertexInfo &v)
 {
 	if (!OidIsValid(v.relid))
 		return -1;
@@ -308,7 +314,7 @@ rpt_vertex_estimates(const RptTransferMgr &forward)
 	for (const RptVertexInfo &v : forward.vertices)
 	{
 		RptForwardVertexEst e;
-		double		base = rpt_base_rows(v);
+		double		base = RptBaseRows(v);
 
 		e.quals_dropped = !rpt_quals_safe(v.scan->qual);
 		e.rows = base > 0 ? base : (double) v.cardinality;
@@ -700,7 +706,7 @@ RptInject(PlannedStmt *stmt, bool materialize, std::string *trace)
 	RptTransferMgr forward;
 
 	RptBuildForwardPlan(&analysis, &forward);
-	RptCheckBackwardConsumers(work, &forward);
+	RptCheckBackwardConsumers(work, &forward, rpt_key_survival);
 
 	/* Preflight against the plan: everything that could refuse a component
 	 * is checked before any node is built, so a refusal changes nothing. */
@@ -720,6 +726,23 @@ RptInject(PlannedStmt *stmt, bool materialize, std::string *trace)
 	RptForwardParams params;
 
 	params.use_total_cost = rpt_forward_total_cost;
+	params.key_survival = rpt_key_survival;
+	if (params.key_survival)
+	{
+		params.reducer_scan_ms_per_row = rpt_cost_scan_row;
+		params.reducer_scan_ms_per_byte = rpt_cost_scan_byte;
+		params.bloom_build_ms_per_row = rpt_cost_build_row;
+		params.bloom_probe_ms_per_row = rpt_cost_probe_row;
+		params.downstream_ms_per_row = rpt_cost_downstream_row;
+	}
+	if (rpt_prefer_inplace && (rpt_forward || rpt_backward))
+		RptPgCall([&]() {
+			AnserVisitInplaceProbes(work,
+				[](Plan *probe, AttrNumber key, HashJoin *, void *arg) {
+					auto &keys = *static_cast<std::set<RptKey> *>(arg);
+					keys.insert({(int) ((Scan *) probe)->scanrelid, key});
+				}, &params.inplace_probe_keys);
+		});
 	params.width = RptPgCall([]() { return getgpsegmentCount(); });
 	params.ms_per_mib_part = rpt_forward_ms_per_mib_part;
 	params.delivery_ms_per_mib = rpt_delivery_ms_per_mib;
@@ -766,7 +789,7 @@ RptInject(PlannedStmt *stmt, bool materialize, std::string *trace)
 			work : stmt;
 
 	/* RPT places its exchanges first; add local hash filters on other keys. */
-	if (materialize && rpt_backward &&
+	if (materialize && (rpt_backward || (rpt_forward && rpt_prefer_inplace)) &&
 		RptPgCall([&]() { return AnserApplyInplaceRuntimeFilters(work); }))
 		any = true;
 	if (materialize && children != NIL)

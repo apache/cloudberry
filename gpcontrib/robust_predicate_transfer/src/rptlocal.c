@@ -47,6 +47,7 @@
 
 #include "anserplanutils.h"
 
+#include "anser.h"
 #include "anserbloom.h"
 #include "anserfilter.h"
 #include "anserplan.h"
@@ -246,6 +247,7 @@ rpt_local_begin(CustomScanState *node, EState *estate, int eflags)
 	 * every slice, and EXPLAIN initializes without running. */
 	node->custom_ps = list_make1(ExecInitNode((Plan *) linitial(cscan->custom_plans),
 											  estate, eflags));
+	AnserInitFilterChildSlot(node, gp_anser_zero_copy);
 	st->key_length = AnserKeyLength((PlanState *) linitial(node->custom_ps), st->key_attno);
 }
 

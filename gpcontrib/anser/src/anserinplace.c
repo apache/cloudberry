@@ -110,9 +110,6 @@ typedef struct AnserInplaceWalk
 	int			slice_index;
 } AnserInplaceWalk;
 
-/* An extension's say on in-place filters; see AnserSetInplaceRequest. */
-static AnserInplaceRequestFn inplace_request = NULL;
-
 static AnserInplaceFilter *
 anser_inplace_lookup(PlanState *build)
 {
@@ -475,12 +472,6 @@ anser_inplace_walk(PlanState *ps, AnserInplaceWalk *walk)
  * Called after standard executor start.  Only segments build in-place
  * filters: the coordinator's slice is never eligible.
  */
-void
-AnserSetInplaceRequest(AnserInplaceRequestFn request)
-{
-	inplace_request = request;
-}
-
 void
 AnserInplaceExecutorStart(QueryDesc *queryDesc, int eflags)
 {
