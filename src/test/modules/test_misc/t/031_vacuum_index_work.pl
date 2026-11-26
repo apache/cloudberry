@@ -43,13 +43,13 @@ my $dead_sql = q{SELECT dead_pages FROM pg_stat_vacuum_indexes
 my $dead = $node->safe_psql('postgres', $dead_sql);
 cmp_ok($dead, '>', 0, 'GIN reports deleted pages retained by a snapshot');
 $node->safe_psql('postgres', 'VACUUM (INDEX_CLEANUP ON) gin_retained');
-is($node->safe_psql('postgres', $dead_sql), 2 * $dead,
-   'GIN counts pre-existing retained pages on the next vacuum');
+is($node->safe_psql('postgres', $dead_sql), $dead,
+   'GIN reports the same retained-page sample on the next vacuum');
 $hold->query_safe('COMMIT');
 $hold->quit;
 $node->safe_psql('postgres', 'SELECT txid_current(); VACUUM (INDEX_CLEANUP ON) gin_retained');
-is($node->safe_psql('postgres', $dead_sql), 2 * $dead,
-   'recyclable GIN pages do not contribute retained-page work');
+is($node->safe_psql('postgres', $dead_sql), 0,
+   'GIN clears the retained-page sample when pages become recyclable');
 
 # Identical hash keys force an overflow chain even as the hash table grows.
 $node->safe_psql('postgres', qq{

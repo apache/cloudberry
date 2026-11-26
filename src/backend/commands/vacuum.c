@@ -3897,5 +3897,5 @@ vacuum_report_index_stats(Relation indrel, const IndexBulkDeleteResult *istat,
 		istat->pages_newly_deleted;
 	if (cleanup && istat->pages_deleted > istat->pages_free)
 		stats.dead_pages = istat->pages_deleted - istat->pages_free;
-	pgstat_report_vacuum_stats(indrel, &stats);
+	pgstat_report_vacuum_stats_phase(indrel, &stats, cleanup);
 }

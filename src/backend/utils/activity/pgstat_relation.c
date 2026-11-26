@@ -373,7 +373,11 @@ pgstat_report_vacuum_stats(Relation rel, const PgStat_VacuumStats *stats)
 	pgstat_report_vacuum_stats_phase(rel, stats, true);
 }
 
-/* Publish phase work without replacing final samples until post-cleanup. */
+/*
+ * Publish work without replacing final samples until the last cleanup.
+ * Like other maintenance statistics, these reports are nontransactional:
+ * a later abort (including an AO distributed abort) does not undo the work.
+ */
 void
 pgstat_report_vacuum_stats_phase(Relation rel, const PgStat_VacuumStats *stats,
 								 bool final_sample)
@@ -392,7 +396,13 @@ pgstat_report_vacuum_stats_phase(Relation rel, const PgStat_VacuumStats *stats,
 	dst = &shared->stats.vacuum_stats;
 	dst->tuples_deleted += stats->tuples_deleted;
 	dst->pages_deleted += stats->pages_deleted;
-	dst->dead_pages += stats->dead_pages;
+	if (rel->rd_rel->relkind == RELKIND_INDEX)
+	{
+		if (final_sample)
+			dst->dead_pages = stats->dead_pages;
+	}
+	else
+		dst->dead_pages += stats->dead_pages;
 	dst->freeze_age_vacuum_count += stats->freeze_age_vacuum_count;
 	dst->tuples_frozen += stats->tuples_frozen;
 	dst->recently_dead_tuples += stats->recently_dead_tuples;

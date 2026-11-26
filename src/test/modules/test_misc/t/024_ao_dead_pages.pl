@@ -50,8 +50,8 @@ SELECT dead_pages FROM pg_stat_vacuum_indexes WHERE indexrelname = '$index'};
     is($node->safe_psql('postgres', $count_sql), $deleted,
        "$orientation AO counts non-reusable index pages once across both cleanup phases");
     $node->safe_psql('postgres', "VACUUM $table");
-    is($node->safe_psql('postgres', $count_sql), 2 * $deleted,
-       "$orientation AO accumulates index pages still waiting for reuse");
+    is($node->safe_psql('postgres', $count_sql), $deleted,
+       "$orientation AO keeps the current number of index pages waiting for reuse");
     $hold->query_safe('COMMIT');
     $hold->quit;
     $node->safe_psql('postgres', 'SELECT txid_current()');
@@ -59,7 +59,7 @@ SELECT dead_pages FROM pg_stat_vacuum_indexes WHERE indexrelname = '$index'};
     # Cloudberry's BTPageIsRecyclable deliberately permits recycling only
     # for heap relations. AO index tombstones remain non-reusable even after
     # the snapshot ends, and each subsequent cleanup observes them once.
-    is($node->safe_psql('postgres', $count_sql), 3 * $deleted,
+    is($node->safe_psql('postgres', $count_sql), $deleted,
        "$orientation AO retains non-reusable index pages after the snapshot ends");
 }
 

@@ -101,7 +101,7 @@ SELECT pages_deleted FROM pg_stat_vacuum_indexes WHERE indexrelname = '$index'})
         is($node->safe_psql('postgres', qq{
 SELECT dead_pages FROM pg_stat_vacuum_indexes WHERE indexrelname = '$index'}),
            $deleted, "$index counts its non-reusable pages once after cleanup");
-        $index_totals{$index} = 2 * $deleted;
+        $index_totals{$index} = $deleted;
     }
     $node->safe_psql('postgres', "VACUUM (INDEX_CLEANUP ON, PARALLEL $parallel) $table");
     for my $suffix ('a', 'b')
@@ -109,7 +109,7 @@ SELECT dead_pages FROM pg_stat_vacuum_indexes WHERE indexrelname = '$index'}),
         my $index = "${table}_$suffix";
         is($node->safe_psql('postgres', qq{
 SELECT dead_pages FROM pg_stat_vacuum_indexes WHERE indexrelname = '$index'}),
-           $index_totals{$index}, "$index accumulates pages still waiting for reuse");
+           $index_totals{$index}, "$index reports the same retained pages after another cleanup");
     }
     $hold->query_safe('COMMIT');
     $hold->quit;
@@ -120,7 +120,8 @@ SELECT dead_pages FROM pg_stat_vacuum_indexes WHERE indexrelname = '$index'}),
         my $index = "${table}_$suffix";
         is($node->safe_psql('postgres', qq{
 SELECT dead_pages FROM pg_stat_vacuum_indexes WHERE indexrelname = '$index'}),
-           $index_totals{$index}, "$index does not count pages that became reusable");
+           0, "$index clears the sample when pages become reusable");
+        $index_totals{$index} = 0;
     }
 }
 
