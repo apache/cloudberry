@@ -672,6 +672,9 @@ extern void pgstat_init_relation(Relation rel);
 extern void pgstat_assoc_relation(Relation rel);
 extern void pgstat_unlink_relation(Relation rel);
 
+extern void pgstat_report_vacuum_stats_phase(Relation rel,
+											  const PgStat_VacuumStats *stats,
+											  bool final_sample);
 extern void pgstat_report_vacuum_stats(Relation rel,
 										 const PgStat_VacuumStats *stats);
 extern void pgstat_report_vacuum(Oid tableoid, bool shared,

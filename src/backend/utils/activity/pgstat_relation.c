@@ -361,12 +361,22 @@ pgstat_report_analyze(Relation rel,
 
 /*
  * Persist the work measured by VACUUM independently of any extension hook.
- * Index calls report deltas, while a table reports once on completion.  The
- * database aggregate describes table work only.  Use the regular relation
- * kind so snapshots, resets, drop handling and persistence work as usual.
+ * Heap tables report once on completion, while indexes report per-call deltas.
+ * AO tables use pgstat_report_vacuum_stats_phase() to publish each phase's
+ * work separately before its QE can be replaced.  The database aggregate
+ * describes table work only.  Use the regular relation kind so snapshots,
+ * resets, drop handling and persistence work as usual.
  */
 void
 pgstat_report_vacuum_stats(Relation rel, const PgStat_VacuumStats *stats)
+{
+	pgstat_report_vacuum_stats_phase(rel, stats, true);
+}
+
+/* Publish phase work without replacing final samples until post-cleanup. */
+void
+pgstat_report_vacuum_stats_phase(Relation rel, const PgStat_VacuumStats *stats,
+								 bool final_sample)
 {
 	Oid			dboid = rel->rd_rel->relisshared ? InvalidOid : MyDatabaseId;
 	PgStat_EntryRef *entry_ref;
@@ -392,8 +402,11 @@ pgstat_report_vacuum_stats(Relation rel, const PgStat_VacuumStats *stats)
 	dst->missed_dead_pages += stats->missed_dead_pages;
 	dst->compacted_segments += stats->compacted_segments;
 	dst->tuples_moved += stats->tuples_moved;
-	dst->dead_tuples = stats->dead_tuples;
-	dst->total_file_segs = stats->total_file_segs;
+	if (final_sample)
+	{
+		dst->dead_tuples = stats->dead_tuples;
+		dst->total_file_segs = stats->total_file_segs;
+	}
 	pgstat_unlock_entry(entry_ref);
 
 	if (rel->rd_rel->relkind != RELKIND_INDEX)
