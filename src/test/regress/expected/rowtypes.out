@@ -1303,25 +1303,34 @@ drop view composite_v;
 explain (verbose, costs off)
 select (ss.a).x, (ss.a).n from
   (select information_schema._pg_expandarray(array[1,2]) AS a) ss;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
- Subquery Scan on ss
-   Output: (ss.a).x, (ss.a).n
+                                                             QUERY PLAN
+-------------------------------------------------------------------------------------------------------------------------------------
+ Result
+   Output: ((information_schema._pg_expandarray('{1,2}'::integer[]))).x, ((information_schema._pg_expandarray('{1,2}'::integer[]))).n
    ->  ProjectSet
          Output: information_schema._pg_expandarray('{1,2}'::integer[])
          ->  Result
-(5 rows)
+               Output: true
+ Settings: optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 explain (verbose, costs off)
 select (ss.a).x, (ss.a).n from
   (select information_schema._pg_expandarray(array[1,2]) AS a) ss
 where false;
-        QUERY PLAN        
---------------------------
+                                                             QUERY PLAN
+-------------------------------------------------------------------------------------------------------------------------------------
  Result
-   Output: (a).f1, (a).f2
-   One-Time Filter: false
-(3 rows)
+   Output: ((information_schema._pg_expandarray('{1,2}'::integer[]))).x, ((information_schema._pg_expandarray('{1,2}'::integer[]))).n
+   ->  ProjectSet
+         Output: information_schema._pg_expandarray('{1,2}'::integer[])
+         ->  Result
+               Output: NULL::boolean
+               One-Time Filter: false
+ Settings: optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 explain (verbose, costs off)
 with cte(c) as materialized (select row(1, 2)),

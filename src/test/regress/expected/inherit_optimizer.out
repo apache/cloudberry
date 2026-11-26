@@ -1757,6 +1757,40 @@ select min(1-id) from matest0;
 reset enable_seqscan;
 reset enable_parallel_append;
 reset enable_bitmapscan;
+explain (verbose, costs off)  -- bug #18652
+select 1 - id as c from
+(select id from matest3 t1 union all select id * 2 from matest3 t2) ss
+order by c;
+                      QUERY PLAN
+------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: ((1 - t1.id))
+   Merge Key: ((1 - t1.id))
+   ->  Sort
+         Output: ((1 - t1.id))
+         Sort Key: ((1 - t1.id))
+         ->  Result
+               Output: (1 - t1.id)
+               ->  Append
+                     ->  Seq Scan on public.matest3 t1
+                           Output: t1.id
+                     ->  Seq Scan on public.matest3 t2
+                           Output: (t2.id * 2)
+ Settings: optimizer = 'on'
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+select 1 - id as c from
+(select id from matest3 t1 union all select id * 2 from matest3 t2) ss
+order by c;
+  c  
+-----
+  -4
+  -5
+  -9
+ -11
+(4 rows)
+
 drop table matest0 cascade;
 NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table matest1
