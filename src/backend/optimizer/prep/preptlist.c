@@ -47,13 +47,14 @@
 #include "parser/parse_coerce.h"
 #include "parser/parsetree.h"
 #include "utils/lsyscache.h"
-#include "utils/partcache.h"
 #include "utils/rel.h"
 
 #include "catalog/gp_distribution_policy.h"     /* CDB: POLICYTYPE_PARTITIONED */
 #include "catalog/pg_inherits.h"
+#include "catalog/pg_partitioned_table.h"
 #include "optimizer/plancat.h"
 #include "parser/parse_relation.h"
+#include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
@@ -612,27 +613,44 @@ is_partkey_updated(Oid rootoid, List *inheritors, Bitmapset *changed_cols)
 
 	foreach(lc, inheritors)
 	{
-		Relation	r;
-		PartitionKey key;
+		HeapTuple	tuple;
+		Datum		datum;
+		bool		isnull;
+		Form_pg_partitioned_table form;
 		Oid			relid = lfirst_oid(lc);
 		Bitmapset  *attnos = NULL;
 
-		if (get_rel_relkind(relid) != RELKIND_PARTITIONED_TABLE)
+		tuple = SearchSysCache1(PARTRELID, ObjectIdGetDatum(relid));
+		if (!HeapTupleIsValid(tuple))
 			continue;
 
-		r = table_open(relid, AccessShareLock);
-		key = RelationGetPartitionKey(r);
-
-		for (int i = 0; i < key->partnatts; i++)
+		form = (Form_pg_partitioned_table) GETSTRUCT(tuple);
+		for (int i = 0; i < form->partnatts; i++)
 		{
-			if (key->partattrs[i] != 0)
+			if (form->partattrs.values[i] != 0)
 				attnos = bms_add_member(attnos,
-										key->partattrs[i] - FirstLowInvalidHeapAttributeNumber);
+						form->partattrs.values[i] - FirstLowInvalidHeapAttributeNumber);
 		}
-		/* partition expressions always use varno 1 */
-		pull_varattnos((Node *) key->partexprs, 1, &attnos);
 
-		table_close(r, AccessShareLock);
+		datum = SysCacheGetAttr(PARTRELID, tuple,
+								Anum_pg_partitioned_table_partexprs, &isnull);
+		if (!isnull)
+		{
+			char	   *exprString;
+			Node	   *expr;
+
+			exprString = TextDatumGetCString(datum);
+			expr = stringToNode(exprString);
+			pfree(exprString);
+
+			/* partition expressions always use varno 1 */
+			pull_varattnos((Node *) expr, 1, &attnos);
+
+			if (expr != NULL)
+				pfree(expr);
+		}
+
+		ReleaseSysCache(tuple);
 
 		for (int x = -1; (x = bms_next_member(attnos, x)) >= 0; )
 		{
