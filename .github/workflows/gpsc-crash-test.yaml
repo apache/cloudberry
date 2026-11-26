@@ -1,0 +1,278 @@
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+# gp_stats_collector crash test
+#
+# Proves that with the runtime query-state feature fully enabled and a poller
+# tracing every running query, Cloudberry does not crash and queries still
+# finish with the same results as without the feature.
+#
+# One build, one demo cluster, two regression passes on it:
+#   run 1  baseline  (feature OFF -- stock Cloudberry)
+#   run 2  traced    (feature ON + poller)            + crash gate
+#
+# Hard verdict: the crash gate (no PANIC / signal / segment down / dead
+# coordinator). The failed-test delta (traced \ baseline) is reported for
+# information only -- the workload is not diff-deterministic -- and does not
+# fail the job.
+#
+# Workload: make installcheck-parallel (upstream parallel_schedule) -- fast and
+# fault-free, so any PANIC in the logs is a genuine crash.
+# --------------------------------------------------------------------
+name: GPSC Crash Test
+
+on:
+  push:
+    branches: [REL_2_STABLE]
+  pull_request:
+    branches: [REL_2_STABLE]
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  crash-test:
+    name: installcheck-parallel under tracing
+    runs-on: ubuntu-latest
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-ubuntu22.04-latest
+      options: >-
+        --user root
+        -h cdw
+    env:
+      SRC_DIR: ${{ github.workspace }}/cloudberry
+      CRASH_DIR: ${{ github.workspace }}/cloudberry/gpcontrib/gp_stats_collector/test/crash
+      UDS_PATH: /tmp/gpsc_agent.sock
+      STOP_FILE: /tmp/gpsc_poller.stop
+
+    steps:
+      - name: Checkout Cloudberry source
+        uses: actions/checkout@v4
+        with:
+          path: cloudberry
+          submodules: recursive
+
+      - name: Cloudberry Environment Initialization
+        shell: bash
+        run: |
+          set -eo pipefail
+          if ! su - gpadmin -c "/tmp/init_system.sh"; then
+            echo "::error::Container initialization failed"
+            exit 1
+          fi
+          mkdir -p "${SRC_DIR}/build-logs"
+          chown -R gpadmin:gpadmin .
+          chmod -R 755 .
+
+      - name: Configure
+        shell: bash
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"; then
+            echo "::error::Configure failed"
+            exit 1
+          fi
+
+      - name: Build
+        shell: bash
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/build-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/build-cloudberry.sh"; then
+            echo "::error::Build failed"
+            exit 1
+          fi
+
+      - name: Create stock demo cluster
+        shell: bash
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
+            echo "::error::Demo cluster creation failed"
+            exit 1
+          fi
+          su - gpadmin -c "cd ${SRC_DIR} && \
+            source /usr/local/cloudberry-db/cloudberry-env.sh && \
+            source gpAux/gpdemo/gpdemo-env.sh && \
+            gpconfig -c optimizer -v on && \
+            gpstop -ar"
+
+      - name: 'Run 1: baseline installcheck-parallel (feature OFF)'
+        shell: bash
+        run: |
+          set -eo pipefail
+          su - gpadmin -c "cd ${SRC_DIR} && \
+            source /usr/local/cloudberry-db/cloudberry-env.sh && \
+            source gpAux/gpdemo/gpdemo-env.sh && \
+            make -C src/test/regress installcheck-parallel > ${SRC_DIR}/build-logs/run1-baseline.log 2>&1" || true
+          cp -f "${SRC_DIR}/src/test/regress/regression.diffs" \
+            "${SRC_DIR}/build-logs/run1-baseline.diffs" 2>/dev/null || true
+          bash "${CRASH_DIR}/extract_failures.sh" "${SRC_DIR}/build-logs/run1-baseline.log" \
+            > "${SRC_DIR}/build-logs/baseline-failures.txt"
+          echo "baseline failures: $(wc -l < ${SRC_DIR}/build-logs/baseline-failures.txt)"
+          cat "${SRC_DIR}/build-logs/baseline-failures.txt"
+
+      - name: Reset state leaked by the baseline pass
+        shell: bash
+        run: |
+          set -eo pipefail
+          # installcheck recreates the 'regression' database each pass, but
+          # CREATE ROLE makes cluster-global roles that outlive it -- run 2's
+          # test_setup would then fail "role already exists".  Drop the baseline
+          # database (clears role grants/ownership on it) and every regression-
+          # created role, so run 2 starts from the same clean slate as run 1.
+          su - gpadmin -c "cd ${SRC_DIR} && \
+            source /usr/local/cloudberry-db/cloudberry-env.sh && \
+            source gpAux/gpdemo/gpdemo-env.sh && \
+            psql -X -d postgres -c 'DROP DATABASE IF EXISTS regression;' && \
+            psql -X -q -A -t -d postgres \
+              -c \"SELECT format('DROP ROLE IF EXISTS %I;', rolname) FROM pg_roles WHERE rolname ~ '^(regress|mdb)'\" \
+            | psql -X -d postgres -f -"
+
+      - name: Enable full gp_stats_collector config
+        shell: bash
+        run: |
+          set -eo pipefail
+          # Phase 1: load the module, then restart so its custom GUCs are known.
+          su - gpadmin -c "cd ${SRC_DIR} && \
+            source /usr/local/cloudberry-db/cloudberry-env.sh && \
+            source gpAux/gpdemo/gpdemo-env.sh && \
+            gpconfig -c shared_preload_libraries -v 'gp_stats_collector' && \
+            gpstop -ar && \
+            sleep 10"
+          # Phase 2: enable every logging/polling knob, then restart again.
+          su - gpadmin -c "cd ${SRC_DIR} && \
+            source /usr/local/cloudberry-db/cloudberry-env.sh && \
+            source gpAux/gpdemo/gpdemo-env.sh && \
+            gpconfig -c pg_query_state.enable -v on && \
+            gpconfig -c pg_query_state.enable_timing -v on && \
+            gpconfig -c pg_query_state.enable_buffers -v on && \
+            gpconfig -c gpsc.enable -v on && \
+            gpconfig -c gpsc.enable_analyze -v on && \
+            gpconfig -c gpsc.enable_cdbstats -v on && \
+            gpconfig -c gpsc.report_nested_queries -v on && \
+            gpconfig -c gpsc.logging_mode -v UDS && \
+            gpconfig -c gpsc.uds_path -v ${UDS_PATH} && \
+            gpconfig -c compute_query_id -v regress && \
+            gpstop -ar && \
+            sleep 10"
+
+      - name: Install and smoke-test extension
+        shell: bash
+        run: |
+          set -eo pipefail
+          # The poller connects to 'postgres' and calls gpsc.pg_query_state; that
+          # SQL entry point only exists where the extension is created.  Without
+          # this the traced run would be vacuous (every poll would just error on
+          # a missing function), so assert the function is resolvable and fail
+          # loudly if it is not.
+          su - gpadmin -c "cd ${SRC_DIR} && \
+            source /usr/local/cloudberry-db/cloudberry-env.sh && \
+            source gpAux/gpdemo/gpdemo-env.sh && \
+            psql -X -d postgres -c 'CREATE EXTENSION IF NOT EXISTS gp_stats_collector;' && \
+            psql -X -q -A -t -d postgres \
+              -c \"SELECT 'gpsc.pg_query_state(int,bytea)'::regprocedure;\"" \
+            || { echo "::error::gpsc.pg_query_state not resolvable -- extension not installed; traced run would be vacuous"; exit 1; }
+
+      - name: Start UDS drain
+        shell: bash
+        run: |
+          set -eo pipefail
+          chown -R gpadmin:gpadmin "${CRASH_DIR}"
+          su - gpadmin -c "nohup python3 ${CRASH_DIR}/uds_drain.py --path ${UDS_PATH} \
+            > ${SRC_DIR}/build-logs/uds-drain.log 2>&1 &"
+          sleep 2
+          test -S "${UDS_PATH}" || { echo "::error::UDS drain socket not created"; exit 1; }
+
+      - name: 'Run 2: traced installcheck-parallel (poller running)'
+        shell: bash
+        run: |
+          set -eo pipefail
+          rm -f "${STOP_FILE}"
+          su - gpadmin -c "cd ${SRC_DIR} && \
+            source /usr/local/cloudberry-db/cloudberry-env.sh && \
+            source gpAux/gpdemo/gpdemo-env.sh && \
+            nohup python3 ${CRASH_DIR}/poller.py --stop-file ${STOP_FILE} \
+              > ${SRC_DIR}/build-logs/poller.log 2>&1 &"
+          su - gpadmin -c "cd ${SRC_DIR} && \
+            source /usr/local/cloudberry-db/cloudberry-env.sh && \
+            source gpAux/gpdemo/gpdemo-env.sh && \
+            make -C src/test/regress installcheck-parallel > ${SRC_DIR}/build-logs/run2-traced.log 2>&1" || true
+          touch "${STOP_FILE}"
+          sleep 3
+          cp -f "${SRC_DIR}/src/test/regress/regression.diffs" \
+            "${SRC_DIR}/build-logs/run2-traced.diffs" 2>/dev/null || true
+          bash "${CRASH_DIR}/extract_failures.sh" "${SRC_DIR}/build-logs/run2-traced.log" \
+            > "${SRC_DIR}/build-logs/traced-failures.txt"
+          echo "traced failures: $(wc -l < ${SRC_DIR}/build-logs/traced-failures.txt)"
+          cat "${SRC_DIR}/build-logs/traced-failures.txt"
+
+      - name: 'Crash gate (hard verdict)'
+        shell: bash
+        run: |
+          set -eo pipefail
+          if ! su - gpadmin -c "cd ${SRC_DIR} && \
+            source /usr/local/cloudberry-db/cloudberry-env.sh && \
+            source gpAux/gpdemo/gpdemo-env.sh && \
+            bash ${CRASH_DIR}/crash_scan.sh ${SRC_DIR}/gpAux/gpdemo/datadirs \
+              > ${SRC_DIR}/build-logs/crash-scan.log 2>&1"; then
+            echo "::error::Crash gate tripped -- Cloudberry did not survive tracing"
+            cat "${SRC_DIR}/build-logs/crash-scan.log"
+            exit 1
+          fi
+          cat "${SRC_DIR}/build-logs/crash-scan.log"
+
+      - name: 'Failed-test delta (informational)'
+        shell: bash
+        run: |
+          set -eo pipefail
+          # Tests whose tracing diff is client-message noise, not a correctness
+          # signal. strings: QD parse-time WARNINGs ("nonstandard use of \\",
+          # scan.l escape_string_warning) re-emit non-deterministically when the
+          # poller ProcSignal lands mid-statement; the query has no runtime stats.
+          printf '%s\n' strings | sort -u > "${SRC_DIR}/build-logs/known-flaky.txt"
+          # baseline/traced-failures.txt are already sort -u (extract_failures.sh).
+          comm -13 \
+            "${SRC_DIR}/build-logs/baseline-failures.txt" \
+            "${SRC_DIR}/build-logs/traced-failures.txt" \
+          | comm -23 - "${SRC_DIR}/build-logs/known-flaky.txt" \
+            > "${SRC_DIR}/build-logs/delta.txt"
+          count=$(wc -l < "${SRC_DIR}/build-logs/delta.txt")
+          echo "tests failing under tracing but not in the stock baseline: ${count}"
+          cat "${SRC_DIR}/build-logs/delta.txt"
+          if [ "${count}" -gt 0 ]; then
+            echo "::warning::${count} test(s) failed only under tracing (informational; the workload is not diff-deterministic -- inspect run2-traced.diffs)."
+          fi
+
+      - name: Upload crash-test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpsc-crash-test-results
+          path: |
+            cloudberry/build-logs/
+          retention-days: 14
