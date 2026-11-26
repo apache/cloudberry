@@ -408,7 +408,7 @@ jobs:
                                "src/test/modules/ssl_passphrase_callback:install installcheck",
                                "src/test/modules/test_custom_rmgrs:install installcheck",
                                "src/test/modules/test_escape:all installcheck",
-                               "src/test/modules/test_misc:installcheck PROVE_TESTS=t/029_vacuum_resource_verbose.pl"]
+                               "src/test/modules/test_misc:installcheck-vacuum-work"]
               },
               {"test":"ic-pl-modules",
                "make_configs":["src/pl/plperl:installcheck",
