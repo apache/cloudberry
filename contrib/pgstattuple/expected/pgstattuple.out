@@ -288,7 +288,7 @@ ERROR:  relation "test_sequence" is not a GIN index
 select pgstathashindex('test_sequence');
 ERROR:  relation "test_sequence" is not a hash index
 select pgstattuple_approx('test_sequence');
-ERROR:  "test_sequence" is not a table, materialized view, or TOAST table
+ERROR:  "test_sequence" is not a table, directory table, materialized view, or TOAST table
 drop sequence test_sequence;
 drop table test_partitioned;
 drop view test_view;
