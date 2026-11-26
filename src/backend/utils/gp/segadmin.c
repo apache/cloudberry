@@ -96,7 +96,7 @@ standby_exists()
 static int16
 get_maxdbid()
 {
-	return cdbcomponent_get_maxdbid();
+	return cdbcomponent_get_maxdbid(true);
 }
 
 /**
