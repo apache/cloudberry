@@ -19,6 +19,7 @@
 #include "nodes/params.h"
 #include "parser/parse_node.h"
 
-void CreateDirectoryTable(CreateDirectoryTableStmt *stmt, Oid relId);
+Oid GetDirectoryTableTablespace(CreateDirectoryTableStmt *stmt);
+void CreateDirectoryTable(CreateDirectoryTableStmt *stmt, Oid relId, Oid tablespaceId);
 
 #endif //DIRTABLECMDS_H

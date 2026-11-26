@@ -1628,9 +1628,17 @@ ProcessUtilitySlow(ParseState *pstate,
 						else if (IsA(stmt, CreateDirectoryTableStmt))
 						{
 							CreateDirectoryTableStmt *cstmt = (CreateDirectoryTableStmt *) stmt;
+							Oid			spcId;
 
 							/* Remember transformed RangeVar for LIKE */
 							table_rv = cstmt->base.relation;
+
+							/*
+							 * The directory table's tablespace is stored outside the
+							 * CreateStmt base. Validate it before DefineRelation dispatches
+							 * the statement, so a missing tablespace is reported by the QD.
+							 */
+							spcId = GetDirectoryTableTablespace(cstmt);
 
 							/* Create the table itself */
 							address = DefineRelation(&cstmt->base,
@@ -1641,7 +1649,7 @@ ProcessUtilitySlow(ParseState *pstate,
 													 true,
 													 cstmt->base.intoPolicy);
 							/* Create directory table tuple */
-							CreateDirectoryTable(cstmt, address.objectId);
+							CreateDirectoryTable(cstmt, address.objectId, spcId);
 							EventTriggerCollectSimpleCommand(address,
 															 secondaryObject,
 															 stmt);
