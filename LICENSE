@@ -398,6 +398,16 @@ The PostgreSQL software includes:
       see licenses/LICENSE-imath.txt
 
 ----------------------------
+   Apache License v2.0 with LLVM Exceptions
+
+      A modified copy of LLVM's SectionMemoryManager:
+      src/backend/jit/llvm/SectionMemoryManager.cpp
+      src/include/jit/SectionMemoryManager.h
+      see licenses/LICENSE-llvm.txt
+      (also shipped in-tree as
+       src/backend/jit/llvm/SectionMemoryManager.LICENSE)
+
+----------------------------
    Public Domain
 
       IANA time zone code and data (https://www.iana.org/time-zones):
