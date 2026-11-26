@@ -73,47 +73,55 @@ stderr: {stderr}
 
     # do not put the packcore results under master data, that will cause
     # failures in other tests
-    os.chdir('/tmp')
+    old_cwd = os.getcwd()
+    try:
+        os.chdir('/tmp')
 
-    gphome = os.getenv('GPHOME')
-    assert gphome
+        gphome = os.getenv('GPHOME')
+        assert gphome
 
-    postgres = '{}/bin/postgres'.format(gphome)
-    assert os.path.exists(postgres)
+        postgres = '{}/bin/postgres'.format(gphome)
+        assert os.path.exists(postgres)
 
-    packcore = '{}/sbin/packcore'.format(gphome)
-    assert os.path.exists(packcore)
+        packcore = '{}/sbin/packcore'.format(gphome)
+        assert os.path.exists(packcore)
 
-    # 'packcore --help' should return 0
-    check_call([packcore, '--help'])
-    check_call([packcore, '-h'])
+        # 'packcore --help' should return 0
+        check_call([packcore, '--help'])
+        check_call([packcore, '-h'])
 
-    # 'packcore --version' should return 0
-    check_call([packcore, '--version'])
+        # 'packcore --version' should return 0
+        check_call([packcore, '--version'])
 
-    cores = glob.glob('/tmp/core.postgres.*')
-    if not cores:
-        # no postgres coredump found, skip the packcore tests
-        return
+        cores = glob.glob('/tmp/core.postgres.*')
+        if not cores:
+            # no postgres coredump found, skip the packcore tests
+            return
 
-    corefile = cores[0]
-    corename = os.path.basename(corefile)
-    tarball = 'packcore-{}.tgz'.format(corename)
-    dirname = 'packcore-{}'.format(corename)
+        corefile = cores[0]
+        corename = os.path.basename(corefile)
+        tarball = 'packcore-{}.tgz'.format(corename)
+        dirname = 'packcore-{}'.format(corename)
 
-    # 'packcore core' should work
-    test_packcore([packcore,
-                   corefile])
+        # 'packcore core' should work
+        test_packcore([packcore,
+                       corefile])
 
-    # 'packcore -b postgres core' should work
-    test_packcore([packcore,
-                   '--binary={}'.format(postgres),
-                   corefile])
-    test_packcore([packcore,
-                   '--binary', postgres,
-                   corefile])
-    test_packcore([packcore,
-                   '-b', postgres,
-                   corefile])
+        # 'packcore -b postgres core' should work
+        test_packcore([packcore,
+                       '--binary={}'.format(postgres),
+                       corefile])
+        test_packcore([packcore,
+                       '--binary', postgres,
+                       corefile])
+        test_packcore([packcore,
+                       '-b', postgres,
+                       corefile])
+    finally:
+        # WAL and other backend files use paths relative to the data directory.
+        os.chdir(old_cwd)
 $$;
+
+-- Opening a new WAL segment must still resolve pg_wal under the data directory.
+SELECT pg_switch_wal() IS NOT NULL AS wal_available_after_packcore;
 -- vi: sw=4 et :
