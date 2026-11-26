@@ -1245,7 +1245,7 @@ CREATE VIEW pg_stat_vacuum_tables AS
            V.tuples_moved
       FROM pg_class C JOIN pg_namespace N ON N.oid = C.relnamespace,
            LATERAL pg_stat_get_vacuum_stats(C.oid) V
-     WHERE C.relkind IN ('r', 't', 'm');
+     WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M');
 
 CREATE VIEW pg_stat_vacuum_indexes AS
     SELECT C.oid AS indexrelid, N.nspname AS schema, C.relname AS indexrelname,

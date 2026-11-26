@@ -28,7 +28,7 @@ AND relallvisible =
  t
 (1 row)
 
-DROP TABLE vacstat_test
+DROP TABLE vacstat_test;
 
 -- Native work counters and cluster summaries need no statistics extension.
 CREATE TABLE work_stats_dist (a int PRIMARY KEY) DISTRIBUTED BY (a);
@@ -101,3 +101,40 @@ SELECT relname, tuples_deleted = 1000 AND tuples_moved = 1000
 (2 rows)
 
 DROP TABLE work_stats_ao, work_stats_aoco;
+-- TOAST relations inherit the replicated owner's normalization policy.
+CREATE TABLE work_stats_toast (a int, payload text) DISTRIBUTED REPLICATED;
+ALTER TABLE work_stats_toast ALTER COLUMN payload SET STORAGE EXTERNAL;
+INSERT INTO work_stats_toast SELECT g, repeat(md5(g::text), 2048)
+  FROM generate_series(1, 100) g;
+DELETE FROM work_stats_toast WHERE a <= 50;
+VACUUM work_stats_toast;
+SELECT count(*) = 1 AND bool_and(s.tuples_deleted > 0 AND
+       s.tuples_deleted = raw.total / d.numsegments) AS toast_work_normalized
+  FROM gp_stat_vacuum_tables_summary s
+  JOIN pg_class owner ON owner.reltoastrelid = s.relid
+  JOIN gp_distribution_policy d ON d.localoid = owner.oid
+  JOIN (SELECT relid, sum(tuples_deleted) AS total
+          FROM gp_dist_random('pg_stat_vacuum_tables') GROUP BY relid) raw
+    ON raw.relid = s.relid
+ WHERE owner.oid = 'work_stats_toast'::regclass;
+ toast_work_normalized 
+-----------------------
+ t
+(1 row)
+
+SELECT count(*) = 1 AND bool_and(s.tuples_deleted > 0 AND
+       s.tuples_deleted = raw.total / d.numsegments) AS toast_index_normalized
+  FROM gp_stat_vacuum_indexes_summary s
+  JOIN pg_index i ON i.indexrelid = s.indexrelid
+  JOIN pg_class owner ON owner.reltoastrelid = i.indrelid
+  JOIN gp_distribution_policy d ON d.localoid = owner.oid
+  JOIN (SELECT indexrelid, sum(tuples_deleted) AS total
+          FROM gp_dist_random('pg_stat_vacuum_indexes') GROUP BY indexrelid) raw
+    ON raw.indexrelid = s.indexrelid
+ WHERE owner.oid = 'work_stats_toast'::regclass;
+ toast_index_normalized 
+------------------------
+ t
+(1 row)
+
+DROP TABLE work_stats_toast;

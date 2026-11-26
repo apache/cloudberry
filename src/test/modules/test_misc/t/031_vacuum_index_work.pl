@@ -70,5 +70,23 @@ is($node->safe_psql('postgres', q{SELECT dead_pages FROM pg_stat_vacuum_indexes
                                  WHERE indexrelname = 'hash_overflow_idx'}), '0',
    'hash overflow pages are reusable immediately');
 
+for my $orientation ('row', 'column')
+{
+    my $table = "aux_$orientation";
+    $node->safe_psql('postgres', qq{
+CREATE TABLE $table (a int) WITH (appendonly = true, orientation = $orientation);
+CREATE INDEX ${table}_idx ON $table (a);
+INSERT INTO $table SELECT generate_series(1, 1000);
+VACUUM $table;
+});
+    is($node->safe_psql('postgres', qq{
+SELECT count(v.relid) = 3 AND sum(v.pages_scanned) > 0
+FROM pg_appendonly a JOIN pg_class c
+ ON c.oid IN (a.segrelid, a.blkdirrelid, a.visimaprelid)
+LEFT JOIN pg_stat_vacuum_tables v ON v.relid = c.oid
+WHERE a.relid = '$table'::regclass AND c.relkind IN ('o', 'b', 'M')
+}), 't', "$orientation AO auxiliary heap vacuum work is visible");
+}
+
 $node->stop;
 done_testing();
