@@ -67,6 +67,8 @@ test: gp_terminate_mpp_backends
 # below case will cause failures on catalog changes,
 # please keep it in a separate test group
 test: gpexpand_catalog_lock
+# This test locks gp_distribution_policy and must run alone as well.
+test: drop_distkey_savepoint
 
 test: reindex
 test: reindex_gpfastsequence
