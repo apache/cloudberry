@@ -62,6 +62,12 @@ set local enable_parallel_semi_join = off;
 set local enable_parallel_dedup_semi_reverse_join = off;
 explain (costs off)
 select sum(foo.a) from foo where exists (select 1 from bar where foo.a = bar.b);
+-- Planning the parallel dedup path must not hold an exclusive catalog lock.
+SELECT coalesce(bool_or(mode = 'AccessExclusiveLock'), false) AS exclusive_lock
+FROM pg_locks
+WHERE pid = pg_backend_pid()
+  AND relation = 'pg_catalog.gp_segment_configuration'::regclass
+  AND granted;
 select sum(foo.a) from foo where exists (select 1 from bar where foo.a = bar.b);
 
 -- Parallel DEDUP_SEMI_REVERSE
@@ -70,6 +76,12 @@ set local enable_parallel_dedup_semi_reverse_join = on;
 set local enable_parallel_dedup_semi_join = on;
 explain (costs off)
 select sum(foo.a) from foo where exists (select 1 from bar where foo.a = bar.b);
+-- Planning the reverse parallel dedup path must not hold an exclusive catalog lock.
+SELECT coalesce(bool_or(mode = 'AccessExclusiveLock'), false) AS exclusive_lock
+FROM pg_locks
+WHERE pid = pg_backend_pid()
+  AND relation = 'pg_catalog.gp_segment_configuration'::regclass
+  AND granted;
 select sum(foo.a) from foo where exists (select 1 from bar where foo.a = bar.b);
 
 -- Parallel oblivious

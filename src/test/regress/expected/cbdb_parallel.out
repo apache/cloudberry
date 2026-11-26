@@ -100,6 +100,17 @@ select sum(foo.a) from foo where exists (select 1 from bar where foo.a = bar.b);
  Optimizer: Postgres query optimizer
 (15 rows)
 
+-- Planning the parallel dedup path must not hold an exclusive catalog lock.
+SELECT coalesce(bool_or(mode = 'AccessExclusiveLock'), false) AS exclusive_lock
+FROM pg_locks
+WHERE pid = pg_backend_pid()
+  AND relation = 'pg_catalog.gp_segment_configuration'::regclass
+  AND granted;
+ exclusive_lock 
+----------------
+ f
+(1 row)
+
 select sum(foo.a) from foo where exists (select 1 from bar where foo.a = bar.b);
   sum   
 --------
@@ -130,6 +141,17 @@ select sum(foo.a) from foo where exists (select 1 from bar where foo.a = bar.b);
                                              ->  Parallel Seq Scan on foo
  Optimizer: Postgres query optimizer
 (15 rows)
+
+-- Planning the reverse parallel dedup path must not hold an exclusive catalog lock.
+SELECT coalesce(bool_or(mode = 'AccessExclusiveLock'), false) AS exclusive_lock
+FROM pg_locks
+WHERE pid = pg_backend_pid()
+  AND relation = 'pg_catalog.gp_segment_configuration'::regclass
+  AND granted;
+ exclusive_lock 
+----------------
+ f
+(1 row)
 
 select sum(foo.a) from foo where exists (select 1 from bar where foo.a = bar.b);
   sum   

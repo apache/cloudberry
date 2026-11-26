@@ -81,8 +81,8 @@ on:
         type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -216,8 +216,69 @@ jobs:
                "behave_features":["test/behave/mgmt_utils/replication_slots.feature"],
                "behave_args":"--tags ~@extended"
               },
-              {"test":"ic-unit-segment-reconfigurer",
-               "unittest_modules":["gppylib.operations.test.unit.test_unit_segment_reconfigurer"]
+              {"test":"ic-unit-gpmgmt",
+               "unittest_modules":[
+                "gppylib.commands.test.unit.test_unit_base",
+                "gppylib.commands.test.unit.test_unit_gp",
+                "gppylib.commands.test.unit.test_unit_pg_base_backup",
+                "gppylib.db.test.unit.test_cluster_dbconn",
+                "gppylib.db.test.unit.test_unit_dbconn",
+                "gppylib.operations.test.unit.test_unit_buildMirrorSegments",
+                "gppylib.operations.test.unit.test_unit_configurationImplGpdb",
+                "gppylib.operations.test.unit.test_unit_deletesystem",
+                "gppylib.operations.test.unit.test_unit_initstandby",
+                "gppylib.operations.test.unit.test_unit_ping",
+                "gppylib.operations.test.unit.test_unit_reload",
+                "gppylib.operations.test.unit.test_unit_segment_reconfigurer",
+                "gppylib.operations.test.unit.test_unit_segment_tablespace_locations",
+                "gppylib.operations.test.unit.test_unit_update_pg_hba_on_segments",
+                "gppylib.programs.test.unit.test_cluster_clsrecoversegment",
+                "gppylib.programs.test.unit.test_cluster_clsrecoversegment_triples",
+                "gppylib.test.unit.test_cluster_gpcheckcat",
+                "gppylib.test.unit.test_cluster_gpsegstart",
+                "gppylib.test.unit.test_cluster_gpsegstop",
+                "gppylib.test.unit.test_unit_command",
+                "gppylib.test.unit.test_unit_commands_unix",
+                "gppylib.test.unit.test_unit_compare_segment_guc",
+                "gppylib.test.unit.test_unit_database_segment_guc",
+                "gppylib.test.unit.test_unit_file_segment_guc",
+                "gppylib.test.unit.test_unit_foreign_key_check",
+                "gppylib.test.unit.test_unit_gp",
+                "gppylib.test.unit.test_unit_gp_era",
+                "gppylib.test.unit.test_unit_gpactivatestandby",
+                "gppylib.test.unit.test_unit_gpaddmirrors",
+                "gppylib.test.unit.test_unit_gpcheckcat",
+                "gppylib.test.unit.test_unit_gpcheckperf",
+                "gppylib.test.unit.test_unit_gpconfig",
+                "gppylib.test.unit.test_unit_gpdeletesystem",
+                "gppylib.test.unit.test_unit_gpexpand",
+                "gppylib.test.unit.test_unit_gpexpand_status",
+                "gppylib.test.unit.test_unit_gpinitsystem",
+                "gppylib.test.unit.test_unit_gpload",
+                "gppylib.test.unit.test_unit_gplog",
+                "gppylib.test.unit.test_unit_gppkg",
+                "gppylib.test.unit.test_unit_gpsegrecovery",
+                "gppylib.test.unit.test_unit_gpsegsetuprecovery",
+                "gppylib.test.unit.test_unit_gpsegstart",
+                "gppylib.test.unit.test_unit_gpssh",
+                "gppylib.test.unit.test_unit_gpstate",
+                "gppylib.test.unit.test_unit_gpstop",
+                "gppylib.test.unit.test_unit_heapchecksum",
+                "gppylib.test.unit.test_unit_info",
+                "gppylib.test.unit.test_unit_leaked_schema_dropper",
+                "gppylib.test.unit.test_unit_mainUtils",
+                "gppylib.test.unit.test_unit_package",
+                "gppylib.test.unit.test_unit_parseutils",
+                "gppylib.test.unit.test_unit_rebalance_segment",
+                "gppylib.test.unit.test_unit_recoveryinfo",
+                "gppylib.test.unit.test_unit_repair",
+                "gppylib.test.unit.test_unit_repair_missing_extraneous",
+                "gppylib.test.unit.test_unit_seg_update_pg_hba",
+                "gppylib.test.unit.test_unit_unique_index_violation_check",
+                "gppylib.test.unit.test_unit_userinput",
+                "gppylib.test.unit.test_unit_workerpool",
+                "gppylib.util.test.unit.test_cluster_ssh_utils"
+               ]
               }
             ]
           }'
@@ -663,10 +724,84 @@ jobs:
             done
 
             # The same PYTHONPATH as "make -C gpMgmt/bin unitdevel", so the
-            # tests use the gppylib of the source tree.
+            # tests use the gppylib of the source tree.  unitdevel runs
+            # "unittest discover -s gppylib", which puts gppylib itself on
+            # sys.path; the modules under gppylib/test/unit rely on that
+            # ("from gparray import ..."), so add it here too.
+            #
+            # gpdemo-env.sh is sourced because some modules read PGPORT or
+            # COORDINATOR_DATA_DIRECTORY, or connect to the demo cluster.
+            #
+            # Each module runs in its own interpreter.  Several modules change
+            # os.environ or module globals without restoring them, so one
+            # "python3 -m unittest" over all of them fails tests that pass on
+            # their own.  The per-module results are summed into one
+            # "Ran N tests" line and one OK/FAILED line at the end of the log,
+            # which is what "Parse Behave Results" reads.
+            #
+            # A module that hangs is stopped after unit_timeout seconds and
+            # counts as failed, so the other modules and the summary still
+            # run.  The slowest module takes about 30 seconds.
             bin_dir="${SRC_DIR}/gpMgmt/bin"
-            if ! time su - gpadmin -c "cd ${bin_dir} && source /usr/local/cloudberry-db/cloudberry-env.sh && PYTHONPATH=${bin_dir}:${bin_dir}/../sbin:\$PYTHONPATH:${bin_dir}/ext:${bin_dir}/lib python3 -m unittest -v $unittest_modules" \
-                 2>&1 | tee -a "$config_log"; then
+            unit_timeout=600
+            unit_total=0; unit_failures=0; unit_errors=0; unit_skipped=0
+            failed_modules=()
+            unit_start=$(date +%s)
+            for module in $unittest_modules; do
+              module_log=$(mktemp)
+              su - gpadmin -c "cd ${bin_dir} && source /usr/local/cloudberry-db/cloudberry-env.sh && source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && PYTHONPATH=${bin_dir}:${bin_dir}/../sbin:\$PYTHONPATH:${bin_dir}/ext:${bin_dir}/lib:${bin_dir}/gppylib timeout -k 30 ${unit_timeout} python3 -m unittest -v ${module}" \
+                   > "$module_log" 2>&1
+              module_rc=$?
+              # timeout exits with 124 after SIGTERM, or 137 when it had to
+              # send SIGKILL.
+              if [[ $module_rc -eq 124 || $module_rc -eq 137 ]]; then
+                # unittest may be in the middle of a line; GitHub reads
+                # "::error::" only at the start of one.
+                printf '\n::error::%s did not finish in %ss and was stopped\n' "$module" "$unit_timeout" >> "$module_log"
+              fi
+              cat "$module_log" | tee -a "$config_log"
+
+              ran=$(sed -nE 's/^Ran ([0-9]+) tests? in .*/\1/p' "$module_log" | tail -n 1)
+              result=$(grep -E '^(OK|FAILED)( \(.*\))?$' "$module_log" | tail -n 1)
+              rm -f "$module_log"
+              count() { echo "$result" | grep -oE "$1=[0-9]+" | cut -d= -f2 || true; }
+              f=$(count failures); e=$(count errors); s=$(count skipped)
+              # A module that dies before unittest prints its summary (for
+              # example on an import-time exception) counts as one error.
+              if [[ -z "$ran" || -z "$result" ]]; then
+                ran=1; e=1
+              elif [[ $module_rc -ne 0 && "$result" == OK* ]]; then
+                e=1
+              fi
+              unit_total=$(( unit_total + ran ))
+              unit_failures=$(( unit_failures + ${f:-0} ))
+              unit_errors=$(( unit_errors + ${e:-0} ))
+              unit_skipped=$(( unit_skipped + ${s:-0} ))
+              if [[ $module_rc -ne 0 || "$result" != OK* ]]; then
+                failed_modules+=("$module")
+              fi
+            done
+
+            read -ra module_list <<< "$unittest_modules"
+            {
+              echo "----------------------------------------------------------------------"
+              echo "Modules run: ${#module_list[@]}, failed: ${#failed_modules[@]}"
+              for module in "${failed_modules[@]}"; do
+                echo "  FAILED MODULE: $module"
+              done
+              echo "Ran ${unit_total} tests in $(( $(date +%s) - unit_start ))s"
+              summary=""
+              [[ $unit_failures -gt 0 ]] && summary="failures=${unit_failures}"
+              [[ $unit_errors -gt 0 ]] && summary="${summary:+$summary, }errors=${unit_errors}"
+              [[ $unit_skipped -gt 0 ]] && summary="${summary:+$summary, }skipped=${unit_skipped}"
+              if [[ ${#failed_modules[@]} -eq 0 ]]; then
+                echo "OK${summary:+ ($summary)}"
+              else
+                echo "FAILED (${summary:-errors=${#failed_modules[@]}})"
+              fi
+            } | tee -a "$config_log"
+
+            if [[ ${#failed_modules[@]} -gt 0 ]]; then
               echo "::warning::Unit test execution reported failures"
               behave_rc=1
             fi
@@ -778,7 +913,8 @@ jobs:
           behave_cmd="behave --tags ~@needs_fix ${{ matrix.behave_args || '' }} ${{ join(matrix.behave_features, ' ') }}"
           unittest_modules="${{ join(matrix.unittest_modules, ' ') }}"
           if [[ -n "$unittest_modules" ]]; then
-            behave_cmd="python3 -m unittest -v ${unittest_modules}"
+            read -ra module_list <<< "$unittest_modules"
+            behave_cmd="python3 -m unittest -v <module>, once for each of ${#module_list[@]} modules"
           fi
           if [ ! -f "$config_log" ]; then
             {

@@ -23,9 +23,6 @@
 #include "utils/queryenvironment.h"
 #include "utils/resowner.h"
 
-/* Forward declaration, to avoid including recursively */
-typedef struct ResourceOwnerData *ResourceOwner;
-
 /* Forward declaration, to avoid including parsenodes.h here */
 struct RawStmt;
 

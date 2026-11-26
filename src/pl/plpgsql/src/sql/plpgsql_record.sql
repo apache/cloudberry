@@ -534,6 +534,10 @@ table mutable;
 
 set debug_discard_caches = 0;
 
+-- Cloudberry: the SELECT reads the row through a Motion from a segment, and
+-- a Motion does not send system columns, so the ctid of each source row is
+-- (4294967295,0).  The checks still show whether the assignment copies the
+-- source tuple (dst = src) or converts it (dst is NULL).
 create table sysmove(f1 int);
 insert into sysmove values (1);
 create domain sysmoved as sysmove;

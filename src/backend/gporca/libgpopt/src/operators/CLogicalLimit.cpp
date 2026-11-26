@@ -197,7 +197,7 @@ CLogicalLimit::DeriveMaxCard(CMemoryPool *,	 // mp
 	// max card is a precise property, so we need an exact scalar expr to derive it
 	CExpression *pexprCount = exprhdl.PexprScalarExactChild(2 /*child_index*/);
 
-	if (nullptr != pexprCount &&
+	if (FHasCount() && nullptr != pexprCount &&
 		CUtils::FScalarConstInt<IMDTypeInt8>(pexprCount) &&
 		!pexprCount->DeriveHasSubquery())
 	{
@@ -206,7 +206,13 @@ CLogicalLimit::DeriveMaxCard(CMemoryPool *,	 // mp
 		IDatumInt8 *pdatumInt8 =
 			dynamic_cast<IDatumInt8 *>(popScalarConst->GetDatum());
 
-		return CMaxCard(pdatumInt8->Value());
+		const LINT count = pdatumInt8->Value();
+		// CMaxCard reserves GPOPT_MAX_CARD for an unbounded cardinality.
+		if (!pdatumInt8->IsNull() && count >= 0 &&
+			static_cast<ULLONG>(count) < GPOPT_MAX_CARD)
+		{
+			return CMaxCard(static_cast<ULLONG>(count));
+		}
 	}
 
 	// pass on max card of first child

@@ -292,6 +292,8 @@ static split_rollup_data *make_new_rollups_for_hash_grouping_set(PlannerInfo *ro
 																 Path *path,
 																 grouping_sets_data *gd);
 
+static void compute_jit_flags(PlannedStmt *pstmt);
+
 static void create_partial_window_path(PlannerInfo *root,
 											RelOptInfo *window_rel,
 											Path *path,
@@ -320,6 +322,7 @@ planner(Query *parse, const char *query_string, int cursorOptions,
 {
 	PlannedStmt *result;
 	instr_time	starttime, endtime;
+	bool		log_optimization_time = gp_log_optimization_time;
 	OptimizerOptions *optimizer_options;
 
 	optimizer_options = palloc(sizeof(OptimizerOptions));
@@ -347,12 +350,12 @@ planner(Query *parse, const char *query_string, int cursorOptions,
 	}
 	if (planner_hook)
 	{
-		if (gp_log_optimization_time)
+		if (log_optimization_time)
 			INSTR_TIME_SET_CURRENT(starttime);
 
 		result = (*planner_hook) (parse, query_string, cursorOptions, boundParams, optimizer_options);
 
-		if (gp_log_optimization_time)
+		if (log_optimization_time)
 		{
 			INSTR_TIME_SET_CURRENT(endtime);
 			INSTR_TIME_SUBTRACT(endtime, starttime);
@@ -382,6 +385,9 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 	PlannerConfig *config;
 	instr_time		starttime;
 	instr_time		endtime;
+	bool			log_optimization_time = gp_log_optimization_time;
+
+	INSTR_TIME_SET_ZERO(starttime);
 
 	/*
 	 * Use ORCA only if it is enabled and we are in a master QD process.
@@ -416,7 +422,7 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 		}
 #endif
 
-		if (gp_log_optimization_time)
+		if (log_optimization_time)
 			INSTR_TIME_SET_CURRENT(starttime);
 
 #ifdef USE_ORCA
@@ -428,7 +434,7 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 		result = NULL;
 #endif
 
-		if (gp_log_optimization_time)
+		if (log_optimization_time)
 		{
 			INSTR_TIME_SET_CURRENT(endtime);
 			INSTR_TIME_SUBTRACT(endtime, starttime);
@@ -436,14 +442,17 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 		}
 
 		if (result)
+		{
+			compute_jit_flags(result);
 			return result;
+		}
 	}
 
 	/*
 	 * Fall back to using the PostgreSQL planner in case Orca didn't run (in
 	 * utility mode or on a segment) or if it didn't produce a plan.
 	 */
-	if (gp_log_optimization_time)
+	if (log_optimization_time)
 		INSTR_TIME_SET_CURRENT(starttime);
 
 	/*
@@ -829,30 +838,8 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 	result->stmt_location = parse->stmt_location;
 	result->stmt_len = parse->stmt_len;
 
-	result->jitFlags = PGJIT_NONE;
-	if (jit_enabled && jit_above_cost >= 0 &&
-		top_plan->total_cost > jit_above_cost)
-	{
-		result->jitFlags |= PGJIT_PERFORM;
-
-		/*
-		 * Decide how much effort should be put into generating better code.
-		 */
-		if (jit_optimize_above_cost >= 0 &&
-			top_plan->total_cost > jit_optimize_above_cost)
-			result->jitFlags |= PGJIT_OPT3;
-		if (jit_inline_above_cost >= 0 &&
-			top_plan->total_cost > jit_inline_above_cost)
-			result->jitFlags |= PGJIT_INLINE;
-
-		/*
-		 * Decide which operations should be JITed.
-		 */
-		if (jit_expressions)
-			result->jitFlags |= PGJIT_EXPR;
-		if (jit_tuple_deforming)
-			result->jitFlags |= PGJIT_DEFORM;
-	}
+	/* GPDB: shared with ORCA, see compute_jit_flags() */
+	compute_jit_flags(result);
 
 	if (glob->partition_directory != NULL)
 		DestroyPartitionDirectory(glob->partition_directory);
@@ -862,7 +849,7 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 
 	Assert(result->utilityStmt == NULL || IsA(result->utilityStmt, DeclareCursorStmt));
 
-	if (gp_log_optimization_time)
+	if (log_optimization_time)
 	{
 		INSTR_TIME_SET_CURRENT(endtime);
 		INSTR_TIME_SUBTRACT(endtime, starttime);
@@ -8356,19 +8343,18 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 				else
 					dNumGroups = dNumGroupsTotal;
 
-				// if (parse->hasAggs)
-					add_path(grouped_rel, (Path *)
-							 create_agg_path(root,
-											 grouped_rel,
-											 path,
-											 grouped_rel->reltarget,
-											 parse->groupClause ? AGG_SORTED : AGG_PLAIN,
-											 AGGSPLIT_FINAL_DESERIAL,
-											 false,
-											 root->processed_groupClause,
-											 havingQual,
-											 agg_final_costs,
-											 dNumGroups), root);
+				add_path(grouped_rel, (Path *)
+						 create_agg_path(root,
+										 grouped_rel,
+										 path,
+										 grouped_rel->reltarget,
+										 parse->groupClause ? AGG_SORTED : AGG_PLAIN,
+										 AGGSPLIT_FINAL_DESERIAL,
+										 false,
+										 root->processed_groupClause,
+										 havingQual,
+										 agg_final_costs,
+										 dNumGroups), root);
 #if 0
 				else
 					add_path(grouped_rel, (Path *)
@@ -9983,4 +9969,61 @@ create_partial_window_path(PlannerInfo *root,
 	}
 
 	add_partial_path(window_rel, path);
+}
+
+/*
+ * Decide JIT settings for the given plan and record them in
+ * PlannedStmt.jitFlags.
+ *
+ * GPDB: moved out of standard_planner(), so that plans from ORCA get them too;
+ * before, ORCA returned its plan without ever setting jitFlags, and with the
+ * default optimizer=on nothing was JIT-compiled.  ORCA's costs are on a
+ * different scale from the planner's, so its plans are compared against the
+ * optimizer_jit_*_above_cost thresholds.  "jit" switches both.
+ */
+static void
+compute_jit_flags(PlannedStmt *pstmt)
+{
+	Plan	   *top_plan = pstmt->planTree;
+	double		above_cost;
+	double		inline_above_cost;
+	double		optimize_above_cost;
+
+	if (pstmt->planGen == PLANGEN_OPTIMIZER)
+	{
+		above_cost = optimizer_jit_above_cost;
+		inline_above_cost = optimizer_jit_inline_above_cost;
+		optimize_above_cost = optimizer_jit_optimize_above_cost;
+	}
+	else
+	{
+		above_cost = jit_above_cost;
+		inline_above_cost = jit_inline_above_cost;
+		optimize_above_cost = jit_optimize_above_cost;
+	}
+
+	pstmt->jitFlags = PGJIT_NONE;
+	if (jit_enabled && above_cost >= 0 &&
+		top_plan->total_cost > above_cost)
+	{
+		pstmt->jitFlags |= PGJIT_PERFORM;
+
+		/*
+		 * Decide how much effort should be put into generating better code.
+		 */
+		if (optimize_above_cost >= 0 &&
+			top_plan->total_cost > optimize_above_cost)
+			pstmt->jitFlags |= PGJIT_OPT3;
+		if (inline_above_cost >= 0 &&
+			top_plan->total_cost > inline_above_cost)
+			pstmt->jitFlags |= PGJIT_INLINE;
+
+		/*
+		 * Decide which operations should be JITed.
+		 */
+		if (jit_expressions)
+			pstmt->jitFlags |= PGJIT_EXPR;
+		if (jit_tuple_deforming)
+			pstmt->jitFlags |= PGJIT_DEFORM;
+	}
 }

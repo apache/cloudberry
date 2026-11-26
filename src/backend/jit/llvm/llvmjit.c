@@ -251,8 +251,14 @@ llvm_create_context(int jitFlags)
 static void
 llvm_release_context(JitContext *context)
 {
-	LLVMJitContext *llvm_context = (LLVMJitContext *) context;
+	LLVMJitContext *llvm_jit_context = (LLVMJitContext *) context;
 	ListCell   *lc;
+
+	/*
+	 * Consider as cleaned up even if we skip doing so below, that way we can
+	 * verify the tracking is correct (see llvm_shutdown()).
+	 */
+	llvm_jit_context_in_use_count--;
 
 	/*
 	 * When this backend is exiting, don't clean up LLVM. As an error might
@@ -264,13 +270,13 @@ llvm_release_context(JitContext *context)
 
 	llvm_enter_fatal_on_oom();
 
-	if (llvm_context->module)
+	if (llvm_jit_context->module)
 	{
 		LLVMDisposeModule(llvm_jit_context->module);
 		llvm_jit_context->module = NULL;
 	}
 
-	foreach(lc, llvm_context->handles)
+	foreach(lc, llvm_jit_context->handles)
 	{
 		LLVMJitHandle *jit_handle = (LLVMJitHandle *) lfirst(lc);
 
@@ -300,8 +306,10 @@ llvm_release_context(JitContext *context)
 
 		pfree(jit_handle);
 	}
-	list_free(llvm_context->handles);
-	llvm_context->handles = NIL;
+	list_free(llvm_jit_context->handles);
+	llvm_jit_context->handles = NIL;
+
+	llvm_leave_fatal_on_oom();
 }
 
 /*
@@ -711,7 +719,11 @@ llvm_optimize_module(LLVMJitContext *context, LLVMModuleRef module)
 
 	if (context->base.flags & PGJIT_OPT3)
 		passes = "default<O3>";
+	else if (context->base.flags & PGJIT_INLINE)
+		/* if doing inlining, but no expensive optimization, add inline pass */
+		passes = "default<O0>,mem2reg,inline";
 	else
+		/* default<O0> includes always-inline pass */
 		passes = "default<O0>,mem2reg";
 
 	options = LLVMCreatePassBuilderOptions();
@@ -1033,6 +1045,10 @@ llvm_shutdown(int code, Datum arg)
 		return;
 	}
 
+	if (llvm_jit_context_in_use_count != 0)
+		elog(PANIC, "LLVMJitContext in use count not 0 at exit (is %zu)",
+			 llvm_jit_context_in_use_count);
+
 #if LLVM_VERSION_MAJOR > 11
 	{
 		if (llvm_opt3_orc)
@@ -1175,9 +1191,6 @@ llvm_create_types(void)
 void
 llvm_split_symbol_name(const char *name, char **modname, char **funcname)
 {
-	*modname = NULL;
-	*funcname = NULL;
-
 	/*
 	 * Module function names are pgextern.$module.$funcname
 	 */
@@ -1187,14 +1200,21 @@ llvm_split_symbol_name(const char *name, char **modname, char **funcname)
 		 * Symbol names cannot contain a ., therefore we can split based on
 		 * first and last occurrence of one.
 		 */
-		*funcname = rindex(name, '.');
-		(*funcname)++;			/* jump over . */
+		const char *lastdot;
 
-		*modname = pnstrdup(name + strlen("pgextern."),
-							*funcname - name - strlen("pgextern.") - 1);
-		Assert(funcname);
-
-		*funcname = pstrdup(*funcname);
+		name += strlen("pgextern.");
+		lastdot = strrchr(name, '.');
+		if (lastdot)
+		{
+			*modname = pnstrdup(name, lastdot - name);
+			*funcname = pstrdup(lastdot + 1);
+		}
+		else
+		{
+			/* hmm, no second dot? */
+			*modname = NULL;
+			*funcname = pstrdup(name);
+		}
 	}
 	else
 	{
@@ -1305,7 +1325,10 @@ llvm_log_jit_error(void *ctx, LLVMErrorRef error)
 static LLVMOrcObjectLayerRef
 llvm_create_object_layer(void *Ctx, LLVMOrcExecutionSessionRef ES, const char *Triple)
 {
-#ifdef USE_LLVM_BACKPORT_SECTION_MEMORY_MANAGER
+#if LLVM_VERSION_MAJOR >= 22
+	LLVMOrcObjectLayerRef objlayer =
+		LLVMOrcCreateRTDyldObjectLinkingLayerWithSectionMemoryManagerReserveAlloc(ES, true);
+#elif defined(USE_LLVM_BACKPORT_SECTION_MEMORY_MANAGER)
 	LLVMOrcObjectLayerRef objlayer =
 		LLVMOrcCreateRTDyldObjectLinkingLayerWithSafeSectionMemoryManager(ES);
 #else
@@ -1328,7 +1351,8 @@ llvm_create_object_layer(void *Ctx, LLVMOrcExecutionSessionRef ES, const char *T
 	{
 		LLVMJITEventListenerRef l = LLVMCreatePerfJITEventListener();
 
-		LLVMOrcRTDyldObjectLinkingLayerRegisterJITEventListener(objlayer, l);
+		if (l)
+			LLVMOrcRTDyldObjectLinkingLayerRegisterJITEventListener(objlayer, l);
 	}
 #endif
 

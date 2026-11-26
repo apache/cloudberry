@@ -168,7 +168,7 @@ void updateSegmentModeStatus(int16 dbid, char mode, char status);
 extern int16 master_standby_dbid(void);
 extern GpSegConfigEntry *dbid_get_dbinfo(int16 dbid);
 extern int16 contentid_get_dbid(int16 contentid, char role, bool getPreferredRoleNotCurrentRole);
-extern int16 cdbcomponent_get_maxdbid(void);
+extern int16 cdbcomponent_get_maxdbid(bool exclusive);
 extern int16 cdbcomponent_get_availableDbId(void);
 extern int16 cdbcomponent_get_maxcontentid(void);
 

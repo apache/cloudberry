@@ -31,6 +31,7 @@ public:
 	// unittests
 	static GPOS_RESULT EresUnittest();
 	static GPOS_RESULT EresUnittest_Basics();
+	static GPOS_RESULT EresUnittest_LimitCardinality();
 	static GPOS_RESULT EresUnittest_RunMinidumpTests();
 
 };	// class CMaxCardTest

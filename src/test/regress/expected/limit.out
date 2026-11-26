@@ -130,6 +130,19 @@ select * from int8_tbl offset (case when random() < 0.5 then null::bigint end);
  4567890123456789 | -4567890123456789
 (5 rows)
 
+-- A LIMIT count above ORCA's finite CMaxCard range must remain a valid bound.
+SET optimizer_trace_fallback = on;
+SELECT * FROM int8_tbl ORDER BY q1, q2 LIMIT 4294967296;
+        q1        |        q2         
+------------------+-------------------
+              123 |               456
+              123 |  4567890123456789
+ 4567890123456789 | -4567890123456789
+ 4567890123456789 |               123
+ 4567890123456789 |  4567890123456789
+(5 rows)
+
+RESET optimizer_trace_fallback;
 -- Test assorted cases involving backwards fetch from a LIMIT plan node
 -- Disable backward scan test which is not supported in this version of Apache Cloudberry
 --start_ignore

@@ -62,7 +62,9 @@ static LLVMValueRef build_EvalXFuncInt(LLVMBuilderRef b, LLVMModuleRef mod,
 									   LLVMValueRef v_state,
 									   ExprEvalStep *op,
 									   int natts, LLVMValueRef *v_args);
+#if LLVM_VERSION_MAJOR < 22
 static LLVMValueRef create_LifetimeEnd(LLVMModuleRef mod);
+#endif
 
 /* macro making it easier to call ExecEval* functions */
 #define build_EvalXFunc(b, mod, funcname, v_state, op, ...) \
@@ -612,8 +614,8 @@ llvm_compile_expr(ExprState *state)
 						LLVMBuildStore(b, l_sbool_const(1), v_resnullp);
 
 						/* create blocks for checking args, one for each */
-						b_checkargnulls =
-							palloc(sizeof(LLVMBasicBlockRef *) * op->d.func.nargs);
+						b_checkargnulls = (LLVMBasicBlockRef *)
+							palloc(sizeof(LLVMBasicBlockRef) * op->d.func.nargs);
 						for (int argno = 0; argno < op->d.func.nargs; argno++)
 							b_checkargnulls[argno] =
 								l_bb_before_v(b_nonull, "b.%d.isnull.%d", opno,
@@ -1636,7 +1638,7 @@ llvm_compile_expr(ExprState *state)
 
 			case EEOP_CURRENTOFEXPR:
 				build_EvalXFunc(b, mod, "ExecEvalCurrentOfExpr",
-								v_state, op);
+								v_state, op, v_econtext);
 				LLVMBuildBr(b, opblocks[opno + 1]);
 				break;
 
@@ -1921,14 +1923,14 @@ llvm_compile_expr(ExprState *state)
 
 			case EEOP_SCALARARRAYOP_FAST_INT:
 				build_EvalXFunc(b, mod, "ExecEvalScalarArrayOpFastInt",
-								v_state, v_econtext, op);
-				LLVMBuildBr(b, opblocks[i + 1]);
+								v_state, op);
+				LLVMBuildBr(b, opblocks[opno + 1]);
 				break;
 
 			case EEOP_SCALARARRAYOP_FAST_STR:
 				build_EvalXFunc(b, mod, "ExecEvalScalarArrayOpFastStr",
-								v_state, v_econtext, op);
-				LLVMBuildBr(b, opblocks[i + 1]);
+								v_state, op);
+				LLVMBuildBr(b, opblocks[opno + 1]);
 				break;
 
 			case EEOP_HASHED_SCALARARRAYOP:
@@ -1987,16 +1989,22 @@ llvm_compile_expr(ExprState *state)
 					LLVMValueRef v_group_id_p;
 					LLVMValueRef v_group_id;
 
-					/* Copy aggstate->group_id to the result */
+					/*
+					 * Copy aggstate->group_id to the result.  The field is
+					 * 32 bits wide: load that and widen it as Int32GetDatum()
+					 * does, since a Datum-wide load would bring the next field
+					 * along in the high half.
+					 */
 					v_group_id_p = l_ptr_const(&aggstate->group_id,
-											  l_ptr(TypeSizeT));
-					v_group_id = LLVMBuildLoad(b, v_group_id_p, "v_group_id");
+											  l_ptr(LLVMInt32TypeInContext(lc)));
+					v_group_id = l_load(b, LLVMInt32TypeInContext(lc), v_group_id_p, "");
+					v_group_id = LLVMBuildSExt(b, v_group_id, TypeSizeT, "v_group_id");
 
 					/* and store result */
 					LLVMBuildStore(b, v_group_id, v_resvaluep);
 					LLVMBuildStore(b, l_sbool_const(0), v_resnullp);
 
-					LLVMBuildBr(b, opblocks[i + 1]);
+					LLVMBuildBr(b, opblocks[opno + 1]);
 					break;
 				}
 
@@ -2006,16 +2014,22 @@ llvm_compile_expr(ExprState *state)
 					LLVMValueRef v_gset_id_p;
 					LLVMValueRef v_gset_id;
 
-					/* Copy aggstate->gset_id to the result */
+					/*
+					 * Copy aggstate->gset_id to the result.  The field is
+					 * 32 bits wide: load that and widen it as Int32GetDatum()
+					 * does, since a Datum-wide load would bring the next field
+					 * along in the high half.
+					 */
 					v_gset_id_p = l_ptr_const(&aggstate->gset_id,
-											  l_ptr(TypeSizeT));
-					v_gset_id = LLVMBuildLoad(b, v_gset_id_p, "v_gset_id");
+											  l_ptr(LLVMInt32TypeInContext(lc)));
+					v_gset_id = l_load(b, LLVMInt32TypeInContext(lc), v_gset_id_p, "");
+					v_gset_id = LLVMBuildSExt(b, v_gset_id, TypeSizeT, "v_gset_id");
 
 					/* and store result */
 					LLVMBuildStore(b, v_gset_id, v_resvaluep);
 					LLVMBuildStore(b, l_sbool_const(0), v_resnullp);
 
-					LLVMBuildBr(b, opblocks[i + 1]);
+					LLVMBuildBr(b, opblocks[opno + 1]);
 					break;
 				}
 
@@ -2025,16 +2039,22 @@ llvm_compile_expr(ExprState *state)
 					LLVMValueRef v_currentExprId_p;
 					LLVMValueRef v_currentExprId;
 
-					/* Copy tsstate->currentExprId to the result */
+					/*
+					 * Copy tsstate->currentExprId to the result.  The field is
+					 * 32 bits wide: load that and widen it as Int32GetDatum()
+					 * does, since a Datum-wide load would bring the next field
+					 * along in the high half.
+					 */
 					v_currentExprId_p = l_ptr_const(&tsstate->currentExprId,
-											  l_ptr(TypeSizeT));
-					v_currentExprId = LLVMBuildLoad(b, v_currentExprId_p, "v_currentExprId");
+											  l_ptr(LLVMInt32TypeInContext(lc)));
+					v_currentExprId = l_load(b, LLVMInt32TypeInContext(lc), v_currentExprId_p, "");
+					v_currentExprId = LLVMBuildSExt(b, v_currentExprId, TypeSizeT, "v_currentExprId");
 
 					/* and store result */
 					LLVMBuildStore(b, v_currentExprId, v_resvaluep);
 					LLVMBuildStore(b, l_sbool_const(0), v_resnullp);
 
-					LLVMBuildBr(b, opblocks[i + 1]);
+					LLVMBuildBr(b, opblocks[opno + 1]);
 					break;
 				}
 
@@ -2047,9 +2067,9 @@ llvm_compile_expr(ExprState *state)
 
 					/* Fetch and increment rowcounter */
 					v_rowcounter_p = l_ptr_const(rowcounter_p,
-												 l_ptr(LLVMInt64Type()));
-					v_rowcounter = LLVMBuildLoad(b, v_rowcounter_p, "v_rowcounter");
-					v_rowcounter_new = LLVMBuildAdd(b, v_rowcounter, l_int64_const(1), "v_rowcounter_new");
+												 l_ptr(LLVMInt64TypeInContext(lc)));
+					v_rowcounter = l_load(b, LLVMInt64TypeInContext(lc), v_rowcounter_p, "v_rowcounter");
+					v_rowcounter_new = LLVMBuildAdd(b, v_rowcounter, l_int64_const(lc, 1), "v_rowcounter_new");
 
 					/* Store the new value back */
 					LLVMBuildStore(b, v_rowcounter_new, v_rowcounter_p);
@@ -2058,7 +2078,7 @@ llvm_compile_expr(ExprState *state)
 					LLVMBuildStore(b, v_rowcounter_new, v_resvaluep);
 					LLVMBuildStore(b, l_sbool_const(0), v_resnullp);
 
-					LLVMBuildBr(b, opblocks[i + 1]);
+					LLVMBuildBr(b, opblocks[opno + 1]);
 					break;
 				}
 
@@ -2170,7 +2190,7 @@ llvm_compile_expr(ExprState *state)
 					v_nullsp = l_ptr_const(nulls, l_ptr(TypeStorageBool));
 
 					/* create blocks for checking args */
-					b_checknulls = palloc(sizeof(LLVMBasicBlockRef *) * nargs);
+					b_checknulls = palloc(sizeof(LLVMBasicBlockRef) * nargs);
 					for (int argno = 0; argno < nargs; argno++)
 					{
 						b_checknulls[argno] =
@@ -2672,13 +2692,10 @@ BuildV1Call(LLVMJitContext *context, LLVMBuilderRef b,
 			LLVMModuleRef mod, FunctionCallInfo fcinfo,
 			LLVMValueRef *v_fcinfo_isnull)
 {
-	LLVMContextRef lc;
 	LLVMValueRef v_fn;
 	LLVMValueRef v_fcinfo_isnullp;
 	LLVMValueRef v_retval;
 	LLVMValueRef v_fcinfo;
-
-	lc = LLVMGetModuleContext(mod);
 
 	v_fn = llvm_function_reference(context, b, mod, fcinfo);
 
@@ -2695,11 +2712,14 @@ BuildV1Call(LLVMJitContext *context, LLVMBuilderRef b,
 	if (v_fcinfo_isnull)
 		*v_fcinfo_isnull = l_load(b, TypeStorageBool, v_fcinfo_isnullp, "");
 
+#if LLVM_VERSION_MAJOR < 22
+
 	/*
 	 * Add lifetime-end annotation, signaling that writes to memory don't have
 	 * to be retained (important for inlining potential).
 	 */
 	{
+		LLVMContextRef lc = LLVMGetModuleContext(mod);
 		LLVMValueRef v_lifetime = create_LifetimeEnd(mod);
 		LLVMValueRef params[2];
 
@@ -2711,6 +2731,7 @@ BuildV1Call(LLVMJitContext *context, LLVMBuilderRef b,
 		params[1] = l_ptr_const(&fcinfo->isnull, l_ptr(LLVMInt8TypeInContext(lc)));
 		l_call(b, LLVMGetFunctionType(v_lifetime), v_lifetime, params, lengthof(params), "");
 	}
+#endif
 
 	return v_retval;
 }
@@ -2748,6 +2769,7 @@ build_EvalXFuncInt(LLVMBuilderRef b, LLVMModuleRef mod, const char *funcname,
 	return v_ret;
 }
 
+#if LLVM_VERSION_MAJOR < 22
 static LLVMValueRef
 create_LifetimeEnd(LLVMModuleRef mod)
 {
@@ -2781,3 +2803,4 @@ create_LifetimeEnd(LLVMModuleRef mod)
 
 	return fn;
 }
+#endif

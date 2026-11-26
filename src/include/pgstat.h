@@ -88,6 +88,27 @@ typedef struct PgStat_FunctionCounts
 	instr_time	self_time;
 } PgStat_FunctionCounts;
 
+/* Resource measurements collected during VACUUM. */
+typedef struct PgStat_CommonCounts
+{
+	int64		total_blks_read;
+	int64		total_blks_hit;
+	int64		total_blks_dirtied;
+	int64		total_blks_written;
+	int64		blks_fetched;
+	int64		blks_hit;
+	double		blk_read_time;
+	double		blk_write_time;
+	int64		wal_records;
+	int64		wal_fpi;
+	uint64		wal_bytes;
+}			PgStat_CommonCounts;
+
+typedef struct PgStat_VacuumRelationCounts
+{
+	PgStat_CommonCounts common;
+}			PgStat_VacuumRelationCounts;
+
 /*
  * Working state needed to accumulate per-function-call timing statistics.
  */
@@ -626,6 +647,7 @@ extern void pgstat_unlink_relation(Relation rel);
 
 extern void pgstat_report_vacuum(Oid tableoid, bool shared,
 								 PgStat_Counter livetuples, PgStat_Counter deadtuples);
+
 extern void pgstat_report_analyze(Relation rel,
 								  PgStat_Counter livetuples, PgStat_Counter deadtuples,
 								  bool resetcounter);
