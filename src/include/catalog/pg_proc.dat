@@ -13025,6 +13025,11 @@
   prorettype => 'void', proargtypes => 'oid', proargnames => '{relid}',
   prosrc => 'pg_stat_reset_vacuum_stats' },
 
+{ oid => '9223', descr => 'statistics: last database-wide vacuum work reset',
+  proname => 'pg_stat_get_vacuum_stat_reset_time', provolatile => 's',
+  proparallel => 'r', prorettype => 'timestamptz', proargtypes => 'oid',
+  prosrc => 'pg_stat_get_vacuum_stat_reset_time' },
+
 { oid => '9220', descr => 'statistics: vacuum work counters',
   proname => 'pg_stat_get_vacuum_stats', provolatile => 's', proparallel => 'r',
   prorettype => 'record', proargtypes => 'oid',

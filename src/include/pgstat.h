@@ -258,7 +258,7 @@ typedef struct PgStat_TableXactStatus
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCC2
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCC3
 
 typedef struct PgStat_ArchiverStats
 {
@@ -376,6 +376,7 @@ typedef struct PgStat_StatDBEntry
 
 	TimestampTz stat_reset_timestamp;
 	PgStat_VacuumStats vacuum_stats;
+	TimestampTz vacuum_stat_reset_timestamp;
 } PgStat_StatDBEntry;
 
 typedef struct PgStat_StatFuncEntry

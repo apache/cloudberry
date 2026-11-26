@@ -2221,7 +2221,7 @@ pg_stat_user_tables| SELECT relid,
   WHERE ((schemaname <> ALL (ARRAY['pg_catalog'::name, 'information_schema'::name])) AND (schemaname !~ '^pg_toast'::text));
 pg_stat_vacuum| SELECT d.oid AS datid,
     d.datname,
-    pg_stat_get_db_stat_reset_time(d.oid) AS stats_reset,
+    pg_stat_get_vacuum_stat_reset_time(d.oid) AS stats_reset,
     v.tuples_deleted,
     v.dead_pages,
     v.freeze_age_vacuum_count,

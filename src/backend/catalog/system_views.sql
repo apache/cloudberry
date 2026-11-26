@@ -1209,7 +1209,7 @@ CREATE VIEW pg_stat_vacuum AS
     SELECT
             D.oid AS datid,
             D.datname AS datname,
-            pg_stat_get_db_stat_reset_time(D.oid) AS stats_reset,
+            pg_stat_get_vacuum_stat_reset_time(D.oid) AS stats_reset,
             V.tuples_deleted,
             V.dead_pages,
             V.freeze_age_vacuum_count,

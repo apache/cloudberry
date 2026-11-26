@@ -451,4 +451,5 @@ void
 pgstat_database_reset_timestamp_cb(PgStatShared_Common *header, TimestampTz ts)
 {
 	((PgStatShared_Database *) header)->stats.stat_reset_timestamp = ts;
+	((PgStatShared_Database *) header)->stats.vacuum_stat_reset_timestamp = ts;
 }

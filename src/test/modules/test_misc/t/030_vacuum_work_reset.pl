@@ -44,6 +44,14 @@ my $before = $node->safe_psql('postgres', $work_sql);
 my $other_db_before = $node->safe_psql('other_work', $work_sql);
 my $db_before = $node->safe_psql('postgres', $db_work_sql);
 my $other_before = $node->safe_psql('postgres', $other_sql);
+my $reset_sql = q{
+SELECT stats_reset FROM pg_stat_vacuum WHERE datname = current_database()
+};
+my $ordinary_reset_sql = q{
+SELECT stats_reset FROM pg_stat_database WHERE datname = current_database()
+};
+my $reset_before = $node->safe_psql('postgres', $reset_sql);
+my $ordinary_reset_before = $node->safe_psql('postgres', $ordinary_reset_sql);
 
 $node->safe_psql('postgres', 'CREATE ROLE work_reader');
 for my $call ('pg_stat_reset_vacuum_stats()',
@@ -74,6 +82,8 @@ is($node->safe_psql('postgres', $other_sql), $other_before,
    'relation reset preserves timestamps, invocation counts and other statistics');
 is($node->safe_psql('postgres', $db_work_sql), $db_before,
    'relation reset preserves database work aggregate');
+is($node->safe_psql('postgres', $reset_sql), $reset_before,
+   'relation reset preserves the database work reset timestamp');
 is($node->safe_psql('postgres', q{
 SELECT tuples_deleted FROM pg_stat_get_vacuum_stats('reset_work_pkey'::regclass)
 }), '100', 'relation reset leaves index work untouched');
@@ -95,6 +105,12 @@ SELECT row_to_json(s) FROM pg_stat_get_vacuum_stats('pg_shdepend'::regclass) s
 my $shared_before = $node->safe_psql('postgres', $shared_sql);
 $other_before = $node->safe_psql('postgres', $other_sql);
 $node->safe_psql('postgres', 'SELECT pg_stat_reset_vacuum_stats()');
+is($node->safe_psql('postgres', q{
+SELECT stats_reset >= pg_postmaster_start_time()
+  FROM pg_stat_vacuum WHERE datname = current_database()
+}), 't', 'database work reset records its own timestamp');
+is($node->safe_psql('postgres', $ordinary_reset_sql), $ordinary_reset_before,
+   'work reset preserves the ordinary database reset timestamp');
 is($node->safe_psql('postgres', $zero_sql), 't', 'database reset clears relation work');
 is($node->safe_psql('postgres', q{
 SELECT bool_and(value::bigint = 0)
@@ -124,9 +140,18 @@ is($node->safe_psql('postgres', q{
 SELECT pages_scanned FROM pg_stat_get_vacuum_database_stats(
  (SELECT oid FROM pg_database WHERE datname = current_database()))
 }), '0', 'reset discards local pending database work before a later flush');
+my $saved_reset = $node->safe_psql('postgres', $reset_sql);
 $node->restart;
+is($node->safe_psql('postgres', $reset_sql), $saved_reset,
+   'work reset timestamp survives a clean restart');
 is($node->safe_psql('postgres', $zero_sql), 't', 'work stays reset after a clean restart');
 is($node->safe_psql('other_work', $work_sql), $other_db_before,
    'untouched database history survives restart');
+$node->safe_psql('postgres', 'SELECT pg_stat_reset()');
+is($node->safe_psql('postgres', q{
+SELECT v.stats_reset = d.stats_reset
+  FROM pg_stat_vacuum v JOIN pg_stat_database d USING (datid)
+ WHERE v.datname = current_database()
+}), 't', 'ordinary database reset updates both reset timestamps');
 $node->stop;
 done_testing();

@@ -2282,3 +2282,13 @@ pg_stat_get_vacuum_database_stats(PG_FUNCTION_ARGS)
 	return pgstat_vacuum_stats_tuple(fcinfo, entry ? &entry->vacuum_stats : NULL,
 								   true);
 }
+
+Datum
+pg_stat_get_vacuum_stat_reset_time(PG_FUNCTION_ARGS)
+{
+	PgStat_StatDBEntry *entry = pgstat_fetch_stat_dbentry(PG_GETARG_OID(0));
+
+	if (!entry || entry->vacuum_stat_reset_timestamp == 0)
+		PG_RETURN_NULL();
+	PG_RETURN_TIMESTAMPTZ(entry->vacuum_stat_reset_timestamp);
+}
