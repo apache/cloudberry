@@ -4441,6 +4441,26 @@ ReindexRelationConcurrently(ReindexStmt *stmt, Oid relationOid, ReindexParams *p
 		return false;
 	}
 
+	/*
+	 * AO and AOCS cannot validate a concurrent index build.  Check the
+	 * selected indexes before creating replacement indexes so that an error
+	 * does not leave invalid _ccnew indexes behind.
+	 */
+	foreach(lc, indexIds)
+	{
+		ReindexIndexInfo *idx = lfirst(lc);
+		Oid			heapOid = IndexGetRelation(idx->indexId, false);
+		Relation	heapRelation = table_open(heapOid, ShareUpdateExclusiveLock);
+
+		if (RelationIsAppendOptimized(heapRelation))
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("cannot reindex append-only table \"%s\" concurrently",
+							RelationGetRelationName(heapRelation))));
+
+		table_close(heapRelation, NoLock);
+	}
+
 	/* It's not a shared catalog, so refuse to move it to shared tablespace */
 	if (params->tablespaceOid == GLOBALTABLESPACE_OID)
 		ereport(ERROR,

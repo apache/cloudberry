@@ -269,6 +269,7 @@ test: fts_session_reset
 
 # Reindex tests
 test: reindex/abort_reindex
+test: reindex/reindex_concurrently_ao
 test: reindex/createidx_while_reindex_idx_ao_btree reindex/createidx_while_reindex_idx_heap_btree reindex/createidx_while_reindex_idx_aoco_btree
 test: reindex/createidx_while_reindex_idx_ao_bitmap reindex/createidx_while_reindex_idx_heap_bitmap reindex/createidx_while_reindex_idx_aoco_bitmap
 test: reindex/reindextable_while_addpart_ao_part_btree reindex/reindextable_while_addpart_heap_part_btree reindex/reindextable_while_addpart_aoco_part_btree
