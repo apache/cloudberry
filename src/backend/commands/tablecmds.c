@@ -7152,9 +7152,18 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 			 * And fire it only once.
 			 */
 			if (parsetree)
+			{
+				/*
+				 * A trigger may abort a nested transaction and clear the
+				 * DDL assignments pending for dispatch.
+				 */
+				List	   *saved_oid_assignments = SaveOidAssignments();
+
 				EventTriggerTableRewrite((Node *) parsetree,
 										 tab->relid,
 										 tab->rewrite);
+				RestoreOidAssignments(saved_oid_assignments);
+			}
 
 			/*
 			 * Create transient table that will receive the modified data.
@@ -9796,12 +9805,18 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 				}
 				else
 				{
-					/* Evaluate the default expression */
+					/*
+					 * Evaluating the default may run a function that aborts
+					 * a nested transaction and clears pending assignments.
+					 */
+					List	   *saved_oid_assignments = SaveOidAssignments();
+
 					estate = CreateExecutorState();
 					exprState = ExecPrepareExpr(defval, estate);
 					missingval = ExecEvalExpr(exprState,
 											  GetPerTupleExprContext(estate),
 											  &missingIsNull);
+					RestoreOidAssignments(saved_oid_assignments);
 
 					/* Remember the value so that it is dispatched to QEs */
 					colDef->hasCookedMissingVal = true;
