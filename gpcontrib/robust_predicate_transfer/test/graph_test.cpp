@@ -1091,6 +1091,19 @@ static void forward_total_cost_and_weak_channels()
 	CHECK(comps[0].chain_rtindexes == std::vector<int>{3});
 	CHECK(comps[0].est_work_ms > comps[0].est_cost_ms);
 
+	/* Cost retained predicates on the full reducer scan, before filtering. */
+	params.qual_ms_per_cost_unit = 0.015;
+	estimates[3].qual_startup_cost = 10;
+	estimates[3].qual_per_tuple_cost = 100;
+	RptSelectForward(forward, params, estimates, size_one_mib, nullptr, &comps);
+	CHECK(!comps[0].accepted);
+	CHECK(std::abs(comps[0].est_qual_ms - 750.15) < 1e-9);
+	estimates[3].quals_dropped = true;
+	RptSelectForward(forward, params, estimates, size_one_mib, nullptr, &comps);
+	CHECK(comps[0].accepted && comps[0].est_qual_ms == 0);
+	estimates[3].quals_dropped = false;
+	params.qual_ms_per_cost_unit = 0;
+
 	/* A matching in-place filter makes the only useful exchange redundant. */
 	const auto &channel = comps[0].channels.front();
 	params.inplace_transfers.emplace(channel.source_key, channel.target_key);
@@ -1153,6 +1166,44 @@ static void forward_filter_reaches_root_and_returns()
 	CHECK(subscriber.source_key == root.source_key);
 	CHECK(subscriber.target_rtindex == 2 && subscriber.main_only);
 	CHECK(std::abs(subscriber.est_cost_ms - 2.4) < 1e-9);
+}
+
+static void forward_startup_counts_shared_subscribers()
+{
+	RptTransferMgr analysis;
+	vertex(analysis, 1, 4000, false);
+	vertex(analysis, 2, 3000, false);
+	vertex(analysis, 3, 500, true);
+	connect(analysis, edge(1, 2));
+	connect(analysis, edge(1, 2, false, false, 2, 2));
+	connect(analysis, edge(2, 3));
+	RptBuildClasses(&analysis);
+	RptTransferMgr forward;
+	RptBuildForwardPlan(&analysis, &forward);
+
+	RptForwardParams params = forward_params(-1, 0);
+	params.use_total_cost = true;
+	params.delivery_ms_per_mib = 0.8;
+	params.main_consumer_processes[2] = 3;
+	std::map<int, RptForwardVertexEst> estimates;
+	estimates[3].rows = 5000;
+	estimates[3].selectivity = 0.1;
+	std::vector<RptForwardComponent> components;
+	auto size = [](double rows, int64 *elems, int64 *payload, int64 *planned) {
+		*elems = (int64) rows;
+		*payload = 8256;
+		*planned = 8192;
+		return true;
+	};
+
+	RptSelectForward(forward, params, estimates, size, nullptr, &components);
+	CHECK(!components[0].accepted);
+	CHECK(components[0].reason == "estimated downstream savings do not repay reducer startup");
+
+	params.main_consumer_keys.insert({2, 1});
+	RptSelectForward(forward, params, estimates, size, nullptr, &components);
+	CHECK(components[0].accepted && components[0].channels.size() == 2);
+	CHECK(components[0].channels.back().main_only);
 }
 
 static void forward_key_survival_and_selection()
@@ -1534,6 +1585,7 @@ int main()
 	forward_selection_in_process();
 	forward_selection_star();
 	forward_selection_gates();
+	forward_startup_counts_shared_subscribers();
 	forward_key_survival_and_selection();
 	forward_total_cost_and_weak_channels();
 	forward_filter_reaches_root_and_returns();

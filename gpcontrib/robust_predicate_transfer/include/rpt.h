@@ -314,6 +314,7 @@ struct RptForwardComponent
 	std::vector<RptForwardChannel> channels;
 	std::set<RptKey> inplace_refusals;
 	double		est_cost_ms = 0;	/* sum of hop estimates */
+	double		est_qual_ms = 0;	/* evaluating retained predicates in the reducer */
 	double		est_work_ms = 0;	/* reducer, probes and exchange */
 	double		est_benefit_ms = 0;	/* downstream work avoided */
 	double		est_selectivity = 1;	/* estimated fraction of root rows kept */
@@ -327,6 +328,7 @@ struct RptForwardParams
 	bool		key_survival = false;
 	double		reducer_scan_ms_per_row = 0.00015;
 	double		reducer_scan_ms_per_byte = 0.000002;
+	double		qual_ms_per_cost_unit = 0;
 	double		bloom_build_ms_per_row = 0.00010;
 	double		bloom_probe_ms_per_row = 0.00008;
 	double		downstream_ms_per_row = 0.00060;
@@ -354,6 +356,8 @@ struct RptForwardVertexEst
 	double		rows = -1;
 	double		selectivity = 1;
 	bool		quals_dropped = false;
+	double		qual_startup_cost = 0;
+	double		qual_per_tuple_cost = 0;
 };
 
 /* Expected retained keys under independent sampling of rows within a key. */
@@ -370,6 +374,7 @@ RptRetainedKeys(double rows, double ndv, double row_keep)
 extern double RptBaseRows(const RptVertexInfo &vertex);
 extern bool rpt_key_survival;
 extern bool rpt_extended_safe_quals;
+extern double rpt_cost_qual_unit;
 extern double rpt_cost_scan_row, rpt_cost_scan_byte, rpt_cost_build_row,
 	rpt_cost_probe_row, rpt_cost_downstream_row;
 

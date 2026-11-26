@@ -217,11 +217,16 @@ rpt_cost_forward_component(const RptTransferMgr &forward,
 		int width = vertex.scan ? vertex.scan->plan_width : 0;
 		double rows = rpt_estimated_scan_rows(forward, est, rtindex);
 
-		/* Charge decoded rows and retained-qual evaluation even when an
-		 * incoming filter rejects most of the tuples. */
+		/* Bloom consumers sit above the reducer scan. Its retained SQL
+		 * predicates may still execute on every input row. */
 		comp.est_work_ms += rows * (params.reducer_scan_ms_per_row +
 									width * params.reducer_scan_ms_per_byte);
+		auto estimate = est.find(rtindex);
+		if (estimate != est.end() && !estimate->second.quals_dropped)
+			comp.est_qual_ms += params.qual_ms_per_cost_unit *
+				(estimate->second.qual_startup_cost + rows * estimate->second.qual_per_tuple_cost);
 	}
+	comp.est_work_ms += comp.est_qual_ms;
 	for (const auto &ch : comp.channels)
 	{
 		comp.est_work_ms += ch.est_cost_ms +
@@ -397,9 +402,11 @@ RptSelectForward(const RptTransferMgr &forward, const RptForwardParams &params,
 		{
 			comp.accepted = true;
 			comp.reason = "inject";
-			combined_savings_ms += comp.est_benefit_ms - comp.est_work_ms;
 			if (params.use_total_cost)
+			{
 				rpt_add_forward_subscribers(forward, params, est, keep, ndv_fn, comp);
+				combined_savings_ms += comp.est_benefit_ms - comp.est_work_ms;
+			}
 		}
 		out->push_back(comp);
 	}
@@ -428,6 +435,7 @@ RptDumpForward(const std::vector<RptForwardComponent> &components, std::string *
 		text << "] channels=" << comp.channels.size()
 			 << " est_cost_ms=" << comp.est_cost_ms
 			 << " est_work_ms=" << comp.est_work_ms
+			 << " est_qual_ms=" << comp.est_qual_ms
 				 << " est_benefit_ms=" << comp.est_benefit_ms
 				 << " est_sel=" << comp.est_selectivity
 			 << " decision=" << comp.reason << '\n';

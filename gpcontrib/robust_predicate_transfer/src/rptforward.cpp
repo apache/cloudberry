@@ -61,6 +61,7 @@ extern "C"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
+#include "optimizer/cost.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/walkers.h"
 #include "utils/lsyscache.h"
@@ -307,7 +308,7 @@ RptBaseRows(const RptVertexInfo &v)
 
 /* What each vertex's reducer scan is expected to keep. */
 static std::map<int, RptForwardVertexEst>
-rpt_vertex_estimates(const RptTransferMgr &forward)
+rpt_vertex_estimates(const RptTransferMgr &forward, bool cost_quals)
 {
 	std::map<int, RptForwardVertexEst> est;
 
@@ -318,8 +319,19 @@ rpt_vertex_estimates(const RptTransferMgr &forward)
 
 		e.quals_dropped = !rpt_quals_safe(v.scan->qual);
 		e.rows = base > 0 ? base : (double) v.cardinality;
-		if (v.scan->qual != NIL && !e.quals_dropped && base > 0)
-			e.selectivity = std::min(1.0, std::max(0.0, v.scan->plan_rows / base));
+		if (v.scan->qual != NIL && !e.quals_dropped)
+		{
+			if (base > 0)
+				e.selectivity = std::min(1.0, std::max(0.0, v.scan->plan_rows / base));
+			if (cost_quals)
+			{
+				QualCost cost;
+				/* The safety walker excludes SubPlans and arbitrary functions. */
+				RptPgCall([&]() { cost_qual_eval(&cost, v.scan->qual, NULL); });
+				e.qual_startup_cost = cost.startup;
+				e.qual_per_tuple_cost = cost.per_tuple;
+			}
+		}
 		est[v.rtindex] = e;
 	}
 	return est;
@@ -726,6 +738,7 @@ RptInject(PlannedStmt *stmt, bool materialize, std::string *trace)
 	RptForwardParams params;
 
 	params.use_total_cost = rpt_forward_total_cost;
+	params.qual_ms_per_cost_unit = rpt_cost_qual_unit;
 	params.key_survival = rpt_key_survival;
 	if (params.key_survival)
 	{
@@ -767,7 +780,8 @@ RptInject(PlannedStmt *stmt, bool materialize, std::string *trace)
 		}
 	}
 
-	std::map<int, RptForwardVertexEst> est = rpt_vertex_estimates(forward);
+	std::map<int, RptForwardVertexEst> est = rpt_vertex_estimates(forward,
+		params.use_total_cost && params.qual_ms_per_cost_unit > 0);
 	std::vector<RptForwardComponent> comps;
 	bool any = false;
 	List *children = NIL;

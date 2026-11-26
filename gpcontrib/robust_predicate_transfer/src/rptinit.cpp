@@ -81,6 +81,7 @@ bool		rpt_key_survival = true;
 bool		rpt_extended_safe_quals = true;
 double		rpt_cost_scan_row = 0.00015;
 double		rpt_cost_scan_byte = 0.000002;
+double		rpt_cost_qual_unit = 0.015;
 double		rpt_cost_build_row = 0.00010;
 double		rpt_cost_probe_row = 0.00008;
 double		rpt_cost_downstream_row = 0.00060;
@@ -264,6 +265,12 @@ rpt_define_gucs(void)
 	DefineCustomRealVariable("rpt.cost_scan_byte",
 							 "Estimated milliseconds per reducer input byte.",
 							 NULL, &rpt_cost_scan_byte, 0.000002, 0.0, 1e6, PGC_USERSET,
+							 GUC_NOT_IN_SAMPLE, NULL, NULL, NULL);
+
+	DefineCustomRealVariable("rpt.cost_qual_unit",
+							 "Estimated milliseconds per planner cost unit of retained predicates.",
+							 "Set to zero to omit the separate predicate charge.",
+							 &rpt_cost_qual_unit, 0.015, 0.0, 1e6, PGC_USERSET,
 							 GUC_NOT_IN_SAMPLE, NULL, NULL, NULL);
 
 	DefineCustomRealVariable("rpt.cost_build_row",

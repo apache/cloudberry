@@ -21,6 +21,8 @@
 -- result query is dynamic SQL, so GUC changes cannot reuse an earlier plan.
 CREATE EXTENSION robust_predicate_transfer;
 SET anser.runtime_filter = off;
+SET rpt.enable = on;
+SET rpt.backward = on;
 SET rpt.prefer_inplace = off;
 SET rpt.key_survival = off;
 SET anser.timeout_ms = 600000;
@@ -185,9 +187,10 @@ BEGIN
             'SELECT * FROM rpt_bw_root r JOIN rpt_bw_local l ON r.k = l.k',
             'l', 'local edge uses core runtime filtering');
         -- A selective local build makes the segment-side filter reject
-        -- actual probe rows. Isolate it from the forward reducer and core
+        -- probe rows. The expression prevents propagation to the probe.
+        -- Isolate it from the forward reducer and core
         -- pushdown so the scan counter can only come from Anser in-place.
-        q := 'SELECT r.k FROM rpt_bw_root r JOIN rpt_bw_local l ON r.k = l.k WHERE l.k < 5';
+        q := 'SELECT r.k FROM rpt_bw_root r JOIN rpt_bw_local l ON r.k = l.k WHERE l.k + 0 < 5';
         PERFORM set_config('rpt.prefer_inplace', 'on', true);
         PERFORM set_config('anser.inplace_with_consumer', 'on', true);
         PERFORM set_config('rpt.forward', 'off', true);
@@ -333,6 +336,8 @@ $$;
 DROP TABLE rpt_bw_root, rpt_bw_member, rpt_bw_dim, rpt_bw_bridge, rpt_bw_empty,
            rpt_bw_local, rpt_bw_replica, rpt_bw_part;
 DROP EXTENSION robust_predicate_transfer;
+RESET rpt.enable;
+RESET rpt.backward;
 RESET rpt.prefer_inplace;
 RESET rpt.key_survival;
 RESET anser.runtime_filter;

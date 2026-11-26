@@ -171,5 +171,8 @@ at a time to measure its effect.
 With `rpt.key_survival` enabled, tune `rpt.cost_scan_row`,
 `rpt.cost_scan_byte`, `rpt.cost_build_row`, `rpt.cost_probe_row`, and
 `rpt.cost_downstream_row` in milliseconds. The defaults are the existing
-model coefficients. Save the session settings and exact query results
+model coefficients. The total-cost model also reports `est_qual_ms` for
+retained predicates evaluated by the reducer. `rpt.cost_qual_unit` converts
+planner cost units to milliseconds and can be set to zero for comparison.
+Save the session settings and exact query results
 alongside each benchmark run.
