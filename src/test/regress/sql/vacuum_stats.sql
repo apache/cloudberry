@@ -41,6 +41,10 @@ SELECT count(*) = 2 * (SELECT numsegments FROM gp_distribution_policy
        AND bool_and(freeze_age_vacuum_count = 1) AS per_segment_counts
   FROM gp_stat_vacuum_tables
  WHERE relname IN ('work_stats_dist', 'work_stats_repl') AND gp_segment_id >= 0;
+SELECT count(*) = 2 AND bool_and(freeze_age_vacuum_count = 0)
+         AS no_coordinator_freeze_count
+  FROM pg_stat_vacuum_tables
+ WHERE relname IN ('work_stats_dist', 'work_stats_repl');
 DELETE FROM work_stats_dist WHERE a <= 100;
 DELETE FROM work_stats_repl WHERE a <= 100;
 VACUUM work_stats_dist, work_stats_repl;
@@ -128,3 +132,44 @@ SELECT count(*) = 1 AND bool_and(s.tuples_deleted > 0 AND
     ON raw.indexrelid = s.indexrelid
  WHERE owner.oid = 'work_stats_toast'::regclass;
 DROP TABLE work_stats_toast;
+
+-- Replicated AO auxiliary tables and their indexes use the parent's policy.
+CREATE TABLE work_stats_ao_repl (a int)
+  WITH (appendonly = true) DISTRIBUTED REPLICATED;
+CREATE TABLE work_stats_aoco_repl (a int)
+  WITH (appendonly = true, orientation = column) DISTRIBUTED REPLICATED;
+CREATE INDEX work_stats_ao_repl_idx ON work_stats_ao_repl (a);
+CREATE INDEX work_stats_aoco_repl_idx ON work_stats_aoco_repl (a);
+INSERT INTO work_stats_ao_repl SELECT generate_series(1, 2000);
+INSERT INTO work_stats_aoco_repl SELECT generate_series(1, 2000);
+DELETE FROM work_stats_ao_repl WHERE a <= 1000;
+DELETE FROM work_stats_aoco_repl WHERE a <= 1000;
+VACUUM work_stats_ao_repl, work_stats_aoco_repl;
+VACUUM work_stats_ao_repl, work_stats_aoco_repl;
+SELECT a.columnstore, count(*) = 3 AND sum(s.pages_scanned) > 0 AND
+       bool_and(s.pages_scanned = (raw.total / d.numsegments)::bigint)
+         AS auxiliary_work_normalized
+  FROM pg_appendonly a
+  JOIN gp_distribution_policy d ON d.localoid = a.relid
+  JOIN gp_stat_vacuum_tables_summary s
+    ON s.relid IN (a.segrelid, a.blkdirrelid, a.visimaprelid)
+  JOIN (SELECT relid, sum(pages_scanned) AS total
+          FROM gp_dist_random('pg_stat_vacuum_tables') GROUP BY relid) raw
+    ON raw.relid = s.relid
+ WHERE a.relid IN ('work_stats_ao_repl'::regclass,
+                   'work_stats_aoco_repl'::regclass)
+ GROUP BY a.columnstore ORDER BY a.columnstore;
+SELECT a.columnstore, count(*) >= 2 AND sum(s.tuples_deleted) > 0 AND
+       bool_and(s.tuples_deleted = (raw.total / d.numsegments)::bigint)
+         AS auxiliary_index_work_normalized
+  FROM pg_appendonly a
+  JOIN gp_distribution_policy d ON d.localoid = a.relid
+  JOIN pg_index i ON i.indrelid IN (a.segrelid, a.blkdirrelid, a.visimaprelid)
+  JOIN gp_stat_vacuum_indexes_summary s ON s.indexrelid = i.indexrelid
+  JOIN (SELECT indexrelid, sum(tuples_deleted) AS total
+          FROM gp_dist_random('pg_stat_vacuum_indexes') GROUP BY indexrelid) raw
+    ON raw.indexrelid = s.indexrelid
+ WHERE a.relid IN ('work_stats_ao_repl'::regclass,
+                   'work_stats_aoco_repl'::regclass)
+ GROUP BY a.columnstore ORDER BY a.columnstore;
+DROP TABLE work_stats_ao_repl, work_stats_aoco_repl;

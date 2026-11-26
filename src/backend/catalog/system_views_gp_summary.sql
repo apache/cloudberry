@@ -567,7 +567,10 @@ FROM (
          CASE WHEN d.policytype = 'r' THEN d.numsegments ELSE 1 END AS divisor
   FROM gp_dist_random('pg_stat_vacuum_tables') v
   LEFT JOIN pg_class owner ON owner.reltoastrelid = v.relid
-  LEFT JOIN gp_distribution_policy d ON d.localoid = COALESCE(owner.oid, v.relid)
+  LEFT JOIN pg_appendonly ao ON COALESCE(owner.oid, v.relid)
+    IN (ao.segrelid, ao.blkdirrelid, ao.visimaprelid)
+  LEFT JOIN gp_distribution_policy d
+    ON d.localoid = COALESCE(ao.relid, owner.oid, v.relid)
   WHERE v.relid >= 16384
 ) s
 GROUP BY s.relid, s.schema, s.relname, s.dbname, s.divisor
@@ -611,7 +614,10 @@ FROM (
   FROM gp_dist_random('pg_stat_vacuum_indexes') v
   JOIN pg_index i ON i.indexrelid = v.indexrelid
   LEFT JOIN pg_class owner ON owner.reltoastrelid = i.indrelid
-  LEFT JOIN gp_distribution_policy d ON d.localoid = COALESCE(owner.oid, i.indrelid)
+  LEFT JOIN pg_appendonly ao ON COALESCE(owner.oid, i.indrelid)
+    IN (ao.segrelid, ao.blkdirrelid, ao.visimaprelid)
+  LEFT JOIN gp_distribution_policy d
+    ON d.localoid = COALESCE(ao.relid, owner.oid, i.indrelid)
   WHERE v.indexrelid >= 16384
 ) s
 GROUP BY s.indexrelid, s.schema, s.indexrelname, s.dbname, s.divisor

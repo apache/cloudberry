@@ -72,6 +72,7 @@
 #include "utils/pg_rusage.h"
 #include "utils/timestamp.h"
 
+#include "catalog/gp_distribution_policy.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_namespace.h"
 #include "cdb/cdbappendonlyam.h"
@@ -767,7 +768,11 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 		stats.tuples_deleted = vacrel->tuples_deleted;
 		stats.dead_tuples = vacrel->recently_dead_tuples + vacrel->missed_dead_tuples;
 		stats.dead_pages = vacrel->dead_pages;
-		stats.freeze_age_vacuum_count = vacrel->freeze_age_vacuum ? 1 : 0;
+		/* The coordinator's empty copy is not another distributed vacuum. */
+		if (vacrel->freeze_age_vacuum &&
+			!(Gp_role == GP_ROLE_DISPATCH && !IS_SINGLENODE() &&
+			  rel->rd_cdbpolicy && !GpPolicyIsEntry(rel->rd_cdbpolicy)))
+			stats.freeze_age_vacuum_count = 1;
 		stats.tuples_frozen = vacrel->tuples_frozen;
 		stats.recently_dead_tuples = vacrel->recently_dead_tuples;
 		stats.missed_dead_tuples = vacrel->missed_dead_tuples;
