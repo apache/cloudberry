@@ -308,7 +308,11 @@ HasVersionedAttributes(Relation relation)
 	 * the case right now, but might again be at a later point). As there's no
 	 * reason to version, it's not worth analyzing further.
 	 */
-	if (RelationGetRelid(relation) < FirstUnpinnedObjectId)
+	/*
+	 * Post-bootstrap initdb objects also have reserved OIDs. Each segment
+	 * runs initdb separately, without coordinator-assigned versions.
+	 */
+	if (RelationGetRelid(relation) < FirstNormalObjectId)
 		return false;
 
 	Assert(!IsBootstrapProcessingMode());
