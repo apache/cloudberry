@@ -429,6 +429,7 @@ GetNewOrPreassignedAttributeVersion(Oid relationOid, AttrNumber attnum)
 	OidAssignment assignment = {0};
 	MemoryContext oldcontext;
 	ListCell   *lc;
+	XLogRecPtr	version;
 
 	Assert(OidIsValid(relationOid));
 	Assert(attnum >= 0);
@@ -456,13 +457,12 @@ GetNewOrPreassignedAttributeVersion(Oid relationOid, AttrNumber attnum)
 		foreach(lc, preassigned_oids)
 		{
 			OidAssignment *p = lfirst(lc);
-			XLogRecPtr version;
 
 			if (p->catalog != ATTRIBUTE_VERSION_ASSIGNMENT ||
-				p->namespaceOid != relationOid || p->keyOid1 != (Oid) attnum)
+				p->keyOid1 != relationOid || p->keyOid2 != (Oid) attnum)
 				continue;
 
-			version = p->attributeVersion;
+			version = OidAssignmentGetAttributeVersion(p);
 			preassigned_oids = foreach_delete_current(preassigned_oids, lc);
 			pfree(p);
 			if (version == InvalidXLogRecPtr)
@@ -474,18 +474,19 @@ GetNewOrPreassignedAttributeVersion(Oid relationOid, AttrNumber attnum)
 			 relationOid, attnum);
 	}
 
-	assignment.attributeVersion = GetNextAttributeVersion();
+	version = GetNextAttributeVersion();
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
 		assignment.type = T_OidAssignment;
 		assignment.catalog = ATTRIBUTE_VERSION_ASSIGNMENT;
-		assignment.namespaceOid = relationOid;
-		assignment.keyOid1 = attnum;
+		assignment.keyOid1 = relationOid;
+		assignment.keyOid2 = attnum;
+		OidAssignmentSetAttributeVersion(&assignment, version);
 		oldcontext = MemoryContextSwitchTo(get_oids_context());
 		dispatch_oids = lappend(dispatch_oids, copyObject(&assignment));
 		MemoryContextSwitchTo(oldcontext);
 	}
-	return assignment.attributeVersion;
+	return version;
 }
 
 /* ----------------------------------------------------------------
@@ -1764,7 +1765,8 @@ IsOidAcceptable(Oid oid)
 	{
 		OidAssignment *p = (OidAssignment *) lfirst(lc);
 
-		if (p->oid == oid)
+		/* The OID field is part of an LSN for attribute assignments. */
+		if (p->catalog != ATTRIBUTE_VERSION_ASSIGNMENT && p->oid == oid)
 			return false;
 	}
 

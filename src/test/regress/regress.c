@@ -1617,28 +1617,28 @@ test_attribute_version_assignments(PG_FUNCTION_ARGS)
 		elog(ERROR, "test requires a coordinator or segment session");
 
 	first->catalog = ATTRIBUTE_VERSION_ASSIGNMENT;
-	first->namespaceOid = 12345;
-	first->keyOid1 = 1;
-	first->attributeVersion = UINT64CONST(0x12345678ABCDEF01);
+	first->keyOid1 = 12345;
+	first->keyOid2 = 1;
+	OidAssignmentSetAttributeVersion(first, UINT64CONST(0x12345678ABCDEF01));
 	second = copyObject(first);
-	second->attributeVersion++;
+	OidAssignmentSetAttributeVersion(second, OidAssignmentGetAttributeVersion(first) + 1);
 	other = copyObject(first);
-	other->keyOid1 = 2;
-	other->attributeVersion += 2;
+	other->keyOid2 = 2;
+	OidAssignmentSetAttributeVersion(other, OidAssignmentGetAttributeVersion(first) + 2);
 	assignments = list_make3(first, second, other);
 
 	roundtrip = copyObject(assignments);
-	EXPECT_TRUE(((OidAssignment *) linitial(roundtrip))->attributeVersion ==
-				first->attributeVersion);
+	EXPECT_TRUE(OidAssignmentGetAttributeVersion((OidAssignment *) linitial(roundtrip)) ==
+				OidAssignmentGetAttributeVersion(first));
 	serialized = nodeToString(assignments);
 	roundtrip = stringToNode(serialized);
-	EXPECT_TRUE(((OidAssignment *) linitial(roundtrip))->attributeVersion ==
-				first->attributeVersion);
+	EXPECT_TRUE(OidAssignmentGetAttributeVersion((OidAssignment *) linitial(roundtrip)) ==
+				OidAssignmentGetAttributeVersion(first));
 	serialized = serializeNode((Node *) assignments, &size, NULL);
 	roundtrip = (List *) deserializeNode(serialized, size);
-	EXPECT_TRUE(((OidAssignment *) linitial(roundtrip))->attributeVersion ==
-				first->attributeVersion);
-	EXPECT_TRUE(((OidAssignment *) lthird(roundtrip))->keyOid1 == 2);
+	EXPECT_TRUE(OidAssignmentGetAttributeVersion((OidAssignment *) linitial(roundtrip)) ==
+				OidAssignmentGetAttributeVersion(first));
+	EXPECT_TRUE(((OidAssignment *) lthird(roundtrip))->keyOid2 == 2);
 
 	/* Do not consume assignments belonging to the surrounding statement. */
 	saved = SaveOidAssignments();
@@ -1647,20 +1647,20 @@ test_attribute_version_assignments(PG_FUNCTION_ARGS)
 		RestoreOidAssignments(copyObject(assignments));
 		restored = SaveOidAssignments();
 		EXPECT_TRUE(list_length(restored) == 3);
-		EXPECT_TRUE(((OidAssignment *) linitial(restored))->attributeVersion ==
-					first->attributeVersion);
-		EXPECT_TRUE(((OidAssignment *) lsecond(restored))->attributeVersion ==
-					second->attributeVersion);
+		EXPECT_TRUE(OidAssignmentGetAttributeVersion((OidAssignment *) linitial(restored)) ==
+					OidAssignmentGetAttributeVersion(first));
+		EXPECT_TRUE(OidAssignmentGetAttributeVersion((OidAssignment *) lsecond(restored)) ==
+					OidAssignmentGetAttributeVersion(second));
 		if (Gp_role == GP_ROLE_EXECUTE)
 		{
 			RestoreOidAssignments(restored);
 			/* Match the attribute key, then consume repeated keys FIFO. */
 			EXPECT_TRUE(GetNewOrPreassignedAttributeVersion(12345, 2) ==
-						other->attributeVersion);
+						OidAssignmentGetAttributeVersion(other));
 			EXPECT_TRUE(GetNewOrPreassignedAttributeVersion(12345, 1) ==
-						first->attributeVersion);
+						OidAssignmentGetAttributeVersion(first));
 			EXPECT_TRUE(GetNewOrPreassignedAttributeVersion(12345, 1) ==
-						second->attributeVersion);
+						OidAssignmentGetAttributeVersion(second));
 			EXPECT_TRUE(SaveOidAssignments() == NIL);
 		}
 	}

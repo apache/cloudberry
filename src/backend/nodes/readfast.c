@@ -1002,7 +1002,6 @@ _readOidAssignment(void)
 	READ_OID_FIELD(keyOid1);
 	READ_OID_FIELD(keyOid2);
 	READ_OID_FIELD(oid);
-	READ_UINT64_FIELD(attributeVersion);
 	READ_DONE();
 }
 

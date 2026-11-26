@@ -1319,7 +1319,6 @@ _outOidAssignment(StringInfo str, const OidAssignment *node)
 	WRITE_OID_FIELD(keyOid1);
 	WRITE_OID_FIELD(keyOid2);
 	WRITE_OID_FIELD(oid);
-	WRITE_UINT64_FIELD(attributeVersion);
 }
 
 /*
