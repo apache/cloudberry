@@ -78,6 +78,7 @@
 
 #include "postgres.h"
 
+#include "access/relation.h"
 #include "catalog/catalog.h"
 #include "catalog/heap.h"
 #include "catalog/indexing.h"
@@ -433,9 +434,22 @@ GetNewOrPreassignedAttributeVersion(Oid relationOid, AttrNumber attnum)
 	Assert(attnum >= 0);
 
 	/* Binary upgrade restores each node locally, without OID dispatch. */
-	if (!IsNormalProcessingMode() || IsBinaryUpgrade ||
-		Gp_role == GP_ROLE_UTILITY)
+	if (!IsNormalProcessingMode() || IsBinaryUpgrade)
 		return GetNextAttributeVersion();
+
+	/*
+	 * A segment's WAL position is unrelated to the coordinator's. For
+	 * changes to existing attributes in utility mode, use the smallest
+	 * version that advances the local relation's version.
+	 */
+	if (Gp_role == GP_ROLE_UTILITY && !IS_QUERY_DISPATCHER() && attnum != 0)
+	{
+		Relation	rel = relation_open(relationOid, NoLock);
+
+		version = TupleDescGetVersion(RelationGetDescr(rel));
+		relation_close(rel, NoLock);
+		return version + 1;
+	}
 
 	if (Gp_role == GP_ROLE_EXECUTE)
 	{
