@@ -26,6 +26,7 @@
 #include "commands/extension.h"
 #include "commands/tablespace.h"
 #include "miscadmin.h"
+#include "storage/proc.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -197,7 +198,7 @@ binary_upgrade_set_next_toast_relfilenode(PG_FUNCTION_ARGS)
 Datum
 binary_upgrade_set_next_attribute_versions(PG_FUNCTION_ARGS)
 {
-	ArrayType  *array = PG_GETARG_ARRAYTYPE_P(0);
+	ArrayType  *array;
 	int16		elmlen;
 	bool		elmbyval;
 	char		elmalign;
@@ -207,6 +208,21 @@ binary_upgrade_set_next_attribute_versions(PG_FUNCTION_ARGS)
 
 	CHECK_IS_BINARY_UPGRADE;
 
+	/*
+	 * NULL denotes a pre-versioning Greenplum dump entry. An empty array
+	 * still specifies exactly one versioned relation with zero attributes.
+	 */
+	if (PG_ARGISNULL(0))
+	{
+		if (binary_upgrade_next_attribute_versions != NULL)
+			pfree(binary_upgrade_next_attribute_versions);
+		binary_upgrade_next_attribute_versions = NULL;
+		binary_upgrade_unversioned_lxid = MyProc->lxid;
+		PG_RETURN_VOID();
+	}
+
+	binary_upgrade_unversioned_lxid = InvalidLocalTransactionId;
+	array = PG_GETARG_ARRAYTYPE_P(0);
 	if (array_contains_nulls(array))
 		elog(ERROR, "null attribute version value is not allowed");
 

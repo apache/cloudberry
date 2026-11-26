@@ -86,6 +86,7 @@
 #include "partitioning/partdesc.h"
 #include "pgstat.h"
 #include "storage/lmgr.h"
+#include "storage/proc.h"
 #include "storage/predicate.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
@@ -116,6 +117,7 @@ Oid			binary_upgrade_next_toast_pg_class_oid = InvalidOid;
 RelFileNumber binary_upgrade_next_heap_pg_class_relfilenumber = InvalidRelFileNumber;
 RelFileNumber binary_upgrade_next_toast_pg_class_relfilenumber = InvalidRelFileNumber;
 BinaryUpgradeAttributeVersions *binary_upgrade_next_attribute_versions = NULL;
+LocalTransactionId binary_upgrade_unversioned_lxid = InvalidLocalTransactionId;
 
 static void MetaTrackAddUpdInternal(Oid			classid,
 									Oid			objoid,
@@ -1314,10 +1316,20 @@ SetBinaryUpgradeAttributeVersions(TupleDesc tupdesc, const char *relname)
 	BinaryUpgradeAttributeVersions *pending = binary_upgrade_next_attribute_versions;
 
 	if (pending == NULL)
+	{
+		/*
+		 * A legacy dump can create multiple relations in one command.
+		 * Its explicit unversioned marker covers only that transaction.
+		 */
+		if (binary_upgrade_unversioned_lxid != InvalidLocalTransactionId &&
+			binary_upgrade_unversioned_lxid == MyProc->lxid)
+			return;
+
 		ereport(ERROR,
 				errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				errmsg("attribute version values not set for \"%s\" when in binary upgrade mode",
 					   relname));
+	}
 	if (pending->natts != tupdesc->natts)
 		ereport(ERROR,
 				errcode(ERRCODE_INVALID_PARAMETER_VALUE),

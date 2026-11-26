@@ -386,7 +386,8 @@ static void binary_upgrade_extension_member(PQExpBuffer upgrade_buffer,
 											const char *objtype,
 											const char *objname,
 											const char *objnamespace);
-static void binary_upgrade_set_next_attribute_versions(PQExpBuffer upgrade_buffer,
+static void binary_upgrade_set_next_attribute_versions(Archive *fout,
+											   PQExpBuffer upgrade_buffer,
 													   int numatts,
 													   const uint64 *attversions);
 static const char *getAttrName(int attrnum, const TableInfo *tblInfo);
@@ -6041,10 +6042,22 @@ binary_upgrade_set_pg_class_oids_for_ao(Archive *fout,
  * would be considered "out-of-date" and throw errors on use.
  */
 static void
-binary_upgrade_set_next_attribute_versions(PQExpBuffer upgrade_buffer,
+binary_upgrade_set_next_attribute_versions(Archive *fout,
+											   PQExpBuffer upgrade_buffer,
 										   int numatts,
 										   const uint64 *attversions)
 {
+	/*
+	 * A Greenplum 6 dump entry can create an entire partition hierarchy.
+	 * None of those relations has versions in the source cluster.
+	 */
+	if (fout->remoteVersion < 100000)
+	{
+		appendPQExpBufferStr(upgrade_buffer,
+							 "SELECT pg_catalog.binary_upgrade_set_next_attribute_versions(NULL::pg_catalog.pg_lsn[]);\n\n");
+		return;
+	}
+
 	appendPQExpBufferStr(upgrade_buffer,
 						 "\n-- For binary upgrade, must preserve the attribute versions\n"
 						 "SELECT pg_catalog.binary_upgrade_set_next_attribute_versions('{");
@@ -12639,7 +12652,7 @@ dumpCompositeType(Archive *fout, const TypeInfo *tyinfo)
 												 tyinfo->dobj.name,
 												 false, false);
 		binary_upgrade_set_pg_class_oids(fout, q, tyinfo->typrelid, false);
-		binary_upgrade_set_next_attribute_versions(q, ntups, attversions);
+		binary_upgrade_set_next_attribute_versions(fout, q, ntups, attversions);
 	}
 
 	qtypname = pg_strdup(fmtId(tyinfo->dobj.name));
@@ -17356,7 +17369,7 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 
 		/* only relations with a row type have versioned attributes */
 		if (RELKIND_HAS_ROWTYPE(tbinfo->relkind))
-			binary_upgrade_set_next_attribute_versions(q, tbinfo->numatts,
+			binary_upgrade_set_next_attribute_versions(fout, q, tbinfo->numatts,
 													   tbinfo->attversion);
 	}
 

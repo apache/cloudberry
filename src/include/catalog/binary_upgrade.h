@@ -53,6 +53,7 @@ typedef struct BinaryUpgradeAttributeVersions
 } BinaryUpgradeAttributeVersions;
 
 extern PGDLLIMPORT BinaryUpgradeAttributeVersions *binary_upgrade_next_attribute_versions;
+extern PGDLLIMPORT LocalTransactionId binary_upgrade_unversioned_lxid;
 
 extern PGDLLIMPORT bool binary_upgrade_record_init_privs;
 
