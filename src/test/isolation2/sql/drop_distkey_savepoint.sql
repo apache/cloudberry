@@ -37,8 +37,8 @@ insert into drop_distkey_heap select i, i from generate_series(1, 10) i;
 select localoid::regclass, distkey from gp_distribution_policy where localoid in ('drop_distkey_ao'::regclass, 'drop_distkey_heap'::regclass) order by 1;
 select count(*) from drop_distkey_ao;
 select count(*) from drop_distkey_heap;
-insert into drop_distkey_ao values (100, 100);
-insert into drop_distkey_heap values (100, 100);
+insert into drop_distkey_ao (b) values (100);
+insert into drop_distkey_heap (b) values (100);
 select count(*) from drop_distkey_ao;
 select count(*) from drop_distkey_heap;
 
