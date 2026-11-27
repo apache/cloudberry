@@ -404,7 +404,7 @@ extern BlockNumber _hash_freeovflpage(Relation rel, Buffer bucketbuf, Buffer ovf
 									  Buffer wbuf, IndexTuple *itups, OffsetNumber *itup_offsets,
 									  Size *tups_size, uint16 nitups, BufferAccessStrategy bstrategy);
 extern void _hash_initbitmapbuffer(Buffer buf, uint16 bmsize, bool initpage);
-extern void _hash_squeezebucket(Relation rel,
+extern BlockNumber _hash_squeezebucket(Relation rel,
 								Bucket bucket, BlockNumber bucket_blkno,
 								Buffer bucket_buf,
 								BufferAccessStrategy bstrategy);
@@ -476,7 +476,7 @@ extern Bucket _hash_get_newbucket_from_oldbucket(Relation rel, Bucket old_bucket
 extern void _hash_kill_items(IndexScanDesc scan);
 
 /* hash.c */
-extern void hashbucketcleanup(Relation rel, Bucket cur_bucket,
+extern BlockNumber hashbucketcleanup(Relation rel, Bucket cur_bucket,
 							  Buffer bucket_buf, BlockNumber bucket_blkno,
 							  BufferAccessStrategy bstrategy,
 							  uint32 maxbucket, uint32 highmask, uint32 lowmask,

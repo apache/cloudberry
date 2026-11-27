@@ -587,7 +587,10 @@ shiftList(Relation index, Buffer metabuffer, BlockNumber newHead,
 		}
 
 		if (stats)
+		{
 			stats->pages_deleted += data.ndeleted;
+			stats->pages_newly_deleted += data.ndeleted;
+		}
 
 		/*
 		 * This operation touches an unusually large number of pages, so
