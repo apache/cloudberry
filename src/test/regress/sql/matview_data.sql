@@ -1177,6 +1177,27 @@ select mvname, datastatus from gp_matview_aux where mvname = 'mv_par_normal_oid'
 insert into par_normal_oid values(1, 2);
 select mvname, datastatus from gp_matview_aux where mvname = 'mv_par_normal_oid';
 
+-- Dropping a matview whose aux entry is gone but whose pg_depend entry is
+-- still there must not crash.  gpexpand leaves new segments in this state:
+-- it copies the coordinator catalog and empties gp_matview_aux and
+-- gp_matview_tables, but keeps pg_depend.  Simulate it on the coordinator.
+create table t_dangling_aux(a int, b int) distributed by (a);
+create materialized view mv_dangling_aux as
+    select a, b from t_dangling_aux distributed by (a);
+set allow_system_table_mods = on;
+delete from gp_matview_tables where mvoid = 'mv_dangling_aux'::regclass;
+delete from gp_matview_aux where mvoid = 'mv_dangling_aux'::regclass;
+reset allow_system_table_mods;
+select count(*) from pg_depend
+    where classid = 'gp_matview_aux'::regclass
+    and objid = 'mv_dangling_aux'::regclass;
+drop materialized view mv_dangling_aux;
+-- The dangling pg_depend entry is removed along with the matview.
+select count(*) from pg_depend d
+    where classid = 'gp_matview_aux'::regclass
+    and not exists (select 1 from pg_class c where c.oid = d.objid);
+drop table t_dangling_aux;
+
 --start_ignore
 drop schema matview_data_schema cascade;
 --end_ignore
