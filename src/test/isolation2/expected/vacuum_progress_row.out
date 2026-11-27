@@ -468,6 +468,12 @@ select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, he
  Success:                      
  Success:                      
 (3 rows)
+-- Compaction time survives replacement of the QE gang before post-cleanup.
+SELECT bool_and(total_vacuum_time > 0 AND vacuum_count = 0) AS phase_time_survives FROM gp_stat_all_tables WHERE relname = 'vacuum_progress_ao_row' AND gp_segment_id > -1;
+ phase_time_survives 
+---------------------
+ t                   
+(1 row)
 -- now seg1's mirror is marked as down
 2: SELECT content, role, preferred_role, mode, status FROM gp_segment_configuration WHERE content > -1;
  content | role | preferred_role | mode | status 
@@ -708,6 +714,12 @@ select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, he
  Success:                      
  Success:                      
 (3 rows)
+-- Compaction time survives replacement of the QE gang before post-cleanup.
+SELECT bool_and(total_vacuum_time > 0 AND vacuum_count = 0) AS phase_time_survives FROM gp_stat_all_tables WHERE relname = 'vacuum_progress_ao_row' AND gp_segment_id > -1;
+ phase_time_survives 
+---------------------
+ t                   
+(1 row)
 -- now seg1's mirror is marked as down
 2: SELECT content, role, preferred_role, mode, status FROM gp_segment_configuration WHERE content > -1;
  content | role | preferred_role | mode | status 
