@@ -147,3 +147,14 @@ cluster t_lexical_cluster;
 select ptblockname,ptstatistics,ptisclustered from get_pax_aux_table('t_lexical_cluster');
 
 drop table t_lexical_cluster;
+-- Reject unsupported options before changing any PAX micro-partitions.
+create table t_cluster_options(c1 int, c2 int) using pax
+  with (minmax_columns='c1,c2', cluster_columns='c1,c2')
+  distributed by (c1);
+insert into t_cluster_options select i, 1001-i from generate_series(1,1000) i;
+select bool_and(ptisclustered) as clustered from get_pax_aux_table('t_cluster_options');
+cluster (bogus) t_cluster_options;
+select bool_and(ptisclustered) as clustered from get_pax_aux_table('t_cluster_options');
+cluster (verbose false) t_cluster_options;
+select bool_and(ptisclustered) as clustered from get_pax_aux_table('t_cluster_options');
+drop table t_cluster_options;
