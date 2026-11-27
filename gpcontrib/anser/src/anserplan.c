@@ -760,7 +760,7 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 }
 
 /*
- * Manual in-place traversal (recurse spine + custom_plans).  We do not use
+ * Manual traversal of the spine, subqueries and custom_plans.  We do not use
  * plan_tree_mutator, whose CustomScan arm does not descend into custom_plans.
  */
 static void
@@ -809,6 +809,9 @@ anser_inject_walk(Plan *plan, AnserInjectCtx *ctx)
 	}
 	else
 		anser_inject_walk(innerPlan(plan), ctx);
+
+	if (IsA(plan, SubqueryScan))
+		anser_inject_walk(((SubqueryScan *) plan)->subplan, ctx);
 
 	if (IsA(plan, CustomScan))
 	{

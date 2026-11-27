@@ -448,6 +448,9 @@ anser_inplace_walk(PlanState *ps, AnserInplaceWalk *walk)
 
 	anser_inplace_walk(innerPlanState(ps), walk);
 
+	if (IsA(ps, SubqueryScanState))
+		anser_inplace_walk(((SubqueryScanState *) ps)->subplan, walk);
+
 	if (IsA(ps, CustomScanState))
 	{
 		ListCell   *lc;

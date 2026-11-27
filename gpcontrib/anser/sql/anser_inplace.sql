@@ -230,7 +230,7 @@ BEGIN
             q := format('SELECT p.v FROM anser_ip_types p JOIN anser_ip_type_build b
                           ON p.%1$I = b.%1$I', col);
             EXECUTE 'SELECT count(*) FROM (' || q || ') r' INTO hits;
-            IF hits <> CASE WHEN col = 'b' THEN 20000 ELSE 2000 END OR
+            IF hits <> (CASE WHEN col = 'b' THEN 20000 ELSE 2000 END) OR
                anser_ip_mode(q) <> 'in-place' OR anser_ip_pruned(q) = 0 OR
                NOT anser_ip_same(q) THEN
                 RAISE EXCEPTION 'expected correct in-place filtering of %, optimizer=%', col, opt;
@@ -272,7 +272,8 @@ DROP TABLE anser_ip_parts;
 
 -- Change either the build predicate or only the probe predicate on each
 -- lateral iteration. The former must refuse Anser. The latter can reuse a
--- filter built from stable keys while the probe is rescanned.
+-- filter built from stable keys while the probe is rescanned. The outer
+-- predicate on the lateral result keeps a Subquery Scan above the hash join.
 CREATE TABLE anser_ip_outer (g int) DISTRIBUTED REPLICATED;
 INSERT INTO anser_ip_outer VALUES (7), (8);
 CREATE TABLE anser_ip_rescan_dim (k int, grp int) DISTRIBUTED REPLICATED;
@@ -285,17 +286,20 @@ DO $$
 DECLARE
     build_param constant text := 'SELECT o.g, s.n FROM anser_ip_outer o
         CROSS JOIN LATERAL (SELECT count(*) AS n FROM anser_ip_fact f
-          JOIN anser_ip_rescan_dim d ON f.k = d.k WHERE d.grp = o.g OFFSET 0) s';
+          JOIN anser_ip_rescan_dim d ON f.k = d.k WHERE d.grp = o.g OFFSET 0) s WHERE s.n >= 0';
     probe_param constant text := 'SELECT o.g, s.n FROM anser_ip_outer o
         CROSS JOIN LATERAL (SELECT count(*) AS n FROM anser_ip_fact f
           JOIN anser_ip_rescan_dim d ON f.k = d.k WHERE d.grp = 7
-          AND f.v > o.g OFFSET 0) s';
+          AND f.v > o.g OFFSET 0) s WHERE s.n >= 0';
     q text;
     line text;
     expected bigint[];
     hits bigint[];
     rescanned_hash boolean;
     exchange_nodes boolean;
+    build_mode text;
+    probe_mode text;
+    probe_pruned bigint;
 BEGIN
     FOREACH q IN ARRAY ARRAY[build_param, probe_param] LOOP
         rescanned_hash := false;
@@ -315,9 +319,12 @@ BEGIN
         END IF;
     END LOOP;
     PERFORM set_config('gp_enable_runtime_filter_pushdown', 'off', true);
-    IF anser_ip_mode(build_param) <> 'none' OR
-       anser_ip_mode(probe_param) <> 'in-place' OR anser_ip_pruned(probe_param) = 0 THEN
-        RAISE EXCEPTION 'expected Anser refusal on changing build keys and reuse on stable keys';
+    build_mode := anser_ip_mode(build_param);
+    probe_mode := anser_ip_mode(probe_param);
+    probe_pruned := anser_ip_pruned(probe_param);
+    IF build_mode <> 'none' OR probe_mode <> 'in-place' OR probe_pruned = 0 THEN
+        RAISE EXCEPTION 'expected Anser refusal and reuse (changing build %, stable build %, pruned %)',
+            build_mode, probe_mode, probe_pruned;
     END IF;
 END $$;
 RESET gp_enable_runtime_filter_pushdown;
@@ -327,10 +334,17 @@ DROP TABLE anser_ip_outer, anser_ip_rescan_dim;
 
 -- A top-level right join preserves the build rows. A semi join preserves
 -- matching probe rows, even when the extra join condition needs both inputs.
+-- Co-locate the right join inputs so the probe scan stays in the join slice.
+CREATE TABLE anser_ip_right_probe (k int, v int) DISTRIBUTED BY (k);
+CREATE TABLE anser_ip_right_build (k int) DISTRIBUTED BY (k);
+INSERT INTO anser_ip_right_probe SELECT k, v FROM anser_ip_fact;
+INSERT INTO anser_ip_right_build SELECT k FROM anser_ip_dim WHERE grp = 7;
+INSERT INTO anser_ip_right_build VALUES (1007);
+ANALYZE anser_ip_right_probe, anser_ip_right_build;
 DO $$
 DECLARE
-    right_join constant text := 'SELECT d.k, f.v FROM anser_ip_fact f
-        RIGHT JOIN anser_ip_dim d ON f.k = d.k AND f.v > 50000 WHERE d.grp = 7';
+    right_join constant text := 'SELECT d.k, f.v FROM anser_ip_right_probe f
+        RIGHT JOIN anser_ip_right_build d ON f.k = d.k AND f.v > 50000';
     semi_join constant text := 'SELECT f.v FROM anser_ip_fact f WHERE EXISTS
         (SELECT 1 FROM anser_ip_dim d WHERE d.k = f.k AND d.grp = 7
          AND d.d < date ''2000-01-01'' + f.v)';
@@ -338,6 +352,9 @@ DECLARE
     line text;
     expected_node text;
     found_join boolean;
+    mode text;
+    pruned bigint;
+    unmatched bigint;
 BEGIN
     FOREACH q IN ARRAY ARRAY[right_join, semi_join] LOOP
         expected_node := CASE WHEN q = right_join THEN 'Hash Right Join' ELSE 'Hash Semi Join' END;
@@ -345,12 +362,20 @@ BEGIN
         FOR line IN EXECUTE 'EXPLAIN (COSTS OFF) ' || q LOOP
             found_join := found_join OR strpos(line, expected_node) > 0;
         END LOOP;
-        IF NOT found_join OR anser_ip_mode(q) <> 'in-place' OR
-           anser_ip_pruned(q) = 0 OR NOT anser_ip_same(q) THEN
-            RAISE EXCEPTION 'expected correct in-place filtering of %', expected_node;
+        mode := anser_ip_mode(q);
+        pruned := anser_ip_pruned(q);
+        IF NOT found_join OR mode <> 'in-place' OR pruned = 0 OR NOT anser_ip_same(q) THEN
+            RAISE EXCEPTION 'expected correct in-place filtering of % (join %, mode %, pruned %)',
+                expected_node, found_join, mode, pruned;
         END IF;
     END LOOP;
+    EXECUTE 'SELECT count(*) FROM (' || right_join || ') r WHERE k = 1007 AND v IS NULL'
+        INTO unmatched;
+    IF unmatched <> 1 THEN
+        RAISE EXCEPTION 'right join lost or duplicated its unmatched build key';
+    END IF;
 END $$;
+DROP TABLE anser_ip_right_probe, anser_ip_right_build;
 
 -- A cached plan keeps the coordinator's in-place decision after a GUC change.
 SET plan_cache_mode = force_generic_plan;

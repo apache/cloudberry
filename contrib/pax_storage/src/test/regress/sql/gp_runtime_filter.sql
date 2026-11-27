@@ -406,12 +406,16 @@ SET optimizer TO off;
 
 -- Core generates integer range and Bloom keys from int4 build Datums.
 -- Probe both wider and narrower PAX columns with the same negative keys.
-SET optimizer TO on;
+-- Use the legacy planner for direct cross-type equality clauses. A small
+-- nonreplicated build requires Motion, so the hash builds before PAX opens.
+SET optimizer TO off;
+SET enable_nestloop TO off;
+SET enable_mergejoin TO off;
 SET gp_enable_predicate_pushdown TO on;
 SET pax.enable_sparse_filter TO on;
 CREATE TABLE rf_width_probe (wide int8, narrow int2, v int)
     USING pax DISTRIBUTED BY (v);
-CREATE TABLE rf_width_build (k int) USING ao_column DISTRIBUTED REPLICATED;
+CREATE TABLE rf_width_build (k int) USING ao_column DISTRIBUTED RANDOMLY;
 INSERT INTO rf_width_probe
 SELECT -(i % 1000), -(i % 1000), i FROM generate_series(1, 40000) i;
 INSERT INTO rf_width_build SELECT -i FROM generate_series(0, 990, 10) i;
@@ -423,6 +427,7 @@ DECLARE
     expected jsonb[];
     line text;
     pruned boolean;
+    plan text;
 BEGIN
     SELECT array_agg(jsonb_build_object('v', i) ORDER BY jsonb_build_object('v', i))
       INTO expected FROM generate_series(1, 40000) i
@@ -436,18 +441,21 @@ BEGIN
         END IF;
         PERFORM set_config('gp_enable_runtime_filter_pushdown', 'on', true);
         pruned := false;
+        plan := '';
         FOR line IN EXECUTE 'EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF) ' || q LOOP
+            plan := plan || E'\n' || line;
             pruned := pruned OR line ~ 'Rows Removed by Pushdown Runtime Filter: [1-9]';
         END LOOP;
-        IF NOT pruned THEN
-            RAISE EXCEPTION 'expected PAX Bloom pruning for %', col;
+        IF NOT pruned OR plan NOT LIKE '%Broadcast Motion%' THEN
+            RAISE EXCEPTION 'expected broadcast build and PAX Bloom pruning for %:%', col, plan;
         END IF;
     END LOOP;
 END $$;
 DROP TABLE rf_width_probe, rf_width_build;
 RESET pax.enable_sparse_filter;
 RESET gp_enable_predicate_pushdown;
-SET optimizer TO off;
+RESET enable_mergejoin;
+RESET enable_nestloop;
 
 -- A hash join rescanned with new build keys: for each outer row the nested
 -- loop runs the LATERAL subquery again, and the hash table is rebuilt from the
