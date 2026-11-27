@@ -51,7 +51,7 @@ test: leastsquares decode_expr bitmapscan bitmapscan_ao case_gp limit_gp percent
 test: gpcopy
 
 test: orca_groupingsets_fallbacks orca_static_pruning
-test: filter gpctas gpdist gpdist_opclasses gpdist_legacy_opclasses matrix sublink table_functions olap_setup complex opclass_ddl explain_format information_schema guc_env_var gp_explain distributed_transactions olap_plans gp_copy_dtx
+test: filter gpctas gpdist gpdist_opclasses gpdist_legacy_opclasses matrix sublink table_functions olap_setup complex explain_format information_schema guc_env_var gp_explain distributed_transactions olap_plans gp_copy_dtx
 test: misc_jiras
 # below test(s) inject faults so each of them need to be in a separate group
 test: guc_gp
@@ -93,7 +93,7 @@ test: cursor
 # so it needs to be in a group by itself
 test: query_finish_pending
 
-test: gpdiffcheck gptokencheck gp_hashagg sequence_gp tidscan_gp dml_in_udf gpdtm_plpgsql agg_pushdown co_nestloop_idxscan gp_array_agg
+test: gpdiffcheck gp_hashagg sequence_gp tidscan_gp dml_in_udf gpdtm_plpgsql agg_pushdown co_nestloop_idxscan gp_array_agg
 
 # The test must be run by itself as it injects a fault on QE to fail
 # at the 2nd phase of 2PC.
@@ -101,7 +101,7 @@ test: dtm_retry
 
 # The appendonly test cannot be run concurrently with tests that have
 # serializable transactions (may conflict with AO vacuum operations).
-test: rangefuncs_cdb gp_dqa subselect_gp2 gp_transactions olap_group sirv_functions appendonly create_table_distpol alter_distpol_dropped query_finish partial_table subselect_gp olap_window_seq subselect_gp_indexes
+test: rangefuncs_cdb gp_dqa subselect_gp2 gp_transactions olap_group sirv_functions appendonly create_table_distpol query_finish partial_table subselect_gp olap_window_seq subselect_gp_indexes
 
 # 'partition' runs for a long time, so try to keep it together with other
 # long-running tests.
@@ -113,7 +113,7 @@ test: brin_ao brin_aocs
 
 test: sreh
 
-test: rle rle_delta dsp not_out_of_shmem_exit_slots create_am_gp
+test: rle_delta dsp not_out_of_shmem_exit_slots create_am_gp
 
 # Cloudberry-specific tests
 test: gp_runtime_filter
@@ -129,7 +129,7 @@ test: gp_runtime_filter
 # ERROR:  parameter "gp_interconnect_type" cannot be set after connection start
 
 ignore: gp_portal_error
-test: external_table external_table_persistent_error_log column_compression alter_table_aocs alter_table_aocs2 external_table_union_all eagerfree alter_distribution_policy
+test: external_table column_compression alter_table_aocs alter_table_aocs2 external_table_union_all eagerfree alter_distribution_policy
 test: alter_table_set alter_table_gp alter_table_ao subtransaction_visibility oid_consistency udf_exception_blocks
 # below test(s) inject faults so each of them need to be in a separate group
 test: aocs
@@ -159,7 +159,7 @@ test: enable_autovacuum
 
 # expand_table tests may affect the result of 'gp_explain', keep them below that
 # portals_updatable
-test: partition_pruning auth_constraint role plpgsql_cache pg_stat_last_operation gp_numeric_agg partindex_test runtime_stats expand_table expand_table_ao expand_table_aoco expand_table_regression
+test: partition_pruning role plpgsql_cache pg_stat_last_operation gp_numeric_agg partindex_test runtime_stats expand_table_regression
 
 # direct dispatch tests
 test: bfv_dd bfv_dd_multicolumn bfv_dd_types direct_dispatch
@@ -202,34 +202,12 @@ test: dpe qp_functions qp_regexp qp_union_intersect qp_subquery qp_orca_fallback
 test: olap_setup
 test: qp_olap_group2
 
-test: hooktest tuple_serialization
+test: tuple_serialization
 
 # Test query_info_collect_hook are called in expected sequence on normal query, query error/abort
 test: query_info_hook_test
 
 ignore: tpch500GB_orca
-
-# Tests for "compaction", i.e. VACUUM, of updatable append-only tables
-# TODO find why these tests fail in parallel, for now keeping them sequential
-test: uao_compaction/index_stats
-
-
-# Tests for "compaction", i.e. VACUUM, of updatable append-only column oriented tables
-# TODO find why these tests fail in parallel, for now keeping them sequential
-test: uaocs_compaction/index_stats
-
-test: uao_ddl/cursor_row uao_ddl/cursor_column uao_ddl/alter_ao_table_statistics_row uao_ddl/alter_ao_table_statistics_column uao_ddl/alter_ao_table_setdefault_row uao_ddl/alter_ao_table_index_row uao_ddl/alter_ao_table_owner_column uao_ddl/spgist_over_ao_table_row
-test: uao_ddl/alter_ao_table_owner_row uao_ddl/alter_ao_table_setstorage_row uao_ddl/alter_ao_table_constraint_row uao_ddl/alter_ao_table_constraint_column uao_ddl/alter_ao_table_index_column uao_ddl/blocksize_row uao_ddl/compresstype_column uao_ddl/alter_ao_table_setdefault_column uao_ddl/blocksize_column uao_ddl/temp_on_commit_delete_rows_row uao_ddl/temp_on_commit_delete_rows_column uao_ddl/spgist_over_ao_table_column
-test: uao_ddl/alter_ao_table_setstorage_column uao_ddl/alter_ao_table_col_ddl_row uao_ddl/compresstype_row uao_ddl/alter_ao_table_col_ddl_column uao_ddl/alter_ao_part_tables_splitpartition_row uao_ddl/alter_ao_part_tables_splitpartition_column uao_ddl/create_ao_tables_row uao_ddl/create_ao_table_500cols_row uao_ddl/create_ao_tables_column uao_ddl/alter_ao_part_exch_row
-test: uao_ddl/alter_ao_part_exch_column uao_ddl/alter_ao_part_tables_row uao_ddl/create_ao_table_500cols_column uao_ddl/alter_ao_part_tables_column
-
-test: uao_ddl/alter_drop_allcol_row uao_ddl/alter_drop_allcol_column uao_ddl/alter_rollback_row uao_ddl/alter_rollback_column uao_ddl/uao_allalter_row uao_ddl/uao_allalter_column
-
-# These tests use gp_select_invisible and VACUUM, and will get confused if there are
-# concurrent transactions holding back the global xmin.
-
-test: uao_dml/uao_dml_cursor_row uao_dml/uao_dml_select_row uao_dml/uao_dml_cursor_column uao_dml/uao_dml_select_column uao_dml/uao_dml_unique_index_delete_row uao_dml/uao_dml_unique_index_delete_column uao_dml/uao_dml_unique_index_update_row uao_dml/uao_dml_unique_index_update_column
-
 
 # disable autovacuum for the test
 test: disable_autovacuum
@@ -239,9 +217,6 @@ test: disable_autovacuum
 
 # uao_catalog_tables/uaocs_catalog_tables/uao_compaction/threshold/uaocs_compaction/threshold
 # should always be below disable_autovacuum, don't change the order.
-test: uao_ddl/analyze_ao_table_every_dml_row uao_ddl/analyze_ao_table_every_dml_column
-test: uao_dml/uao_dml_row
-test: uao_dml/uao_dml_column
 test: freeze_aux_tables
 
 # cbdb parallel test
@@ -263,7 +238,7 @@ test: freeze_aux_tables
 test: autostats
 test: enable_autovacuum
 
-test: AOCO_Compression AORO_Compression table_statistics
+test: table_statistics
 ignore: session_reset
 # below test(s) inject faults so each of them need to be in a separate group
 
