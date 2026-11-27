@@ -1030,20 +1030,25 @@ PLyObject_AsString(PyObject *plrv)
 
 	if (PyUnicode_Check(plrv))
 		plrv_bo = PLyUnicode_Bytes(plrv);
-	else if (PyFloat_Check(plrv))
-	{
-		/* use repr() for floats, str() is lossy */
-		PyObject   *s = PyObject_Repr(plrv);
-
-		plrv_bo = PLyUnicode_Bytes(s);
-		Py_XDECREF(s);
-	}
 	else
 	{
-		PyObject   *s = PyObject_Str(plrv);
+		PyObject   *s;
 
+		/* use repr() for floats, str() is lossy */
+		if (PyFloat_Check(plrv))
+			s = PyObject_Repr(plrv);
+		else
+			s = PyObject_Str(plrv);
+
+		/*
+		 * Cloudberry: repr() and str() return NULL when __repr__ or
+		 * __str__ raises or returns a non-string; do not pass NULL to
+		 * PLyUnicode_Bytes().
+		 */
+		if (s == NULL)
+			PLy_elog(ERROR, "could not create string representation of Python object");
 		plrv_bo = PLyUnicode_Bytes(s);
-		Py_XDECREF(s);
+		Py_DECREF(s);
 	}
 	if (!plrv_bo)
 		PLy_elog(ERROR, "could not create string representation of Python object");

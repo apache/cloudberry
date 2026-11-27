@@ -80,13 +80,6 @@ SHLIB_LINK = $(python_libspec) $(python_additional_libs) $(filter -lintl,$(LIBS)
 
 REGRESS_OPTS = --dbname=$(PL_TESTDB) --init-file=$(srcdir)/init_file
 
-# FIXME: enable plpython_returns test. exec() functionality changed
-# between Python2 and Python3. plpython_returns test uses it
-# extensively, hence it must be modified to handle exec()
-# correctly. Attempted to use namespace for variable assignment for
-# exec() and then return the same via namespace['y]. But test crashes
-# for some of text return type functions, hence adding this as fixme
-# for later.
 REGRESS = \
 	plpython_schema \
 	plpython_populate \
@@ -110,6 +103,7 @@ REGRESS = \
 	plpython_composite \
 	plpython_subtransaction \
 	plpython_transaction \
+	plpython_returns \
 	plpython_gpdb \
 	plpython_drop
 
