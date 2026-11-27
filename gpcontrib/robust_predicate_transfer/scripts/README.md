@@ -106,6 +106,36 @@ Use `client.log` to find the last step reached or first error,
 `decisions.json` for the captured decisions, and `workload.sql` for the
 exact SQL. A timeout also produces activity and cancellation snapshots.
 
+## Install and prepare TPC-DS
+
+Build [cbdb_tpcds](https://github.com/leborchuk/cbdb_tpcds) on the
+coordinator with GCC, Make, and the target Cloudberry installation's
+`pg_config` on `PATH`. The install target also builds and installs the
+TPC-DS data and query generators.
+
+```sh
+git clone https://github.com/leborchuk/cbdb_tpcds.git
+cd cbdb_tpcds
+make install
+```
+
+In an empty benchmark database, create the extension and prepare the
+data and query text. This example uses scale factor 1 and AOCO storage.
+
+```sql
+CREATE EXTENSION tpcds;
+SELECT tpcds.gen_schema('aocs');
+SELECT tpcds.gen_data(1, 2);
+SELECT tpcds.load_data(2);
+SELECT tpcds.gen_query();
+```
+
+Connect as a benchmark administrator with `psql -X -d rpt_tpcds` (or
+substitute your database). To use PAX, install the PAX table access
+method first and pass `'pax'` to `tpcds.gen_schema()`. For a multi-host
+cluster, see the extension's setup instructions for segment-side data
+generation and `gpfdist`.
+
 ## Survey benchmark plans
 
 ```sh
