@@ -821,6 +821,8 @@ GCOV
 enable_debug
 enable_orafce
 enable_faultinjector
+disable_plperlu_extension
+disable_plpythonu_extension
 enable_debug_extensions
 enable_pxf
 enable_gpfdist
@@ -894,6 +896,8 @@ enable_strong_random
 enable_gpfdist
 enable_pxf
 enable_debug_extensions
+enable_plpythonu_extension
+enable_plperlu_extension
 enable_faultinjector
 enable_orafce
 enable_debug
@@ -1621,6 +1625,10 @@ Optional Features:
   --disable-pxf           do not build pxf
   --disable-debug-extensions
                           exclude debug extensions in gpcontrib
+  --disable-plpythonu-extension
+                          do not install untrusted PL/Python extensions
+  --disable-plperlu-extension
+                          do not install the untrusted plperlu extension
   --disable-faultinjector disable fault injector
   --enable-orafce         build with Oracle compatibility functions
   --enable-debug          build with debugging symbols (-g)
@@ -3624,6 +3632,34 @@ else
 
 fi
 
+
+
+
+# Allow selected builds to omit untrusted language extensions.
+# Check whether --enable-plpythonu-extension was given.
+if test "${enable_plpythonu_extension+set}" = set; then :
+  enableval=$enable_plpythonu_extension; case $enableval in #(
+  no) :
+    disable_plpythonu_extension=yes ;; #(
+  *) :
+    as_fn_error $? "use --disable-plpythonu-extension to omit PL/Python extensions" "$LINENO" 5 ;;
+esac
+else
+  disable_plpythonu_extension=no
+fi
+
+
+# Check whether --enable-plperlu-extension was given.
+if test "${enable_plperlu_extension+set}" = set; then :
+  enableval=$enable_plperlu_extension; case $enableval in #(
+  no) :
+    disable_plperlu_extension=yes ;; #(
+  *) :
+    as_fn_error $? "use --disable-plperlu-extension to omit PL/Perl extensions" "$LINENO" 5 ;;
+esac
+else
+  disable_plperlu_extension=no
+fi
 
 
 
