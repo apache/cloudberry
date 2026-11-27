@@ -752,6 +752,8 @@ SET optimizer TO off;
 -- Probe both wider and narrower PAX columns with the same negative keys.
 -- Use the legacy planner for direct cross-type equality clauses. A small
 -- nonreplicated build requires Motion, so the hash builds before PAX opens.
+-- Use a range predicate with column statistics: a modulo equality has no
+-- expression statistics and can make redistributing both inputs look cheaper.
 SET optimizer TO off;
 SET enable_nestloop TO off;
 SET enable_mergejoin TO off;
@@ -775,10 +777,10 @@ DECLARE
 BEGIN
     SELECT array_agg(jsonb_build_object('v', i) ORDER BY jsonb_build_object('v', i))
       INTO expected FROM generate_series(1, 40000) i
-     WHERE i % 10 = 0 AND i % 3 = 1;
+     WHERE i % 10 = 0 AND i > 1000;
     FOREACH col IN ARRAY ARRAY['wide', 'narrow'] LOOP
         q := format('SELECT p.v FROM rf_width_probe p JOIN rf_width_build b
-                      ON p.%I = b.k WHERE p.v %% 3 = 1', col);
+                      ON p.%I = b.k WHERE p.v > 1000', col);
         IF rf_query_rows(q, false) IS DISTINCT FROM expected OR
            rf_query_rows(q, true) IS DISTINCT FROM expected THEN
             RAISE EXCEPTION 'PAX mixed-width Bloom mismatch for %', col;

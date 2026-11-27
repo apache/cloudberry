@@ -358,10 +358,31 @@ BEGIN
     END IF;
 END $$;
 DROP TABLE anser_ip_parts;
--- Change either the build predicate or only the probe predicate on each
--- lateral iteration. The former must refuse Anser. The latter can reuse a
--- filter built from stable keys while the probe is rescanned. The outer
--- predicate on the lateral result keeps a Subquery Scan above the hash join.
+-- A Subquery Scan above an eligible segment-local join must not hide it
+-- from either the plan walker or the executor walker.
+DO $$
+DECLARE
+    q constant text := 'SELECT * FROM (SELECT f.k, f.v FROM anser_ip_fact f
+        JOIN anser_ip_dim d ON f.k = d.k WHERE d.grp = 7 OFFSET 0) s WHERE s.v > 0';
+    line text;
+    subquery_found boolean := false;
+    hits bigint;
+BEGIN
+    FOR line IN EXECUTE 'EXPLAIN (COSTS OFF) ' || q LOOP
+        subquery_found := subquery_found OR line LIKE '%Subquery Scan%';
+    END LOOP;
+    EXECUTE 'SELECT count(*) FROM (' || q || ') r' INTO hits;
+    IF NOT subquery_found OR hits <> 1000 OR
+       anser_ip_mode(q) <> 'in-place' OR anser_ip_pruned(q) = 0 OR
+       NOT anser_ip_same(q) THEN
+        RAISE EXCEPTION 'expected correct in-place filtering below Subquery Scan';
+    END IF;
+END $$;
+-- These parameterized lateral aggregates run their hash joins on the
+-- coordinator, with Motions between the joins and the scans. Both changing
+-- build keys and changing probe predicates must therefore run without Anser.
+-- In-place callback reuse across rescans is checked by anserinplace_test.
+-- The outer predicate retains a Subquery Scan above each hash join.
 CREATE TABLE anser_ip_outer (g int) DISTRIBUTED REPLICATED;
 INSERT INTO anser_ip_outer VALUES (7), (8);
 CREATE TABLE anser_ip_rescan_dim (k int, grp int) DISTRIBUTED REPLICATED;
@@ -384,6 +405,7 @@ DECLARE
     expected bigint[];
     hits bigint[];
     rescanned_hash boolean;
+    coordinator_loop boolean;
     exchange_nodes boolean;
     build_mode text;
     probe_mode text;
@@ -391,12 +413,14 @@ DECLARE
 BEGIN
     FOREACH q IN ARRAY ARRAY[build_param, probe_param] LOOP
         rescanned_hash := false;
+        coordinator_loop := false;
         exchange_nodes := false;
         FOR line IN EXECUTE 'EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF) ' || q LOOP
             rescanned_hash := rescanned_hash OR line ~ 'Hash Join.*loops=[2-9]';
+            coordinator_loop := coordinator_loop OR line ~ '^Nested Loop ';
             exchange_nodes := exchange_nodes OR line LIKE '%Anser Bloom%';
         END LOOP;
-        IF NOT rescanned_hash OR exchange_nodes OR NOT anser_ip_same(q) THEN
+        IF NOT coordinator_loop OR NOT rescanned_hash OR exchange_nodes OR NOT anser_ip_same(q) THEN
             RAISE EXCEPTION 'unexpected Anser rescan plan for %', q;
         END IF;
         expected := CASE WHEN q = build_param THEN ARRAY[1000, 1000]::bigint[]
@@ -410,8 +434,8 @@ BEGIN
     build_mode := anser_ip_mode(build_param);
     probe_mode := anser_ip_mode(probe_param);
     probe_pruned := anser_ip_pruned(probe_param);
-    IF build_mode <> 'none' OR probe_mode <> 'in-place' OR probe_pruned = 0 THEN
-        RAISE EXCEPTION 'expected Anser refusal and reuse (changing build %, stable build %, pruned %)',
+    IF build_mode <> 'none' OR probe_mode <> 'none' OR probe_pruned <> 0 THEN
+        RAISE EXCEPTION 'expected Anser refusal across coordinator Motions (changing build %, stable build %, pruned %)',
             build_mode, probe_mode, probe_pruned;
     END IF;
 END $$;
