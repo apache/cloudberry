@@ -679,30 +679,30 @@ explain select * from (select t1.a t1a, t1.b t1b, t2.a t2a, t2.b t2b from t1 lef
   join t3 on tt.t1b = t3.b 
   join (select t1.a t1a, t1.b t1b, t2.a t2a, t2.b t2b from t1 left join t2 on t1.a = t2.a) tt1 on tt1.t1b = t3.b 
   join t3 t3_1 on tt1.t1b = t3_1.b and (tt1.t2a is NULL OR tt1.t1b = t3.b);
-                                             QUERY PLAN                                              
------------------------------------------------------------------------------------------------------
- Hash Right Join  (cost=47.33..63.11 rows=3 width=56)
-   Hash Cond: (t2_1.a = t1_1.a)
-   Filter: ((t2_1.a IS NULL) OR (t1_1.b = t3.b))
-   ->  Seq Scan on t2 t2_1  (cost=0.00..11.99 rows=999 width=8)
-   ->  Hash  (cost=47.29..47.29 rows=3 width=48)
-         ->  Hash Right Join  (cost=31.52..47.29 rows=3 width=48)
-               Hash Cond: (t2.a = t1.a)
-               ->  Seq Scan on t2  (cost=0.00..11.99 rows=999 width=8)
-               ->  Hash  (cost=31.48..31.48 rows=3 width=40)
-                     ->  Hash Join  (cost=16.82..31.48 rows=3 width=40)
-                           Hash Cond: (t1.b = t3.b)
-                           ->  Hash Join  (cost=1.04..15.65 rows=10 width=20)
-                                 Hash Cond: (t1.b = t3_1.b)
-                                 ->  Seq Scan on t1  (cost=0.00..12.00 rows=1000 width=8)
-                                 ->  Hash  (cost=1.02..1.02 rows=2 width=12)
-                                       ->  Seq Scan on t3 t3_1  (cost=0.00..1.02 rows=2 width=12)
-                           ->  Hash  (cost=15.65..15.65 rows=10 width=20)
-                                 ->  Hash Join  (cost=1.04..15.65 rows=10 width=20)
-                                       Hash Cond: (t1_1.b = t3.b)
-                                       ->  Seq Scan on t1 t1_1  (cost=0.00..12.00 rows=1000 width=8)
-                                       ->  Hash  (cost=1.02..1.02 rows=2 width=12)
-                                             ->  Seq Scan on t3  (cost=0.00..1.02 rows=2 width=12)
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Hash Join  (cost=47.50..63.58 rows=20 width=56)
+   Hash Cond: (t1.b = t1_1.b)
+   Join Filter: ((t2_1.a IS NULL) OR (t1_1.b = t3.b))
+   ->  Hash Right Join  (cost=15.77..31.61 rows=10 width=28)
+         Hash Cond: (t2.a = t1.a)
+         ->  Seq Scan on t2  (cost=0.00..11.99 rows=999 width=8)
+         ->  Hash  (cost=15.65..15.65 rows=10 width=20)
+               ->  Hash Join  (cost=1.04..15.65 rows=10 width=20)
+                     Hash Cond: (t1.b = t3.b)
+                     ->  Seq Scan on t1  (cost=0.00..12.00 rows=1000 width=8)
+                     ->  Hash  (cost=1.02..1.02 rows=2 width=12)
+                           ->  Seq Scan on t3  (cost=0.00..1.02 rows=2 width=12)
+   ->  Hash  (cost=31.61..31.61 rows=10 width=28)
+         ->  Hash Right Join  (cost=15.77..31.61 rows=10 width=28)
+               Hash Cond: (t2_1.a = t1_1.a)
+               ->  Seq Scan on t2 t2_1  (cost=0.00..11.99 rows=999 width=8)
+               ->  Hash  (cost=15.65..15.65 rows=10 width=20)
+                     ->  Hash Join  (cost=1.04..15.65 rows=10 width=20)
+                           Hash Cond: (t1_1.b = t3_1.b)
+                           ->  Seq Scan on t1 t1_1  (cost=0.00..12.00 rows=1000 width=8)
+                           ->  Hash  (cost=1.02..1.02 rows=2 width=12)
+                                 ->  Seq Scan on t3 t3_1  (cost=0.00..1.02 rows=2 width=12)
  Optimizer: Postgres query optimizer
 (23 rows)
 
@@ -1097,9 +1097,9 @@ explain select * from t1_lateral_limit as t1 cross join lateral
 (select ((c).x+t2.b) as n  from t2_lateral_limit as t2 order by n limit 1)s;
                                            QUERY PLAN                                           
 ------------------------------------------------------------------------------------------------
- Nested Loop  (cost=10000000169.08..10000813417.08 rows=4810 width=44)
+ Nested Loop  (cost=10000000169.08..10000813368.98 rows=4810 width=44)
    ->  Seq Scan on t1_lateral_limit t1  (cost=0.00..58.10 rows=4810 width=40)
-   ->  Materialize  (cost=169.08..169.09 rows=1 width=4)
+   ->  Materialize  (cost=169.08..169.08 rows=1 width=4)
          ->  Limit  (cost=169.08..169.08 rows=1 width=4)
                ->  Sort  (cost=169.08..191.80 rows=9090 width=4)
                      Sort Key: (((t1.c).x + t2.b))
@@ -1154,9 +1154,9 @@ explain select * from t1_lateral_limit t1 cross join lateral
 (select (c).x+t2.a, sum(t2.a+t2.b) from t2_lateral_limit t2 group by (c).x+t2.a)x;
                                         QUERY PLAN                                         
 -------------------------------------------------------------------------------------------
- Nested Loop  (cost=10000000191.80..10001078941.10 rows=4810000 width=52)
+ Nested Loop  (cost=10000000191.80..10001030841.10 rows=4810000 width=52)
    ->  Seq Scan on t1_lateral_limit t1  (cost=0.00..58.10 rows=4810 width=40)
-   ->  Materialize  (cost=191.80..219.30 rows=1000 width=12)
+   ->  Materialize  (cost=191.80..209.30 rows=1000 width=12)
          ->  HashAggregate  (cost=191.80..204.30 rows=1000 width=12)
                Group Key: ((t1.c).x + t2.a)
                ->  Seq Scan on t2_lateral_limit t2  (cost=0.00..123.62 rows=9090 width=12)

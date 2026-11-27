@@ -2796,33 +2796,36 @@ SELECT t1.a, t1.c, t2.b, t2.c FROM prt1_n t1 LEFT JOIN prt2_n t2 ON (t1.c = t2.c
 -- partition lists
 EXPLAIN (COSTS OFF)
 SELECT t1.a, t1.c, t2.b, t2.c FROM prt1_n t1 JOIN prt2_n t2 ON (t1.c = t2.c) JOIN plt1 t3 ON (t1.c = t3.c);
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Join
-         Hash Cond: ((t1.c)::text = t2.c)
-         ->  Hash Join
-               Hash Cond: (t3.c = (t1.c)::text)
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+   ->  Merge Join
+         Merge Cond: ((t1.c)::text = t3.c)
+         ->  Sort
+               Sort Key: t1.c
+               ->  Hash Join
+                     Hash Cond: (t2.c = (t1.c)::text)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: t2.c
+                           ->  Append
+                                 ->  Seq Scan on prt2_n_p1 t2_1
+                                 ->  Seq Scan on prt2_n_p2 t2_2
+                     ->  Hash
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Hash Key: t1.c
+                                 ->  Append
+                                       ->  Seq Scan on prt1_n_p1 t1_1
+                                       ->  Seq Scan on prt1_n_p2 t1_2
+         ->  Sort
+               Sort Key: t3.c
+               ->  Redistribute Motion 3:3  (slice4; segments: 3)
                      Hash Key: t3.c
                      ->  Append
                            ->  Seq Scan on plt1_p1 t3_1
                            ->  Seq Scan on plt1_p2 t3_2
                            ->  Seq Scan on plt1_p3 t3_3
-               ->  Hash
-                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                           Hash Key: t1.c
-                           ->  Append
-                                 ->  Seq Scan on prt1_n_p1 t1_1
-                                 ->  Seq Scan on prt1_n_p2 t1_2
-         ->  Hash
-               ->  Redistribute Motion 3:3  (slice4; segments: 3)
-                     Hash Key: t2.c
-                     ->  Append
-                           ->  Seq Scan on prt2_n_p1 t2_1
-                           ->  Seq Scan on prt2_n_p2 t2_2
  Optimizer: Postgres query optimizer
-(24 rows)
+(27 rows)
 
 -- partitionwise join can not be applied for a join between key column and
 -- non-key column

@@ -3050,6 +3050,8 @@ create index on tbl_ra (b);
 analyze tbl_ra;
 set enable_hashjoin to off;
 set enable_nestloop to off;
+-- GPDB: merge joins are disabled by default
+set enable_mergejoin to on;
 -- ensure we get a merge right anti join
 explain (costs off)
 select * from tbl_ra t1
@@ -3099,6 +3101,7 @@ where not exists (select 1 from tbl_ra t2 where t2.b = t1.a) and t1.b < 2;
 
 reset enable_hashjoin;
 reset enable_nestloop;
+reset enable_mergejoin;
 --
 -- regression test for bug #13908 (hash join with skew tuples & nbatch increase)
 --
@@ -8701,8 +8704,8 @@ from onek t1, tenk1 t2
 where exists (select 1 from tenk1 t3
               where t3.thousand = t1.unique1 and t3.tenthous = t2.hundred)
       and t1.unique1 < 1;
-                                                      QUERY PLAN                                                      
-----------------------------------------------------------------------------------------------------------------------
+                                                                        QUERY PLAN                                                                        
+----------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: t1.unique1, t2.hundred
    ->  Nested Loop
@@ -8711,14 +8714,9 @@ where exists (select 1 from tenk1 t3
                Output: t1.unique1, t3.tenthous
                ->  Nested Loop
                      Output: t1.unique1, t3.tenthous
-                     Join Filter: (t1.unique1 = t3.thousand)
-                     ->  Broadcast Motion 3:3  (slice3; segments: 3)
-                           Output: t1.unique1
-                           ->  Index Only Scan using onek_unique1 on public.onek t1
-                                 Output: t1.unique1
-                                 Index Cond: (t1.unique1 < 1)
-                     ->  Materialize
+                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
                            Output: t3.thousand, t3.tenthous
+                           Hash Key: t3.thousand
                            ->  HashAggregate
                                  Output: t3.thousand, t3.tenthous
                                  Group Key: t3.thousand, t3.tenthous
@@ -8728,12 +8726,19 @@ where exists (select 1 from tenk1 t3
                                        ->  Index Only Scan using tenk1_thous_tenthous on public.tenk1 t3
                                              Output: t3.thousand, t3.tenthous
                                              Index Cond: (t3.thousand < 1)
+                     ->  Memoize
+                           Output: t1.unique1
+                           Cache Key: t3.thousand
+                           Cache Mode: logical
+                           ->  Index Only Scan using onek_unique1 on public.onek t1
+                                 Output: t1.unique1
+                                 Index Cond: ((t1.unique1 = t3.thousand) AND (t1.unique1 < 1))
          ->  Index Only Scan using tenk1_hundred on public.tenk1 t2
                Output: t2.hundred
                Index Cond: (t2.hundred = t3.tenthous)
+ Settings: optimizer = 'off', enable_mergejoin = 'on', enable_hashjoin = 'off', enable_nestloop = 'on', enable_seqscan = 'off', enable_bitmapscan = 'off'
  Optimizer: Postgres query optimizer
- Settings: enable_bitmapscan=off, enable_mergejoin=on, enable_nestloop=on, enable_seqscan=off, jit=off, optimizer=off
-(30 rows)
+(32 rows)
 
 -- ... unless it actually is unique
 create table j3 as select unique1, tenthous from onek;

@@ -5544,6 +5544,9 @@ get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel,
 	return nrows;
 }
 
+/* GPDB: true while set_joinrel_size_estimates() is running */
+bool		gp_in_joinrel_size_estimate = false;
+
 /*
  * set_joinrel_size_estimates
  *		Set the size estimates for the given join relation.
@@ -5573,14 +5576,30 @@ set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel,
 						   SpecialJoinInfo *sjinfo,
 						   List *restrictlist)
 {
-	rel->rows = calc_joinrel_size_estimate(root,
-										   rel,
-										   outer_rel,
-										   inner_rel,
-										   outer_rel->rows,
-										   inner_rel->rows,
-										   sjinfo,
-										   restrictlist);
+	bool		save = gp_in_joinrel_size_estimate;
+
+	/*
+	 * GPDB: let eqjoinsel() take the join inputs into account (see
+	 * clamp_ndistinct_to_join_input()), only while estimating the size of a
+	 * join relation; selectivities used for costing paths stay cached.
+	 */
+	gp_in_joinrel_size_estimate = true;
+	PG_TRY();
+	{
+		rel->rows = calc_joinrel_size_estimate(root,
+											   rel,
+											   outer_rel,
+											   inner_rel,
+											   outer_rel->rows,
+											   inner_rel->rows,
+											   sjinfo,
+											   restrictlist);
+	}
+	PG_FINALLY();
+	{
+		gp_in_joinrel_size_estimate = save;
+	}
+	PG_END_TRY();
 }
 
 static double

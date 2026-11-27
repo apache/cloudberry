@@ -6774,22 +6774,22 @@ where exists (select 1 from j3
 ------------------------------------------------------------------------------
  Hash Join
    Output: t1.unique1, t2.hundred
-   Hash Cond: (j3.unique1 = t1.unique1)
-   ->  Hash Join
-         Output: t2.hundred, j3.unique1
-         Hash Cond: (t2.hundred = j3.tenthous)
-         ->  Index Only Scan using tenk1_hundred on public.tenk1 t2
-               Output: t2.hundred
-         ->  Hash
-               Output: j3.unique1, j3.tenthous
+   Hash Cond: (t2.hundred = j3.tenthous)
+   ->  Index Only Scan using tenk1_hundred on public.tenk1 t2
+         Output: t2.hundred
+   ->  Hash
+         Output: t1.unique1, j3.tenthous
+         ->  Hash Join
+               Output: t1.unique1, j3.tenthous
+               Hash Cond: (j3.unique1 = t1.unique1)
                ->  Index Only Scan using j3_unique1_tenthous_idx on public.j3
                      Output: j3.unique1, j3.tenthous
                      Index Cond: (j3.unique1 < 1)
-   ->  Hash
-         Output: t1.unique1
-         ->  Index Only Scan using onek_unique1 on public.onek t1
-               Output: t1.unique1
-               Index Cond: (t1.unique1 < 1)
+               ->  Hash
+                     Output: t1.unique1
+                     ->  Index Only Scan using onek_unique1 on public.onek t1
+                           Output: t1.unique1
+                           Index Cond: (t1.unique1 < 1)
  Optimizer: Postgres query optimizer
 (19 rows)
 

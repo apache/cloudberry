@@ -941,19 +941,17 @@ SELECT t1.* FROM prt1 t1 WHERE t1.a IN (SELECT t1.b FROM prt2 t1, prt1_e t2 WHER
                            ->  Hash
                                  ->  Seq Scan on prt2_p1 t1_5
                                        Filter: (a = 0)
-         ->  Hash Join
+         ->  Hash Semi Join
                Hash Cond: (t1_3.a = t1_6.b)
                ->  Seq Scan on prt1_p2 t1_3
                      Filter: (b = 0)
                ->  Hash
-                     ->  HashAggregate
-                           Group Key: t1_6.b
-                           ->  Hash Join
-                                 Hash Cond: (((t2_2.a + t2_2.b) / 2) = t1_6.b)
-                                 ->  Seq Scan on prt1_e_p2 t2_2
-                                 ->  Hash
-                                       ->  Seq Scan on prt2_p2 t1_6
-                                             Filter: (a = 0)
+                     ->  Hash Join
+                           Hash Cond: (((t2_2.a + t2_2.b) / 2) = t1_6.b)
+                           ->  Seq Scan on prt1_e_p2 t2_2
+                           ->  Hash
+                                 ->  Seq Scan on prt2_p2 t1_6
+                                       Filter: (a = 0)
          ->  Hash Join
                Hash Cond: (t1_4.a = t1_7.b)
                ->  Seq Scan on prt1_p3 t1_4
@@ -968,7 +966,7 @@ SELECT t1.* FROM prt1 t1 WHERE t1.a IN (SELECT t1.b FROM prt2 t1, prt1_e t2 WHER
                                        ->  Seq Scan on prt2_p3 t1_7
                                              Filter: (a = 0)
  Optimizer: Postgres query optimizer
-(41 rows)
+(39 rows)
 
 SELECT t1.* FROM prt1 t1 WHERE t1.a IN (SELECT t1.b FROM prt2 t1, prt1_e t2 WHERE t1.a = 0 AND t1.b = (t2.a + t2.b)/2) AND t1.b = 0 ORDER BY t1.a;
   a  | b |  c   

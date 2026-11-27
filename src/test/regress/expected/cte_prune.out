@@ -909,97 +909,107 @@ explain verbose with frequent_ss_items as
   having count(*) >4)
 select t1.v1 from t1 where t1.v1 in (select item_sk from frequent_ss_items where true)
     and t1.v1 in (select item_sk from frequent_ss_items where item_sk > 0);
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                    QUERY PLAN                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=452.31..452.37 rows=3 width=4)
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                          QUERY PLAN                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=474.88..475.05 rows=10 width=4)
    Output: t1.v1
-   ->  HashAggregate  (cost=452.31..452.32 rows=1 width=4)
+   ->  HashAggregate  (cost=474.88..474.91 rows=3 width=4)
          Output: t1.v1
          Group Key: (RowIdExpr)
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=451.79..452.31 rows=1 width=4)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=473.02..474.87 rows=3 width=4)
                Output: t1.v1, (RowIdExpr)
                Hash Key: (RowIdExpr)
-               ->  Hash Join  (cost=451.79..452.29 rows=1 width=4)
+               ->  Hash Join  (cost=473.02..474.80 rows=3 width=4)
                      Output: t1.v1, (RowIdExpr)
                      Hash Cond: (frequent_ss_items.item_sk = t1.v1)
-                     ->  Subquery Scan on frequent_ss_items  (cost=223.67..224.14 rows=6 width=4)
+                     ->  Subquery Scan on frequent_ss_items  (cost=231.63..233.32 rows=22 width=4)
                            Output: frequent_ss_items.item_sk
-                           ->  GroupAggregate  (cost=223.67..224.14 rows=6 width=48)
+                           ->  GroupAggregate  (cost=231.63..233.32 rows=22 width=48)
                                  Output: (substr((tpcds_item.i_item_desc)::text, 1, 30)), tpcds_item.i_item_sk, tpcds_date_dim.d_date, count(*)
                                  Group Key: (substr((tpcds_item.i_item_desc)::text, 1, 30)), tpcds_item.i_item_sk, tpcds_date_dim.d_date
                                  Filter: (count(*) > 4)
-                                 ->  Sort  (cost=223.67..223.72 rows=18 width=40)
+                                 ->  Sort  (cost=231.63..231.79 rows=65 width=40)
                                        Output: (substr((tpcds_item.i_item_desc)::text, 1, 30)), tpcds_item.i_item_sk, tpcds_date_dim.d_date
                                        Sort Key: (substr((tpcds_item.i_item_desc)::text, 1, 30)), tpcds_item.i_item_sk, tpcds_date_dim.d_date
-                                       ->  Hash Join  (cost=181.20..223.30 rows=18 width=40)
+                                       ->  Hash Join  (cost=132.52..229.65 rows=65 width=40)
                                              Output: substr((tpcds_item.i_item_desc)::text, 1, 30), tpcds_item.i_item_sk, tpcds_date_dim.d_date
-                                             Hash Cond: (tpcds_item.i_item_sk = tpcds_store_sales.ss_item_sk)
-                                             ->  Seq Scan on cte_prune.tpcds_item  (cost=0.00..39.33 rows=533 width=422)
-                                                   Output: tpcds_item.i_item_sk, tpcds_item.i_item_id, tpcds_item.i_rec_start_date, tpcds_item.i_rec_end_date, tpcds_item.i_item_desc, tpcds_item.i_current_price, tpcds_item.i_wholesale_cost, tpcds_item.i_brand_id, tpcds_item.i_brand, tpcds_item.i_class_id, tpcds_item.i_class, tpcds_item.i_category_id, tpcds_item.i_category, tpcds_item.i_manufact_id, tpcds_item.i_manufact, tpcds_item.i_size, tpcds_item.i_formulation, tpcds_item.i_color, tpcds_item.i_units, tpcds_item.i_container, tpcds_item.i_manager_id, tpcds_item.i_product_name
-                                             ->  Hash  (cost=180.98..180.98 rows=18 width=8)
+                                             Inner Unique: true
+                                             Hash Cond: (tpcds_store_sales.ss_item_sk = tpcds_item.i_item_sk)
+                                             ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=89.63..185.78 rows=65 width=8)
                                                    Output: tpcds_store_sales.ss_item_sk, tpcds_date_dim.d_date
-                                                   ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=89.63..180.98 rows=18 width=8)
+                                                   Hash Key: tpcds_store_sales.ss_item_sk
+                                                   ->  Hash Join  (cost=89.63..184.47 rows=65 width=8)
                                                          Output: tpcds_store_sales.ss_item_sk, tpcds_date_dim.d_date
-                                                         Hash Key: tpcds_store_sales.ss_item_sk
-                                                         ->  Hash Join  (cost=89.63..180.62 rows=18 width=8)
-                                                               Output: tpcds_store_sales.ss_item_sk, tpcds_date_dim.d_date
-                                                               Inner Unique: true
-                                                               Hash Cond: (tpcds_store_sales.ss_sold_date_sk = tpcds_date_dim.d_date_sk)
-                                                               ->  Seq Scan on cte_prune.tpcds_store_sales  (cost=0.00..79.00 rows=4500 width=8)
-                                                                     Output: tpcds_store_sales.ss_sold_date_sk, tpcds_store_sales.ss_sold_time_sk, tpcds_store_sales.ss_item_sk, tpcds_store_sales.ss_customer_sk, tpcds_store_sales.ss_cdemo_sk, tpcds_store_sales.ss_hdemo_sk, tpcds_store_sales.ss_addr_sk, tpcds_store_sales.ss_store_sk, tpcds_store_sales.ss_promo_sk, tpcds_store_sales.ss_ticket_number, tpcds_store_sales.ss_quantity, tpcds_store_sales.ss_wholesale_cost, tpcds_store_sales.ss_list_price, tpcds_store_sales.ss_sales_price, tpcds_store_sales.ss_ext_discount_amt, tpcds_store_sales.ss_ext_sales_price, tpcds_store_sales.ss_ext_wholesale_cost, tpcds_store_sales.ss_ext_list_price, tpcds_store_sales.ss_ext_tax, tpcds_store_sales.ss_coupon_amt, tpcds_store_sales.ss_net_paid, tpcds_store_sales.ss_net_paid_inc_tax, tpcds_store_sales.ss_net_profit
-                                                               ->  Hash  (cost=89.08..89.08 rows=44 width=8)
+                                                         Inner Unique: true
+                                                         Hash Cond: (tpcds_store_sales.ss_sold_date_sk = tpcds_date_dim.d_date_sk)
+                                                         ->  Seq Scan on cte_prune.tpcds_store_sales  (cost=0.00..90.25 rows=1500 width=8)
+                                                               Output: tpcds_store_sales.ss_sold_date_sk, tpcds_store_sales.ss_sold_time_sk, tpcds_store_sales.ss_item_sk, tpcds_store_sales.ss_customer_sk, tpcds_store_sales.ss_cdemo_sk, tpcds_store_sales.ss_hdemo_sk, tpcds_store_sales.ss_addr_sk, tpcds_store_sales.ss_store_sk, tpcds_store_sales.ss_promo_sk, tpcds_store_sales.ss_ticket_number, tpcds_store_sales.ss_quantity, tpcds_store_sales.ss_wholesale_cost, tpcds_store_sales.ss_list_price, tpcds_store_sales.ss_sales_price, tpcds_store_sales.ss_ext_discount_amt, tpcds_store_sales.ss_ext_sales_price, tpcds_store_sales.ss_ext_wholesale_cost, tpcds_store_sales.ss_ext_list_price, tpcds_store_sales.ss_ext_tax, tpcds_store_sales.ss_coupon_amt, tpcds_store_sales.ss_net_paid, tpcds_store_sales.ss_net_paid_inc_tax, tpcds_store_sales.ss_net_profit
+                                                               Filter: (tpcds_store_sales.ss_item_sk > 0)
+                                                         ->  Hash  (cost=89.08..89.08 rows=44 width=8)
+                                                               Output: tpcds_date_dim.d_date, tpcds_date_dim.d_date_sk
+                                                               ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=0.00..89.08 rows=44 width=8)
                                                                      Output: tpcds_date_dim.d_date, tpcds_date_dim.d_date_sk
-                                                                     ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=0.00..89.08 rows=44 width=8)
+                                                                     ->  Seq Scan on cte_prune.tpcds_date_dim  (cost=0.00..88.50 rows=15 width=8)
                                                                            Output: tpcds_date_dim.d_date, tpcds_date_dim.d_date_sk
-                                                                           ->  Seq Scan on cte_prune.tpcds_date_dim  (cost=0.00..88.50 rows=15 width=8)
-                                                                                 Output: tpcds_date_dim.d_date, tpcds_date_dim.d_date_sk
-                                                                                 Filter: (tpcds_date_dim.d_year = ANY ('{1999,2000,2001,2002}'::integer[]))
-                     ->  Hash  (cost=228.10..228.10 rows=1 width=8)
+                                                                           Filter: (tpcds_date_dim.d_year = ANY ('{1999,2000,2001,2002}'::integer[]))
+                                             ->  Hash  (cost=40.67..40.67 rows=178 width=422)
+                                                   Output: tpcds_item.i_item_desc, tpcds_item.i_item_sk
+                                                   ->  Seq Scan on cte_prune.tpcds_item  (cost=0.00..40.67 rows=178 width=422)
+                                                         Output: tpcds_item.i_item_desc, tpcds_item.i_item_sk
+                                                         Filter: (tpcds_item.i_item_sk > 0)
+                     ->  Hash  (cost=241.35..241.35 rows=3 width=8)
                            Output: t1.v1, frequent_ss_items_1.item_sk, (RowIdExpr)
-                           ->  Hash Semi Join  (cost=227.05..228.10 rows=1 width=8)
-                                 Output: t1.v1, frequent_ss_items_1.item_sk, RowIdExpr
-                                 Hash Cond: (t1.v1 = frequent_ss_items_1.item_sk)
-                                 ->  Seq Scan on cte_prune.t1  (cost=0.00..1.03 rows=3 width=4)
-                                       Output: t1.v1, t1.v2, t1.v3
-                                 ->  Hash  (cost=227.04..227.04 rows=1 width=4)
-                                       Output: frequent_ss_items_1.item_sk
-                                       ->  Subquery Scan on frequent_ss_items_1  (cost=226.96..227.04 rows=1 width=4)
-                                             Output: frequent_ss_items_1.item_sk
-                                             ->  GroupAggregate  (cost=226.96..227.04 rows=1 width=48)
-                                                   Output: (substr((tpcds_item_1.i_item_desc)::text, 1, 30)), tpcds_item_1.i_item_sk, tpcds_date_dim_1.d_date, count(*)
-                                                   Group Key: (substr((tpcds_item_1.i_item_desc)::text, 1, 30)), tpcds_item_1.i_item_sk, tpcds_date_dim_1.d_date
-                                                   Filter: (count(*) > 4)
-                                                   ->  Sort  (cost=226.96..226.97 rows=3 width=40)
-                                                         Output: (substr((tpcds_item_1.i_item_desc)::text, 1, 30)), tpcds_item_1.i_item_sk, tpcds_date_dim_1.d_date
-                                                         Sort Key: (substr((tpcds_item_1.i_item_desc)::text, 1, 30)), tpcds_item_1.i_item_sk, tpcds_date_dim_1.d_date
-                                                         ->  Hash Join  (cost=132.52..226.94 rows=3 width=40)
-                                                               Output: substr((tpcds_item_1.i_item_desc)::text, 1, 30), tpcds_item_1.i_item_sk, tpcds_date_dim_1.d_date
-                                                               Inner Unique: true
-                                                               Hash Cond: (tpcds_store_sales_1.ss_item_sk = tpcds_item_1.i_item_sk)
-                                                               ->  Redistribute Motion 3:3  (slice5; segments: 3)  (cost=89.63..183.99 rows=6 width=8)
-                                                                     Output: tpcds_store_sales_1.ss_item_sk, tpcds_date_dim_1.d_date
-                                                                     Hash Key: tpcds_store_sales_1.ss_item_sk
-                                                                     ->  Hash Join  (cost=89.63..183.87 rows=6 width=8)
-                                                                           Output: tpcds_store_sales_1.ss_item_sk, tpcds_date_dim_1.d_date
+                           ->  Redistribute Motion 3:3  (slice5; segments: 3)  (cost=241.22..241.35 rows=3 width=8)
+                                 Output: t1.v1, frequent_ss_items_1.item_sk, (RowIdExpr)
+                                 Hash Key: t1.v1
+                                 ->  Result  (cost=241.22..241.29 rows=3 width=8)
+                                       Output: t1.v1, frequent_ss_items_1.item_sk, RowIdExpr
+                                       ->  HashAggregate  (cost=241.22..241.25 rows=3 width=8)
+                                             Output: t1.v1, frequent_ss_items_1.item_sk
+                                             Group Key: (RowIdExpr)
+                                             ->  Redistribute Motion 3:3  (slice6; segments: 3)  (cost=238.33..241.21 rows=3 width=8)
+                                                   Output: t1.v1, frequent_ss_items_1.item_sk, (RowIdExpr)
+                                                   Hash Key: (RowIdExpr)
+                                                   ->  Hash Join  (cost=238.33..241.15 rows=3 width=8)
+                                                         Output: t1.v1, frequent_ss_items_1.item_sk, (RowIdExpr)
+                                                         Hash Cond: (frequent_ss_items_1.item_sk = t1.v1)
+                                                         ->  Subquery Scan on frequent_ss_items_1  (cost=237.25..239.87 rows=65 width=4)
+                                                               Output: frequent_ss_items_1.item_sk
+                                                               ->  HashAggregate  (cost=237.25..239.87 rows=65 width=48)
+                                                                     Output: (substr((tpcds_item_1.i_item_desc)::text, 1, 30)), tpcds_item_1.i_item_sk, tpcds_date_dim_1.d_date, count(*)
+                                                                     Group Key: substr((tpcds_item_1.i_item_desc)::text, 1, 30), tpcds_item_1.i_item_sk, tpcds_date_dim_1.d_date
+                                                                     Filter: (count(*) > 4)
+                                                                     ->  Hash Join  (cost=135.63..235.29 rows=196 width=40)
+                                                                           Output: substr((tpcds_item_1.i_item_desc)::text, 1, 30), tpcds_item_1.i_item_sk, tpcds_date_dim_1.d_date
                                                                            Inner Unique: true
-                                                                           Hash Cond: (tpcds_store_sales_1.ss_sold_date_sk = tpcds_date_dim_1.d_date_sk)
-                                                                           ->  Seq Scan on cte_prune.tpcds_store_sales tpcds_store_sales_1  (cost=0.00..90.25 rows=1500 width=8)
-                                                                                 Output: tpcds_store_sales_1.ss_sold_date_sk, tpcds_store_sales_1.ss_sold_time_sk, tpcds_store_sales_1.ss_item_sk, tpcds_store_sales_1.ss_customer_sk, tpcds_store_sales_1.ss_cdemo_sk, tpcds_store_sales_1.ss_hdemo_sk, tpcds_store_sales_1.ss_addr_sk, tpcds_store_sales_1.ss_store_sk, tpcds_store_sales_1.ss_promo_sk, tpcds_store_sales_1.ss_ticket_number, tpcds_store_sales_1.ss_quantity, tpcds_store_sales_1.ss_wholesale_cost, tpcds_store_sales_1.ss_list_price, tpcds_store_sales_1.ss_sales_price, tpcds_store_sales_1.ss_ext_discount_amt, tpcds_store_sales_1.ss_ext_sales_price, tpcds_store_sales_1.ss_ext_wholesale_cost, tpcds_store_sales_1.ss_ext_list_price, tpcds_store_sales_1.ss_ext_tax, tpcds_store_sales_1.ss_coupon_amt, tpcds_store_sales_1.ss_net_paid, tpcds_store_sales_1.ss_net_paid_inc_tax, tpcds_store_sales_1.ss_net_profit
-                                                                                 Filter: (tpcds_store_sales_1.ss_item_sk > 0)
-                                                                           ->  Hash  (cost=89.08..89.08 rows=44 width=8)
-                                                                                 Output: tpcds_date_dim_1.d_date, tpcds_date_dim_1.d_date_sk
-                                                                                 ->  Broadcast Motion 3:3  (slice6; segments: 3)  (cost=0.00..89.08 rows=44 width=8)
-                                                                                       Output: tpcds_date_dim_1.d_date, tpcds_date_dim_1.d_date_sk
-                                                                                       ->  Seq Scan on cte_prune.tpcds_date_dim tpcds_date_dim_1  (cost=0.00..88.50 rows=15 width=8)
+                                                                           Hash Cond: (tpcds_store_sales_1.ss_item_sk = tpcds_item_1.i_item_sk)
+                                                                           ->  Redistribute Motion 3:3  (slice7; segments: 3)  (cost=89.63..186.32 rows=196 width=8)
+                                                                                 Output: tpcds_store_sales_1.ss_item_sk, tpcds_date_dim_1.d_date
+                                                                                 Hash Key: tpcds_store_sales_1.ss_item_sk
+                                                                                 ->  Hash Join  (cost=89.63..182.40 rows=196 width=8)
+                                                                                       Output: tpcds_store_sales_1.ss_item_sk, tpcds_date_dim_1.d_date
+                                                                                       Inner Unique: true
+                                                                                       Hash Cond: (tpcds_store_sales_1.ss_sold_date_sk = tpcds_date_dim_1.d_date_sk)
+                                                                                       ->  Seq Scan on cte_prune.tpcds_store_sales tpcds_store_sales_1  (cost=0.00..79.00 rows=4500 width=8)
+                                                                                             Output: tpcds_store_sales_1.ss_sold_date_sk, tpcds_store_sales_1.ss_sold_time_sk, tpcds_store_sales_1.ss_item_sk, tpcds_store_sales_1.ss_customer_sk, tpcds_store_sales_1.ss_cdemo_sk, tpcds_store_sales_1.ss_hdemo_sk, tpcds_store_sales_1.ss_addr_sk, tpcds_store_sales_1.ss_store_sk, tpcds_store_sales_1.ss_promo_sk, tpcds_store_sales_1.ss_ticket_number, tpcds_store_sales_1.ss_quantity, tpcds_store_sales_1.ss_wholesale_cost, tpcds_store_sales_1.ss_list_price, tpcds_store_sales_1.ss_sales_price, tpcds_store_sales_1.ss_ext_discount_amt, tpcds_store_sales_1.ss_ext_sales_price, tpcds_store_sales_1.ss_ext_wholesale_cost, tpcds_store_sales_1.ss_ext_list_price, tpcds_store_sales_1.ss_ext_tax, tpcds_store_sales_1.ss_coupon_amt, tpcds_store_sales_1.ss_net_paid, tpcds_store_sales_1.ss_net_paid_inc_tax, tpcds_store_sales_1.ss_net_profit
+                                                                                       ->  Hash  (cost=89.08..89.08 rows=44 width=8)
                                                                                              Output: tpcds_date_dim_1.d_date, tpcds_date_dim_1.d_date_sk
-                                                                                             Filter: (tpcds_date_dim_1.d_year = ANY ('{1999,2000,2001,2002}'::integer[]))
-                                                               ->  Hash  (cost=40.67..40.67 rows=178 width=422)
-                                                                     Output: tpcds_item_1.i_item_desc, tpcds_item_1.i_item_sk
-                                                                     ->  Seq Scan on cte_prune.tpcds_item tpcds_item_1  (cost=0.00..40.67 rows=178 width=422)
-                                                                           Output: tpcds_item_1.i_item_desc, tpcds_item_1.i_item_sk
-                                                                           Filter: (tpcds_item_1.i_item_sk > 0)
+                                                                                             ->  Broadcast Motion 3:3  (slice8; segments: 3)  (cost=0.00..89.08 rows=44 width=8)
+                                                                                                   Output: tpcds_date_dim_1.d_date, tpcds_date_dim_1.d_date_sk
+                                                                                                   ->  Seq Scan on cte_prune.tpcds_date_dim tpcds_date_dim_1  (cost=0.00..88.50 rows=15 width=8)
+                                                                                                         Output: tpcds_date_dim_1.d_date, tpcds_date_dim_1.d_date_sk
+                                                                                                         Filter: (tpcds_date_dim_1.d_year = ANY ('{1999,2000,2001,2002}'::integer[]))
+                                                                           ->  Hash  (cost=39.33..39.33 rows=533 width=422)
+                                                                                 Output: tpcds_item_1.i_item_desc, tpcds_item_1.i_item_sk
+                                                                                 ->  Seq Scan on cte_prune.tpcds_item tpcds_item_1  (cost=0.00..39.33 rows=533 width=422)
+                                                                                       Output: tpcds_item_1.i_item_desc, tpcds_item_1.i_item_sk
+                                                         ->  Hash  (cost=1.03..1.03 rows=3 width=4)
+                                                               Output: t1.v1, (RowIdExpr)
+                                                               ->  Seq Scan on cte_prune.t1  (cost=0.00..1.03 rows=3 width=4)
+                                                                     Output: t1.v1, RowIdExpr
+ Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
-(89 rows)
+(98 rows)
 
 -- sql 95
 explain verbose with ws_wh as
@@ -1427,31 +1437,31 @@ select * from
 where country.percentage = countrylanguage.percentage order by countrylanguage.COUNTRY,country.language LIMIT 40;
                                                                                                                            QUERY PLAN                                                                                                                           
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=1048.68..1049.08 rows=28 width=202)
+ Limit  (cost=1124.55..1125.12 rows=40 width=202)
    Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage, country.code, country.country, country.language, country.isofficial, country.percentage
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=1048.68..1049.08 rows=28 width=202)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=1124.55..1126.25 rows=120 width=202)
          Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage, country.code, country.country, country.language, country.isofficial, country.percentage
          Merge Key: country.country, countrylanguage_2.language
-         ->  Limit  (cost=1048.68..1048.70 rows=9 width=202)
+         ->  Limit  (cost=1124.55..1124.65 rows=40 width=202)
                Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage, country.code, country.country, country.language, country.isofficial, country.percentage
-               ->  Sort  (cost=1048.68..1048.70 rows=9 width=202)
+               ->  Sort  (cost=1124.55..1126.40 rows=740 width=202)
                      Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage, country.code, country.country, country.language, country.isofficial, country.percentage
                      Sort Key: country.country, countrylanguage_2.language
-                     ->  Hash Join  (cost=846.89..1048.53 rows=9 width=202)
+                     ->  Hash Join  (cost=859.67..1101.16 rows=740 width=202)
                            Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage, country.code, country.country, country.language, country.isofficial, country.percentage
                            Hash Cond: (country.percentage = countrylanguage_2.percentage)
-                           ->  Hash Join  (cost=436.98..637.90 rows=245 width=85)
+                           ->  Hash Join  (cost=442.08..668.89 rows=2545 width=85)
                                  Output: country.code, country.country, country.language, country.isofficial, country.percentage
                                  Hash Cond: (countrylanguage.countrycode = country.code)
                                  ->  Seq Scan on cte_prune.countrylanguage  (cost=0.00..165.33 rows=13133 width=16)
                                        Output: countrylanguage.countrycode, countrylanguage.language, countrylanguage.isofficial, countrylanguage.percentage
-                                 ->  Hash  (cost=436.74..436.74 rows=19 width=85)
+                                 ->  Hash  (cost=439.66..439.66 rows=194 width=85)
                                        Output: country.code, country.country, country.language, country.isofficial, country.percentage
-                                       ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=227.29..436.74 rows=19 width=85)
+                                       ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=227.29..439.66 rows=194 width=85)
                                              Output: country.code, country.country, country.language, country.isofficial, country.percentage
-                                             ->  Subquery Scan on country  (cost=227.29..436.49 rows=6 width=85)
+                                             ->  Subquery Scan on country  (cost=227.29..437.08 rows=65 width=85)
                                                    Output: country.code, country.country, country.language, country.isofficial, country.percentage
-                                                   ->  Hash Join  (cost=227.29..436.49 rows=6 width=117)
+                                                   ->  Hash Join  (cost=227.29..437.08 rows=65 width=117)
                                                          Output: country_1.code, country_1.name, city.name, countrylanguage_1.language, countrylanguage_1.isofficial, countrylanguage_1.percentage
                                                          Hash Cond: (countrylanguage_1.countrycode = country_1.code)
                                                          ->  Seq Scan on cte_prune.countrylanguage countrylanguage_1  (cost=0.00..198.17 rows=4378 width=53)
@@ -1474,11 +1484,11 @@ where country.percentage = countrylanguage.percentage order by countrylanguage.C
                                                                                        ->  Seq Scan on cte_prune.country country_1  (cost=0.00..77.33 rows=3 width=52)
                                                                                              Output: country_1.code, country_1.name, country_1.capital
                                                                                              Filter: (country_1.continent = 'Europe'::text)
-                           ->  Hash  (cost=409.57..409.57 rows=28 width=117)
+                           ->  Hash  (cost=413.95..413.95 rows=291 width=117)
                                  Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage
-                                 ->  Broadcast Motion 3:3  (slice5; segments: 3)  (cost=227.29..409.57 rows=28 width=117)
+                                 ->  Broadcast Motion 3:3  (slice5; segments: 3)  (cost=227.29..413.95 rows=291 width=117)
                                        Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage
-                                       ->  Hash Join  (cost=227.29..409.20 rows=9 width=117)
+                                       ->  Hash Join  (cost=227.29..410.07 rows=97 width=117)
                                              Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage
                                              Hash Cond: (countrylanguage_2.countrycode = country_2.code)
                                              ->  Seq Scan on cte_prune.countrylanguage countrylanguage_2  (cost=0.00..165.33 rows=6567 width=53)
@@ -1501,6 +1511,7 @@ where country.percentage = countrylanguage.percentage order by countrylanguage.C
                                                                            ->  Seq Scan on cte_prune.country country_2  (cost=0.00..77.33 rows=3 width=52)
                                                                                  Output: country_2.code, country_2.name, country_2.capital
                                                                                  Filter: (country_2.continent = 'Europe'::text)
+ Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
 (76 rows)
 
@@ -1524,113 +1535,112 @@ where FOO.code = bad_headofstates.code and FOO.capital = city.id) OUTER_FOO
 group by region ) OUTERMOST_FOO,bad_headofstates,country 
 where country.code = bad_headofstates.code and country.region = OUTERMOST_FOO.region
 order by OUTERMOST_FOO.region,bad_headofstates.headofstate LIMIT 40;
-                                                                                           QUERY PLAN                                                                                            
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=3470.04..3470.61 rows=40 width=96)
+                                                                                                                                                                                                          QUERY PLAN                                                                                                                                                                                                          
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=5122.70..5123.27 rows=40 width=96)
    Output: (avg(country_2.population)), country_2.region, country_1.headofstate
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=3470.04..3471.74 rows=120 width=96)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=5122.70..5124.40 rows=120 width=96)
          Output: (avg(country_2.population)), country_2.region, country_1.headofstate
          Merge Key: country_2.region, country_1.headofstate
-         ->  Limit  (cost=3470.04..3470.14 rows=40 width=96)
+         ->  Limit  (cost=5122.70..5122.80 rows=40 width=96)
                Output: (avg(country_2.population)), country_2.region, country_1.headofstate
-               ->  Sort  (cost=3470.04..3479.16 rows=3648 width=96)
+               ->  Sort  (cost=5122.70..5139.12 rows=6567 width=96)
                      Output: (avg(country_2.population)), country_2.region, country_1.headofstate
                      Sort Key: country_2.region, country_1.headofstate
-                     ->  Hash Join  (cost=2912.21..3354.72 rows=3648 width=96)
+                     ->  Hash Join  (cost=4445.27..4915.13 rows=6567 width=96)
                            Output: (avg(country_2.population)), country_2.region, country_1.headofstate
-                           Inner Unique: true
-                           Hash Cond: (country.region = country_2.region)
-                           ->  Hash Join  (cost=222.07..618.52 rows=3648 width=64)
-                                 Output: country_1.headofstate, country.region
+                           Hash Cond: (country_1.code = country.code)
+                           ->  Hash Join  (cost=110.07..489.65 rows=6567 width=112)
+                                 Output: country_1.code, country_1.name, country_1.headofstate, countrylanguage.language
                                  Inner Unique: true
-                                 Hash Cond: (country_1.code = country.code)
-                                 ->  Hash Join  (cost=110.07..460.46 rows=3648 width=112)
-                                       Output: country_1.code, country_1.name, country_1.headofstate, countrylanguage.language
-                                       Inner Unique: true
-                                       Hash Cond: (countrylanguage.countrycode = country_1.code)
-                                       ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..296.67 rows=6567 width=48)
+                                 Hash Cond: (countrylanguage.countrycode = country_1.code)
+                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..296.67 rows=6567 width=48)
+                                       Output: countrylanguage.language, countrylanguage.countrycode
+                                       Hash Key: countrylanguage.countrycode
+                                       ->  Seq Scan on cte_prune.countrylanguage  (cost=0.00..165.33 rows=6567 width=48)
                                              Output: countrylanguage.language, countrylanguage.countrycode
-                                             Hash Key: countrylanguage.countrycode
-                                             ->  Seq Scan on cte_prune.countrylanguage  (cost=0.00..165.33 rows=6567 width=48)
-                                                   Output: countrylanguage.language, countrylanguage.countrycode
-                                                   Filter: countrylanguage.isofficial
-                                       ->  Hash  (cost=86.00..86.00 rows=1926 width=80)
+                                             Filter: countrylanguage.isofficial
+                                 ->  Hash  (cost=86.00..86.00 rows=1926 width=80)
+                                       Output: country_1.code, country_1.name, country_1.headofstate
+                                       ->  Seq Scan on cte_prune.country country_1  (cost=0.00..86.00 rows=1926 width=80)
                                              Output: country_1.code, country_1.name, country_1.headofstate
-                                             ->  Seq Scan on cte_prune.country country_1  (cost=0.00..86.00 rows=1926 width=80)
-                                                   Output: country_1.code, country_1.name, country_1.headofstate
-                                                   Filter: ((country_1.gnp < country_1.gnpold) OR (country_1.gnp < '3000'::numeric))
-                                 ->  Hash  (cost=68.67..68.67 rows=3467 width=48)
-                                       Output: country.code, country.region
+                                             Filter: ((country_1.gnp < country_1.gnpold) OR (country_1.gnp < '3000'::numeric))
+                           ->  Hash  (cost=4291.86..4291.86 rows=3467 width=80)
+                                 Output: (avg(country_2.population)), country_2.region, country.code
+                                 ->  Hash Join  (cost=4179.43..4291.86 rows=3467 width=80)
+                                       Output: (avg(country_2.population)), country_2.region, country.code
+                                       Inner Unique: true
+                                       Hash Cond: (country.region = country_2.region)
                                        ->  Seq Scan on cte_prune.country  (cost=0.00..68.67 rows=3467 width=48)
-                                             Output: country.code, country.region
-                           ->  Hash  (cost=2677.64..2677.64 rows=1000 width=64)
-                                 Output: (avg(country_2.population)), country_2.region
-                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=2660.14..2677.64 rows=1000 width=64)
-                                       Output: (avg(country_2.population)), country_2.region
-                                       ->  Finalize HashAggregate  (cost=2660.14..2664.31 rows=333 width=64)
-                                             Output: avg(country_2.population), country_2.region
-                                             Group Key: country_2.region
-                                             ->  Redistribute Motion 3:3  (slice4; segments: 3)  (cost=2625.14..2655.14 rows=1000 width=64)
-                                                   Output: country_2.region, (PARTIAL avg(country_2.population))
-                                                   Hash Key: country_2.region
-                                                   ->  Streaming Partial HashAggregate  (cost=2625.14..2635.14 rows=1000 width=64)
-                                                         Output: country_2.region, PARTIAL avg(country_2.population)
+                                             Output: country.code, country.name, country.continent, country.region, country.surfacearea, country.indepyear, country.population, country.lifeexpectancy, country.gnp, country.gnpold, country.localname, country.governmentform, country.headofstate, country.capital, country.code2
+                                       ->  Hash  (cost=4166.93..4166.93 rows=1000 width=64)
+                                             Output: (avg(country_2.population)), country_2.region
+                                             ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=4149.43..4166.93 rows=1000 width=64)
+                                                   Output: (avg(country_2.population)), country_2.region
+                                                   ->  Finalize HashAggregate  (cost=4149.43..4153.59 rows=333 width=64)
+                                                         Output: avg(country_2.population), country_2.region
                                                          Group Key: country_2.region
-                                                         ->  Hash Join  (cost=1662.17..2425.51 rows=39927 width=36)
-                                                               Output: country_2.region, country_2.population
-                                                               Hash Cond: (country_3.code = country_2.code)
-                                                               ->  Hash Join  (cost=110.07..460.46 rows=3648 width=112)
-                                                                     Output: country_3.code, country_3.name, country_3.headofstate, countrylanguage_1.language
-                                                                     Inner Unique: true
-                                                                     Hash Cond: (countrylanguage_1.countrycode = country_3.code)
-                                                                     ->  Redistribute Motion 3:3  (slice5; segments: 3)  (cost=0.00..296.67 rows=6567 width=48)
-                                                                           Output: countrylanguage_1.language, countrylanguage_1.countrycode
-                                                                           Hash Key: countrylanguage_1.countrycode
-                                                                           ->  Seq Scan on cte_prune.countrylanguage countrylanguage_1  (cost=0.00..165.33 rows=6567 width=48)
-                                                                                 Output: countrylanguage_1.language, countrylanguage_1.countrycode
-                                                                                 Filter: countrylanguage_1.isofficial
-                                                                     ->  Hash  (cost=86.00..86.00 rows=1926 width=80)
-                                                                           Output: country_3.code, country_3.name, country_3.headofstate
-                                                                           ->  Seq Scan on cte_prune.country country_3  (cost=0.00..86.00 rows=1926 width=80)
-                                                                                 Output: country_3.code, country_3.name, country_3.headofstate
-                                                                                 Filter: ((country_3.gnp < country_3.gnpold) OR (country_3.gnp < '3000'::numeric))
-                                                               ->  Hash  (cost=1506.49..1506.49 rows=3648 width=68)
-                                                                     Output: country_2.population, country_2.region, country_2.code, country_4.code
-                                                                     ->  Hash Join  (cost=1063.99..1506.49 rows=3648 width=68)
-                                                                           Output: country_2.population, country_2.region, country_2.code, country_4.code
-                                                                           Inner Unique: true
-                                                                           Hash Cond: (country_2.capital = city.id)
-                                                                           ->  Hash Join  (cost=222.07..618.52 rows=3648 width=72)
-                                                                                 Output: country_2.population, country_2.region, country_2.code, country_2.capital, country_4.code
+                                                         ->  Redistribute Motion 3:3  (slice4; segments: 3)  (cost=4114.43..4144.43 rows=1000 width=64)
+                                                               Output: country_2.region, (PARTIAL avg(country_2.population))
+                                                               Hash Key: country_2.region
+                                                               ->  Streaming Partial HashAggregate  (cost=4114.43..4124.43 rows=1000 width=64)
+                                                                     Output: country_2.region, PARTIAL avg(country_2.population)
+                                                                     Group Key: country_2.region
+                                                                     ->  Hash Join  (cost=1769.78..3467.61 rows=129363 width=36)
+                                                                           Output: country_2.region, country_2.population
+                                                                           Hash Cond: (country_3.code = country_2.code)
+                                                                           ->  Hash Join  (cost=110.07..489.65 rows=6567 width=112)
+                                                                                 Output: country_3.code, country_3.name, country_3.headofstate, countrylanguage_1.language
                                                                                  Inner Unique: true
-                                                                                 Hash Cond: (country_4.code = country_2.code)
-                                                                                 ->  Hash Join  (cost=110.07..460.46 rows=3648 width=112)
-                                                                                       Output: country_4.code, country_4.name, country_4.headofstate, countrylanguage_2.language
-                                                                                       Inner Unique: true
-                                                                                       Hash Cond: (countrylanguage_2.countrycode = country_4.code)
-                                                                                       ->  Redistribute Motion 3:3  (slice6; segments: 3)  (cost=0.00..296.67 rows=6567 width=48)
-                                                                                             Output: countrylanguage_2.language, countrylanguage_2.countrycode
-                                                                                             Hash Key: countrylanguage_2.countrycode
-                                                                                             ->  Seq Scan on cte_prune.countrylanguage countrylanguage_2  (cost=0.00..165.33 rows=6567 width=48)
+                                                                                 Hash Cond: (countrylanguage_1.countrycode = country_3.code)
+                                                                                 ->  Redistribute Motion 3:3  (slice5; segments: 3)  (cost=0.00..296.67 rows=6567 width=48)
+                                                                                       Output: countrylanguage_1.language, countrylanguage_1.countrycode
+                                                                                       Hash Key: countrylanguage_1.countrycode
+                                                                                       ->  Seq Scan on cte_prune.countrylanguage countrylanguage_1  (cost=0.00..165.33 rows=6567 width=48)
+                                                                                             Output: countrylanguage_1.language, countrylanguage_1.countrycode
+                                                                                             Filter: countrylanguage_1.isofficial
+                                                                                 ->  Hash  (cost=86.00..86.00 rows=1926 width=80)
+                                                                                       Output: country_3.code, country_3.name, country_3.headofstate
+                                                                                       ->  Seq Scan on cte_prune.country country_3  (cost=0.00..86.00 rows=1926 width=80)
+                                                                                             Output: country_3.code, country_3.name, country_3.headofstate
+                                                                                             Filter: ((country_3.gnp < country_3.gnpold) OR (country_3.gnp < '3000'::numeric))
+                                                                           ->  Hash  (cost=1577.62..1577.62 rows=6567 width=68)
+                                                                                 Output: country_2.population, country_2.region, country_2.code, country_4.code
+                                                                                 ->  Hash Join  (cost=1107.76..1577.62 rows=6567 width=68)
+                                                                                       Output: country_2.population, country_2.region, country_2.code, country_4.code
+                                                                                       Hash Cond: (country_4.code = country_2.code)
+                                                                                       ->  Hash Join  (cost=110.07..489.65 rows=6567 width=112)
+                                                                                             Output: country_4.code, country_4.name, country_4.headofstate, countrylanguage_2.language
+                                                                                             Inner Unique: true
+                                                                                             Hash Cond: (countrylanguage_2.countrycode = country_4.code)
+                                                                                             ->  Redistribute Motion 3:3  (slice6; segments: 3)  (cost=0.00..296.67 rows=6567 width=48)
                                                                                                    Output: countrylanguage_2.language, countrylanguage_2.countrycode
-                                                                                                   Filter: countrylanguage_2.isofficial
-                                                                                       ->  Hash  (cost=86.00..86.00 rows=1926 width=80)
-                                                                                             Output: country_4.code, country_4.name, country_4.headofstate
-                                                                                             ->  Seq Scan on cte_prune.country country_4  (cost=0.00..86.00 rows=1926 width=80)
+                                                                                                   Hash Key: countrylanguage_2.countrycode
+                                                                                                   ->  Seq Scan on cte_prune.countrylanguage countrylanguage_2  (cost=0.00..165.33 rows=6567 width=48)
+                                                                                                         Output: countrylanguage_2.language, countrylanguage_2.countrycode
+                                                                                                         Filter: countrylanguage_2.isofficial
+                                                                                             ->  Hash  (cost=86.00..86.00 rows=1926 width=80)
                                                                                                    Output: country_4.code, country_4.name, country_4.headofstate
-                                                                                                   Filter: ((country_4.gnp < country_4.gnpold) OR (country_4.gnp < '3000'::numeric))
-                                                                                 ->  Hash  (cost=68.67..68.67 rows=3467 width=56)
-                                                                                       Output: country_2.population, country_2.region, country_2.code, country_2.capital
-                                                                                       ->  Seq Scan on cte_prune.country country_2  (cost=0.00..68.67 rows=3467 width=56)
-                                                                                             Output: country_2.population, country_2.region, country_2.code, country_2.capital
-                                                                           ->  Hash  (cost=495.67..495.67 rows=27700 width=4)
-                                                                                 Output: city.id
-                                                                                 ->  Broadcast Motion 3:3  (slice7; segments: 3)  (cost=0.00..495.67 rows=27700 width=4)
-                                                                                       Output: city.id
-                                                                                       ->  Seq Scan on cte_prune.city  (cost=0.00..126.33 rows=9233 width=4)
-                                                                                             Output: city.id
+                                                                                                   ->  Seq Scan on cte_prune.country country_4  (cost=0.00..86.00 rows=1926 width=80)
+                                                                                                         Output: country_4.code, country_4.name, country_4.headofstate
+                                                                                                         Filter: ((country_4.gnp < country_4.gnpold) OR (country_4.gnp < '3000'::numeric))
+                                                                                       ->  Hash  (cost=954.35..954.35 rows=3467 width=52)
+                                                                                             Output: country_2.population, country_2.region, country_2.code
+                                                                                             ->  Hash Join  (cost=841.92..954.35 rows=3467 width=52)
+                                                                                                   Output: country_2.population, country_2.region, country_2.code
+                                                                                                   Inner Unique: true
+                                                                                                   Hash Cond: (country_2.capital = city.id)
+                                                                                                   ->  Seq Scan on cte_prune.country country_2  (cost=0.00..68.67 rows=3467 width=56)
+                                                                                                         Output: country_2.code, country_2.name, country_2.continent, country_2.region, country_2.surfacearea, country_2.indepyear, country_2.population, country_2.lifeexpectancy, country_2.gnp, country_2.gnpold, country_2.localname, country_2.governmentform, country_2.headofstate, country_2.capital, country_2.code2
+                                                                                                   ->  Hash  (cost=495.67..495.67 rows=27700 width=4)
+                                                                                                         Output: city.id
+                                                                                                         ->  Broadcast Motion 3:3  (slice7; segments: 3)  (cost=0.00..495.67 rows=27700 width=4)
+                                                                                                               Output: city.id
+                                                                                                               ->  Seq Scan on cte_prune.city  (cost=0.00..126.33 rows=9233 width=4)
+                                                                                                                     Output: city.id
+ Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
-(105 rows)
+(103 rows)
 
 -- start_ignore
 drop table city;
