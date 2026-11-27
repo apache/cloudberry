@@ -41,23 +41,30 @@
 #include "anser.h"
 #include "anserfilter.h"
 #include "anserplan.h"
+#include "catalog/gp_distribution_policy.h"
 #include "cdb/cdbvars.h"
 #include "catalog/pg_type.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
+#include "parser/parsetree.h"
 #include "utils/acl.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/typcache.h"
 
 /* Runtime-filter bloom size bounds (realized bitset bytes). */
-#define ANSER_RF_MIN_BYTES		(1024 * 1024)		/* bloom_create's 1 MB floor */
+#define ANSER_RF_MIN_BYTES		ANSER_BLOOM_MIN_BYTES
 #define ANSER_RF_MAX_BYTES		(64 * 1024 * 1024)
 #define ANSER_RF_HEADER_ROOM	64
 
 /* Per-statement state for the injection pass. */
 typedef struct AnserInjectCtx
 {
+	bool		inplace_only;	/* only find in-place joins, inject nothing */
+	bool		found_inplace;	/* some join was left to an in-place filter */
+	AnserInplaceProbeFn visit_probe;
+	AnserInplaceCandidateFn visit_inplace;	/* see AnserVisitInplaceCandidates */
+	void	   *visit_arg;
 	PlannedStmt *stmt;			/* for slices[]: see AnserSliceProducers */
 	int			slice_index;	/* slice the subtree being walked runs in */
 	Bitmapset  *nestloop_params;	/* PARAM_EXECs an enclosing nested loop
@@ -80,17 +87,33 @@ void
 AnserApplyRuntimeFilters(PlannedStmt *stmt)
 {
 	/*
-	 * Opt-in and coordinator-only: the pass runs on the QD where the whole
-	 * PlannedStmt is available, and only when the operator has enabled the
-	 * Anser subsystem and the runtime-filter feature.  Anything else is left
-	 * completely untouched.
+	 * Opt-in: only when the operator has enabled the runtime-filter feature.
+	 * Anything else is left completely untouched.
 	 */
-	if (!gp_anser_enable || !gp_anser_runtime_filter)
-		return;
+	if (gp_anser_runtime_filter)
+		(void) AnserApplyRuntimeFilterFallback(stmt);
+}
+
+/*
+ * The pass of AnserApplyRuntimeFilters without the anser.runtime_filter
+ * gate, for an extension that plans its own exchanges and falls back to
+ * Anser's where it places none.  Returns whether the pass placed any filter:
+ * an exchange, or a join left to an in-place filter.
+ */
+bool
+AnserApplyRuntimeFilterFallback(PlannedStmt *stmt)
+{
+	/*
+	 * Coordinator-only: the pass runs on the QD where the whole PlannedStmt
+	 * is available, and only when the operator has enabled the Anser
+	 * subsystem.
+	 */
+	if (!gp_anser_enable)
+		return false;
 	if (Gp_role != GP_ROLE_DISPATCH)
-		return;
+		return false;
 	if (stmt == NULL || stmt->commandType != CMD_SELECT || stmt->planTree == NULL)
-		return;
+		return false;
 
 	{
 		/*
@@ -129,7 +152,69 @@ AnserApplyRuntimeFilters(PlannedStmt *stmt)
 		ctx.nestloop_params = NULL;	/* no loop encloses the root */
 
 		anser_inject_walk(stmt->planTree, &ctx);
+		return ctx.found_inplace || ctx.next_condition_id != 0;
 	}
+}
+
+/*
+ * Mark eligible same-slice joins for an extension that places its own
+ * exchanges. Segments install the marked filters from the dispatched plan.
+ */
+bool
+AnserApplyInplaceRuntimeFilters(PlannedStmt *stmt)
+{
+	AnserInjectCtx ctx = {0};
+
+	if (!gp_anser_enable || !gp_anser_runtime_filter_inplace ||
+		Gp_role != GP_ROLE_DISPATCH || stmt == NULL ||
+		stmt->commandType != CMD_SELECT || stmt->planTree == NULL)
+		return false;
+
+	ctx.stmt = stmt;
+	ctx.inplace_only = true;
+	anser_inject_walk(stmt->planTree, &ctx);
+	return ctx.found_inplace;
+}
+
+/*
+ * Call visit for each join AnserApplyInplaceRuntimeFilters would leave to an
+ * in-place filter whose build input and probe target are single SeqScans,
+ * with the two scans and their key columns.
+ */
+void
+AnserVisitInplaceCandidates(PlannedStmt *stmt, AnserInplaceCandidateFn visit,
+							void *arg)
+{
+	AnserInjectCtx ctx = {0};
+
+	if (visit == NULL || !gp_anser_enable || !gp_anser_runtime_filter_inplace ||
+		Gp_role != GP_ROLE_DISPATCH || stmt == NULL ||
+		stmt->commandType != CMD_SELECT || stmt->planTree == NULL)
+		return;
+
+	ctx.stmt = stmt;
+	ctx.inplace_only = true;
+	ctx.visit_inplace = visit;
+	ctx.visit_arg = arg;
+	anser_inject_walk(stmt->planTree, &ctx);
+}
+
+/* Visit eligible probe keys without constraining the Hash input shape. */
+void
+AnserVisitInplaceProbes(PlannedStmt *stmt, AnserInplaceProbeFn visit, void *arg)
+{
+	AnserInjectCtx ctx = {0};
+
+	if (visit == NULL || !gp_anser_enable || !gp_anser_runtime_filter_inplace ||
+		Gp_role != GP_ROLE_DISPATCH || stmt == NULL ||
+		stmt->commandType != CMD_SELECT || stmt->planTree == NULL)
+		return;
+
+	ctx.stmt = stmt;
+	ctx.inplace_only = true;
+	ctx.visit_probe = visit;
+	ctx.visit_arg = arg;
+	anser_inject_walk(stmt->planTree, &ctx);
 }
 
 /* Include separately stored SubPlans as well as the main tree. */
@@ -187,7 +272,7 @@ anser_max_plan_node_id(Plan *plan)
  * the estimated build cardinality.  Both call AnserBloomCreate (== bloom_create)
  * with the SAME (total_elems, max_payload) so they realize an identical filter;
  * we mirror bloom_create's own math here so `planned_bytes` (shown in EXPLAIN)
- * equals the realized bitset: target ~2 bytes/element, floor at 1 MB, cap at the
+ * equals the realized bitset: target ~2 bytes/element, floor at 8 KiB, cap at the
  * server payload budget, round DOWN to a power of two.
  */
 bool
@@ -250,7 +335,7 @@ AnserRuntimeFilterSize(double est_rows, int64 *total_elems, int64 *max_payload,
 	/*
 	 * The filter is built from total_elems (bloom_create sizes from the
 	 * element count, not from planned_bytes), so a floor on realized alone
-	 * only inflates the EXPLAIN number: a 200-row build still produces a 1 MB
+	 * only inflates the EXPLAIN number: a 200-row build still produces an 8 KiB
 	 * filter whatever the knob says.  Raise the element count to match the
 	 * forced size, so producer and consumer really build it.  The extra hash
 	 * functions cost only probe time, and the larger bitset only lowers the
@@ -381,6 +466,272 @@ AnserResolveKeyScan(Plan *top, AttrNumber key_attno, int slice_index,
 	return true;
 }
 
+/* One of our own filter nodes: it passes its single child's rows on or drops them. */
+static bool
+anser_is_own_filter(const Plan *plan)
+{
+	return AnserIsFilterScan(plan);
+}
+
+/* A scan an in-place filter can be installed on: a plain SeqScan emitting
+ * the key as a column of its relation. */
+static bool
+anser_inplace_scan_accepts(const Plan *scan, AttrNumber attno)
+{
+	if (!IsA(scan, SeqScan))
+		return false;
+	return AnserScanOutputVar((const Scan *) scan, attno) != NULL;
+}
+
+/*
+ * Is there a scan for this join's in-place filter, and which way to it?
+ *
+ * Down the join's outer side through HashJoins (their outer side only, and
+ * only joins that keep their outer rows' values), Results and our own nodes,
+ * to a SeqScan, or to an Append whose children all are.  Anything else --
+ * above all a Motion -- ends the search: a scan below a Motion is not joined
+ * in this process, and this process's hash table says nothing about it.
+ * anserinplace.c follows the same path on the PlanState tree.
+ */
+static bool
+anser_inplace_find_target(HashJoin *hj, AttrNumber attno, bool skip_filtered_key,
+						  Plan **scan, AttrNumber *scan_attno)
+{
+	Plan	   *parent = (Plan *) hj;
+	Plan	   *child = outerPlan(hj);
+
+	for (;;)
+	{
+		TargetEntry *te;
+		Var		   *var;
+
+		if (IsA(parent, Append) && child == NULL)
+		{
+			List	   *subplans = ((Append *) parent)->appendplans;
+			ListCell   *lc;
+
+			if (subplans == NIL)
+				return false;
+			foreach(lc, subplans)
+			{
+				if (!anser_inplace_scan_accepts((Plan *) lfirst(lc), attno))
+					return false;
+			}
+			if (scan != NULL)
+			{
+				*scan = parent;
+				*scan_attno = attno;
+			}
+			return true;
+		}
+		if (child == NULL)
+			return false;
+
+		if (IsA(child, SeqScan))
+		{
+			if (scan != NULL)
+			{
+				*scan = child;
+				*scan_attno = attno;
+			}
+			return anser_inplace_scan_accepts(child, attno);
+		}
+
+		if (attno < 1 || attno > list_length(child->targetlist))
+			return false;
+		te = (TargetEntry *) list_nth(child->targetlist, attno - 1);
+		if (te == NULL || !IsA(te->expr, Var))
+			return false;
+		var = (Var *) te->expr;
+
+		if (anser_is_own_filter(child))
+		{
+			if (skip_filtered_key && AnserBloomConsumerKey(child) == attno)
+				return false;
+			if (var->varno != INDEX_VAR || var->varattno < 1)
+				return false;
+			attno = var->varattno;
+			parent = child;
+			child = (Plan *) linitial(((CustomScan *) child)->custom_plans);
+			continue;
+		}
+
+		if (!IsA(child, HashJoin) && !IsA(child, Result) && !IsA(child, Append))
+			return false;
+		if (var->varno == INNER_VAR)
+			return false;
+		if (IsA(child, HashJoin) &&
+			!AnserJoinSidePushdownSafe(((HashJoin *) child)->join.jointype, false))
+			return false;
+
+		attno = var->varattno;
+		parent = child;
+		child = outerPlan(child);
+	}
+}
+
+static bool
+anser_inplace_has_target(HashJoin *hj, AttrNumber attno, bool skip_filtered_key)
+{
+	return anser_inplace_find_target(hj, attno, skip_filtered_key, NULL, NULL);
+}
+
+/*
+ * Tell an AnserVisitInplaceCandidates caller about an eligible join whose
+ * Hash input is a single SeqScan, possibly below a Motion, and whose filter
+ * lands on a single SeqScan.
+ */
+static void
+anser_report_inplace_candidate(HashJoin *hj, AnserInjectCtx *ctx)
+{
+	AttrNumber	inner_attno;
+	AttrNumber	outer_attno;
+	Plan	   *build_parent;
+	Plan	   *build_scan;
+	Plan	   *probe_scan;
+	AttrNumber	build_attno;
+	AttrNumber	probe_attno;
+	int			build_slice;
+	Var		   *build_key;
+	Var		   *probe_key;
+	Plan	   *input = outerPlan(innerPlan(hj));
+
+	if (!anser_hashjoin_keys(hj, &inner_attno, &outer_attno))
+		return;
+	while (input != NULL && IsA(input, Motion))
+		input = outerPlan(input);
+	if (input == NULL || !IsA(input, SeqScan) ||
+		!AnserResolveKeyScan(innerPlan(hj), inner_attno, ctx->slice_index, false,
+							 &build_parent, &build_scan, &build_attno, &build_slice) ||
+		build_scan != input ||
+		!anser_inplace_find_target(hj, outer_attno, true, &probe_scan, &probe_attno) ||
+		!IsA(probe_scan, SeqScan))
+		return;
+	build_key = AnserScanOutputVar((Scan *) build_scan, build_attno);
+	probe_key = AnserScanOutputVar((Scan *) probe_scan, probe_attno);
+	if (build_key != NULL && probe_key != NULL)
+		ctx->visit_inplace(build_scan, build_key->varattno, probe_scan,
+						   probe_key->varattno, ctx->visit_arg);
+}
+
+static void
+anser_report_inplace_probes(HashJoin *hj, AttrNumber outer_attno, AnserInjectCtx *ctx)
+{
+	Plan	   *probe;
+	AttrNumber	position;
+	ListCell   *lc;
+
+	if (!anser_inplace_find_target(hj, outer_attno, false, &probe, &position))
+		return;
+
+	if (IsA(probe, Append))
+	{
+		foreach(lc, ((Append *) probe)->appendplans)
+		{
+			Scan *scan = (Scan *) lfirst(lc);
+			Var *key = AnserScanOutputVar(scan, position);
+
+			if (key != NULL)
+				ctx->visit_probe(&scan->plan, key->varattno, hj, ctx->visit_arg);
+		}
+	}
+	else
+	{
+		Var *key = AnserScanOutputVar((Scan *) probe, position);
+
+		if (key != NULL)
+			ctx->visit_probe(probe, key->varattno, hj, ctx->visit_arg);
+	}
+}
+
+/*
+ * Does this join get an in-place filter rather than an exchanged one?
+ *
+ * A hash join runs on every segment against that segment's hash table.  When
+ * its probe scan runs in the join's own slice -- no Motion between the two --
+ * every row the scan produces on a segment is joined on that segment, so the
+ * keys that segment's Hash node receives are all the keys those rows can
+ * match.  That holds however the build side got there: broadcast,
+ * redistributed on the join key, or co-located.  A filter built from them is
+ * complete, needs no exchange, and never makes the scan wait: until the hash
+ * table is built, rows simply pass unfiltered.  The keys are also those left
+ * after everything the build side does -- joins, semi-joins, predicates --
+ * where an exchanged filter holds the whole key column of a base scan.
+ *
+ * The coordinator calls this to skip the exchange for such a join, and every
+ * segment calls it again on the plan it received to build the filter
+ * (anserinplace.c).  Nothing marks the join in the plan, so the two must see
+ * the same inputs: the plan, the slice table, the nested loops above, and the
+ * anser.* settings, which are synchronized to the segments.
+ *
+ * Refused: a build side a nested loop above re-runs with new parameter values
+ * (the filter only grows, so it would hold keys of earlier iterations); a
+ * slice on the coordinator or in MPP parallel mode; a join without a target
+ * scan; and a build side the filter size rules refuse.
+ */
+bool
+AnserInplaceEligible(HashJoin *hj, PlannedStmt *stmt, int slice_index,
+					 Bitmapset *nestloop_params, bool skip_filtered_key)
+{
+	Plan	   *hash = innerPlan(hj);
+	PlanSlice  *slice;
+	Var		   *outer_var;
+	Var		   *inner_var;
+	Oid			key_type;
+	int64		total_elems;
+	int64		max_payload;
+	int64		planned_bytes;
+
+	if (!AnserJoinSideReducible(hj->join.jointype, false))
+		return false;
+	if (hash == NULL || !IsA(hash, Hash) || outerPlan(hj) == NULL)
+		return false;
+	if (bms_overlap(hash->extParam, nestloop_params))
+		return false;
+	if (list_length(hj->hashclauses) != 1 ||
+		!AnserEqualityKeys((Node *) linitial(hj->hashclauses),
+						   &outer_var, &inner_var, &key_type))
+		return false;
+
+	if (stmt->slices == NULL || slice_index < 0 || slice_index >= stmt->numSlices)
+		return false;
+	slice = &stmt->slices[slice_index];
+	if (slice->gangType == GANGTYPE_UNALLOCATED || slice->parallel_workers != 0)
+		return false;
+
+	if (!anser_inplace_has_target(hj, outer_var->varattno, skip_filtered_key))
+		return false;
+
+	/* Sized from what the Hash node receives: the build side's output. */
+	return AnserRuntimeFilterSize(hash->plan_rows, &total_elems, &max_payload,
+								  &planned_bytes);
+}
+
+/*
+ * How many rows the producers of an exchanged filter insert together.  A
+ * scan's plan_rows is what one process reads -- the planner divides a
+ * partitioned table's rows among its segments -- but the coordinator folds
+ * every producer's part into one filter, which holds the union of their keys.
+ * Every process of a replicated (or catalog) table's scan reads all of it.
+ */
+static double
+anser_exchange_rows(PlannedStmt *stmt, Plan *scan, int n_producers)
+{
+	Index		scanrelid = ((Scan *) scan)->scanrelid;
+	RangeTblEntry *rte;
+	GpPolicy   *policy;
+
+	if (scanrelid < 1 || scanrelid > list_length(stmt->rtable))
+		return scan->plan_rows;
+	rte = rt_fetch(scanrelid, stmt->rtable);
+	if (rte->rtekind != RTE_RELATION)
+		return scan->plan_rows;
+	policy = GpPolicyFetch(rte->relid);
+	if (policy == NULL || policy->ptype != POLICYTYPE_PARTITIONED)
+		return scan->plan_rows;
+	return scan->plan_rows * n_producers;
+}
+
 /*
  * If this HashJoin is the supported shape, inject a producer above the base
  * scan its build key comes from and a consumer above the base scan its probe
@@ -444,6 +795,35 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 	 * Not worth it for a shape this narrow.
 	 */
 	if (bms_overlap(hash->extParam, ctx->nestloop_params))
+		return;
+
+	/*
+	 * A probe scan in the join's own slice gets its filter in place, built by
+	 * each segment from the join's Hash node (AnserInplaceEligible,
+	 * anserinplace.c).  That also takes the joins whose scans the exchange
+	 * declines below because both sides are co-located.
+	 */
+	if (gp_anser_runtime_filter_inplace &&
+		AnserInplaceEligible(hj, ctx->stmt, ctx->slice_index,
+							 ctx->nestloop_params, ctx->inplace_only &&
+							 ctx->visit_probe == NULL && !gp_anser_inplace_with_consumer))
+	{
+		ctx->found_inplace = true;
+		if (ctx->visit_inplace != NULL)
+			anser_report_inplace_candidate(hj, ctx);
+		if (ctx->visit_probe != NULL)
+		{
+			AttrNumber inner_attno;
+			AttrNumber outer_attno;
+
+			if (anser_hashjoin_keys(hj, &inner_attno, &outer_attno))
+				anser_report_inplace_probes(hj, outer_attno, ctx);
+		}
+		if (ctx->visit_inplace == NULL && ctx->visit_probe == NULL)
+			hj->anser_inplace_filter = true;
+		return;
+	}
+	if (ctx->inplace_only)
 		return;
 
 	if (!anser_hashjoin_keys(hj, &inner_attno, &outer_attno))
@@ -531,10 +911,12 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 	 * rows whose keys actually go into the filter.  They are the same thing
 	 * when the build side is one scan under a Hash, and they are not when the
 	 * descent came through a join -- there the Hash holds the joined result and
-	 * the scan holds the whole key column, which is what gets inserted.
+	 * the scan holds the whole key column, which is what gets inserted.  And
+	 * from all producers' rows, not one's: the folded filter holds them all.
 	 */
-	if (!AnserRuntimeFilterSize(build_scan->plan_rows, &total_elems, &max_payload,
-								&planned_bytes))
+	if (!AnserRuntimeFilterSize(anser_exchange_rows(ctx->stmt, build_scan,
+													n_producers),
+								&total_elems, &max_payload, &planned_bytes))
 		return;
 
 	condition_id = ctx->next_condition_id++;
@@ -593,7 +975,7 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 }
 
 /*
- * Manual in-place traversal (recurse spine + custom_plans).  We do not use
+ * Manual traversal of the spine, subqueries and custom_plans.  We do not use
  * plan_tree_mutator, whose CustomScan arm does not descend into custom_plans.
  */
 static void
@@ -642,6 +1024,9 @@ anser_inject_walk(Plan *plan, AnserInjectCtx *ctx)
 	}
 	else
 		anser_inject_walk(innerPlan(plan), ctx);
+
+	if (IsA(plan, SubqueryScan))
+		anser_inject_walk(((SubqueryScan *) plan)->subplan, ctx);
 
 	if (IsA(plan, CustomScan))
 	{

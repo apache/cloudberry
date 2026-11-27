@@ -8,6 +8,10 @@
 -- Deterministic plan shape: force a hash join.
 SET enable_nestloop = off;
 SET enable_mergejoin = off;
+-- This file tests the Anser exchange.  A join whose probe scan runs in the
+-- join's own slice would otherwise get an in-place filter instead; that path
+-- is tested in anser_inplace.
+SET anser.runtime_filter_inplace = off;
 -- A regress test must not inherit the production deadline.  anser.timeout_ms
 -- defaults to 10 s, which is a budget for an exchange that has gone wrong; a
 -- test that waits it out has turned a delivery failure into a slow pass.
@@ -40,14 +44,14 @@ SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.i
    ->  Hash Right Join
          Hash Cond: (p.id = b.id)
          ->  Custom Scan (Anser Bloom Consumer)
-               Bloom Filter Size: 1048576 bytes
+               Bloom Filter Size: 8192 bytes
                ->  Seq Scan on anser_rf_probe p
          ->  Hash
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Hash Key: b.id
                      ->  Custom Scan (Anser Bloom Producer)
-                           Bloom Filter Size: 1048576 bytes
-                           Bloom Filter Stats: memory=1024kB
+                           Bloom Filter Size: 8192 bytes
+                           Bloom Filter Stats: memory=8kB
                            ->  Seq Scan on anser_rf_build b
  Optimizer: Postgres query optimizer
 (14 rows)
@@ -123,10 +127,10 @@ SELECT count(*) AS only_off_orca
              0
 (1 row)
 
--- Pushdown mix: with gp_enable_runtime_filter_pushdown on, the consumer
--- installs its filter on the probe SeqScan before projection. Narrow keys use
--- an Anser-owned qual to normalize storage-dependent Datum padding. Results
--- must still match the filter-off run.
+-- Pushdown mix: with gp_enable_runtime_filter_pushdown on, core's own
+-- filters and the consumer's both go to the probe SeqScan before projection,
+-- and the keys of both are normalized the same way. Results must still match
+-- the filter-off run.
 SET optimizer = off;
 SET gp_enable_runtime_filter_pushdown = on;
 SET anser.runtime_filter = on;
@@ -1104,6 +1108,7 @@ DECLARE
     plan jsonb;
     consumers int;
     pruned numeric;
+    consumer_pruned numeric;
     double_counted numeric;
 BEGIN
     PERFORM set_config('gp_enable_runtime_filter', 'off', true);
@@ -1138,13 +1143,16 @@ BEGIN
                 )
                 SELECT count(*) FILTER (WHERE node->>'Custom Plan Provider' = 'Anser Bloom Consumer'),
                     coalesce(sum((node->>'Rows Removed by Pushdown Runtime Filter')::numeric), 0),
+                    coalesce(sum((node->>'Rows Removed by Bloom Filter')::numeric)
+                        FILTER (WHERE node->>'Custom Plan Provider' = 'Anser Bloom Consumer'), 0),
                     coalesce(sum(CASE WHEN node->>'Node Type' = 'Seq Scan'
                         THEN (node->>'Rows Removed by Filter')::numeric END), 0)
-                INTO consumers, pruned, double_counted FROM walk;
-                -- Narrow keys use a scan qual even with core pushdown off.
-                -- These scans have no SQL quals, so generic filter counts
-                -- must remain zero while pushdown rejects the extra keys.
-                IF consumers = 0 OR pruned <= 0 OR double_counted <> 0 THEN
+                INTO consumers, pruned, consumer_pruned, double_counted FROM walk;
+                -- Either probe takes the filter as a scan key, with core
+                -- pushdown on or off, and prunes before projection; the
+                -- consumer probes nothing itself.
+                IF consumers = 0 OR double_counted <> 0 OR
+                   pruned <= 0 OR consumer_pruned <> 0 THEN
                     RAISE EXCEPTION 'negative-key filtering not exercised (optimizer=%, build=%, pushdown=%): %',
                         opt, storage, push, plan;
                 END IF;
@@ -1155,6 +1163,84 @@ END
 $$;
 DROP TABLE anser_neg_build_ao, anser_neg_build_heap,
     anser_neg_probe_heap, anser_neg_probe_ao;
+-- A PAX probe takes the exchanged filter as a scan key, whether PAX checks it
+-- in its own row filter (pax.enable_row_filter) or leaves it to the scan.
+-- Negative int4 keys also check that PAX hashes the key the way the producer
+-- did.  The same join with an in-place filter must give the same answer.
+-- Skipped where PAX is not installed, so the output is the same either way.
+DO $$
+DECLARE
+    opt text;
+    row_filter text;
+    q constant text := 'SELECT count(*) FROM anser_pax_probe p JOIN anser_pax_build b ON p.id = b.id';
+    baseline bigint;
+    filtered bigint;
+    plan jsonb;
+    consumers int;
+    pruned numeric;
+    consumer_pruned numeric;
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_am WHERE amname = 'pax') THEN
+        RETURN;
+    END IF;
+    EXECUTE 'CREATE TABLE anser_pax_build (id int, pad int) DISTRIBUTED BY (pad)';
+    EXECUTE 'CREATE TABLE anser_pax_probe (id int, v int) USING pax DISTRIBUTED BY (v)';
+    EXECUTE 'INSERT INTO anser_pax_build SELECT -g, g FROM generate_series(1, 1000) g';
+    -- Mix 100,000 matches and 10,000 misses in the same scan groups.
+    EXECUTE 'INSERT INTO anser_pax_probe
+             SELECT CASE WHEN g % 11 = 0 THEN -(g % 1000 + 1001)
+                         ELSE -(g % 1000 + 1) END, g
+             FROM generate_series(1, 110000) g';
+    EXECUTE 'ANALYZE anser_pax_build';
+    EXECUTE 'ANALYZE anser_pax_probe';
+    -- This fixture checks scan placement. Keep adaptive backoff from
+    -- masking probe rejections on either the SeqScan or PAX path.
+    PERFORM set_config('gp_runtime_filter_min_reject_pct', '0', true);
+    PERFORM set_config('gp_enable_runtime_filter', 'off', true);
+    PERFORM set_config('gp_enable_runtime_filter_pushdown', 'off', true);
+    FOREACH opt IN ARRAY ARRAY['off', 'on'] LOOP
+        PERFORM set_config('optimizer', opt, true);
+        FOREACH row_filter IN ARRAY ARRAY['off', 'on'] LOOP
+            PERFORM set_config('pax.enable_row_filter', row_filter, true);
+            PERFORM set_config('anser.runtime_filter', 'off', true);
+            EXECUTE q INTO baseline;
+            IF baseline <> 100000 THEN
+                RAISE EXCEPTION 'PAX baseline changed: %', baseline;
+            END IF;
+            PERFORM set_config('anser.runtime_filter', 'on', true);
+            PERFORM set_config('anser.runtime_filter_inplace', 'off', true);
+            EXECUTE q INTO filtered;
+            IF filtered <> baseline THEN
+                RAISE EXCEPTION 'PAX exchange mismatch (optimizer=%, row_filter=%): % <> %',
+                    opt, row_filter, filtered, baseline;
+            END IF;
+            EXECUTE 'EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, FORMAT JSON) ' || q INTO plan;
+            WITH RECURSIVE walk(node) AS (
+                SELECT plan->0->'Plan'
+                UNION ALL
+                SELECT child FROM walk CROSS JOIN LATERAL
+                    jsonb_array_elements(coalesce(node->'Plans', '[]')) child
+            )
+            SELECT count(*) FILTER (WHERE node->>'Custom Plan Provider' = 'Anser Bloom Consumer'),
+                coalesce(sum((node->>'Rows Removed by Pushdown Runtime Filter')::numeric), 0),
+                coalesce(sum((node->>'Rows Removed by Bloom Filter')::numeric)
+                    FILTER (WHERE node->>'Custom Plan Provider' = 'Anser Bloom Consumer'), 0)
+            INTO consumers, pruned, consumer_pruned FROM walk;
+            IF consumers = 0 OR pruned <= 0 OR consumer_pruned <> 0 THEN
+                RAISE EXCEPTION 'PAX scan did not take the filter (optimizer=%, row_filter=%): %',
+                    opt, row_filter, plan;
+            END IF;
+            PERFORM set_config('anser.runtime_filter_inplace', 'on', true);
+            EXECUTE q INTO filtered;
+            IF filtered <> baseline THEN
+                RAISE EXCEPTION 'PAX in-place mismatch (optimizer=%, row_filter=%): % <> %',
+                    opt, row_filter, filtered, baseline;
+            END IF;
+        END LOOP;
+    END LOOP;
+    EXECUTE 'DROP TABLE anser_pax_build, anser_pax_probe';
+END
+$$;
 -- Resource and log knobs are superuser-only: an unprivileged role must not
 -- force 64 MB filters on every segment or fill the server log.  runtime_filter
 -- and timeout_ms only shape the caller's own queries, so they stay

@@ -121,7 +121,8 @@ AnserScanOutputVar(const Scan *scan, AttrNumber position)
 			return NULL;
 		var = (Var *) tle->expr;
 	}
-	if (scan->scanrelid == 0 || var->varno != scan->scanrelid || var->varattno < 1)
+	if (var->varno <= 0 || (Index) var->varno != scan->scanrelid ||
+		var->varattno < 1)
 		return NULL;
 	return var;
 }
@@ -321,10 +322,27 @@ AnserInitFilterScan(CustomScan *cs, const CustomScanMethods *methods, Plan *chil
 	cs->methods = methods;
 }
 
+/* The parent must handle any slot implementation returned by the child.
+ * Freeze the choice at executor initialization, before compiling expressions. */
+static inline void
+AnserInitFilterChildSlot(CustomScanState *node, bool zero_copy)
+{
+	PlanState *ps = &node->ss.ps;
+
+	if (zero_copy && ps->ps_ProjInfo == NULL)
+	{
+		ps->resultopsset = true;
+		ps->resultopsfixed = false;
+		ps->resultops = NULL;
+	}
+}
+
 /* Slot copying can allocate/ERROR through the tuple-slot implementation. */
 static inline TupleTableSlot *
 AnserFilterChildSlot(CustomScanState *node, TupleTableSlot *childslot)
 {
+	if (node->ss.ps.resultopsset && node->ss.ps.resultops == NULL)
+		return childslot;
 	ExecCopySlot(node->ss.ss_ScanTupleSlot, childslot);
 	return node->ss.ss_ScanTupleSlot;
 }

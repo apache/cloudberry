@@ -70,8 +70,8 @@ AnserBloomSeed(const char *condition_key)
  * Sizing is bloom_create's, but the decision to keep the result is ours.  Two
  * ways it can come back unusable:
  *
- *   - Too large to send.  bloom_create ends with Max(1 MB, bitset), a floor
- *     that overrides the work_mem cap, so a payload cap below 1 MB yields a
+ *   - Too large to send.  bloom_create ends with Max(8 KiB, bitset), a floor
+ *     that overrides the work_mem cap, so a payload cap below 8 KiB yields a
  *     bitset that cannot be shipped.
  *   - Too thin to help.  bloom_create has no minimum density (unlike
  *     bloom_create_aggresive, which refuses below 1.6 bits/key), so a large
@@ -79,7 +79,7 @@ AnserBloomSeed(const char *condition_key)
  *     almost everything.
  *
  * Both are judged from the filter's own accessors rather than by re-deriving
- * bloom_create's arithmetic here: my_bloom_power() and the floor are private to
+ * the constructor's arithmetic here: rounding and hash-count selection are private to
  * lib/bloomfilter.c, and a copy of them would go quietly out of date on a
  * kernel rebase.  The cost of learning the answer this way is one palloc0 that
  * is immediately freed -- against a build-side scan, which is what returning
@@ -103,8 +103,9 @@ AnserBloomCreate(int64 total_elems, Size max_payload_bytes, uint64 seed)
 	if (total_elems <= 0 || max_payload_bytes <= sizeof(AnserBloomPartHeader))
 		return NULL;
 
-	filter = bloom_create(total_elems, AnserBloomWorkMemKb(max_payload_bytes),
-						  seed);
+	filter = bloom_create_with_minimum(total_elems,
+									   AnserBloomWorkMemKb(max_payload_bytes),
+									   seed, ANSER_BLOOM_MIN_BYTES);
 	serialized = AnserBloomSerializedSize(filter);
 	bits_per_key = (double) bloom_total_bits(filter) / (double) total_elems;
 
@@ -335,12 +336,12 @@ AnserBloomDeserializePart(const void *payload, Size payload_len,
 	 * described above happens here.  A filter is thus only ever populated at
 	 * construction and, from then on, only grown by add/union -- never re-set.
 	 */
-	filter = bloom_create_from_bitset(total_elems,
+	filter = bloom_create_from_bitset_with_minimum(total_elems,
 									  AnserBloomWorkMemKb(max_payload_bytes),
 									  seed,
 									  (const unsigned char *) payload +
 									  sizeof(AnserBloomPartHeader),
-									  payload_len - sizeof(AnserBloomPartHeader));
+									  payload_len - sizeof(AnserBloomPartHeader), ANSER_BLOOM_MIN_BYTES);
 	if (filter == NULL)
 		return NULL;
 

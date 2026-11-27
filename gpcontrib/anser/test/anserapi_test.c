@@ -930,6 +930,11 @@ test_filter_child_slot_and_recheck(void)
 	node.ss.ss_ScanTupleSlot = &scan_slot;
 	CHECK(AnserFilterChildSlot(&node, &child_slot) == &scan_slot);
 	CHECK(copied_dst == &scan_slot && copied_src == &child_slot);
+	copied_dst = copied_src = NULL;
+	AnserInitFilterChildSlot(&node, true);
+	CHECK(AnserFilterChildSlot(&node, &child_slot) == &child_slot);
+	CHECK(!node.ss.ps.resultopsfixed && node.ss.ps.resultopsset);
+	CHECK(copied_dst == NULL && copied_src == NULL);
 	CHECK(AnserFilterRecheck(&node, &scan_slot));
 	CHECK(AnserFilterRecheck(NULL, NULL));
 }
@@ -938,20 +943,22 @@ test_filter_child_slot_and_recheck(void)
 
 /*
  * AnserNormalizeBloomDatum(value, key_length)
- * Contract: for key_length 1, 2 or 4 keep only the low key_length bytes of
- * the Datum and clear the rest, so a sign-extended and a zero-extended copy
- * of one value become identical; for sizeof(Datum) return it unchanged.
- * Distinct values of the key's width stay distinct.
+ * Contract: for key_length 1, 2 or 4 take the low key_length bytes of the
+ * Datum as a signed value and sign-extend it -- core's canonical form, see
+ * bloom_normalize_datum -- so a sign-extended and a zero-extended copy of one
+ * value become identical; for sizeof(Datum) return it unchanged.  Distinct
+ * values of the key's width stay distinct.
  */
 static void
 test_normalize_bloom_datum(void)
 {
 	Datum		all = ~(Datum) 0;
 
-	CHECK(AnserNormalizeBloomDatum(all, 1) == (Datum) 0xff);
-	CHECK(AnserNormalizeBloomDatum(all, 2) == (Datum) 0xffff);
-	CHECK(AnserNormalizeBloomDatum(all, 4) == (Datum) 0xffffffff);
+	CHECK(AnserNormalizeBloomDatum(all, 1) == all);
+	CHECK(AnserNormalizeBloomDatum(all, 2) == all);
+	CHECK(AnserNormalizeBloomDatum(all, 4) == all);
 	CHECK(AnserNormalizeBloomDatum(all, sizeof(Datum)) == all);
+	CHECK(AnserNormalizeBloomDatum((Datum) 0x7f, 1) == (Datum) 0x7f);
 	/* heap sign-extends, AOCO zero-extends: one value after normalizing */
 	CHECK(AnserNormalizeBloomDatum(Int32GetDatum(-5), 4) ==
 		  AnserNormalizeBloomDatum((Datum) (uint32) -5, 4));
@@ -962,6 +969,10 @@ test_normalize_bloom_datum(void)
 	CHECK(AnserNormalizeBloomDatum(Int32GetDatum(-5), 4) !=
 		  AnserNormalizeBloomDatum(Int32GetDatum(5), 4));
 	CHECK(AnserNormalizeBloomDatum(Int64GetDatum(-5), 8) == Int64GetDatum(-5));
+	/* the same Datum core's scan-key path and PAX hash */
+	CHECK(AnserNormalizeBloomDatum((Datum) (uint32) -5, 4) ==
+		  bloom_normalize_datum((Datum) (uint32) -5, 4));
+	CHECK(AnserNormalizeBloomDatum((Datum) (uint32) -5, 4) == Int64GetDatum(-5));
 }
 
 /*
@@ -983,7 +994,8 @@ test_bloom_add_lacks_key(void)
 	for (i = 0; i < lengthof(lengths); ++i)
 	{
 		Datum		sign_extended = ~(Datum) 0;		/* -1 from heap */
-		Datum		zero_extended = AnserNormalizeBloomDatum(sign_extended, lengths[i]);
+		Datum		zero_extended = lengths[i] == 1 ? (Datum) 0xff :
+			lengths[i] == 2 ? (Datum) 0xffff : (Datum) 0xffffffff;	/* AOCO */
 
 		bloom_count = 0;
 		AnserBloomAddKey(filter, zero_extended, lengths[i]);

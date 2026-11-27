@@ -99,25 +99,85 @@ intermediate result cannot filter the table it is being joined to.
 
 ### Bloom key representation
 
-Producer and consumer keys use the same width-normalized Datum bytes. For
-allowlisted by-value types narrower than a Datum, Anser clears the unused high
-bits before hashing. This matters for negative integers: heap tuple access can
-sign-extend an `int4`, while AOCO can zero-extend the same value. The type and
-plain-column checks alone do not make those whole-Datum representations equal.
+Producer and consumer keys use the same width-normalized Datum bytes, the
+ones core's runtime filters use: for allowlisted by-value types narrower than
+a Datum, the low bytes are taken as a signed value and sign-extended to 64
+bits (`bloom_normalize_datum`). This matters for negative integers: heap
+tuple access can sign-extend an `int4`, while AOCO can zero-extend the same
+value. The type and plain-column checks alone do not make those whole-Datum
+representations equal.
 
-Narrow keys use an Anser-owned scan qualification that normalizes the table
-value before projection and then checks the scan's existing quals. This does
-not depend on `gp_enable_runtime_filter_pushdown` or `filter_in_seqscan` and
-also works for parallel scans. It supports stacked filters and reports
-pushdown pruning on the scan. It does not send those filters to the table AM
-for block pruning, because core's Bloom scan-key path hashes unnormalized
-Datums. Full-width keys continue to use that existing scan-key path when core pushdown
-is enabled and the scan accepts it. No core changes are needed.
+A consumer hands its filter to the probe scan before projection. It prefers
+core's Bloom scan-key path for keys of every width: the scan passes the key
+to a table AM that takes runtime filters -- PAX checks it before it loads the
+other columns and orders it among its own filters -- and checks the rows
+itself otherwise. This needs neither `gp_enable_runtime_filter_pushdown` nor
+any setting of PAX's. A scan in MPP parallel mode, or one whose AM took
+earlier keys and has already started, cannot take a key; it gets an
+Anser-owned scan qualification instead, which normalizes the table value
+before projection and then checks the scan's existing quals. The Anser qual
+is never put on an AOCO scan, which evaluates a qual before it loads the
+columns the plan's own qual does not use, nor on a scan whose table AM takes
+runtime filters itself (PAX), which may rebuild the scan's qual from the plan
+and drop ours; there the consumer probes the rows itself. Either way the scan
+reports the rows it pruned.
+
+### Adaptive probing
+
+Every probe goes through core's adaptive probe (`bloom_runtime_probe`), in the
+consumer node, in the Anser scan qualification, and in core's scan-key path
+alike. A filter samples its probes in windows of 1024 rows; when a window
+rejects fewer than `gp_runtime_filter_min_reject_pct` percent (default 5), the
+filter stops probing and rows pass through. It samples again after 1024
+skipped rows, then after twice as many each time it is still ineffective, up
+to 64M rows, and a sample that rejects enough turns it back on. A filter built
+from a dimension's whole key column, which rejects nothing, so costs a few
+windows instead of a probe per row.
+
+### In-place filters
+
+A hash join whose probe scan runs in the join's **own slice** -- no Motion
+between the scan and the join -- does not need an exchange. Each segment joins
+the rows it scans against its own hash table, so the keys its Hash node
+receives are all the keys those rows can match, whether the build side was
+broadcast, redistributed on the join key, or co-located. For such joins the
+plan pass injects nothing, and each segment builds the filter itself at
+executor start (`src/anserinplace.c`): it wraps the Hash node's child so that
+every row the Hash node reads adds its key to a Bloom filter, and wraps the
+probe scan so that it lets rows through until the build side is drained and
+then drops the rows it returns whose key the filter lacks, whatever the
+table AM. The
+filter holds the keys left after everything the build side does -- joins,
+semi-joins, predicates -- where an exchanged filter holds a base scan's whole
+key column, and the scan never waits for it: a join that fetches its first
+outer tuple before building its hash table just sees that tuple unfiltered.
+Keys are normalized as above, so every key type the exchange takes works, and
+the filter works independently of `gp_enable_runtime_filter_pushdown`. EXPLAIN shows no Anser node for such a join; EXPLAIN ANALYZE shows
+`Rows Removed by Pushdown Runtime Filter` on the scan. The filter is probed
+adaptively like any other.
+
+The coordinator marks eligible hash joins in the plan. Segments use that
+decision when executing the dispatched plan, including when a cached plan is
+reused after a setting changes. The check takes one key that passes
+the checks below, as bare Vars; a slice that runs on segments and not in MPP
+parallel mode; and a SeqScan on the join's outer side, reached through
+HashJoins that keep their outer rows' values, Results, Appends and our own
+nodes, never through a Motion. A build side a nested loop re-runs with new
+parameter values stays out, as it does for the exchange; a plain rescan of the
+build side adds its keys again, and a filter that only grows stays correct.
+`anser.runtime_filter_inplace = off` makes newly planned queries use the
+exchange where eligible.
+
+An extension that places its own exchanges, like `robust_predicate_transfer`,
+can leave the remaining same-slice joins to in-place filters without turning
+on `anser.runtime_filter`. `AnserApplyInplaceRuntimeFilters` marks the eligible
+joins in the plan. An extension can register its identity filter nodes with
+`AnserRegisterFilterScanMethods` so the walk can reach the underlying scans.
 
 ### Only across a Motion
 
-A join is injected into only when its build and probe scans run in **different
-slices**. Slices are divided by Motions and nothing else, so this says: filter
+Apart from in-place filters, a join is injected into only when its build and
+probe scans run in **different slices**. Slices are divided by Motions and nothing else, so this says: filter
 only where the rows already travel over the network.
 
 It is a safety rule first. An exchange is a synchronisation point — the
@@ -192,8 +252,9 @@ published, and only the fold and the fan-out are left. Where the probe side
 travels through its own Motion, the consumer sits in that scan's slice and runs
 alongside the build, so it waits the build side out as well.
 
-Measured on 4 segments, 5000 build rows, a 1 MB filter (`bloom_create` floors
-every bitset at 1 MB, whatever the cardinality):
+Measured on 4 segments, 5000 build rows, a 1 MiB filter (historical
+measurements with the former 1 MiB minimum;
+the current Anser minimum is 8 KiB):
 
 | Slice width | Subscribers | Fan-in | Fan-out | Consumer stalls |
 | --- | --- | --- | --- | --- |
@@ -413,7 +474,8 @@ coordinator until it is done — the consumer drives the flow. Under
 | --- | --- | --- | --- |
 | `anser.enable` | `off` | SIGHUP | Master switch. With it off the plan pass never injects anything and no filters are exchanged. |
 | `anser.runtime_filter` | `off` | USERSET | Enables the post-planning pass that injects bloom-filter producer/consumer nodes into a matching plan. Requires `anser.enable`. |
-| `anser.max_info_size` | `65 MB` | SUSET | Maximum serialized payload (merged bloom filter + part header) a channel may hold; caps the effective bloom-filter size. The default is `64 MB + 1 MB` so a full 64 MB power-of-two bitset fits with its header; `bloom_create` also floors every bitset at 1 MB. The ceiling is a little under 1 GB: every payload is held whole in a single palloc on each end — the coordinator's merged payload and the consumer's assembly buffer, plus the base64 copy of a part on a producer — so it must stay inside `MaxAllocSize`. Both ends read it — see [Changing max_info_size](#changing-max_info_size) before touching it on a live session. |
+| `anser.runtime_filter_inplace` | `on` | USERSET | Joins whose probe scan runs in the join's own slice get an in-place filter, built on each segment from the join's Hash node, instead of an exchanged one. See [In-place filters](#in-place-filters). |
+| `anser.max_info_size` | `65 MB` | SUSET | Maximum serialized payload (merged bloom filter + part header) a channel may hold; caps the effective bloom-filter size. The default is `64 MB + 1 MB` so a full 64 MB power-of-two bitset fits with its header; Anser floors its bitsets at 8 KiB; serialized headers and framing add overhead. The ceiling is a little under 1 GB: every payload is held whole in a single palloc on each end — the coordinator's merged payload and the consumer's assembly buffer, plus the base64 copy of a part on a producer — so it must stay inside `MaxAllocSize`. Both ends read it — see [Changing max_info_size](#changing-max_info_size) before touching it on a live session. |
 | `anser.timeout_ms` | `10 s` | USERSET | How long a consumer waits for its filter before running unfiltered. What the wait covers depends on the plan — see [Delivery cost](#delivery-cost). The deadline matters because a producer that gets squelched never publishes at all: `ExecSquelchNode` only marks a `CustomScanState`, it does not call the node back. |
 | `anser.debug` | `off` | SUSET | Traces the exchange — publish, merge, delivery, receive — in the log of the process each step happens in. See below. |
 | `anser.debug_min_filter_bytes` | `0` | SUSET | Test knob: a floor on the bitset size, so a small table still produces a full-size filter. |
@@ -578,13 +640,23 @@ and artifacts are unchanged. Missing compiler profiles are reported.
 Sanitizer leak checking is disabled because fixture allocations intentionally
 live until process exit; address and undefined-behavior checks remain active.
 
+`make -C gpcontrib/anser/test unitcheck` includes a real Bloom sizing test:
+small filters use an 8 KiB bitset, planner and runtime sizes agree, merged
+parts round-trip without losing keys, and legacy core callers retain their
+1 MiB minimum. The constructor API addition requires rebuilding the server
+as well as the extensions.
+
 `make installcheck` runs two suites:
 
 - `anser_test` — the payload protocol (serialize, fold, reject a mismatched
   part) and the four give-up decisions, each walked along its boundary: the
-  estimate either side of 4 bits/key, the payload cap either side of "1 MB plus
+  estimate either side of 4 bits/key, the payload cap either side of "8 KiB plus
   a header", fill either side of the 95% limit, and a producer whose filter
   saturates. The case tables live in the `.sql` file, so the expected output
   records real sizes rather than a bare `t`.
 - `anser_runtime_filter` — plan-tree integration end to end: the nodes are
   injected, and query results are identical with the feature on and off.
+- `anser_inplace` — in-place filters: which joins get one and which are
+  exchanged, rows removed by them, a semi-join build side, negative keys on
+  AOCO, a weak filter that switches itself off, and identical results with
+  filters on and off.

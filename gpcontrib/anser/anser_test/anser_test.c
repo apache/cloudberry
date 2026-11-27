@@ -52,21 +52,10 @@
  */
 PG_MODULE_MAGIC;
 
-/*
- * Bloom sizing used by the test helpers.  bloom_create floors every filter at
- * 1 MB, so these are the smallest filters we can build; producer and consumer
- * sides must pass the identical pair (that is the whole point of carrying the
- * parameters in the node rather than on the wire).
- */
+/* Producer and consumer use identical sizing parameters. Keep enough room
+ * for Anser's 8 KiB minimum bitset and the serialized-part header. */
 #define ANSER_TEST_ELEMS		32
-
-/*
- * bloom_create floors every bitset at 1 MB, so a payload cap must be 1 MB
- * *plus* room for the serialized-part header -- the same allowance the planner
- * makes (ANSER_RF_HEADER_ROOM).  Passing a flat 1 MB asks AnserBloomCreate for
- * a filter that cannot fit the cap it was given, and it now declines.
- */
-#define ANSER_TEST_MAX_PAYLOAD	(1024 * 1024 + 64)
+#define ANSER_TEST_MAX_PAYLOAD	(ANSER_BLOOM_MIN_BYTES + 64)
 
 PG_FUNCTION_INFO_V1(anser_test_bloom_roundtrip);
 PG_FUNCTION_INFO_V1(anser_test_bloom_fold_inplace);
@@ -189,8 +178,8 @@ anser_test_bloom_fold_inplace(PG_FUNCTION_ARGS)
 
 	/*
 	 * A differently-sized part must be rejected and leave acc untouched.  Since
-	 * bloom_create floors every filter at 1 MB, we need a genuinely larger
-	 * cardinality/budget to get a bigger (2 MB) bitset than the 1 MB acc.
+	 * Anser floors its bitset at 8 KiB, so use a larger cardinality/budget
+	 * to get a differently sized (2 MiB) bitset.
 	 */
 	big = AnserBloomCreate(1500000, 4 * 1024 * 1024, seed);
 	if (big == NULL)
@@ -410,7 +399,7 @@ anser_test_rf_size(PG_FUNCTION_ARGS)
  * the cap, or there are too many keys for it to be worth building.
  *
  * Returns the realized sizes so the expected output pins down bloom_create's
- * actual behaviour (its 1 MB floor, its power-of-two rounding) and not merely
+ * actual behaviour (its 8 KiB floor, its power-of-two rounding) and not merely
  * our verdict on it.
  */
 Datum

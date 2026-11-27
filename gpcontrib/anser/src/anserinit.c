@@ -57,6 +57,9 @@ void		_PG_init(void);
 
 bool		gp_anser_enable = false;
 bool		gp_anser_runtime_filter = false;
+bool		gp_anser_runtime_filter_inplace = true;
+bool		gp_anser_inplace_with_consumer = true;
+bool		gp_anser_zero_copy = true;
 bool		gp_anser_debug = false;
 int			gp_anser_max_info_size = 64 * 1024 * 1024 + 1024 * 1024;
 int			gp_anser_timeout_ms = 10000;
@@ -72,6 +75,7 @@ static planner_hook_type prev_planner_hook = NULL;
 static ExecutorRun_hook_type prev_ExecutorRun_hook = NULL;
 static ExecutorFinish_hook_type prev_ExecutorFinish_hook = NULL;
 static ExecutorEnd_hook_type prev_ExecutorEnd_hook = NULL;
+static ExecutorStart_hook_type prev_ExecutorStart_hook = NULL;
 static cdbdisp_notify_hook_type prev_cdbdisp_notify_hook = NULL;
 
 /*
@@ -97,6 +101,7 @@ static void anser_executor_run(QueryDesc *queryDesc, ScanDirection direction,
 							   uint64 count, bool execute_once);
 static void anser_executor_finish(QueryDesc *queryDesc);
 static void anser_executor_end(QueryDesc *queryDesc);
+static void anser_executor_start(QueryDesc *queryDesc, int eflags);
 static void anser_xact_callback(XactEvent event, void *arg);
 static void anser_subxact_callback(SubXactEvent event, SubTransactionId mySubid,
 								   SubTransactionId parentSubid, void *arg);
@@ -125,6 +130,10 @@ _PG_init(void)
 	 * skips it for a failed portal), and its parked deliveries would otherwise
 	 * sit in the inbox until the top-level statement ends.
 	 */
+	/* Segments build in-place filters at executor start (anserinplace.c). */
+	prev_ExecutorStart_hook = ExecutorStart_hook;
+	ExecutorStart_hook = anser_executor_start;
+
 	prev_ExecutorRun_hook = ExecutorRun_hook;
 	ExecutorRun_hook = anser_executor_run;
 	prev_ExecutorFinish_hook = ExecutorFinish_hook;
@@ -171,6 +180,28 @@ anser_define_gucs(void)
 							 "Requires anser.enable; the plan pass is a no-op otherwise.",
 							 &gp_anser_runtime_filter,
 							 false,
+							 PGC_USERSET,
+							 GUC_EXPLAIN | GUC_GPDB_NEED_SYNC,
+							 NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("anser.inplace_with_consumer",
+							 "Allow in-place filters on keys already covered by an exchange.",
+							 NULL, &gp_anser_inplace_with_consumer, true, PGC_USERSET,
+							 GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC, NULL, NULL, NULL);
+	DefineCustomBoolVariable("anser.zero_copy",
+							 "Pass through child tuple slots in runtime filter nodes.",
+							 NULL, &gp_anser_zero_copy, true, PGC_USERSET,
+							 GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("anser.runtime_filter_inplace",
+							 "Builds the runtime filter of a co-located probe scan in place.",
+							 "When a hash join's probe scan runs in the join's own slice, each "
+							 "segment builds the filter from the rows the join's Hash node "
+							 "receives and applies it to that scan, with no exchange between "
+							 "segments.  Off makes newly planned queries use the exchange "
+							 "where eligible. The decision is recorded in the plan.",
+							 &gp_anser_runtime_filter_inplace,
+							 true,
 							 PGC_USERSET,
 							 GUC_EXPLAIN,
 							 NULL, NULL, NULL);
@@ -320,6 +351,17 @@ anser_notify_hook(struct CdbDispatchResult *dispatchResult,
 		return prev_cdbdisp_notify_hook(dispatchResult, notify);
 
 	return false;
+}
+
+static void
+anser_executor_start(QueryDesc *queryDesc, int eflags)
+{
+	if (prev_ExecutorStart_hook)
+		prev_ExecutorStart_hook(queryDesc, eflags);
+	else
+		standard_ExecutorStart(queryDesc, eflags);
+
+	AnserInplaceExecutorStart(queryDesc, eflags);
 }
 
 /* Count a query as executing for as long as it is running. */

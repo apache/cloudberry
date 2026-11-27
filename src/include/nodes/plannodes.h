@@ -1287,6 +1287,7 @@ typedef struct HashJoin
 	List	   *hashqualclauses;
 	bool	    batch0_barrier;
 	bool	    outer_motionhazard; /* CBDB_PARALLEL: for parallel aware join */
+	bool		anser_inplace_filter; /* Anser chose a segment-local Bloom filter */
 } HashJoin;
 
 #define SHARE_ID_NOT_SHARED (-1)

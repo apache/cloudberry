@@ -1670,8 +1670,11 @@ typedef struct SeqScanState
 	Size		pscan_len;		/* size of parallel heap scan descriptor */
 
 	List		*filters;			/* the list of struct ScanKeyData */
+	int			bloom_sample_rows;	/* capped at the probe ordering sample size */
 	bool		filter_in_seqscan;	/* check scan slot with runtime filters in
                                        seqscan node or in am */
+	bool		filters_in_am;		/* the scan began with runtime filters
+									 * handed to the table AM */
 } SeqScanState;
 
 /* ----------------
@@ -3226,7 +3229,9 @@ typedef struct RuntimeFilterState
 	uint64 inner_processed;
 	uint64 inner_threshold;
 	Datum *value_buf;
-	bool  *raw_value;
+	/* Datum widths per key, or zero to use the join hash functions. */
+	int16 *outer_raw_width;
+	int16 *inner_raw_width;
 
 	bloom_filter *bf;
 } RuntimeFilterState;

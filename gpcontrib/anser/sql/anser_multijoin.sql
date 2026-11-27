@@ -26,6 +26,10 @@
 
 SET enable_nestloop = off;
 SET enable_mergejoin = off;
+-- This file tests the Anser exchange.  A join whose probe scan runs in the
+-- join's own slice would otherwise get an in-place filter instead; that path
+-- is tested in anser_inplace.
+SET anser.runtime_filter_inplace = off;
 
 -- A regress test must not inherit the production deadline.  anser.timeout_ms
 -- defaults to 10 s, which is a budget for an exchange that has gone wrong; a

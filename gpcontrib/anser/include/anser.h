@@ -83,6 +83,9 @@ typedef struct AnserChannelKey
 /* GUCs (defined in anserinit.c). */
 extern PGDLLEXPORT bool gp_anser_enable;
 extern PGDLLEXPORT bool gp_anser_runtime_filter;
+extern PGDLLEXPORT bool gp_anser_runtime_filter_inplace;
+extern PGDLLEXPORT bool gp_anser_inplace_with_consumer;
+extern PGDLLEXPORT bool gp_anser_zero_copy;
 extern PGDLLEXPORT bool gp_anser_debug;
 extern PGDLLEXPORT int	gp_anser_max_info_size;
 extern PGDLLEXPORT int	gp_anser_timeout_ms;

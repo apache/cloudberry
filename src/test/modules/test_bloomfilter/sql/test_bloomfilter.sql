@@ -1,5 +1,10 @@
 CREATE EXTENSION test_bloomfilter;
 
+CREATE FUNCTION test_bloomfilter_runtime_probe()
+RETURNS void AS '$libdir/test_bloomfilter' LANGUAGE C;
+DO $$ BEGIN PERFORM test_bloomfilter_runtime_probe(); END $$;
+DROP FUNCTION test_bloomfilter_runtime_probe();
+
 -- See README for explanation of arguments:
 SELECT test_bloomfilter(power => 23,
     nelements => 838861,
@@ -17,3 +22,9 @@ SELECT test_bloomfilter(power => 23,
 -- SELECT test_bloomfilter(30, 107374182)
 -- SELECT test_bloomfilter(31, 214748365)
 -- SELECT test_bloomfilter(32, 429496730)
+
+-- Runtime filters hash and compare narrow keys in one canonical form.
+CREATE FUNCTION test_bloomfilter_normalize()
+RETURNS void AS '$libdir/test_bloomfilter' LANGUAGE C;
+DO $$ BEGIN PERFORM test_bloomfilter_normalize(); END $$;
+DROP FUNCTION test_bloomfilter_normalize();

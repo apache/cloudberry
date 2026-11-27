@@ -37,6 +37,8 @@
  */
 #include "postgres.h"
 
+#include "access/tableam.h"
+
 #include "anserplanutils.h"
 
 #include "access/skey.h"
@@ -56,6 +58,7 @@
 #include "nodes/pg_list.h"
 #include "nodes/value.h"
 #include "utils/guc.h"
+#include "utils/rel.h"
 
 /*
  * Positional layout of CustomScan.custom_private shared with anserplan.c.
@@ -113,6 +116,9 @@ typedef struct AnserBloomConsumeScanState
 								 * building its hash; see anser_consume_receive() */
 	bool		probed;			/* has the join pulled a tuple from us before? */
 	bool		pushed_down;	/* child scan applies the filter before projection */
+	bool		pushdown_tried;	/* anser_consume_pushdown() ran, whatever it did */
+	SeqScanState *key_scan;		/* target of a pushed-down scan key */
+	bool		check_scan_key;	/* recheck after a rescan, before pulling rows */
 } AnserBloomConsumeScanState;
 
 /* Provider callbacks. */
@@ -230,6 +236,63 @@ AnserIsRuntimeFilterScan(const Plan *plan)
 	cscan = (const CustomScan *) plan;
 	return cscan->methods == &anser_produce_scan_methods ||
 		cscan->methods == &anser_consume_scan_methods;
+}
+
+/* Other extensions' identity filter nodes; see AnserIsFilterScan. */
+#define ANSER_MAX_FILTER_METHODS 8
+static const CustomScanMethods *anser_filter_methods[ANSER_MAX_FILTER_METHODS];
+static int	anser_n_filter_methods = 0;
+
+void
+AnserRegisterFilterScanMethods(const CustomScanMethods *methods)
+{
+	int			i;
+
+	for (i = 0; i < anser_n_filter_methods; i++)
+		if (anser_filter_methods[i] == methods)
+			return;
+	if (anser_n_filter_methods >= ANSER_MAX_FILTER_METHODS)
+		elog(ERROR, "too many Anser filter scan providers");
+	anser_filter_methods[anser_n_filter_methods++] = methods;
+}
+
+/*
+ * An identity filter node with its one child: ours, or one registered with
+ * AnserRegisterFilterScanMethods.
+ */
+bool
+AnserIsFilterScan(const Plan *plan)
+{
+	const CustomScan *cscan;
+	int			i;
+
+	if (plan == NULL || !IsA(plan, CustomScan))
+		return false;
+	cscan = (const CustomScan *) plan;
+	if (list_length(cscan->custom_plans) != 1)
+		return false;
+	if (AnserIsRuntimeFilterScan(plan))
+		return true;
+	for (i = 0; i < anser_n_filter_methods; i++)
+		if (cscan->methods == anser_filter_methods[i])
+			return true;
+	return false;
+}
+
+/* The consumer's key position in its identity output target list. */
+AttrNumber
+AnserBloomConsumerKey(const Plan *plan)
+{
+	const CustomScan *scan;
+
+	if (plan == NULL || !IsA(plan, CustomScan))
+		return InvalidAttrNumber;
+
+	scan = (const CustomScan *) plan;
+	if (scan->methods != &anser_consume_scan_methods)
+		return InvalidAttrNumber;
+
+	return (AttrNumber) intVal(list_nth(scan->custom_private, ANSER_RF_PRIV_KEY_ATTNO));
 }
 
 CustomScan *
@@ -386,6 +449,7 @@ anser_produce_begin(CustomScanState *node, EState *estate, int eflags)
 				max_payload, st->produce != NULL ? "ok" : "NULL");
 
 	node->custom_ps = list_make1(ExecInitNode(child, estate, eflags));
+	AnserInitFilterChildSlot(node, gp_anser_zero_copy);
 	st->key_length = AnserKeyLength((PlanState *) linitial(node->custom_ps), st->key_attno);
 }
 
@@ -568,6 +632,7 @@ anser_consume_begin(CustomScanState *node, EState *estate, int eflags)
 	st->defer_first = (intVal(list_nth(priv, ANSER_RF_PRIV_DEFER_FIRST)) != 0);
 	st->probed = false;
 	st->pushed_down = false;
+	st->pushdown_tried = false;
 
 	anser_rf_build_key(cscan, &key);
 	anser_rf_part_info(cscan, &part_index, &expected_parts);
@@ -576,6 +641,7 @@ anser_consume_begin(CustomScanState *node, EState *estate, int eflags)
 												  expected_parts);
 
 	node->custom_ps = list_make1(ExecInitNode(child, estate, eflags));
+	AnserInitFilterChildSlot(node, gp_anser_zero_copy);
 	st->key_length = AnserKeyLength((PlanState *) linitial(node->custom_ps), st->key_attno);
 }
 
@@ -690,12 +756,9 @@ anser_is_rf_scan_state(const PlanState *ps)
  * a key carrying 1 tests `payload` against a filter built on `id` and discards
  * every row.
  *
- * Only a SeqScan is accepted, because nodeSeqscan.c is the only consumer of
- * this scan-key shape that sees an unprojected table tuple.  DynamicSeqScan
- * also carries a `filters` list, but it applies the filter to its child
- * SeqScan's *projected* slot and remaps varattnos per partition, so it would
- * need different numbering -- and the injection pass cannot reach one anyway,
- * since AnserResolveKeyScan only terminates on a plain SeqScan.
+ * Anser's placement walk terminates on a plain SeqScan. Core can also
+ * install keys on a DynamicSeqScan, which remaps table attribute numbers
+ * when passing keys to each partition.
  */
 static bool
 anser_scan_qual_accepts(PlanState *ps, AttrNumber attno, AttrNumber *sk_attno_out)
@@ -748,6 +811,31 @@ AnserPushdownAccepts(PlanState *ps, AttrNumber attno, AttrNumber *sk_attno_out)
  * directly above the scan, and the only thing that later gets between them is
  * another one of ours.
  */
+/*
+ * Keep Anser quals off scans whose table AM does not simply run the
+ * executor's qual; the consumer probes the rows itself there.
+ *
+ *	 - AOCO can evaluate a scan's qual before it loads the columns absent from
+ *	   the original SQL qual, so an Anser qual there could read a key that is
+ *	   not loaded yet.
+ *	 - An AM that takes runtime filters (SCAN_SUPPORT_RUNTIME_FILTER; PAX) may
+ *	   rebuild its own row filter from the plan's qual and clear the
+ *	   executor's, which would drop ours: the filter would be lost while the
+ *	   consumer believes it was pushed down.
+ */
+static bool
+anser_runtime_qual_accepts(PlanState *ps, AttrNumber attno,
+						   AttrNumber *sk_attno_out)
+{
+	Relation	rel;
+
+	if (!anser_scan_qual_accepts(ps, attno, sk_attno_out))
+		return false;
+	rel = ((SeqScanState *) ps)->ss.ss_currentRelation;
+	return rel != NULL && !RelationIsAoCols(rel) &&
+		(table_scan_flags(rel) & SCAN_SUPPORT_RUNTIME_FILTER) == 0;
+}
+
 static PlanState *
 anser_pushdown_target(PlanState *top, AttrNumber attno,
 					  AttrNumber *sk_attno_out, bool scan_qual)
@@ -764,7 +852,7 @@ anser_pushdown_target(PlanState *top, AttrNumber attno,
 		TargetEntry *tle;
 		Var		   *var;
 
-		if (scan_qual ? anser_scan_qual_accepts(cur, cur_attno, &sk_attno) :
+		if (scan_qual ? anser_runtime_qual_accepts(cur, cur_attno, &sk_attno) :
 			AnserPushdownAccepts(cur, cur_attno, &sk_attno))
 		{
 			best = cur;
@@ -801,8 +889,7 @@ AnserPushdownTarget(PlanState *top, AttrNumber attno, AttrNumber *sk_attno_out)
 }
 
 /*
- * Core's SK_BLOOM_FILTER path hashes an unnormalized Datum, including unused
- * upper bytes. For narrow keys, install an Anser-owned scan qual instead.
+ * When a scan cannot accept an SK_BLOOM_FILTER key, try an Anser-owned qual.
  * It runs before projection, delegates the original qual unchanged, and may
  * stack with other consumers. Query-context lifetime matches the scan and
  * the consumer ends its child before releasing the referenced Bloom filter.
@@ -825,10 +912,12 @@ anser_bloom_scan_qual(ExprState *expr, ExprContext *context, bool *isnull)
 	Datum		value;
 
 	*isnull = false;
+	if (bloom_runtime_probe_skip(qual->filter))
+		return BoolGetDatum(ExecQual(qual->original, context));
 	value = slot_getattr(context->ecxt_scantuple, qual->key_attno, &key_isnull);
 	if (!key_isnull)
 	{
-		if (AnserBloomLacksKey(qual->filter, value, qual->key_length))
+		if (AnserBloomProbe(qual->filter, value, qual->key_length))
 		{
 			InstrCountFilteredPRF(qual->scan, 1);
 			/* ExecScan adds one to nfiltered1 when this qual returns false.
@@ -841,9 +930,17 @@ anser_bloom_scan_qual(ExprState *expr, ExprContext *context, bool *isnull)
 	return BoolGetDatum(ExecQual(qual->original, context));
 }
 
-/* Hand the received filter to the deepest eligible scan before projection.
- * Narrow keys use the normalized qual above; full-width keys can use core's
- * SK_BLOOM_FILTER path, including table-AM block pruning. */
+/*
+ * Hand the received filter to the deepest eligible scan before projection.
+ *
+ * Preferred is core's SK_BLOOM_FILTER path: the scan passes the key to a
+ * table AM that takes runtime filters -- PAX checks it before it loads the
+ * other columns and orders it among its own filters -- and checks it itself
+ * otherwise.  Keys of every width are hashed the way core and PAX probe them
+ * (AnserNormalizeBloomDatum).  A scan that cannot take a key -- in MPP
+ * parallel mode, or one whose AM took earlier keys and has started -- gets
+ * an Anser-owned qual instead where the AM runs the executor's qual as is.
+ */
 static void
 anser_consume_pushdown(CustomScanState *node)
 {
@@ -853,14 +950,27 @@ anser_consume_pushdown(CustomScanState *node)
 	AttrNumber	sk_attno;
 	ScanKey		sk;
 	MemoryContext oldcxt;
-	bool		scan_qual = st->key_length < sizeof(Datum);
+	bool		scan_qual = false;
 
-	if (!scan_qual && !gp_enable_runtime_filter_pushdown)
-		return;
-
-	target = anser_pushdown_target(child, st->key_attno, &sk_attno, scan_qual);
+	target = anser_pushdown_target(child, st->key_attno, &sk_attno, false);
 	if (target == NULL)
+	{
+		scan_qual = true;
+		target = anser_pushdown_target(child, st->key_attno, &sk_attno, true);
+	}
+	if (target == NULL)
+	{
+		/* Probing in this node costs a slot copy per row; say why. */
+		elog(DEBUG1,
+			 "anser bloom consumer: no scan to push the filter into, probing here "
+			 "(key position %d, child %s)",
+			 st->key_attno,
+			 IsA(child, SeqScanState) ?
+			 (((SeqScanState *) child)->filter_in_seqscan ? "SeqScan" :
+			  "SeqScan without runtime filters") :
+			 "not a SeqScan");
 		return;
+	}
 
 	/* Both eligibility paths require a plain SeqScan. */
 	Assert(IsA(target, SeqScanState));
@@ -889,12 +999,37 @@ anser_consume_pushdown(CustomScanState *node)
 		sk->sk_attno = sk_attno;
 		sk->sk_flags = SK_BLOOM_FILTER;
 		sk->sk_argument = PointerGetDatum(st->filter);
-		((SeqScanState *) target)->filters =
-			lappend(((SeqScanState *) target)->filters, sk);
+		st->key_scan = (SeqScanState *) target;
+		st->key_scan->filters = lappend(st->key_scan->filters, sk);
 	}
 	MemoryContextSwitchTo(oldcxt);
 
 	st->pushed_down = true;
+}
+
+/*
+ * Core can clear a scan's keys when it rebuilds a hash table. Check at the
+ * next pull, after the join has had a chance to reset its filters. A surviving
+ * key or an Anser-owned qual needs no new installation.
+ */
+static void
+anser_consume_check_scan_key(AnserBloomConsumeScanState *st)
+{
+	ListCell   *lc;
+
+	st->check_scan_key = false;
+	foreach(lc, st->key_scan->filters)
+	{
+		ScanKey key = lfirst(lc);
+
+		if ((key->sk_flags & SK_BLOOM_FILTER) &&
+			key->sk_argument == PointerGetDatum(st->filter))
+			return;
+	}
+
+	st->key_scan = NULL;
+	st->pushed_down = false;
+	st->pushdown_tried = false;
 }
 
 static TupleTableSlot *
@@ -904,13 +1039,19 @@ anser_consume_next(CustomScanState *node)
 	PlanState  *child = (PlanState *) linitial(node->custom_ps);
 
 	anser_consume_receive(st);
+	if (st->check_scan_key)
+		anser_consume_check_scan_key(st);
 
 	/*
-	 * When the pushdown machinery is enabled, hand the filter to the scan and
-	 * pass tuples through untouched; otherwise probe the filter here.
+	 * Hand the filter to the scan once, and pass tuples through untouched if
+	 * it took it; otherwise probe the filter here.  Once: a scan that cannot
+	 * take it now will not later, unless a rescan invalidates its scan key.
 	 */
-	if (st->filter != NULL && !st->pushed_down)
+	if (st->filter != NULL && !st->pushdown_tried)
+	{
+		st->pushdown_tried = true;
 		anser_consume_pushdown(node);
+	}
 
 	for (;;)
 	{
@@ -926,6 +1067,10 @@ anser_consume_next(CustomScanState *node)
 		 * projection): pass everything.
 		 */
 		if (st->filter == NULL || st->pushed_down)
+			return AnserFilterChildSlot(node, slot);
+
+		/* The filter turned itself off for now; see bloom_runtime_probe(). */
+		if (bloom_runtime_probe_skip(st->filter))
 			return AnserFilterChildSlot(node, slot);
 
 		/*
@@ -946,7 +1091,7 @@ anser_consume_next(CustomScanState *node)
 			 * segment-executed nodes too.
 			 */
 			InstrCountFiltered1(node, 1);
-			if (AnserBloomLacksKey(st->filter, value, st->key_length))
+			if (AnserBloomProbe(st->filter, value, st->key_length))
 			{
 				/* Definitely absent from the build side -> prune. */
 				InstrCountFiltered2(node, 1);
@@ -987,6 +1132,9 @@ anser_consume_end(CustomScanState *node)
 static void
 anser_consume_rescan(CustomScanState *node)
 {
+	AnserBloomConsumeScanState *st = (AnserBloomConsumeScanState *) node;
+
+	st->check_scan_key = st->key_scan != NULL;
 	if (node->custom_ps != NIL)
 		ExecReScan((PlanState *) linitial(node->custom_ps));
 }

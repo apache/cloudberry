@@ -38,8 +38,17 @@
 #include "common/hashfn.h"
 #include "lib/bloomfilter.h"
 #include "port/pg_bitutils.h"
+#include "utils/guc.h"
 
 #define MAX_HASH_FUNCS		10
+
+/*
+ * A disabled runtime probe samples again after this many skipped rows, doubling
+ * the gap every time the sample confirms the filter is still ineffective, up to
+ * BLOOM_PROBE_MAX_SKIP rows between samples.
+ */
+#define BLOOM_PROBE_MIN_SKIP	((uint64) BLOOM_PROBE_SAMPLE_SIZE)
+#define BLOOM_PROBE_MAX_SKIP	(UINT64CONST(64) * 1024 * 1024)
 
 struct bloom_filter
 {
@@ -48,6 +57,14 @@ struct bloom_filter
 	uint64		seed;
 	/* m is bitset size, in bits.  Must be a power of two <= 2^32.  */
 	uint64		m;
+	/* Runtime probe sampling, see bloom_runtime_probe() */
+	int			probe_sample_count;		/* probes in the current window */
+	int			probe_sample_rejected;	/* rejections in the current window */
+	int			probe_last_rejected;	/* rejections in the last full window,
+										 * or -1 if no window completed yet */
+	bool		probe_disabled;
+	uint64		probe_skip_left;		/* rows to skip before sampling again */
+	uint64		probe_skip_gap;			/* current gap between samples */
 	unsigned char bitset[FLEXIBLE_ARRAY_MEMBER];
 };
 
@@ -86,6 +103,17 @@ static inline uint32 mod_m(uint32 val, uint64 m);
 bloom_filter *
 bloom_create(int64 total_elems, int bloom_work_mem, uint64 seed)
 {
+	return bloom_create_with_minimum(total_elems, bloom_work_mem, seed, 1024 * 1024);
+}
+
+/*
+ * Like bloom_create, with a caller-selected power-of-two minimum bitset size
+ * in bytes.  bloom_create keeps its historical 1 MiB floor.
+ */
+bloom_filter *
+bloom_create_with_minimum(int64 total_elems, int bloom_work_mem, uint64 seed,
+						  Size minimum_bytes)
+{
 	bloom_filter *filter;
 	int			bloom_power;
 	uint64		bitset_bytes;
@@ -99,7 +127,9 @@ bloom_create(int64 total_elems, int bloom_work_mem, uint64 seed)
 	 * false positive rate still won't exceed 2% in almost all cases.
 	 */
 	bitset_bytes = Min(bloom_work_mem * UINT64CONST(1024), total_elems * 2);
-	bitset_bytes = Max(1024 * 1024, bitset_bytes);
+	Assert(minimum_bytes > 0 && minimum_bytes <= UINT64CONST(512) * 1024 * 1024);
+	Assert((minimum_bytes & (minimum_bytes - 1)) == 0);
+	bitset_bytes = Max(minimum_bytes, bitset_bytes);
 
 	/*
 	 * Size in bits should be the highest power of two <= target.  bitset_bits
@@ -115,6 +145,7 @@ bloom_create(int64 total_elems, int bloom_work_mem, uint64 seed)
 	filter->k_hash_funcs = optimal_k(bitset_bits, total_elems);
 	filter->seed = seed;
 	filter->m = bitset_bits;
+	filter->probe_last_rejected = -1;
 
 	return filter;
 }
@@ -169,6 +200,96 @@ bloom_lacks_element(bloom_filter *filter, unsigned char *elem, size_t len)
 	}
 
 	return false;
+}
+
+bool
+bloom_runtime_probe_disabled(const bloom_filter *filter)
+{
+	return filter->probe_disabled;
+}
+
+/*
+ * Should the caller skip probing for this row?  Call once per row, before
+ * reading the key and calling bloom_runtime_probe().  A disabled filter is
+ * skipped, but it counts
+ * the skipped rows and starts a new sample window once its gap is used up, so
+ * that a filter switched off by an unrepresentative first sample (rows loaded
+ * in key order, for instance) gets switched on again.
+ */
+bool
+bloom_runtime_probe_skip(bloom_filter *filter)
+{
+	if (!filter->probe_disabled)
+		return false;
+	if (filter->probe_skip_left > 1)
+	{
+		filter->probe_skip_left--;
+		return true;
+	}
+
+	/* Gap used up: sample a new window with this row. */
+	filter->probe_disabled = false;
+	filter->probe_skip_left = 0;
+	filter->probe_sample_count = 0;
+	filter->probe_sample_rejected = 0;
+	return false;
+}
+
+/* Rank by rejection rate, including partial samples. */
+int
+bloom_runtime_probe_rank(const bloom_filter *filter)
+{
+	if (filter->probe_disabled)
+		return -1;
+	if (filter->probe_last_rejected >= 0)
+		return filter->probe_last_rejected;
+	if (filter->probe_sample_count == 0)
+		return 0;
+	return filter->probe_sample_rejected * BLOOM_PROBE_SAMPLE_SIZE /
+		filter->probe_sample_count;
+}
+
+/*
+ * Return true for a definite miss.
+ *
+ * Probes are counted in windows of BLOOM_PROBE_SAMPLE_SIZE.  When a window
+ * rejects fewer than gp_runtime_filter_min_reject_pct percent of its keys, the
+ * filter is disabled: bloom_runtime_probe_skip() then tells the caller to pass
+ * rows through, and after a gap of skipped rows a new window is sampled.  The
+ * gap starts at BLOOM_PROBE_MIN_SKIP and doubles each time a window confirms
+ * the filter is still ineffective, up to BLOOM_PROBE_MAX_SKIP; a window that
+ * rejects enough keys resets it.  The last probe of a window still returns its
+ * actual result.  The state belongs to this filter and lasts across partitions
+ * and rescans that reuse it.  A threshold of 0 never disables the filter.
+ */
+bool
+bloom_runtime_probe(bloom_filter *filter, unsigned char *elem, size_t len)
+{
+	bool		lacks;
+
+	if (filter->probe_disabled)
+		return false;
+
+	lacks = bloom_lacks_element(filter, elem, len);
+	filter->probe_sample_rejected += lacks;
+	if (++filter->probe_sample_count == BLOOM_PROBE_SAMPLE_SIZE)
+	{
+		filter->probe_last_rejected = filter->probe_sample_rejected;
+		if (filter->probe_sample_rejected * 100 <
+			BLOOM_PROBE_SAMPLE_SIZE * gp_runtime_filter_min_reject_pct)
+		{
+			filter->probe_skip_gap = filter->probe_skip_gap == 0 ?
+				BLOOM_PROBE_MIN_SKIP :
+				Min(filter->probe_skip_gap * 2, BLOOM_PROBE_MAX_SKIP);
+			filter->probe_skip_left = filter->probe_skip_gap;
+			filter->probe_disabled = true;
+		}
+		else
+			filter->probe_skip_gap = 0;
+		filter->probe_sample_count = 0;
+		filter->probe_sample_rejected = 0;
+	}
+	return lacks;
 }
 
 /*
@@ -318,12 +439,25 @@ bloom_filter *
 bloom_create_from_bitset(int64 total_elems, int bloom_work_mem, uint64 seed,
 						 const unsigned char *bitset, Size bitset_len)
 {
+	return bloom_create_from_bitset_with_minimum(total_elems, bloom_work_mem,
+												   seed, bitset, bitset_len, 1024 * 1024);
+}
+
+/*
+ * Like bloom_create_from_bitset, for a filter created with
+ * bloom_create_with_minimum: pass the same minimum the producer used.
+ */
+bloom_filter *
+bloom_create_from_bitset_with_minimum(int64 total_elems, int bloom_work_mem,
+									 uint64 seed, const unsigned char *bitset,
+									 Size bitset_len, Size minimum_bytes)
+{
 	bloom_filter *filter;
 
 	if (bitset == NULL)
 		return NULL;
 
-	filter = bloom_create(total_elems, bloom_work_mem, seed);
+	filter = bloom_create_with_minimum(total_elems, bloom_work_mem, seed, minimum_bytes);
 	if (bitset_len != (Size) (filter->m / BITS_PER_BYTE))
 	{
 		bloom_free(filter);
@@ -390,6 +524,7 @@ bloom_create_aggresive(int64 total_elems, int work_mem, uint64 seed)
 	filter->k_hash_funcs = bits_per_elem >= 3.5 ? 3 : 2;
 	filter->seed = seed;
 	filter->m = bitset_bits;
+	filter->probe_last_rejected = -1;
 
 	return filter;
 }

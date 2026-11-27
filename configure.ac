@@ -242,6 +242,16 @@ PGAC_ARG_BOOL(with, anser, no,
 AC_SUBST(with_anser)
 
 #
+# Robust predicate transfer (RPT+ over Anser)
+#
+PGAC_ARG_BOOL(with, rpt, no,
+              [build the RPT+ transfer-plan extension (requires --with-anser)])
+AC_SUBST(with_rpt)
+if test "$with_rpt" = yes && test "$with_anser" != yes; then
+  AC_MSG_ERROR([--with-rpt requires --with-anser])
+fi
+
+#
 # Enable fault injector
 #
 PGAC_ARG_BOOL(enable, faultinjector, yes, [disable fault injector],

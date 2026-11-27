@@ -31,6 +31,7 @@
 #include <thread>
 
 #include "comm/gtest_wrappers.h"
+#include "storage/filter/pax_row_filter.h"
 #include "storage/filter/pax_sparse_filter.h"
 #include "storage/filter/pax_sparse_filter_tree.h"
 
@@ -90,6 +91,126 @@ TEST_F(PaxFilterTest, TestPrint) {
   std::cout << sf.DebugString() << std::endl;
 
   sf.filter_tree_ = nullptr;
+}
+
+TEST_F(PaxFilterTest, OrdersBloomFiltersBeforeMoreSelectivePredicates) {
+  ExecutionFilterContext context{};
+  using Kind = ExecutionFilterContext::FilterKind;
+  context.filter_nodes = {
+      {Kind::kBloom, 0, 100, 90},
+      {Kind::kExpr, 0, 100, 5},
+      {Kind::kBloom, 1, 100, 20},
+      {Kind::kExpr, 1, 5, 0},
+  };
+
+  context.FinishSampling();
+
+  ASSERT_FALSE(context.sampling);
+  ASSERT_EQ(context.filter_nodes[0].kind, Kind::kBloom);
+  ASSERT_EQ(context.filter_nodes[0].index, 1);
+  ASSERT_EQ(context.filter_nodes[1].kind, Kind::kBloom);
+  ASSERT_EQ(context.filter_nodes[1].index, 0);
+  ASSERT_EQ(context.filter_nodes[2].kind, Kind::kExpr);
+  ASSERT_EQ(context.filter_nodes[2].index, 0);
+  ASSERT_EQ(context.filter_nodes[3].kind, Kind::kExpr);
+  ASSERT_EQ(context.filter_nodes[3].index, 1);
+}
+
+TEST_F(PaxFilterTest, KeepsSqlGuardFirstAcrossSamplingWindow) {
+  using Kind = ExecutionFilterContext::FilterKind;
+  using Result = ExecutionFilterContext::FilterResult;
+
+  for (bool with_bloom : {false, true}) {
+    SCOPED_TRACE(with_bloom);
+    ExecutionFilterContext context{};
+    if (with_bloom) context.filter_nodes.push_back({Kind::kBloom, 0});
+    context.filter_nodes.push_back({Kind::kExpr, 0});
+    context.filter_nodes.push_back({Kind::kExpr, 1});
+
+    uint64 passed = 0;
+    uint64 bloom_rejected = 0;
+    for (uint64 i = 0; i < 2 * context.sample_target; ++i) {
+      const bool valid = i % 10 != 1;
+      const bool bloom_pass = !with_bloom || i % 10 != 0;
+      const auto result = context.ApplyFilters([&](const auto &node) {
+        if (node.kind == Kind::kBloom) return bloom_pass;
+        EXPECT_TRUE(bloom_pass) << "SQL predicate on Bloom-rejected row " << i;
+        if (node.index == 0) return valid;
+        EXPECT_TRUE(valid) << "unguarded predicate at row " << i;
+        return i % 10 > 5;
+      });
+      passed += result == Result::kPass;
+      bloom_rejected += result == Result::kBloomRejected;
+    }
+
+    EXPECT_FALSE(context.sampling);
+    EXPECT_EQ(passed, 52428U);
+    EXPECT_EQ(bloom_rejected, with_bloom ? 13108U : 0U);
+  }
+}
+
+TEST_F(PaxFilterTest, KeepsExactlyTheRowsPassingBloomAndSqlFilters) {
+  ExecutionFilterContext context{};
+  using Kind = ExecutionFilterContext::FilterKind;
+  using Result = ExecutionFilterContext::FilterResult;
+  context.filter_nodes = {{Kind::kBloom, 0}, {Kind::kBloom, 1},
+                          {Kind::kExpr, 0}, {Kind::kExpr, 1}};
+
+  struct Row {
+    bool bloom[2];
+    bool sql[2];
+  };
+  const Row rows[] = {
+      {{true, true}, {true, true}},
+      {{false, false}, {true, true}},
+      {{true, false}, {false, false}},
+      {{false, true}, {true, true}},
+      {{true, true}, {true, false}},
+      {{true, true}, {false, true}},
+      {{true, true}, {true, true}},
+  };
+  context.sample_target = sizeof(rows) / sizeof(rows[0]);
+  const std::vector<size_t> expected_kept{0, 6};
+  const std::vector<size_t> expected_bloom_removed{1, 2, 3};
+  const std::vector<size_t> expected_sql_removed{4, 5};
+
+  for (bool sampling : {true, false}) {
+    ASSERT_EQ(context.sampling, sampling);
+    std::vector<size_t> kept, bloom_removed, sql_removed;
+    size_t sql_calls_on_bloom_rejection = 0;
+    size_t sql_calls_on_sql_rejection = 0;
+    for (size_t i = 0; i < context.sample_target; ++i) {
+      const auto &row = rows[i];
+      bool sql_rejected = false;
+      auto result = context.ApplyFilters([&](const auto &node) {
+        if (node.kind == Kind::kBloom) return row.bloom[node.index];
+        if (!row.bloom[0] || !row.bloom[1]) ++sql_calls_on_bloom_rejection;
+        if (sql_rejected) ++sql_calls_on_sql_rejection;
+        sql_rejected = !row.sql[node.index];
+        return row.sql[node.index];
+      });
+      if (result == Result::kPass) kept.push_back(i);
+      if (result == Result::kBloomRejected) bloom_removed.push_back(i);
+      if (result == Result::kExprRejected) sql_removed.push_back(i);
+    }
+    EXPECT_EQ(kept, expected_kept);
+    EXPECT_EQ(bloom_removed, expected_bloom_removed);
+    EXPECT_EQ(sql_removed, expected_sql_removed);
+    EXPECT_EQ(sql_calls_on_bloom_rejection, 0U);
+    // A SQL condition never sees a row an earlier one rejected, sampling or
+    // not, so the second condition is sampled on fewer rows.
+    EXPECT_EQ(sql_calls_on_sql_rejection, 0U);
+
+    for (const auto &node : context.filter_nodes) {
+      if (node.kind == Kind::kBloom) {
+        EXPECT_EQ(node.tested, 7U);
+        EXPECT_EQ(node.passed, 5U);
+      } else {
+        EXPECT_EQ(node.tested, node.index == 0 ? 4U : 3U);
+        EXPECT_EQ(node.passed, node.index == 0 ? 3U : 2U);
+      }
+    }
+  }
 }
 
 void thread_task(std::array<std::atomic<int>, 2> &array,

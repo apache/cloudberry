@@ -2303,7 +2303,7 @@ CreateRuntimeFilter(HashJoinState* hjstate)
 	HashState	*hstate;
 	AttrFilter	*attr_filter;
 	ListCell	*lc;
-	ListCell	*lc2;
+	ListCell	*lc_targets;
 	List		*targets;
 
 	/*
@@ -2349,9 +2349,9 @@ CreateRuntimeFilter(HashJoinState* hjstate)
 		if (lattno == -1 || targets == NULL)
 			continue;
 
-		foreach(lc2, targets)
+		foreach(lc_targets, targets)
 		{
-			PlanState *target = lfirst(lc2);
+			PlanState *target = lfirst(lc_targets);
 			Assert(IsA(target, SeqScanState) || IsA(target, DynamicSeqScanState));
 
 			attr_filter = CreateAttrFilter(target, lattno, rattno,
@@ -2454,12 +2454,6 @@ CheckTargetNode(PlanState *node, AttrNumber attno, AttrNumber *lattno)
 	if (!IsA(te->expr, Var))
 		return false;
 
-	if (IsA(node, DynamicSeqScanState))
-	{
-		*lattno = te->resno;
-		return true;
-	}
-
 	/*
 	 * seqscan is a special case, it's targetlist is a projection of the
 	 * relation's attributes. so we need to find the attribute number of the
@@ -2475,6 +2469,23 @@ CheckTargetNode(PlanState *node, AttrNumber attno, AttrNumber *lattno)
 	*lattno = var->varattno;
 
 	return true;
+}
+
+/* Does every output row of this join carry an outer row's values unchanged? */
+static bool
+JoinKeepsOuterValues(JoinType jointype)
+{
+	switch (jointype)
+	{
+		case JOIN_INNER:
+		case JOIN_LEFT:
+		case JOIN_SEMI:
+		case JOIN_ANTI:
+		case JOIN_LASJ_NOTIN:
+			return true;
+		default:
+			return false;
+	}
 }
 
 /*
@@ -2548,6 +2559,17 @@ FindTargetNodes(HashJoinState *hjstate, AttrNumber attno, AttrNumber *lattno)
 		 *     ...
 		 */
 		if (!IsA(child, HashJoinState) && !IsA(child, ResultState) && !IsA(child, AppendState))
+			return NULL;
+
+		/*
+		 * Only through a join whose output carries its outer rows' values as
+		 * they are.  Below the outer side of a right or full join, a row the
+		 * filter drops does not vanish: its partner comes out NULL-extended
+		 * instead, and a NULL-tolerant condition above (IS NOT DISTINCT FROM,
+		 * whose null test sits in hashqualclauses) can then match it.
+		 */
+		if (IsA(child, HashJoinState) &&
+			!JoinKeepsOuterValues(castNode(HashJoinState, child)->js.jointype))
 			return NULL;
 
 		/* child is hashjoin, result or append node */
