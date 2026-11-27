@@ -336,7 +336,7 @@ def main():
                     result = subprocess.run(
                         [args.psql, "-X", "-q", "-A", "-t", "--no-password", "-v", "ON_ERROR_STOP=1", "-d", connections[suite]],
                         input=survey_sql(query, optimizer, args.statement_timeout_ms, schemas[suite]),
-                        text=True, capture_output=True,
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
                         timeout=2 * args.statement_timeout_ms / 1000 + 15)
                     if result.returncode:
                         # Do not record connection strings or arbitrary stderr,

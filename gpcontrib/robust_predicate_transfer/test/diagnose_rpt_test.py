@@ -84,7 +84,8 @@ backward consumer 3 root=1 rep=1.2 key=- defer_first=no rows_removed=-1 decision
             result = subprocess.run([sys.executable, str(SCRIPT), "--psql", str(fake_psql),
                                      "--output", str(output), "--wall-timeout",
                                      "0.2" if hangs else "5", "--cancel-grace", "0.1"],
-                                    capture_output=True, text=True, timeout=10)
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    universal_newlines=True, timeout=10)
             state = json.loads((output / "result.json").read_text())
             self.assertEqual(state["timed_out"], hangs)
             self.assertEqual(result.returncode, 2 if hangs else 0, result.stderr)

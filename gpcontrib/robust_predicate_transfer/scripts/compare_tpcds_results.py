@@ -38,7 +38,7 @@ COPY (
 """
     result = subprocess.run(
         [psql, "-Xq", "-v", "ON_ERROR_STOP=1", "-d", database],
-        input=sql, text=True, capture_output=True, check=True,
+        input=sql, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, check=True,
     )
     return Counter(result.stdout.split("\n")[:-1])
 

@@ -160,7 +160,8 @@ def main():
     def monitor(filename, sql):
         try:
             result = subprocess.run(command + ["-A", "-t", "-c", sql],
-                                    env=env, capture_output=True, text=True, timeout=8)
+                                    env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    universal_newlines=True, timeout=8)
             (args.output / filename).write_text(result.stdout + result.stderr)
             return result.returncode
         except subprocess.TimeoutExpired as error:
