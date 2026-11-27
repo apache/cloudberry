@@ -12,5 +12,4 @@
 
 # ignores including sub-directories
 autovacuum-analyze.out
-workfile_mgr_test.out
 resgroup_io_limit.out

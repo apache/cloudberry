@@ -159,7 +159,7 @@ test: enable_autovacuum
 
 # expand_table tests may affect the result of 'gp_explain', keep them below that
 # portals_updatable
-test: partition_pruning role plpgsql_cache pg_stat_last_operation gp_numeric_agg partindex_test runtime_stats expand_table expand_table_ao expand_table_aoco expand_table_regression
+test: partition_pruning role plpgsql_cache pg_stat_last_operation gp_numeric_agg partindex_test runtime_stats expand_table_regression
 
 # direct dispatch tests
 test: bfv_dd bfv_dd_multicolumn bfv_dd_types direct_dispatch

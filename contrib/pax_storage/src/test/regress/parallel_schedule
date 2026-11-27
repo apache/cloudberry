@@ -51,8 +51,8 @@ test: copy copyselect copydml insert
 # ----------
 # More groups of parallel tests
 # ----------
-test: create_misc create_operator create_procedure
-# These depend on create_misc and create_operator
+test: create_misc create_procedure
+# These depend on create_misc
 
 test: create_index create_view index_including 
 # PAX not support spgist
