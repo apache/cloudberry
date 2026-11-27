@@ -1805,3 +1805,22 @@ CREATE STATISTICS s1 (dependencies) ON col1, col2 FROM tbl_issue1293;
 -- Trigger extended stats collection
 ANALYZE tbl_issue1293;
 DROP TABLE tbl_issue1293;
+
+-- Extended-statistics ownership must survive a rebuild by the table owner.
+CREATE ROLE regress_stats_ext_owner;
+CREATE ROLE regress_stats_ext_table_owner;
+GRANT CREATE ON SCHEMA public TO regress_stats_ext_owner, regress_stats_ext_table_owner;
+SET ROLE regress_stats_ext_owner;
+CREATE TABLE stats_ext_owner_table (a int, b int) DISTRIBUTED BY (a);
+CREATE STATISTICS stats_ext_owner_stats ON a, b FROM stats_ext_owner_table;
+RESET ROLE;
+ALTER TABLE stats_ext_owner_table OWNER TO regress_stats_ext_table_owner;
+REVOKE CREATE ON SCHEMA public FROM regress_stats_ext_owner, regress_stats_ext_table_owner;
+SET ROLE regress_stats_ext_table_owner;
+ALTER TABLE stats_ext_owner_table ALTER COLUMN b TYPE bigint;
+RESET ROLE;
+SELECT stxowner = 'regress_stats_ext_owner'::regrole AS owner_preserved
+  FROM pg_statistic_ext WHERE stxname = 'stats_ext_owner_stats';
+DROP TABLE stats_ext_owner_table;
+DROP ROLE regress_stats_ext_owner;
+DROP ROLE regress_stats_ext_table_owner;
