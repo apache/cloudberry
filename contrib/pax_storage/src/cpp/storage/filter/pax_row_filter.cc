@@ -63,20 +63,16 @@ static bool BuildExecutionFilterForColumns(Relation rel, PlanState *ps,
 
   int ret = false;
 
-  for (int i = 0; key && i < nkeys; i++) {
-    if (key[i].sk_flags & SK_BLOOM_FILTER)
-      ctx->runtime_bloom_keys.emplace_back(key[i]);
+  // Only SeqScanState supports handing row-level Bloom probing to PAX.
+  // DynamicSeqScan supplies a regular SeqScanState for each partition.
+  if (IsA(ps, SeqScanState) && key) {
+    for (int i = 0; i < nkeys; i++) {
+      if (key[i].sk_flags & SK_BLOOM_FILTER)
+        ctx->runtime_bloom_keys.emplace_back(key[i]);
+    }
   }
 
   if (!ctx->runtime_bloom_keys.empty()) {
-    // We don't need to support DynamicSeqScanState here. Even if the plan uses
-    // DynamicSeqScanNode for partitioned tables, it's always a regular SeqScan
-    // on a single table. So this will always be a SeqScanState.
-    if (nodeTag(ps) != T_SeqScanState) {
-      elog(ERROR, "runtime filter only support seqscan state, but got %d",
-           nodeTag(ps));
-    }
-
     ret = true;
 
     // register bloom filters

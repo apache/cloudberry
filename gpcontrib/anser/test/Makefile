@@ -94,7 +94,7 @@ ansernormalize_test: $(srcdir)/ansernormalize_test.c $(srcdir)/../src/anserplank
 EXTRA_CLEAN += ansernormalize_test
 
 # -O0 ensures compiler optimization cannot hide Max's repeated evaluation.
-anserplanwalk_test: $(srcdir)/anserplanwalk_test.c $(srcdir)/../src/anserplan.c $(srcdir)/../src/anserplankeys.c $(wildcard $(srcdir)/../include/*.h)
+anserplanwalk_test: $(srcdir)/anserplanwalk_test.c $(srcdir)/../src/anserinplace.c $(srcdir)/../src/anserplan.c $(srcdir)/../src/anserplankeys.c $(wildcard $(srcdir)/../include/*.h)
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(PG_CPPFLAGS) -O0 -ffunction-sections -fdata-sections \
 	  $(DETACH_TEST_LDFLAGS) $< -o $@
 

@@ -677,6 +677,121 @@ BEGIN
     END IF;
 END $$;
 DROP TABLE rf_neg_probe, rf_neg_build4, rf_neg_build8;
+-- Visimap must hide deleted rows before the PAX reader probes Bloom keys.
+-- ORCA builds the hash table before opening the probe scan, so PAX receives
+-- the keys at scan startup. The sparse build keys leave gaps within the
+-- min/max range for the Bloom filter to reject.
+SET optimizer TO on;
+SET gp_enable_predicate_pushdown TO on;
+SET pax.enable_sparse_filter TO on;
+CREATE TABLE rf_visi_probe (k int, v int) USING pax DISTRIBUTED BY (k);
+CREATE TABLE rf_visi_build (k int) USING ao_column DISTRIBUTED BY (k);
+-- Interleave NULL keys with known matches and misses within each file.
+INSERT INTO rf_visi_probe
+SELECT CASE WHEN i % 13 <> 0 THEN i % 1000 END, i
+FROM generate_series(1, 40000) i;
+INSERT INTO rf_visi_build SELECT i FROM generate_series(0, 990, 10) i;
+-- Delete a mix of matching and nonmatching probe rows without rewriting it.
+DELETE FROM rf_visi_probe WHERE v % 7 = 0;
+ANALYZE rf_visi_probe, rf_visi_build;
+DO $$
+DECLARE
+    q constant text := 'SELECT p.v FROM rf_visi_probe p JOIN rf_visi_build b ON p.k = b.k';
+    expected jsonb[];
+    line text;
+    removed bigint;
+    plan_removals bigint;
+    using_orca boolean;
+BEGIN
+    SELECT array_agg(jsonb_build_object('v', i) ORDER BY jsonb_build_object('v', i))
+      INTO expected
+      FROM generate_series(1, 40000) i
+     WHERE i % 10 = 0 AND i % 7 <> 0 AND i % 13 <> 0;
+
+    IF rf_query_rows(q, false) IS DISTINCT FROM expected OR
+       rf_query_rows(q, true) IS DISTINCT FROM expected THEN
+        RAISE EXCEPTION 'PAX visimap and Bloom join returned incorrect rows';
+    END IF;
+
+    PERFORM set_config('gp_enable_runtime_filter_pushdown', 'on', true);
+    FOR phase IN 1..2 LOOP
+        plan_removals := NULL;
+        using_orca := false;
+        FOR line IN EXECUTE 'EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF) ' || q LOOP
+            using_orca := using_orca OR line LIKE '%Optimizer:%GPORCA%';
+            removed := substring(line FROM 'Rows Removed by Pushdown Runtime Filter: ([0-9]+)')::bigint;
+            IF removed IS NOT NULL THEN
+                plan_removals := coalesce(plan_removals, 0) + removed;
+            END IF;
+        END LOOP;
+
+        IF NOT using_orca THEN
+            RAISE EXCEPTION 'expected ORCA to build the hash before opening the PAX scan';
+        END IF;
+        IF phase = 1 THEN
+            IF coalesce(plan_removals, 0) = 0 THEN
+                RAISE EXCEPTION 'expected Bloom pruning with live nonmatching rows';
+            END IF;
+            -- Now every live row matches. Deleted nonmatches must no longer
+            -- reach Bloom probing, so the same filter should reject zero rows.
+            DELETE FROM rf_visi_probe WHERE k IS NULL OR k % 10 <> 0;
+        ELSIF plan_removals IS DISTINCT FROM 0::bigint THEN
+            RAISE EXCEPTION 'expected an active Bloom filter with zero rejections after deletes, got %',
+                plan_removals;
+        END IF;
+    END LOOP;
+    IF rf_query_rows(q, true) IS DISTINCT FROM expected THEN
+        RAISE EXCEPTION 'PAX visimap and Bloom join returned incorrect rows after deleting nonmatches';
+    END IF;
+END $$;
+DROP TABLE rf_visi_probe, rf_visi_build;
+RESET pax.enable_sparse_filter;
+RESET gp_enable_predicate_pushdown;
+SET optimizer TO off;
+-- Core generates integer range and Bloom keys from int4 build Datums.
+-- Probe both wider and narrower PAX columns with the same negative keys.
+SET optimizer TO on;
+SET gp_enable_predicate_pushdown TO on;
+SET pax.enable_sparse_filter TO on;
+CREATE TABLE rf_width_probe (wide int8, narrow int2, v int)
+    USING pax DISTRIBUTED BY (v);
+CREATE TABLE rf_width_build (k int) USING ao_column DISTRIBUTED REPLICATED;
+INSERT INTO rf_width_probe
+SELECT -(i % 1000), -(i % 1000), i FROM generate_series(1, 40000) i;
+INSERT INTO rf_width_build SELECT -i FROM generate_series(0, 990, 10) i;
+ANALYZE rf_width_probe, rf_width_build;
+DO $$
+DECLARE
+    col text;
+    q text;
+    expected jsonb[];
+    line text;
+    pruned boolean;
+BEGIN
+    SELECT array_agg(jsonb_build_object('v', i) ORDER BY jsonb_build_object('v', i))
+      INTO expected FROM generate_series(1, 40000) i
+     WHERE i % 10 = 0 AND i % 3 = 1;
+    FOREACH col IN ARRAY ARRAY['wide', 'narrow'] LOOP
+        q := format('SELECT p.v FROM rf_width_probe p JOIN rf_width_build b
+                      ON p.%I = b.k WHERE p.v %% 3 = 1', col);
+        IF rf_query_rows(q, false) IS DISTINCT FROM expected OR
+           rf_query_rows(q, true) IS DISTINCT FROM expected THEN
+            RAISE EXCEPTION 'PAX mixed-width Bloom mismatch for %', col;
+        END IF;
+        PERFORM set_config('gp_enable_runtime_filter_pushdown', 'on', true);
+        pruned := false;
+        FOR line IN EXECUTE 'EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF) ' || q LOOP
+            pruned := pruned OR line ~ 'Rows Removed by Pushdown Runtime Filter: [1-9]';
+        END LOOP;
+        IF NOT pruned THEN
+            RAISE EXCEPTION 'expected PAX Bloom pruning for %', col;
+        END IF;
+    END LOOP;
+END $$;
+DROP TABLE rf_width_probe, rf_width_build;
+RESET pax.enable_sparse_filter;
+RESET gp_enable_predicate_pushdown;
+SET optimizer TO off;
 -- A hash join rescanned with new build keys: for each outer row the nested
 -- loop runs the LATERAL subquery again, and the hash table is rebuilt from the
 -- build rows of that row's group, a different set of keys every time.  The
@@ -724,5 +839,61 @@ DROP TABLE rf_rs_outer, rf_rs_probe, rf_rs_build;
 RESET enable_mergejoin;
 RESET gp_enable_runtime_filter_pushdown;
 RESET pax.enable_row_filter;
+-- Keep a cast behind its guard after the PAX sampling window (65536 rows).
+-- A constant distribution key puts all 300000 rows in one scan. Interleave
+-- invalid values so that some remain after sampling, even without Bloom keys.
+SET gp_enable_runtime_filter TO off;
+SET gp_enable_predicate_pushdown TO on;
+SET pax.enable_sparse_filter TO on;
+CREATE TABLE rf_qual_order (bucket int, kind text, val text, k int)
+    USING pax DISTRIBUTED BY (bucket);
+INSERT INTO rf_qual_order
+SELECT 1, CASE WHEN i % 10000 = 1 THEN 'x' ELSE 'n' END,
+          CASE WHEN i % 10000 = 1 THEN 'abc' ELSE (i % 10)::text END,
+          (i / 10) % 10
+FROM generate_series(1, 300000) i ORDER BY i;
+SET pax.enable_row_filter TO off;
+SELECT count(*) FROM rf_qual_order WHERE kind = 'n' AND val::int > 5;
+ count  
+--------
+ 120000
+(1 row)
+
+SET pax.enable_row_filter TO on;
+SELECT count(*) FROM rf_qual_order WHERE kind = 'n' AND val::int > 5;
+ count  
+--------
+ 120000
+(1 row)
+
+-- Repeat with a Bloom filter and the same guarded cast. The constant
+-- distribution key keeps more than two sampling windows on the probe segment.
+SET optimizer TO on;
+SET gp_enable_runtime_filter_pushdown TO on;
+CREATE TABLE rf_qual_keys (k int) USING ao_column DISTRIBUTED REPLICATED;
+INSERT INTO rf_qual_keys VALUES (0), (2), (4), (6), (8);
+ANALYZE rf_qual_keys, rf_qual_order;
+DO $$
+DECLARE
+    q constant text := 'SELECT count(*) FROM rf_qual_order p JOIN rf_qual_keys b
+        ON p.k = b.k WHERE p.kind = ''n'' AND p.val::int > 5';
+    line text;
+    pruned boolean := false;
+    hits bigint;
+BEGIN
+    EXECUTE q INTO hits;
+    FOR line IN EXECUTE 'EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF) ' || q LOOP
+        pruned := pruned OR line ~ 'Rows Removed by Pushdown Runtime Filter: [1-9]';
+    END LOOP;
+    IF hits <> 60000 OR NOT pruned THEN
+        RAISE EXCEPTION 'expected 60000 matches with Bloom probes and guarded SQL quals, got %', hits;
+    END IF;
+END $$;
+DROP TABLE rf_qual_order, rf_qual_keys;
+RESET gp_enable_runtime_filter_pushdown;
+RESET pax.enable_row_filter;
+RESET pax.enable_sparse_filter;
+RESET gp_enable_predicate_pushdown;
+
 RESET enable_parallel;
 SET optimizer TO default;

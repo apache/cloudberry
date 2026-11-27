@@ -116,6 +116,39 @@ TEST_F(PaxFilterTest, OrdersBloomFiltersBeforeMoreSelectivePredicates) {
   ASSERT_EQ(context.filter_nodes[3].index, 1);
 }
 
+TEST_F(PaxFilterTest, KeepsSqlGuardFirstAcrossSamplingWindow) {
+  using Kind = ExecutionFilterContext::FilterKind;
+  using Result = ExecutionFilterContext::FilterResult;
+
+  for (bool with_bloom : {false, true}) {
+    SCOPED_TRACE(with_bloom);
+    ExecutionFilterContext context{};
+    if (with_bloom) context.filter_nodes.push_back({Kind::kBloom, 0});
+    context.filter_nodes.push_back({Kind::kExpr, 0});
+    context.filter_nodes.push_back({Kind::kExpr, 1});
+
+    uint64 passed = 0;
+    uint64 bloom_rejected = 0;
+    for (uint64 i = 0; i < 2 * context.sample_target; ++i) {
+      const bool valid = i % 10 != 1;
+      const bool bloom_pass = !with_bloom || i % 10 != 0;
+      const auto result = context.ApplyFilters([&](const auto &node) {
+        if (node.kind == Kind::kBloom) return bloom_pass;
+        EXPECT_TRUE(bloom_pass) << "SQL predicate on Bloom-rejected row " << i;
+        if (node.index == 0) return valid;
+        EXPECT_TRUE(valid) << "unguarded predicate at row " << i;
+        return i % 10 > 5;
+      });
+      passed += result == Result::kPass;
+      bloom_rejected += result == Result::kBloomRejected;
+    }
+
+    EXPECT_FALSE(context.sampling);
+    EXPECT_EQ(passed, 52428U);
+    EXPECT_EQ(bloom_rejected, with_bloom ? 13108U : 0U);
+  }
+}
+
 TEST_F(PaxFilterTest, KeepsExactlyTheRowsPassingBloomAndSqlFilters) {
   ExecutionFilterContext context{};
   using Kind = ExecutionFilterContext::FilterKind;

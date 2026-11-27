@@ -183,14 +183,21 @@ check_partition_runtime_keys(void)
 	DynamicSeqScanState parent = {0};
 	SeqScanState child = {0};
 	TupleTableSlot parent_slot = {0};
+	TupleTableSlot child_slot = {0};
 	RelationData partition = {0};
 	EState		estate = {0};
+	ScanKeyData old_key = {0};
 	ScanKeyData bloom_key = {0};
 	ScanKeyData range_key = {0};
 	TupleDesc	parent_desc = CreateTemplateTupleDesc(2);
 	TupleDesc	child_desc = CreateTemplateTupleDesc(2);
 	ScanKey		first;
 	ScanKey		second;
+	bloom_filter *bloom = bloom_create(32, 8, 123);
+	Datum		present = Int64GetDatum(1);
+	Datum		absent = Int64GetDatum(2);
+	Datum		values[2] = {absent, present};
+	bool		nulls[2] = {false, false};
 
 	TupleDescInitEntry(parent_desc, 1, "a", INT8OID, -1, 0);
 	TupleDescInitEntry(parent_desc, 2, "b", INT8OID, -1, 0);
@@ -206,9 +213,12 @@ check_partition_runtime_keys(void)
 	parent.seqScanState = &child;
 	child.ss.ss_currentRelation = &partition;
 	/* An already-open partition whose AM took ownership of the old keys. */
-	child.filters = list_make1(&bloom_key);
+	old_key.sk_flags = SK_BLOOM_FILTER;
+	child.filters = list_make1(&old_key);
+	bloom_add_element(bloom, (unsigned char *) &present, sizeof(Datum));
 	bloom_key.sk_flags = SK_BLOOM_FILTER;
 	bloom_key.sk_attno = 1;
+	bloom_key.sk_argument = PointerGetDatum(bloom);
 	range_key.sk_attno = 2;
 
 	ExecDynamicSeqScanAddRuntimeFilters(&parent, list_make2(&bloom_key, &range_key));
@@ -221,6 +231,18 @@ check_partition_runtime_keys(void)
 		bloom_key.sk_attno != 1 || range_key.sk_attno != 2)
 		elog(ERROR, "late runtime keys were not copied to the partition layout");
 
+	child_slot.tts_tupleDescriptor = child_desc;
+	child_slot.tts_nvalid = 2;
+	child_slot.tts_values = values;
+	child_slot.tts_isnull = nulls;
+	if (!PassByBloomFilter(&child, &child_slot))
+		elog(ERROR, "late Bloom key rejected a match in the remapped column");
+	values[0] = present;
+	values[1] = absent;
+	if (PassByBloomFilter(&child, &child_slot))
+		elog(ERROR, "late Bloom key accepted a nonmatch in the remapped column");
+
+	bloom_free(bloom);
 	list_free(parent.filters);
 	MemoryContextDelete(parent.partitionMemoryContext);
 	FreeTupleDesc(child_desc);

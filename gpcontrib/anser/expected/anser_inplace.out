@@ -295,6 +295,149 @@ SELECT count(*) AS indf_rows FROM (anser_ip_s s LEFT JOIN anser_ip_r r ON s.x = 
 DROP TABLE anser_ip_s, anser_ip_r, anser_ip_b;
 RESET gp_enable_runtime_filter;
 SET optimizer = off;
+-- Check both optimizers with additional by-value key types. Each build has
+-- only one key, and a scan must actually reject rows in every case.
+CREATE TABLE anser_ip_types (s int2, l int8, b bool, t timestamp, v int)
+    DISTRIBUTED BY (v);
+CREATE TABLE anser_ip_type_build (s int2, l int8, b bool, t timestamp)
+    DISTRIBUTED REPLICATED;
+INSERT INTO anser_ip_types
+SELECT (g % 20 - 10)::int2, g % 20 - 5000000000::int8, g % 2 = 1,
+       timestamp '1999-01-01' + (g % 20) * interval '1 second', g
+FROM generate_series(1, 40000) g;
+INSERT INTO anser_ip_type_build VALUES (-7, -4999999997, true, '1999-01-01 00:00:03');
+ANALYZE anser_ip_types, anser_ip_type_build;
+DO $$
+DECLARE
+    opt text;
+    col text;
+    q text;
+    hits bigint;
+BEGIN
+    FOREACH opt IN ARRAY ARRAY['off', 'on'] LOOP
+        PERFORM set_config('optimizer', opt, true);
+        FOREACH col IN ARRAY ARRAY['s', 'l', 'b', 't'] LOOP
+            q := format('SELECT p.v FROM anser_ip_types p JOIN anser_ip_type_build b
+                          ON p.%1$I = b.%1$I', col);
+            EXECUTE 'SELECT count(*) FROM (' || q || ') r' INTO hits;
+            IF hits <> CASE WHEN col = 'b' THEN 20000 ELSE 2000 END OR
+               anser_ip_mode(q) <> 'in-place' OR anser_ip_pruned(q) = 0 OR
+               NOT anser_ip_same(q) THEN
+                RAISE EXCEPTION 'expected correct in-place filtering of %, optimizer=%', col, opt;
+            END IF;
+        END LOOP;
+    END LOOP;
+END $$;
+DROP TABLE anser_ip_types, anser_ip_type_build;
+SET optimizer = off;
+-- The in-place probe descends through Append and installs a filter on each
+-- partition scan. Both halves contain the same distribution of join keys.
+CREATE TABLE anser_ip_parts (k int, v int) DISTRIBUTED BY (v)
+    PARTITION BY RANGE (v) (START (1) END (100001) EVERY (50000));
+INSERT INTO anser_ip_parts SELECT k, v FROM anser_ip_fact;
+ANALYZE anser_ip_parts;
+DO $$
+DECLARE
+    q constant text := 'SELECT p.v FROM anser_ip_parts p JOIN anser_ip_dim d
+                          ON p.k = d.k WHERE d.grp = 7';
+    line text;
+    append_found boolean := false;
+    pruned_scans int := 0;
+    hits bigint;
+BEGIN
+    FOR line IN EXECUTE 'EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF) ' || q LOOP
+        append_found := append_found OR line ~ '(^|->  )Append';
+        IF line ~ 'Rows Removed by Pushdown Runtime Filter: [1-9]' THEN
+            pruned_scans := pruned_scans + 1;
+        END IF;
+    END LOOP;
+    EXECUTE 'SELECT count(*) FROM (' || q || ') r' INTO hits;
+    IF NOT append_found OR pruned_scans < 2 OR hits <> 1000 OR
+       anser_ip_mode(q) <> 'in-place' OR NOT anser_ip_same(q) THEN
+        RAISE EXCEPTION 'expected in-place filtering on both Append children';
+    END IF;
+END $$;
+DROP TABLE anser_ip_parts;
+-- Change either the build predicate or only the probe predicate on each
+-- lateral iteration. The former must refuse Anser. The latter can reuse a
+-- filter built from stable keys while the probe is rescanned.
+CREATE TABLE anser_ip_outer (g int) DISTRIBUTED REPLICATED;
+INSERT INTO anser_ip_outer VALUES (7), (8);
+CREATE TABLE anser_ip_rescan_dim (k int, grp int) DISTRIBUTED REPLICATED;
+INSERT INTO anser_ip_rescan_dim SELECT k, grp FROM anser_ip_dim;
+ANALYZE anser_ip_outer, anser_ip_rescan_dim;
+SET enable_nestloop = on;
+SET enable_memoize = off;
+SET gp_enable_runtime_filter_pushdown = on;
+DO $$
+DECLARE
+    build_param constant text := 'SELECT o.g, s.n FROM anser_ip_outer o
+        CROSS JOIN LATERAL (SELECT count(*) AS n FROM anser_ip_fact f
+          JOIN anser_ip_rescan_dim d ON f.k = d.k WHERE d.grp = o.g OFFSET 0) s';
+    probe_param constant text := 'SELECT o.g, s.n FROM anser_ip_outer o
+        CROSS JOIN LATERAL (SELECT count(*) AS n FROM anser_ip_fact f
+          JOIN anser_ip_rescan_dim d ON f.k = d.k WHERE d.grp = 7
+          AND f.v > o.g OFFSET 0) s';
+    q text;
+    line text;
+    expected bigint[];
+    hits bigint[];
+    rescanned_hash boolean;
+    exchange_nodes boolean;
+BEGIN
+    FOREACH q IN ARRAY ARRAY[build_param, probe_param] LOOP
+        rescanned_hash := false;
+        exchange_nodes := false;
+        FOR line IN EXECUTE 'EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF) ' || q LOOP
+            rescanned_hash := rescanned_hash OR line ~ 'Hash Join.*loops=[2-9]';
+            exchange_nodes := exchange_nodes OR line LIKE '%Anser Bloom%';
+        END LOOP;
+        IF NOT rescanned_hash OR exchange_nodes OR NOT anser_ip_same(q) THEN
+            RAISE EXCEPTION 'unexpected Anser rescan plan for %', q;
+        END IF;
+        expected := CASE WHEN q = build_param THEN ARRAY[1000, 1000]::bigint[]
+                         ELSE ARRAY[999, 999]::bigint[] END;
+        EXECUTE 'SELECT array_agg(n ORDER BY g) FROM (' || q || ') r' INTO hits;
+        IF hits IS DISTINCT FROM expected THEN
+            RAISE EXCEPTION 'incorrect Anser rescan result for %: %', q, hits;
+        END IF;
+    END LOOP;
+    PERFORM set_config('gp_enable_runtime_filter_pushdown', 'off', true);
+    IF anser_ip_mode(build_param) <> 'none' OR
+       anser_ip_mode(probe_param) <> 'in-place' OR anser_ip_pruned(probe_param) = 0 THEN
+        RAISE EXCEPTION 'expected Anser refusal on changing build keys and reuse on stable keys';
+    END IF;
+END $$;
+RESET gp_enable_runtime_filter_pushdown;
+RESET enable_memoize;
+SET enable_nestloop = off;
+DROP TABLE anser_ip_outer, anser_ip_rescan_dim;
+-- A top-level right join preserves the build rows. A semi join preserves
+-- matching probe rows, even when the extra join condition needs both inputs.
+DO $$
+DECLARE
+    right_join constant text := 'SELECT d.k, f.v FROM anser_ip_fact f
+        RIGHT JOIN anser_ip_dim d ON f.k = d.k AND f.v > 50000 WHERE d.grp = 7';
+    semi_join constant text := 'SELECT f.v FROM anser_ip_fact f WHERE EXISTS
+        (SELECT 1 FROM anser_ip_dim d WHERE d.k = f.k AND d.grp = 7
+         AND d.d < date ''2000-01-01'' + f.v)';
+    q text;
+    line text;
+    expected_node text;
+    found_join boolean;
+BEGIN
+    FOREACH q IN ARRAY ARRAY[right_join, semi_join] LOOP
+        expected_node := CASE WHEN q = right_join THEN 'Hash Right Join' ELSE 'Hash Semi Join' END;
+        found_join := false;
+        FOR line IN EXECUTE 'EXPLAIN (COSTS OFF) ' || q LOOP
+            found_join := found_join OR strpos(line, expected_node) > 0;
+        END LOOP;
+        IF NOT found_join OR anser_ip_mode(q) <> 'in-place' OR
+           anser_ip_pruned(q) = 0 OR NOT anser_ip_same(q) THEN
+            RAISE EXCEPTION 'expected correct in-place filtering of %', expected_node;
+        END IF;
+    END LOOP;
+END $$;
 -- A cached plan keeps the coordinator's in-place decision after a GUC change.
 SET plan_cache_mode = force_generic_plan;
 PREPARE anser_ip_cached AS
