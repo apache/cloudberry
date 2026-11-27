@@ -412,8 +412,8 @@ static const double PE[NUM_OF_PRECOMPUTED_EXPONENTS] = { 1.,
 
 int gp_hll_b64_encode(const char *src, unsigned len, char *dst);
 int gp_hll_b64_decode(const char *src, unsigned len, char *dst);
-int gp_b64_enc_len(const char *src, unsigned srclen);
-int gp_b64_dec_len(const char *src, unsigned srclen);
+Size gp_b64_enc_len(Size srclen);
+Size gp_b64_dec_len(Size srclen);
 
 uint64_t GpMurmurHash64A (const void * key, int len, unsigned int seed);
 
