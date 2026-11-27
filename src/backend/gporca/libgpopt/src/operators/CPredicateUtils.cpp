@@ -1932,11 +1932,11 @@ CPredicateUtils::FColumnDisjunctionOfConst(CConstraintInterval *pcnstrInterval,
 }
 
 // An index can only serve a comparison that uses the collation of the index
-// key, which is the collation of the key column. Of the collations of the
-// two sides the comparison uses the non-default one (the parser rejects two
-// different non-default ones), so it differs from the key's collation when
-// the key has the default collation and the other side does not, or does
-// not have a known one.
+// key, which is the collation of the key column. The comparison uses the
+// common collation of its two sides, which differs from the key's when the
+// key has the default collation and the other side does not, e.g. in
+// d.name < c.name or d.name < c.n::text, with c.name of collation "C" and
+// c.n of type name, whose collation is "C" too.
 static BOOL
 FIndexKeyCollationMatches(const CColRef *pcrKey, CExpression *pexprOther)
 {
@@ -1946,25 +1946,11 @@ FIndexKeyCollationMatches(const CColRef *pcrKey, CExpression *pexprOther)
 		return true;
 	}
 
-	BOOL fKeyHasDefault = CConstraintInterval::FCollationMatchesType(pcrKey);
-	CColRefSetIter crsi(*pexprOther->DeriveUsedColumns());
-	while (crsi.Advance())
-	{
-		CColRef *colref = crsi.Pcr();
-		if (CConstraintInterval::FCollationMatchesType(colref))
-		{
-			continue;
-		}
-
-		if (fKeyHasDefault ||
-			(0 != colref->Collation() &&
-			 colref->Collation() != pcrKey->Collation()))
-		{
-			return false;
-		}
-	}
-
-	return true;
+	OID other_collation = 0;
+	return 0 != pcrKey->Collation() &&
+		   CUtils::FDeriveCollation(pexprOther, &other_collation) &&
+		   pcrKey->Collation() ==
+			   CUtils::MergeCollation(pcrKey->Collation(), other_collation);
 }
 
 // helper to create index lookup comparison predicate with index key on left side

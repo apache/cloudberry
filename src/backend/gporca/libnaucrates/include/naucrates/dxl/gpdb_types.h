@@ -49,6 +49,9 @@ using OID = ULONG;
 #define GPDB_NAME OID(19)
 #define GPDB_SINGLE_CHAR OID(18)
 
+// collations
+#define GPDB_DEFAULT_COLLATION OID(100)
+
 // network related types
 #define GPDB_INET OID(869)
 #define GPDB_CIDR OID(650)

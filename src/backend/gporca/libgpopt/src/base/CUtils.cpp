@@ -4871,6 +4871,143 @@ CUtils::FAggHasOrderBy(CExpression *pexprAggFunc)
 		   (*pexprAggFunc)[EaggfuncIndexOrder]->Arity() > 0;
 }
 
+// Merge the collation of an argument into the common collation of the
+// arguments, as gpdb::ExprCollation() does for a list: a non-default
+// collation beats the default one. Two different non-default collations are
+// rejected by the parser, as are expressions ORCA would derive a different
+// collation for than the parser (see check_collation()).
+OID
+CUtils::MergeCollation(OID collation, OID arg_collation)
+{
+	if (0 == collation || GPDB_DEFAULT_COLLATION == collation)
+	{
+		return 0 != arg_collation ? arg_collation : collation;
+	}
+
+	return collation;
+}
+
+// Derive the collation of a scalar expression, following the rules the
+// translator to a plan tree uses to set the collations of the nodes it
+// creates. ORCA does not track collations of expressions, only of columns,
+// so this is needed to tell whether an expression can be replaced by another
+// one, e.g. a constant, without changing the collation an enclosing
+// comparison uses. Only common expressions are handled; for others false is
+// returned, as for columns of a collatable type with an unknown collation.
+BOOL
+CUtils::FDeriveCollation(CExpression *pexprScalar, OID *collation)
+{
+	GPOS_ASSERT(nullptr != pexprScalar);
+	GPOS_ASSERT(nullptr != collation);
+
+	COperator *pop = pexprScalar->Pop();
+	if (!pop->FScalar())
+	{
+		return false;
+	}
+
+	IMDId *mdid_type = CScalar::PopConvert(pop)->MdidType();
+	if (!IMDId::IsValid(mdid_type))
+	{
+		return false;
+	}
+
+	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
+	OID type_collation = md_accessor->RetrieveType(mdid_type)->TypeCollation();
+
+	switch (pop->Eopid())
+	{
+		case COperator::EopScalarIdent:
+		{
+			const CColRef *colref = CScalarIdent::PopConvert(pop)->Pcr();
+			*collation = colref->Collation();
+
+			return 0 != *collation || 0 == type_collation;
+		}
+
+		case COperator::EopScalarConst:
+		case COperator::EopScalarArray:
+		{
+			*collation = type_collation;
+			return true;
+		}
+
+		case COperator::EopScalarCast:
+		{
+			if (!IMDId::IsValid(CScalarCast::PopConvert(pop)->FuncMdId()))
+			{
+				// a RelabelType keeps the collation of its argument
+				return FDeriveCollation((*pexprScalar)[0], collation);
+			}
+			break;
+		}
+
+		case COperator::EopScalarCoerceViaIO:
+		case COperator::EopScalarCoerceToDomain:
+		case COperator::EopScalarArrayCoerceExpr:
+		{
+			*collation = type_collation;
+			return true;
+		}
+
+		case COperator::EopScalarOp:
+		case COperator::EopScalarFunc:
+		case COperator::EopScalarCoalesce:
+		case COperator::EopScalarMinMax:
+		case COperator::EopScalarNullIf:
+			break;
+
+		default:
+		{
+			if (0 == type_collation)
+			{
+				// not a collatable result, e.g. a comparison
+				*collation = 0;
+				return true;
+			}
+			return false;
+		}
+	}
+
+	if (0 == type_collation)
+	{
+		*collation = 0;
+		return true;
+	}
+
+	OID args_collation = 0;
+	if (!FDeriveArgsCollation(pexprScalar, &args_collation))
+	{
+		return false;
+	}
+
+	*collation = 0 != args_collation ? args_collation : type_collation;
+	return true;
+}
+
+// Derive the common collation of the arguments of a scalar expression, which
+// is the input collation of an operator or function
+BOOL
+CUtils::FDeriveArgsCollation(CExpression *pexprScalar, OID *collation)
+{
+	GPOS_ASSERT(nullptr != pexprScalar);
+	GPOS_ASSERT(nullptr != collation);
+
+	OID args_collation = 0;
+	for (ULONG ul = 0; ul < pexprScalar->Arity(); ul++)
+	{
+		OID arg_collation = 0;
+		if (!FDeriveCollation((*pexprScalar)[ul], &arg_collation))
+		{
+			return false;
+		}
+		args_collation = MergeCollation(args_collation, arg_collation);
+	}
+
+	*collation = args_collation;
+	return true;
+}
+
 // returns true if the result of the aggregate function may depend on the
 // order of its input.  That is assumed for every aggregate that is not known
 // to be order insensitive, including all user-defined ones that are not

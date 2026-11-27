@@ -618,10 +618,13 @@ DROP TABLE t_default_cols;
 
 CREATE TABLE t_c_rows (id int, name text COLLATE "C") DISTRIBUTED BY (id);
 CREATE TABLE t_d_rows (id int, name text) DISTRIBUTED BY (id);
+CREATE TABLE t_n_rows (id int, n name) DISTRIBUTED BY (id);
 INSERT INTO t_c_rows VALUES (1, 'abc'), (2, 'ABC'), (3, 'def'), (4, 'DEF');
 INSERT INTO t_d_rows SELECT * FROM t_c_rows;
+INSERT INTO t_n_rows SELECT * FROM t_c_rows;
 ANALYZE t_c_rows;
 ANALYZE t_d_rows;
+ANALYZE t_n_rows;
 
 -- d.name < c.name compares in C, so c.name = 'abc' must not turn it into
 -- d.name < 'abc' in the default collation
@@ -632,6 +635,12 @@ SELECT d.name FROM t_c_rows c JOIN t_d_rows d ON d.name < c.name
 WHERE c.name = 'abc' ORDER BY 1;
 SELECT d.name FROM t_c_rows c JOIN t_d_rows d ON d.name < lower(c.name)
 WHERE lower(c.name) = 'abc' ORDER BY 1;
+-- the same for n::text, which has the collation C of type name
+EXPLAIN (COSTS OFF)
+SELECT d.name FROM t_n_rows c JOIN t_d_rows d ON d.name < c.n::text
+WHERE c.n::text = 'abc';
+SELECT d.name FROM t_n_rows c JOIN t_d_rows d ON d.name < c.n::text
+WHERE c.n::text = 'abc' ORDER BY 1;
 -- with a C column on the other side the comparison stays in C
 EXPLAIN (COSTS OFF)
 SELECT c2.name FROM t_c_rows c1 JOIN t_c_rows c2 ON c2.name < c1.name
@@ -641,6 +650,13 @@ WHERE c1.name = 'abc' ORDER BY 1;
 
 -- the parameter for the output of a correlated subplan keeps its collation
 SELECT d.id, d.name < ANY (SELECT c.name FROM t_c_rows c
+                           WHERE c.id = d.id + 1 LIMIT 1) AS cmp
+FROM t_d_rows d ORDER BY d.id;
+-- also if the output is computed
+SELECT d.id, d.name < ANY (SELECT c.name || '' FROM t_c_rows c
+                           WHERE c.id = d.id + 1 LIMIT 1) AS cmp
+FROM t_d_rows d ORDER BY d.id;
+SELECT d.id, d.name < ALL (SELECT c.n::text FROM t_n_rows c
                            WHERE c.id = d.id + 1 LIMIT 1) AS cmp
 FROM t_d_rows d ORDER BY d.id;
 
@@ -676,6 +692,10 @@ SELECT count(*) FROM t_c_rows c JOIN t_d_idx d ON d.name < c.name;
 SELECT count(*) FROM t_c_rows c JOIN t_d_idx d ON d.name < c.name;
 SELECT count(*) FROM t_c_rows c JOIN t_d_idx d ON d.name = c.name || '6';
 SELECT count(*) FROM t_d_idx d WHERE d.name < (SELECT max(name) FROM t_c_rows);
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM t_n_rows c JOIN t_d_idx d ON d.name < c.n::text;
+SELECT count(*) FROM t_n_rows c JOIN t_d_idx d ON d.name < c.n::text;
+SELECT count(*) FROM t_c_rows c JOIN t_d_idx d ON d.name < c.name || '';
 -- comparisons in the default collation still use it
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM t_d_rows c JOIN t_d_idx d ON d.name < c.name;
@@ -684,6 +704,7 @@ RESET optimizer_enable_hashjoin;
 
 DROP TABLE t_c_rows;
 DROP TABLE t_d_rows;
+DROP TABLE t_n_rows;
 DROP TABLE t_d_idx;
 
 -- ======================================================================

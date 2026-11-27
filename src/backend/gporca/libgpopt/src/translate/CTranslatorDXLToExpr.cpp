@@ -4230,9 +4230,17 @@ CTranslatorDXLToExpr::PexprScalarProjElem(const CDXLNode *pdxlnPrEl)
 
 	CName name(pdxlopPrEl->GetMdNameAlias()->GetMDName());
 
+	// the computed column has the collation of the expression, e.g. that of
+	// c.name in c.name || 'x', otherwise it stays unknown
+	OID collation = 0;
+	if (!CUtils::FDeriveCollation(pexprChild, &collation))
+	{
+		collation = 0;
+	}
+
 	// generate a new column reference
-	CColRef *colref =
-		m_pcf->PcrCreate(pmdtype, popScalar->TypeModifier(), name);
+	CColRef *colref = m_pcf->PcrCreate(pmdtype, popScalar->TypeModifier(),
+									   name, collation);
 
 	// store colid -> colref mapping
 	BOOL fInserted GPOS_ASSERTS_ONLY =

@@ -1376,10 +1376,13 @@ DROP TABLE t_default_cols;
 -- ======================================================================
 CREATE TABLE t_c_rows (id int, name text COLLATE "C") DISTRIBUTED BY (id);
 CREATE TABLE t_d_rows (id int, name text) DISTRIBUTED BY (id);
+CREATE TABLE t_n_rows (id int, n name) DISTRIBUTED BY (id);
 INSERT INTO t_c_rows VALUES (1, 'abc'), (2, 'ABC'), (3, 'def'), (4, 'DEF');
 INSERT INTO t_d_rows SELECT * FROM t_c_rows;
+INSERT INTO t_n_rows SELECT * FROM t_c_rows;
 ANALYZE t_c_rows;
 ANALYZE t_d_rows;
+ANALYZE t_n_rows;
 -- d.name < c.name compares in C, so c.name = 'abc' must not turn it into
 -- d.name < 'abc' in the default collation
 EXPLAIN (COSTS OFF)
@@ -1414,6 +1417,31 @@ WHERE lower(c.name) = 'abc' ORDER BY 1;
  DEF
  DEF
 (4 rows)
+
+-- the same for n::text, which has the collation C of type name
+EXPLAIN (COSTS OFF)
+SELECT d.name FROM t_n_rows c JOIN t_d_rows d ON d.name < c.n::text
+WHERE c.n::text = 'abc';
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Join Filter: (d.name < (c.n)::text)
+         ->  Seq Scan on t_n_rows c
+               Filter: ((n)::text = 'abc'::text)
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on t_d_rows d
+ Optimizer: GPORCA
+(9 rows)
+
+SELECT d.name FROM t_n_rows c JOIN t_d_rows d ON d.name < c.n::text
+WHERE c.n::text = 'abc' ORDER BY 1;
+ name 
+------
+ ABC
+ DEF
+(2 rows)
 
 -- with a C column on the other side the comparison stays in C
 EXPLAIN (COSTS OFF)
@@ -1451,6 +1479,29 @@ FROM t_d_rows d ORDER BY d.id;
   2 | t
   3 | f
   4 | f
+(4 rows)
+
+-- also if the output is computed
+SELECT d.id, d.name < ANY (SELECT c.name || '' FROM t_c_rows c
+                           WHERE c.id = d.id + 1 LIMIT 1) AS cmp
+FROM t_d_rows d ORDER BY d.id;
+ id | cmp 
+----+-----
+  1 | f
+  2 | t
+  3 | f
+  4 | f
+(4 rows)
+
+SELECT d.id, d.name < ALL (SELECT c.n::text FROM t_n_rows c
+                           WHERE c.id = d.id + 1 LIMIT 1) AS cmp
+FROM t_d_rows d ORDER BY d.id;
+ id | cmp 
+----+-----
+  1 | f
+  2 | t
+  3 | f
+  4 | t
 (4 rows)
 
 -- the final stage of a split aggregate, which only gets the transition
@@ -1576,6 +1627,33 @@ SELECT count(*) FROM t_d_idx d WHERE d.name < (SELECT max(name) FROM t_c_rows);
   5000
 (1 row)
 
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM t_n_rows c JOIN t_d_idx d ON d.name < c.n::text;
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Nested Loop
+                     Join Filter: (d.name < (c.n)::text)
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on t_n_rows c
+                     ->  Seq Scan on t_d_idx d
+ Optimizer: GPORCA
+(9 rows)
+
+SELECT count(*) FROM t_n_rows c JOIN t_d_idx d ON d.name < c.n::text;
+ count 
+-------
+ 10000
+(1 row)
+
+SELECT count(*) FROM t_c_rows c JOIN t_d_idx d ON d.name < c.name || '';
+ count 
+-------
+ 10000
+(1 row)
+
 -- comparisons in the default collation still use it
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM t_d_rows c JOIN t_d_idx d ON d.name < c.name;
@@ -1602,6 +1680,7 @@ SELECT count(*) FROM t_d_rows c JOIN t_d_idx d ON d.name < c.name;
 RESET optimizer_enable_hashjoin;
 DROP TABLE t_c_rows;
 DROP TABLE t_d_rows;
+DROP TABLE t_n_rows;
 DROP TABLE t_d_idx;
 -- ======================================================================
 -- Cleanup
