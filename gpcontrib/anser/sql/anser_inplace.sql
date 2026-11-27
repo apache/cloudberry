@@ -403,6 +403,10 @@ END $$;
 DROP TABLE anser_ip_right_probe, anser_ip_right_build;
 
 -- A cached plan keeps the coordinator's in-place decision after a GUC change.
+-- Prevent background ANALYZE/VACUUM from invalidating this plan between runs:
+-- force_generic_plan controls plan selection, not cache invalidation.
+BEGIN;
+LOCK TABLE anser_ip_fact, anser_ip_dim IN SHARE MODE;
 SET plan_cache_mode = force_generic_plan;
 PREPARE anser_ip_cached AS
     SELECT f.k, f.v FROM anser_ip_fact f JOIN anser_ip_dim d ON f.k = d.k WHERE d.grp = 7;
@@ -412,6 +416,7 @@ SELECT anser_ip_mode('EXECUTE anser_ip_cached') AS cached_mode_after;
 SET anser.runtime_filter_inplace = on;
 DEALLOCATE anser_ip_cached;
 RESET plan_cache_mode;
+COMMIT;
 
 -- With anser.runtime_filter_inplace off, the same join is exchanged again.
 SET anser.runtime_filter_inplace = off;
