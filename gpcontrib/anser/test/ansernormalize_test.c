@@ -169,6 +169,41 @@ scan_qual_eligibility(void)
 	CHECK(!anser_scan_qual_accepts(&state.ss.ps, 2, &table_attno));
 }
 
+static void
+rescan_scan_key(void)
+{
+	AnserBloomConsumeScanState consumer = {0};
+	SeqScanState scan = {0};
+	ScanKeyData core_key = {0};
+	ScanKeyData anser_key = {0};
+	List keys = {0};
+	ListCell cells[2];
+
+	keys.type = T_List;
+	keys.length = keys.max_length = 2;
+	keys.elements = cells;
+	cells[0].ptr_value = &core_key;
+	cells[1].ptr_value = &anser_key;
+	scan.filters = &keys;
+	consumer.filter = (bloom_filter *) &consumer;
+	anser_key.sk_flags = SK_BLOOM_FILTER;
+	anser_key.sk_argument = PointerGetDatum(consumer.filter);
+	consumer.key_scan = &scan;
+	consumer.pushed_down = consumer.pushdown_tried = true;
+
+	consumer.check_scan_key = true;
+	anser_consume_check_scan_key(&consumer);
+	CHECK(consumer.pushed_down && consumer.pushdown_tried);
+	CHECK(!consumer.check_scan_key && consumer.key_scan == &scan);
+
+	/* The scan has only a core key after the hash join rebuilds. */
+	keys.length = 1;
+	consumer.check_scan_key = true;
+	anser_consume_check_scan_key(&consumer);
+	CHECK(!consumer.pushed_down && !consumer.pushdown_tried);
+	CHECK(!consumer.check_scan_key && consumer.key_scan == NULL);
+}
+
 int main(void)
 {
 	AnserBloomFilterProduceState producer = {0};
@@ -186,6 +221,7 @@ int main(void)
 
 	key_length_bounds();
 	scan_qual_eligibility();
+	rescan_scan_key();
 	producer.filter = (bloom_filter *) &producer;
 	slot.tts_nvalid = 1;
 	slot.tts_values = values;

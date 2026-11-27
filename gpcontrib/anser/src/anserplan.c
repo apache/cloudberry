@@ -608,7 +608,10 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 	if (gp_anser_runtime_filter_inplace &&
 		AnserInplaceEligible(hj, ctx->stmt, ctx->slice_index,
 							 ctx->nestloop_params))
+	{
+		hj->anser_inplace_filter = true;
 		return;
+	}
 
 	if (!anser_hashjoin_keys(hj, &inner_attno, &outer_attno))
 		return;

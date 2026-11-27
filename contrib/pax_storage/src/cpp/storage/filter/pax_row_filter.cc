@@ -31,6 +31,10 @@
 
 #include "comm/cbdb_wrappers.h"
 
+extern "C" {
+#include "optimizer/clauses.h"
+}
+
 namespace paxc {
 
 static inline void FindAttrsInQual(Node *qual, bool *proj, int ncol,
@@ -59,7 +63,12 @@ static bool BuildExecutionFilterForColumns(Relation rel, PlanState *ps,
 
   int ret = false;
 
-  if (key && nkeys > 0) {
+  for (int i = 0; key && i < nkeys; i++) {
+    if (key[i].sk_flags & SK_BLOOM_FILTER)
+      ctx->runtime_bloom_keys.emplace_back(key[i]);
+  }
+
+  if (!ctx->runtime_bloom_keys.empty()) {
     // We don't need to support DynamicSeqScanState here. Even if the plan uses
     // DynamicSeqScanNode for partitioned tables, it's always a regular SeqScan
     // on a single table. So this will always be a SeqScanState.
@@ -68,12 +77,7 @@ static bool BuildExecutionFilterForColumns(Relation rel, PlanState *ps,
            nodeTag(ps));
     }
 
-    for (int i = 0; i < nkeys; i++) {
-      if (key[i].sk_flags & SK_BLOOM_FILTER) {
-        ctx->runtime_bloom_keys.emplace_back(key[i]);
-        ret = true;
-      }
-    }
+    ret = true;
 
     // register bloom filters
     for (int i = 0; i < (int)ctx->runtime_bloom_keys.size(); ++i) {
@@ -94,7 +98,9 @@ static bool BuildExecutionFilterForColumns(Relation rel, PlanState *ps,
     seqscan->filter_in_seqscan = false;
   }
 
-  if (!qual || !IsA(qual, List)) return ret;
+  // SubPlans belong to the executor. Recompiling them on each AM scan
+  // would register new subplan states on the parent PlanState.
+  if (!qual || !IsA(qual, List) || contain_subplans((Node *)qual)) return ret;
 
   if (list_length(qual) == 1 && IsA(linitial(qual), BoolExpr)) {
     auto boolexpr = (BoolExpr *)linitial(qual);
@@ -144,14 +150,12 @@ static bool BuildExecutionFilterForColumns(Relation rel, PlanState *ps,
       node.kind = pax::ExecutionFilterContext::FilterKind::kExpr;
       node.index = k;
       ctx->filter_nodes.emplace_back(node);
-      list_free(qual_list[i]);
       k++;
     }
     Assert(ctx->size == k);
   }
   if (qual_list[0]) {
     ctx->estate_final = ExecInitQual(qual_list[0], ps);
-    list_free(qual_list[0]);
   }
 
   Assert(ctx->size > 0 || ctx->estate_final ||
@@ -180,7 +184,7 @@ void ExecutionFilterContext::FinishSampling() {
                    [](const auto &a, const auto &b) {
                      if (a.kind != b.kind)
                        return a.kind == FilterKind::kBloom;
-                     return a.score < b.score;
+                     return a.kind == FilterKind::kBloom && a.score < b.score;
                    });
   sampling = false;
 }

@@ -117,6 +117,8 @@ typedef struct AnserBloomConsumeScanState
 	bool		probed;			/* has the join pulled a tuple from us before? */
 	bool		pushed_down;	/* child scan applies the filter before projection */
 	bool		pushdown_tried;	/* anser_consume_pushdown() ran, whatever it did */
+	SeqScanState *key_scan;		/* target of a pushed-down scan key */
+	bool		check_scan_key;	/* recheck after a rescan, before pulling rows */
 } AnserBloomConsumeScanState;
 
 /* Provider callbacks. */
@@ -695,12 +697,9 @@ anser_is_rf_scan_state(const PlanState *ps)
  * a key carrying 1 tests `payload` against a filter built on `id` and discards
  * every row.
  *
- * Only a SeqScan is accepted, because nodeSeqscan.c is the only consumer of
- * this scan-key shape that sees an unprojected table tuple.  DynamicSeqScan
- * also carries a `filters` list, but it applies the filter to its child
- * SeqScan's *projected* slot and remaps varattnos per partition, so it would
- * need different numbering -- and the injection pass cannot reach one anyway,
- * since AnserResolveKeyScan only terminates on a plain SeqScan.
+ * Anser's placement walk terminates on a plain SeqScan. Core can also
+ * install keys on a DynamicSeqScan, which remaps table attribute numbers
+ * when passing keys to each partition.
  */
 static bool
 anser_scan_qual_accepts(PlanState *ps, AttrNumber attno, AttrNumber *sk_attno_out)
@@ -831,8 +830,7 @@ AnserPushdownTarget(PlanState *top, AttrNumber attno, AttrNumber *sk_attno_out)
 }
 
 /*
- * Core's SK_BLOOM_FILTER path hashes an unnormalized Datum, including unused
- * upper bytes. For narrow keys, install an Anser-owned scan qual instead.
+ * When a scan cannot accept an SK_BLOOM_FILTER key, try an Anser-owned qual.
  * It runs before projection, delegates the original qual unchanged, and may
  * stack with other consumers. Query-context lifetime matches the scan and
  * the consumer ends its child before releasing the referenced Bloom filter.
@@ -942,12 +940,37 @@ anser_consume_pushdown(CustomScanState *node)
 		sk->sk_attno = sk_attno;
 		sk->sk_flags = SK_BLOOM_FILTER;
 		sk->sk_argument = PointerGetDatum(st->filter);
-		((SeqScanState *) target)->filters =
-			lappend(((SeqScanState *) target)->filters, sk);
+		st->key_scan = (SeqScanState *) target;
+		st->key_scan->filters = lappend(st->key_scan->filters, sk);
 	}
 	MemoryContextSwitchTo(oldcxt);
 
 	st->pushed_down = true;
+}
+
+/*
+ * Core can clear a scan's keys when it rebuilds a hash table. Check at the
+ * next pull, after the join has had a chance to reset its filters. A surviving
+ * key or an Anser-owned qual needs no new installation.
+ */
+static void
+anser_consume_check_scan_key(AnserBloomConsumeScanState *st)
+{
+	ListCell   *lc;
+
+	st->check_scan_key = false;
+	foreach(lc, st->key_scan->filters)
+	{
+		ScanKey key = lfirst(lc);
+
+		if ((key->sk_flags & SK_BLOOM_FILTER) &&
+			key->sk_argument == PointerGetDatum(st->filter))
+			return;
+	}
+
+	st->key_scan = NULL;
+	st->pushed_down = false;
+	st->pushdown_tried = false;
 }
 
 static TupleTableSlot *
@@ -957,11 +980,13 @@ anser_consume_next(CustomScanState *node)
 	PlanState  *child = (PlanState *) linitial(node->custom_ps);
 
 	anser_consume_receive(st);
+	if (st->check_scan_key)
+		anser_consume_check_scan_key(st);
 
 	/*
 	 * Hand the filter to the scan once, and pass tuples through untouched if
 	 * it took it; otherwise probe the filter here.  Once: a scan that cannot
-	 * take it now will not later, and the search is not free.
+	 * take it now will not later, unless a rescan invalidates its scan key.
 	 */
 	if (st->filter != NULL && !st->pushdown_tried)
 	{
@@ -1048,6 +1073,9 @@ anser_consume_end(CustomScanState *node)
 static void
 anser_consume_rescan(CustomScanState *node)
 {
+	AnserBloomConsumeScanState *st = (AnserBloomConsumeScanState *) node;
+
+	st->check_scan_key = st->key_scan != NULL;
 	if (node->custom_ps != NIL)
 		ExecReScan((PlanState *) linitial(node->custom_ps));
 }

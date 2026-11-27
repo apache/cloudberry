@@ -236,9 +236,15 @@ initNextTableToScan(DynamicSeqScanState *node)
 	node->seqScanState = ExecInitSeqScanForPartition(&plan->seqscan, estate,
 													 currentRelation);
 
-	if(estate->es_instrument)
+	if (estate->es_instrument)
 	{
-		node->seqScanState->ss.ps.instrument = GpInstrAlloc(node->seqScanState->ss.ps.plan, estate->es_instrument, node->seqScanState->ss.ps.async_capable);
+		MemoryContext oldcontext;
+
+		oldcontext = MemoryContextSwitchTo(node->partitionMemoryContext);
+		node->seqScanState->ss.ps.instrument =
+			GpInstrAlloc(node->seqScanState->ss.ps.plan, estate->es_instrument,
+						 node->seqScanState->ss.ps.async_capable);
+		MemoryContextSwitchTo(oldcontext);
 	}
 
 	if (gp_enable_runtime_filter_pushdown && !estate->useMppParallelMode)

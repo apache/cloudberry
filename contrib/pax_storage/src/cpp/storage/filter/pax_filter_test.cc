@@ -100,6 +100,7 @@ TEST_F(PaxFilterTest, OrdersBloomFiltersBeforeMoreSelectivePredicates) {
       {Kind::kBloom, 0, 100, 90},
       {Kind::kExpr, 0, 100, 5},
       {Kind::kBloom, 1, 100, 20},
+      {Kind::kExpr, 1, 5, 0},
   };
 
   context.FinishSampling();
@@ -110,6 +111,9 @@ TEST_F(PaxFilterTest, OrdersBloomFiltersBeforeMoreSelectivePredicates) {
   ASSERT_EQ(context.filter_nodes[1].kind, Kind::kBloom);
   ASSERT_EQ(context.filter_nodes[1].index, 0);
   ASSERT_EQ(context.filter_nodes[2].kind, Kind::kExpr);
+  ASSERT_EQ(context.filter_nodes[2].index, 0);
+  ASSERT_EQ(context.filter_nodes[3].kind, Kind::kExpr);
+  ASSERT_EQ(context.filter_nodes[3].index, 1);
 }
 
 TEST_F(PaxFilterTest, KeepsExactlyTheRowsPassingBloomAndSqlFilters) {

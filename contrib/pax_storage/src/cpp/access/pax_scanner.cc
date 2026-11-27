@@ -232,8 +232,10 @@ TableScanDesc PaxScanDesc::BeginScan(Relation relation, Snapshot snapshot,
 
   auto desc = this;
 
-  desc->memory_context_ = cbdb::AllocSetCtxCreate(
-      CurrentMemoryContext, "Pax Storage", PAX_ALLOCSET_DEFAULT_SIZES);
+  if (!desc->memory_context_) {
+    desc->memory_context_ = cbdb::AllocSetCtxCreate(
+        CurrentMemoryContext, "Pax Storage", PAX_ALLOCSET_DEFAULT_SIZES);
+  }
 
   memset(&desc->rs_base_, 0, sizeof(desc->rs_base_));
   desc->rs_base_.rs_rd = relation;
@@ -322,6 +324,7 @@ void PaxScanDesc::EndScan() {
   if (rs_base_.rs_flags & SO_TEMP_SNAPSHOT)
     UnregisterSnapshot(rs_base_.rs_snapshot);
 
+  if (qual_owner_) qual_owner_->qual = saved_qual_;
   cbdb::MemoryCtxDelete(memory_context);
 }
 
@@ -372,7 +375,16 @@ TableScanDesc PaxScanDesc::BeginScanExtractColumns(
         && !(flags & SO_TYPE_VECTOR)
 #endif
     ) {
+      memory_context_ = cbdb::AllocSetCtxCreate(
+          CurrentMemoryContext, "Pax Storage", PAX_ALLOCSET_DEFAULT_SIZES);
+      auto old_ctx = MemoryContextSwitchTo(memory_context_);
+      auto original_qual = ps->qual;
       filter->InitRowFilter(rel, ps, filter->GetColumnProjection(), key, nkeys);
+      MemoryContextSwitchTo(old_ctx);
+      if (ps->qual != original_qual) {
+        qual_owner_ = ps;
+        saved_qual_ = original_qual;
+      }
     }
   }
   return BeginScan(rel, snapshot, nkeys, key, parallel_scan, flags,

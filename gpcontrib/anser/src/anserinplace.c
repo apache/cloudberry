@@ -99,11 +99,9 @@ static List *inplace_probes = NIL;	/* AnserInplaceProbe *, likewise */
 
 typedef struct AnserInplaceWalk
 {
-	PlannedStmt *stmt;
 	EState	   *estate;
 	int			local_slice;
 	int			slice_index;
-	Bitmapset  *nestloop_params;
 } AnserInplaceWalk;
 
 static AnserInplaceFilter *
@@ -366,6 +364,7 @@ anser_inplace_setup(HashJoinState *hjs, AnserInplaceWalk *walk)
 	List	   *scans;
 	List	   *attnos;
 	AnserInplaceFilter *f;
+	bloom_filter *filter;
 	MemoryContext oldcxt;
 	ListCell   *lc1;
 	ListCell   *lc2;
@@ -386,6 +385,8 @@ anser_inplace_setup(HashJoinState *hjs, AnserInplaceWalk *walk)
 	if (te == NULL || !IsA(te->expr, Var) || ((Var *) te->expr)->varattno < 1)
 		return;
 	build_attno = ((Var *) te->expr)->varattno;
+	if (build_attno > ExecGetResultType(build)->natts)
+		return;
 	keyattr = TupleDescAttr(ExecGetResultType(build), build_attno - 1);
 	if (!keyattr->attbyval)
 		return;
@@ -398,12 +399,19 @@ anser_inplace_setup(HashJoinState *hjs, AnserInplaceWalk *walk)
 
 	oldcxt = MemoryContextSwitchTo(walk->estate->es_query_cxt);
 
+	filter = AnserBloomCreate(total_elems, max_payload, 0);
+	if (filter == NULL)
+	{
+		MemoryContextSwitchTo(oldcxt);
+		return;
+	}
+
 	f = palloc0(sizeof(AnserInplaceFilter));
 	f->build = build;
 	f->build_next = build->ExecProcNode;
 	f->build_attno = build_attno;
 	f->key_length = keyattr->attlen;
-	f->filter = AnserBloomCreate(total_elems, max_payload, 0);
+	f->filter = filter;
 	f->ready = false;
 
 	MemoryContextSwitchTo(oldcxt);
@@ -419,7 +427,7 @@ anser_inplace_setup(HashJoinState *hjs, AnserInplaceWalk *walk)
 
 /*
  * Walk the PlanState tree as anser_inject_walk (anserplan.c) walks the plan,
- * so that slices and nested-loop parameters are tracked the same way.
+ * so that slices are tracked the same way.
  */
 static void
 anser_inplace_walk(PlanState *ps, AnserInplaceWalk *walk)
@@ -433,28 +441,12 @@ anser_inplace_walk(PlanState *ps, AnserInplaceWalk *walk)
 		walk->slice_index = ((Motion *) ps->plan)->motionID;
 
 	if (IsA(ps, HashJoinState) && walk->slice_index == walk->local_slice &&
-		AnserInplaceEligible((HashJoin *) ps->plan, walk->stmt,
-							 walk->slice_index, walk->nestloop_params))
+		((HashJoin *) ps->plan)->anser_inplace_filter)
 		anser_inplace_setup((HashJoinState *) ps, walk);
 
 	anser_inplace_walk(outerPlanState(ps), walk);
 
-	if (IsA(ps->plan, NestLoop) && ((NestLoop *) ps->plan)->nestParams != NIL)
-	{
-		Bitmapset  *saved = walk->nestloop_params;
-		Bitmapset  *inner = bms_copy(saved);
-		ListCell   *lc;
-
-		foreach(lc, ((NestLoop *) ps->plan)->nestParams)
-			inner = bms_add_member(inner,
-								   ((NestLoopParam *) lfirst(lc))->paramno);
-		walk->nestloop_params = inner;
-		anser_inplace_walk(innerPlanState(ps), walk);
-		walk->nestloop_params = saved;
-		bms_free(inner);
-	}
-	else
-		anser_inplace_walk(innerPlanState(ps), walk);
+	anser_inplace_walk(innerPlanState(ps), walk);
 
 	if (IsA(ps, CustomScanState))
 	{
@@ -479,9 +471,6 @@ AnserInplaceExecutorStart(QueryDesc *queryDesc, int eflags)
 
 	if (Gp_role != GP_ROLE_EXECUTE)
 		return;
-	if (!gp_anser_enable || !gp_anser_runtime_filter ||
-		!gp_anser_runtime_filter_inplace)
-		return;
 	if (eflags & EXEC_FLAG_EXPLAIN_ONLY)
 		return;
 	if (queryDesc->plannedstmt == NULL ||
@@ -489,11 +478,9 @@ AnserInplaceExecutorStart(QueryDesc *queryDesc, int eflags)
 		queryDesc->estate == NULL || root == NULL)
 		return;
 
-	walk.stmt = queryDesc->plannedstmt;
 	walk.estate = queryDesc->estate;
 	walk.local_slice = LocallyExecutingSliceIndex(queryDesc->estate);
 	walk.slice_index = 0;		/* as the coordinator's walk starts */
-	walk.nestloop_params = NULL;
 
 	anser_inplace_walk(root, &walk);
 }

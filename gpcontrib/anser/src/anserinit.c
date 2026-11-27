@@ -187,12 +187,12 @@ anser_define_gucs(void)
 							 "When a hash join's probe scan runs in the join's own slice, each "
 							 "segment builds the filter from the rows the join's Hash node "
 							 "receives and applies it to that scan, with no exchange between "
-							 "segments.  Off sends every filter through the Anser exchange.  "
-							 "Synchronized to the segments, which make the same decision.",
+							 "segments.  Off makes newly planned queries use the exchange "
+							 "where eligible. The decision is recorded in the plan.",
 							 &gp_anser_runtime_filter_inplace,
 							 true,
 							 PGC_USERSET,
-							 GUC_EXPLAIN | GUC_GPDB_NEED_SYNC,
+							 GUC_EXPLAIN,
 							 NULL, NULL, NULL);
 
 	/*
@@ -342,7 +342,6 @@ anser_notify_hook(struct CdbDispatchResult *dispatchResult,
 	return false;
 }
 
-/* Count a query as executing for as long as it is running. */
 static void
 anser_executor_start(QueryDesc *queryDesc, int eflags)
 {
@@ -354,6 +353,7 @@ anser_executor_start(QueryDesc *queryDesc, int eflags)
 	AnserInplaceExecutorStart(queryDesc, eflags);
 }
 
+/* Count a query as executing for as long as it is running. */
 static void
 anser_executor_run(QueryDesc *queryDesc, ScanDirection direction,
 				   uint64 count, bool execute_once)

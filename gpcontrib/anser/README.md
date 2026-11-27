@@ -152,24 +152,21 @@ semi-joins, predicates -- where an exchanged filter holds a base scan's whole
 key column, and the scan never waits for it: a join that fetches its first
 outer tuple before building its hash table just sees that tuple unfiltered.
 Keys are normalized as above, so every key type the exchange takes works, and
-nothing depends on `gp_enable_runtime_filter_pushdown` or any change to core's
-plan nodes. EXPLAIN shows no Anser node for such a join; EXPLAIN ANALYZE shows
+the filter works independently of `gp_enable_runtime_filter_pushdown`. EXPLAIN shows no Anser node for such a join; EXPLAIN ANALYZE shows
 `Rows Removed by Pushdown Runtime Filter` on the scan. The filter is probed
 adaptively like any other.
 
-Nothing in the plan marks these joins. The coordinator and every segment run
-the same check (`AnserInplaceEligible`) on the same plan, the coordinator to
-skip the exchange and the segments to build the filter, and
-`anser.runtime_filter` and `anser.runtime_filter_inplace` are synced to the
-segments so both see the same settings. The check takes one key that passes
+The coordinator marks eligible hash joins in the plan. Segments use that
+decision when executing the dispatched plan, including when a cached plan is
+reused after a setting changes. The check takes one key that passes
 the checks below, as bare Vars; a slice that runs on segments and not in MPP
 parallel mode; and a SeqScan on the join's outer side, reached through
 HashJoins that keep their outer rows' values, Results, Appends and our own
 nodes, never through a Motion. A build side a nested loop re-runs with new
 parameter values stays out, as it does for the exchange; a plain rescan of the
 build side adds its keys again, and a filter that only grows stays correct.
-`anser.runtime_filter_inplace = off` sends every filter through the exchange
-as before.
+`anser.runtime_filter_inplace = off` makes newly planned queries use the
+exchange where eligible.
 
 ### Only across a Motion
 

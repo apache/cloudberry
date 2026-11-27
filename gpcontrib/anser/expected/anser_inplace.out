@@ -295,6 +295,26 @@ SELECT count(*) AS indf_rows FROM (anser_ip_s s LEFT JOIN anser_ip_r r ON s.x = 
 DROP TABLE anser_ip_s, anser_ip_r, anser_ip_b;
 RESET gp_enable_runtime_filter;
 SET optimizer = off;
+-- A cached plan keeps the coordinator's in-place decision after a GUC change.
+SET plan_cache_mode = force_generic_plan;
+PREPARE anser_ip_cached AS
+    SELECT f.k, f.v FROM anser_ip_fact f JOIN anser_ip_dim d ON f.k = d.k WHERE d.grp = 7;
+SELECT anser_ip_mode('EXECUTE anser_ip_cached') AS cached_mode_before;
+ cached_mode_before 
+--------------------
+ in-place
+(1 row)
+
+SET anser.runtime_filter_inplace = off;
+SELECT anser_ip_mode('EXECUTE anser_ip_cached') AS cached_mode_after;
+ cached_mode_after 
+-------------------
+ in-place
+(1 row)
+
+SET anser.runtime_filter_inplace = on;
+DEALLOCATE anser_ip_cached;
+RESET plan_cache_mode;
 -- With anser.runtime_filter_inplace off, the same join is exchanged again.
 SET anser.runtime_filter_inplace = off;
 SELECT anser_ip_mode($$SELECT f.k, f.v FROM anser_ip_fact f JOIN anser_ip_dim d ON f.k = d.k WHERE d.grp = 7$$) AS inplace_off_mode;
