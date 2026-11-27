@@ -326,10 +326,14 @@ RemoveMatviewAuxEntry(Oid mvoid)
 
 	tup = SearchSysCache1(MVAUXOID, ObjectIdGetDatum(mvoid));
 
- 	/* This clould happen, not all materialized views have an aux entry. */
+	/*
+	 * The aux entry can be missing even though a pg_depend entry points to
+	 * it: gpexpand copies the coordinator catalog to new segments and then
+	 * empties gp_matview_aux there, leaving the pg_depend entries behind.
+	 * There is nothing to release in that case.
+	 */
 	if (!HeapTupleIsValid(tup))
 	{
-		ReleaseSysCache(tup);
 		table_close(mvauxRel, RowExclusiveLock);
 		return;
 	}
