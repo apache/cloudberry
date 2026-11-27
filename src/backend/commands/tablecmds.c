@@ -488,8 +488,9 @@ static void RememberStatisticsForRebuilding(Oid indoid, AlteredTableInfo *tab);
 static void ATPostAlterTypeCleanup(List **wqueue, AlteredTableInfo *tab,
 								   LOCKMODE lockmode, AlterTableUtilityContext *context);
 static void ATPostAlterTypeParse(Oid oldId, Oid oldRelId, Oid refRelId,
-								 char *cmd, List **wqueue, LOCKMODE lockmode,
-								 bool rewrite, AlterTableUtilityContext *context);
+								 Oid ownerId, char *cmd, List **wqueue,
+								 LOCKMODE lockmode, bool rewrite,
+								 AlterTableUtilityContext *context);
 static void RebuildConstraintComment(AlteredTableInfo *tab, int pass,
 									 Oid objid, Relation rel, List *domname,
 									 const char *conname);
@@ -10699,6 +10700,8 @@ ATExecAddStatistics(AlteredTableInfo *tab, Relation rel,
 
 	/* The CreateStatsStmt has already been through transformStatsStmt */
 	Assert(stmt->transformed);
+	if (is_rebuild)
+		Assert(OidIsValid(stmt->owner));
 
 	HOLD_DISPATCH();
 	address = CreateStatistics(stmt, !is_rebuild);
@@ -15135,7 +15138,7 @@ ATPostAlterTypeCleanup(List **wqueue, AlteredTableInfo *tab, LOCKMODE lockmode,
 		if (relid != tab->relid)
 			LockRelationOid(relid, AccessExclusiveLock);
 
-		ATPostAlterTypeParse(oldId, relid, confrelid,
+		ATPostAlterTypeParse(oldId, relid, confrelid, InvalidOid,
 							 (char *) lfirst(def_item),
 							 wqueue, lockmode, tab->rewrite, context);
 	}
@@ -15154,7 +15157,7 @@ ATPostAlterTypeCleanup(List **wqueue, AlteredTableInfo *tab, LOCKMODE lockmode,
 		if (relid != tab->relid)
 			LockRelationOid(relid, AccessExclusiveLock);
 
-		ATPostAlterTypeParse(oldId, relid, InvalidOid,
+		ATPostAlterTypeParse(oldId, relid, InvalidOid, InvalidOid,
 							 (char *) lfirst(def_item),
 							 wqueue, lockmode, tab->rewrite, context);
 
@@ -15168,8 +15171,19 @@ ATPostAlterTypeCleanup(List **wqueue, AlteredTableInfo *tab, LOCKMODE lockmode,
 	{
 		Oid			oldId = lfirst_oid(oid_item);
 		Oid			relid;
+		Oid			ownerId;
+		HeapTuple	tuple;
 
 		relid = StatisticsGetRelation(oldId, false);
+
+		/* Preserve the statistics owner across the DROP and re-creation. */
+		tuple = SearchSysCache1(STATEXTOID, ObjectIdGetDatum(oldId));
+		if (!HeapTupleIsValid(tuple))
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_OBJECT),
+					 errmsg("statistics object with OID %u does not exist", oldId)));
+		ownerId = ((Form_pg_statistic_ext) GETSTRUCT(tuple))->stxowner;
+		ReleaseSysCache(tuple);
 
 		/*
 		 * As above, make sure we have lock on the statistics object's table
@@ -15184,7 +15198,7 @@ ATPostAlterTypeCleanup(List **wqueue, AlteredTableInfo *tab, LOCKMODE lockmode,
 		if (relid != tab->relid)
 			LockRelationOid(relid, ShareUpdateExclusiveLock);
 
-		ATPostAlterTypeParse(oldId, relid, InvalidOid,
+		ATPostAlterTypeParse(oldId, relid, InvalidOid, ownerId,
 							 (char *) lfirst(def_item),
 							 wqueue, lockmode, tab->rewrite, context);
 
@@ -15252,9 +15266,9 @@ ATPostAlterTypeCleanup(List **wqueue, AlteredTableInfo *tab, LOCKMODE lockmode,
  * operator that's not available for the new column type.
  */
 static void
-ATPostAlterTypeParse(Oid oldId, Oid oldRelId, Oid refRelId, char *cmd,
-					 List **wqueue, LOCKMODE lockmode, bool rewrite,
-					 AlterTableUtilityContext *context)
+ATPostAlterTypeParse(Oid oldId, Oid oldRelId, Oid refRelId, Oid ownerId,
+						 char *cmd, List **wqueue, LOCKMODE lockmode,
+						 bool rewrite, AlterTableUtilityContext *context)
 {
 	List	   *raw_parsetree_list;
 	List	   *querytree_list;
@@ -15510,6 +15524,10 @@ ATPostAlterTypeParse(Oid oldId, Oid oldRelId, Oid refRelId, char *cmd,
 		{
 			CreateStatsStmt *stmt = (CreateStatsStmt *) stm;
 			AlterTableCmd *newcmd;
+
+			/* Preserve the original owner in the queued command sent to QEs. */
+			Assert(OidIsValid(ownerId));
+			stmt->owner = ownerId;
 
 			/* keep the statistics object's comment */
 			stmt->stxcomment = GetComment(oldId, StatisticExtRelationId, 0);
