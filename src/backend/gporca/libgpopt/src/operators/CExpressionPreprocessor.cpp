@@ -2044,6 +2044,87 @@ UpdateExprToConstantPredicateMapping(CMemoryPool *mp, CExpression *pexprFilter,
 	}
 }
 
+// Can the child of an expression be replaced with the constant it is mapped
+// to, i.e. are they of the same type
+static BOOL
+FSubstitutable(CExpression *pexprChild, ExprToConstantMap *phmExprToConst)
+{
+	CExpression *pexprConst = phmExprToConst->Find(pexprChild);
+
+	return COperator::EopScalarConst != pexprChild->Pop()->Eopid() &&
+		   nullptr != pexprConst &&
+		   CScalar::PopConvert(pexprConst->Pop())
+			   ->MdidType()
+			   ->Equals(CScalar::PopConvert(pexprChild->Pop())->MdidType());
+}
+
+// Is the collation of a substitutable child the same as the collation of
+// the constant replacing it, which is the default collation of its type.
+// Then the replacement does not change the collation of anything.
+static BOOL
+FConstantHasSameCollation(CExpression *pexprChild,
+						  ExprToConstantMap *phmExprToConst)
+{
+	OID collation = 0;
+	OID const_collation = 0;
+
+	return CUtils::FDeriveCollation(pexprChild, &collation) &&
+		   CUtils::FDeriveCollation(phmExprToConst->Find(pexprChild),
+									&const_collation) &&
+		   collation == const_collation;
+}
+
+// Does replacing all substitutable children of an expression with constants
+// keep the common collation of its arguments, which is the collation the
+// expression uses and passes on. E.g. in c2.name < c1.name with
+// c1.name = 'abc', both of collation "C", the comparison still uses "C" after
+// c1.name has become 'abc', but in d.name < c.name with d.name of the
+// default collation, it would use the default collation instead.
+static BOOL
+FSubstitutionKeepsCollation(CMemoryPool *mp, CExpression *pexpr,
+							ExprToConstantMap *phmExprToConst)
+{
+	OID collation = 0;
+	if (!pexpr->Pop()->FScalar() ||
+		!CUtils::FDeriveArgsCollation(pexpr, &collation))
+	{
+		return false;
+	}
+
+	BOOL fSubstitutes = false;
+	CExpressionArray *pdrgpexpr = GPOS_NEW(mp) CExpressionArray(mp);
+	for (ULONG ul = 0; ul < pexpr->Arity(); ul++)
+	{
+		CExpression *pexprChild = (*pexpr)[ul];
+		if (FSubstitutable(pexprChild, phmExprToConst))
+		{
+			pexprChild = phmExprToConst->Find(pexprChild);
+			fSubstitutes = true;
+		}
+		pexprChild->AddRef();
+		pdrgpexpr->Append(pexprChild);
+	}
+
+	if (!fSubstitutes)
+	{
+		pdrgpexpr->Release();
+		return false;
+	}
+
+	COperator *pop = pexpr->Pop();
+	pop->AddRef();
+	CExpression *pexprSubstituted = GPOS_NEW(mp) CExpression(mp, pop, pdrgpexpr);
+
+	OID substituted_collation = 0;
+	BOOL fKeepsCollation =
+		CUtils::FDeriveArgsCollation(pexprSubstituted,
+									 &substituted_collation) &&
+		collation == substituted_collation;
+	pexprSubstituted->Release();
+
+	return fKeepsCollation;
+}
+
 // Create a new expression from an exression and map of ident to const
 static CExpression *
 SubstituteConstantIdentifier(CMemoryPool *mp, CExpression *pexpr,
@@ -2051,16 +2132,21 @@ SubstituteConstantIdentifier(CMemoryPool *mp, CExpression *pexpr,
 {
 	CExpressionArray *pdrgpexpr = GPOS_NEW(mp) CExpressionArray(mp);
 
+	// A constant has the default collation of its type, so replacing an
+	// expression with a constant may change the collation of the enclosing
+	// expression. Children whose collation is the same as the constant's can
+	// always be replaced; the others only if replacing all of them does not
+	// change the collation the expression uses.
+	BOOL fSubstituteAll =
+		FSubstitutionKeepsCollation(mp, pexpr, phmExprToConst);
+
 	const ULONG ulChildren = pexpr->Arity();
 	for (ULONG ul = 0; ul < ulChildren; ul++)
 	{
 		CExpression *pexprChild = nullptr;
-		if (COperator::EopScalarConst != (*pexpr)[ul]->Pop()->Eopid() &&
-			phmExprToConst->Find((*pexpr)[ul]) != nullptr &&
-			// make sure the types match
-			CScalar::PopConvert(phmExprToConst->Find((*pexpr)[ul])->Pop())
-				->MdidType()
-				->Equals(CScalar::PopConvert((*pexpr)[ul]->Pop())->MdidType()))
+		if (FSubstitutable((*pexpr)[ul], phmExprToConst) &&
+			(fSubstituteAll ||
+			 FConstantHasSameCollation((*pexpr)[ul], phmExprToConst)))
 		{
 			// substitute with constant
 			pexprChild = phmExprToConst->Find((*pexpr)[ul]);

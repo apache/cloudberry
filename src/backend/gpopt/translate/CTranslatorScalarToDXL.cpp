@@ -252,9 +252,15 @@ CTranslatorScalarToDXL::TranslateVarToDXL(
 	CMDName *mdname = GPOS_NEW(m_mp) CMDName(m_mp, str);
 
 	// create a column reference for the given var
+	IMDId *mdid_collation = nullptr;
+	if (OidIsValid(var->varcollid))
+	{
+		mdid_collation =
+			GPOS_NEW(m_mp) CMDIdGPDB(IMDId::EmdidGeneral, var->varcollid);
+	}
 	CDXLColRef *dxl_colref = GPOS_NEW(m_mp) CDXLColRef(
 		mdname, id, GPOS_NEW(m_mp) CMDIdGPDB(IMDId::EmdidGeneral, var->vartype),
-		var->vartypmod);
+		var->vartypmod, mdid_collation);
 
 	// create the scalar ident operator
 	CDXLScalarIdent *scalar_ident =
@@ -1483,9 +1489,17 @@ CTranslatorScalarToDXL::TranslateAggrefToDXL(
 		aggargtypes_values->Append(poid);
 	}
 
+	IMDId *mdid_input_collation = nullptr;
+	if (OidIsValid(aggref->inputcollid))
+	{
+		mdid_input_collation =
+			GPOS_NEW(m_mp) CMDIdGPDB(IMDId::EmdidGeneral, aggref->inputcollid);
+	}
+
 	CDXLScalarAggref *aggref_scalar = GPOS_NEW(m_mp) CDXLScalarAggref(
 		m_mp, agg_mdid, resolved_ret_type, is_distinct, agg_stage,
-		CTranslatorUtils::GetAggKind(aggref->aggkind), aggargtypes_values, is_agg_star);
+		CTranslatorUtils::GetAggKind(aggref->aggkind), aggargtypes_values,
+		is_agg_star, mdid_input_collation);
 
 	// create the DXL node holding the scalar aggref
 	CDXLNode *dxlnode = GPOS_NEW(m_mp) CDXLNode(m_mp, aggref_scalar);

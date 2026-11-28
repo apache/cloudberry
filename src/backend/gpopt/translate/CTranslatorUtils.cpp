@@ -176,11 +176,17 @@ CTranslatorUtils::GetTableDescr(CMemoryPool *mp, CMDAccessor *md_accessor,
 		col_type->AddRef();
 
 		// create a column descriptor for the column
+		IMDId *mdid_collation = nullptr;
+		if (0 != md_col->Collation())
+		{
+			mdid_collation = GPOS_NEW(mp)
+				CMDIdGPDB(IMDId::EmdidGeneral, md_col->Collation());
+		}
 		CDXLColDescr *dxl_col_descr = GPOS_NEW(mp)
 			CDXLColDescr(col, id_generator->next_id(), md_col->AttrNum(),
 						 col_type, md_col->TypeModifier(), /* type_modifier */
 						 false,							   /* fColDropped */
-						 md_col->Length());
+						 md_col->Length(), mdid_collation);
 		table_descr->AddColumnDescr(dxl_col_descr);
 	}
 
@@ -240,6 +246,41 @@ CTranslatorUtils::HasSubquery(Node *node)
 
 //---------------------------------------------------------------------------
 //	@function:
+//		SetTVFColumnCollations
+//
+//	@doc:
+//		Give the output columns of a table-valued function the collations
+//		the parser assigned to them. For a polymorphic function such as
+//		unnest() the collation comes from the arguments, so it cannot be
+//		deduced from the column types alone.
+//
+//---------------------------------------------------------------------------
+static void
+SetTVFColumnCollations(CMemoryPool *mp, CDXLColDescrArray *column_descrs,
+					   const RangeTblEntry *rte)
+{
+	List *collations = gpdb::GetRTEColumnCollations((RangeTblEntry *) rte);
+
+	if (gpdb::ListLength(collations) == (INT) column_descrs->Size())
+	{
+		ULONG ul = 0;
+		ListCell *lc = nullptr;
+		ForEach(lc, collations)
+		{
+			OID collation = lfirst_oid(lc);
+			if (OidIsValid(collation))
+			{
+				(*column_descrs)[ul]->SetMdidCollation(
+					GPOS_NEW(mp) CMDIdGPDB(IMDId::EmdidGeneral, collation));
+			}
+			ul++;
+		}
+	}
+	gpdb::ListFree(collations);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CTranslatorUtils::ConvertToCDXLLogicalTVF
 //
 //	@doc:
@@ -280,6 +321,7 @@ CTranslatorUtils::ConvertToCDXLLogicalTVF(CMemoryPool *mp,
 		const IMDType *type = md_accessor->RetrieveType(mdid_return_type);
 		CDXLColDescrArray *column_descrs = GetColumnDescriptorsFromComposite(
 			mp, md_accessor, id_generator, type);
+		SetTVFColumnCollations(mp, column_descrs, rte);
 
 		CMDName *func_name =
 			CDXLUtils::CreateMDNameFromCharArray(mp, rte->eref->aliasname);
@@ -355,6 +397,8 @@ CTranslatorUtils::ConvertToCDXLLogicalTVF(CMemoryPool *mp,
 			GetColumnDescriptorsFromBase(mp, id_generator, mdid_return_type,
 										 default_type_modifier, &func_mdname);
 	}
+
+	SetTVFColumnCollations(mp, column_descrs, rte);
 
 	CMDName *pmdfuncname = GPOS_NEW(mp) CMDName(mp, func->Mdname().GetMDName());
 
@@ -1494,12 +1538,19 @@ CTranslatorUtils::GetColumnDescrAt(CMemoryPool *mp, TargetEntry *target_entry,
 	// create a column descriptor
 	OID type_oid = gpdb::ExprType((Node *) target_entry->expr);
 	INT type_modifier = gpdb::ExprTypeMod((Node *) target_entry->expr);
+	OID collation = gpdb::ExprCollation((Node *) target_entry->expr);
 	CMDIdGPDB *col_type = GPOS_NEW(mp) CMDIdGPDB(IMDId::EmdidGeneral, type_oid);
-	CDXLColDescr *dxl_col_descr =
-		GPOS_NEW(mp) CDXLColDescr(mdname, colid, pos,	   /* attno */
-								  col_type, type_modifier, /* type_modifier */
-								  false					   /* fColDropped */
-		);
+	IMDId *mdid_collation = nullptr;
+	if (OidIsValid(collation))
+	{
+		mdid_collation = GPOS_NEW(mp) CMDIdGPDB(IMDId::EmdidGeneral, collation);
+	}
+	CDXLColDescr *dxl_col_descr = GPOS_NEW(mp)
+		CDXLColDescr(mdname, colid, pos,		 /* attno */
+					 col_type, type_modifier, /* type_modifier */
+					 false,					 /* fColDropped */
+					 gpos::ulong_max,		 /* width */
+					 mdid_collation);
 
 	return dxl_col_descr;
 }
@@ -1612,7 +1663,7 @@ CTranslatorUtils::GetColId(ULONG query_level, INT varno, INT var_attno,
 						   IMDId *mdid, CMappingVarColId *var_colid_mapping)
 {
 	OID oid = CMDIdGPDB::CastMdid(mdid)->Oid();
-	Var *var = gpdb::MakeVar(varno, var_attno, oid, -1, 0);
+	Var *var = gpdb::MakeVar(varno, var_attno, oid, -1, InvalidOid, 0);
 	ULONG colid = var_colid_mapping->GetColId(query_level, var, EpspotNone);
 	gpdb::GPDBFree(var);
 

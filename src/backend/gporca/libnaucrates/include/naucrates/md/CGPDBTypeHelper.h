@@ -64,6 +64,13 @@ public:
 			CDXLTokens::GetDXLTokenStr(EdxltokenMDTypeIsTextRelated),
 			mdtype->IsTextRelated());
 
+		if (0 != mdtype->TypeCollation())
+		{
+			xml_serializer->AddAttribute(
+				CDXLTokens::GetDXLTokenStr(EdxltokenMDTypeCollation),
+				mdtype->TypeCollation());
+		}
+
 		xml_serializer->AddAttribute(
 			CDXLTokens::GetDXLTokenStr(EdxltokenMDTypeFixedLength),
 			mdtype->IsFixedLength());

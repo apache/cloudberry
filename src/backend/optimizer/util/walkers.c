@@ -912,11 +912,277 @@ check_collation_in_list(List *colllist, check_collation_context *context)
 	foreach (lc, colllist)
 	{
 		Oid coll = lfirst_oid(lc);
-		if (InvalidOid != coll && DEFAULT_COLLATION_OID != coll)
+		if (InvalidOid != coll && DEFAULT_COLLATION_OID != coll &&
+			C_COLLATION_OID != coll)
 		{
 			context->foundNonDefaultCollation = 1;
 			break;
 		}
+	}
+}
+
+/*
+ * ORCA does not keep the collations computed by the parser: when translating
+ * its plan back, it derives them again bottom up, from the collations of the
+ * columns (see gpdb::ExprCollation() and CTranslatorDXLToScalar). The helpers
+ * below mirror those rules, so that queries whose collations would come out
+ * differently, e.g. because an explicit COLLATE clause overrides an implicit
+ * collation, can be left to the Postgres planner.
+ */
+
+/*
+ * Do the collation computed by the parser and the one derived by ORCA agree?
+ * Only two different valid collations make a difference in the results:
+ * whether a collation-insensitive operation gets the default collation or
+ * none does not matter, and a collation-sensitive one would raise an error
+ * rather than produce a different result.
+ */
+static bool
+orca_same_collation(Oid parser_collation, Oid orca_collation)
+{
+	if (!OidIsValid(parser_collation))
+		parser_collation = DEFAULT_COLLATION_OID;
+	if (!OidIsValid(orca_collation))
+		orca_collation = DEFAULT_COLLATION_OID;
+
+	return parser_collation == orca_collation;
+}
+
+/*
+ * Collation ORCA gives to an expression. Nodes that ORCA rebuilds with the
+ * collation of their type may differ from the parser's, e.g. a folded
+ * current_user constant has no collation in the query but gets the one of
+ * type name. For the other nodes, the parser's collation is checked by
+ * orca_collations_match().
+ */
+static Oid
+orca_expr_collation(Node *node)
+{
+	if (node == NULL)
+		return InvalidOid;
+
+	switch (nodeTag(node))
+	{
+		case T_Const:
+			return get_typcollation(((Const *) node)->consttype);
+		case T_Param:
+			if (((Param *) node)->paramkind == PARAM_EXTERN)
+				return get_typcollation(((Param *) node)->paramtype);
+			break;
+		case T_CaseTestExpr:
+			return get_typcollation(((CaseTestExpr *) node)->typeId);
+		case T_ArrayExpr:
+			return get_typcollation(((ArrayExpr *) node)->array_typeid);
+		case T_SubscriptingRef:
+			return get_typcollation(((SubscriptingRef *) node)->refelemtype);
+		case T_CoerceViaIO:
+			return get_typcollation(((CoerceViaIO *) node)->resulttype);
+		case T_ArrayCoerceExpr:
+			return get_typcollation(((ArrayCoerceExpr *) node)->resulttype);
+		case T_CoerceToDomain:
+			return get_typcollation(((CoerceToDomain *) node)->resulttype);
+		case T_RelabelType:
+			return orca_expr_collation((Node *) ((RelabelType *) node)->arg);
+		default:
+			break;
+	}
+
+	return exprCollation(node);
+}
+
+/*
+ * Collation ORCA derives for a list of arguments: like for implicit
+ * collations in the parser, a non-default collation beats the default one.
+ */
+static Oid
+orca_merge_collations(List *exprs)
+{
+	Oid			result = InvalidOid;
+	ListCell   *lc;
+
+	foreach(lc, exprs)
+	{
+		Oid			coll = orca_expr_collation((Node *) lfirst(lc));
+
+		if (OidIsValid(coll) &&
+			(!OidIsValid(result) || result == DEFAULT_COLLATION_OID))
+			result = coll;
+	}
+
+	return result;
+}
+
+/* Collation ORCA derives for the result of an operator or function */
+static Oid
+orca_result_collation(Oid input_collation, Oid result_type)
+{
+	Oid			type_collation = get_typcollation(result_type);
+
+	if (!OidIsValid(type_collation))
+		return InvalidOid;
+
+	return OidIsValid(input_collation) ? input_collation : type_collation;
+}
+
+/*
+ * ORCA gives constants and parameters the collation of their type, which an
+ * explicit COLLATE clause on a constant overrides in the parser. A leaf
+ * without a collation (e.g. a folded current_user) or of a type without one
+ * (e.g. a pseudo-type) has no collation to lose.
+ */
+static bool
+orca_leaf_collation_matches(Oid collation, Oid type)
+{
+	Oid			type_collation = get_typcollation(type);
+
+	return !OidIsValid(collation) || !OidIsValid(type_collation) ||
+		collation == type_collation;
+}
+
+/* Collation ORCA derives for the input of an aggregate */
+static Oid
+orca_aggref_input_collation(Aggref *aggref)
+{
+	List	   *args = NIL;
+	ListCell   *lc;
+
+	/* the ORDER BY-only arguments do not count, like in the parser */
+	foreach(lc, aggref->args)
+	{
+		TargetEntry *tle = lfirst_node(TargetEntry, lc);
+
+		if (!tle->resjunk)
+			args = lappend(args, tle->expr);
+	}
+
+	return orca_merge_collations(args);
+}
+
+/* Collation ORCA derives for the result of a CASE expression */
+static Oid
+orca_case_collation(CaseExpr *caseexpr)
+{
+	List	   *results = NIL;
+	ListCell   *lc;
+	Oid			coll;
+
+	foreach(lc, caseexpr->args)
+		results = lappend(results, ((CaseWhen *) lfirst(lc))->result);
+	if (caseexpr->defresult)
+		results = lappend(results, caseexpr->defresult);
+
+	coll = orca_merge_collations(results);
+
+	return OidIsValid(coll) ? coll : get_typcollation(caseexpr->casetype);
+}
+
+/*
+ * Does ORCA derive the same collations for this node as the parser did,
+ * provided it does so for its arguments?
+ */
+static bool
+orca_collations_match(Node *node)
+{
+	Oid			input;
+
+	switch (nodeTag(node))
+	{
+		case T_OpExpr:
+		case T_DistinctExpr:
+		case T_NullIfExpr:
+			{
+				OpExpr	   *op = (OpExpr *) node;
+
+				input = orca_merge_collations(op->args);
+				return orca_same_collation(op->inputcollid, input) &&
+					orca_same_collation(op->opcollid,
+										orca_result_collation(input,
+															  op->opresulttype));
+			}
+		case T_ScalarArrayOpExpr:
+			return orca_same_collation(((ScalarArrayOpExpr *) node)->inputcollid,
+									   orca_merge_collations(((ScalarArrayOpExpr *) node)->args));
+		case T_FuncExpr:
+			{
+				FuncExpr   *func = (FuncExpr *) node;
+
+				input = orca_merge_collations(func->args);
+				return orca_same_collation(func->inputcollid, input) &&
+					orca_same_collation(func->funccollid,
+										orca_result_collation(input,
+															  func->funcresulttype));
+			}
+		case T_Aggref:
+			{
+				Aggref	   *aggref = (Aggref *) node;
+
+				input = orca_aggref_input_collation(aggref);
+				return orca_same_collation(aggref->inputcollid, input) &&
+					orca_same_collation(aggref->aggcollid,
+										orca_result_collation(input,
+															  aggref->aggtype));
+			}
+		case T_WindowFunc:
+			{
+				WindowFunc *wfunc = (WindowFunc *) node;
+
+				input = orca_merge_collations(wfunc->args);
+				return orca_same_collation(wfunc->inputcollid, input) &&
+					orca_same_collation(wfunc->wincollid,
+										orca_result_collation(input,
+															  wfunc->wintype));
+			}
+		case T_MinMaxExpr:
+			{
+				MinMaxExpr *minmax = (MinMaxExpr *) node;
+
+				input = orca_merge_collations(minmax->args);
+				return orca_same_collation(minmax->inputcollid, input) &&
+					orca_same_collation(minmax->minmaxcollid,
+										orca_result_collation(input,
+															  minmax->minmaxtype));
+			}
+		case T_CoalesceExpr:
+			{
+				CoalesceExpr *coalesce = (CoalesceExpr *) node;
+
+				input = orca_merge_collations(coalesce->args);
+				return orca_same_collation(coalesce->coalescecollid,
+										   orca_result_collation(input,
+																 coalesce->coalescetype));
+			}
+		case T_CaseExpr:
+			return orca_same_collation(((CaseExpr *) node)->casecollid,
+									   orca_case_collation((CaseExpr *) node));
+		case T_Const:
+			/* e.g. a constant with an explicit COLLATE clause */
+			return orca_leaf_collation_matches(((Const *) node)->constcollid,
+											   ((Const *) node)->consttype);
+		case T_Param:
+			if (((Param *) node)->paramkind != PARAM_EXTERN)
+				return true;
+			return orca_leaf_collation_matches(((Param *) node)->paramcollid,
+											   ((Param *) node)->paramtype);
+		case T_CaseTestExpr:
+			return orca_leaf_collation_matches(((CaseTestExpr *) node)->collation,
+											   ((CaseTestExpr *) node)->typeId);
+		case T_ArrayExpr:
+			return orca_same_collation(((ArrayExpr *) node)->array_collid,
+									   orca_expr_collation(node));
+		case T_SubscriptingRef:
+			return orca_same_collation(((SubscriptingRef *) node)->refcollid,
+									   orca_expr_collation(node));
+		case T_CoerceViaIO:
+			return orca_same_collation(((CoerceViaIO *) node)->resultcollid,
+									   orca_expr_collation(node));
+		case T_ArrayCoerceExpr:
+			return orca_same_collation(((ArrayCoerceExpr *) node)->resultcollid,
+									   orca_expr_collation(node));
+		case T_CoerceToDomain:
+			return orca_same_collation(((CoerceToDomain *) node)->resultcollid,
+									   orca_expr_collation(node));
+		default:
+			return true;
 	}
 }
 
@@ -936,10 +1202,15 @@ check_collation_walker(Node *node, check_collation_context *context)
 		return query_tree_walker((Query *) node, check_collation_walker, (void *) context, 0 /* flags */);
 	}
 
+	if (!orca_collations_match(node))
+	{
+		context->foundNonDefaultCollation = 1;
+		return true;
+	}
+
 	switch (nodeTag(node))
 	{
 		case T_Var:
-		case T_Const:
 		case T_OpExpr:
 			type = exprType((node));
 			collation = exprCollation(node);
@@ -948,11 +1219,35 @@ check_collation_walker(Node *node, check_collation_context *context)
 				if (collation != C_COLLATION_OID)
 					context->foundNonDefaultCollation = 1;
 			}
-			else if (InvalidOid != collation && DEFAULT_COLLATION_OID != collation)
+			else if (InvalidOid != collation && DEFAULT_COLLATION_OID != collation &&
+				 C_COLLATION_OID != collation)
 			{
 				context->foundNonDefaultCollation = 1;
 			}
 			break;
+		case T_Const:
+		{
+			/*
+			 * fold_constants() converts CollateExpr on a constant into a
+			 * Const with modified constcollid (no RelabelType wrapper).
+			 * Normal string constants have constcollid = DEFAULT_COLLATION_OID.
+			 * Constants with explicit COLLATE (e.g., 'foo' COLLATE "C")
+			 * have a different constcollid that ORCA cannot propagate.
+			 *
+			 * To distinguish explicit COLLATE from inherent type collation
+			 * (e.g., '1505703298'::name where name type has C collation),
+			 * compare constcollid with the type's default collation.
+			 * A mismatch means an explicit COLLATE override was applied.
+			 */
+			Const *c = (Const *) node;
+			if (OidIsValid(c->constcollid) &&
+				c->constcollid != DEFAULT_COLLATION_OID &&
+				c->constcollid != get_typcollation(c->consttype))
+			{
+				context->foundNonDefaultCollation = 1;
+			}
+			break;
+		}
 		case T_ScalarArrayOpExpr:
 		case T_DistinctExpr:
 		case T_BoolExpr:
@@ -966,7 +1261,6 @@ check_collation_walker(Node *node, check_collation_context *context)
 		case T_WindowFunc:
 		case T_NullTest:
 		case T_NullIfExpr:
-		case T_RelabelType:
 		case T_CoerceToDomain:
 		case T_CoerceViaIO:
 		case T_ArrayCoerceExpr:
@@ -993,14 +1287,57 @@ check_collation_walker(Node *node, check_collation_context *context)
 		case T_DMLActionExpr:
 			collation = exprCollation(node);
 			inputCollation = exprInputCollation(node);
-			if ((InvalidOid != collation && DEFAULT_COLLATION_OID != collation) ||
-				(InvalidOid != inputCollation && DEFAULT_COLLATION_OID != inputCollation))
+			if ((InvalidOid != collation && DEFAULT_COLLATION_OID != collation &&
+				 C_COLLATION_OID != collation) ||
+				(InvalidOid != inputCollation && DEFAULT_COLLATION_OID != inputCollation &&
+				 C_COLLATION_OID != inputCollation))
 			{
 				context->foundNonDefaultCollation = 1;
 			}
 			break;
+		case T_RelabelType:
+		{
+			/*
+			 * fold_constants() converts CollateExpr to RelabelType.
+			 * Detect expression-level COLLATE override by checking if the
+			 * RelabelType's collation differs from its argument's collation.
+			 * ORCA does not yet propagate expression-level collation, so
+			 * these must fall back to the Postgres planner.
+			 *
+			 * Skip the check when the argument's collation is InvalidOid.
+			 * This happens for CaseTestExpr inside ArrayCoerceExpr, where
+			 * the parser leaves the placeholder's collation unset.
+			 * Treating that as a mismatch would cause false fallback for
+			 * ordinary casts like text[]::varchar[].
+			 */
+			RelabelType *r = (RelabelType *) node;
+			Oid arg_coll = exprCollation((Node *) r->arg);
+			if (OidIsValid(r->resultcollid) &&
+				OidIsValid(arg_coll) &&
+				r->resultcollid != arg_coll)
+			{
+				context->foundNonDefaultCollation = 1;
+				break;
+			}
+			/* Normal type coercion: check like other expression nodes */
+			collation = exprCollation(node);
+			inputCollation = exprInputCollation(node);
+			if ((InvalidOid != collation && DEFAULT_COLLATION_OID != collation &&
+				 C_COLLATION_OID != collation) ||
+				(InvalidOid != inputCollation && DEFAULT_COLLATION_OID != inputCollation &&
+				 C_COLLATION_OID != inputCollation))
+			{
+				context->foundNonDefaultCollation = 1;
+			}
+			break;
+		}
 		case T_CollateClause:
-			/* unsupported */
+			/*
+			 * CollateClause is a raw parse node without a resolved OID.
+			 * Analyzed COLLATE expressions use T_CollateExpr instead,
+			 * which is handled above with the C_COLLATION_OID check.
+			 * Keep this as unconditional reject for safety.
+			 */
 			context->foundNonDefaultCollation = 1;
 			break;
 		case T_RangeTblEntry:

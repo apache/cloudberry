@@ -86,6 +86,9 @@ private:
 	// table info
 	IMDId *m_mdid_table;
 
+	// collation OID (metadata for translation, does not affect column identity)
+	OID m_collation;
+
 	// debug function
 	const char* UsedStatusToString(EUsedStatus status) const;
 
@@ -102,7 +105,7 @@ public:
 
 	// ctor
 	CColRef(const IMDType *pmdtype, const INT type_modifier, ULONG id,
-			const CName *pname);
+			const CName *pname, OID collation = 0);
 
 	// dtor
 	virtual ~CColRef();
@@ -119,6 +122,13 @@ public:
 	TypeModifier() const
 	{
 		return m_type_modifier;
+	}
+
+	// collation
+	OID
+	Collation() const
+	{
+		return m_collation;
 	}
 
 	// name

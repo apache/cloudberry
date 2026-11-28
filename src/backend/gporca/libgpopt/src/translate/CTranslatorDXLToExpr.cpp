@@ -603,11 +603,18 @@ CTranslatorDXLToExpr::PexprLogicalTVF(const CDXLNode *dxlnode)
 			m_mp, pdxlcoldesc->MdName()->GetMDName()->GetBuffer());
 
 		INT attrnum = pdxlcoldesc->AttrNum();
+		OID collation = 0;
+		if (nullptr != pdxlcoldesc->MdidCollation() &&
+			pdxlcoldesc->MdidCollation()->IsValid())
+		{
+			collation =
+				CMDIdGPDB::CastMdid(pdxlcoldesc->MdidCollation())->Oid();
+		}
 		CColumnDescriptor *pcoldesc = GPOS_NEW(m_mp)
 			CColumnDescriptor(m_mp, pmdtype, pdxlcoldesc->TypeModifier(),
 							  CName(m_mp, &strColName), attrnum,
 							  true,	 // is_nullable
-							  pdxlcoldesc->Width());
+							  pdxlcoldesc->Width(), collation);
 		pdrgpcoldesc->Append(pcoldesc);
 	}
 
@@ -990,6 +997,13 @@ CTranslatorDXLToExpr::BuildSetOpChild(
 
 		const IMDType *pmdtype = m_pmda->RetrieveType(mdid_dest);
 		INT type_modifier = pdxlcdOutput->TypeModifier();
+		OID collation = colref->Collation();
+		if (nullptr != pdxlcdOutput->MdidCollation() &&
+			pdxlcdOutput->MdidCollation()->IsValid())
+		{
+			collation =
+				CMDIdGPDB::CastMdid(pdxlcdOutput->MdidCollation())->Oid();
+		}
 
 		BOOL fEqualTypes = IMDId::MDIdCompare(pmdidSource, mdid_dest);
 		BOOL fFirstChild = (0 == child_index);
@@ -999,8 +1013,9 @@ CTranslatorDXLToExpr::BuildSetOpChild(
 			// input column is an outer reference, add a project element for input column
 
 			// add the colref to the hash map between DXL ColId and colref as they can used above the setop
-			CColRef *new_colref = PcrCreate(colref, pmdtype, type_modifier,
-											fFirstChild, pdxlcdOutput->Id());
+			CColRef *new_colref =
+				PcrCreate(colref, pmdtype, type_modifier, collation,
+						  fFirstChild, pdxlcdOutput->Id());
 			(*ppdrgpcrChild)->Append(new_colref);
 
 			CExpression *pexprChildProjElem = nullptr;
@@ -1032,8 +1047,9 @@ CTranslatorDXLToExpr::BuildSetOpChild(
 		else
 		{
 			// add the colref to the hash map between DXL ColId and colref as they can used above the setop
-			CColRef *new_colref = PcrCreate(colref, pmdtype, type_modifier,
-											fFirstChild, pdxlcdOutput->Id());
+			CColRef *new_colref =
+				PcrCreate(colref, pmdtype, type_modifier, collation,
+						  fFirstChild, pdxlcdOutput->Id());
 			(*ppdrgpcrChild)->Append(new_colref);
 
 			// introduce cast expression for input column
@@ -1186,12 +1202,13 @@ CTranslatorDXLToExpr::LookupColRef(ULONG colid, BOOL mark_used)
 //---------------------------------------------------------------------------
 CColRef *
 CTranslatorDXLToExpr::PcrCreate(const CColRef *colref, const IMDType *pmdtype,
-								INT type_modifier, BOOL fStoreMapping,
-								ULONG colid)
+								INT type_modifier, OID collation,
+								BOOL fStoreMapping, ULONG colid)
 {
 	// generate a new column reference
 	CName name(colref->Name().Pstr());
-	CColRef *new_colref = m_pcf->PcrCreate(pmdtype, type_modifier, name);
+	CColRef *new_colref =
+		m_pcf->PcrCreate(pmdtype, type_modifier, name, collation);
 
 	if (fStoreMapping)
 	{
@@ -1225,9 +1242,15 @@ CTranslatorDXLToExpr::Pdrgpcr(const CDXLColDescrArray *dxl_col_descr_array)
 		const IMDType *pmdtype = m_pmda->RetrieveType(mdid);
 
 		CName name(pdxlcd->MdName()->GetMDName());
+		OID collation = 0;
+		if (nullptr != pdxlcd->MdidCollation() &&
+			pdxlcd->MdidCollation()->IsValid())
+		{
+			collation = CMDIdGPDB::CastMdid(pdxlcd->MdidCollation())->Oid();
+		}
 		// generate a new column reference
 		CColRef *colref =
-			m_pcf->PcrCreate(pmdtype, pdxlcd->TypeModifier(), name);
+			m_pcf->PcrCreate(pmdtype, pdxlcd->TypeModifier(), name, collation);
 		pdrgpcrOutput->Append(colref);
 	}
 
@@ -2378,9 +2401,17 @@ CTranslatorDXLToExpr::Ptabdesc(CDXLTableDescr *table_descr)
 		INT attrnum = pdxlcoldesc->AttrNum();
 
 		const ULONG ulWidth = pdxlcoldesc->Width();
+		OID col_collation = 0;
+		if (nullptr != pdxlcoldesc->MdidCollation() &&
+			pdxlcoldesc->MdidCollation()->IsValid())
+		{
+			col_collation =
+				CMDIdGPDB::CastMdid(pdxlcoldesc->MdidCollation())->Oid();
+		}
 		CColumnDescriptor *pcoldesc = GPOS_NEW(m_mp) CColumnDescriptor(
 			m_mp, pmdtype, pdxlcoldesc->TypeModifier(),
-			CName(m_mp, &strColName), attrnum, is_nullable, ulWidth);
+			CName(m_mp, &strColName), attrnum, is_nullable, ulWidth,
+			col_collation);
 
 		ptabdesc->AddColumn(pcoldesc);
 	}
@@ -2579,9 +2610,17 @@ CTranslatorDXLToExpr::PtabdescFromCTAS(CDXLLogicalCTAS *pdxlopCTAS)
 		INT attrnum = pdxlcoldesc->AttrNum();
 
 		const ULONG ulWidth = pdxlcoldesc->Width();
+		OID col_collation = 0;
+		if (nullptr != pdxlcoldesc->MdidCollation() &&
+			pdxlcoldesc->MdidCollation()->IsValid())
+		{
+			col_collation =
+				CMDIdGPDB::CastMdid(pdxlcoldesc->MdidCollation())->Oid();
+		}
 		CColumnDescriptor *pcoldesc = GPOS_NEW(m_mp) CColumnDescriptor(
 			m_mp, pmdtype, pdxlcoldesc->TypeModifier(),
-			CName(m_mp, &strColName), attrnum, is_nullable, ulWidth);
+			CName(m_mp, &strColName), attrnum, is_nullable, ulWidth,
+			col_collation);
 
 		ptabdesc->AddColumn(pcoldesc);
 	}
@@ -3420,13 +3459,22 @@ CTranslatorDXLToExpr::PexprAggFunc(const CDXLNode *pdxlnAggref)
 		resolved_return_type_mdid->AddRef();
 	}
 
+	OID input_collation = 0;
+	if (nullptr != dxl_op->MdidInputCollation() &&
+		dxl_op->MdidInputCollation()->IsValid())
+	{
+		input_collation =
+			CMDIdGPDB::CastMdid(dxl_op->MdidInputCollation())->Oid();
+	}
+
 	dxl_op->GetArgTypes()->AddRef();
 	CScalarAggFunc *popScAggFunc = CUtils::PopAggFunc(
 		m_mp, agg_func_mdid,
 		GPOS_NEW(m_mp)
 			CWStringConst(m_mp, (pmdagg->Mdname().GetMDName())->GetBuffer()),
 		dxl_op->IsDistinct(), agg_func_stage, fSplit, resolved_return_type_mdid,
-		agg_func_kind, dxl_op->GetArgTypes(), pmdagg->IsAggRepSafe(), dxl_op->IsAggStar());
+		agg_func_kind, dxl_op->GetArgTypes(), pmdagg->IsAggRepSafe(),
+		dxl_op->IsAggStar(), input_collation);
 
 	CExpression *pexprAggFunc = nullptr;
 
@@ -4183,9 +4231,17 @@ CTranslatorDXLToExpr::PexprScalarProjElem(const CDXLNode *pdxlnPrEl)
 
 	CName name(pdxlopPrEl->GetMdNameAlias()->GetMDName());
 
+	// the computed column has the collation of the expression, e.g. that of
+	// c.name in c.name || 'x', otherwise it stays unknown
+	OID collation = 0;
+	if (!CUtils::FDeriveCollation(pexprChild, &collation))
+	{
+		collation = 0;
+	}
+
 	// generate a new column reference
-	CColRef *colref =
-		m_pcf->PcrCreate(pmdtype, popScalar->TypeModifier(), name);
+	CColRef *colref = m_pcf->PcrCreate(pmdtype, popScalar->TypeModifier(),
+									   name, collation);
 
 	// store colid -> colref mapping
 	BOOL fInserted GPOS_ASSERTS_ONLY =

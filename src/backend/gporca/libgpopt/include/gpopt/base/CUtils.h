@@ -246,7 +246,7 @@ public:
 		BOOL is_distinct, EAggfuncStage eaggfuncstage, BOOL fSplit,
 		IMDId * pmdidResolvedReturnType,  // return type to be used if original return type is ambiguous
 		EAggfuncKind aggkind, ULongPtrArray *argtypes, BOOL fRepSafe,
-		BOOL is_agg_star);
+		BOOL is_agg_star, OID input_collation = 0);
 
 	// generate an aggregate function
 	static CExpression *PexprAggFunc(CMemoryPool *mp, IMDId *pmdidAggFunc,
@@ -975,6 +975,19 @@ public:
 
 	// return true if given expression contains window aggregate function
 	static BOOL FHasAggWindowFunc(CExpression *pexpr);
+
+	// merge the collation of an argument into the common collation of the
+	// arguments of an expression, the way gpdb::ExprCollation() does
+	static OID MergeCollation(OID collation, OID arg_collation);
+
+	// derive the collation of a scalar expression, the way the translator to
+	// a plan tree does; return false if it is not known
+	static BOOL FDeriveCollation(CExpression *pexprScalar, OID *collation);
+
+	// derive the common collation of the arguments of a scalar expression;
+	// return false if it is not known
+	static BOOL FDeriveArgsCollation(CExpression *pexprScalar,
+									 OID *collation);
 
 	// return true if the given aggregate function has an ORDER BY clause,
 	// e.g. string_agg(x, ',' ORDER BY x)

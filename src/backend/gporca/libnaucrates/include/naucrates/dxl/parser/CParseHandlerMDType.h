@@ -120,6 +120,9 @@ private:
 	// is type text related
 	BOOL m_is_text_related;
 
+	// default collation of the type
+	OID m_type_collation;
+
 	// id of the relation corresponding to a composite type
 	IMDId *m_mdid_base_rel;
 

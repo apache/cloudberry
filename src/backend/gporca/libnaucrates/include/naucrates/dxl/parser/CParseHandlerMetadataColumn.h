@@ -58,6 +58,9 @@ private:
 	// width of the column
 	ULONG m_width;
 
+	// collation OID
+	OID m_collation;
+
 	// process the start of an element
 	void StartElement(
 		const XMLCh *const element_uri,			// URI of element's namespace

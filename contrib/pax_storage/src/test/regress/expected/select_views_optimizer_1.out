@@ -1327,8 +1327,6 @@ SET SESSION AUTHORIZATION regress_alice;
 --           prior to the security policy of the view.
 --
 SELECT * FROM my_property_normal WHERE f_leak(passwd);
-NOTICE:  f_leak => beafsteak
-NOTICE:  f_leak => hamburger
 NOTICE:  f_leak => passwd123
  cid |     name      |       tel        |  passwd   
 -----+---------------+------------------+-----------
@@ -1340,7 +1338,7 @@ EXPLAIN (COSTS OFF) SELECT * FROM my_property_normal WHERE f_leak(passwd);
 ---------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on customer
-         Filter: (f_leak(passwd) AND (name = 'regress_alice'::name))
+         Filter: ((name = 'regress_alice'::name) AND f_leak(passwd))
  Optimizer: Pivotal Optimizer (GPORCA) version 2.59.1
 (4 rows)
 
@@ -1368,8 +1366,6 @@ EXPLAIN (COSTS OFF) SELECT * FROM my_property_secure WHERE f_leak(passwd);
 --
 SELECT * FROM my_property_normal v
 		WHERE f_leak('passwd') AND f_leak(passwd);
-NOTICE:  f_leak => beafsteak
-NOTICE:  f_leak => hamburger
 NOTICE:  f_leak => passwd
 NOTICE:  f_leak => passwd123
  cid |     name      |       tel        |  passwd   
@@ -1383,7 +1379,7 @@ EXPLAIN (COSTS OFF) SELECT * FROM my_property_normal v
 ------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on customer
-         Filter: (f_leak('passwd'::text) AND f_leak(passwd) AND (name = 'regress_alice'::name))
+         Filter: ((name = 'regress_alice'::name) AND f_leak('passwd'::text) AND f_leak(passwd))
  Optimizer: Pivotal Optimizer (GPORCA) version 3.44.0
 (4 rows)
 
@@ -1429,12 +1425,12 @@ EXPLAIN (COSTS OFF) SELECT * FROM my_credit_card_normal WHERE f_leak(cnum);
 -------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
-         Hash Cond: ((r.cid = l.cid) AND (r.dist_key = l.dist_key))
-         ->  Seq Scan on credit_card r
-               Filter: f_leak(cnum)
+         Hash Cond: ((l.cid = r.cid) AND (l.dist_key = r.dist_key))
+         ->  Seq Scan on customer l
+               Filter: (name = 'regress_alice'::name)
          ->  Hash
-               ->  Seq Scan on customer l
-                     Filter: (name = 'regress_alice'::name)
+               ->  Seq Scan on credit_card r
+                     Filter: f_leak(cnum)
  Optimizer: Pivotal Optimizer (GPORCA) version 2.67.0
 (9 rows)
 
@@ -1541,8 +1537,6 @@ EXPLAIN (COSTS OFF) SELECT * FROM my_credit_card_usage_secure
 PREPARE p1 AS SELECT * FROM my_property_normal WHERE f_leak(passwd);
 PREPARE p2 AS SELECT * FROM my_property_secure WHERE f_leak(passwd);
 EXECUTE p1;
-NOTICE:  f_leak => beafsteak
-NOTICE:  f_leak => hamburger
 NOTICE:  f_leak => passwd123
  cid |     name      |       tel        |  passwd   
 -----+---------------+------------------+-----------
@@ -1568,8 +1562,6 @@ NOTICE:  f_leak => passwd123
 (1 row)
 
 EXECUTE p2;		-- To be perform as a view without security-barrier
-NOTICE:  f_leak => beafsteak
-NOTICE:  f_leak => hamburger
 NOTICE:  f_leak => passwd123
  cid |     name      |       tel        |  passwd   
 -----+---------------+------------------+-----------

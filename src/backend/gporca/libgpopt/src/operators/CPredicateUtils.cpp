@@ -1931,6 +1931,28 @@ CPredicateUtils::FColumnDisjunctionOfConst(CConstraintInterval *pcnstrInterval,
 	return true;
 }
 
+// An index can only serve a comparison that uses the collation of the index
+// key, which is the collation of the key column. The comparison uses the
+// common collation of its two sides, which differs from the key's when the
+// key has the default collation and the other side does not, e.g. in
+// d.name < c.name or d.name < c.n::text, with c.name of collation "C" and
+// c.n of type name, whose collation is "C" too.
+static BOOL
+FIndexKeyCollationMatches(const CColRef *pcrKey, CExpression *pexprOther)
+{
+	if (0 == pcrKey->RetrieveType()->TypeCollation())
+	{
+		// not a collatable type, or metadata without collation information
+		return true;
+	}
+
+	OID other_collation = 0;
+	return 0 != pcrKey->Collation() &&
+		   CUtils::FDeriveCollation(pexprOther, &other_collation) &&
+		   pcrKey->Collation() ==
+			   CUtils::MergeCollation(pcrKey->Collation(), other_collation);
+}
+
 // helper to create index lookup comparison predicate with index key on left side
 CExpression *
 CPredicateUtils::PexprIndexLookupKeyOnLeft(
@@ -1962,9 +1984,13 @@ CPredicateUtils::PexprIndexLookupKeyOnLeft(
 	{
 		// left expression is a scalar identifier or casted scalar identifier on an index key
 		CColRefSet *pcrsUsedRight = pexprRight->DeriveUsedColumns();
-		BOOL fSuccess = true;
+		const CColRef *pcrKey =
+			CUtils::FScalarIdent(pexprLeft)
+				? CScalarIdent::PopConvert(pexprLeft->Pop())->Pcr()
+				: CScalarIdent::PopConvert((*pexprLeft)[0]->Pop())->Pcr();
+		BOOL fSuccess = FIndexKeyCollationMatches(pcrKey, pexprRight);
 
-		if (0 < pcrsUsedRight->Size())
+		if (fSuccess && 0 < pcrsUsedRight->Size())
 		{
 			if (!pcrsUsedRight->IsDisjoint(pcrsIndex))
 			{

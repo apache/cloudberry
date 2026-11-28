@@ -151,6 +151,10 @@ protected:
 		CMemoryPool *mp, CColRef *colref, CConstraintArray *pdrgpcnstr,
 		BOOL fConj);
 
+	// can all the given constraints be remapped exactly to the given column
+	static BOOL FRemapIsExact(const CConstraintArray *pdrgpcnstr,
+							  const CColRef *colref);
+
 	// create constraint from scalar array comparison expression originally generated for
 	// "scalar op ANY/ALL (array)" construct
 	static CConstraint *PcnstrFromScalarArrayCmp(CMemoryPool *mp,
@@ -239,6 +243,14 @@ public:
 	// return a clone of the constraint for a different column
 	virtual CConstraint *PcnstrRemapForColumn(CMemoryPool *mp,
 											  CColRef *colref) const = 0;
+
+	// does PcnstrRemapForColumn return an equivalent constraint for the given
+	// column, rather than a weaker one (see CConstraintInterval)
+	virtual BOOL
+	FRemapIsExact(const CColRef *) const
+	{
+		return true;
+	}
 
 	// create constraint from scalar expression and pass back any discovered
 	// equivalence classes

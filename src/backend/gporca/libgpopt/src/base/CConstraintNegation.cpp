@@ -124,6 +124,14 @@ CConstraintNegation::PcnstrRemapForColumn(CMemoryPool *mp,
 {
 	GPOS_ASSERT(1 == m_pcrsUsed->Size());
 
+	if (!m_pcnstr->FRemapIsExact(colref))
+	{
+		// the remapped child would be weaker than the original one, so its
+		// negation would be stronger: give up on the constraint
+		return CConstraintInterval::PciUnbounded(mp, colref,
+												 true /*fIncludesNull*/);
+	}
+
 	return GPOS_NEW(mp)
 		CConstraintNegation(mp, m_pcnstr->PcnstrRemapForColumn(mp, colref));
 }
