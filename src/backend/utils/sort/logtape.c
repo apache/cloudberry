@@ -338,16 +338,6 @@ ltsReadFillBuffer(LogicalTape *lt)
 	return (lt->nbytes > 0);
 }
 
-static inline void
-swap_nodes(long *heap, unsigned long a, unsigned long b)
-{
-	long		swap;
-
-	swap = heap[a];
-	heap[a] = heap[b];
-	heap[b] = swap;
-}
-
 static inline unsigned long
 left_offset(unsigned long i)
 {

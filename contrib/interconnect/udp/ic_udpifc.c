@@ -1080,33 +1080,6 @@ removeFromRTOList(mudp_manager_t mudp,
 	mudp->rto_list_cnt--;
 }
 
-static inline void
-updateRetransmissionTimer(mudp_manager_t mudp,
-				MotionConnUDP *cur_stream,
-				uint32_t cur_ts)
-{
-	cur_stream->sndvar.nrtx = 0;
-
-	/* if in rto list, remove it */
-	if (cur_stream->on_rto_idx >= 0)
-		removeFromRTOList(mudp, cur_stream);
-
-	/* Reset retransmission timeout */
-	if (UDP_SEQ_GT(cur_stream->snd_nxt, cur_stream->sndvar.snd_una))
-	{
-		/* there are packets sent but not acked */
-		/* update rto timestamp */
-		cur_stream->sndvar.ts_rto = cur_ts + cur_stream->sndvar.rto;
-		addtoRTOList(mudp, cur_stream);
-	}
-
-	if (cur_stream->on_rto_idx == -1)
-	{
-		cur_stream->sndvar.ts_rto = cur_ts + cur_stream->sndvar.rto;
-		addtoRTOList(mudp, cur_stream);
-	}
-}
-
 static int 
 handleRTO(mudp_manager_t mudp,
 				uint32_t cur_ts,
