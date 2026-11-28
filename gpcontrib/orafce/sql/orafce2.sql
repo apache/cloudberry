@@ -2,3 +2,20 @@
 -- because input has type "unknown"'
 -- decode in GPDB support this type
 select decode('2012-01-01', '2012-01-01', 23, '2012-01-02', 24);
+
+-- (a) a finite value modulo infinity is the value itself
+select oracle.remainder(1::numeric, 'infinity'::numeric)  as remainder_says,  -- nan (wrong)
+       mod(1::numeric, 'infinity'::numeric)               as builtin_mod;     -- 1   (right)
+
+select oracle.remainder(5::numeric, '-infinity'::numeric) as remainder_neg_inf,  -- nan (wrong)
+       mod(5::numeric, '-infinity'::numeric)              as builtin_mod;        -- 5
+
+-- (b) nan must win over the division-by-zero check
+select mod('nan'::numeric, 0::numeric) as builtin_mod_nan_zero;   -- nan
+
+select oracle.remainder('nan'::numeric, 0::numeric) as should_be_nan;  -- error
+
+-- (c) nan as the second argument only survives by accident: it reaches the
+--     division-by-zero test too, and passes it because "nan == 0" is false.
+select oracle.remainder(1::numeric, 'nan'::numeric) as one_mod_nan,  -- nan, by luck
+       mod(1::numeric, 'nan'::numeric)              as builtin_mod;  -- nan

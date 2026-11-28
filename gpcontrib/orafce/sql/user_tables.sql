@@ -1,0 +1,40 @@
+-- Test that USER_TABLES / USER_TAB_COLUMNS describe only the current user's
+-- objects, not every table in the database.
+\set ECHO none
+SET client_min_messages = warning;
+SET client_encoding = utf8;
+\set VERBOSITY terse
+\set ECHO all
+
+CREATE SCHEMA orafce_user_tables;
+SET search_path TO orafce_user_tables, oracle;
+
+CREATE TABLE ut_one (id int, note text);
+CREATE TABLE ut_two (id int);
+CREATE VIEW ut_view AS SELECT id FROM ut_one;
+
+----
+-- USER_TABLES lists the current schema's base tables, and only those. A view
+-- is not a table, so ut_view is absent.
+----
+SELECT table_name FROM user_tables ORDER BY 1;
+
+----
+-- No PostgreSQL catalog table may appear: they are not owned by this user.
+-- Before the current-schema restriction this count was in the dozens.
+----
+SELECT count(*) FROM user_tables WHERE table_name LIKE 'pg=_%' ESCAPE '=';
+
+----
+-- USER_TAB_COLUMNS is restricted the same way, so it describes exactly the
+-- columns of the tables above.
+----
+SELECT table_name, column_name, column_id
+  FROM user_tab_columns
+ WHERE table_name IN ('ut_one', 'ut_two')
+ ORDER BY table_name, column_id;
+
+SELECT count(*) FROM user_tab_columns WHERE table_name LIKE 'pg=_%' ESCAPE '=';
+
+DROP SCHEMA orafce_user_tables CASCADE;
+SET search_path TO public, oracle;
