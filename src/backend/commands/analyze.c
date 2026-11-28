@@ -159,6 +159,15 @@ typedef struct AnlIndexData
 	int			attr_cnt;
 } AnlIndexData;
 
+/* Extra state for columns whose root statistics are merged from leaves. */
+typedef struct MergeAnalyzeData
+{
+	/* Keep the standard type information first for extended statistics. */
+	StdAnalyzeData std;
+	double		ndvbs_lower;
+	double		ndvbs_upper;
+} MergeAnalyzeData;
+
 
 /* Default statistics target (GUC parameter) */
 int			default_statistics_target = 100;
@@ -210,6 +219,12 @@ static void analyze_rel_internal(Oid relid, RangeVar *relation,
 								 bool in_outer_xact, BufferAccessStrategy bstrategy,
 								 gp_acquire_sample_rows_context *ctx);
 static void acquire_hll_by_query(Relation onerel, int nattrs, VacAttrStats **attrstats, int elevel);
+static void sample_merged_ndv_by_segments(Relation onerel, int attr_cnt,
+										VacAttrStats **attrstats, int targrows,
+										int elevel, bool sampled, double *colndv);
+static void merge_leaf_stats(VacAttrStatsP stats,
+								AnalyzeAttrFetchFunc fetchfunc,
+								int samplerows, double totalrows);
 
 static int16 AcquireCountOfSegmentFile(Relation onerel);
 
@@ -1044,6 +1059,10 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 
 			MemoryContextResetAndDeleteChildren(col_context);
 		}
+
+		/* Resolve segment overlap that cannot be inferred from leaf summaries. */
+		sample_merged_ndv_by_segments(onerel, attr_cnt, vacattrstats,
+									 targrows, elevel, sample_needed, colNDVBySeg);
 
 		/*
 		 * Datums exceeding WIDTH_THRESHOLD are masked as NULL in the sample, and
@@ -3115,6 +3134,118 @@ acquire_sample_rows_dispatcher(Relation onerel, bool inh, int elevel,
 }
 
 /*
+ * Leaf NDV summaries do not identify the segments holding a value in different
+ * partitions.  When they leave a range of possible root NDV_BY_SEGMENTS, use
+ * the existing inherited sampler: each QE estimates NDV across its partitions
+ * and the dispatcher sums those estimates.  This handles both correlated
+ * columns and sparse leaves without assuming stable cross-partition placement.
+ *
+ * Reuse a sample already needed for another column or extended statistics.
+ * Otherwise acquire one sample for all ambiguous columns, retaining the merged
+ * NDV, MCV and histogram statistics.  A column with no sampled non-null values
+ * keeps its bounded frequency estimate rather than being declared colocated.
+ */
+static void
+sample_merged_ndv_by_segments(Relation onerel, int attr_cnt,
+								 VacAttrStats **attrstats, int targrows,
+								 int elevel, bool sampled, double *colndv)
+{
+	MemoryContext sample_context = NULL;
+	bool		needed = false;
+
+	if (Gp_role != GP_ROLE_DISPATCH ||
+		!GpPolicyIsPartitioned(onerel->rd_cdbpolicy))
+		return;
+
+	for (int i = 0; i < attr_cnt; i++)
+	{
+		VacAttrStats *stats = attrstats[i];
+		MergeAnalyzeData *merged;
+
+		if (stats->compute_stats != merge_leaf_stats || !stats->stats_valid)
+			continue;
+		merged = (MergeAnalyzeData *) stats->extra_data;
+		if (merged->ndvbs_lower < merged->ndvbs_upper)
+		{
+			needed = true;
+			break;
+		}
+	}
+	if (!needed)
+		return;
+
+	if (!sampled)
+	{
+		MemoryContext old_context;
+		HeapTuple  *sample_rows;
+		double		totalrows;
+		double		deadrows;
+
+		/* The dispatcher must request at least one row from each segment. */
+		targrows = Max(targrows, onerel->rd_cdbpolicy->numsegments);
+		sample_context = AllocSetContextCreate(CurrentMemoryContext,
+											   "Analyze root NDV sample",
+											   ALLOCSET_DEFAULT_SIZES);
+		old_context = MemoryContextSwitchTo(sample_context);
+		sample_rows = palloc(targrows * sizeof(HeapTuple));
+		colndv = palloc0(onerel->rd_att->natts * sizeof(double));
+
+		Assert(acquire_func_colLargeRowIndexes == NULL);
+		Assert(acquire_func_colLargeRowLength == NULL);
+		Assert(acquire_func_colNDVBySeg == NULL);
+		acquire_func_colNDVBySeg = colndv;
+		pgstat_progress_update_param(PROGRESS_ANALYZE_PHASE,
+									 PROGRESS_ANALYZE_PHASE_ACQUIRE_SAMPLE_ROWS_INH);
+		PG_TRY();
+		{
+			(void) acquire_inherited_sample_rows(onerel, elevel, sample_rows,
+												targrows, &totalrows, &deadrows);
+		}
+		PG_FINALLY();
+		{
+			acquire_func_colNDVBySeg = NULL;
+			MemoryContextSwitchTo(old_context);
+		}
+		PG_END_TRY();
+		pgstat_progress_update_param(PROGRESS_ANALYZE_PHASE,
+									 PROGRESS_ANALYZE_PHASE_COMPUTE_STATS);
+	}
+
+	for (int i = 0; i < attr_cnt; i++)
+	{
+		VacAttrStats *stats = attrstats[i];
+		MergeAnalyzeData *merged;
+		double		estimate;
+
+		if (stats->compute_stats != merge_leaf_stats || !stats->stats_valid)
+			continue;
+		merged = (MergeAnalyzeData *) stats->extra_data;
+		if (merged->ndvbs_lower >= merged->ndvbs_upper)
+			continue;
+		estimate = colndv[stats->attr->attnum - 1];
+		if (!isfinite(estimate) || estimate <= 0)
+			continue;
+
+		for (int slot = 0; slot < STATISTIC_NUM_SLOTS; slot++)
+		{
+			if (stats->stakind[slot] == STATISTIC_KIND_NDV_BY_SEGMENTS)
+			{
+				MemoryContext old_context;
+
+				old_context = MemoryContextSwitchTo(stats->anl_context);
+				stats->stavalues[slot][0] = Float8GetDatum(
+					Min(merged->ndvbs_upper, Max(merged->ndvbs_lower, estimate)));
+				MemoryContextSwitchTo(old_context);
+				break;
+			}
+		}
+	}
+
+	if (sample_context != NULL)
+		MemoryContextDelete(sample_context);
+}
+
+/*
  *	update_attstats() -- update attribute statistics for one relation
  *
  *		Statistics are stored in several places: the pg_class row for the
@@ -3353,10 +3484,6 @@ static void compute_scalar_stats(VacAttrStatsP stats,
 								 AnalyzeAttrFetchFunc fetchfunc,
 								 int samplerows,
 								 double totalrows);
-static void merge_leaf_stats(VacAttrStatsP stats,
-								 AnalyzeAttrFetchFunc fetchfunc,
-								 int samplerows,
-								 double totalrows);
 static int	compare_scalars(const void *a, const void *b, void *arg);
 static int	compare_mcvs(const void *a, const void *b, void *arg);
 static int	analyze_mcv_list(int *mcv_counts,
@@ -3401,11 +3528,18 @@ std_typanalyze(VacAttrStats *stats)
 	 * Determine which standard statistics algorithm to use
 	 */
 	List *va_cols = list_make1(makeString(NameStr(stats->attr->attname)));
-	if (get_rel_relkind(attr->attrelid) == RELKIND_PARTITIONED_TABLE &&
+	/* QEs must compute local NDV from the sample returned to the dispatcher. */
+	if (Gp_role != GP_ROLE_EXECUTE &&
+		get_rel_relkind(attr->attrelid) == RELKIND_PARTITIONED_TABLE &&
 		!get_rel_relispartition(attr->attrelid) &&
 		leaf_parts_analyzed(stats->attr->attrelid, InvalidOid, va_cols, stats->elevel) &&
 		op_hashjoinable(eqopr, stats->attrtypid))
 	{
+		MergeAnalyzeData *merged = palloc0(sizeof(MergeAnalyzeData));
+
+		merged->std = *mystats;
+		pfree(mystats);
+		stats->extra_data = merged;
 		stats->merge_stats = true;
 		stats->compute_stats = merge_leaf_stats;
 		stats->minrows = 300 * attr->attstattarget;
@@ -5013,74 +5147,120 @@ merge_leaf_stats(VacAttrStatsP stats,
 		}
 	}
 
-	// ndistinct by segments calculation
+	/* Match compute_scalar_stats(): custom typanalyze routines own their slots. */
+	if (!OidIsValid(stats->attrtype->typanalyze))
 	{
-		old_context = MemoryContextSwitchTo(stats->anl_context);
-		bool valid;
-		double ndinstinct_by_segs = 0;
-		double leaf_ndistinct_sum = 0;
-		Datum *ndvbs;
+		MergeAnalyzeData *merged = (MergeAnalyzeData *) stats->extra_data;
+		GpPolicy   *policy = GpPolicyFetch(stats->attr->attrelid);
+		int			numsegments = GpPolicyIsPartitioned(policy) ?
+			(policy->numsegments > 0 ? policy->numsegments : getgpsegmentCount()) : 1;
+		double		root_ndistinct = stats->stadistinct < 0 ?
+			-stats->stadistinct * totalTuples : stats->stadistinct;
+		double		nonnull_rows = Max(0.0,
+			totalTuples * (1.0 - stats->stanullfrac));
+		double		leaf_sum;
+		double		leaf_max;
+		double		leaf_ndistinct_sum;
+		double		estimate = 0.0;
+		bool		valid;
+		Datum	   *ndvbs;
 
-		valid = aggregate_leaf_partition_ndvbs(
-			numPartitions, heaptupleStats, relTuples, &ndinstinct_by_segs,
-			&leaf_ndistinct_sum);
+		valid = aggregate_leaf_partition_ndvbs(numPartitions, heaptupleStats,
+											 relTuples, &leaf_sum, &leaf_max,
+											 &leaf_ndistinct_sum);
 
+		/*
+		 * Leaf sums are exact only when their (segment, value) pairs do not
+		 * overlap.  The maximum leaf NDV_BY_SEGMENTS is a lower bound; the
+		 * sum is an upper bound.  Missing leaf slots must not cap the root
+		 * using a partial sum.  Empty and all-null leaves contribute zero.
+		 */
+		merged->ndvbs_lower = Max(root_ndistinct, valid ? leaf_max : 0);
+		merged->ndvbs_upper = root_ndistinct > 0 ?
+			Min(nonnull_rows, root_ndistinct * numsegments) : nonnull_rows;
 		if (valid)
+			merged->ndvbs_upper = Min(merged->ndvbs_upper, leaf_sum);
+
+		/* Inconsistent leaf estimates cannot establish the root's overlap. */
+		if (merged->ndvbs_lower > merged->ndvbs_upper)
 		{
-			/*
-			 * The leaves' values are summed, which is only right when leaves hold
-			 * disjoint values, e.g. for the partitioning key.  A value repeated in
-			 * every partition is counted once per partition, so the sum grows
-			 * with the number of partitions and ORCA overestimates the output of
-			 * a local aggregate.
-			 *
-			 * This statistic counts a distinct value once per segment holding
-			 * it, so it is the column's ndistinct times the average number of
-			 * segments a value sits on.  That average does not depend on the
-			 * partitioning, so take it from the leaves, where the sums are free
-			 * of the double counting, and apply it to the root's ndistinct.
-			 * For a partitioning key, whose values belong to one leaf each, the
-			 * result is the plain sum as before.
-			 *
-			 * The average is between one and the number of segments.  Keeping
-			 * the sum as an upper bound guards against the root's ndistinct and
-			 * the leaves' one disagreeing, as they are estimated separately.
-			 */
-			double		root_ndistinct = stats->stadistinct < 0 ?
-				-stats->stadistinct * totalTuples : stats->stadistinct;
+			valid = false;
+			merged->ndvbs_lower = root_ndistinct;
+			merged->ndvbs_upper = root_ndistinct > 0 ?
+				Min(nonnull_rows, root_ndistinct * numsegments) : nonnull_rows;
+		}
 
-			if (root_ndistinct > 0)
+		if (numsegments == 1 ||
+			(GpPolicyIsHashPartitioned(policy) && policy->nattrs == 1 &&
+			 policy->attrs[0] == stats->attr->attnum))
+		{
+			/* Equal values of the sole hash distribution key are colocated. */
+			merged->ndvbs_upper = Min(merged->ndvbs_upper, root_ndistinct);
+		}
+		else if (valid && root_ndistinct >= leaf_ndistinct_sum)
+		{
+			/* Disjoint leaf values also imply disjoint (segment, value) pairs. */
+			merged->ndvbs_lower = merged->ndvbs_upper;
+		}
+
+		/* Prefer the upper bound if separately estimated bounds cross. */
+		merged->ndvbs_lower = Min(merged->ndvbs_lower, merged->ndvbs_upper);
+
+		/*
+		 * Keep an independent-placement estimate as a fallback if the root
+		 * sample contains no non-null values.  Otherwise unresolved bounds
+		 * request sample_merged_ndv_by_segments() after all columns are merged.
+		 * A leaf colocation ratio cannot distinguish a key copy from values
+		 * whose segment changes between partitions.  Nor does a singleton in
+		 * each leaf provide evidence of colocation across leaves.
+		 *
+		 * Under independent placement k occurrences occupy
+		 * S * (1 - (1 - 1/S)^k) segments on average.  Use MCV frequencies and
+		 * a uniform frequency for the remaining non-null distinct values.
+		 */
+		if (merged->ndvbs_lower < merged->ndvbs_upper && root_ndistinct > 0)
+		{
+			double		remaining_rows = nonnull_rows;
+			double		remaining_distinct = root_ndistinct;
+			double		log_absent = log1p(-1.0 / numsegments);
+
+			for (int slot = 0; slot < slot_idx; slot++)
 			{
-				GpPolicy   *policy = GpPolicyFetch(stats->attr->attrelid);
-				int			numsegments = policy->numsegments > 0 ?
-					policy->numsegments : getgpsegmentCount();
-				double		segs_per_value;
+				if (stats->stakind[slot] != STATISTIC_KIND_MCV)
+					continue;
 
-				pfree(policy);
+				for (int mcv = 0; mcv < stats->numnumbers[slot] &&
+					 remaining_distinct > 0 && remaining_rows > 0; mcv++)
+				{
+					double		count = Min(remaining_rows, Max(0.0,
+						totalTuples * stats->stanumbers[slot][mcv]));
 
-				segs_per_value = leaf_ndistinct_sum > 0 ?
-					ndinstinct_by_segs / leaf_ndistinct_sum : numsegments;
-				segs_per_value = Min(Max(segs_per_value, 1.0), numsegments);
-
-				ndinstinct_by_segs = Min(ndinstinct_by_segs,
-										 root_ndistinct * segs_per_value);
+					estimate -= numsegments * expm1(count * log_absent);
+					remaining_rows -= count;
+					remaining_distinct -= 1.0;
+				}
+				break;
 			}
 
-			ndvbs = (Datum *) palloc(sizeof(Datum));
-			ndvbs[0] = Float8GetDatum(ndinstinct_by_segs);
-
-			stats->stakind[slot_idx] = STATISTIC_KIND_NDV_BY_SEGMENTS;
-			stats->staop[slot_idx] = mystats->ltopr;
-
-			stats->statypid[slot_idx] = FLOAT8OID;
-			stats->statyplen[slot_idx] = 8;
-			stats->statypbyval[slot_idx] = true;
-			stats->statypalign[slot_idx] = TYPALIGN_DOUBLE;
-
-			stats->stavalues[slot_idx] = ndvbs;
-			stats->numvalues[slot_idx] = 1;
-			slot_idx++;
+			if (remaining_distinct > 0 && remaining_rows > 0)
+				estimate -= numsegments * remaining_distinct *
+					expm1(remaining_rows / remaining_distinct * log_absent);
 		}
+		pfree(policy);
+
+		old_context = MemoryContextSwitchTo(stats->anl_context);
+		ndvbs = (Datum *) palloc(sizeof(Datum));
+		ndvbs[0] = Float8GetDatum(Min(merged->ndvbs_upper,
+									Max(merged->ndvbs_lower, estimate)));
+		stats->stakind[slot_idx] = STATISTIC_KIND_NDV_BY_SEGMENTS;
+		stats->staop[slot_idx] = mystats->ltopr;
+		stats->statypid[slot_idx] = FLOAT8OID;
+		stats->statyplen[slot_idx] = 8;
+		stats->statypbyval[slot_idx] = true;
+		stats->statypalign[slot_idx] = TYPALIGN_DOUBLE;
+		stats->stavalues[slot_idx] = ndvbs;
+		stats->numvalues[slot_idx] = 1;
+		slot_idx++;
 		MemoryContextSwitchTo(old_context);
 	}
 

@@ -10,6 +10,8 @@
  */
 #include "postgres.h"
 
+#include <math.h>
+
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "catalog/indexing.h"
@@ -743,58 +745,6 @@ getHistogramMCVTuple(AttStatsSlot * *histSlots, MCVFreqPair **mcvRemaining,
 	}
 }
 
-static bool
-getNdvBySegHeapTuple(AttStatsSlot * *ndvbsSlots, HeapTuple *heaptupleStats, float4 *relTuples, int nParts)
-{
-	bool valid = true;
-
-	for (int i = 0; i < nParts; i++)
-	{
-		if (!HeapTupleIsValid(heaptupleStats[i]))
-		{
-			continue;
-		}
-
-		ndvbsSlots[i] = (AttStatsSlot *) palloc(sizeof(AttStatsSlot));
-		(void) get_attstatsslot(ndvbsSlots[i], heaptupleStats[i],
-			STATISTIC_KIND_NDV_BY_SEGMENTS, InvalidOid, ATTSTATSSLOT_VALUES);
-
-		if (ndvbsSlots[i]->valuetype != FLOAT8OID)
-		{
-			/*
-			 * NDV_BY_SEGMENTS slot not found or has unexpected type.
-			 * Non-empty partitions must have valid NDV_BY_SEGMENTS;
-			 * empty partitions (relTuples == 0) can be skipped.
-			 */
-			if (relTuples[i] > 0)
-			{
-				valid = false;
-				break;
-			}
-			free_attstatsslot(ndvbsSlots[i]);	
-			pfree(ndvbsSlots[i]);
-			ndvbsSlots[i] = NULL;
-			continue;
-		}
-
-		Assert(ndvbsSlots[i]->valuetype == FLOAT8OID);
-
-		if (ndvbsSlots[i]->nvalues != 1)
-		{
-			valid = false;
-			break;
-		}
-
-		/* Non-empty partition with zero NDV is suspicious */
-		if (relTuples[i] > 0 && DatumGetFloat8(ndvbsSlots[i]->values[0]) == 0)
-		{
-			valid = false;
-			break;
-		}
-	}
-	return valid;
-}
-
 /*
  * Initialize heap by inserting the second histogram bound from each partition histogram.
  * Input:
@@ -1357,40 +1307,59 @@ leaf_parts_analyzed(Oid attrelid, Oid relid_exclude, List *va_cols, int elevel)
 }
 
 
+/*
+ * Bound the root's distinct (segment, value) pairs using the leaf statistics.
+ * A missing slot on a non-null, non-empty leaf makes all three aggregates
+ * unusable.  Empty and all-null leaves contribute zero, even if they retain
+ * an old NDV_BY_SEGMENTS slot.
+ */
 bool
 aggregate_leaf_partition_ndvbs(int nParts,
 							   HeapTuple *heaptupleStats,
 							   float4 *relTuples,
-							   float8 *result,
+							   float8 *sum, float8 *maximum,
 							   float8 *ndistinct_sum)
 {
-	bool valid;
 	Assert(nParts > 0);
-	Assert(result);
-	Assert(ndistinct_sum);
+	*sum = *maximum = *ndistinct_sum = 0;
 
-	AttStatsSlot **ndvbsSlots = (AttStatsSlot **) palloc0((nParts) * sizeof(AttStatsSlot *));
-	valid = getNdvBySegHeapTuple(ndvbsSlots, heaptupleStats, relTuples, nParts);
-	if (valid) {
-		for (int i = 0; i < nParts; i++)
+	for (int i = 0; i < nParts; i++)
+	{
+		Form_pg_statistic stat;
+		AttStatsSlot slot;
+		double		ndvbs;
+		double		ndistinct;
+
+		if (relTuples[i] == 0)
+			continue;
+		if (!isfinite(relTuples[i]) || relTuples[i] < 0 ||
+			!HeapTupleIsValid(heaptupleStats[i]))
+			return false;
+
+		stat = (Form_pg_statistic) GETSTRUCT(heaptupleStats[i]);
+		if (stat->stanullfrac == 1 && stat->stadistinct == 0)
+			continue;
+
+		(void) get_attstatsslot(&slot, heaptupleStats[i],
+							  STATISTIC_KIND_NDV_BY_SEGMENTS, InvalidOid,
+							  ATTSTATSSLOT_VALUES);
+		if (slot.valuetype != FLOAT8OID || slot.nvalues != 1)
 		{
-			if (ndvbsSlots[i]) {
-				Form_pg_statistic stat;
-
-				*result += DatumGetFloat8(ndvbsSlots[i]->values[0]);
-
-				/*
-				 * Sum the leaves' own ndistinct as well.  Both sums are over
-				 * the same leaves and on the same (absolute) scale, so their
-				 * ratio tells how many segments a distinct value of this
-				 * column sits on, on average.  See merge_leaf_stats().
-				 */
-				stat = (Form_pg_statistic) GETSTRUCT(heaptupleStats[i]);
-				*ndistinct_sum += stat->stadistinct < 0 ?
-					-stat->stadistinct * relTuples[i] : stat->stadistinct;
-			}
+			free_attstatsslot(&slot);
+			return false;
 		}
+		ndvbs = DatumGetFloat8(slot.values[0]);
+		free_attstatsslot(&slot);
+		ndistinct = stat->stadistinct < 0 ?
+			-stat->stadistinct * relTuples[i] : stat->stadistinct;
+		if (!isfinite(ndvbs) || ndvbs <= 0 ||
+			!isfinite(ndistinct) || ndistinct <= 0)
+			return false;
+
+		*sum += ndvbs;
+		*maximum = Max(*maximum, ndvbs);
+		*ndistinct_sum += ndistinct;
 	}
 
-	return valid;
+	return true;
 }
