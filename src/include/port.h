@@ -288,7 +288,6 @@ extern int	pgunlink(const char *path);
 #if defined(WIN32) && !defined(__CYGWIN__)
 extern int	pgsymlink(const char *oldpath, const char *newpath);
 extern int	pgreadlink(const char *path, char *buf, size_t size);
-extern bool pgwin32_is_junction(const char *path);
 
 #define symlink(oldpath, newpath)	pgsymlink(oldpath, newpath)
 #define readlink(path, buf, size)	pgreadlink(path, buf, size)
@@ -303,6 +302,7 @@ extern bool rmtree(const char *path, bool rmtopdir);
  * passing of other special options.
  */
 #define		O_DIRECT	0x80000000
+extern HANDLE pgwin32_open_handle(const char *, int, bool);
 extern int	pgwin32_open(const char *, int,...);
 extern FILE *pgwin32_fopen(const char *, const char *);
 #define		open(a,b,c) pgwin32_open(a,b,c)

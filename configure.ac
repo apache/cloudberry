@@ -21,7 +21,7 @@ dnl The PACKAGE_VERSION from upstream PostgreSQL is maintained in the
 dnl PG_PACKAGE_VERSION variable, when merging make sure to update this
 dnl variable with the merge conflict from the AC_INIT() statement.
 AC_INIT([Apache Cloudberry], [2.2.0-incubating], [dev@cloudberry.apache.org], [], [https://cloudberry.apache.org/])
-[PG_PACKAGE_VERSION=14.13]
+[PG_PACKAGE_VERSION=14.14]
 AC_SUBST(PG_PACKAGE_VERSION)
 
 m4_if(m4_defn([m4_PACKAGE_VERSION]), [2.69], [],
@@ -2579,6 +2579,7 @@ if test "$PORTNAME" = "win32"; then
   AC_LIBOBJ(win32common)
   AC_LIBOBJ(win32env)
   AC_LIBOBJ(win32error)
+  AC_LIBOBJ(win32ntdll)
   AC_LIBOBJ(win32security)
   AC_LIBOBJ(win32setlocale)
   AC_LIBOBJ(win32stat)

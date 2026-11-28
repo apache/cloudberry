@@ -2920,7 +2920,7 @@ ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $
 ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 
-PG_PACKAGE_VERSION=14.13
+PG_PACKAGE_VERSION=14.14
 
 
 
@@ -21121,6 +21121,12 @@ esac
   case " $LIBOBJS " in
   *" win32error.$ac_objext "* ) ;;
   *) LIBOBJS="$LIBOBJS win32error.$ac_objext"
+ ;;
+esac
+
+  case " $LIBOBJS " in
+  *" win32ntdll.$ac_objext "* ) ;;
+  *) LIBOBJS="$LIBOBJS win32ntdll.$ac_objext"
  ;;
 esac
 

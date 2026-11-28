@@ -1298,6 +1298,67 @@ select pg_get_viewdef('composite_v', true);
 
 drop view composite_v;
 --
+-- Check cases where the composite comes from a proven-dummy rel (bug #18576)
+--
+explain (verbose, costs off)
+select (ss.a).x, (ss.a).n from
+  (select information_schema._pg_expandarray(array[1,2]) AS a) ss;
+                                                             QUERY PLAN
+-------------------------------------------------------------------------------------------------------------------------------------
+ Result
+   Output: ((information_schema._pg_expandarray('{1,2}'::integer[]))).x, ((information_schema._pg_expandarray('{1,2}'::integer[]))).n
+   ->  ProjectSet
+         Output: information_schema._pg_expandarray('{1,2}'::integer[])
+         ->  Result
+               Output: true
+ Settings: optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+explain (verbose, costs off)
+select (ss.a).x, (ss.a).n from
+  (select information_schema._pg_expandarray(array[1,2]) AS a) ss
+where false;
+                                                             QUERY PLAN
+-------------------------------------------------------------------------------------------------------------------------------------
+ Result
+   Output: ((information_schema._pg_expandarray('{1,2}'::integer[]))).x, ((information_schema._pg_expandarray('{1,2}'::integer[]))).n
+   ->  ProjectSet
+         Output: information_schema._pg_expandarray('{1,2}'::integer[])
+         ->  Result
+               Output: NULL::boolean
+               One-Time Filter: false
+ Settings: optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+explain (verbose, costs off)
+with cte(c) as materialized (select row(1, 2)),
+     cte2(c) as (select * from cte)
+select (c).f1 from cte2 as t;
+              QUERY PLAN
+---------------------------------------
+ Subquery Scan on t
+   Output: (t.c).f1
+   ->  Shared Scan (share slice:id 0:0)
+         Output: share0_ref1."row"
+         ->  Result
+               Output: ROW(1, 2)
+(8 rows)
+
+explain (verbose, costs off)
+with cte(c) as materialized (select row(1, 2)),
+     cte2(c) as (select * from cte)
+select (c).f1 from cte2 as t
+where false;
+       QUERY PLAN
+-------------------------
+ Result
+   Output: (c).f1
+   One-Time Filter: false
+(5 rows)
+
+--
 -- Tests for component access / FieldSelect
 --
 CREATE TABLE compositetable(a text, b text);
