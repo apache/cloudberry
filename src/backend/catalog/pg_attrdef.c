@@ -145,6 +145,9 @@ StoreAttrDefault(Relation rel, AttrNumber attnum,
 		else if ((rel->rd_rel->relkind == RELKIND_RELATION || rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE) &&
 			add_column_mode && !attgenerated)
 		{
+			/* Preserve the enclosing DDL's assignments across this callback. */
+			List	   *saved_oid_assignments = SaveOidAssignments();
+
 			expr2 = expression_planner(expr2);
 			estate = CreateExecutorState();
 			exprState = ExecPrepareExpr(expr2, estate);
@@ -153,6 +156,7 @@ StoreAttrDefault(Relation rel, AttrNumber attnum,
 			missingval = ExecEvalExpr(exprState, econtext,
 									  &missingIsNull);
 
+			RestoreOidAssignments(saved_oid_assignments);
 			FreeExecutorState(estate);
 
 			defAttStruct = TupleDescAttr(rel->rd_att, attnum - 1);

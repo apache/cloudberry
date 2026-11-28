@@ -27,6 +27,7 @@
 #include "cdb/tupleremap.h"
 #include "cdb/tupser.h"
 #include "utils/guc.h"
+#include "utils/inval.h"
 #include "utils/memutils.h"
 #include "utils/typcache.h"
 
@@ -104,6 +105,14 @@ reconstructTuple(MotionNodeEntry *pMNEntry, ChunkSorterEntry *pCSEntry, TupleRem
 
 	if (!tup)
 		return;
+
+	/*
+	 * A sender may have seen a committed row type change that our backend
+	 * has not processed yet. Apply invalidations before remapping or using
+	 * the received tuple, rather than during a datum check that may already
+	 * hold an unpinned descriptor from the type cache.
+	 */
+	AcceptInvalidationMessages();
 
 	tup = TRCheckAndRemap(remapper, pSerInfo->tupdesc, tup);
 

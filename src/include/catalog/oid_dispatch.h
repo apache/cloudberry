@@ -15,9 +15,12 @@
 
 #include "utils/relcache.h"
 #include "access/htup.h"
+#include "access/xlogdefs.h"
 
 /* Functions used in master */
 extern List *GetAssignedOidsForDispatch(void);
+extern XLogRecPtr GetNewOrPreassignedAttributeVersion(Oid relationOid,
+													AttrNumber attnum);
 
 /* Functions used in QE nodes */
 extern void AddPreassignedOids(List *l);

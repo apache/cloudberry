@@ -78,7 +78,9 @@
 
 #include "postgres.h"
 
+#include "access/relation.h"
 #include "catalog/catalog.h"
+#include "catalog/heap.h"
 #include "catalog/indexing.h"
 #include "catalog/gp_storage_server.h"
 #include "catalog/gp_storage_user_mapping.h"
@@ -409,6 +411,82 @@ GetPreassignedOid(OidAssignment *searchkey)
 	}
 
 	return InvalidOid;
+}
+
+/*
+ * Attribute versions describe a logical row type, so all nodes must use the
+ * coordinator's WAL position rather than their independent WAL positions.
+ * Share the OID assignment queue's dispatch, subtransaction and lifetime rules,
+ * but keep the full-width version in a separate payload and key space.
+ *
+ * attnum is zero for a new relation, whose attributes initially share a
+ * version. For ALTER, it identifies the added or changed attribute. Repeated
+ * changes to the same attribute consume matching assignments in FIFO order.
+ */
+XLogRecPtr
+GetNewOrPreassignedAttributeVersion(Oid relationOid, AttrNumber attnum)
+{
+	OidAssignment assignment = {0};
+	MemoryContext oldcontext;
+	ListCell   *lc;
+	XLogRecPtr	version;
+
+	Assert(OidIsValid(relationOid));
+	Assert(attnum >= 0);
+
+	/* Binary upgrade restores each node locally, without OID dispatch. */
+	if (!IsNormalProcessingMode() || IsBinaryUpgrade)
+		return GetNextAttributeVersion();
+
+	/*
+	 * A segment's WAL position is unrelated to the coordinator's. For
+	 * changes to existing attributes in utility mode, use the smallest
+	 * version that advances the local relation's version.
+	 */
+	if (Gp_role == GP_ROLE_UTILITY && !IS_QUERY_DISPATCHER() && attnum != 0)
+	{
+		Relation	rel = relation_open(relationOid, NoLock);
+
+		version = TupleDescGetVersion(RelationGetDescr(rel));
+		relation_close(rel, NoLock);
+		return version + 1;
+	}
+
+	if (Gp_role == GP_ROLE_EXECUTE)
+	{
+		foreach(lc, preassigned_oids)
+		{
+			OidAssignment *p = lfirst(lc);
+
+			if (p->catalog != ATTRIBUTE_VERSION_ASSIGNMENT ||
+				p->keyOid1 != relationOid || p->keyOid2 != (Oid) attnum)
+				continue;
+
+			version = OidAssignmentGetAttributeVersion(p);
+			preassigned_oids = foreach_delete_current(preassigned_oids, lc);
+			pfree(p);
+			if (version == InvalidXLogRecPtr)
+				elog(ERROR, "invalid pre-assigned attribute version");
+			return version;
+		}
+
+		elog(ERROR, "no pre-assigned attribute version for relation %u, attribute %d",
+			 relationOid, attnum);
+	}
+
+	version = GetNextAttributeVersion();
+	if (Gp_role == GP_ROLE_DISPATCH)
+	{
+		assignment.type = T_OidAssignment;
+		assignment.catalog = ATTRIBUTE_VERSION_ASSIGNMENT;
+		assignment.keyOid1 = relationOid;
+		assignment.keyOid2 = attnum;
+		OidAssignmentSetAttributeVersion(&assignment, version);
+		oldcontext = MemoryContextSwitchTo(get_oids_context());
+		dispatch_oids = lappend(dispatch_oids, copyObject(&assignment));
+		MemoryContextSwitchTo(oldcontext);
+	}
+	return version;
 }
 
 /* ----------------------------------------------------------------
@@ -1687,7 +1765,8 @@ IsOidAcceptable(Oid oid)
 	{
 		OidAssignment *p = (OidAssignment *) lfirst(lc);
 
-		if (p->oid == oid)
+		/* The OID field is part of an LSN for attribute assignments. */
+		if (p->catalog != ATTRIBUTE_VERSION_ASSIGNMENT && p->oid == oid)
 			return false;
 	}
 

@@ -304,6 +304,26 @@ typedef struct OidAssignment
  */
 #define INDEX_NAME_ASSIGNMENT		1
 
+/* A coordinator-generated attribute version, keyed by relation and attnum. */
+#define ATTRIBUTE_VERSION_ASSIGNMENT	2
+
+/*
+ * Attribute version assignments use keyOid1 and keyOid2 for relation and
+ * attribute, and namespaceOid and oid for the two halves of the WAL position.
+ */
+static inline uint64
+OidAssignmentGetAttributeVersion(const OidAssignment *assignment)
+{
+	return ((uint64) assignment->namespaceOid << 32) | assignment->oid;
+}
+
+static inline void
+OidAssignmentSetAttributeVersion(OidAssignment *assignment, uint64 version)
+{
+	assignment->namespaceOid = (Oid) (version >> 32);
+	assignment->oid = (Oid) version;
+}
+
 /* ----------------
  *		query descriptor:
  *

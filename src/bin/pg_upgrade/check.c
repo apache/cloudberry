@@ -239,12 +239,39 @@ dump_old_cluster:
 }
 
 
+/*
+ * A cluster initialized before attribute versioning lacks the catalog
+ * function used by the schema restore, even with a current executable.
+ */
+static void
+check_new_cluster_attribute_version_support(void)
+{
+	PGconn	   *conn = connectToServer(&new_cluster, "template1");
+	PGresult   *res;
+
+	prep_status("Checking for attribute version support in new cluster");
+
+	res = executeQueryOrDie(conn,
+							"SELECT 1 WHERE pg_catalog.to_regprocedure("
+							"'pg_catalog.binary_upgrade_set_next_attribute_versions(pg_catalog.pg_lsn[])') "
+							"IS NOT NULL");
+	if (PQntuples(res) == 0)
+		pg_fatal("The new cluster lacks pg_catalog.binary_upgrade_set_next_attribute_versions().\n"
+				 "Initialize the new cluster again with the current binaries.");
+
+	PQclear(res);
+	PQfinish(conn);
+	check_ok();
+}
+
 void
 check_new_cluster(void)
 {
 	get_db_and_rel_infos(&new_cluster);
 
 	check_new_cluster_is_empty();
+
+	check_new_cluster_attribute_version_support();
 
 	check_loadable_libraries();
 
