@@ -28,6 +28,7 @@
 #pragma once
 
 #include "storage/micro_partition.h"
+#include "storage/filter/pax_row_filter.h"
 
 namespace pax {
 class MicroPartitionRowFilterReader : public MicroPartitionReaderProxy {
@@ -49,6 +50,22 @@ class MicroPartitionRowFilterReader : public MicroPartitionReaderProxy {
   std::shared_ptr<MicroPartitionReader::Group> GetNextGroup(TupleDesc desc);
   bool TestRowScanInternal(TupleTableSlot *slot, ExprState *estate,
                            AttrNumber attno);
+
+  // Evaluate a single bloom filter node
+  inline bool EvalBloomNode(const ExecutionFilterContext *ctx,
+                            MicroPartitionReader::Group *group, TupleDesc desc,
+                            size_t row_index, int bloom_index);
+
+  // Evaluate a single expr filter node
+  inline bool EvalExprNode(
+	  const ExecutionFilterContext *ctx, MicroPartitionReader::Group *group,
+	  TupleDesc desc, size_t row_index, TupleTableSlot *slot, int expr_index);
+
+  // Apply all filters with sampling and dynamic ordering
+  bool ApplyFiltersWithSampling(ExecutionFilterContext *ctx,
+                                MicroPartitionReader::Group *group,
+                                TupleDesc desc, size_t row_index,
+                                TupleTableSlot *slot);
 
   // filter is referenced only, the reader doesn't own it.
   std::shared_ptr<PaxFilter> filter_;

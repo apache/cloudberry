@@ -76,16 +76,18 @@ SeqNext(SeqScanState *node)
 		ScanKey keys = NULL;
 
 		/*
-		 * Just when gp_enable_runtime_filter_pushdown enabled and
-		 * node->filter_in_seqscan is false means scankey need to be pushed to
-		 * AM.
+		 * Runtime filters that are here when the scan starts go to the table
+		 * AM if it supports them.  They are only here because something asked
+		 * for them: hash joins under gp_enable_runtime_filter_pushdown, or an
+		 * extension such as Anser.
 		 */
-		if (gp_enable_runtime_filter_pushdown && node->filter_in_seqscan && node->filters &&
+		if (node->filter_in_seqscan && node->filters &&
 			(table_scan_flags(node->ss.ss_currentRelation) &
 			 (SCAN_SUPPORT_RUNTIME_FILTER)))
 		{
 			// pushdown runtime filter to AM
 			keys = ScanKeyListToArray(node->filters, &nkeys);
+			node->filters_in_am = true;
 		}
 
 		/*
@@ -108,7 +110,7 @@ SeqNext(SeqScanState *node)
 		while (table_scan_getnextslot(scandesc, direction, slot))
 		{
 			// TODO: later pushdown bloom filter to AM
-			if (!PassByBloomFilter(&node->ss.ps, node->filters, slot))
+			if (!PassByBloomFilter(node, slot))
 				continue;
 
 			return slot;
@@ -225,13 +227,10 @@ ExecInitSeqScanForPartition(SeqScan *node, EState *estate,
 		ExecInitQual(node->scan.plan.qual, (PlanState *) scanstate);
 
 	/*
-	 * check scan slot with bloom filters in seqscan node or not.
+	 * Runtime filters are applied in the scan unless the plan runs in MPP
+	 * parallel mode.  Whether any arrive is up to the nodes above.
 	 */
-	if (gp_enable_runtime_filter_pushdown
-		&& !estate->useMppParallelMode)
-	{
-		scanstate->filter_in_seqscan = true;
-	}
+	scanstate->filter_in_seqscan = !estate->useMppParallelMode;
 
 	return scanstate;
 }
@@ -289,7 +288,25 @@ ExecReScanSeqScan(SeqScanState *node)
 
 	scan = node->ss.ss_currentScanDesc;
 
-	if (scan != NULL)
+	if (scan != NULL && node->filters_in_am)
+	{
+		/*
+		 * The table AM keeps copies of the runtime filter keys it was given,
+		 * such as the min/max range.  A rescan of the join above may rebuild
+		 * its hash table, which frees those filters and builds new ones
+		 * (ResetRuntimeFilter), but table_rescan() hands the AM no new keys
+		 * and PAX's ignores them.  Start a fresh scan instead: the next
+		 * SeqNext() hands the AM the current filters, and the AM's copies go
+		 * away with the old scan.
+		 */
+		ExecClearTuple(node->ss.ss_ScanTupleSlot);
+		table_endscan(scan);
+		node->ss.ss_currentScanDesc = NULL;
+		node->filters_in_am = false;
+		/* The AM may have turned executor-side checking off; restore it. */
+		node->filter_in_seqscan = !node->ss.ps.state->useMppParallelMode;
+	}
+	else if (scan != NULL)
 		table_rescan(scan,		/* scan desc */
 					 NULL);		/* new scan keys */
 
@@ -407,17 +424,33 @@ ExecSeqScanInitializeWorker(SeqScanState *node,
 	node->ss.ss_currentScanDesc = scandesc;
 }
 
+static int
+compare_bloom_scan_keys(const ListCell *left, const ListCell *right)
+{
+	const ScanKeyData *a = lfirst(left);
+	const ScanKeyData *b = lfirst(right);
+	int a_rank = a->sk_flags == SK_BLOOM_FILTER ?
+		bloom_runtime_probe_rank((bloom_filter *) DatumGetPointer(a->sk_argument)) : 0;
+	int b_rank = b->sk_flags == SK_BLOOM_FILTER ?
+		bloom_runtime_probe_rank((bloom_filter *) DatumGetPointer(b->sk_argument)) : 0;
+
+	return b_rank - a_rank;
+}
+
 /*
  * Returns true if the element may be in the bloom filter.
  */
 bool
-PassByBloomFilter(PlanState *ps, List *filters, TupleTableSlot *slot)
+PassByBloomFilter(SeqScanState *node, TupleTableSlot *slot)
 {
+	PlanState  *ps = &node->ss.ps;
+	List	   *filters = node->filters;
 	ScanKey	sk;
 	Datum	val;
 	bool	isnull;
 	ListCell *lc;
 	bloom_filter *blm_filter;
+	bool		rejected = false;
 
 	/*
 	 * Mark that the pushdown runtime filter is actually taking effect.
@@ -431,19 +464,34 @@ PassByBloomFilter(PlanState *ps, List *filters, TupleTableSlot *slot)
 		if (sk->sk_flags != SK_BLOOM_FILTER)
 			continue;
 
+		blm_filter = (bloom_filter *) DatumGetPointer(sk->sk_argument);
+		if (bloom_runtime_probe_skip(blm_filter))
+			continue;
+
 		val = slot_getattr(slot, sk->sk_attno, &isnull);
 		if (isnull)
 			continue;
 
-		blm_filter = (bloom_filter *)DatumGetPointer(sk->sk_argument);
-		if (bloom_lacks_element(blm_filter, (unsigned char *)&val, sizeof(Datum)))
+		/* Hash the same bytes the Hash node hashed, see bloom_normalize_datum. */
+		val = bloom_normalize_datum(val,
+									TupleDescAttr(slot->tts_tupleDescriptor,
+												  sk->sk_attno - 1)->attlen);
+		if (bloom_runtime_probe(blm_filter, (unsigned char *) &val, sizeof(Datum)))
 		{
 			InstrCountFilteredPRF(ps, 1);
-			return false;
+			rejected = true;
+			break;
 		}
 	}
 
-	return true;
+	/*
+	 * Sort once, after sampling the first rows in the original order.
+	 * Later filters may have partial samples because earlier filters reject.
+	 */
+	if (node->bloom_sample_rows < BLOOM_PROBE_SAMPLE_SIZE &&
+		++node->bloom_sample_rows == BLOOM_PROBE_SAMPLE_SIZE)
+		list_sort(filters, compare_bloom_scan_keys);
+	return !rejected;
 }
 
 /*

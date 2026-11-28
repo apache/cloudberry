@@ -31,8 +31,8 @@
 #include "comm/log.h"
 #include "comm/pax_memory.h"
 #include "storage/filter/pax_filter.h"
-#include "storage/filter/pax_sparse_filter.h"
 #include "storage/filter/pax_row_filter.h"
+#include "storage/filter/pax_sparse_filter.h"
 #include "storage/pax_defined.h"
 #include "storage/pax_itemptr.h"
 
@@ -73,6 +73,49 @@ retry_next_group:
   return group_;
 }
 
+bool MicroPartitionRowFilterReader::EvalBloomNode(
+    const ExecutionFilterContext *ctx, MicroPartitionReader::Group *group,
+    TupleDesc desc, size_t row_index, int bloom_index) {
+  Assert(bloom_index >= 0 &&
+         (size_t)bloom_index < ctx->runtime_bloom_keys.size());
+  const auto &key = ctx->runtime_bloom_keys[bloom_index];
+  auto *filter = (bloom_filter *)DatumGetPointer(key.sk_argument);
+  if (bloom_runtime_probe_skip(filter)) return true;
+
+  auto [value, isnull] =
+      group->GetColumnValue(desc, key.sk_attno - 1, row_index);
+  if (isnull) return true;
+
+  // Hash the same bytes the build side hashed, see bloom_normalize_datum().
+  value = bloom_normalize_datum(value,
+                                TupleDescAttr(desc, key.sk_attno - 1)->attlen);
+  return !bloom_runtime_probe(filter, (unsigned char *)&value, sizeof(Datum));
+}
+
+bool MicroPartitionRowFilterReader::EvalExprNode(
+    const ExecutionFilterContext *ctx, MicroPartitionReader::Group *group,
+    TupleDesc desc, size_t row_index, TupleTableSlot *slot, int expr_index) {
+  auto attno = ctx->attnos[expr_index];
+  Assert(attno > 0);
+  std::tie(slot->tts_values[attno - 1], slot->tts_isnull[attno - 1]) =
+      group->GetColumnValue(desc, attno - 1, row_index);
+  return TestRowScanInternal(slot, ctx->estates[expr_index], attno);
+}
+
+bool MicroPartitionRowFilterReader::ApplyFiltersWithSampling(
+    ExecutionFilterContext *ctx, MicroPartitionReader::Group *group,
+    TupleDesc desc, size_t row_index, TupleTableSlot *slot) {
+  using Result = ExecutionFilterContext::FilterResult;
+  auto result = ctx->ApplyFilters([&](const auto &node) {
+    if (node.kind == ExecutionFilterContext::FilterKind::kBloom)
+      return EvalBloomNode(ctx, group, desc, row_index, node.index);
+    return EvalExprNode(ctx, group, desc, row_index, slot, node.index);
+  });
+
+  if (result == Result::kBloomRejected) InstrCountFilteredPRF(ctx->ps, 1);
+  return result == Result::kPass;
+}
+
 bool MicroPartitionRowFilterReader::ReadTuple(TupleTableSlot *slot) {
   auto g = group_;
   Assert(filter_->GetRowFilter());
@@ -108,16 +151,13 @@ retry_next:
     }
   }
 
-  for (int i = 0; i < ctx->size; i++) {
-    auto attno = ctx->attnos[i];
-    Assert(attno > 0);
-    std::tie(slot->tts_values[attno - 1], slot->tts_isnull[attno - 1]) =
-        g->GetColumnValue(desc, attno - 1, current_group_row_index_);
-    if (!TestRowScanInternal(slot, ctx->estates[i], attno)) {
-      current_group_row_index_++;
-      goto retry_next;
-    }
+  if (!ApplyFiltersWithSampling(const_cast<ExecutionFilterContext *>(ctx),
+                                g.get(), desc, current_group_row_index_,
+                                slot)) {
+    current_group_row_index_++;
+    goto retry_next;
   }
+
   for (auto attno : remaining_columns) {
     std::tie(slot->tts_values[attno - 1], slot->tts_isnull[attno - 1]) =
         g->GetColumnValue(desc, attno - 1, current_group_row_index_);

@@ -475,6 +475,7 @@ bool gp_enable_predicate_pushdown;
 int  gp_predicate_pushdown_sample_rows;
 
 bool gp_enable_runtime_filter_pushdown;
+int			gp_runtime_filter_min_reject_pct = 5;
 
 bool        enable_offload_entry_to_qe = false;
 bool 		enable_answer_query_using_materialized_views = false;
@@ -3440,6 +3441,19 @@ struct config_bool ConfigureNamesBool_gp[] =
 
 struct config_int ConfigureNamesInt_gp[] =
 {
+	{
+		{"gp_runtime_filter_min_reject_pct", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Stop probing a runtime Bloom filter that rejects fewer than this percent of rows."),
+			gettext_noop("Each filter samples its probes in windows of 1024 rows and samples "
+						 "again after a growing number of skipped rows. "
+						 "0 keeps every filter on."),
+			GUC_NOT_IN_SAMPLE
+		},
+		&gp_runtime_filter_min_reject_pct,
+		5, 0, 100,
+		NULL, NULL, NULL
+	},
+
 	{
 		{"readable_external_table_timeout", PGC_USERSET, EXTERNAL_TABLES,
 			gettext_noop("Cancel the query if no data read within N seconds."),

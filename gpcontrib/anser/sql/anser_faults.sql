@@ -20,6 +20,10 @@ CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 -- anser_runtime_filter.  A fresh session inherits none of its settings.
 SET enable_nestloop = off;
 SET enable_mergejoin = off;
+-- This file tests the Anser exchange.  A join whose probe scan runs in the
+-- join's own slice would otherwise get an in-place filter instead; that path
+-- is tested in anser_inplace.
+SET anser.runtime_filter_inplace = off;
 SET optimizer = off;
 
 -- Trace every exchange step into the server logs (never reaches the client),

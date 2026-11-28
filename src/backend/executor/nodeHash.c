@@ -35,6 +35,7 @@
 #include "commands/tablespace.h"
 #include "executor/execdebug.h"
 #include "executor/hashjoin.h"
+#include "executor/nodeDynamicSeqscan.h"
 #include "executor/nodeHash.h"
 #include "executor/nodeHashjoin.h"
 #include "executor/nodeRuntimeFilter.h"
@@ -2184,8 +2185,10 @@ ExecHashGetHashValue(HashState *hashState, HashJoinTable hashtable,
 		{
 			Datum *dp = palloc(sizeof(Datum));
 
-			/* consider use raw value or hash value */
-			*dp = hashState->rfstate->raw_value[i] ? keyval : hkey;
+			int16		raw_width = hashState->rfstate->inner_raw_width[i];
+
+			/* Match the canonical Datum bytes used by the probe. */
+			*dp = raw_width != 0 ? bloom_normalize_datum(keyval, raw_width) : hkey;
 			keyvalues = lappend(keyvalues, dp);
 		}
 
@@ -4359,12 +4362,28 @@ PushdownRuntimeFilter(HashState *node)
 		if (IsA(attr_filter->target, SeqScanState))
 		{
 			SeqScanState *sss = castNode(SeqScanState, attr_filter->target);
+
+			/*
+			 * A scan that has already started -- the join fetched its first
+			 * outer tuple before building the hash table -- no longer hands
+			 * filters to the table AM.  If the AM took the earlier ones and
+			 * turned executor-side checking off, leave those with the AM and
+			 * check only the new ones here: probing the AM's filters again
+			 * would cost twice and skew their adaptive sampling, which would
+			 * then only see the rows the AM let through.
+			 */
+			if (sss->ss.ss_currentScanDesc != NULL && !sss->filter_in_seqscan)
+			{
+				list_free(sss->filters);
+				sss->filters = NIL;
+				sss->filter_in_seqscan = true;
+			}
 			sss->filters = list_concat(sss->filters, scankeys);
 		}
 		else if (IsA(attr_filter->target, DynamicSeqScanState))
 		{
 			DynamicSeqScanState *dsss = castNode(DynamicSeqScanState, attr_filter->target);
-			dsss->filters = list_concat(dsss->filters, scankeys);
+			ExecDynamicSeqScanAddRuntimeFilters(dsss, scankeys);
 		}
 		else
 		{
@@ -4392,10 +4411,20 @@ AddTupleValuesIntoRF(HashState *node, TupleTableSlot *slot)
 
 		attr_filter->empty = false;
 
-		if ((int64_t)val < (int64_t)attr_filter->min)
+		/*
+		 * Use the canonical form, not the raw Datum: a narrow negative key
+		 * that arrives zero-extended would otherwise compare as a large
+		 * positive one, push a range that excludes it, and hash differently
+		 * from the probe side.
+		 */
+		val = bloom_normalize_datum(val,
+									TupleDescAttr(slot->tts_tupleDescriptor,
+												  attr_filter->rattno - 1)->attlen);
+
+		if (DatumGetInt64(val) < DatumGetInt64(attr_filter->min))
 			attr_filter->min = val;
 
-		if ((int64_t)val > (int64_t)attr_filter->max)
+		if (DatumGetInt64(val) > DatumGetInt64(attr_filter->max))
 			attr_filter->max = val;
 
 		if (attr_filter->blm_filter)

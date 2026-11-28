@@ -62,13 +62,14 @@ anserfilter.o: $(srcdir)/../src/anserfilter.c
 # Not called "check": pgxs.mk already defines that target, and overriding it
 # here would only earn a warning from make.
 .PHONY: unitcheck
-unitcheck: $(PROGRAM) anserdetach_test ansernormalize_test anserplanwalk_test ansercancel_test anserapi_test
+unitcheck: $(PROGRAM) anserdetach_test ansernormalize_test anserplanwalk_test ansercancel_test anserapi_test anserinplace_test
 	./$(PROGRAM)
 	./anserdetach_test
 	./ansernormalize_test
 	./anserplanwalk_test
 	./ansercancel_test
 	./anserapi_test
+	./anserinplace_test
 
 # Only teardown code from the included transport source is linked. Any
 # allocation, wait or error-reporting dependency in that path is unresolved,
@@ -94,7 +95,7 @@ ansernormalize_test: $(srcdir)/ansernormalize_test.c $(srcdir)/../src/anserplank
 EXTRA_CLEAN += ansernormalize_test
 
 # -O0 ensures compiler optimization cannot hide Max's repeated evaluation.
-anserplanwalk_test: $(srcdir)/anserplanwalk_test.c $(srcdir)/../src/anserplan.c $(srcdir)/../src/anserplankeys.c $(wildcard $(srcdir)/../include/*.h)
+anserplanwalk_test: $(srcdir)/anserplanwalk_test.c $(srcdir)/../src/anserinplace.c $(srcdir)/../src/anserplan.c $(srcdir)/../src/anserplankeys.c $(wildcard $(srcdir)/../include/*.h)
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(PG_CPPFLAGS) -O0 -ffunction-sections -fdata-sections \
 	  $(DETACH_TEST_LDFLAGS) $< -o $@
 
@@ -121,3 +122,10 @@ LOCALCHECK_PYTHON ?= python3
 .PHONY: localcheck
 localcheck:
 	$(LOCALCHECK_PYTHON) $(srcdir)/localcheck.py
+
+# Exercise the production in-place callbacks with a rewound probe/build input.
+anserinplace_test: $(srcdir)/anserinplace_test.c $(srcdir)/../src/anserinplace.c $(wildcard $(srcdir)/../include/*.h)
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(PG_CPPFLAGS) -ffunction-sections -fdata-sections \
+	  $(DETACH_TEST_LDFLAGS) $< -o $@
+
+EXTRA_CLEAN += anserinplace_test

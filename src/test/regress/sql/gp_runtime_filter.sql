@@ -258,6 +258,28 @@ SET optimizer TO off;
 
 RESET enable_parallel;
 
+-- A NULL-tolerant join above the nullable side of an outer join must not
+-- filter that side: a row the filter drops comes back NULL-extended and then
+-- matches the build side's NULL under IS NOT DISTINCT FROM.  ORCA puts a plain
+-- = in the hash clauses and the null test in hashqualclauses, so the join is
+-- eligible for a runtime filter; the target search must not descend into the
+-- nullable side.  The right answer is 0 rows.
+SET optimizer TO on;
+SET gp_enable_runtime_filter_pushdown TO on;
+CREATE TABLE rf_indf_s (x int, y int) DISTRIBUTED BY (x);
+CREATE TABLE rf_indf_r (x int, k int) DISTRIBUTED BY (x);
+CREATE TABLE rf_indf_b (k int) DISTRIBUTED RANDOMLY;
+INSERT INTO rf_indf_s SELECT g, g FROM generate_series(1, 100000) g;
+INSERT INTO rf_indf_r SELECT g, g + 1000000 FROM generate_series(1, 100000) g;
+INSERT INTO rf_indf_b VALUES (NULL);
+INSERT INTO rf_indf_b SELECT g FROM generate_series(1, 10) g;
+ANALYZE rf_indf_s, rf_indf_r, rf_indf_b;
+SELECT count(*) AS indf_rows FROM (rf_indf_s s LEFT JOIN rf_indf_r r ON s.x = r.x)
+    JOIN rf_indf_b b ON r.k IS NOT DISTINCT FROM b.k;
+DROP TABLE rf_indf_s, rf_indf_r, rf_indf_b;
+RESET gp_enable_runtime_filter_pushdown;
+SET optimizer TO off;
+
 -- Clean up: reset guc
 SET gp_enable_runtime_filter TO off;
 SET optimizer TO default;

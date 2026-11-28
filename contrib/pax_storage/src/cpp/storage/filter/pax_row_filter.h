@@ -42,16 +42,70 @@ struct ExecutionFilterContext {
   ExprState *estate_final = nullptr;
   ExprState **estates;
   AttrNumber *attnos;
+  PlanState *ps;
   int size = 0;
   inline bool HasExecutionFilter() const { return size > 0 || estate_final; }
+
+  // runtime bloom filters pushed down via SeqScanState->filters
+  // (SK_BLOOM_FILTER)
+  std::vector<ScanKeyData> runtime_bloom_keys;
+
+  // unified filter nodes (expr + bloom) for execution ordering
+  enum class FilterKind { kExpr, kBloom };
+  struct FilterNode {
+    FilterKind kind;
+    int index;  // index in estates (for kExpr) or in runtime_bloom_keys (for
+                // kBloom)
+    uint64 tested = 0;   // number of rows tested during sampling
+    uint64 passed = 0;   // number of rows passed during sampling
+    double score = 1.0;  // pass rate used for ordering (lower is better)
+  };
+  std::vector<FilterNode> filter_nodes;
+
+  // sampling control to determine filter order
+  bool sampling = true;
+  uint64 sample_target = 65536;  // number of rows for sampling phase
+  uint64 sample_rows = 0;        // rows seen in sampling
+
+  enum class FilterResult { kPass, kBloomRejected, kExprRejected };
+
+  template <typename Evaluate>
+  FilterResult ApplyFilters(Evaluate evaluate) {
+	auto result = FilterResult::kPass;
+	for (auto &node : filter_nodes) {
+	  // A rejected row may still feed the sampling of later Bloom probes,
+	  // which only hash the key, but no SQL condition may see it: it could
+	  // raise an error (b <> 0 AND a / b > 1) or leak the row's values to a
+	  // function that the earlier condition was meant to guard.
+	  if (result != FilterResult::kPass && node.kind == FilterKind::kExpr)
+		break;
+
+	  bool pass = evaluate(node);
+	  if (sampling) {
+		++node.tested;
+		node.passed += pass;
+	  }
+	  if (!pass) {
+		result = node.kind == FilterKind::kBloom
+					 ? FilterResult::kBloomRejected
+					 : FilterResult::kExprRejected;
+		if (!sampling) break;
+	  }
+	}
+
+	if (sampling && ++sample_rows >= sample_target) FinishSampling();
+	return result;
+  }
+
+  void FinishSampling();
 };
 
 class PaxRowFilter final {
-public:
+ public:
   PaxRowFilter();
 
   bool Initialize(Relation rel, PlanState *ps,
-                const std::vector<bool> &projection);
+                  const std::vector<bool> &projection, ScanKey key, int nkeys);
 
   inline const ExecutionFilterContext *GetExecutionFilterContext() const {
     return &efctx_;
@@ -60,11 +114,11 @@ public:
   inline const std::vector<AttrNumber> &GetRemainingColumns() const {
     return remaining_attnos_;
   }
-  
-private:
+
+ private:
   void FillRemainingColumns(Relation rel, const std::vector<bool> &projection);
 
-private:
+ private:
   ExecutionFilterContext efctx_;
   // all selected columns - single row filting columns
   // before running final cross columns expression filtering, the remaining
@@ -72,5 +126,4 @@ private:
   std::vector<AttrNumber> remaining_attnos_;
 };
 
-
-}; 
+};  // namespace pax

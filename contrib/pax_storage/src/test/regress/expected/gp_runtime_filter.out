@@ -254,6 +254,655 @@ SELECT COUNT(*) FROM dim_rf
   1600
 (1 row)
 
--- Clean up: reset guc
+-- Test bloom filter pushdown
+SET enable_parallel TO off;
+-- case 1: join on distribution table and replicated table.
+DROP TABLE IF EXISTS t1;
+NOTICE:  table "t1" does not exist, skipping
+DROP TABLE IF EXISTS t2;
+NOTICE:  table "t2" does not exist, skipping
+CREATE TABLE t1(c1 int, c2 int, c3 int, c4 int, c5 int) distributed by (c1);
+CREATE TABLE t2(c1 int, c2 int, c3 int, c4 int, c5 int) distributed REPLICATED;
+INSERT INTO t1 VALUES (5,5,5,5,5);
+INSERT INTO t2 VALUES (1,1,1,1,1), (2,2,2,2,2), (3,3,3,3,3), (4,4,4,4,4);
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t2 select * FROM t2;
+INSERT INTO t2 select * FROM t2;
+INSERT INTO t2 select * FROM t2;
+ANALYZE;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT t1.c3 FROM t1, t2 WHERE t1.c2 = t2.c2;
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
+   ->  Hash Join (actual rows=0 loops=1)
+         Hash Cond: (t1.c2 = t2.c2)
+         Extra Text: (seg2)   Hash chain length 8.0 avg, 8 max, using 4 of 524288 buckets.
+         ->  Seq Scan on t1 (actual rows=128 loops=1)
+         ->  Hash (actual rows=32 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4098kB
+               ->  Seq Scan on t2 (actual rows=32 loops=1)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT t1.c3 FROM t1, t2 WHERE t1.c2 = t2.c2;
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
+   ->  Hash Join (actual rows=0 loops=1)
+         Hash Cond: (t1.c2 = t2.c2)
+         Extra Text: (seg2)   Hash chain length 8.0 avg, 8 max, using 4 of 524288 buckets.
+         ->  Seq Scan on t1 (actual rows=1 loops=1)
+               Rows Removed by Pushdown Runtime Filter: 127
+         ->  Hash (actual rows=32 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4098kB
+               ->  Seq Scan on t2 (actual rows=32 loops=1)
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+RESET gp_enable_runtime_filter_pushdown;
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+-- case 2: join on partition table and replicated table.
+CREATE TABLE t1 (c1 INT, c2 INT) DISTRIBUTED BY (c1) PARTITION BY RANGE (c2) (START (1) END (100) EVERY (50));
+CREATE TABLE t2 (c1 INT, c2 INT) DISTRIBUTED REPLICATED;
+INSERT INTO t1 SELECT generate_series(1, 99), generate_series(1, 99);
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t2 SELECT generate_series(1, 5), generate_series(1, 5);
+INSERT INTO t2 SELECT generate_series(51, 51), generate_series(51, 51);
+ANALYZE;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT * FROM t1, t2 WHERE t1.c2 = t2.c2;
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=96 loops=1)
+   ->  Hash Join (actual rows=64 loops=1)
+         Hash Cond: (t1.c2 = t2.c2)
+         Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 6 of 524288 buckets.
+         ->  Append (actual rows=608 loops=1)
+               Partition Selectors: $0
+               ->  Seq Scan on t1_1_prt_1 t1_1 (actual rows=288 loops=1)
+               ->  Seq Scan on t1_1_prt_2 t1_2 (actual rows=320 loops=1)
+         ->  Hash (actual rows=6 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Partition Selector (selector id: $0) (actual rows=6 loops=1)
+                     ->  Seq Scan on t2 (actual rows=6 loops=1)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT * FROM t1, t2 WHERE t1.c2 = t2.c2;
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=96 loops=1)
+   ->  Hash Join (actual rows=64 loops=1)
+         Hash Cond: (t1.c2 = t2.c2)
+         Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 6 of 524288 buckets.
+         ->  Append (actual rows=64 loops=1)
+               Partition Selectors: $0
+               ->  Seq Scan on t1_1_prt_1 t1_1 (actual rows=48 loops=1)
+                     Rows Removed by Pushdown Runtime Filter: 240
+               ->  Seq Scan on t1_1_prt_2 t1_2 (actual rows=16 loops=1)
+                     Rows Removed by Pushdown Runtime Filter: 304
+         ->  Hash (actual rows=6 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Partition Selector (selector id: $0) (actual rows=6 loops=1)
+                     ->  Seq Scan on t2 (actual rows=6 loops=1)
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+RESET gp_enable_runtime_filter_pushdown;
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+-- case 3: bug fix with explain
+DROP TABLE IF EXISTS test_tablesample1;
+NOTICE:  table "test_tablesample1" does not exist, skipping
+CREATE TABLE test_tablesample1 (dist int, id int, name text) DISTRIBUTED BY (dist);
+INSERT INTO test_tablesample1 SELECT 0, i, repeat(i::text, 875) FROM generate_series(0, 9) s(i) ORDER BY i;
+INSERT INTO test_tablesample1 SELECT 3, i, repeat(i::text, 875) FROM generate_series(10, 19) s(i) ORDER BY i;
+INSERT INTO test_tablesample1 SELECT 5, i, repeat(i::text, 875) FROM generate_series(20, 29) s(i) ORDER BY i;
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (COSTS OFF) SELECT id FROM test_tablesample1 TABLESAMPLE SYSTEM (50) REPEATABLE (2);
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Sample Scan on test_tablesample1
+         Sampling: system ('50'::real) REPEATABLE ('2'::double precision)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+RESET gp_enable_runtime_filter_pushdown;
+DROP TABLE IF EXISTS test_tablesample1;
+-- case 4: show debug info only when gp_enable_runtime_filter_pushdown is on
+DROP TABLE IF EXISTS t1;
+NOTICE:  table "t1" does not exist, skipping
+DROP TABLE IF EXISTS t2;
+NOTICE:  table "t2" does not exist, skipping
+CREATE TABLE t1(c1 int, c2 int);
+CREATE TABLE t2(c1 int, c2 int);
+INSERT INTO t1 SELECT GENERATE_SERIES(1, 1000), GENERATE_SERIES(1, 1000);
+INSERT INTO t2 SELECT * FROM t1;
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT count(t1.c2) FROM t1, t2 WHERE t1.c1 = t2.c1;
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Finalize Aggregate (actual rows=1 loops=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=1)
+         ->  Partial Aggregate (actual rows=1 loops=1)
+               ->  Hash Join (actual rows=340 loops=1)
+                     Hash Cond: (t1.c1 = t2.c1)
+                     Extra Text: (seg2)   Hash chain length 1.0 avg, 1 max, using 340 of 524288 buckets.
+                     ->  Seq Scan on t1 (actual rows=340 loops=1)
+                           Rows Removed by Pushdown Runtime Filter: 0
+                     ->  Hash (actual rows=340 loops=1)
+                           Buckets: 524288  Batches: 1  Memory Usage: 4108kB
+                           ->  Seq Scan on t2 (actual rows=340 loops=1)
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+RESET gp_enable_runtime_filter_pushdown;
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+-- case 5: hashjoin + result + seqsacn
+DROP TABLE IF EXISTS t1;
+NOTICE:  table "t1" does not exist, skipping
+DROP TABLE IF EXISTS t2;
+NOTICE:  table "t2" does not exist, skipping
+CREATE TABLE t1(c1 int, c2 int, c3 char(50), c4 char(50), c5 char(50)) DISTRIBUTED REPLICATED;
+CREATE TABLE t2(c1 int, c2 int, c3 char(50), c4 char(50), c5 char(50));
+INSERT INTO t1 VALUES (5,5,5,5,5), (3,3,3,3,3), (4,4,4,4,4);
+INSERT INTO t2 VALUES (1,1,1,1,1), (2,2,2,2,2), (3,3,3,3,3), (4,4,4,4,4);
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t2 select * FROM t2;
+ANALYZE;
+SET optimizer TO on;
+SET gp_enable_runtime_filter_pushdown TO off;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT t1.c3 FROM t1, t2 WHERE t1.c1 = t2.c1;
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=32 loops=1)
+   ->  Hash Join (actual rows=32 loops=1)
+         Hash Cond: (t1.c1 = t2.c1)
+         Extra Text: (seg0)   Hash chain length 2.0 avg, 2 max, using 3 of 524288 buckets.
+         ->  Result (actual rows=16 loops=1)
+               ->  Seq Scan on t1 (actual rows=24 loops=1)
+         ->  Hash (actual rows=6 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Seq Scan on t2 (actual rows=6 loops=1)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(10 rows)
+
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT t1.c3 FROM t1, t2 WHERE t1.c1 = t2.c1;
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=32 loops=1)
+   ->  Hash Join (actual rows=32 loops=1)
+         Hash Cond: (t1.c1 = t2.c1)
+         Extra Text: (seg0)   Hash chain length 2.0 avg, 2 max, using 3 of 524288 buckets.
+         ->  Result (actual rows=16 loops=1)
+               ->  Seq Scan on t1 (actual rows=16 loops=1)
+                     Rows Removed by Pushdown Runtime Filter: 8
+         ->  Hash (actual rows=6 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Seq Scan on t2 (actual rows=6 loops=1)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(11 rows)
+
+RESET gp_enable_runtime_filter_pushdown;
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+-- case 6: hashjoin + hashjoin + seqscan
+DROP TABLE IF EXISTS t1;
+NOTICE:  table "t1" does not exist, skipping
+DROP TABLE IF EXISTS t2;
+NOTICE:  table "t2" does not exist, skipping
+DROP TABLE IF EXISTS t3;
+NOTICE:  table "t3" does not exist, skipping
+CREATE TABLE t1(c1 int, c2 int, c3 char(50), c4 char(50), c5 char(50)) DISTRIBUTED REPLICATED;
+CREATE TABLE t2(c1 int, c2 int, c3 char(50), c4 char(50), c5 char(50)) DISTRIBUTED REPLICATED;
+CREATE TABLE t3(c1 int, c2 int, c3 char(50), c4 char(50), c5 char(50)) DISTRIBUTED REPLICATED;
+INSERT INTO t1 VALUES (1,1,1,1,1), (2,2,2,2,2), (5,5,5,5,5);
+INSERT INTO t2 VALUES (1,1,1,1,1), (2,2,2,2,2), (3,3,3,3,3), (4,4,4,4,4);
+INSERT INTO t3 VALUES (1,1,1,1,1), (2,2,2,2,2), (3,3,3,3,3), (4,4,4,4,4);
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t2 select * FROM t2;
+INSERT INTO t2 select * FROM t2;
+INSERT INTO t3 select * FROM t3;
+ANALYZE;
+SET optimizer TO off;
+SET gp_enable_runtime_filter_pushdown TO off;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT * FROM t1, t2, t3 WHERE t1.c1 = t2.c1 AND t1.c2 = t3.c2;
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1) (actual rows=256 loops=1)
+   ->  Hash Join (actual rows=256 loops=1)
+         Hash Cond: (t1.c1 = t2.c1)
+         Extra Text: Hash chain length 4.0 avg, 4 max, using 4 of 32768 buckets.
+         ->  Hash Join (actual rows=64 loops=1)
+               Hash Cond: (t1.c2 = t3.c2)
+               Extra Text: Hash chain length 2.0 avg, 2 max, using 4 of 32768 buckets.
+               ->  Seq Scan on t1 (actual rows=48 loops=1)
+               ->  Hash (actual rows=8 loops=1)
+                     Buckets: 32768  Batches: 1  Memory Usage: 258kB
+                     ->  Seq Scan on t3 (actual rows=8 loops=1)
+         ->  Hash (actual rows=16 loops=1)
+               Buckets: 32768  Batches: 1  Memory Usage: 260kB
+               ->  Seq Scan on t2 (actual rows=16 loops=1)
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT * FROM t1, t2, t3 WHERE t1.c1 = t2.c1 AND t1.c2 = t3.c2;
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1) (actual rows=256 loops=1)
+   ->  Hash Join (actual rows=256 loops=1)
+         Hash Cond: (t1.c1 = t2.c1)
+         Extra Text: Hash chain length 4.0 avg, 4 max, using 4 of 32768 buckets.
+         ->  Hash Join (actual rows=64 loops=1)
+               Hash Cond: (t1.c2 = t3.c2)
+               Extra Text: Hash chain length 2.0 avg, 2 max, using 4 of 32768 buckets.
+               ->  Seq Scan on t1 (actual rows=32 loops=1)
+                     Rows Removed by Pushdown Runtime Filter: 16
+               ->  Hash (actual rows=8 loops=1)
+                     Buckets: 32768  Batches: 1  Memory Usage: 258kB
+                     ->  Seq Scan on t3 (actual rows=8 loops=1)
+         ->  Hash (actual rows=16 loops=1)
+               Buckets: 32768  Batches: 1  Memory Usage: 260kB
+               ->  Seq Scan on t2 (actual rows=16 loops=1)
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+RESET gp_enable_runtime_filter_pushdown;
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+DROP TABLE IF EXISTS t3;
+-- case 7: scan partition table with dynamic scan
+CREATE TABLE t1 (c1 INT, c2 INT) DISTRIBUTED BY (c1) PARTITION BY RANGE (c2) (START (1) END (100) EVERY (50));
+CREATE TABLE t2 (c1 INT, c2 INT) DISTRIBUTED REPLICATED;
+INSERT INTO t1 SELECT generate_series(1, 99), generate_series(1, 99);
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t2 SELECT generate_series(1, 5), generate_series(1, 5);
+INSERT INTO t2 SELECT generate_series(51, 51), generate_series(51, 51);
+ANALYZE;
+SET optimizer TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT t1.c2 FROM t1, t2 WHERE t1.c2 = t2.c2;
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=96 loops=1)
+   ->  Hash Join (actual rows=64 loops=1)
+         Hash Cond: (t1.c2 = t2.c2)
+         Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 6 of 524288 buckets.
+         ->  Dynamic Seq Scan on t1 (actual rows=608 loops=1)
+               Number of partitions to scan: 2 (out of 2)
+               Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+         ->  Hash (actual rows=6 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Partition Selector (selector id: $0) (actual rows=6 loops=1)
+                     ->  Seq Scan on t2 (actual rows=6 loops=1)
+ Optimizer: GPORCA
+(12 rows)
+
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT t1.c2 FROM t1, t2 WHERE t1.c2 = t2.c2;
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=96 loops=1)
+   ->  Hash Join (actual rows=64 loops=1)
+         Hash Cond: (t1.c2 = t2.c2)
+         Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 6 of 524288 buckets.
+         ->  Dynamic Seq Scan on t1 (actual rows=64 loops=1)
+               Rows Removed by Pushdown Runtime Filter: 544
+               Number of partitions to scan: 2 (out of 2)
+               Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+         ->  Hash (actual rows=6 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Partition Selector (selector id: $0) (actual rows=6 loops=1)
+                     ->  Seq Scan on t2 (actual rows=6 loops=1)
+ Optimizer: GPORCA
+(13 rows)
+
+set pax.enable_row_filter TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT t1.c2 FROM t1, t2 WHERE t1.c2 = t2.c2;
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=96 loops=1)
+   ->  Hash Join (actual rows=64 loops=1)
+         Hash Cond: (t1.c2 = t2.c2)
+         Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 6 of 524288 buckets.
+         ->  Dynamic Seq Scan on t1 (actual rows=64 loops=1)
+               Rows Removed by Pushdown Runtime Filter: 544
+               Number of partitions to scan: 2 (out of 2)
+               Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+         ->  Hash (actual rows=6 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Partition Selector (selector id: $0) (actual rows=6 loops=1)
+                     ->  Seq Scan on t2 (actual rows=6 loops=1)
+ Optimizer: GPORCA
+(13 rows)
+
+RESET pax.enable_row_filter;
+RESET gp_enable_runtime_filter_pushdown;
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+SET optimizer TO off;
+-- Isolate executor pushdown from the planner's separate RuntimeFilter node.
+-- That node hashes raw integer Datums on this co-located join.
 SET gp_enable_runtime_filter TO off;
+-- Execute a plain SELECT in each mode and compare its complete row multiset.
+-- In particular, the correlated rescan query must not acquire CTAS writer
+-- distribution requirements. Sort on the coordinator after execution.
+CREATE FUNCTION rf_query_rows(q text, pushdown boolean) RETURNS jsonb[]
+LANGUAGE plpgsql AS $$
+DECLARE
+    r record;
+    rows jsonb[] := '{}';
+    previous text := current_setting('gp_enable_runtime_filter_pushdown');
+BEGIN
+    PERFORM set_config('gp_enable_runtime_filter_pushdown', pushdown::text, true);
+    FOR r IN EXECUTE q LOOP
+        rows := array_append(rows, to_jsonb(r));
+    END LOOP;
+    PERFORM set_config('gp_enable_runtime_filter_pushdown', previous, true);
+    RETURN ARRAY(SELECT v FROM unnest(rows) AS t(v) ORDER BY v);
+END $$;
+-- Negative keys with range keys pushed into PAX.  The build side is AOCO and
+-- co-located with the probe, so the Hash node receives AOCO's zero-extended
+-- int4 Datums; the Bloom filter and the min/max range must still describe the
+-- negative values, or PAX drops rows that join.  The int8 build key checks
+-- that equal int4 and int8 keys hash and compare as the same integer.
+SET optimizer TO off;
+SET pax.enable_row_filter TO on;
+CREATE TABLE rf_neg_probe (k int, v int) USING pax DISTRIBUTED BY (k);
+INSERT INTO rf_neg_probe SELECT -(i % 1000), i FROM generate_series(1, 50000) i;
+CREATE TABLE rf_neg_build4 (k int) USING ao_column DISTRIBUTED BY (k);
+INSERT INTO rf_neg_build4 SELECT -i FROM generate_series(1, 20) i;
+CREATE TABLE rf_neg_build8 (k int8) USING ao_column DISTRIBUTED RANDOMLY;
+INSERT INTO rf_neg_build8 SELECT -i FROM generate_series(1, 20) i;
+ANALYZE rf_neg_probe, rf_neg_build4, rf_neg_build8;
+DO $$
+DECLARE
+    build text;
+    q text;
+    baseline jsonb[];
+    filtered jsonb[];
+    line text;
+    planner_filter boolean := false;
+BEGIN
+    FOREACH build IN ARRAY ARRAY['rf_neg_build4', 'rf_neg_build8'] LOOP
+        q := format('SELECT p.v FROM rf_neg_probe p JOIN %I b ON p.k = b.k', build);
+        baseline := rf_query_rows(q, false);
+        filtered := rf_query_rows(q, true);
+        IF cardinality(baseline) <> 1000 OR filtered IS DISTINCT FROM baseline THEN
+            RAISE EXCEPTION 'negative-key mismatch for % (baseline rows %, filtered rows %)',
+                build, cardinality(baseline), cardinality(filtered);
+        END IF;
+    END LOOP;
+    -- Exercise the planner's node separately on the same AOCO/PAX join.
+    q := 'SELECT p.v FROM rf_neg_probe p JOIN rf_neg_build4 b ON p.k = b.k';
+    baseline := rf_query_rows(q, false);
+    PERFORM set_config('gp_enable_runtime_filter', 'on', true);
+    FOR line IN EXECUTE 'EXPLAIN (COSTS OFF) ' || q LOOP
+        planner_filter := planner_filter OR line LIKE '%->  RuntimeFilter%';
+    END LOOP;
+    filtered := rf_query_rows(q, false);
+    PERFORM set_config('gp_enable_runtime_filter', 'off', true);
+    IF NOT planner_filter OR filtered IS DISTINCT FROM baseline THEN
+        RAISE EXCEPTION 'planner RuntimeFilter failed negative-key check (planned %, rows %)',
+            planner_filter, cardinality(filtered);
+    END IF;
+END $$;
+DROP TABLE rf_neg_probe, rf_neg_build4, rf_neg_build8;
+-- Visimap must hide deleted rows before the PAX reader probes Bloom keys.
+-- ORCA builds the hash table before opening the probe scan, so PAX receives
+-- the keys at scan startup. The sparse build keys leave gaps within the
+-- min/max range for the Bloom filter to reject.
+SET optimizer TO on;
+SET gp_enable_predicate_pushdown TO on;
+SET pax.enable_sparse_filter TO on;
+CREATE TABLE rf_visi_probe (k int, v int) USING pax DISTRIBUTED BY (k);
+CREATE TABLE rf_visi_build (k int) USING ao_column DISTRIBUTED BY (k);
+-- Interleave NULL keys with known matches and misses within each file.
+INSERT INTO rf_visi_probe
+SELECT CASE WHEN i % 13 <> 0 THEN i % 1000 END, i
+FROM generate_series(1, 40000) i;
+INSERT INTO rf_visi_build SELECT i FROM generate_series(0, 990, 10) i;
+-- Delete a mix of matching and nonmatching probe rows without rewriting it.
+DELETE FROM rf_visi_probe WHERE v % 7 = 0;
+ANALYZE rf_visi_probe, rf_visi_build;
+DO $$
+DECLARE
+    q constant text := 'SELECT p.v FROM rf_visi_probe p JOIN rf_visi_build b ON p.k = b.k';
+    expected jsonb[];
+    line text;
+    removed bigint;
+    plan_removals bigint;
+    using_orca boolean;
+BEGIN
+    SELECT array_agg(jsonb_build_object('v', i) ORDER BY jsonb_build_object('v', i))
+      INTO expected
+      FROM generate_series(1, 40000) i
+     WHERE i % 10 = 0 AND i % 7 <> 0 AND i % 13 <> 0;
+
+    IF rf_query_rows(q, false) IS DISTINCT FROM expected OR
+       rf_query_rows(q, true) IS DISTINCT FROM expected THEN
+        RAISE EXCEPTION 'PAX visimap and Bloom join returned incorrect rows';
+    END IF;
+
+    PERFORM set_config('gp_enable_runtime_filter_pushdown', 'on', true);
+    FOR phase IN 1..2 LOOP
+        plan_removals := NULL;
+        using_orca := false;
+        FOR line IN EXECUTE 'EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF) ' || q LOOP
+            using_orca := using_orca OR line LIKE '%Optimizer:%GPORCA%';
+            removed := substring(line FROM 'Rows Removed by Pushdown Runtime Filter: ([0-9]+)')::bigint;
+            IF removed IS NOT NULL THEN
+                plan_removals := coalesce(plan_removals, 0) + removed;
+            END IF;
+        END LOOP;
+
+        IF NOT using_orca THEN
+            RAISE EXCEPTION 'expected ORCA to build the hash before opening the PAX scan';
+        END IF;
+        IF phase = 1 THEN
+            IF coalesce(plan_removals, 0) = 0 THEN
+                RAISE EXCEPTION 'expected Bloom pruning with live nonmatching rows';
+            END IF;
+            -- Now every live row matches. Deleted nonmatches must no longer
+            -- reach Bloom probing, so the same filter should reject zero rows.
+            DELETE FROM rf_visi_probe WHERE k IS NULL OR k % 10 <> 0;
+        ELSIF plan_removals IS DISTINCT FROM 0::bigint THEN
+            RAISE EXCEPTION 'expected an active Bloom filter with zero rejections after deletes, got %',
+                plan_removals;
+        END IF;
+    END LOOP;
+    IF rf_query_rows(q, true) IS DISTINCT FROM expected THEN
+        RAISE EXCEPTION 'PAX visimap and Bloom join returned incorrect rows after deleting nonmatches';
+    END IF;
+END $$;
+DROP TABLE rf_visi_probe, rf_visi_build;
+RESET pax.enable_sparse_filter;
+RESET gp_enable_predicate_pushdown;
+SET optimizer TO off;
+-- Core generates integer range and Bloom keys from int4 build Datums.
+-- Probe both wider and narrower PAX columns with the same negative keys.
+-- Use the legacy planner for direct cross-type equality clauses. A small
+-- nonreplicated build requires Motion, so the hash builds before PAX opens.
+-- Use a range predicate with column statistics: a modulo equality has no
+-- expression statistics and can make redistributing both inputs look cheaper.
+SET optimizer TO off;
+SET enable_nestloop TO off;
+SET enable_mergejoin TO off;
+SET gp_enable_predicate_pushdown TO on;
+SET pax.enable_sparse_filter TO on;
+CREATE TABLE rf_width_probe (wide int8, narrow int2, v int)
+    USING pax DISTRIBUTED BY (v);
+CREATE TABLE rf_width_build (k int) USING ao_column DISTRIBUTED RANDOMLY;
+INSERT INTO rf_width_probe
+SELECT -(i % 1000), -(i % 1000), i FROM generate_series(1, 40000) i;
+INSERT INTO rf_width_build SELECT -i FROM generate_series(0, 990, 10) i;
+ANALYZE rf_width_probe, rf_width_build;
+DO $$
+DECLARE
+    col text;
+    q text;
+    expected jsonb[];
+    line text;
+    pruned boolean;
+    plan text;
+BEGIN
+    SELECT array_agg(jsonb_build_object('v', i) ORDER BY jsonb_build_object('v', i))
+      INTO expected FROM generate_series(1, 40000) i
+     WHERE i % 10 = 0 AND i > 1000;
+    FOREACH col IN ARRAY ARRAY['wide', 'narrow'] LOOP
+        q := format('SELECT p.v FROM rf_width_probe p JOIN rf_width_build b
+                      ON p.%I = b.k WHERE p.v > 1000', col);
+        IF rf_query_rows(q, false) IS DISTINCT FROM expected OR
+           rf_query_rows(q, true) IS DISTINCT FROM expected THEN
+            RAISE EXCEPTION 'PAX mixed-width Bloom mismatch for %', col;
+        END IF;
+        PERFORM set_config('gp_enable_runtime_filter_pushdown', 'on', true);
+        pruned := false;
+        plan := '';
+        FOR line IN EXECUTE 'EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF) ' || q LOOP
+            plan := plan || E'\n' || line;
+            pruned := pruned OR line ~ 'Rows Removed by Pushdown Runtime Filter: [1-9]';
+        END LOOP;
+        IF NOT pruned OR plan NOT LIKE '%Broadcast Motion%' THEN
+            RAISE EXCEPTION 'expected broadcast build and PAX Bloom pruning for %:%', col, plan;
+        END IF;
+    END LOOP;
+END $$;
+DROP TABLE rf_width_probe, rf_width_build;
+RESET pax.enable_sparse_filter;
+RESET gp_enable_predicate_pushdown;
+RESET enable_mergejoin;
+RESET enable_nestloop;
+-- A hash join rescanned with new build keys: for each outer row the nested
+-- loop runs the LATERAL subquery again, and the hash table is rebuilt from the
+-- build rows of that row's group, a different set of keys every time.  The
+-- PAX scan below must use the new filter on every iteration, not keep the
+-- copy of the first one it was given (its rescan does not take new keys, so
+-- the executor restarts the scan instead).
+CREATE TABLE rf_rs_outer (g int) DISTRIBUTED REPLICATED;
+INSERT INTO rf_rs_outer SELECT i FROM generate_series(1, 5) i;
+CREATE TABLE rf_rs_probe (k int, v int) USING pax DISTRIBUTED REPLICATED;
+INSERT INTO rf_rs_probe SELECT i % 100, i FROM generate_series(1, 20000) i;
+CREATE TABLE rf_rs_build (k int, g int) DISTRIBUTED REPLICATED;
+INSERT INTO rf_rs_build SELECT i, i % 5 + 1 FROM generate_series(0, 99) i;
+ANALYZE rf_rs_outer, rf_rs_probe, rf_rs_build;
+SET enable_mergejoin TO off;
+DO $$
+DECLARE
+    q constant text := 'SELECT o.g, s.c, s.total FROM rf_rs_outer o,
+        LATERAL (SELECT count(*) AS c, sum(p.v) AS total
+          FROM rf_rs_probe p JOIN rf_rs_build b ON p.k = b.k WHERE b.g = o.g) s';
+    line text;
+    nestloop boolean := false;
+    hashjoin boolean := false;
+    baseline jsonb[];
+    filtered jsonb[];
+    matches bigint;
+BEGIN
+    FOR line IN EXECUTE 'EXPLAIN (COSTS OFF) ' || q LOOP
+        nestloop := nestloop OR line LIKE '%Nested Loop%';
+        hashjoin := hashjoin OR line LIKE '%Hash Join%';
+    END LOOP;
+    IF NOT (nestloop AND hashjoin) THEN
+        RAISE EXCEPTION 'expected a rescanned hash join below a nested loop';
+    END IF;
+    baseline := rf_query_rows(q, false);
+    filtered := rf_query_rows(q, true);
+    SELECT sum((v->>'c')::bigint) INTO matches FROM unnest(baseline) AS t(v);
+    IF cardinality(baseline) <> 5 OR matches IS DISTINCT FROM 20000::bigint OR
+        filtered IS DISTINCT FROM baseline THEN
+        RAISE EXCEPTION 'rescan mismatch (groups %, matches %, filtered groups %)',
+            cardinality(baseline), matches, cardinality(filtered);
+    END IF;
+END $$;
+DROP FUNCTION rf_query_rows(text, boolean);
+DROP TABLE rf_rs_outer, rf_rs_probe, rf_rs_build;
+RESET enable_mergejoin;
+RESET gp_enable_runtime_filter_pushdown;
+RESET pax.enable_row_filter;
+-- Keep a cast behind its guard after the PAX sampling window (65536 rows).
+-- A constant distribution key puts all 300000 rows in one scan. Interleave
+-- invalid values so that some remain after sampling, even without Bloom keys.
+SET gp_enable_runtime_filter TO off;
+SET gp_enable_predicate_pushdown TO on;
+SET pax.enable_sparse_filter TO on;
+CREATE TABLE rf_qual_order (bucket int, kind text, val text, k int)
+    USING pax DISTRIBUTED BY (bucket);
+INSERT INTO rf_qual_order
+SELECT 1, CASE WHEN i % 10000 = 1 THEN 'x' ELSE 'n' END,
+          CASE WHEN i % 10000 = 1 THEN 'abc' ELSE (i % 10)::text END,
+          (i / 10) % 10
+FROM generate_series(1, 300000) i ORDER BY i;
+SET pax.enable_row_filter TO off;
+SELECT count(*) FROM rf_qual_order WHERE kind = 'n' AND val::int > 5;
+ count  
+--------
+ 120000
+(1 row)
+
+SET pax.enable_row_filter TO on;
+SELECT count(*) FROM rf_qual_order WHERE kind = 'n' AND val::int > 5;
+ count  
+--------
+ 120000
+(1 row)
+
+-- Repeat with a Bloom filter and the same guarded cast. The constant
+-- distribution key keeps more than two sampling windows on the probe segment.
+SET optimizer TO on;
+SET gp_enable_runtime_filter_pushdown TO on;
+CREATE TABLE rf_qual_keys (k int) USING ao_column DISTRIBUTED REPLICATED;
+INSERT INTO rf_qual_keys VALUES (0), (2), (4), (6), (8);
+ANALYZE rf_qual_keys, rf_qual_order;
+DO $$
+DECLARE
+    q constant text := 'SELECT count(*) FROM rf_qual_order p JOIN rf_qual_keys b
+        ON p.k = b.k WHERE p.kind = ''n'' AND p.val::int > 5';
+    line text;
+    pruned boolean := false;
+    hits bigint;
+BEGIN
+    EXECUTE q INTO hits;
+    FOR line IN EXECUTE 'EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF) ' || q LOOP
+        pruned := pruned OR line ~ 'Rows Removed by Pushdown Runtime Filter: [1-9]';
+    END LOOP;
+    IF hits <> 60000 OR NOT pruned THEN
+        RAISE EXCEPTION 'expected 60000 matches with Bloom probes and guarded SQL quals, got %', hits;
+    END IF;
+END $$;
+DROP TABLE rf_qual_order, rf_qual_keys;
+RESET gp_enable_runtime_filter_pushdown;
+RESET pax.enable_row_filter;
+RESET pax.enable_sparse_filter;
+RESET gp_enable_predicate_pushdown;
+RESET enable_parallel;
 SET optimizer TO default;

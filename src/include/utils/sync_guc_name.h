@@ -106,6 +106,7 @@
 		"gp_resgroup_memory_policy_auto_fixed_mem",
 		"gp_resqueue_memory_policy_auto_fixed_mem",
 		"gp_resqueue_print_operator_memory_limits",
+		"gp_runtime_filter_min_reject_pct",
 		"gp_select_invisible",
 		"gp_sessionstate_loglevel",
 		"gp_snapshotadd_timeout",

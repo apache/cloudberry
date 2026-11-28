@@ -116,6 +116,8 @@ class PaxScanDesc {
   std::shared_ptr<DataBuffer<char>> reused_buffer_;
 
   MemoryContext memory_context_ = nullptr;
+  PlanState *qual_owner_ = nullptr;
+  ExprState *saved_qual_ = nullptr;
 
   // Only used by `scan analyze` and `scan sample`
   uint64 next_tuple_id_ = 0;

@@ -113,8 +113,9 @@ RuntimeFilterTupleNext(RuntimeFilterState *node)
 			if (hasnull)
 				break;
 
-			if (node->raw_value[idx])
-				node->value_buf[idx] = keyval;
+			if (node->outer_raw_width[idx] != 0)
+				node->value_buf[idx] = bloom_normalize_datum(keyval,
+														 node->outer_raw_width[idx]);
 			else
 			{
 				uint32 hkey;
@@ -164,7 +165,8 @@ ExecInitRuntimeFilter(RuntimeFilter *node, EState *estate, int eflags)
 	rfstate->inner_estimated = 0;
 	rfstate->inner_threshold = 0;
 	rfstate->value_buf = NULL;
-	rfstate->raw_value = NULL;
+	rfstate->outer_raw_width = NULL;
+	rfstate->inner_raw_width = NULL;
 	rfstate->bf = NULL;
 
 	/* CDB: Offer extra info for EXPLAIN ANALYZE. */
@@ -236,7 +238,8 @@ ExecInitRuntimeFilterFinish(RuntimeFilterState *node, double inner_rows)
 	hashops = node->hjstate->hj_HashOperators;
 
 	node->value_buf = (Datum *) palloc(hashops->length * sizeof(Datum));
-	node->raw_value = (bool *) palloc(hashops->length * sizeof(bool));
+	node->outer_raw_width = palloc0(list_length(hashops) * sizeof(int16));
+	node->inner_raw_width = palloc0(list_length(hashops) * sizeof(int16));
 	node->inner_estimated = (uint64) inner_rows;
 
 	node->bf = bloom_create_aggresive((int64) inner_rows, work_mem, random());
@@ -250,15 +253,14 @@ ExecInitRuntimeFilterFinish(RuntimeFilterState *node, double inner_rows)
 	{
 		Oid outer_typ;
 		Oid inner_typ;
-		bool outer_raw;
-		bool inner_raw;
 
 		op_input_types(lfirst_oid(lc), &outer_typ, &inner_typ);
-		outer_raw = IsRawInt8CmpType(outer_typ);
-		inner_raw = IsRawInt8CmpType(inner_typ);
-
-		/* can we directly compare the i-th value as int8? */
-		node->raw_value[i++] = outer_raw && inner_raw;
+		if (IsRawInt8CmpType(outer_typ) && IsRawInt8CmpType(inner_typ))
+		{
+			node->outer_raw_width[i] = get_typlen(outer_typ);
+			node->inner_raw_width[i] = get_typlen(inner_typ);
+		}
+		i++;
 	}
 }
 
@@ -269,6 +271,10 @@ ExecEndRuntimeFilter(RuntimeFilterState *node)
 		bloom_free(node->bf);
 	if (node->value_buf != NULL)
 		pfree(node->value_buf);
+	if (node->outer_raw_width != NULL)
+		pfree(node->outer_raw_width);
+	if (node->inner_raw_width != NULL)
+		pfree(node->inner_raw_width);
 
 	ExecFreeExprContext(&node->ps);
 	ExecEndNode(outerPlanState(node));

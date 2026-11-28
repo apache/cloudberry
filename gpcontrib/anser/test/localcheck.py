@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[3]
 TEST = ROOT / "gpcontrib/anser/test"
 TESTS = (
     "anserfold_test", "anserdetach_test", "ansernormalize_test",
-    "anserplanwalk_test", "ansercancel_test", "anserapi_test",
+    "anserplanwalk_test", "ansercancel_test", "anserapi_test", "anserinplace_test",
 )
 
 
