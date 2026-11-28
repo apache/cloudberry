@@ -1158,6 +1158,12 @@ dbms_pipe_list_pipes(PG_FUNCTION_ARGS)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("materialize mode required, but it is not allowed in this context")));
 
+	/* there is no expected tupdesc when called without a column list */
+	if (rsi->expectedDesc == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("function returning record called in context that cannot accept type record")));
+
 	if (rsi->expectedDesc->natts != DB_PIPES_COLS)
 		elog(ERROR, "unexpected number of returning columns");
 

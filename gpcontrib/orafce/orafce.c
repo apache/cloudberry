@@ -17,6 +17,17 @@
 #include "builtins.h"
 #include "pipe.h"
 #include "miscadmin.h"
+#include "utils/builtins.h"
+
+/*
+ * Cloudberry: GUCs marked GUC_GPDB_NEED_SYNC are passed to every gang the
+ * coordinator starts, so new segment processes get the session's value.
+ */
+#ifdef GUC_GPDB_NEED_SYNC
+#define ORAFCE_GUC_SYNC		GUC_GPDB_NEED_SYNC
+#else
+#define ORAFCE_GUC_SYNC		0
+#endif
 
 
 /*  default value */
@@ -184,10 +195,58 @@ _PG_init(void)
 							 0,
 							 NULL, NULL, NULL);
 
+	/*
+	 * Cloudberry: session settings made by plvdate.set_*,
+	 * plvsubst.setsubst() and oracle.set_nls_sort().  The functions keep
+	 * them here so that they reach the segments; see orafce_set_config().
+	 */
+	DefineCustomStringVariable("orafce.plvdate_state",
+							   "Calendar set by the plvdate functions.",
+							   NULL,
+							   &orafce_plvdate_state,
+							   "",
+							   PGC_USERSET,
+							   GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE |
+							   GUC_DISALLOW_IN_FILE | ORAFCE_GUC_SYNC,
+							   orafce_plvdate_state_check_hook,
+							   orafce_plvdate_state_assign_hook, NULL);
+
+	DefineCustomStringVariable("orafce.plvsubst_keyword",
+							   "Substitution keyword used by plvsubst.string(), set by plvsubst.setsubst().",
+							   NULL,
+							   &orafce_plvsubst_keyword,
+							   "%s",
+							   PGC_USERSET,
+							   ORAFCE_GUC_SYNC,
+							   NULL, NULL, NULL);
+
+	DefineCustomStringVariable("orafce.nls_sort",
+							   "Locale used by nlssort() without a locale argument, set by oracle.set_nls_sort().",
+							   NULL,
+							   &orafce_nls_sort,
+							   "",
+							   PGC_USERSET,
+							   ORAFCE_GUC_SYNC,
+							   NULL, NULL, NULL);
+
 	EmitWarningsOnPlaceholders("orafce");
 
 	RegisterXactCallback(orafce_xact_cb, NULL);
 	RegisterSubXactCallback(orafce_subxact_cb, NULL);
 
 	orafce_initialized = true;
+}
+
+/*
+ * Cloudberry: sets a GUC like set_config(name, value, false) does.  On the
+ * coordinator set_config() also sends the new value to the segments, so a
+ * session setting kept in a GUC is the same wherever a function runs.
+ */
+void
+orafce_set_config(const char *name, const char *value)
+{
+	DirectFunctionCall3(set_config_by_name,
+						CStringGetTextDatum(name),
+						CStringGetTextDatum(value),
+						BoolGetDatum(false));
 }

@@ -888,7 +888,17 @@ ora_date_trunc(PG_FUNCTION_ARGS)
 
 	CHECK_SEQ_SEARCH(f, "round/trunc format string");
 
+	/* like date_trunc(), leave infinity as it is */
+	if (DATE_NOT_FINITE(day))
+		PG_RETURN_DATEADT(day);
+
 	result = _ora_date_trunc(day, f);
+
+	if (!IS_VALID_DATE(result))
+		ereport(ERROR,
+				(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+				 errmsg("date out of range")));
+
 	PG_RETURN_DATEADT(result);
 }
 
@@ -1056,7 +1066,17 @@ ora_date_round(PG_FUNCTION_ARGS)
 
 	CHECK_SEQ_SEARCH(f, "round/trunc format string");
 
+	/* like date_trunc(), leave infinity as it is */
+	if (DATE_NOT_FINITE(day))
+		PG_RETURN_DATEADT(day);
+
 	result = _ora_date_round(day, f);
+
+	if (!IS_VALID_DATE(result))
+		ereport(ERROR,
+				(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+				 errmsg("date out of range")));
+
 	PG_RETURN_DATEADT(result);
 }
 

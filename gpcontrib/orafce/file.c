@@ -20,6 +20,7 @@
 #include "executor/spi.h"
 
 #include "access/htup_details.h"
+#include "access/parallel.h"
 #include "catalog/pg_type.h"
 #include "fmgr.h"
 #include "funcapi.h"
@@ -144,22 +145,47 @@ orafce_umask_check_hook(char **newval, void **extra, GucSource source)
 	char	   *ptr = *newval;
 	int		   *myextra;
 
-	if (orafce_initialized && IsNormalProcessingMode() && IsTransactionState())
+	/*
+	 * A value that comes from the client (SET, PGOPTIONS, the validation of
+	 * ALTER ROLE ... SET) needs the privilege.  That includes a value that
+	 * was set before the library was loaded and is applied now, when the
+	 * variable gets defined.  Values from the server configuration are
+	 * trusted, and a parallel worker gets the leader's checked values.
+	 */
+	if (source >= PGC_S_CLIENT && source != PGC_S_OVERRIDE &&
+		!InitializingParallelWorker)
 	{
-		if (!superuser())
+		bool		allowed = false;
+
+		/* the privileges cannot be checked outside a transaction */
+		if (IsTransactionState())
 		{
-			if (!OidIsValid(orafce_set_umask_roleid))
-				orafce_set_umask_roleid = get_role_oid("orafce_set_umask", false);
-
-			if (!has_privs_of_role(GetUserId(), orafce_set_umask_roleid))
+			if (superuser())
+				allowed = true;
+			else
 			{
-				GUC_check_errcode(ERRCODE_INSUFFICIENT_PRIVILEGE);
-				GUC_check_errmsg("permission denied to set \"orafce.umask\"");
-				GUC_check_errdetail("Only roles with privileges of the \"orafce_set_umask\" can set \"orafce.umask\".");
+				if (!OidIsValid(orafce_set_umask_roleid))
+					orafce_set_umask_roleid = get_role_oid("orafce_set_umask", true);
 
-				return false;
+				allowed = OidIsValid(orafce_set_umask_roleid) &&
+					has_privs_of_role(GetUserId(), orafce_set_umask_roleid);
 			}
 		}
+
+		if (!allowed)
+		{
+			GUC_check_errcode(ERRCODE_INSUFFICIENT_PRIVILEGE);
+			GUC_check_errmsg("permission denied to set \"orafce.umask\"");
+			GUC_check_errdetail("Only roles with privileges of the \"orafce_set_umask\" can set \"orafce.umask\".");
+
+			return false;
+		}
+	}
+
+	if (*ptr == '\0')
+	{
+		GUC_check_errdetail("umask must not be empty");
+		return false;
 	}
 
 	while (*ptr)
@@ -172,7 +198,7 @@ orafce_umask_check_hook(char **newval, void **extra, GucSource source)
 
 		if (digits > 3)
 		{
-			GUC_check_errdetail("number is too big (only four digits are allowed");
+			GUC_check_errdetail("number is too big (only four digits are allowed)");
 			return false;
 		}
 
@@ -1035,6 +1061,10 @@ check_secure_locality(const char *path)
 	 * SELECT 1 FROM utl_file.utl_file_dir WHERE CASE WHEN substring(dir from
 	 * '.$') = '/' THEN substring($1, 1, length(dir)) = dir ELSE substring($1,
 	 * 1, length(dir) + 1) = dir || '/' END
+	 *
+	 * The query runs with the caller's search_path, so every function and
+	 * operator is schema-qualified. Otherwise a user could put their own "="
+	 * in front of pg_catalog's and pass the check for any path.
 	 */
 
 	if (SPI_connect() < 0)
@@ -1049,10 +1079,14 @@ check_secure_locality(const char *path)
 		/* Don't use LIKE not to escape '_' and '%' */
 		SPIPlanPtr	p = SPI_prepare(
 									"SELECT 1 FROM utl_file.utl_file_dir"
-									" WHERE CASE WHEN substring(dir from '.$') = '/' THEN"
-									"  substring($1, 1, length(dir)) = dir"
+									" WHERE CASE WHEN pg_catalog.substring(dir, '.$')"
+									"  OPERATOR(pg_catalog.=) '/' THEN"
+									"  pg_catalog.substring($1, 1, pg_catalog.length(dir))"
+									"  OPERATOR(pg_catalog.=) dir"
 									" ELSE"
-									"  substring($1, 1, length(dir) + 1) = dir || '/'"
+									"  pg_catalog.substring($1, 1,"
+									"   pg_catalog.length(dir) OPERATOR(pg_catalog.+) 1)"
+									"  OPERATOR(pg_catalog.=) (dir OPERATOR(pg_catalog.||) '/')"
 									" END",
 									1, argtypes);
 
@@ -1101,7 +1135,8 @@ safe_named_location(text *location)
 
 		/* Don't use LIKE not to escape '_' and '%' */
 		SPIPlanPtr	p = SPI_prepare(
-									"SELECT dir FROM utl_file.utl_file_dir WHERE dirname = $1",
+									"SELECT dir FROM utl_file.utl_file_dir"
+									" WHERE dirname OPERATOR(pg_catalog.=) $1",
 									1, argtypes);
 
 		if (p == NULL || (plan = SPI_saveplan(p)) == NULL)

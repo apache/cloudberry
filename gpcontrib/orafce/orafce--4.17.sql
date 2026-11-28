@@ -294,22 +294,22 @@ COMMENT ON FUNCTION oracle.substr(text, int, int) IS 'Returns substring started 
 
 CREATE OR REPLACE FUNCTION oracle.substr(numeric,numeric)
 RETURNS text AS $$
-SELECT oracle.substr($1::text, pg_catalog.trunc($2)::int);
+SELECT oracle.substr($1::text,pg_catalog.trunc($2)::int);
 $$ LANGUAGE SQL IMMUTABLE PARALLEL SAFE;
 
 CREATE OR REPLACE FUNCTION oracle.substr(numeric,numeric,numeric)
 RETURNS text AS $$
-SELECT oracle.substr($1::text,  pg_catalog.trunc($2)::int,  pg_catalog.trunc($3)::int);
+SELECT oracle.substr($1::text,pg_catalog.trunc($2)::int,pg_catalog.trunc($3)::int);
 $$ LANGUAGE SQL IMMUTABLE PARALLEL SAFE;
 
 CREATE OR REPLACE FUNCTION oracle.substr(varchar,numeric)
 RETURNS text AS $$
-SELECT oracle.substr($1,  pg_catalog.trunc($2)::int);
+SELECT oracle.substr($1,pg_catalog.trunc($2)::int);
 $$ LANGUAGE SQL IMMUTABLE PARALLEL SAFE;
 
 CREATE OR REPLACE FUNCTION oracle.substr(varchar,numeric,numeric)
 RETURNS text AS $$
-SELECT oracle.substr($1,  pg_catalog.trunc($2)::int,  pg_catalog.trunc($3)::int);
+SELECT oracle.substr($1,pg_catalog.trunc($2)::int,pg_catalog.trunc($3)::int);
 $$ LANGUAGE SQL IMMUTABLE PARALLEL SAFE;
 
 CREATE OR REPLACE FUNCTION oracle.mod(smallint, smallint)
@@ -404,7 +404,7 @@ $$ LANGUAGE SQL IMMUTABLE PARALLEL SAFE;
 
 CREATE OR REPLACE FUNCTION oracle.subtract(oracle.date,oracle.date)
 RETURNS double precision AS $$
-SELECT  pg_catalog.date_part('epoch', ($1::timestamp - $2::timestamp)/3600/24);
+SELECT pg_catalog.date_part('epoch', ($1::timestamp - $2::timestamp)/3600/24);
 $$ LANGUAGE SQL IMMUTABLE PARALLEL SAFE;
 
 CREATE OPERATOR oracle.+ (
@@ -555,13 +555,13 @@ COMMENT ON FUNCTION oracle.from_tz(timestamp, text) IS 'Interprets a timestamp a
 
 CREATE FUNCTION oracle.hextoraw(text)
 RETURNS bytea
-AS $$ SELECT  pg_catalog.decode($1, 'hex') $$
+AS $$ SELECT pg_catalog.decode($1, 'hex') $$
 LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE;
 COMMENT ON FUNCTION oracle.hextoraw(text) IS 'Converts a string of hexadecimal digits to a raw (bytea) value';
 
 CREATE FUNCTION oracle.rawtohex(bytea)
 RETURNS text
-AS $$ SELECT  pg_catalog.upper(encode($1, 'hex')) $$
+AS $$ SELECT pg_catalog.upper(pg_catalog.encode($1, 'hex')) $$
 LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE;
 COMMENT ON FUNCTION oracle.rawtohex(bytea) IS 'Converts a raw (bytea) value to a string of hexadecimal digits';
 
@@ -1590,7 +1590,7 @@ COMMENT ON FUNCTION plvchr.quoted2(text) IS 'Quoted text between "';
 
 CREATE FUNCTION plvchr.stripped(str text, char_in text)
 RETURNS varchar
-AS $$ SELECT pg_catalog.TRANSLATE($1, 'A'||$2, 'A'); $$
+AS $$ SELECT pg_catalog.translate($1, 'A'||$2, 'A'); $$
 LANGUAGE SQL IMMUTABLE STRICT;
 COMMENT ON FUNCTION plvchr.stripped(text, text) IS 'Strips a string of all instances of the specified characters';
 
@@ -3768,10 +3768,8 @@ BEGIN
     RETURN NULL;
   END IF;
   modifiers := oracle.translate_oracle_modifiers($3, false);
-  IF (regexp_matches($1, $2, modifiers))[1] IS NOT NULL THEN
-    RETURN true;
-  END IF;
-  RETURN false;
+  -- Cloudberry: test for a match, the first group can be NULL in one
+  RETURN EXISTS (SELECT FROM pg_catalog.regexp_matches($1, $2, modifiers));
 END;
 $$
 LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE;
@@ -4118,7 +4116,7 @@ AS $$
   -- newline-sensitivity but not ^ and $ search.
   SELECT CASE WHEN (count(*) > 0) THEN false ELSE true END FROM regexp_matches($1, $2, 'p');
 $$
-LANGUAGE 'sql' STRICT;
+LANGUAGE 'sql' STRICT IMMUTABLE PARALLEL SAFE;
 
 -- REGEXP_NOT_LIKE( string text, pattern text, flags text ) -> boolean
 CREATE OR REPLACE FUNCTION oracle.regexp_not_like(text, text, text)
@@ -4132,13 +4130,10 @@ BEGIN
     RETURN NULL;
   END IF;
   modifiers := oracle.translate_oracle_modifiers($3, false);
-  IF (regexp_matches($1, $2, modifiers))[1] IS NOT NULL THEN
-    RETURN false;
-  END IF;
-  RETURN true;
+  RETURN NOT EXISTS (SELECT FROM pg_catalog.regexp_matches($1, $2, modifiers));
 END;
 $$
-LANGUAGE plpgsql;
+LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE;
 
 ----
 -- Add LEAST/GREATEST declaration to return NULL on NULL input.
@@ -4467,13 +4462,13 @@ CREATE SCHEMA utl_raw;
 
 CREATE FUNCTION utl_raw.cast_to_raw(text)
 RETURNS bytea
-AS $$ SELECT  pg_catalog.convert_to($1,  pg_catalog.current_setting('server_encoding')) $$
+AS $$ SELECT pg_catalog.convert_to($1, pg_catalog.current_setting('server_encoding')) $$
 LANGUAGE sql STABLE STRICT PARALLEL SAFE;
 COMMENT ON FUNCTION utl_raw.cast_to_raw(text) IS 'Converts a value to a raw (bytea) value using the database character set';
 
 CREATE FUNCTION utl_raw.cast_to_varchar2(bytea)
 RETURNS text
-AS $$ SELECT  pg_catalog.convert_from($1,  pg_catalog.current_setting('server_encoding')) $$
+AS $$ SELECT pg_catalog.convert_from($1, pg_catalog.current_setting('server_encoding')) $$
 LANGUAGE sql STABLE STRICT PARALLEL SAFE;
 COMMENT ON FUNCTION utl_raw.cast_to_varchar2(bytea) IS 'Converts a raw (bytea) value to a value using the database character set';
 

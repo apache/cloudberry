@@ -40,32 +40,16 @@ PG_FUNCTION_INFO_V1(plvsubst_subst);
 #define C_SUBST  "%s"
 
 
-static text *c_subst = NULL;
+/*
+ * The substitution keyword, set by plvsubst.setsubst().  It is kept in a GUC
+ * so that it reaches the segments.
+ */
+char	   *orafce_plvsubst_keyword = NULL;
 
-static void
-init_c_subst()
+static text *
+get_c_subst(void)
 {
-	if (!c_subst)
-	{
-		MemoryContext oldctx;
-
-		oldctx = MemoryContextSwitchTo(TopMemoryContext);
-		c_subst = cstring_to_text(C_SUBST);
-		MemoryContextSwitchTo(oldctx);
-	}
-}
-
-static void
-set_c_subst(text *sc)
-{
-	MemoryContext oldctx;
-
-	if (c_subst)
-		pfree(c_subst);
-
-	oldctx = MemoryContextSwitchTo(TopMemoryContext);
-	c_subst = sc ? TextPCopy(sc) : cstring_to_text(C_SUBST);
-	MemoryContextSwitchTo(oldctx);
+	return cstring_to_text(orafce_plvsubst_keyword ? orafce_plvsubst_keyword : C_SUBST);
 }
 
 static text *
@@ -195,14 +179,12 @@ plvsubst_string(text *template_in, ArrayType *vals_in, text *c_subst, FunctionCa
 Datum
 plvsubst_string_array(PG_FUNCTION_ARGS)
 {
-	init_c_subst();
-
 	if (PG_ARGISNULL(0) || PG_ARGISNULL(1))
 		PG_RETURN_NULL();
 
 	PG_RETURN_TEXT_P(plvsubst_string(PG_GETARG_TEXT_P(0),
 									 PG_GETARG_ARRAYTYPE_P(1),
-									 PG_ARGISNULL(2) ? c_subst : PG_GETARG_TEXT_P(2),
+									 PG_ARGISNULL(2) ? get_c_subst() : PG_GETARG_TEXT_P(2),
 									 fcinfo));
 }
 
@@ -215,8 +197,6 @@ plvsubst_string_string(PG_FUNCTION_ARGS)
 	LOCAL_FCINFO(locfcinfo, 2);
 
 	Oid			collation = PG_GET_COLLATION();
-
-	init_c_subst();
 
 	if (PG_ARGISNULL(0) || PG_ARGISNULL(1))
 		PG_RETURN_NULL();
@@ -241,7 +221,7 @@ plvsubst_string_string(PG_FUNCTION_ARGS)
 
 	PG_RETURN_TEXT_P(plvsubst_string(PG_GETARG_TEXT_P(0),
 									 array,
-									 PG_GETARG_IF_EXISTS(3, TEXT_P, c_subst),
+									 PG_GETARG_IF_EXISTS(3, TEXT_P, get_c_subst()),
 									 fcinfo));
 }
 
@@ -254,14 +234,15 @@ plvsubst_setsubst(PG_FUNCTION_ARGS)
 				 errmsg("substition is NULL"),
 				 errdetail("Substitution keyword may not be NULL.")));
 
-	set_c_subst(PG_GETARG_TEXT_P(0));
+	orafce_set_config("orafce.plvsubst_keyword",
+					  text_to_cstring(PG_GETARG_TEXT_P(0)));
 	PG_RETURN_VOID();
 }
 
 Datum
 plvsubst_setsubst_default(PG_FUNCTION_ARGS)
 {
-	set_c_subst(NULL);
+	orafce_set_config("orafce.plvsubst_keyword", C_SUBST);
 	PG_RETURN_VOID();
 }
 
@@ -269,6 +250,5 @@ plvsubst_setsubst_default(PG_FUNCTION_ARGS)
 Datum
 plvsubst_subst(PG_FUNCTION_ARGS)
 {
-	init_c_subst();
-	PG_RETURN_TEXT_P(TextPCopy(c_subst));
+	PG_RETURN_TEXT_P(get_c_subst());
 }

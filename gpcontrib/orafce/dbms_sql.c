@@ -282,12 +282,27 @@ dbms_sql_is_open(PG_FUNCTION_ARGS)
 }
 
 /*
+ * Returns the cursor's portal, or NULL when it has none.  The portal belongs
+ * to the (sub)transaction that opened it and is dropped when that aborts,
+ * while c->portal still points to it.  So check the cached pointer against
+ * the portal that is registered under the cursor's name.
+ */
+static Portal
+cursor_portal(CursorData *c)
+{
+	if (c->portal && SPI_cursor_find(c->cursorname) != c->portal)
+		c->portal = NULL;
+
+	return c->portal;
+}
+
+/*
  * Release all sources assigned to cursor
  */
 static void
 close_cursor(CursorData *c)
 {
-	if (c->executed && c->portal)
+	if (c->executed && cursor_portal(c))
 		SPI_cursor_close(c->portal);
 
 	/* release all assigned memory */
@@ -997,7 +1012,7 @@ execute(CursorData *c)
 	 * execution is still open in that case, and it uses the name that the new
 	 * execution needs, so close it first.
 	 */
-	if (c->executed && c->portal)
+	if (c->executed && cursor_portal(c))
 	{
 		SPI_cursor_close(c->portal);
 		c->portal = NULL;
@@ -1467,7 +1482,7 @@ fetch_rows(CursorData *c, bool exact)
 				(errcode(ERRCODE_INVALID_CURSOR_STATE),
 				 errmsg("cursor is not executed")));
 
-	if (!c->portal)
+	if (!cursor_portal(c))
 		ereport(ERROR,
 				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 				 errmsg("cursor has not portal")));

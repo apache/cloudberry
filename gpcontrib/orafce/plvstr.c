@@ -331,12 +331,14 @@ plvstr_normalize(PG_FUNCTION_ARGS)
 			case '\n':
 			case '\r':
 			case ' ':
-				write_spc = true;
+				/* leading whitespace is dropped, like trailing */
+				if (write_ptr > VARDATA(result))
+					write_spc = true;
 				break;
 
 			default:
 				/* ignore all other unvisible chars */
-				if (mblen > 1 || c > 32)
+				if (mblen > 1 || (unsigned char) c > 32)
 				{
 					if (write_spc)
 					{

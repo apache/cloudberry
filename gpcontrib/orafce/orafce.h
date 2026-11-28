@@ -57,6 +57,14 @@ extern void orafce_subxact_cb(SubXactEvent event, SubTransactionId mySubid,
 extern void orafce_umask_assign_hook(const char *newvalue, void *extra);
 extern bool orafce_umask_check_hook(char **newval, void **extra, GucSource source);
 
+extern char *orafce_plvdate_state;
+extern char *orafce_plvsubst_keyword;
+extern char *orafce_nls_sort;
+
+extern void orafce_plvdate_state_assign_hook(const char *newvalue, void *extra);
+extern bool orafce_plvdate_state_check_hook(char **newval, void **extra, GucSource source);
+extern void orafce_set_config(const char *name, const char *value);
+
 /*
  * pg_mblen_range() and pg_mblen_cstr() replace the now deprecated pg_mblen().
  * They were not added by a major release - they appeared in the minor releases

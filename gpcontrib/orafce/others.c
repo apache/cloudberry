@@ -51,7 +51,8 @@
 static char *lc_collate_cache = NULL;
 static size_t multiplication = 1;
 
-static text *def_locale = NULL;
+/* set by oracle.set_nls_sort(), kept in a GUC so that it reaches the segments */
+char	   *orafce_nls_sort = NULL;
 
 char	   *orafce_sys_guid_source;
 
@@ -272,14 +273,7 @@ ora_set_nls_sort(PG_FUNCTION_ARGS)
 {
 	text	   *arg = PG_GETARG_TEXT_P(0);
 
-	if (def_locale != NULL)
-	{
-		pfree(def_locale);
-		def_locale = NULL;
-	}
-
-	def_locale = (text *) MemoryContextAlloc(TopMemoryContext, VARSIZE(arg));
-	memcpy(def_locale, arg, VARSIZE(arg));
+	orafce_set_config("orafce.nls_sort", text_to_cstring(arg));
 
 	PG_RETURN_VOID();
 }
@@ -430,15 +424,7 @@ ora_nlssort(PG_FUNCTION_ARGS)
 	if (PG_ARGISNULL(0))
 		PG_RETURN_NULL();
 	if (PG_ARGISNULL(1))
-	{
-		if (def_locale != NULL)
-			locale = def_locale;
-		else
-		{
-			locale = palloc(VARHDRSZ);
-			SET_VARSIZE(locale, VARHDRSZ);
-		}
-	}
+		locale = cstring_to_text(orafce_nls_sort ? orafce_nls_sort : "");
 	else
 	{
 		locale = PG_GETARG_TEXT_PP(1);

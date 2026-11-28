@@ -224,6 +224,8 @@ ALTER FUNCTION plvsubst.string(text, text[], text) STABLE;
  * is known workaround with known risks.
  */
 ALTER FUNCTION oracle.orafce_concat2(oracle.nvarchar2, oracle.nvarchar2) IMMUTABLE;
+-- Cloudberry: the varchar2 version is the one 4.16 created as STABLE
+ALTER FUNCTION oracle.orafce_concat2(oracle.varchar2, oracle.varchar2) IMMUTABLE;
 
 /*
  * These bodies resolved upper(), encode(), trunc(), date_part(),
@@ -282,3 +284,129 @@ ALTER FUNCTION plvdate.isbizday(date) VOLATILE;
 ALTER FUNCTION dbms_random.initialize(integer) VOLATILE;
 ALTER FUNCTION dbms_random.seed(integer) VOLATILE;
 ALTER FUNCTION dbms_random.seed(text) VOLATILE;
+
+-- Cloudberry: regexp_like(text, text, text) and regexp_not_like() test for
+-- a match, not for the first group, which is NULL when it does not take part
+-- in the match; regexp_not_like() is IMMUTABLE PARALLEL SAFE like
+-- regexp_like().
+CREATE OR REPLACE FUNCTION oracle.regexp_like(text, text, text)
+RETURNS boolean
+AS $$
+DECLARE
+  modifiers text;
+BEGIN
+  -- Only modifier can be NULL
+  IF $1 IS NULL OR $2 IS NULL THEN
+    RETURN NULL;
+  END IF;
+  modifiers := oracle.translate_oracle_modifiers($3, false);
+  -- Cloudberry: test for a match, the first group can be NULL in one
+  RETURN EXISTS (SELECT FROM pg_catalog.regexp_matches($1, $2, modifiers));
+END;
+$$
+LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION oracle.regexp_not_like(text, text)
+RETURNS boolean
+AS $$
+  -- Oracle default behavior is newline-sensitive,
+  -- PostgreSQL not, so force 'p' modifier to affect
+  -- newline-sensitivity but not ^ and $ search.
+  SELECT CASE WHEN (count(*) > 0) THEN false ELSE true END FROM regexp_matches($1, $2, 'p');
+$$
+LANGUAGE 'sql' STRICT IMMUTABLE PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION oracle.regexp_not_like(text, text, text)
+RETURNS boolean
+AS $$
+DECLARE
+  modifiers text;
+BEGIN
+  -- Only modifier can be NULL
+  IF $1 IS NULL OR $2 IS NULL THEN
+    RETURN NULL;
+  END IF;
+  modifiers := oracle.translate_oracle_modifiers($3, false);
+  RETURN NOT EXISTS (SELECT FROM pg_catalog.regexp_matches($1, $2, modifiers));
+END;
+$$
+LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE;
+
+-- Cloudberry: orafce--4.8--4.9.sql defines these without
+-- regexp_count_pattern_fix(), unlike the 4.9 and later base scripts, so an
+-- extension created at 4.8 or earlier kept the old pattern handling.
+CREATE OR REPLACE FUNCTION oracle.regexp_substr(text, text)
+RETURNS text
+AS $$
+DECLARE
+  v_substr text;
+  v_pattern text;
+BEGIN
+  -- Without subexpression specified, assume 0 which mean that the first
+  -- position for the substring matching the whole pattern is returned.
+  -- We need to enclose the pattern between parentheses.
+  v_pattern := '(' || oracle.regexp_count_pattern_fix($2) || ')';
+
+  -- Oracle default behavior is newline-sensitive,
+  -- PostgreSQL not, so force 'p' modifier to affect
+  -- newline-sensitivity but not ^ and $ search.
+  v_substr := (SELECT (regexp_matches($1, v_pattern, 'sg'))[1] OFFSET 0 LIMIT 1);
+  RETURN v_substr;
+END;
+$$
+LANGUAGE plpgsql STRICT IMMUTABLE PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION oracle.regexp_substr(text, text, int)
+RETURNS text
+AS $$
+DECLARE
+  v_substr text;
+  v_pattern text;
+BEGIN
+  -- Check numeric arguments
+  IF $3 < 1 THEN
+    RAISE EXCEPTION 'argument ''position'' must be a number greater than 0';
+  END IF;
+
+  -- Without subexpression specified, assume 0 which mean that the first
+  -- position for the substring matching the whole pattern is returned.
+  -- We need to enclose the pattern between parentheses.
+  v_pattern := '(' || oracle.regexp_count_pattern_fix($2) || ')';
+
+  -- Oracle default behavior is newline-sensitive,
+  -- PostgreSQL not, so force 'p' modifier to affect
+  -- newline-sensitivity but not ^ and $ search.
+  v_substr := (SELECT (regexp_matches(substr($1, $3), v_pattern, 'sg'))[1] OFFSET 0 LIMIT 1);
+  RETURN v_substr;
+END;
+$$
+LANGUAGE plpgsql STRICT IMMUTABLE PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION oracle.regexp_substr(text, text, integer, integer)
+RETURNS text
+AS $$
+DECLARE
+  v_substr text;
+  v_pattern text;
+BEGIN
+  -- Check numeric arguments
+  IF $3 < 1 THEN
+    RAISE EXCEPTION 'argument ''position'' must be a number greater than 0';
+  END IF;
+  IF $4 < 1 THEN
+    RAISE EXCEPTION 'argument ''occurence'' must be a number greater than 0';
+  END IF;
+
+  -- Without subexpression specified, assume 0 which mean that the first
+  -- position for the substring matching the whole pattern is returned.
+  -- We need to enclose the pattern between parentheses.
+  v_pattern := '(' || oracle.regexp_count_pattern_fix($2) || ')';
+
+  -- Oracle default behavior is newline-sensitive,
+  -- PostgreSQL not, so force 'p' modifier to affect
+  -- newline-sensitivity but not ^ and $ search.
+  v_substr := (SELECT (regexp_matches(substr($1, $3), v_pattern, 'sg'))[1] OFFSET $4 - 1 LIMIT 1);
+  RETURN v_substr;
+END;
+$$
+LANGUAGE plpgsql STRICT IMMUTABLE PARALLEL SAFE;
