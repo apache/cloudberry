@@ -48,6 +48,7 @@ test: horology
 test: regex
 # test: oidjoins
 test: type_sanity
+test: gp_hyperloglog
 test: opr_sanity
 test: misc_sanity
 test: comments

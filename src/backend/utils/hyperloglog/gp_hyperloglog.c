@@ -64,6 +64,7 @@
 #include "utils/builtins.h"
 #include "utils/bytea.h"
 #include "utils/lsyscache.h"
+#include "utils/memutils.h"
 #include "lib/stringinfo.h"
 #include "libpq/pqformat.h"
 #include "varatt.h"
@@ -83,6 +84,9 @@ static GpHLLCounter gp_hll_compress_dense_unpacked(GpHLLCounter hloglog);
 static GpHLLCounter gp_hll_decompress_unpacked(GpHLLCounter hloglog);
 static GpHLLCounter gp_hll_decompress_dense(GpHLLCounter hloglog);
 static GpHLLCounter gp_hll_decompress_dense_unpacked(GpHLLCounter hloglog);
+static void gp_hll_validate_pglz(const char *source, Size source_len,
+								 Size raw_size);
+static void gp_hll_validate_state(GpHLLCounter hloglog);
 
 /* ---------------------- function definitions --------------------------- */
 
@@ -273,14 +277,15 @@ gp_hll_merge(GpHLLCounter counter1, GpHLLCounter counter2)
 
 	int i;
 	GpHLLCounter result = counter1;
-	int upper_bound = POW2(result->b);
+	int upper_bound;
 
-	/* check compatibility first */
-	//if (counter1->b != counter2->b && -1*counter1->b != counter2->b)
-	//elog(ERROR, "index size of estimators differs (%d != %d)", counter1->b, counter2->b);
-	//else if (counter1->binbits != counter2->binbits)
-	//elog(ERROR, "bin size of estimators differs (%d != %d)", counter1->binbits, counter2->binbits);
+	/* Both arrays are indexed using counter1's dimensions below. */
+	if (counter1->b != counter2->b || counter1->binbits != counter2->binbits)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("cannot merge incompatible gp_hyperloglog estimators")));
 
+	upper_bound = POW2(result->b);
 
 	/* Keep the maximum register value for each bin */
 	for (i = 0; i < upper_bound; i += 1){
@@ -1075,17 +1080,18 @@ gp_hll_b64_decode(const char *src, unsigned len, char *dst)
 }
 
 
-int
-gp_b64_enc_len(const char *src, unsigned srclen)
+Size
+gp_b64_enc_len(Size srclen)
 {
-	/* 3 bytes will be converted to 4, linefeed after 76 chars */
-	return (srclen + 2) * 4 / 3 + srclen / (76 * 3 / 4);
+	/* Three input bytes produce four output bytes, plus a linefeed per row. */
+	return (srclen / 3) * 4 + (srclen % 3 ? 4 : 0) + srclen / 57;
 }
 
-int
-gp_b64_dec_len(const char *src, unsigned srclen)
+Size
+gp_b64_dec_len(Size srclen)
 {
-	return (srclen * 3) >> 2;
+	/* This is an upper bound; the decoder ignores whitespace and padding. */
+	return (srclen / 4) * 3 + ((srclen % 4) * 3) / 4;
 }
 
 /* PG_GETARG macros for GpHLLCounter's that does version checking */
@@ -1124,10 +1130,181 @@ static GpHLLCounter pg_check_hll_version(GpHLLCounter hloglog);
 static GpHLLCounter
 pg_check_hll_version(GpHLLCounter hloglog)
 {
-	if (hloglog->version != STRUCT_VERSION){
-		elog(ERROR,"ERROR: The stored counter is version %u while the library is version %u. Please change library version or use upgrade function to upgrade the counter",hloglog->version,STRUCT_VERSION);
-	}
+	gp_hll_validate_state(hloglog);
 	return hloglog;
+}
+
+/*
+ * Validate compressed data before passing it to pglz_decompress().  The
+ * decompressor expects a complete match tag before reading it, while malformed
+ * input can otherwise make it read past the end of the source buffer.
+ */
+static void
+gp_hll_validate_pglz(const char *source, Size source_len, Size raw_size)
+{
+	const unsigned char *sp = (const unsigned char *) source;
+	const unsigned char *srcend = sp + source_len;
+	Size		decoded = 0;
+
+	while (sp < srcend && decoded < raw_size)
+	{
+		unsigned char ctrl = *sp++;
+		int			ctrlc;
+
+		for (ctrlc = 0; ctrlc < 8 && sp < srcend && decoded < raw_size;
+			 ctrlc++, ctrl >>= 1)
+		{
+			if (ctrl & 1)
+			{
+				int			len;
+				int			off;
+
+				if (srcend - sp < 2)
+					goto invalid;
+
+				len = (sp[0] & 0x0f) + 3;
+				off = ((sp[0] & 0xf0) << 4) | sp[1];
+				sp += 2;
+				if (len == 18)
+				{
+					if (sp >= srcend)
+						goto invalid;
+					len += *sp++;
+				}
+
+				if (off == 0 || off > decoded)
+					goto invalid;
+
+				decoded += Min((Size) len, raw_size - decoded);
+			}
+			else
+			{
+				decoded++;
+				sp++;
+			}
+		}
+	}
+
+	if (sp == srcend && decoded == raw_size)
+		return;
+
+invalid:
+	ereport(ERROR,
+			(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+			 errmsg("invalid compressed gp_hyperloglog estimator state")));
+}
+
+/*
+ * Validate the serialized state before any operation trusts its dimensions or
+ * accesses its register array.  Sparse states are no longer supported.
+ */
+static void
+gp_hll_validate_state(GpHLLCounter hloglog)
+{
+	Size		state_size = VARSIZE_ANY(hloglog);
+	Size		data_offset = offsetof(GpHLLData, data);
+	Size		data_size;
+	Size		packed_size;
+	Size		raw_size;
+	int			b;
+	int			i;
+	uint8		register_max;
+
+	if (state_size < data_offset)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+				 errmsg("invalid gp_hyperloglog estimator state")));
+
+	if (hloglog->version != STRUCT_VERSION)
+		elog(ERROR,"ERROR: The stored counter is version %u while the library is version %u. Please change library version or use upgrade function to upgrade the counter",hloglog->version,STRUCT_VERSION);
+
+	b = hloglog->b;
+	if ((b < MIN_INDEX_BITS && b > -MIN_INDEX_BITS) ||
+		b > MAX_INDEX_BITS || b < -MAX_INDEX_BITS ||
+		hloglog->binbits < MIN_BINBITS || hloglog->binbits > MAX_BINBITS ||
+		hloglog->idx != -1 || hloglog->format > UNPACKED_UNPACKED)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+				 errmsg("invalid gp_hyperloglog estimator state")));
+
+	raw_size = ((Size) 1) << (b < 0 ? -b : b);
+	packed_size = (raw_size * hloglog->binbits + 7) / 8;
+	data_size = state_size - data_offset;
+	register_max = (1U << hloglog->binbits) - 1;
+
+	if (b < 0)
+	{
+		Size		compressed_size;
+		char	   *decoded;
+
+		/* Compressed states are emitted only in the packed format. */
+		if (hloglog->format != PACKED || state_size <= sizeof(GpHLLData))
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+					 errmsg("invalid gp_hyperloglog estimator state")));
+
+		compressed_size = state_size - sizeof(GpHLLData);
+		if (compressed_size >= packed_size)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+					 errmsg("invalid gp_hyperloglog estimator state")));
+		gp_hll_validate_pglz(hloglog->data, compressed_size, raw_size);
+
+		/*
+		 * Compressed payloads contain one byte per register.  Check their
+		 * values too, since the unpacked estimate path indexes a lookup table.
+		 */
+		decoded = palloc(raw_size);
+		if (pglz_decompress(hloglog->data, compressed_size, decoded,
+							raw_size, true) != raw_size)
+		{
+			pfree(decoded);
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+					 errmsg("invalid compressed gp_hyperloglog estimator state")));
+		}
+		if (hloglog->binbits <= MAX_PRECOMPUTED_EXPONENTS_BINWIDTH)
+		{
+			for (i = 0; i < raw_size; i++)
+			{
+				if ((uint8) decoded[i] > register_max)
+				{
+					pfree(decoded);
+					ereport(ERROR,
+							(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+							 errmsg("invalid gp_hyperloglog estimator register value")));
+				}
+			}
+		}
+		pfree(decoded);
+	}
+	else if (hloglog->format == PACKED || hloglog->format == PACKED_UNPACKED)
+	{
+		/* Dense register access reads one byte past the packed payload. */
+		if (data_size < packed_size + 1)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+					 errmsg("gp_hyperloglog estimator data is too short")));
+	}
+	else
+	{
+		if (data_size < raw_size)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+					 errmsg("gp_hyperloglog estimator data is too short")));
+
+		if (hloglog->binbits <= MAX_PRECOMPUTED_EXPONENTS_BINWIDTH)
+		{
+			for (i = 0; i < raw_size; i++)
+			{
+				if ((uint8) hloglog->data[i] > register_max)
+					ereport(ERROR,
+							(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+							 errmsg("invalid gp_hyperloglog estimator register value")));
+			}
+		}
+	}
+
 }
 
 Datum
@@ -1227,18 +1404,24 @@ gp_hyperloglog_get_estimate(PG_FUNCTION_ARGS)
 Datum
 gp_hyperloglog_out(PG_FUNCTION_ARGS)
 {
-	int16   datalen, resultlen, res;
+	Size   datalen, resultlen;
+	int    res;
 	char     *result;
-	bytea    *data = PG_GETARG_BYTEA_P(0);
+	GpHLLCounter data = PG_GETARG_HLL_P(0);
 
 	datalen = VARSIZE_ANY_EXHDR(data);
-	resultlen = gp_b64_enc_len(VARDATA_ANY(data), datalen);
+	resultlen = gp_b64_enc_len(datalen);
+	if (resultlen > MaxAllocSize - 1)
+		ereport(ERROR,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				 errmsg("gp_hyperloglog estimator is too large to encode")));
 	result = palloc(resultlen + 1);
-	res = gp_hll_b64_encode(VARDATA_ANY(data),datalen, result);
+	res = gp_hll_b64_encode(VARDATA_ANY(data), (unsigned) datalen, result);
 
-	/* Make this FATAL 'cause we've trodden on memory ... */
-	if (res > resultlen)
-		elog(FATAL, "overflow - encode estimate too small");
+	if (res < 0 || (Size) res > resultlen)
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("could not encode gp_hyperloglog estimator")));
 
 	result[res] = '\0';
 
@@ -1250,18 +1433,29 @@ gp_hyperloglog_in(PG_FUNCTION_ARGS)
 {
 	bytea      *result;
 	char       *data = PG_GETARG_CSTRING(0);
-	int16      datalen, resultlen, res;
+	Size       datalen, resultlen;
+	int        res;
 
 	datalen = strlen(data);
-	resultlen = gp_b64_dec_len(data,datalen);
+	if (datalen > MaxAllocSize)
+		ereport(ERROR,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				 errmsg("gp_hyperloglog estimator text is too large")));
+	resultlen = gp_b64_dec_len(datalen);
+	if (resultlen > MaxAllocSize - VARHDRSZ)
+		ereport(ERROR,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				 errmsg("gp_hyperloglog estimator is too large to decode")));
 	result = palloc(VARHDRSZ + resultlen);
-	res = gp_hll_b64_decode(data, datalen, VARDATA(result));
+	res = gp_hll_b64_decode(data, (unsigned) datalen, VARDATA(result));
 
-	/* Make this FATAL 'cause we've trodden on memory ... */
-	if (res > resultlen)
-		elog(FATAL, "overflow - decode estimate too small");
+	if (res < 0 || (Size) res > resultlen)
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("could not decode gp_hyperloglog estimator")));
 
 	SET_VARSIZE(result, VARHDRSZ + res);
+	(void) pg_check_hll_version((GpHLLCounter) result);
 
 	PG_RETURN_BYTEA_P(result);
 }
