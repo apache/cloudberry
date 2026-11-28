@@ -29,9 +29,16 @@ class GpLoadTestCase(unittest.TestCase):
     def mockDoNothing(self):
         pass
 
+    def new_gpload(self, gpload_param):
+        # gpload opens its log file and leaves it open until the process
+        # exits. Close it after each test to avoid a ResourceWarning.
+        gploader = gpload(gpload_param)
+        self.addCleanup(gploader.logfile.close)
+        return gploader
+
     def help_test_with_config(self, gpload_param, expected_begin_value, expected_commit_value):
         print(gpload_param)
-        gploader = gpload(gpload_param)
+        gploader = self.new_gpload(gpload_param)
         gploader.read_config()
         gploader.db = self
         gploader.db.query = Mock(side_effect=self.mockQuery)
@@ -43,7 +50,7 @@ class GpLoadTestCase(unittest.TestCase):
         self.assertEqual(self.commit, expected_commit_value)
 
     def test_reuse_exttbl_with_logerrors_and_limit(self):
-        gploader = gpload(['-f', os.path.join(os.path.dirname(__file__), 'gpload_merge.yml')])
+        gploader = self.new_gpload(['-f', os.path.join(os.path.dirname(__file__), 'gpload_merge.yml')])
         gploader.read_config()
         gploader.locations = [ 'gpfdist://localhost:8080/test' ]
         rejectLimit = '9999'
@@ -94,7 +101,7 @@ class GpLoadTestCase(unittest.TestCase):
                               False)
 
     def test_case_configvalue(self):
-        gploader = gpload(['-f', os.path.join(os.path.dirname(__file__), 'allconfig.yml')])
+        gploader = self.new_gpload(['-f', os.path.join(os.path.dirname(__file__), 'allconfig.yml')])
         self.assertEqual('test', gploader.getconfig('gpload:output:table'))
         self.assertEqual(1981, gploader.getconfig('gpload:input:source:port', int))
         self.assertEqual(True, gploader.getconfig('gpload:preload:reuse_tables', bool))

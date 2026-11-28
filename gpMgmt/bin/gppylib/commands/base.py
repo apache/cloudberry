@@ -523,7 +523,7 @@ class RemoteExecutionContext(LocalExecutionContext):
         if count == SSH_MAX_RETRY:
             return
         time.sleep(SSH_RETRY_DELAY)
-        LocalExecutionContext.execute(self, cmd, pickled)
+        LocalExecutionContext.execute(self, cmd, pickled=pickled)
         if (cmd.get_stderr().startswith('ssh_exchange_identification: Connection closed by remote host')):
             self.__retry(cmd, count + 1, pickled)
 

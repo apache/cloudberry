@@ -62,3 +62,5 @@ class WorkerPoolTestCase(unittest.TestCase):
         cmd = Command('test', cmdStr='ls /tmp')
         self.subject.execute(cmd)
         self.assertEqual(Command.get_stderr.call_count, 11)
+        # Each retry must wait for its command to finish.
+        self.assertIsNotNone(self.subject.proc.returncode)
