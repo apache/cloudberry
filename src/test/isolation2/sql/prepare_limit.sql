@@ -17,6 +17,14 @@
 
 5: select gp_inject_fault_infinite('dtm_before_insert_forget_comitted', 'suspend', 1);
 
+-- This test uses a suspended commit as a test barrier.  Keep the concurrent
+-- writers from waiting for that barrier while obtaining their snapshots.
+1: SET debug_disable_distributed_snapshot = on;
+2: SET debug_disable_distributed_snapshot = on;
+3: SET debug_disable_distributed_snapshot = on;
+4: SET debug_disable_distributed_snapshot = on;
+5: SET debug_disable_distributed_snapshot = on;
+
 -- Note first insert after table create triggers auto_stats and leads to 2pc
 -- transaction.
 

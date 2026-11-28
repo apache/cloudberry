@@ -32,6 +32,19 @@ CREATE
  Success:                 
 (1 row)
 
+-- This test uses a suspended commit as a test barrier.  Keep the concurrent
+-- writers from waiting for that barrier while obtaining their snapshots.
+1: SET debug_disable_distributed_snapshot = on;
+SET
+2: SET debug_disable_distributed_snapshot = on;
+SET
+3: SET debug_disable_distributed_snapshot = on;
+SET
+4: SET debug_disable_distributed_snapshot = on;
+SET
+5: SET debug_disable_distributed_snapshot = on;
+SET
+
 -- Note first insert after table create triggers auto_stats and leads to 2pc
 -- transaction.
 

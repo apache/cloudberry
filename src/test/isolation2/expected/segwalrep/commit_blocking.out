@@ -90,6 +90,10 @@ INSERT 1
 3&: commit;  <waiting ...>
 
 -- this should not block due to direct dispatch to primary with active synced mirror
+-- Do not wait for the blocked commit: this test exercises direct dispatch on
+-- another primary while synchronous replication is waiting.
+4: SET debug_disable_distributed_snapshot = on;
+SET
 4: insert into segwalrep_commit_blocking values (6);
 INSERT 1
 
