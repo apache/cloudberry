@@ -1,0 +1,54 @@
+# LANGUAGE message translation file for pg_hint_plan description.
+# Copyright (C) 2012-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+# This file is distributed under the same license as the pg_hint_plan
+# package.
+# Julien Rouhaud <rjuju123@gmail.com>, 2023.
+# Tatsuro Yamada <yamatattsu@gmail.com>, 2023.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: pg_hint_plan\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-03-02 12:25+0800\n"
+"PO-Revision-Date: 2023-07-15 12:23+0900\n"
+"Last-Translator: Tatsuro Yamada <yamatattsu@gmail.com>\n"
+"Language-Team: \n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.12.1\n"
+"X-Generator: Poedit 3.3.1\n"
+
+#: ../../description.md:1 36ecf3f5b33149abba3c29147babecec
+msgid "Description"
+msgstr "機能説明"
+
+#: ../../description.md:3 876c61bdb07540eaac5fa67254a8b6d0
+msgid "Basic Usage"
+msgstr "基本的な使用方法"
+
+#: ../../description.md:5 da1244d0fca640da9c0728a3d004e462
+msgid ""
+"`pg_hint_plan` reads hinting phrases in a comment of special form given "
+"with the target SQL statement. The special form is beginning by the "
+"character sequence `\"/\\*+\"` and ends with `\"\\*/\"`. Hint phrases "
+"are consists of hint name and following parameters enclosed by "
+"parentheses and delimited by spaces. Each hinting phrases can be "
+"delimited by new lines for readability."
+msgstr ""
+"`pg_hint_plan`は対象のSQL文と一緒に与えられた特殊形式のコメント内のヒン"
+"ト句を読みます。\n"
+"特殊形式は `\"/*+\"` で始まり、`\"*/\"` で終わります。\n"
+"ヒント句はヒント名とそれに続くパラメータを括弧で囲み、スペースで区切った"
+"ものです。\n"
+"各ヒント句は読みやすくするために改行することができます。"
+
+#: ../../description.md:11 f580a4b229054382a573c06093f5a37e
+msgid ""
+"In the example below, hash join is selected as the joining method and "
+"scanning `pgbench_accounts` by sequential scan method."
+msgstr ""
+"以下の例では、結合方法にハッシュ結合を選択しシーケンシャルスキャンの方法"
+"で`pgbench_accounts`をスキャンしています。"

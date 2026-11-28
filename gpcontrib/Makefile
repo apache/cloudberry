@@ -97,5 +97,6 @@ installcheck:
 	$(MAKE) -C gp_sparse_vector installcheck
 	$(MAKE) -C gp_toolkit installcheck
 	$(MAKE) -C gp_exttable_fdw installcheck
+	$(MAKE) -C pg_hint_plan installcheck
 	if [ "$(with_diskquota)" = "yes" ]; then $(MAKE) -C diskquota installcheck; fi
 	if [ "$(with_anser)" = "yes" ]; then $(MAKE) -C anser installcheck; fi

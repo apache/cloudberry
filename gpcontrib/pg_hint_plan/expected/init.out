@@ -9,27 +9,35 @@ CREATE TABLE t4 (id int PRIMARY KEY, val int);
 CREATE TABLE t5 (id int PRIMARY KEY, val int);
 CREATE TABLE p1 (id int PRIMARY KEY, val int);
 CREATE TABLE p1_c1 (LIKE p1 INCLUDING ALL, CHECK (id <= 100)) INHERITS(p1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "id" with inherited definition
 NOTICE:  merging column "val" with inherited definition
 CREATE TABLE p1_c2 (LIKE p1 INCLUDING ALL, CHECK (id > 100 AND id <= 200)) INHERITS(p1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "id" with inherited definition
 NOTICE:  merging column "val" with inherited definition
 CREATE TABLE p1_c3 (LIKE p1 INCLUDING ALL, CHECK (id > 200 AND id <= 300)) INHERITS(p1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "id" with inherited definition
 NOTICE:  merging column "val" with inherited definition
 CREATE TABLE p1_c4 (LIKE p1 INCLUDING ALL, CHECK (id > 300)) INHERITS(p1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "id" with inherited definition
 NOTICE:  merging column "val" with inherited definition
 CREATE TABLE p1_c1_c1 (LIKE p1 INCLUDING ALL, CHECK (id <= 50)) INHERITS(p1_c1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "id" with inherited definition
 NOTICE:  merging column "val" with inherited definition
 CREATE TABLE p1_c1_c2 (LIKE p1 INCLUDING ALL, CHECK (id > 50 AND id <= 100)) INHERITS(p1_c1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "id" with inherited definition
 NOTICE:  merging column "val" with inherited definition
 CREATE TABLE p1_c3_c1 (LIKE p1 INCLUDING ALL, CHECK (id > 200 AND id <= 250)) INHERITS(p1_c3);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "id" with inherited definition
 NOTICE:  merging column "val" with inherited definition
 CREATE TABLE p1_c3_c2 (LIKE p1 INCLUDING ALL, CHECK (id > 250 AND id <= 300)) INHERITS(p1_c3);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "id" with inherited definition
 NOTICE:  merging column "val" with inherited definition
 CREATE TABLE p2 (id int PRIMARY KEY, val text);
@@ -46,27 +54,35 @@ CREATE INDEX p2_expr2 ON p2 ((id * 2 < 120));
 CREATE INDEX p2_val_idx6 ON p2 (val) WHERE val >= '50' AND val < '51';
 CREATE INDEX p2_val_idx7 ON p2 (val) WHERE id < 120;
 CREATE TABLE p2_c1 (LIKE p2 INCLUDING ALL, CHECK (id <= 100)) INHERITS(p2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "id" with inherited definition
 NOTICE:  merging column "val" with inherited definition
 CREATE TABLE p2_c2 (LIKE p2 INCLUDING ALL, CHECK (id > 100 AND id <= 200)) INHERITS(p2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "id" with inherited definition
 NOTICE:  merging column "val" with inherited definition
 CREATE TABLE p2_c3 (LIKE p2 INCLUDING ALL, CHECK (id > 200 AND id <= 300)) INHERITS(p2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "id" with inherited definition
 NOTICE:  merging column "val" with inherited definition
 CREATE TABLE p2_c4 (LIKE p2 INCLUDING ALL, CHECK (id > 300)) INHERITS(p2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "id" with inherited definition
 NOTICE:  merging column "val" with inherited definition
 CREATE TABLE p2_c1_c1 (LIKE p2 INCLUDING ALL, CHECK (id <= 50)) INHERITS(p2_c1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "id" with inherited definition
 NOTICE:  merging column "val" with inherited definition
 CREATE TABLE p2_c1_c2 (LIKE p2 INCLUDING ALL, CHECK (id > 50 AND id <= 100)) INHERITS(p2_c1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "id" with inherited definition
 NOTICE:  merging column "val" with inherited definition
 CREATE TABLE p2_c3_c1 (LIKE p2 INCLUDING ALL, CHECK (id > 200 AND id <= 250)) INHERITS(p2_c3);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "id" with inherited definition
 NOTICE:  merging column "val" with inherited definition
 CREATE TABLE p2_c3_c2 (LIKE p2 INCLUDING ALL, CHECK (id > 250 AND id <= 300)) INHERITS(p2_c3);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "id" with inherited definition
 NOTICE:  merging column "val" with inherited definition
 CREATE TABLE s0.t1 (id int PRIMARY KEY, val int);
@@ -170,6 +186,8 @@ SELECT * FROM settings;
  jit                                                  | on          | Query Tuning / Other Planner Options
  join_collapse_limit                                  | 20          | Query Tuning / Other Planner Options
  optimizer_join_order                                 | exhaustive2 | Query Tuning / Other Planner Options
+ optimizer_nestloop_factor                            | 1024        | Query Tuning / Other Planner Options
+ optimizer_sort_factor                                | 1           | Query Tuning / Other Planner Options
  plan_cache_mode                                      | auto        | Query Tuning / Other Planner Options
  cpu_index_tuple_cost                                 | 0.005       | Query Tuning / Planner Cost Constants
  cpu_operator_cost                                    | 0.0025      | Query Tuning / Planner Cost Constants
@@ -206,10 +224,12 @@ SELECT * FROM settings;
  enable_partition_pruning                             | on          | Query Tuning / Planner Method Configuration
  enable_partitionwise_aggregate                       | off         | Query Tuning / Planner Method Configuration
  enable_partitionwise_join                            | off         | Query Tuning / Planner Method Configuration
+ enable_presorted_aggregate                           | on          | Query Tuning / Planner Method Configuration
  enable_seqscan                                       | on          | Query Tuning / Planner Method Configuration
  enable_sort                                          | on          | Query Tuning / Planner Method Configuration
  enable_tidscan                                       | on          | Query Tuning / Planner Method Configuration
  gp_adjust_selectivity_for_outerjoins                 | on          | Query Tuning / Planner Method Configuration
+ gp_cte_sharing                                       | off         | Query Tuning / Planner Method Configuration
  gp_dynamic_partition_pruning                         | on          | Query Tuning / Planner Method Configuration
  gp_enable_agg_distinct                               | on          | Query Tuning / Planner Method Configuration
  gp_enable_agg_distinct_pruning                       | on          | Query Tuning / Planner Method Configuration
@@ -227,12 +247,25 @@ SELECT * FROM settings;
  gp_statistics_pullup_from_child_partition            | off         | Query Tuning / Planner Method Configuration
  gp_statistics_use_fkeys                              | off         | Query Tuning / Planner Method Configuration
  optimizer                                            | off         | Query Tuning / Planner Method Configuration
+ optimizer_array_expansion_threshold                  | 20          | Query Tuning / Planner Method Configuration
+ optimizer_cte_inlining_bound                         | 0           | Query Tuning / Planner Method Configuration
+ optimizer_damping_factor_filter                      | 0.75        | Query Tuning / Planner Method Configuration
+ optimizer_damping_factor_groupby                     | 0.75        | Query Tuning / Planner Method Configuration
+ optimizer_damping_factor_join                        | 0           | Query Tuning / Planner Method Configuration
+ optimizer_dpe_stats                                  | on          | Query Tuning / Planner Method Configuration
  optimizer_enable_associativity                       | off         | Query Tuning / Planner Method Configuration
+ optimizer_enable_dynamicbitmapscan                   | on          | Query Tuning / Planner Method Configuration
  optimizer_enable_dynamicindexonlyscan                | on          | Query Tuning / Planner Method Configuration
+ optimizer_enable_dynamicindexscan                    | on          | Query Tuning / Planner Method Configuration
+ optimizer_enable_right_outer_join                    | on          | Query Tuning / Planner Method Configuration
+ optimizer_force_three_stage_scalar_dqa               | on          | Query Tuning / Planner Method Configuration
  optimizer_join_arity_for_associativity_commutativity | 18          | Query Tuning / Planner Method Configuration
  optimizer_join_order_threshold                       | 10          | Query Tuning / Planner Method Configuration
  optimizer_metadata_caching                           | on          | Query Tuning / Planner Method Configuration
-(71 rows)
+ optimizer_penalize_broadcast_threshold               | 100000      | Query Tuning / Planner Method Configuration
+ optimizer_push_group_by_below_setop_threshold        | 10          | Query Tuning / Planner Method Configuration
+ parallel_query_use_streaming_hashagg                 | on          | Query Tuning / Planner Method Configuration
+(88 rows)
 
 ANALYZE;
 reset optimizer;
