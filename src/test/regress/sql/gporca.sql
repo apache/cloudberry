@@ -2660,7 +2660,7 @@ analyze tcorr1;
 analyze tcorr2;
 
 
-explain
+explain (costs off)
 select *
 from tcorr1 out
 where out.b in (select coalesce(tcorr2.a, 99)
@@ -2672,7 +2672,7 @@ from tcorr1 out
 where out.b in (select coalesce(tcorr2.a, 99)
                 from tcorr1 left outer join tcorr2 on tcorr1.a=tcorr2.a+out.a);
 
-explain
+explain (costs off)
 select *
 from tcorr1 out
 where out.b in (select max(tcorr2.b + out.b - 1)
@@ -2685,7 +2685,7 @@ where out.b in (select max(tcorr2.b + out.b - 1)
                 from tcorr2
                 where tcorr2.a=out.a);
 
-explain
+explain (costs off)
 select *
 from tcorr1 out
 where out.b in (select coalesce(tcorr2_d.c, 99)
@@ -2710,7 +2710,7 @@ where out.b in (select coalesce(tcorr2.a, 99)
 
 set optimizer_join_order to exhaustive2;
 
-explain
+explain (costs off)
 select *
 from tcorr1 out
 where out.b in (select coalesce(tcorr2.a, 99)
@@ -2721,7 +2721,7 @@ from tcorr1 out
 where out.b in (select coalesce(tcorr2.a, 99)
                 from tcorr1 left outer join tcorr2 on tcorr1.a=tcorr2.a+out.a);
 
-explain
+explain (costs off)
 select *
 from tcorr1 out
 where out.b in (select max(tcorr2.b + out.b - 1)
@@ -2734,7 +2734,7 @@ where out.b in (select max(tcorr2.b + out.b - 1)
                 from tcorr2
                 where tcorr2.a=out.a);
 
-explain
+explain (costs off)
 select *
 from tcorr1 out
 where out.b in (select coalesce(tcorr2_d.c, 99)

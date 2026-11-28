@@ -101,6 +101,9 @@ private:
 	// does the query have replicated tables
 	BOOL m_has_replicated_tables;
 
+	// does the query have parallel operators (parallel table scans)
+	BOOL m_has_parallel_operators;
+
 	// does this plan have a direct dispatchable filter
 	CExpressionArray *m_direct_dispatchable_filters;
 
@@ -181,6 +184,12 @@ public:
 	}
 
 	void
+	SetHasParallelOperators()
+	{
+		m_has_parallel_operators = true;
+	}
+
+	void
 	AddDirectDispatchableFilterCandidate(CExpression *filter_expression)
 	{
 		filter_expression->AddRef();
@@ -203,6 +212,12 @@ public:
 	HasReplicatedTables() const
 	{
 		return m_has_replicated_tables;
+	}
+
+	BOOL
+	HasParallelOperators() const
+	{
+		return m_has_parallel_operators;
 	}
 
 	CExpressionArray *

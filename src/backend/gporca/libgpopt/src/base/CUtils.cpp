@@ -48,6 +48,7 @@
 #include "gpopt/operators/CPhysicalCTEProducer.h"
 #include "gpopt/operators/CPhysicalMotionRandom.h"
 #include "gpopt/operators/CPhysicalNLJoin.h"
+#include "gpopt/operators/CPhysicalParallelHashJoin.h"
 #include "gpopt/operators/CPredicateUtils.h"
 #include "gpopt/operators/CScalarArray.h"
 #include "gpopt/operators/CScalarArrayCoerceExpr.h"
@@ -1248,6 +1249,31 @@ CUtils::FHashJoin(COperator *pop)
 	return (nullptr != popHJN);
 }
 
+// check if a given operator is a parallel hash join
+BOOL
+CUtils::FParallelHashJoin(COperator *pop)
+{
+	GPOS_ASSERT(nullptr != pop);
+
+	CPhysicalParallelHashJoin *popPHJN = nullptr;
+	if (pop->FPhysical())
+	{
+		popPHJN = dynamic_cast<CPhysicalParallelHashJoin *>(pop);
+	}
+
+	return (nullptr != popPHJN);
+}
+
+// check if a given operator is a parallel left outer hash join
+BOOL
+CUtils::FParallelLeftOuterHashJoin(COperator *pop)
+{
+	GPOS_ASSERT(nullptr != pop);
+
+	return (nullptr != pop &&
+			COperator::EopPhysicalParallelLeftOuterHashJoin == pop->Eopid());
+}
+
 // check if a given operator is a correlated nested loops join
 BOOL
 CUtils::FCorrelatedNLJoin(COperator *pop)
@@ -1287,7 +1313,7 @@ CUtils::FPhysicalJoin(COperator *pop)
 	return FHashJoin(pop) || FNLJoin(pop);
 }
 
-// check if a given operator is a physical agg
+// check if a given operator is a physical scan
 BOOL
 CUtils::FPhysicalScan(COperator *pop)
 {
@@ -1302,6 +1328,15 @@ CUtils::FPhysicalScan(COperator *pop)
 	}
 
 	return (nullptr != popScan);
+}
+
+// check if a given operator is a physical parallel scan
+BOOL
+CUtils::FPhysicalParallelScan(COperator *pop)
+{
+	GPOS_ASSERT(nullptr != pop);
+
+	return (COperator::EopPhysicalParallelTableScan == pop->Eopid());
 }
 
 // check if a given operator is a physical agg
@@ -4250,7 +4285,8 @@ CUtils::FDuplicateHazardDistributionSpec(CDistributionSpec *pds)
 	CDistributionSpec::EDistributionType edt = pds->Edt();
 
 	return CDistributionSpec::EdtStrictReplicated == edt ||
-		   CDistributionSpec::EdtUniversal == edt;
+		   CDistributionSpec::EdtUniversal == edt ||
+		   CDistributionSpec::EdtReplicatedWorkers == edt;
 }
 
 // Check if duplicate values can be generated when executing the given Motion expression,

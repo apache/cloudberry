@@ -482,6 +482,11 @@ private:
 		CMemoryPool *mp, CParseHandlerManager *parse_handler_mgr,
 		CParseHandlerBase *parse_handler_root);
 
+	// construct a broadcast workers motion parse handler
+	static CParseHandlerBase *CreateBroadcastWorkersMotionParseHandler(
+		CMemoryPool *mp, CParseHandlerManager *parse_handler_mgr,
+		CParseHandlerBase *parse_handler_root);
+
 	// construct a redistribute motion parse handler
 	static CParseHandlerBase *CreateRedistributeMotionParseHandler(
 		CMemoryPool *mp, CParseHandlerManager *parse_handler_mgr,
@@ -494,6 +499,11 @@ private:
 
 	// construct a random motion parse handler
 	static CParseHandlerBase *CreateRandomMotionParseHandler(
+		CMemoryPool *mp, CParseHandlerManager *parse_handler_mgr,
+		CParseHandlerBase *parse_handler_root);
+
+	// construct a worker-level hash distribute motion parse handler
+	static CParseHandlerBase *CreateHashDistributeWorkersMotionParseHandler(
 		CMemoryPool *mp, CParseHandlerManager *parse_handler_mgr,
 		CParseHandlerBase *parse_handler_root);
 

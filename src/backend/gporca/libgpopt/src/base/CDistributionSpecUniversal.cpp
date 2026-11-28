@@ -56,7 +56,8 @@ CDistributionSpecUniversal::Matches(const CDistributionSpec *pds) const
 	return (CDistributionSpec::EdtUniversal == edt ||
 			CDistributionSpec::EdtSingleton == edt ||
 			CDistributionSpec::EdtStrictReplicated == edt ||
-			CDistributionSpec::EdtReplicated == edt);
+			CDistributionSpec::EdtReplicated == edt ||
+			CDistributionSpec::EdtReplicatedWorkers == edt);
 }
 
 void

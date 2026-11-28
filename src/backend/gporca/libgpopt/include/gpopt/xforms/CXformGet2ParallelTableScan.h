@@ -46,10 +46,6 @@ using namespace gpos;
 class CXformGet2ParallelTableScan : public CXformImplementation
 {
 public:
-	// check if memo contains logical operators that are incompatible with parallel execution
-	// (shared with other parallel scan xforms, e.g. CXformDynamicGet2ParallelAppendTableScan)
-	static BOOL FHasParallelIncompatibleOps(CExpressionHandle &exprhdl);
-
 	CXformGet2ParallelTableScan(const CXformGet2ParallelTableScan &) = delete;
 
 	// ctor

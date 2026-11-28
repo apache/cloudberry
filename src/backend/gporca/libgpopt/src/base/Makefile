@@ -36,6 +36,7 @@ OBJS        = CAutoOptCtxt.o \
               CDistributionSpecNonSingleton.o \
               CDistributionSpecRandom.o \
               CDistributionSpecReplicated.o \
+              CDistributionSpecReplicatedWorkers.o \
               CDistributionSpecRouted.o \
               CDistributionSpecSingleton.o \
               CDistributionSpecStrictHashed.o \

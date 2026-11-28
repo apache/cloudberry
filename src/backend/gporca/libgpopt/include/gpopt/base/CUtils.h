@@ -565,6 +565,9 @@ public:
 	// check if a given operator is a physical scan
 	static BOOL FPhysicalScan(COperator *pop);
 
+	// check if a given operator is a physical parallel scan
+	static BOOL FPhysicalParallelScan(COperator *pop);
+
 	// check if a given operator is a physical agg
 	static BOOL FPhysicalAgg(COperator *pop);
 
@@ -585,6 +588,12 @@ public:
 
 	// check if a given operator is a hash join
 	static BOOL FHashJoin(COperator *pop);
+
+	// check if a given operator is a parallel hash join
+	static BOOL FParallelHashJoin(COperator *pop);
+
+	// check if a given operator is a parallel left outer hash join
+	static BOOL FParallelLeftOuterHashJoin(COperator *pop);
 
 	// check if a given operator is a correlated nested loops join
 	static BOOL FCorrelatedNLJoin(COperator *pop);

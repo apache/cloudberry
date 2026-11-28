@@ -57,6 +57,7 @@
 #include "gpopt/optimizer/COptimizerConfig.h"
 #include "gpopt/search/CGroupExpression.h"
 #include "gpopt/search/CGroupProxy.h"
+#include "gpopt/search/CMemo.h"
 #include "gpopt/xforms/CDecorrelator.h"
 #include "gpopt/xforms/CSubqueryHandler.h"
 #include "gpopt/xforms/CXformExploration.h"
@@ -97,6 +98,94 @@ CXformUtils::ExfpLogicalJoin2PhysicalJoin(CExpressionHandle &exprhdl)
 	}
 
 	return CXform::ExfpHigh;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CXformUtils::FHasParallelIncompatibleOps
+//
+//	@doc:
+//		Check if memo contains operations incompatible with parallel execution
+//
+//---------------------------------------------------------------------------
+BOOL
+CXformUtils::FHasParallelIncompatibleOps(CMemo *pmemo)
+{
+	if (nullptr == pmemo)
+	{
+		return false;
+	}
+
+	// Iterate through all groups in memo to check for parallel-incompatible operations
+	const ULONG_PTR ulGroups = pmemo->UlpGroups();
+	for (ULONG_PTR ul = 0; ul < ulGroups; ul++)
+	{
+		CGroup *pgroupCurrent = pmemo->Pgroup(ul);
+		if (nullptr == pgroupCurrent)
+		{
+			continue;
+		}
+
+		// Check all group expressions in this group using CGroupProxy
+		CGroupProxy gp(pgroupCurrent);
+		CGroupExpression *pgexpr = gp.PgexprFirst();
+		while (nullptr != pgexpr)
+		{
+			COperator::EOperatorId eopid = pgexpr->Pop()->Eopid();
+
+			// Check for CTE-related operators (incompatible with parallel execution)
+			if (COperator::EopLogicalCTEProducer == eopid ||
+				COperator::EopLogicalCTEConsumer == eopid ||
+				COperator::EopLogicalSequence == eopid ||
+				COperator::EopLogicalSequenceProject == eopid)
+			{
+				return true;
+			}
+
+			if (COperator::EopLogicalUnion == eopid ||
+				COperator::EopLogicalUnionAll == eopid ||
+				COperator::EopLogicalIntersect == eopid ||
+				COperator::EopLogicalIntersectAll == eopid ||
+				COperator::EopLogicalDifference == eopid ||
+				COperator::EopLogicalDifferenceAll == eopid)
+			{
+				// Set operations are not supported in parallel plans
+				return true;
+			}
+
+			pgexpr = gp.PgexprNext(pgexpr);
+		}
+	}
+
+	return false;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CXformUtils::FHasParallelIncompatibleOps
+//
+//	@doc:
+//		Check if memo (extracted from expression handle) contains
+//		operations incompatible with parallel execution
+//
+//---------------------------------------------------------------------------
+BOOL
+CXformUtils::FHasParallelIncompatibleOps(CExpressionHandle &exprhdl)
+{
+	CGroupExpression *pgexprHandle = exprhdl.Pgexpr();
+	if (nullptr == pgexprHandle)
+	{
+		return false;
+	}
+
+	CGroup *pgroup = pgexprHandle->Pgroup();
+	if (nullptr == pgroup)
+	{
+		return false;
+	}
+
+	CMemo *pmemo = pgroup->Pmemo();
+	return FHasParallelIncompatibleOps(pmemo);
 }
 
 

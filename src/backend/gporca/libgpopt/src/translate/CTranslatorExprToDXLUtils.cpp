@@ -1449,7 +1449,8 @@ CTranslatorExprToDXLUtils::FProjListContainsSubplanWithBroadCast(
 {
 	if (pdxlnPrjList->GetOperator()->GetDXLOperator() == EdxlopScalarSubPlan)
 	{
-		gpdxl::Edxlopid rgeopidMotion[] = {EdxlopPhysicalMotionBroadcast};
+		gpdxl::Edxlopid rgeopidMotion[] = {EdxlopPhysicalMotionBroadcast,
+										   EdxlopPhysicalMotionBroadcastWorkers};
 		return FHasDXLOp(pdxlnPrjList, rgeopidMotion,
 						 GPOS_ARRAY_SIZE(rgeopidMotion));
 	}

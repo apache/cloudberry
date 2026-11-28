@@ -293,6 +293,13 @@ CPhysicalHashJoin::PdsMatch(CMemoryPool *mp, CDistributionSpec *pds,
 			return PdshashedMatching(mp,
 									 CDistributionSpecHashed::PdsConvert(pds),
 									 ulSourceChildIndex);
+		//FIXME:
+		case CDistributionSpec::EdtWorkerRandom:
+			// Regular HashJoin cannot handle WorkerRandom distributions.
+			// Return NonSingleton so that FValidContext() will reject this context later.
+			// ORCA will then explore alternatives: ParallelHashJoin or Motion nodes.
+			GPOS_ASSERT(false &&
+					 "Regular HashJoin cannot handle WorkerRandom distributions");
 
 		default:
 			GPOS_ASSERT(CDistributionSpec::EdtStrictReplicated == pds->Edt() ||
@@ -799,7 +806,8 @@ CPhysicalHashJoin::PdsRequiredReplicate(
 
 	// otherwise, require second child to deliver non-singleton distribution
 	GPOS_ASSERT(CDistributionSpec::EdtStrictReplicated == pdsInner->Edt() ||
-				CDistributionSpec::EdtTaintedReplicated == pdsInner->Edt());
+				CDistributionSpec::EdtTaintedReplicated == pdsInner->Edt() ||
+				CDistributionSpec::EdtReplicatedWorkers == pdsInner->Edt());
 	return GPOS_NEW(mp) CDistributionSpecNonSingleton();
 }
 
@@ -1150,6 +1158,55 @@ CPhysicalHashJoin::EpetOrder(CExpressionHandle &,  // exprhdl
 	// hash join is not order-preserving;
 	// any order requirements have to be enforced on top
 	return CEnfdProp::EpetRequired;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CPhysicalHashJoin::FValidContext
+//
+//	@doc:
+//		Check if optimization context is valid;
+//		Regular (non-parallel) hash join should not accept WorkerRandom
+//		distribution from children
+//
+//---------------------------------------------------------------------------
+BOOL
+CPhysicalHashJoin::FValidContext(CMemoryPool *,  // mp
+								 COptimizationContext *,  // poc
+								 COptimizationContextArray *pdrgpocChild) const
+{
+	// Regular hash join should reject WorkerRandom distributions from children.
+	// Only ParallelHashJoin can handle WorkerRandom distributions.
+	if (nullptr != pdrgpocChild)
+	{
+		// Check both children's derived distributions
+		for (ULONG ul = 0; ul < pdrgpocChild->Size(); ul++)
+		{
+			COptimizationContext *pocChild = (*pdrgpocChild)[ul];
+			if (nullptr != pocChild)
+			{
+				CCostContext *pccBest = pocChild->PccBest();
+				if (nullptr != pccBest)
+				{
+					CDrvdPropPlan *pdpplan = pccBest->Pdpplan();
+					if (nullptr != pdpplan)
+					{
+						CDistributionSpec *pds = pdpplan->Pds();
+						if (CDistributionSpec::EdtWorkerRandom == pds->Edt())
+						{
+							// Regular HashJoin cannot handle WorkerRandom input
+							// Reject this context so ORCA will try ParallelHashJoin or add Motion
+							// GPOS_TRACE(GPOS_WSZ_LIT("Regular HashJoin cannot handle WorkerRandom input"));
+							return false;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return true;
 }
 
 
