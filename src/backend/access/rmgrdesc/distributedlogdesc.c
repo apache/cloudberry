@@ -22,6 +22,7 @@ DistributedLog_desc(StringInfo buf, XLogReaderState *record)
 {
 	uint8		info = XLogRecGetInfo(record) & ~XLR_INFO_MASK;
 	char		*rec = XLogRecGetData(record);
+	uint32		len = XLogRecGetDataLen(record);
 
 	if (info == DISTRIBUTEDLOG_ZEROPAGE)
 	{
@@ -35,7 +36,16 @@ DistributedLog_desc(StringInfo buf, XLogReaderState *record)
 		int			page;
 
 		memcpy(&page, rec, sizeof(int));
-		appendStringInfo(buf, "truncate before: %d", page);
+		if (len >= SizeOfDistributedLogTruncate)
+		{
+			xl_distributedlog_truncate xlrec;
+
+			memcpy(&xlrec, rec, SizeOfDistributedLogTruncate);
+			appendStringInfo(buf, "truncate before: %d, truncGXid: " UINT64_FORMAT,
+							 xlrec.page, xlrec.truncGXid);
+		}
+		else
+			appendStringInfo(buf, "truncate before: %d", page);
 	}
 	else
 		appendStringInfo(buf, "UNKNOWN");
