@@ -7,7 +7,10 @@ from gpconfig_modules.guc_collection import GucCollection
 
 class GucCollectionTest(GpTestCase):
     def setUp(self):
-        self.subject = GucCollection()
+        # GucCollection needs the gpconfig options.  These tests do not use
+        # --coordinatoronly.
+        self.options = Mock(coordinatoronly=False)
+        self.subject = GucCollection(self.options)
         row = ['-1', 'guc_name', 'coordinator_value']
         self.db_seg_guc_1 = DatabaseSegmentGuc(row)
         self.subject.update(self.db_seg_guc_1)
@@ -101,7 +104,7 @@ class GucCollectionTest(GpTestCase):
         self.assertIn("Segment     value: value | not set in file", self.subject.report())
 
     def test_values_unset_in_file_only(self):
-        self.subject = GucCollection() # remove existing DatabaseSegmentGucs
+        self.subject = GucCollection(self.options) # remove existing DatabaseSegmentGucs
 
         row = ['0', 'guc_name', None, 'dbid']
         self.subject.update(FileSegmentGuc(row))
@@ -169,7 +172,7 @@ class GucCollectionTest(GpTestCase):
         self.assertIn("Segment     value: value", self.subject.report())
 
     def test_update_when_only_file_segments_overwriting_succeeds(self):
-        self.subject = GucCollection()
+        self.subject = GucCollection(self.options)
         row = ['-1', 'guc_name', 'coordinator_value', 'dbid1']
         self.subject.update(FileSegmentGuc(row))
         row = ['0', 'guc_name', 'value', 'dbid2']
@@ -183,7 +186,7 @@ class GucCollectionTest(GpTestCase):
         self.assertIn("Segment     value: value", self.subject.report())
 
     def test_update_when_only_file_segments_primary_and_mirror_succeeds(self):
-        self.subject = GucCollection()
+        self.subject = GucCollection(self.options)
         row = ['-1', 'guc_name', 'coordinator_value', 'dbid1']
         self.subject.update(FileSegmentGuc(row))
         row = ['0', 'guc_name', 'value', 'dbid2']
@@ -197,7 +200,7 @@ class GucCollectionTest(GpTestCase):
         self.assertIn("Segment     value: value", self.subject.report())
 
     def test_update_when_only_file_segments_primary_and_mirror_fails(self):
-        self.subject = GucCollection()
+        self.subject = GucCollection(self.options)
         row = ['-1', 'guc_name', None, 'dbid1']
         self.subject.update(FileSegmentGuc(row))
         row = ['0', 'guc_name', 'value', 'dbid2']
@@ -213,7 +216,7 @@ class GucCollectionTest(GpTestCase):
         self.assertIn("[context: 0] [dbid: dbid4] [name: guc_name] [value: value]", self.subject.report())
 
     def test_for_sorting_based_on_context_and_dbid_with_file_option_succeeds(self):
-        self.subject = GucCollection()
+        self.subject = GucCollection(self.options)
         row = ['-1', 'guc_name', None, 'dbid1']
         self.subject.update(FileSegmentGuc(row))
         row = ['0', 'guc_name', 'value', 'dbid2']
@@ -235,7 +238,7 @@ class GucCollectionTest(GpTestCase):
                           "[context: 1] [dbid: dbid6] [name: guc_name] [value: value]", self.subject.report())
 
     def test_for_sorting_based_on_context_and_dbid_with_file_compare_option_succeeds(self):
-        self.subject = GucCollection()
+        self.subject = GucCollection(self.options)
         row = ['-1', 'guc_name', 'coordinator_value', 'dbid1']
         self.subject.update(FileSegmentGuc(row))
         row = ['0', 'guc_name', 'value', 'dbid2']
