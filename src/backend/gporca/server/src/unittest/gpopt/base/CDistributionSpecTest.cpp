@@ -21,6 +21,7 @@
 #include "gpopt/base/CDistributionSpecReplicated.h"
 #include "gpopt/base/CDistributionSpecSingleton.h"
 #include "gpopt/base/CDistributionSpecUniversal.h"
+#include "gpopt/base/CDistributionSpecWorkerRandom.h"
 #include "gpopt/eval/CConstExprEvaluatorDefault.h"
 #include "gpopt/mdcache/CMDAccessor.h"
 #include "gpopt/mdcache/CMDCache.h"
@@ -671,6 +672,23 @@ CDistributionSpecTest::EresUnittest_Hashed()
 	GPOS_UNITTEST_ASSERT(!pdsrandom->FSatisfies(pdshashed1));
 	GPOS_UNITTEST_ASSERT(!pdshashed1->FSatisfies(pdsrandom));
 
+	// worker-random over hashed base can satisfy hashed requests, which lets
+	// hash joins preserve parallel scan distributions without enforcing motion.
+	CDistributionSpecHashed *pdshashed19 = pdshashed2->Copy(mp);
+	CDistributionSpecWorkerRandom *pdsWorkerRandomHashed =
+		CDistributionSpecWorkerRandom::PdsCreateWorkerRandom(mp, 2,
+															 pdshashed19);
+	pdshashed19->Release();
+	GPOS_UNITTEST_ASSERT(pdsWorkerRandomHashed->FSatisfies(pdshashed1));
+
+	CDistributionSpecRandom *pdsSegmentRandom =
+		GPOS_NEW(mp) CDistributionSpecRandom();
+	CDistributionSpecWorkerRandom *pdsWorkerRandomRandom =
+		CDistributionSpecWorkerRandom::PdsCreateWorkerRandom(mp, 2,
+															 pdsSegmentRandom);
+	pdsSegmentRandom->Release();
+	GPOS_UNITTEST_ASSERT(!pdsWorkerRandomRandom->FSatisfies(pdshashed2));
+
 	// hashed and any
 	CDistributionSpecAny *pdsany =
 		GPOS_NEW(mp) CDistributionSpecAny(COperator::EopSentinel);
@@ -721,6 +739,8 @@ CDistributionSpecTest::EresUnittest_Hashed()
 	pdssSegment->Release();
 	pdsreplicated->Release();
 	pdsrandom->Release();
+	pdsWorkerRandomHashed->Release();
+	pdsWorkerRandomRandom->Release();
 	pdsany->Release();
 	pdsuniversal->Release();
 
