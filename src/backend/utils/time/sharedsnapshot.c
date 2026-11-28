@@ -774,6 +774,7 @@ readSharedLocalSnapshot_forCursor(Snapshot snapshot, DtxContext distributedTrans
 			 dumpsnapshot->subxcnt);
 	snapshot->subxcnt = dumpsnapshot->subxcnt;
 	snapshot->suboverflowed = dumpsnapshot->suboverflowed;
+	snapshot->takenDuringRecovery = dumpsnapshot->takenDuringRecovery;
 	if (snapshot->subxcnt > 0)
 		memcpy(snapshot->subxip, dumpsnapshot->subxip,
 			   snapshot->subxcnt * sizeof(TransactionId));

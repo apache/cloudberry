@@ -2470,6 +2470,7 @@ ReadSharedLocalSnapshot(Snapshot snapshot)
 	snapshot->xcnt = serialized_snapshot->xcnt;
 	snapshot->subxcnt = serialized_snapshot->subxcnt;
 	snapshot->suboverflowed = serialized_snapshot->suboverflowed;
+	snapshot->takenDuringRecovery = serialized_snapshot->takenDuringRecovery;
 	snapshot->curcid = serialized_snapshot->curcid;
 
 	/* We now capture our current view of the xip/combocid arrays */
