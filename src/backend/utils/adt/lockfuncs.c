@@ -20,6 +20,7 @@
 #include "storage/predicate_internals.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
+#include "utils/memutils.h"
 
 #include "libpq-fe.h"
 #include "cdb/cdbdisp_query.h"
@@ -74,10 +75,31 @@ typedef struct
 	int			nextResultset;	/* which result set is being processed */
 	int			nextRow;		/* which row in current result set will be processed next */
 	struct pg_result **segresults;	/* pg_result for each segDB */
+	MemoryContextCallback segresults_cb;	/* cleanup callback for segresults */
 } PG_Lock_Status;
 
 /* Number of columns in pg_locks output */
 #define NUM_LOCK_STATUS_COLUMNS		19
+
+/*
+ * Cleanup callback to ensure libpq PGresult memory is freed even if
+ * pg_lock_status() is terminated early (e.g. LIMIT) or errors out.
+ */
+static void
+pg_lock_status_cleanup(void *arg)
+{
+	PG_Lock_Status *mystatus = (PG_Lock_Status *) arg;
+
+	if (mystatus->segresults != NULL)
+	{
+		for (int i = 0; i < mystatus->numsegresults; i++)
+			PQclear(mystatus->segresults[i]);
+
+		pfree(mystatus->segresults);
+		mystatus->segresults = NULL;
+		mystatus->numsegresults = 0;
+	}
+}
 
 /*
  * VXIDGetDatum - Construct a text representation of a VXID
@@ -203,9 +225,7 @@ pg_lock_status(PG_FUNCTION_ARGS)
 		if (Gp_role == GP_ROLE_DISPATCH)
 		{
 			CdbPgResults cdb_pgresults = {NULL, 0};
-			StringInfoData buffer;
-			int i;
-			initStringInfo(&buffer);
+			int			i;
 
 			/*
 			 * Why dispatch something here, rather than do a UNION ALL in pg_locks view, and
@@ -276,8 +296,13 @@ pg_lock_status(PG_FUNCTION_ARGS)
 				 * This query better match the tupledesc we just made above.
 				 */
 				if (PQnfields(cdb_pgresults.pg_results[i]) != tupdesc->natts)
+				{
+					int			nfields = PQnfields(cdb_pgresults.pg_results[i]);
+
+					cdbdisp_clearCdbPgResults(&cdb_pgresults);
 					elog(ERROR, "unexpected number of columns returned from pg_lock_status() on segment (%d, expected %d)",
-						 PQnfields(cdb_pgresults.pg_results[i]), tupdesc->natts);
+						 nfields, tupdesc->natts);
+				}
 			}
 
 			mystatus->numsegresults = cdb_pgresults.numResults;
@@ -286,6 +311,12 @@ pg_lock_status(PG_FUNCTION_ARGS)
 			 * will still exist on the subsequent calls.
 			 */
 			mystatus->segresults = cdb_pgresults.pg_results;
+			mystatus->segresults_cb.func = pg_lock_status_cleanup;
+			mystatus->segresults_cb.arg = mystatus;
+			MemoryContextRegisterResetCallback(funcctx->multi_call_memory_ctx,
+											   &mystatus->segresults_cb);
+
+			funcctx->attinmeta = TupleDescGetAttInMetadata(funcctx->tuple_desc);
 		}
 
 		MemoryContextSwitchTo(oldcontext);
@@ -543,8 +574,7 @@ pg_lock_status(PG_FUNCTION_ARGS)
 	{
 		HeapTuple	tuple;
 		Datum		result;
-		Datum		values[NUM_LOCK_STATUS_COLUMNS];
-		bool		nulls[NUM_LOCK_STATUS_COLUMNS];
+		char	   *values[NUM_LOCK_STATUS_COLUMNS];
 		int			i;
 		int			whichresultset;
 		int			whichrow;
@@ -555,7 +585,8 @@ pg_lock_status(PG_FUNCTION_ARGS)
 		 * Because we have one result set per segDB (rather than one big result
 		 * set with everything), we use mystatus->nextResultset and
 		 * mystatus->nextRow to track which result set we are on, and which row
-		 * within that result set we are returning, respectively.
+		 * within that result set we are returning, respectively. Each segment
+		 * reports at least the virtual transaction lock of the dispatched query.
 		 */
 		whichresultset = mystatus->nextResultset;
 		whichrow = mystatus->nextRow;
@@ -578,56 +609,19 @@ pg_lock_status(PG_FUNCTION_ARGS)
 		mystatus->currIdx++;
 
 		/*
-		 * Form tuple with appropriate data we got from the segDBs
-		 */
-		MemSet(values, 0, sizeof(values));
-		MemSet(nulls, false, sizeof(nulls));
-
-		/*
-		 * For each column, extract out the value (which comes out in text).
-		 * Convert it to the appropriate datatype to match our tupledesc,
-		 * and put that in values.
-		 * The columns look like this (from select statement earlier):
-		 *
-		 * "   (locktype text, database oid, relation oid, page int4, tuple int2,"
-		 *	"   transactionid xid, classid oid, objid oid, objsubid int2,"
-		 *	"    transaction xid, pid int4, mode text, granted boolean, "
-		 *	"    mppSessionId int4, mppIsWriter boolean, gp_segment_id int4) ,"
-		 */
-
-		values[0] = CStringGetTextDatum(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 0));
-		values[1] = ObjectIdGetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 1)));
-		values[2] = ObjectIdGetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 2)));
-		values[3] = UInt32GetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 3)));
-		values[4] = UInt16GetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 4)));
-
-		values[5] = CStringGetTextDatum(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 5));
-		values[6] = TransactionIdGetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 6)));
-		values[7] = ObjectIdGetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 7)));
-		values[8] = ObjectIdGetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 8)));
-		values[9] = UInt16GetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 9)));
-
-		values[10] = CStringGetTextDatum(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 10));
-		values[11] = UInt32GetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 11)));
-		values[12] = CStringGetTextDatum(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 12));
-		values[13] = BoolGetDatum(strncmp(PQgetvalue(mystatus->segresults[whichresultset], whichrow,13),"t",1)==0);
-		values[14] = BoolGetDatum(strncmp(PQgetvalue(mystatus->segresults[whichresultset], whichrow,14),"t",1)==0);
-		values[15] = TimestampTzGetDatum(atoll(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 15)));
-		/*
-		 * These next fields are specific to GPDB
-		 */
-		values[16] = Int32GetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow,16)));
-		values[17] = BoolGetDatum(strncmp(PQgetvalue(mystatus->segresults[whichresultset], whichrow,17),"t",1)==0);
-		values[18] = Int32GetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow,18)));
-		/*
-		 * Copy the null info over.  It should all match properly.
+		 * Form tuple with appropriate data we got from the segDBs.
+		 * Each column comes back in text format, so convert via each
+		 * attribute's type input function using BuildTupleFromCStrings().
 		 */
 		for (i = 0; i < NUM_LOCK_STATUS_COLUMNS; i++)
 		{
-			nulls[i] = PQgetisnull(mystatus->segresults[whichresultset], whichrow, i);
+			if (PQgetisnull(mystatus->segresults[whichresultset], whichrow, i))
+				values[i] = NULL;
+			else
+				values[i] = PQgetvalue(mystatus->segresults[whichresultset], whichrow, i);
 		}
 
-		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
+		tuple = BuildTupleFromCStrings(funcctx->attinmeta, values);
 		result = HeapTupleGetDatum(tuple);
 		SRF_RETURN_NEXT(funcctx, result);
 	}
@@ -711,18 +705,10 @@ pg_lock_status(PG_FUNCTION_ARGS)
 	}
 
 	/*
-	 * if we dispatched to the segDBs, free up the memory holding the result sets.
-	 * Otherwise we might leak this memory each time we got called (does it automatically
-	 * get freed by the pool being deleted?  Probably, but this is safer).
+	 * Free any segment result sets now (the memory context callback also
+	 * ensures cleanup if execution terminates early).
 	 */
-	if (mystatus->segresults != NULL)
-	{
-		int i;
-		for (i = 0; i < mystatus->numsegresults; i++)
-			PQclear(mystatus->segresults[i]);
-
-		pfree(mystatus->segresults);
-	}
+	pg_lock_status_cleanup(mystatus);
 
 	SRF_RETURN_DONE(funcctx);
 }
