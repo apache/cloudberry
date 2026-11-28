@@ -26,6 +26,43 @@ from dataclasses import dataclass
 from dotenv import load_dotenv
 
 
+# How much of a query result one tool call returns.  Everything a tool returns
+# lands in the agent's context, and nothing else bounds a SELECT the agent
+# writes itself.
+DEFAULT_MAX_ROWS = 1000
+DEFAULT_MAX_VALUE_LENGTH = 10000
+DEFAULT_MAX_RESULT_BYTES = 1000000
+
+# Seconds a statement may run before the driver cancels it on the server.
+DEFAULT_QUERY_TIMEOUT = 60.0
+
+
+def _positive_int_env(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be a positive integer, got {raw!r}") from None
+    if value < 1:
+        raise ValueError(f"{name} must be a positive integer, got {value}")
+    return value
+
+
+def _positive_float_env(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be a positive number of seconds, got {raw!r}") from None
+    if not value > 0 or value == float("inf"):
+        raise ValueError(f"{name} must be a positive number of seconds, got {raw!r}")
+    return value
+
+
 @dataclass
 class DatabaseConfig:
     """Database connection configuration"""
@@ -34,6 +71,10 @@ class DatabaseConfig:
     database: str
     username: str
     password: str
+    max_rows: int = DEFAULT_MAX_ROWS
+    max_value_length: int = DEFAULT_MAX_VALUE_LENGTH
+    max_result_bytes: int = DEFAULT_MAX_RESULT_BYTES
+    query_timeout: float = DEFAULT_QUERY_TIMEOUT
     
     @classmethod
     def from_env(cls) -> "DatabaseConfig":
@@ -45,6 +86,14 @@ class DatabaseConfig:
             database=os.getenv("DB_NAME", "postgres"),
             username=os.getenv("DB_USER", "postgres"),
             password=os.getenv("DB_PASSWORD", ""),
+            max_rows=_positive_int_env("MCP_MAX_ROWS", DEFAULT_MAX_ROWS),
+            max_value_length=_positive_int_env(
+                "MCP_MAX_VALUE_LENGTH", DEFAULT_MAX_VALUE_LENGTH
+            ),
+            max_result_bytes=_positive_int_env(
+                "MCP_MAX_RESULT_BYTES", DEFAULT_MAX_RESULT_BYTES
+            ),
+            query_timeout=_positive_float_env("MCP_QUERY_TIMEOUT", DEFAULT_QUERY_TIMEOUT),
         )
     
     @property
