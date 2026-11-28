@@ -71,6 +71,9 @@ class GpRecoversegTestCase(GpTestCase):
         self.gpArrayMock.segmentPairs = []
         self.gpArrayMock.hasMirrors = True
         self.gpArrayMock.coordinator = self.gparray.coordinator
+        # standbyCoordinator is set in GpArray.__init__, so spec=GpArray does
+        # not provide it.  gprecoverseg reads it when there are no mirrors.
+        self.gpArrayMock.standbyCoordinator = None
 
         self.config_provider_mock.loadSystemConfig.return_value = self.gpArrayMock
 
