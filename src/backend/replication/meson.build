@@ -7,6 +7,7 @@ backend_sources += files(
   'walreceiver.c',
   'walreceiverfuncs.c',
   'walsender.c',
+  'gp_replication.c',
 )
 
 # see ../parser/meson.build

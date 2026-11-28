@@ -2,12 +2,15 @@
 
 subdir('regress')
 subdir('isolation')
+subdir('isolation2')
+subdir('unit')
 
 subdir('authentication')
 subdir('postmaster')
 subdir('recovery')
 subdir('subscription')
 subdir('modules')
+subdir('walrep')
 
 if ssl.found()
   subdir('ssl')

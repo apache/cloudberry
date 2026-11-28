@@ -90,3 +90,13 @@ contrib_targets += refint
 install_data('refint.control', 'refint--1.0.sql',
   kwargs: contrib_data_args,
 )
+
+# Cloudberry's contrib/spi/Makefile installs the examples as DOCS, which
+# upstream's meson.build leaves out.
+install_data(
+  'autoinc.example',
+  'insert_username.example',
+  'moddatetime.example',
+  'refint.example',
+  install_dir: dir_doc / 'extension',
+)
