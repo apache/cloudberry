@@ -124,3 +124,12 @@ WITH query_select AS (SELECT * FROM test_aocs_tablesample_append)
 SELECT * FROM query_select TABLESAMPLE BERNOULLI (5.5) REPEATABLE (1);
 
 SELECT q.* FROM (SELECT * FROM test_aocs_tablesample_append) as q TABLESAMPLE BERNOULLI (5);
+
+-- A constant-only index expression still needs an AOCS anchor column.
+CREATE TABLE aocs_constant_expr_index (a int, b int)
+  WITH (appendonly=true, orientation=column) DISTRIBUTED BY (a);
+INSERT INTO aocs_constant_expr_index VALUES (1, 10), (2, 20);
+CREATE INDEX aocs_constant_expr_index_a ON aocs_constant_expr_index (a);
+CREATE INDEX aocs_constant_expr_index_expr
+  ON aocs_constant_expr_index ((num_nulls(- (+ (2008221825)))));
+DROP TABLE aocs_constant_expr_index;
