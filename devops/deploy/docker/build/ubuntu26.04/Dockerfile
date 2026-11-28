@@ -142,6 +142,7 @@ RUN apt-get update && \
             libcgroup3 \
             meson \
             ninja-build \
+            openjdk-25-jdk-headless \
             quilt \
             unzip && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
