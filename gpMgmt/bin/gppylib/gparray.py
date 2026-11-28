@@ -810,6 +810,10 @@ class GpArray:
         self.__version = None
         self.__segmentsAsLoadedFromDb = segmentsAsLoadedFromDb
         self.hasMirrors = False
+        # Cloudberry: initFromCatalog() sets this from
+        # gp_internal_is_singlenode.  Default to False so that a GpArray
+        # built in any other way also has it.
+        self.is_singlenode = False
 
         for segdb in segments:
 
