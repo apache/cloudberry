@@ -2405,3 +2405,175 @@ SELECT EXISTS(
 (1 row)
 
 DROP TABLE foo_issue_1204_test;
+--
+-- With gp_cte_sharing off, a CTE referenced more than once is shared by the
+-- references that have no quals to push down into it, and inlined, with the
+-- quals pushed down, for those that have.
+--
+create table cte_auto (a int, b int) distributed by (a);
+insert into cte_auto select i, i % 10 from generate_series(1, 1000) i;
+analyze cte_auto;
+set optimizer = off;
+set gp_cte_sharing = off;
+-- no quals on the references: shared
+explain (costs off)
+with c as (select b, count(*) n from cte_auto group by b)
+select count(*) from cte_auto where b in (select b from c)
+union all
+select count(*) from cte_auto where a in (select b from c);
+                                                 QUERY PLAN                                                 
+------------------------------------------------------------------------------------------------------------
+ Append
+   ->  Finalize Aggregate
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               ->  Partial Aggregate
+                     ->  Hash Semi Join
+                           Hash Cond: (cte_auto.b = c.b)
+                           ->  Seq Scan on cte_auto
+                           ->  Hash
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                       ->  Subquery Scan on c
+                                             ->  Shared Scan (share slice:id 2:0)
+                                                   ->  Finalize HashAggregate
+                                                         Group Key: cte_auto_1.b
+                                                         ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                                               Hash Key: cte_auto_1.b
+                                                               ->  Streaming Partial HashAggregate
+                                                                     Group Key: cte_auto_1.b
+                                                                     ->  Seq Scan on cte_auto cte_auto_1
+   ->  Finalize Aggregate
+         ->  Gather Motion 3:1  (slice4; segments: 3)
+               ->  Partial Aggregate
+                     ->  Hash Semi Join
+                           Hash Cond: (cte_auto_2.a = c_1.b)
+                           ->  Seq Scan on cte_auto cte_auto_2
+                           ->  Hash
+                                 ->  Subquery Scan on c_1
+                                       ->  Shared Scan (share slice:id 4:0)
+ Optimizer: Postgres query optimizer
+(28 rows)
+
+with c as (select b, count(*) n from cte_auto group by b)
+select count(*) from cte_auto where b in (select b from c)
+union all
+select count(*) from cte_auto where a in (select b from c);
+ count 
+-------
+  1000
+     9
+(2 rows)
+
+-- each reference filters differently: inlined, with the quals pushed down
+explain (costs off)
+with c as (select b, count(*) n from cte_auto group by b)
+select c1.n, c2.n from c c1, c c2 where c1.b = 1 and c2.b = 2;
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Nested Loop
+   ->  Finalize GroupAggregate
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               ->  Partial GroupAggregate
+                     ->  Seq Scan on cte_auto
+                           Filter: (b = 1)
+   ->  Materialize
+         ->  Finalize GroupAggregate
+               ->  Gather Motion 3:1  (slice2; segments: 3)
+                     ->  Partial GroupAggregate
+                           ->  Seq Scan on cte_auto cte_auto_1
+                                 Filter: (b = 2)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+with c as (select b, count(*) n from cte_auto group by b)
+select c1.n, c2.n from c c1, c c2 where c1.b = 1 and c2.b = 2;
+  n  |  n  
+-----+-----
+ 100 | 100
+(1 row)
+
+-- one reference filters, the other doesn't: the first is inlined, the second
+-- reads a shared scan of the CTE that has no other consumer
+explain (costs off)
+with c as (select b, count(*) n from cte_auto group by b)
+select c1.b, c1.n, c2.n from c c1 join c c2 on c1.b = c2.b where c1.n > 99
+order by 1;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: cte_auto_1.b
+   ->  Sort
+         Sort Key: cte_auto_1.b
+         ->  Hash Join
+               Hash Cond: (share0_ref1.b = cte_auto_1.b)
+               ->  Shared Scan (share slice:id 1:0)
+                     ->  Finalize HashAggregate
+                           Group Key: cte_auto.b
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                 Hash Key: cte_auto.b
+                                 ->  Streaming Partial HashAggregate
+                                       Group Key: cte_auto.b
+                                       ->  Seq Scan on cte_auto
+               ->  Hash
+                     ->  Finalize HashAggregate
+                           Group Key: cte_auto_1.b
+                           Filter: (count(*) > 99)
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Hash Key: cte_auto_1.b
+                                 ->  Streaming Partial HashAggregate
+                                       Group Key: cte_auto_1.b
+                                       ->  Seq Scan on cte_auto cte_auto_1
+ Optimizer: Postgres query optimizer
+(24 rows)
+
+with c as (select b, count(*) n from cte_auto group by b)
+select c1.b, c1.n, c2.n from c c1 join c c2 on c1.b = c2.b where c1.n > 99
+order by 1;
+ b |  n  |  n  
+---+-----+-----
+ 0 | 100 | 100
+ 1 | 100 | 100
+ 2 | 100 | 100
+ 3 | 100 | 100
+ 4 | 100 | 100
+ 5 | 100 | 100
+ 6 | 100 | 100
+ 7 | 100 | 100
+ 8 | 100 | 100
+ 9 | 100 | 100
+(10 rows)
+
+-- a CTE whose result isn't spread across the segments is not shared: here one
+-- reference is executed in the QD, because of the volatile function, and the
+-- other in the segments, and they couldn't share a Shared Scan
+explain (costs off)
+with c as (select 1 as x)
+select x, random() >= 0 as r from c
+union all
+select x, random() >= 0 from c, gp_dist_random('gp_id');
+                   QUERY PLAN                   
+------------------------------------------------
+ Append
+   ->  Subquery Scan on c
+         ->  Result
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Nested Loop
+               ->  Result
+               ->  Seq Scan on gp_id
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+with c as (select 1 as x)
+select x, random() >= 0 as r from c
+union all
+select x, random() >= 0 from c, gp_dist_random('gp_id');
+ x | r 
+---+---
+ 1 | t
+ 1 | t
+ 1 | t
+ 1 | t
+(4 rows)
+
+reset gp_cte_sharing;
+reset optimizer;
+drop table cte_auto;

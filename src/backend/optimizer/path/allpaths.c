@@ -3370,6 +3370,89 @@ set_tablefunc_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 }
 
 /*
+ * Would push_down_restrict() push any of the quals of this CTE reference
+ * into the CTE query? Unlike push_down_restrict(), this doesn't change
+ * anything.
+ */
+static bool
+cte_ref_has_pushable_quals(RelOptInfo *rel, RangeTblEntry *rte, Query *subquery)
+{
+	pushdown_safety_info safetyInfo;
+	bool		result = false;
+	ListCell   *l;
+
+	if (rel->baserestrictinfo == NIL)
+		return false;
+
+	memset(&safetyInfo, 0, sizeof(safetyInfo));
+	safetyInfo.unsafeFlags = (unsigned char *)
+		palloc0((list_length(subquery->targetList) + 1) * sizeof(unsigned char));
+	safetyInfo.unsafeLeaky = rte->security_barrier;
+
+	if (subquery_is_pushdown_safe(subquery, subquery, &safetyInfo))
+	{
+		foreach(l, rel->baserestrictinfo)
+		{
+			RestrictInfo *rinfo = (RestrictInfo *) lfirst(l);
+
+			if (!rinfo->pseudoconstant &&
+				qual_is_pushdown_safe(subquery, rel->relid, rinfo, &safetyInfo) == PUSHDOWN_SAFE)
+			{
+				result = true;
+				break;
+			}
+		}
+	}
+	pfree(safetyInfo.unsafeFlags);
+
+	return result;
+}
+
+/*
+ * Plan CTE 'cte' for sharing among its references, if that hasn't been done
+ * yet, and return its PlannerInfo. 'subquery' is a copy of the CTE query, which
+ * subquery_planner() may scribble on.
+ */
+static PlannerInfo *
+plan_shared_cte(PlannerInfo *root, PlannerInfo *cteroot, CtePlanInfo *cteplaninfo,
+				CommonTableExpr *cte, Query *subquery, double tuple_fraction)
+{
+	PlannerConfig *config;
+	PlannerInfo *subroot;
+	RelOptInfo *sub_final_rel;
+
+	if (cteplaninfo->subroot != NULL)
+		return cteplaninfo->subroot;
+
+	config = CopyPlannerConfig(root->config);
+
+	/*
+	 * Having multiple SharedScans can lead to deadlocks. For now, disallow
+	 * sharing of ctes at lower levels.
+	 */
+	config->gp_cte_sharing = false;
+	config->cte_sharing_auto = false;
+
+	config->honor_order_by = false;
+
+	subroot = subquery_planner(cteroot->glob, subquery, cteroot, cte->cterecursive,
+							   tuple_fraction, config);
+
+	/* Select best Path and turn it into a Plan */
+	sub_final_rel = fetch_upper_rel(subroot, UPPERREL_FINAL, NULL);
+
+	/*
+	 * we cannot use different plans for different instances of this CTE
+	 * reference, so keep only the cheapest
+	 */
+	sub_final_rel->pathlist = list_make1(sub_final_rel->cheapest_total_path);
+
+	cteplaninfo->subroot = subroot;
+
+	return subroot;
+}
+
+/*
  * set_cte_pathlist
  *		Build the (single) access path for a non-self-reference CTE RTE
  *
@@ -3392,6 +3475,7 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	RelOptInfo *sub_final_rel;
 	Relids		required_outer;
 	bool		is_shared;
+	bool		shared_by_auto = false;
 	Query           *subquery = NULL;
 	bool            contain_volatile_function = false;
 
@@ -3487,6 +3571,25 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			/* if plan sharing is enabled and contains volatile functions in the CTE query, also generate a shared scan plan */
 			is_shared =  root->config->gp_cte_sharing && (cte->cterefcount > 1 || contain_volatile_function);
 
+			/*
+			 * GPDB: when gp_cte_sharing is off, decide per reference. Sharing
+			 * a CTE computes it once for all references, but then none of the
+			 * references' quals can be pushed down into it. When the
+			 * references filter the CTE differently, e.g. on different years,
+			 * the shared CTE computes all of them, and loses partition pruning
+			 * too, which can be many times slower than computing each filtered
+			 * copy. So share only the references that have no quals that could
+			 * be pushed down; the others are planned as separate subqueries
+			 * with their quals pushed down, as without sharing.
+			 */
+			if (!is_shared && root->config->cte_sharing_auto &&
+				cte->cterefcount > 1 && !contain_volatile_function &&
+				!cte->cterecursive && subquery->commandType == CMD_SELECT)
+			{
+				is_shared = !cte_ref_has_pushable_quals(rel, rte, subquery);
+				shared_by_auto = is_shared;
+			}
+
 	}
 
 	/*
@@ -3495,6 +3598,29 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	 */
 	if (is_shared && contain_outer_selfref(cte->ctequery))
 		is_shared = false;
+
+	/*
+	 * GPDB: a CTE that is shared because the reference has no quals to push
+	 * down is shared only if its result is spread across the segments. That
+	 * is where sharing pays off, and otherwise a reference executed in the
+	 * QD, e.g. on a CTE without a FROM, and one executed in the segments, e.g.
+	 * joined with gp_dist_random(), would need the same Shared Scan in the QD
+	 * and in a primary gang, which is not supported. Plan the shared CTE from
+	 * a fresh copy, as subquery_planner() may scribble on it, and 'subquery'
+	 * is still needed if we inline it.
+	 */
+	if (shared_by_auto)
+	{
+		PlannerInfo *shared_root;
+		Path	   *shared_path;
+
+		shared_root = plan_shared_cte(root, cteroot, cteplaninfo, cte,
+									  (Query *) copyObject(cte->ctequery),
+									  tuple_fraction);
+		shared_path = fetch_upper_rel(shared_root, UPPERREL_FINAL, NULL)->cheapest_total_path;
+		if (!CdbPathLocus_IsPartitioned(shared_path->locus))
+			is_shared = false;
+	}
 
 	if (!is_shared)
 	{
@@ -3505,6 +3631,7 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 		 * disallow sharing of ctes at lower levels.
 		 */
 		config->gp_cte_sharing = false;
+		config->cte_sharing_auto = false;
 
 		config->honor_order_by = false;
 
@@ -3554,34 +3681,8 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 		 * subplan will not be used by InitPlans, so that they can be shared
 		 * if this CTE is referenced multiple times (excluding in InitPlans).
 		 */
-		if (cteplaninfo->subroot == NULL)
-		{
-			PlannerConfig *config = CopyPlannerConfig(root->config);
-
-			/*
-			 * Having multiple SharedScans can lead to deadlocks. For now,
-			 * disallow sharing of ctes at lower levels.
-			 */
-			config->gp_cte_sharing = false;
-
-			config->honor_order_by = false;
-
-			subroot = subquery_planner(cteroot->glob, subquery, cteroot, cte->cterecursive,
-									   tuple_fraction, config);
-
-			/* Select best Path and turn it into a Plan */
-			sub_final_rel = fetch_upper_rel(subroot, UPPERREL_FINAL, NULL);
-
-			/*
-			 * we cannot use different plans for different instances of this CTE
-			 * reference, so keep only the cheapest
-			 */
-			sub_final_rel->pathlist = list_make1(sub_final_rel->cheapest_total_path);
-
-			cteplaninfo->subroot = subroot;
-		}
-		else
-			subroot = cteplaninfo->subroot;
+		subroot = plan_shared_cte(root, cteroot, cteplaninfo, cte, subquery,
+								  tuple_fraction);
 	}
 	rel->subroot = subroot;
 

@@ -14900,14 +14900,15 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 insert into cte_test select i from generate_series(1,10)i;
 analyze cte_test;
 explain (analyze, costs off, summary off, timing off) with cte as (select * from cte_test) select * from cte union all select * from cte;
-                             QUERY PLAN                              
----------------------------------------------------------------------
+                              QUERY PLAN                              
+----------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=20 loops=1)
    ->  Append (actual rows=10 loops=1)
-         ->  Seq Scan on cte_test (actual rows=5 loops=1)
-         ->  Seq Scan on cte_test cte_test_1 (actual rows=5 loops=1)
+         ->  Shared Scan (share slice:id 1:0) (actual rows=5 loops=1)
+               ->  Seq Scan on cte_test (actual rows=5 loops=1)
+         ->  Shared Scan (share slice:id 1:0) (actual rows=5 loops=1)
  Optimizer: Postgres query optimizer
-(5 rows)
+(6 rows)
 
 -- While retrieving the columns width in partitioned tables, inherited stats i.e.
 -- stats that cover all the child tables should be used

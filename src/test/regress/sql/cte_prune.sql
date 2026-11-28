@@ -217,6 +217,7 @@ primary key (ws_item_sk, ws_order_number)
 );
 
 -- sql 23
+-- force_explain
 explain verbose with frequent_ss_items as 
  (select substr(i_item_desc,1,30) itemdesc,i_item_sk item_sk,d_date solddate,count(*) cnt
   from tpcds_store_sales
@@ -231,6 +232,7 @@ select t1.v1 from t1 where t1.v1 in (select item_sk from frequent_ss_items where
     and t1.v1 in (select item_sk from frequent_ss_items where item_sk > 0);
 
 -- sql 95
+-- force_explain
 explain verbose with ws_wh as
 (select ws1.ws_order_number,ws1.ws_warehouse_sk wh1,ws2.ws_warehouse_sk wh2
  from tpcds_web_sales ws1,tpcds_web_sales ws2
@@ -238,6 +240,7 @@ explain verbose with ws_wh as
    and ws1.ws_warehouse_sk <> ws2.ws_warehouse_sk)
 select * from t1 where t1.v1 in (select ws_order_number from ws_wh where true) and t1.v1 in (select ws_order_number from ws_wh where ws_order_number > 0);
 
+-- force_explain
 explain verbose with ws_wh as
 (select ws1.ws_order_number,ws1.ws_warehouse_sk wh1,ws2.ws_warehouse_sk wh2
  from tpcds_web_sales ws1,tpcds_web_sales ws2
@@ -265,6 +268,7 @@ analyze t4;
 
 -- Additional filtering conditions are added to the consumer.
 -- This is caused by `PexprInferPredicates` in the ORCA preprocessor.
+-- force_explain
 explain verbose WITH t(a,b,d) AS
 (
   SELECT t3.a,t3.b,t4.d FROM t3,t4 WHERE t3.a = t4.d
@@ -380,6 +384,7 @@ ALTER TABLE ONLY countrylanguage
     ADD CONSTRAINT countrylanguage_pkey PRIMARY KEY (countrycode, "language");
 
 -- CTE1(inlined) in CTE2(no-inlined) case
+-- force_explain
 explain verbose with country as
 (select country.code,country.name COUNTRY, city.name CAPITAL, language, isofficial, percentage
  FROM country,city,countrylanguage
@@ -397,6 +402,7 @@ select * from
 where country.percentage = countrylanguage.percentage order by countrylanguage.COUNTRY,country.language LIMIT 40;
 
 -- CTE in the main query and subqueries within the main query
+-- force_explain
 explain verbose with bad_headofstates as 
 (
  select country.code,country.name,country.headofstate,countrylanguage.language
