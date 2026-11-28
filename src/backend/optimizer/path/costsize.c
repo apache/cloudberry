@@ -77,8 +77,10 @@
 #include <math.h>
 
 #include "access/amapi.h"
+#include "access/stratnum.h"
 #include "access/htup_details.h"
 #include "access/tsmapi.h"
+#include "catalog/pg_type.h"
 #include "executor/executor.h"
 #include "executor/nodeAgg.h"
 #include "executor/nodeHash.h"
@@ -191,6 +193,11 @@ static double calc_joinrel_size_estimate(PlannerInfo *root,
 										 double inner_rows,
 										 SpecialJoinInfo *sjinfo,
 										 List *restrictlist);
+static Selectivity get_composite_key_join_selectivity(PlannerInfo *root,
+													  Relids outer_relids,
+													  Relids inner_relids,
+													  SpecialJoinInfo *sjinfo,
+													  List **restrictlist);
 static Selectivity get_foreign_key_join_selectivity(PlannerInfo *root,
 													Relids outer_relids,
 													Relids inner_relids,
@@ -5780,6 +5787,17 @@ calc_joinrel_size_estimate(PlannerInfo *root,
 											   &restrictlist);
 
 	/*
+	 * GPDB: Likewise for groups of equality clauses between the same two
+	 * relations, whose combined selectivity is underestimated if the columns
+	 * are correlated, like a composite key.
+	 */
+	fkselec *= get_composite_key_join_selectivity(root,
+												  outer_rel->relids,
+												  inner_rel->relids,
+												  sjinfo,
+												  &restrictlist);
+
+	/*
 	 * For an outer join, we have to distinguish the selectivity of the join's
 	 * own clauses (JOIN/ON conditions) from any clauses that were "pushed
 	 * down".  For inner joins we just count them all as joinclauses.
@@ -5916,6 +5934,358 @@ calc_joinrel_size_estimate(PlannerInfo *root,
 		nrows = adjnrows;
 
 	return clamp_row_est(nrows);
+}
+
+/*
+ * Estimate the number of distinct combinations of 'exprs', all of relation
+ * 'rel', as the product of their numbers of distinct values, clamped to the
+ * number of rows of 'rel'. Returns false if any of them has no statistics.
+ */
+static bool
+combination_ndistinct(PlannerInfo *root, List *exprs, RelOptInfo *rel, double *result)
+{
+	double		nd = 1.0;
+	ListCell   *lc;
+
+	foreach(lc, exprs)
+	{
+		VariableStatData vardata;
+		bool		isdefault;
+		double		n;
+
+		examine_variable(root, (Node *) lfirst(lc), 0, &vardata);
+		n = get_variable_numdistinct(&vardata, &isdefault);
+		ReleaseVariableStats(vardata);
+		if (isdefault)
+			return false;
+		nd *= n;
+	}
+	*result = Min(nd, Max(rel->tuples, 1.0));
+	return true;
+}
+
+/*
+ * A way to see an equijoin clause as "a.x = b.y", with a in the outer and b in
+ * the inner relation of a join, for get_composite_key_join_selectivity().
+ */
+typedef struct CompositeKeyTerm
+{
+	int			outer_relid;
+	int			inner_relid;
+	Expr	   *outer_expr;
+	Expr	   *inner_expr;
+	Node	   *clause;			/* the RestrictInfo, or an equivalent clause */
+} CompositeKeyTerm;
+
+static List *
+add_composite_key_term(List *terms, int outer_relid, int inner_relid,
+					   Expr *outer_expr, Expr *inner_expr, Node *clause)
+{
+	CompositeKeyTerm *term;
+	ListCell   *lc;
+
+	/* Keep one term per pair of relations, the first one */
+	foreach(lc, terms)
+	{
+		term = (CompositeKeyTerm *) lfirst(lc);
+		if (term->outer_relid == outer_relid && term->inner_relid == inner_relid)
+			return terms;
+	}
+
+	term = palloc(sizeof(CompositeKeyTerm));
+	term->outer_relid = outer_relid;
+	term->inner_relid = inner_relid;
+	term->outer_expr = outer_expr;
+	term->inner_expr = inner_expr;
+	term->clause = clause;
+	return lappend(terms, term);
+}
+
+/*
+ * Return the ways to see 'rinfo' as an equijoin clause between a base relation
+ * of 'outer_relids' and one of 'inner_relids'.
+ *
+ * A clause generated from an EquivalenceClass is only one of the equalities
+ * the class implies between the two sides; which members it compares depends
+ * on the join order. In "x.ord = r.ord AND s.ord = r.ord AND s.item = r.item",
+ * joining {x, r} to s may get "x.ord = s.ord", which doesn't go with
+ * "s.item = r.item". So we also return "r.ord = s.ord", and every other pair
+ * of members of the class on the two sides.
+ */
+static List *
+composite_key_terms(RestrictInfo *rinfo, Relids outer_relids, Relids inner_relids)
+{
+	List	   *terms = NIL;
+	OpExpr	   *opexpr;
+	int			left_relid;
+	int			right_relid;
+	EquivalenceClass *ec = rinfo->parent_ec;
+	ListCell   *lc;
+	ListCell   *lc2;
+
+	if (rinfo->pseudoconstant || rinfo->mergeopfamilies == NIL ||
+		!is_opclause(rinfo->clause))
+		return NIL;
+	opexpr = (OpExpr *) rinfo->clause;
+	if (list_length(opexpr->args) != 2)
+		return NIL;
+
+	/* The clause itself */
+	if (bms_get_singleton_member(rinfo->left_relids, &left_relid) &&
+		bms_get_singleton_member(rinfo->right_relids, &right_relid))
+	{
+		if (bms_is_member(left_relid, outer_relids) &&
+			bms_is_member(right_relid, inner_relids))
+			terms = add_composite_key_term(terms, left_relid, right_relid,
+										   linitial(opexpr->args),
+										   lsecond(opexpr->args),
+										   (Node *) rinfo);
+		else if (bms_is_member(right_relid, outer_relids) &&
+				 bms_is_member(left_relid, inner_relids))
+			terms = add_composite_key_term(terms, right_relid, left_relid,
+										   lsecond(opexpr->args),
+										   linitial(opexpr->args),
+										   (Node *) rinfo);
+	}
+	if (terms == NIL)
+		return NIL;
+
+	/* Equivalent clauses */
+	if (ec == NULL || ec->ec_has_volatile || ec->ec_broken)
+		return terms;
+	foreach(lc, ec->ec_members)
+	{
+		EquivalenceMember *outer_em = (EquivalenceMember *) lfirst(lc);
+		int			outer_relid;
+
+		if (outer_em->em_is_const ||
+			!bms_get_singleton_member(outer_em->em_relids, &outer_relid) ||
+			!bms_is_member(outer_relid, outer_relids))
+			continue;
+
+		foreach(lc2, ec->ec_members)
+		{
+			EquivalenceMember *inner_em = (EquivalenceMember *) lfirst(lc2);
+			int			inner_relid;
+			Oid			opno = InvalidOid;
+			ListCell   *lc3;
+
+			if (inner_em->em_is_const ||
+				!bms_get_singleton_member(inner_em->em_relids, &inner_relid) ||
+				!bms_is_member(inner_relid, inner_relids))
+				continue;
+
+			foreach(lc3, ec->ec_opfamilies)
+			{
+				opno = get_opfamily_member(lfirst_oid(lc3),
+										   outer_em->em_datatype,
+										   inner_em->em_datatype,
+										   BTEqualStrategyNumber);
+				if (OidIsValid(opno))
+					break;
+			}
+			if (!OidIsValid(opno))
+				continue;
+
+			terms = add_composite_key_term(terms, outer_relid, inner_relid,
+										   outer_em->em_expr,
+										   inner_em->em_expr,
+										   (Node *) make_opclause(opno, BOOLOID, false,
+																  outer_em->em_expr,
+																  inner_em->em_expr,
+																  InvalidOid,
+																  ec->ec_collation));
+		}
+	}
+
+	return terms;
+}
+
+/*
+ * Clauses are estimated as a composite key only if the product of their
+ * selectivities is less than this fraction of the combined estimate.
+ */
+#define COMPOSITE_KEY_MAX_RATIO 0.01
+
+/*
+ * get_composite_key_join_selectivity
+ *		GPDB: estimate groups of equijoin clauses between the same two base
+ *		relations together, if they look like a composite key.
+ *
+ * With clauses "a.x = b.x AND a.y = b.y", clauselist_selectivity() multiplies
+ * the selectivities of the two clauses, assuming that the columns are
+ * independent. When (x, y) is in fact a composite key, like (item, order
+ * number) in TPC-DS catalog_sales and catalog_returns, that is off by orders
+ * of magnitude: every catalog_returns row matches exactly one catalog_sales
+ * row, but the estimate is 1 / (ndistinct(x) * ndistinct(y)), which is far
+ * less than one match per row.
+ *
+ * The number of distinct (x, y) combinations on each side can't be more than
+ * the number of rows, and with the usual containment assumption of eqjoinsel
+ * the selectivity of the combined equality is 1 / max(ndistinct(a.x, a.y),
+ * ndistinct(b.x, b.y)). We estimate the number of combinations on each side
+ * as the product of the columns' ndistincts, clamped to the number of rows.
+ * (Not with estimate_num_groups(), which for several columns of one relation
+ * clamps to 10% of the rows, assuming correlation; that is reasonable for
+ * GROUP BY, but would make a unique composite key look 10 times less
+ * selective than it is.) If the product is below the number of rows, this is
+ * the same as the product of the clause selectivities, roughly; it only
+ * differs when the product exceeds the number of rows.
+ *
+ * That is not impossible, though: containment of the combinations is a much
+ * stronger assumption than containment of the values of each column. If x
+ * and y are independent on both sides, with 300 values each, two tables of
+ * 20000 rows have about 18000 of the 90000 combinations each, chosen
+ * independently, and the product of the selectivities is right. Statistics
+ * on the columns can't tell that from a composite key, so we assume a key
+ * only if the product is less than COMPOSITE_KEY_MAX_RATIO of the combined
+ * selectivity: when the number of combinations is that much smaller than the
+ * product of the numbers of values, few rows would match by chance, and a
+ * join on them is most likely a join on a key. Then we use the combined
+ * selectivity, but never more than the selectivity of the most selective
+ * clause alone.
+ *
+ * The size of a join relation is estimated once, from the first pair of
+ * inputs it is built from, so the clauses we see depend on the join order.
+ * To find the same groups in any order, a clause generated from an
+ * EquivalenceClass can join any members of the class on the two sides (see
+ * composite_key_terms()). We take the pair of relations with the most
+ * clauses first, then the next among the remaining clauses, and so on.
+ *
+ * Like get_foreign_key_join_selectivity(), the clauses we estimate this way
+ * are removed from *restrictlist, and the returned selectivity applies to
+ * them. Only inner joins are handled.
+ */
+static Selectivity
+get_composite_key_join_selectivity(PlannerInfo *root,
+								   Relids outer_relids,
+								   Relids inner_relids,
+								   SpecialJoinInfo *sjinfo,
+								   List **restrictlist)
+{
+	Selectivity result = 1.0;
+	List	   *rinfos = NIL;	/* candidate clauses */
+	List	   *termlists = NIL;	/* their terms; NIL once used */
+	ListCell   *lc;
+	ListCell   *lc2;
+
+	if (!gp_composite_key_join_selectivity || sjinfo->jointype != JOIN_INNER)
+		return 1.0;
+
+	foreach(lc, *restrictlist)
+	{
+		RestrictInfo *rinfo = lfirst_node(RestrictInfo, lc);
+		List	   *terms = composite_key_terms(rinfo, outer_relids, inner_relids);
+
+		if (terms != NIL)
+		{
+			rinfos = lappend(rinfos, rinfo);
+			termlists = lappend(termlists, terms);
+		}
+	}
+	if (list_length(rinfos) < 2)
+		return 1.0;
+
+	for (;;)
+	{
+		int			best_outer = 0;
+		int			best_inner = 0;
+		int			best_count = 0;
+		List	   *group = NIL;
+		RelOptInfo *outer_rel;
+		RelOptInfo *inner_rel;
+		List	   *outer_exprs = NIL;
+		List	   *inner_exprs = NIL;
+		Selectivity product = 1.0;
+		Selectivity minsel = 1.0;
+		Selectivity combined;
+		double		outer_nd;
+		double		inner_nd;
+
+		/* Find the pair of relations with the most remaining clauses */
+		foreach(lc, termlists)
+		{
+			foreach(lc2, (List *) lfirst(lc))
+			{
+				CompositeKeyTerm *term = (CompositeKeyTerm *) lfirst(lc2);
+				int			count = 0;
+				ListCell   *lc3;
+				ListCell   *lc4;
+
+				foreach(lc3, termlists)
+				{
+					foreach(lc4, (List *) lfirst(lc3))
+					{
+						CompositeKeyTerm *other = (CompositeKeyTerm *) lfirst(lc4);
+
+						if (other->outer_relid == term->outer_relid &&
+							other->inner_relid == term->inner_relid)
+						{
+							count++;
+							break;
+						}
+					}
+				}
+				if (count > best_count)
+				{
+					best_outer = term->outer_relid;
+					best_inner = term->inner_relid;
+					best_count = count;
+				}
+			}
+		}
+		if (best_count < 2)
+			break;
+
+		/* Take its clauses */
+		forboth(lc, rinfos, lc2, termlists)
+		{
+			ListCell   *lc3;
+
+			foreach(lc3, (List *) lfirst(lc2))
+			{
+				CompositeKeyTerm *term = (CompositeKeyTerm *) lfirst(lc3);
+				Selectivity s;
+
+				if (term->outer_relid != best_outer ||
+					term->inner_relid != best_inner)
+					continue;
+
+				group = lappend(group, lfirst(lc));
+				outer_exprs = lappend(outer_exprs, term->outer_expr);
+				inner_exprs = lappend(inner_exprs, term->inner_expr);
+				s = clause_selectivity(root, term->clause, 0, JOIN_INNER, sjinfo, false);
+				product *= s;
+				minsel = Min(minsel, s);
+				lfirst(lc2) = NIL;
+				break;
+			}
+		}
+
+		outer_rel = find_base_rel(root, best_outer);
+		inner_rel = find_base_rel(root, best_inner);
+		if (!combination_ndistinct(root, outer_exprs, outer_rel, &outer_nd) ||
+			!combination_ndistinct(root, inner_exprs, inner_rel, &inner_nd))
+			continue;			/* no statistics */
+		combined = 1.0 / Max(Max(outer_nd, inner_nd), 1.0);
+		if (product >= combined * COMPOSITE_KEY_MAX_RATIO)
+			continue;			/* plausible for independent columns */
+		combined = Min(combined, minsel);
+
+		if (combined <= product)
+			continue;			/* nothing to correct */
+
+		elog(DEBUG1, "composite key join selectivity: %d clauses between rels %d and %d, "
+			 "product %g, ndistinct %.0f / %.0f, using %g",
+			 list_length(group), best_outer, best_inner,
+			 product, outer_nd, inner_nd, combined);
+
+		/* Use this estimate for these clauses */
+		*restrictlist = list_difference_ptr(*restrictlist, group);
+		result *= combined;
+	}
+
+	return result;
 }
 
 /*

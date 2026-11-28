@@ -3762,3 +3762,82 @@ select k from using_coerce_t3 full join using_coerce_t4 using(k) order by 1;
 
 drop table using_coerce_t3;
 drop table using_coerce_t4;
+--
+-- gp_composite_key_join_selectivity: equijoin clauses between the same two
+-- relations on a composite key are estimated together. Multiplying their
+-- selectivities would estimate far fewer rows than the 3000 that match.
+--
+create table ck_sales (item int, ord int, v int) distributed by (ord);
+create table ck_returns (item int, ord int, v int) distributed by (ord);
+insert into ck_sales select i % 1000, i / 3, i from generate_series(1, 30000) i;
+insert into ck_returns select item, ord, v from ck_sales where v % 10 = 0;
+analyze ck_sales;
+analyze ck_returns;
+create function ck_join_rows(query text) returns int language plpgsql as $$
+declare
+  l text;
+begin
+  for l in execute query loop
+    if l ~ 'Hash Join' then
+      return substring(l from 'rows=(\d+)')::int;
+    end if;
+  end loop;
+  return null;
+end $$;
+set optimizer = off;
+set gp_composite_key_join_selectivity = off;
+select ck_join_rows('explain select * from ck_sales s join ck_returns r on s.item = r.item and s.ord = r.ord') < 100 as underestimated;
+ underestimated 
+----------------
+ t
+(1 row)
+
+set gp_composite_key_join_selectivity = on;
+select ck_join_rows('explain select * from ck_sales s join ck_returns r on s.item = r.item and s.ord = r.ord') between 500 and 2000 as close_to_actual;
+ close_to_actual 
+-----------------
+ t
+(1 row)
+
+select count(*) from ck_sales s join ck_returns r on s.item = r.item and s.ord = r.ord;
+ count 
+-------
+  3000
+(1 row)
+
+-- Also when joining {x, r} to s first, which gets "x.ord = s.ord" from the
+-- equivalence class instead of "r.ord = s.ord".
+create table ck_x (ord int, w int) distributed by (ord);
+insert into ck_x select i, i from generate_series(0, 10000) i;
+analyze ck_x;
+select ck_join_rows('explain select * from ck_x x join ck_returns r on x.ord = r.ord join ck_sales s on s.item = r.item and s.ord = r.ord') between 500 and 2000 as close_to_actual;
+ close_to_actual 
+-----------------
+ t
+(1 row)
+
+-- But not independent columns with few values: the tables have about a fifth
+-- of the 90000 combinations each, and 4496 rows match, as multiplying the
+-- selectivities estimates, not 20000.
+create table ck_i1 (x int, y int) distributed randomly;
+create table ck_i2 (x int, y int) distributed randomly;
+insert into ck_i1 select abs(hashint4(i)) % 300, abs(hashint4(i + 7000000)) % 300 from generate_series(1, 20000) i;
+insert into ck_i2 select abs(hashint4(i + 3000000)) % 300, abs(hashint4(i + 9000000)) % 300 from generate_series(1, 20000) i;
+analyze ck_i1;
+analyze ck_i2;
+select ck_join_rows('explain select * from ck_i1 join ck_i2 using (x, y)') between 1000 and 2000 as close_to_actual;
+ close_to_actual 
+-----------------
+ t
+(1 row)
+
+select count(*) from ck_i1 join ck_i2 using (x, y);
+ count 
+-------
+  4496
+(1 row)
+
+reset gp_composite_key_join_selectivity;
+reset optimizer;
+drop function ck_join_rows(text);
+drop table ck_sales, ck_returns, ck_x, ck_i1, ck_i2;

@@ -284,6 +284,7 @@ bool		gp_enable_agg_distinct = true;
 bool		gp_enable_dqa_pruning = true;
 bool		gp_enable_agg_pushdown = false;
 bool		gp_dynamic_partition_pruning = true;
+bool		gp_composite_key_join_selectivity = false;
 bool		gp_log_dynamic_partition_pruning = false;
 bool		gp_cte_sharing = false;
 bool		gp_enable_relsize_collection = false;
@@ -1803,6 +1804,19 @@ struct config_bool ConfigureNamesBool_gp[] =
 			NULL
 		},
 		&gp_dynamic_partition_pruning,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_composite_key_join_selectivity", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Estimate several equijoin clauses between the same two relations together."),
+			gettext_noop("Instead of multiplying their selectivities, which underestimates joins on "
+						 "composite keys, bound the combined selectivity by the number of distinct "
+						 "combinations of the columns on each side."),
+			GUC_NOT_IN_SAMPLE | GUC_EXPLAIN
+		},
+		&gp_composite_key_join_selectivity,
 		true,
 		NULL, NULL, NULL
 	},
