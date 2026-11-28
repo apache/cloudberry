@@ -232,3 +232,5 @@ test: sync_guc
 #test: local_directory_table_mixed
 test: stat_activity_extended
 test: sharedsnapshot
+
+test: pax_cluster_lock

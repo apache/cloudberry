@@ -949,6 +949,15 @@ static void paxProcessUtility(PlannedStmt *pstmt, const char *queryString,
       if (stmt->relation) {
         Relation rel = table_openrv(stmt->relation, AccessShareLock);
         if (RelationIsPAX(rel)) {
+          /*
+           * The column clustering path bypasses cluster(), which normally
+           * acquires this lock before rewriting the table.  Release the
+           * initial lock before acquiring it to avoid a lock upgrade.
+           */
+          table_close(rel, AccessShareLock);
+          rel = table_openrv(stmt->relation, AccessExclusiveLock);
+        }
+        if (RelationIsPAX(rel)) {
           bool has_cluster_columns;
           if (stmt->indexname == NULL && !table_can_be_clustered(rel)) {
             ereport(ERROR,
@@ -1038,8 +1047,16 @@ static void paxProcessUtility(PlannedStmt *pstmt, const char *queryString,
           foreach (lc, relids) {
             Oid pax_rel_id = Oid(lfirst_oid(lc));
 
-            Relation rel = table_open(pax_rel_id, RowExclusiveLock);
-            if (relation_has_cluster_columns_options(rel)) {
+            Relation rel = table_open(pax_rel_id, AccessShareLock);
+            bool has_cluster_columns = relation_has_cluster_columns_options(rel);
+            table_close(rel, AccessShareLock);
+
+            if (!has_cluster_columns) continue;
+
+            /* Lock before dispatch, just as the core CLUSTER path does. */
+            rel = try_table_open(pax_rel_id, AccessExclusiveLock, false);
+            if (!rel) continue;
+            if (RelationIsPAX(rel) && relation_has_cluster_columns_options(rel)) {
               stmt->relation = makeNode(RangeVar);
               stmt->relation->schemaname =
                   get_namespace_name(rel->rd_rel->relnamespace);
@@ -1049,8 +1066,12 @@ static void paxProcessUtility(PlannedStmt *pstmt, const char *queryString,
                                           GetAssignedOidsForDispatch(), NULL);
               pfree(stmt->relation);
               stmt->relation = NULL;
+
+              /* Keep the lock until the transaction completes. */
+              table_close(rel, NoLock);
+            } else {
+              table_close(rel, AccessExclusiveLock);
             }
-            table_close(rel, RowExclusiveLock);
           }
 
           list_free(relids);

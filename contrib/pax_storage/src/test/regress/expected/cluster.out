@@ -708,6 +708,35 @@ DROP TABLE clstr_3;
 DROP TABLE clstr_4;
 DROP TABLE clstr_expression;
 DROP USER regress_clstr_user;
+-- CLUSTER rewrites PAX tuple locations, so indexes must be rebuilt.
+CREATE TABLE pax_clstr_index (c1 int, c2 int) USING pax
+  WITH (minmax_columns = 'c1,c2') DISTRIBUTED BY (c1);
+ALTER TABLE pax_clstr_index SET (cluster_columns = 'c1,c2');
+CREATE INDEX pax_clstr_index_idx ON pax_clstr_index (c1);
+INSERT INTO pax_clstr_index
+SELECT i, (i * 17) % 997
+FROM generate_series(1,1000) AS s(i)
+ORDER BY (i * 541) % 1000;
+SET enable_seqscan = off;
+SET enable_bitmapscan = off;
+SET enable_indexscan = on;
+SELECT c1, c2 FROM pax_clstr_index WHERE c1 = 42;
+ c1 | c2  
+----+-----
+ 42 | 714
+(1 row)
+
+CLUSTER pax_clstr_index;
+SELECT c1, c2 FROM pax_clstr_index WHERE c1 = 42;
+ c1 | c2  
+----+-----
+ 42 | 714
+(1 row)
+
+RESET enable_seqscan;
+RESET enable_bitmapscan;
+RESET enable_indexscan;
+DROP TABLE pax_clstr_index;
 -- Test transactional safety of CLUSTER against heap
 CREATE TABLE foo (a int, b varchar, c int) DISTRIBUTED BY (a);
 INSERT INTO foo SELECT i, 'initial insert' || i, i FROM generate_series(1,10000)i;

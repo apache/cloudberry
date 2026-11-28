@@ -32,6 +32,7 @@
 #include <map>
 
 #include "access/paxc_rel_options.h"
+#include "catalog/index.h"
 #include "catalog/pax_catalog.h"
 #include "clustering/clustering.h"
 #include "clustering/index_clustering.h"
@@ -171,6 +172,14 @@ void Cluster(Relation rel, Snapshot snapshot, bool is_incremental_cluster) {
       std::make_shared<VectorIterator<MicroPartitionMetadata>>(
           std::move(delete_files));
   DeleteClusteringFiles(rel, snapshot, iter_ptr);
+
+  /*
+   * CLUSTER rewrites PAX tuples and therefore changes their TIDs.  Rebuild
+   * indexes so they point to the new tuple locations.
+   */
+  ReindexParams reindex_params = {0};
+  reindex_relation(RelationGetRelid(rel), REINDEX_REL_SUPPRESS_INDEX_USE,
+                   &reindex_params);
 }
 
 void IndexCluster(Relation old_rel, Relation new_rel, Relation index,
